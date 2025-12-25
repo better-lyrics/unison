@@ -2,8 +2,6 @@
 
 Crowdsourced lyrics API for [Better Lyrics](https://github.com/better-lyrics/better-lyrics).
 
-Cloudflare Workers + D1 + KV with Community Notes-style reputation system.
-
 ## Authentication
 
 All write operations require an `X-Device-ID` header:
