@@ -45,6 +45,40 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
+      - name: Create wrangler.toml
+        env:
+          D1_DATABASE_ID: ${{ secrets.D1_DATABASE_ID }}
+          KV_NAMESPACE_ID: ${{ secrets.KV_NAMESPACE_ID }}
+        run: |
+          cat > wrangler.toml <<EOF
+          name = "unison"
+          main = "src/index.ts"
+          compatibility_date = "2024-12-01"
+          compatibility_flags = ["nodejs_compat"]
+
+          [[d1_databases]]
+          binding = "DB"
+          database_name = "unison-db"
+          database_id = "$D1_DATABASE_ID"
+
+          [[kv_namespaces]]
+          binding = "CACHE"
+          id = "$KV_NAMESPACE_ID"
+
+          [[unsafe.bindings]]
+          name = "RATE_LIMITER"
+          type = "ratelimit"
+          namespace_id = "1001"
+          simple = { limit = 10, period = 60 }
+
+          [vars]
+          CACHE_TTL_SECONDS = "604800"
+
+          [triggers]
+          crons = ["0 * * * *"]
+          EOF
+          sed -i 's/^          //' wrangler.toml
+
       - name: Deploy to Cloudflare Workers
         run: pnpm run deploy
         env:
