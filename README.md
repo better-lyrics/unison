@@ -4,13 +4,26 @@ Crowdsourced lyrics API for [Better Lyrics](https://github.com/better-lyrics/bet
 
 ## Authentication
 
-All write operations require an `X-Device-ID` header:
+All write operations require signed requests using ECDSA P-256:
 
-```
-X-Device-ID: <uuid-from-extension>
+```json
+{
+  "payload": {
+    "keyId": "<sha256-hash-of-public-key>",
+    "timestamp": 1703520000000,
+    "nonce": "<random-16+-char-string>",
+    ...request data
+  },
+  "signature": "<base64-ecdsa-signature>",
+  "publicKey": { "kty": "EC", "crv": "P-256", ... }
+}
 ```
 
-The device ID is a hybrid of UUID (from `chrome.storage.local`) and a lightweight fingerprint.
+- `keyId`: SHA-256 hash of the public key (hex)
+- `timestamp`: Must be within ±5 minutes of server time
+- `nonce`: Unique per request (replay prevention)
+- `signature`: ECDSA signature over the canonical JSON payload
+- `publicKey`: Required on first request to register the key
 
 ## API
 
@@ -19,7 +32,7 @@ The device ID is a hybrid of UUID (from `chrome.storage.local`) and a lightweigh
 ```
 GET /lyrics?v=<videoId>
 GET /lyrics?song=<song>&artist=<artist>
-GET /lyrics?song=<song>&artist=<artist>&album=<album>&duration=<ms>
+GET /lyrics?song=<song>&artist=<artist>&album=<album>&duration=<seconds>
 ```
 
 Returns the highest-scored match. Optional `album` and `duration` narrow results.
@@ -32,7 +45,7 @@ Returns all matching entries sorted by score (highest first).
 ```
 GET /lyrics/search?song=<song>&artist=<artist>
 GET /lyrics/search?song=<song>&artist=<artist>&album=<album>
-GET /lyrics/search?song=<song>&artist=<artist>&duration=<ms>
+GET /lyrics/search?song=<song>&artist=<artist>&duration=<seconds>
 ```
 
 ### Get by ID
@@ -51,7 +64,7 @@ POST /lyrics/submit
   "videoId": "dQw4w9WgXcQ",
   "song": "Song Title",
   "artist": "Artist Name",
-  "duration": 180000,
+  "duration": 180,
   "lyrics": "[00:15.00]First line...",
   "format": "lrc",
   "album": "Album Name",
