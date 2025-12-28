@@ -1,8 +1,8 @@
 import type { Env, User } from "@/types"
 
-export async function getOrCreateUser(env: Env, deviceHash: string): Promise<User> {
-	const existing = await env.DB.prepare("SELECT * FROM users WHERE device_hash = ?")
-		.bind(deviceHash)
+export async function getOrCreateUser(env: Env, keyId: string): Promise<User> {
+	const existing = await env.DB.prepare("SELECT * FROM users WHERE key_id = ?")
+		.bind(keyId)
 		.first<User>()
 
 	if (existing) {
@@ -10,9 +10,9 @@ export async function getOrCreateUser(env: Env, deviceHash: string): Promise<Use
 	}
 
 	const result = await env.DB.prepare(
-		"INSERT INTO users (device_hash) VALUES (?) RETURNING *"
+		"INSERT INTO users (key_id) VALUES (?) RETURNING *"
 	)
-		.bind(deviceHash)
+		.bind(keyId)
 		.first<User>()
 
 	return result!

@@ -42,6 +42,38 @@ describe("SongArtistQuerySchema", () => {
 		expect(result).toHaveProperty("duration", 180000)
 	})
 
+	it("validates with optional album", () => {
+		const result = SongArtistQuerySchema({
+			song: "Test Song",
+			artist: "Test Artist",
+			album: "Test Album",
+		})
+		expect(result).not.toBeInstanceOf(Error)
+		expect(result).toHaveProperty("album", "Test Album")
+	})
+
+	it("validates with all optional fields", () => {
+		const result = SongArtistQuerySchema({
+			song: "Test Song",
+			artist: "Test Artist",
+			album: "Test Album",
+			duration: "180000",
+		})
+		expect(result).not.toBeInstanceOf(Error)
+		expect(result).toHaveProperty("album", "Test Album")
+		expect(result).toHaveProperty("duration", 180000)
+	})
+
+	it("accepts undefined for optional fields", () => {
+		const result = SongArtistQuerySchema({
+			song: "Test Song",
+			artist: "Test Artist",
+			album: undefined,
+			duration: undefined,
+		})
+		expect(result).not.toBeInstanceOf(Error)
+	})
+
 	it("rejects missing song", () => {
 		const result = SongArtistQuerySchema({ artist: "Test Artist" })
 		expect(result.toString()).toContain("song")
@@ -58,7 +90,7 @@ describe("LyricsSubmissionSchema", () => {
 		videoId: "dQw4w9WgXcQ",
 		song: "Never Gonna Give You Up",
 		artist: "Rick Astley",
-		duration: 213000,
+		duration: 213, // 3:33 in seconds
 		lyrics: "[00:15.00]Never gonna give you up",
 		format: "lrc",
 	}
@@ -96,12 +128,12 @@ describe("LyricsSubmissionSchema", () => {
 	})
 
 	it("rejects duration below minimum", () => {
-		const result = LyricsSubmissionSchema({ ...validSubmission, duration: 500 })
+		const result = LyricsSubmissionSchema({ ...validSubmission, duration: 0 })
 		expect(result.toString()).toContain("duration")
 	})
 
 	it("rejects duration above maximum", () => {
-		const result = LyricsSubmissionSchema({ ...validSubmission, duration: 3700000 })
+		const result = LyricsSubmissionSchema({ ...validSubmission, duration: 3700 })
 		expect(result.toString()).toContain("duration")
 	})
 

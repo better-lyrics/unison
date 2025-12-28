@@ -27,7 +27,8 @@ app.get("/", (c) => {
 		version: "1.0.0",
 		description: "Crowdsourced lyrics API for Better Lyrics",
 		endpoints: {
-			getLyrics: "GET /lyrics?v=videoId OR ?song=...&artist=...&duration=...",
+			getLyrics: "GET /lyrics?v=videoId OR ?song=...&artist=...&album=...&duration=...",
+			searchLyrics: "GET /lyrics/search?song=...&artist=...&album=...&duration=...",
 			getLyricsById: "GET /lyrics/:id",
 			submitLyrics: "POST /lyrics/submit (accepts TTML or LRC)",
 			vote: "POST /lyrics/:id/vote",

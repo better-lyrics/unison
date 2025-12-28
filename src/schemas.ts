@@ -10,15 +10,15 @@ export const VideoIdQuerySchema = type({
 export const SongArtistQuerySchema = type({
 	song: "string>0",
 	artist: "string>0",
-	"album?": "string",
-	"duration?": "string.numeric.parse",
+	"album?": "string | undefined",
+	"duration?": "string.numeric.parse | undefined",
 })
 
 export const LyricsSubmissionSchema = type({
 	videoId: "string>0",
 	song: `string>0&string<=${config.validation.song.maxLength}`,
 	artist: `string>0&string<=${config.validation.artist.maxLength}`,
-	duration: `number>=${config.validation.duration.minMs}&number<=${config.validation.duration.maxMs}`,
+	duration: `number>=${config.validation.duration.min}&number<=${config.validation.duration.max}`,
 	lyrics: `string>0&string<=${config.validation.ttml.maxSizeBytes}`,
 	format: "'ttml'|'lrc'|'plain'",
 	"album?": `string<=${config.validation.album.maxLength}`,

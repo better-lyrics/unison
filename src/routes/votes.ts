@@ -1,30 +1,17 @@
 import { getLyricsById } from "@/db/lyrics"
 import { submitReport } from "@/db/reports"
-import { getOrCreateUser } from "@/db/users"
 import { castVote, removeVote } from "@/db/votes"
 import { IdParamSchema, ReportSchema, VoteSchema } from "@/schemas"
 import type { ApiResponse, Env } from "@/types"
-import { hashDeviceId } from "@/utils/hash"
+import { createSignedRequestMiddleware } from "@/utils/auth"
 import { type } from "arktype"
 import { Hono } from "hono"
 
-type Variables = { deviceHash: string; userId: number }
+type Variables = { keyId: string; userId: number; signedPayload: Record<string, unknown> }
 
 const votes = new Hono<{ Bindings: Env; Variables: Variables }>()
 
-votes.use("*", async (c, next) => {
-	const deviceId = c.req.header("x-device-id")
-	if (!deviceId) {
-		return c.json<ApiResponse>({ success: false, error: "Missing X-Device-ID header" }, 401)
-	}
-	const deviceHash = hashDeviceId(deviceId)
-	const user = await getOrCreateUser(c.env, deviceHash)
-	c.set("deviceHash", deviceHash)
-	c.set("userId", user.id)
-	await next()
-})
-
-votes.post("/:id/vote", async (c) => {
+votes.post("/:id/vote", createSignedRequestMiddleware(), async (c) => {
 	const paramParsed = IdParamSchema({ id: c.req.param("id") })
 	if (paramParsed instanceof type.errors) {
 		return c.json<ApiResponse>({ success: false, error: "Invalid ID" }, 400)
@@ -35,14 +22,8 @@ votes.post("/:id/vote", async (c) => {
 		return c.json<ApiResponse>({ success: false, error: "Lyrics not found" }, 404)
 	}
 
-	let body: unknown
-	try {
-		body = await c.req.json()
-	} catch {
-		return c.json<ApiResponse>({ success: false, error: "Invalid JSON" }, 400)
-	}
-
-	const parsed = VoteSchema(body)
+	const payload = c.get("signedPayload")
+	const parsed = VoteSchema(payload)
 	if (parsed instanceof type.errors) {
 		return c.json<ApiResponse>({ success: false, error: parsed.summary }, 400)
 	}
@@ -56,7 +37,7 @@ votes.post("/:id/vote", async (c) => {
 	)
 })
 
-votes.delete("/:id/vote", async (c) => {
+votes.delete("/:id/vote", createSignedRequestMiddleware(), async (c) => {
 	const paramParsed = IdParamSchema({ id: c.req.param("id") })
 	if (paramParsed instanceof type.errors) {
 		return c.json<ApiResponse>({ success: false, error: "Invalid ID" }, 400)
@@ -76,7 +57,7 @@ votes.delete("/:id/vote", async (c) => {
 	)
 })
 
-votes.post("/:id/report", async (c) => {
+votes.post("/:id/report", createSignedRequestMiddleware(), async (c) => {
 	const paramParsed = IdParamSchema({ id: c.req.param("id") })
 	if (paramParsed instanceof type.errors) {
 		return c.json<ApiResponse>({ success: false, error: "Invalid ID" }, 400)
@@ -87,14 +68,8 @@ votes.post("/:id/report", async (c) => {
 		return c.json<ApiResponse>({ success: false, error: "Lyrics not found" }, 404)
 	}
 
-	let body: unknown
-	try {
-		body = await c.req.json()
-	} catch {
-		return c.json<ApiResponse>({ success: false, error: "Invalid JSON" }, 400)
-	}
-
-	const parsed = ReportSchema(body)
+	const payload = c.get("signedPayload")
+	const parsed = ReportSchema(payload)
 	if (parsed instanceof type.errors) {
 		return c.json<ApiResponse>({ success: false, error: parsed.summary }, 400)
 	}

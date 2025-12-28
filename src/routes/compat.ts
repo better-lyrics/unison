@@ -21,6 +21,7 @@ compat.get("/getLyrics", async (c) => {
 	const songQuery = SongArtistQuerySchema({
 		song: c.req.query("s") || c.req.query("song"),
 		artist: c.req.query("a") || c.req.query("artist"),
+		album: c.req.query("album"),
 		duration: c.req.query("d") || c.req.query("duration"),
 	})
 	if (!(songQuery instanceof type.errors)) {
@@ -28,7 +29,8 @@ compat.get("/getLyrics", async (c) => {
 			c.env,
 			songQuery.song,
 			songQuery.artist,
-			songQuery.duration
+			songQuery.duration,
+			songQuery.album
 		)
 		if (!result) {
 			return c.json({ error: "Not found" }, 404)

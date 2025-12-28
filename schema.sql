@@ -1,17 +1,24 @@
 -- Unison: Crowdsourced Lyrics Database Schema
 -- Designed for Cloudflare D1 (SQLite)
 
--- Users table (device identity + reputation)
+-- Public keys table (cryptographic identity)
+CREATE TABLE IF NOT EXISTS public_keys (
+    key_id TEXT PRIMARY KEY,
+    public_key TEXT NOT NULL,
+    created_at INTEGER NOT NULL DEFAULT (unixepoch())
+);
+
+-- Users table (identity + reputation)
 CREATE TABLE IF NOT EXISTS users (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    device_hash TEXT UNIQUE NOT NULL,
+    key_id TEXT UNIQUE NOT NULL,
     reputation REAL DEFAULT 1.0,
     vote_count INTEGER DEFAULT 0,
     avg_vote REAL DEFAULT 0,
     created_at INTEGER NOT NULL DEFAULT (unixepoch())
 );
 
-CREATE INDEX IF NOT EXISTS idx_users_device_hash ON users(device_hash);
+CREATE INDEX IF NOT EXISTS idx_users_key_id ON users(key_id);
 
 -- Main lyrics table
 CREATE TABLE IF NOT EXISTS lyrics (
@@ -24,7 +31,7 @@ CREATE TABLE IF NOT EXISTS lyrics (
     song TEXT NOT NULL,
     artist TEXT NOT NULL,
     album TEXT,
-    duration_ms INTEGER NOT NULL,
+    duration INTEGER NOT NULL,  -- in seconds
 
     -- Normalized values for search (lowercase, stripped)
     song_norm TEXT NOT NULL,

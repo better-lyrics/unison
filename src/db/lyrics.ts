@@ -35,32 +35,31 @@ export async function findBySongArtist(
 	env: Env,
 	song: string,
 	artist: string,
-	durationMs?: number
+	duration?: number,
+	album?: string
 ): Promise<LyricsRow | null> {
 	const songNorm = normalizeSong(song)
 	const artistNorm = normalizeArtist(artist)
 
-	let query: string
-	let params: (string | number)[]
+	const conditions = ["song_norm = ?", "artist_norm = ?"]
+	const params: (string | number)[] = [songNorm, artistNorm]
 
-	if (durationMs !== undefined) {
-		query = `
-			SELECT * FROM lyrics
-			WHERE song_norm = ? AND artist_norm = ?
-			AND ABS(duration_ms - ?) <= ?
-			ORDER BY score DESC
-			LIMIT 1
-		`
-		params = [songNorm, artistNorm, durationMs, config.matching.durationToleranceMs]
-	} else {
-		query = `
-			SELECT * FROM lyrics
-			WHERE song_norm = ? AND artist_norm = ?
-			ORDER BY score DESC
-			LIMIT 1
-		`
-		params = [songNorm, artistNorm]
+	if (duration !== undefined) {
+		conditions.push("ABS(duration - ?) <= ?")
+		params.push(duration, config.matching.durationTolerance)
 	}
+
+	if (album) {
+		conditions.push("album = ?")
+		params.push(album.trim())
+	}
+
+	const query = `
+		SELECT * FROM lyrics
+		WHERE ${conditions.join(" AND ")}
+		ORDER BY score DESC
+		LIMIT 1
+	`
 
 	const result = await env.DB.prepare(query)
 		.bind(...params)
@@ -103,7 +102,7 @@ export async function submitLyrics(
 				song = ?,
 				artist = ?,
 				album = ?,
-				duration_ms = ?,
+				duration = ?,
 				song_norm = ?,
 				artist_norm = ?,
 				submitter_id = ?,
@@ -136,7 +135,7 @@ export async function submitLyrics(
 		`
 		INSERT INTO lyrics (
 			video_id, song, artist, album,
-			duration_ms, song_norm, artist_norm,
+			duration, song_norm, artist_norm,
 			lyrics, format, language, sync_type, submitter_id
 		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		RETURNING id
@@ -159,6 +158,52 @@ export async function submitLyrics(
 		.first<{ id: number }>()
 
 	return { id: result!.id, updated: false }
+}
+
+export async function searchBySongArtist(
+	env: Env,
+	song: string,
+	artist: string,
+	duration?: number,
+	album?: string,
+	limit = 20
+): Promise<LyricsRow[]> {
+	const songNorm = normalizeSong(song)
+	const artistNorm = normalizeArtist(artist)
+
+	const conditions = ["song_norm = ?", "artist_norm = ?"]
+	const params: (string | number)[] = [songNorm, artistNorm]
+
+	if (duration !== undefined) {
+		conditions.push("ABS(duration - ?) <= ?")
+		params.push(duration, config.matching.durationTolerance)
+	}
+
+	if (album) {
+		conditions.push("album = ?")
+		params.push(album.trim())
+	}
+
+	params.push(limit)
+
+	const results = await env.DB.prepare(
+		`
+		SELECT * FROM lyrics
+		WHERE ${conditions.join(" AND ")}
+		ORDER BY score DESC
+		LIMIT ?
+		`
+	)
+		.bind(...params)
+		.all<LyricsRow>()
+
+	for (const row of results.results) {
+		if (isCompressed(row.lyrics)) {
+			row.lyrics = await decompress(row.lyrics)
+		}
+	}
+
+	return results.results
 }
 
 export async function getLyricsById(env: Env, id: number): Promise<LyricsRow | null> {

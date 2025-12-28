@@ -19,10 +19,21 @@ The device ID is a hybrid of UUID (from `chrome.storage.local`) and a lightweigh
 ```
 GET /lyrics?v=<videoId>
 GET /lyrics?song=<song>&artist=<artist>
-GET /lyrics?song=<song>&artist=<artist>&duration=<ms>
+GET /lyrics?song=<song>&artist=<artist>&album=<album>&duration=<ms>
 ```
 
+Returns the highest-scored match. Optional `album` and `duration` narrow results.
 Duration matching uses ±2s tolerance (configurable in `src/config.ts`).
+
+### Search lyrics
+
+Returns all matching entries sorted by score (highest first).
+
+```
+GET /lyrics/search?song=<song>&artist=<artist>
+GET /lyrics/search?song=<song>&artist=<artist>&album=<album>
+GET /lyrics/search?song=<song>&artist=<artist>&duration=<ms>
+```
 
 ### Get by ID
 

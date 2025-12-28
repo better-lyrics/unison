@@ -18,11 +18,11 @@ interface LyricsScoreUpdate {
 
 export async function updateScores(env: Env): Promise<{ updated: number }> {
 	// 1. Update user avg_vote for clustering
-	await env.DB.exec(`
+	await env.DB.prepare(`
 		UPDATE users SET
 			avg_vote = COALESCE((SELECT AVG(vote) FROM votes WHERE votes.user_id = users.id), 0),
 			vote_count = (SELECT COUNT(*) FROM votes WHERE votes.user_id = users.id)
-	`)
+	`).run()
 
 	// 2. Get all lyrics with votes that need score updates
 	const lyricsWithVotes = await env.DB.prepare(`

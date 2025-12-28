@@ -14,10 +14,16 @@ export type Confidence = "low" | "medium" | "high"
 
 export interface User {
 	id: number
-	device_hash: string
+	key_id: string
 	reputation: number
 	vote_count: number
 	avg_vote: number
+	created_at: number
+}
+
+export interface PublicKeyRecord {
+	key_id: string
+	public_key: string
 	created_at: number
 }
 
@@ -27,7 +33,7 @@ export interface LyricsRow {
 	song: string
 	artist: string
 	album: string | null
-	duration_ms: number
+	duration: number
 	song_norm: string
 	artist_norm: string
 	lyrics: string

@@ -22,7 +22,7 @@ export const config = {
   },
 
   matching: {
-    durationToleranceMs: 2000, // ±2 seconds for duration matching
+    durationTolerance: 2, // ±2 seconds for duration matching
   },
 
   validation: {
@@ -40,8 +40,8 @@ export const config = {
       maxLength: 500,
     },
     duration: {
-      minMs: 1 * 1000,
-      maxMs: 60 * 60 * 1000,
+      min: 1,
+      max: 60 * 60, // 1 hour in seconds
     },
     report: {
       maxDetailsLength: 1000,

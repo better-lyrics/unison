@@ -1,5 +1,10 @@
-import { findBySongArtist, findByVideoId, getLyricsById, submitLyrics } from "@/db/lyrics"
-import { getOrCreateUser } from "@/db/users"
+import {
+	findBySongArtist,
+	findByVideoId,
+	getLyricsById,
+	searchBySongArtist,
+	submitLyrics,
+} from "@/db/lyrics"
 import {
 	IdParamSchema,
 	LyricsSubmissionSchema,
@@ -7,25 +12,13 @@ import {
 	VideoIdQuerySchema,
 } from "@/schemas"
 import type { ApiResponse, Confidence, Env, LyricsResponse, LyricsSubmission } from "@/types"
-import { hashDeviceId } from "@/utils/hash"
+import { createSignedRequestMiddleware } from "@/utils/auth"
 import { type } from "arktype"
 import { Hono } from "hono"
 
-type Variables = { deviceHash: string; userId: number }
+type Variables = { keyId: string; userId: number; signedPayload: Record<string, unknown> }
 
 const lyrics = new Hono<{ Bindings: Env; Variables: Variables }>()
-
-lyrics.use("*", async (c, next) => {
-	const deviceId = c.req.header("x-device-id")
-	if (!deviceId) {
-		return c.json<ApiResponse>({ success: false, error: "Missing X-Device-ID header" }, 401)
-	}
-	const deviceHash = hashDeviceId(deviceId)
-	const user = await getOrCreateUser(c.env, deviceHash)
-	c.set("deviceHash", deviceHash)
-	c.set("userId", user.id)
-	await next()
-})
 
 function toResponse(row: {
 	id: number
@@ -60,7 +53,6 @@ function toResponse(row: {
 }
 
 lyrics.get("/", async (c) => {
-	// Try videoId first
 	const videoQuery = VideoIdQuerySchema({ v: c.req.query("v") })
 	if (!(videoQuery instanceof type.errors)) {
 		const result = await findByVideoId(c.env, videoQuery.v)
@@ -70,7 +62,6 @@ lyrics.get("/", async (c) => {
 		return c.json<ApiResponse<LyricsResponse>>({ success: true, data: toResponse(result) })
 	}
 
-	// Try song/artist
 	const songQuery = SongArtistQuerySchema({
 		song: c.req.query("song"),
 		artist: c.req.query("artist"),
@@ -82,7 +73,8 @@ lyrics.get("/", async (c) => {
 			c.env,
 			songQuery.song,
 			songQuery.artist,
-			songQuery.duration
+			songQuery.duration,
+			songQuery.album
 		)
 		if (!result) {
 			return c.json<ApiResponse>({ success: false, error: "Lyrics not found" }, 404)
@@ -96,47 +88,29 @@ lyrics.get("/", async (c) => {
 	)
 })
 
-lyrics.post("/submit", async (c) => {
-	const deviceHash = c.get("deviceHash")
-	const userId = c.get("userId")
-
-	const { success } = await c.env.RATE_LIMITER.limit({ key: deviceHash })
-	if (!success) {
-		return c.json<ApiResponse>({ success: false, error: "Rate limited. Try again later." }, 429)
+lyrics.get("/search", async (c) => {
+	const query = SongArtistQuerySchema({
+		song: c.req.query("song"),
+		artist: c.req.query("artist"),
+		album: c.req.query("album"),
+		duration: c.req.query("duration"),
+	})
+	if (query instanceof type.errors) {
+		return c.json<ApiResponse>({ success: false, error: "Provide 'song' and 'artist'" }, 400)
 	}
 
-	let body: unknown
-	try {
-		body = await c.req.json()
-	} catch {
-		return c.json<ApiResponse>({ success: false, error: "Invalid JSON" }, 400)
-	}
-
-	const parsed = LyricsSubmissionSchema(body)
-	if (parsed instanceof type.errors) {
-		return c.json<ApiResponse>({ success: false, error: parsed.summary }, 400)
-	}
-
-	const durationMs = parsed.duration < 1000 ? parsed.duration * 1000 : parsed.duration
-
-	const submission: LyricsSubmission = {
-		videoId: parsed.videoId,
-		song: parsed.song,
-		artist: parsed.artist,
-		album: parsed.album,
-		duration: durationMs,
-		lyrics: parsed.lyrics,
-		format: parsed.format,
-		language: parsed.language,
-		syncType: parsed.syncType,
-	}
-
-	const result = await submitLyrics(c.env, submission, userId)
-
-	return c.json<ApiResponse<{ id: number; updated: boolean }>>(
-		{ success: true, data: result },
-		result.updated ? 200 : 201
+	const results = await searchBySongArtist(
+		c.env,
+		query.song,
+		query.artist,
+		query.duration,
+		query.album
 	)
+
+	return c.json<ApiResponse<LyricsResponse[]>>({
+		success: true,
+		data: results.map(toResponse),
+	})
 })
 
 lyrics.get("/:id", async (c) => {
@@ -151,6 +125,41 @@ lyrics.get("/:id", async (c) => {
 	}
 
 	return c.json<ApiResponse<LyricsResponse>>({ success: true, data: toResponse(result) })
+})
+
+lyrics.post("/submit", createSignedRequestMiddleware(), async (c) => {
+	const keyId = c.get("keyId")
+	const userId = c.get("userId")
+	const payload = c.get("signedPayload")
+
+	const { success } = await c.env.RATE_LIMITER.limit({ key: keyId })
+	if (!success) {
+		return c.json<ApiResponse>({ success: false, error: "Rate limited. Try again later." }, 429)
+	}
+
+	const parsed = LyricsSubmissionSchema(payload)
+	if (parsed instanceof type.errors) {
+		return c.json<ApiResponse>({ success: false, error: parsed.summary }, 400)
+	}
+
+	const submission: LyricsSubmission = {
+		videoId: parsed.videoId,
+		song: parsed.song,
+		artist: parsed.artist,
+		album: parsed.album,
+		duration: parsed.duration,
+		lyrics: parsed.lyrics,
+		format: parsed.format,
+		language: parsed.language,
+		syncType: parsed.syncType,
+	}
+
+	const result = await submitLyrics(c.env, submission, userId)
+
+	return c.json<ApiResponse<{ id: number; updated: boolean }>>(
+		{ success: true, data: result },
+		result.updated ? 200 : 201
+	)
 })
 
 export default lyrics
