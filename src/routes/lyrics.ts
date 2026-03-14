@@ -16,6 +16,7 @@ function toResponse(row: {
 	song: string
 	artist: string
 	album: string | null
+	isrc: string | null
 	lyrics: string
 	format: "ttml" | "lrc" | "plain"
 	language: string | null
@@ -31,6 +32,7 @@ function toResponse(row: {
 		song: row.song,
 		artist: row.artist,
 		album: row.album || undefined,
+		isrc: row.isrc || undefined,
 		lyrics: row.lyrics,
 		format: row.format,
 		language: row.language || undefined,
@@ -177,6 +179,7 @@ export const lyricsRoutes = (env: Env) =>
 				song: p.song as string,
 				artist: p.artist as string,
 				album: typeof p.album === "string" ? p.album : undefined,
+			isrc: typeof p.isrc === "string" ? p.isrc : undefined,
 				duration: p.duration as number,
 				lyrics: p.lyrics as string,
 				format: p.format as "ttml" | "lrc" | "plain",

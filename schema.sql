@@ -31,6 +31,7 @@ CREATE TABLE IF NOT EXISTS lyrics (
     song TEXT NOT NULL,
     artist TEXT NOT NULL,
     album TEXT,
+    isrc TEXT,  -- International Standard Recording Code
     duration INTEGER NOT NULL,  -- in seconds
 
     -- Normalized values for search (lowercase, stripped)
@@ -99,3 +100,6 @@ CREATE TABLE IF NOT EXISTS reports (
 
 CREATE INDEX IF NOT EXISTS idx_reports_lyrics ON reports(lyrics_id);
 CREATE INDEX IF NOT EXISTS idx_lyrics_effective_score ON lyrics(effective_score DESC);
+
+-- Migrations
+ALTER TABLE lyrics ADD COLUMN IF NOT EXISTS isrc TEXT;

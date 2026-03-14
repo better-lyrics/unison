@@ -1,6 +1,6 @@
 {
   "name": "unison",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Crowdsourced lyrics API for Better Lyrics",
   "main": "src/index.ts",
   "scripts": {

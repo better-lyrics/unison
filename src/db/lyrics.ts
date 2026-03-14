@@ -102,6 +102,7 @@ export async function submitLyrics(
 				song = ?,
 				artist = ?,
 				album = ?,
+				isrc = ?,
 				duration = ?,
 				song_norm = ?,
 				artist_norm = ?,
@@ -118,6 +119,7 @@ export async function submitLyrics(
 				submission.song.trim(),
 				submission.artist.trim(),
 				submission.album?.trim() || null,
+				submission.isrc || null,
 				submission.duration,
 				songNorm,
 				artistNorm,
@@ -134,10 +136,10 @@ export async function submitLyrics(
 	const result = await env.DB.prepare(
 		`
 		INSERT INTO lyrics (
-			video_id, song, artist, album,
+			video_id, song, artist, album, isrc,
 			duration, song_norm, artist_norm,
 			lyrics, format, language, sync_type, submitter_id
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		RETURNING id
 		`
 	)
@@ -146,6 +148,7 @@ export async function submitLyrics(
 			submission.song.trim(),
 			submission.artist.trim(),
 			submission.album?.trim() || null,
+			submission.isrc || null,
 			submission.duration,
 			songNorm,
 			artistNorm,

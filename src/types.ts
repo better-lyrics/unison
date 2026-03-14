@@ -37,6 +37,7 @@ export interface LyricsRow {
 	song: string
 	artist: string
 	album: string | null
+	isrc: string | null
 	duration: number
 	song_norm: string
 	artist_norm: string
@@ -62,6 +63,7 @@ export interface LyricsSubmission {
 	song: string
 	artist: string
 	album?: string
+	isrc?: string
 	duration: number
 	lyrics: string
 	format: LyricsFormat
@@ -75,6 +77,7 @@ export interface LyricsResponse {
 	song: string
 	artist: string
 	album?: string
+	isrc?: string
 	lyrics: string
 	format: LyricsFormat
 	language?: string

@@ -31,7 +31,7 @@ const app = new Elysia({ adapter: node() })
 	)
 	.get("/", () => ({
 		name: "Unison",
-		version: "1.0.0",
+		version: "1.1.0",
 		description: "Crowdsourced lyrics API for Better Lyrics",
 		endpoints: {
 			getLyrics: "GET /lyrics?v=videoId OR ?song=...&artist=...&album=...&duration=...",

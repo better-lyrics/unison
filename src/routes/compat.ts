@@ -14,7 +14,7 @@ export const compatRoutes = (env: Env) =>
 					if (!result) {
 						return status(404, { error: "Not found" })
 					}
-					return { lyrics: result.lyrics, format: result.format }
+					return { lyrics: result.lyrics, format: result.format, isrc: result.isrc || undefined }
 				}
 
 				// Try song/artist (legacy support)
@@ -27,7 +27,7 @@ export const compatRoutes = (env: Env) =>
 					if (!result) {
 						return status(404, { error: "Not found" })
 					}
-					return { lyrics: result.lyrics, format: result.format }
+					return { lyrics: result.lyrics, format: result.format, isrc: result.isrc || undefined }
 				}
 
 				return status(400, { error: "Missing parameters" })
