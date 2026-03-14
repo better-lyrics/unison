@@ -145,3 +145,6 @@ wrangler.toml
 .wrangler
 
 *.sql
+
+# CLI utils
+cli/

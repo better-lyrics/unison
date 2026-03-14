@@ -34,24 +34,35 @@ const app = new Elysia({ adapter: node() })
 			},
 		})
 	)
-	.onBeforeHandle(({ request, store }) => {
-		;(store as Record<string, unknown>).__startTime = performance.now()
-		;(store as Record<string, unknown>).__method = request.method
-		;(store as Record<string, unknown>).__url = new URL(request.url).pathname
-	})
-	.onAfterHandle(({ store, set }) => {
+	.onRequest(({ request, store }) => {
 		const s = store as Record<string, unknown>
+		s.__startTime = performance.now()
+		s.__method = request.method
+		s.__url = new URL(request.url).pathname
+	})
+	.onAfterResponse(({ store, set }) => {
+		const s = store as Record<string, unknown>
+		if (!s.__startTime) return
 		const duration = (performance.now() - (s.__startTime as number)).toFixed(1)
 		const status = typeof set.status === "number" ? set.status : 200
+		if (status >= 400) return // already logged by onError
 		httpLog.info(`${s.__method} ${s.__url} ${status} ${duration}ms`)
 	})
-	.onError(({ error, store, set }) => {
+	.onError(({ code, error, request, store, set }) => {
 		const s = store as Record<string, unknown>
+		const method = s.__method || request.method
+		const url = s.__url || new URL(request.url).pathname
 		const duration = s.__startTime
 			? (performance.now() - (s.__startTime as number)).toFixed(1)
 			: "?"
+
+		if (code === "NOT_FOUND") {
+			httpLog.warn(`${method} ${url} 404 ${duration}ms`)
+			return { success: false, error: "Not Found" }
+		}
+
 		const status = typeof set.status === "number" ? set.status : 500
-		httpLog.error(`${s.__method || "?"} ${s.__url || "?"} ${status} ${duration}ms`, {
+		httpLog.error(`${method} ${url} ${status} ${duration}ms`, {
 			error: "message" in error ? error.message : String(error),
 		})
 		return { success: false, error: "Internal Server Error" }
