@@ -27,7 +27,7 @@ export async function castVote(
 
 		await env.DB.batch([
 			env.DB.prepare(
-				"UPDATE votes SET vote = ?, created_at = unixepoch() WHERE lyrics_id = ? AND user_id = ?"
+				"UPDATE votes SET vote = ?, created_at = EXTRACT(EPOCH FROM NOW())::INTEGER WHERE lyrics_id = ? AND user_id = ?"
 			).bind(vote, lyricsId, userId),
 			env.DB.prepare(
 				`
@@ -35,7 +35,7 @@ export async function castVote(
 					upvotes = upvotes + CASE WHEN ? = 1 THEN 1 ELSE -1 END,
 					downvotes = downvotes + CASE WHEN ? = -1 THEN 1 ELSE -1 END,
 					score = score + (? * 2),
-					updated_at = unixepoch()
+					updated_at = EXTRACT(EPOCH FROM NOW())::INTEGER
 				WHERE id = ?
 				`
 			).bind(vote, vote, vote, lyricsId),
@@ -55,7 +55,7 @@ export async function castVote(
 				upvotes = upvotes + CASE WHEN ? = 1 THEN 1 ELSE 0 END,
 				downvotes = downvotes + CASE WHEN ? = -1 THEN 1 ELSE 0 END,
 				score = score + ?,
-				updated_at = unixepoch()
+				updated_at = EXTRACT(EPOCH FROM NOW())::INTEGER
 			WHERE id = ?
 			`
 		).bind(vote, vote, vote, lyricsId),
@@ -93,7 +93,7 @@ export async function removeVote(
 				upvotes = upvotes - CASE WHEN ? = 1 THEN 1 ELSE 0 END,
 				downvotes = downvotes - CASE WHEN ? = -1 THEN 1 ELSE 0 END,
 				score = score - ?,
-				updated_at = unixepoch()
+				updated_at = EXTRACT(EPOCH FROM NOW())::INTEGER
 			WHERE id = ?
 			`
 		).bind(vote, vote, vote, lyricsId),
