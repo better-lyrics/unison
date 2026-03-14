@@ -83,10 +83,7 @@ export async function removeVote(
 	const vote = existing.vote
 
 	await env.DB.batch([
-		env.DB.prepare("DELETE FROM votes WHERE lyrics_id = ? AND user_id = ?").bind(
-			lyricsId,
-			userId
-		),
+		env.DB.prepare("DELETE FROM votes WHERE lyrics_id = ? AND user_id = ?").bind(lyricsId, userId),
 		env.DB.prepare(
 			`
 			UPDATE lyrics SET

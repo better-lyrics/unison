@@ -1,9 +1,6 @@
 import type { Env, PublicKeyRecord } from "@/types"
 
-export async function getPublicKey(
-	env: Env,
-	keyId: string
-): Promise<PublicKeyRecord | null> {
+export async function getPublicKey(env: Env, keyId: string): Promise<PublicKeyRecord | null> {
 	return env.DB.prepare("SELECT * FROM public_keys WHERE key_id = ?")
 		.bind(keyId)
 		.first<PublicKeyRecord>()

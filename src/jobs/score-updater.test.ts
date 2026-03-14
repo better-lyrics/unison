@@ -25,9 +25,7 @@ function calculateScore(lyricsId: number, votes: VoteWithUser[]): LyricsScoreUpd
 	let generousUpvotes = 0
 
 	for (const v of votes) {
-		const weight = v.is_self_vote
-			? v.reputation * config.reputation.selfVoteWeight
-			: v.reputation
+		const weight = v.is_self_vote ? v.reputation * config.reputation.selfVoteWeight : v.reputation
 
 		weightedSum += v.vote * weight
 		totalWeight += weight

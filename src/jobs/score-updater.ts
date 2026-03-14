@@ -86,9 +86,7 @@ function calculateScore(lyricsId: number, votes: VoteWithUser[]): LyricsScoreUpd
 
 	for (const v of votes) {
 		// Self-votes count less
-		const weight = v.is_self_vote
-			? v.reputation * config.reputation.selfVoteWeight
-			: v.reputation
+		const weight = v.is_self_vote ? v.reputation * config.reputation.selfVoteWeight : v.reputation
 
 		weightedSum += v.vote * weight
 		totalWeight += weight

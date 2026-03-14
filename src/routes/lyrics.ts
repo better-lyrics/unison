@@ -179,14 +179,13 @@ export const lyricsRoutes = (env: Env) =>
 				song: p.song as string,
 				artist: p.artist as string,
 				album: typeof p.album === "string" ? p.album : undefined,
-			isrc: typeof p.isrc === "string" ? p.isrc : undefined,
+				isrc: typeof p.isrc === "string" ? p.isrc : undefined,
 				duration: p.duration as number,
 				lyrics: p.lyrics as string,
 				format: p.format as "ttml" | "lrc" | "plain",
 				language: typeof p.language === "string" ? p.language : undefined,
 				syncType:
-					typeof p.syncType === "string" &&
-					["richsync", "linesync", "plain"].includes(p.syncType)
+					typeof p.syncType === "string" && ["richsync", "linesync", "plain"].includes(p.syncType)
 						? (p.syncType as "richsync" | "linesync" | "plain")
 						: undefined,
 			}

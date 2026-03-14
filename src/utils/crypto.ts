@@ -8,23 +8,12 @@ export async function verifySignature(
 	publicKeyJwk: JsonWebKey
 ): Promise<boolean> {
 	try {
-		const key = await crypto.subtle.importKey(
-			"jwk",
-			publicKeyJwk,
-			ECDSA_PARAMS,
-			false,
-			["verify"]
-		)
+		const key = await crypto.subtle.importKey("jwk", publicKeyJwk, ECDSA_PARAMS, false, ["verify"])
 
 		const signatureBuffer = base64ToBuffer(signature)
 		const payloadBuffer = new TextEncoder().encode(canonicalJson(payload))
 
-		return await crypto.subtle.verify(
-			ECDSA_SIGN_PARAMS,
-			key,
-			signatureBuffer,
-			payloadBuffer
-		)
+		return await crypto.subtle.verify(ECDSA_SIGN_PARAMS, key, signatureBuffer, payloadBuffer)
 	} catch {
 		return false
 	}
@@ -56,10 +45,7 @@ export async function hashPublicKey(publicKeyJwk: JsonWebKey): Promise<string> {
 	return bufferToHex(hash)
 }
 
-export async function verifyKeyId(
-	keyId: string,
-	publicKeyJwk: JsonWebKey
-): Promise<boolean> {
+export async function verifyKeyId(keyId: string, publicKeyJwk: JsonWebKey): Promise<boolean> {
 	const computed = await hashPublicKey(publicKeyJwk)
 	return computed.toLowerCase() === keyId.toLowerCase()
 }
