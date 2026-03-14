@@ -12,8 +12,8 @@ export function getPool(databaseUrl: string): pg.Pool {
 }
 
 class PreparedStatement {
-	private sql: string
-	private params: unknown[] = []
+	readonly sql: string
+	readonly params: unknown[] = []
 	private pool: pg.Pool
 
 	constructor(pool: pg.Pool, sql: string) {
@@ -59,7 +59,7 @@ export class D1Compat {
 		try {
 			await client.query("BEGIN")
 			for (const stmt of statements) {
-				await stmt.run()
+				await client.query(stmt.sql, stmt.params)
 			}
 			await client.query("COMMIT")
 		} catch (err) {
