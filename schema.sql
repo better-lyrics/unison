@@ -1,28 +1,28 @@
 -- Unison: Crowdsourced Lyrics Database Schema
--- Designed for Cloudflare D1 (SQLite)
+-- Designed for PostgreSQL
 
 -- Public keys table (cryptographic identity)
 CREATE TABLE IF NOT EXISTS public_keys (
     key_id TEXT PRIMARY KEY,
     public_key TEXT NOT NULL,
-    created_at INTEGER NOT NULL DEFAULT (unixepoch())
+    created_at INTEGER NOT NULL DEFAULT (EXTRACT(EPOCH FROM NOW())::INTEGER)
 );
 
 -- Users table (identity + reputation)
 CREATE TABLE IF NOT EXISTS users (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    id SERIAL PRIMARY KEY,
     key_id TEXT UNIQUE NOT NULL,
-    reputation REAL DEFAULT 1.0,
+    reputation DOUBLE PRECISION DEFAULT 1.0,
     vote_count INTEGER DEFAULT 0,
-    avg_vote REAL DEFAULT 0,
-    created_at INTEGER NOT NULL DEFAULT (unixepoch())
+    avg_vote DOUBLE PRECISION DEFAULT 0,
+    created_at INTEGER NOT NULL DEFAULT (EXTRACT(EPOCH FROM NOW())::INTEGER)
 );
 
 CREATE INDEX IF NOT EXISTS idx_users_key_id ON users(key_id);
 
 -- Main lyrics table
 CREATE TABLE IF NOT EXISTS lyrics (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    id SERIAL PRIMARY KEY,
 
     -- YouTube video identifier (primary lookup key)
     video_id TEXT NOT NULL UNIQUE,
@@ -51,15 +51,15 @@ CREATE TABLE IF NOT EXISTS lyrics (
     downvotes INTEGER DEFAULT 0,
 
     -- Reputation-weighted metrics (computed by batch job)
-    effective_score REAL DEFAULT 0,
+    effective_score DOUBLE PRECISION DEFAULT 0,
     vote_count INTEGER DEFAULT 0,
     diversity_bonus INTEGER DEFAULT 0,
     confidence TEXT CHECK(confidence IN ('low', 'medium', 'high')) DEFAULT 'low',
     score_updated_at INTEGER,
 
     -- Timestamps
-    created_at INTEGER NOT NULL DEFAULT (unixepoch()),
-    updated_at INTEGER NOT NULL DEFAULT (unixepoch()),
+    created_at INTEGER NOT NULL DEFAULT (EXTRACT(EPOCH FROM NOW())::INTEGER),
+    updated_at INTEGER NOT NULL DEFAULT (EXTRACT(EPOCH FROM NOW())::INTEGER),
 
     -- Submitter info
     submitter_id INTEGER REFERENCES users(id)
@@ -72,12 +72,12 @@ CREATE INDEX IF NOT EXISTS idx_lyrics_score ON lyrics(score DESC);
 
 -- Votes table (for quality control)
 CREATE TABLE IF NOT EXISTS votes (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    id SERIAL PRIMARY KEY,
     lyrics_id INTEGER NOT NULL REFERENCES lyrics(id) ON DELETE CASCADE,
     user_id INTEGER NOT NULL REFERENCES users(id),
     vote INTEGER CHECK(vote IN (-1, 1)) NOT NULL,
     is_self_vote INTEGER DEFAULT 0,
-    created_at INTEGER NOT NULL DEFAULT (unixepoch()),
+    created_at INTEGER NOT NULL DEFAULT (EXTRACT(EPOCH FROM NOW())::INTEGER),
 
     UNIQUE(lyrics_id, user_id)
 );
@@ -87,12 +87,12 @@ CREATE INDEX IF NOT EXISTS idx_votes_user ON votes(user_id);
 
 -- Reports table (for flagging bad lyrics)
 CREATE TABLE IF NOT EXISTS reports (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    id SERIAL PRIMARY KEY,
     lyrics_id INTEGER NOT NULL REFERENCES lyrics(id) ON DELETE CASCADE,
     user_id INTEGER NOT NULL REFERENCES users(id),
     reason TEXT CHECK(reason IN ('wrong_song', 'bad_sync', 'offensive', 'spam', 'other')) NOT NULL,
     details TEXT,
-    created_at INTEGER NOT NULL DEFAULT (unixepoch()),
+    created_at INTEGER NOT NULL DEFAULT (EXTRACT(EPOCH FROM NOW())::INTEGER),
 
     UNIQUE(lyrics_id, user_id)
 );

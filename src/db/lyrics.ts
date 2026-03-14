@@ -106,7 +106,7 @@ export async function submitLyrics(
 				song_norm = ?,
 				artist_norm = ?,
 				submitter_id = ?,
-				updated_at = unixepoch()
+				updated_at = EXTRACT(EPOCH FROM NOW())::INTEGER
 			WHERE id = ?
 			`
 		)

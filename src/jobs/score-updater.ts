@@ -27,7 +27,7 @@ export async function updateScores(env: Env): Promise<{ updated: number }> {
 	// 2. Get all lyrics with votes that need score updates
 	const lyricsWithVotes = await env.DB.prepare(`
 		SELECT DISTINCT lyrics_id FROM votes
-		WHERE created_at > (unixepoch() - 3600)
+		WHERE created_at > (EXTRACT(EPOCH FROM NOW())::INTEGER - 3600)
 		UNION
 		SELECT id FROM lyrics WHERE score_updated_at IS NULL AND vote_count > 0
 	`).all<{ lyrics_id: number }>()
@@ -59,7 +59,7 @@ export async function updateScores(env: Env): Promise<{ updated: number }> {
 				vote_count = ?,
 				diversity_bonus = ?,
 				confidence = ?,
-				score_updated_at = unixepoch()
+				score_updated_at = EXTRACT(EPOCH FROM NOW())::INTEGER
 			WHERE id = ?
 		`)
 			.bind(

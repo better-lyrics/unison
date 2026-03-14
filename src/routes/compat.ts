@@ -1,44 +1,47 @@
+import { Elysia, t } from "elysia"
 import { findBySongArtist, findByVideoId } from "@/db/lyrics"
-import { SongArtistQuerySchema, VideoIdQuerySchema } from "@/schemas"
 import type { Env } from "@/types"
-import { type } from "arktype"
-import { Hono } from "hono"
 
-const compat = new Hono<{ Bindings: Env }>()
+export const compatRoutes = (env: Env) =>
+	new Elysia()
+		.decorate("env", env)
+		.get(
+			"/getLyrics",
+			async ({ query, env, status }) => {
+				// Try videoId first
+				if (query.v) {
+					const result = await findByVideoId(env, query.v)
+					if (!result) {
+						return status(404, { error: "Not found" })
+					}
+					return { lyrics: result.lyrics, format: result.format }
+				}
 
-compat.get("/getLyrics", async (c) => {
-	// Try videoId first
-	const videoQuery = VideoIdQuerySchema({ v: c.req.query("v") })
-	if (!(videoQuery instanceof type.errors)) {
-		const result = await findByVideoId(c.env, videoQuery.v)
-		if (!result) {
-			return c.json({ error: "Not found" }, 404)
-		}
-		return c.json({ lyrics: result.lyrics, format: result.format })
-	}
+				// Try song/artist (legacy support)
+				const song = query.s || query.song
+				const artist = query.a || query.artist
+				if (song && artist) {
+					const duration =
+						query.d || query.duration ? Number(query.d || query.duration) : undefined
+					const result = await findBySongArtist(env, song, artist, duration, query.album)
+					if (!result) {
+						return status(404, { error: "Not found" })
+					}
+					return { lyrics: result.lyrics, format: result.format }
+				}
 
-	// Try song/artist (legacy support)
-	const songQuery = SongArtistQuerySchema({
-		song: c.req.query("s") || c.req.query("song"),
-		artist: c.req.query("a") || c.req.query("artist"),
-		album: c.req.query("album"),
-		duration: c.req.query("d") || c.req.query("duration"),
-	})
-	if (!(songQuery instanceof type.errors)) {
-		const result = await findBySongArtist(
-			c.env,
-			songQuery.song,
-			songQuery.artist,
-			songQuery.duration,
-			songQuery.album
+				return status(400, { error: "Missing parameters" })
+			},
+			{
+				query: t.Object({
+					v: t.Optional(t.String()),
+					s: t.Optional(t.String()),
+					song: t.Optional(t.String()),
+					a: t.Optional(t.String()),
+					artist: t.Optional(t.String()),
+					album: t.Optional(t.String()),
+					d: t.Optional(t.String()),
+					duration: t.Optional(t.String()),
+				}),
+			}
 		)
-		if (!result) {
-			return c.json({ error: "Not found" }, 404)
-		}
-		return c.json({ lyrics: result.lyrics, format: result.format })
-	}
-
-	return c.json({ error: "Missing parameters" }, 400)
-})
-
-export default compat

@@ -1,28 +1,35 @@
+import { Elysia } from "elysia"
+import { node } from "@elysiajs/node"
+import { cors } from "@elysiajs/cors"
+import { cron } from "@elysiajs/cron"
+import { createEnv } from "@/infra/env"
 import { updateScores } from "@/jobs/score-updater"
-import compat from "@/routes/compat"
-import lyrics from "@/routes/lyrics"
-import votes from "@/routes/votes"
-import type { Env } from "@/types"
-import { Hono } from "hono"
-import { cors } from "hono/cors"
-import { logger } from "hono/logger"
+import { lyricsRoutes } from "@/routes/lyrics"
+import { voteRoutes } from "@/routes/votes"
+import { compatRoutes } from "@/routes/compat"
 
-const app = new Hono<{ Bindings: Env }>()
+const env = createEnv()
 
-app.use("*", logger())
-
-app.use(
-	"*",
-	cors({
-		origin: "*",
-		allowMethods: ["GET", "POST", "DELETE", "OPTIONS"],
-		allowHeaders: ["Content-Type", "X-Device-ID"],
-		maxAge: 86400,
-	})
-)
-
-app.get("/", (c) => {
-	return c.json({
+const app = new Elysia({ adapter: node() })
+	.use(
+		cors({
+			origin: true,
+			methods: ["GET", "POST", "DELETE", "OPTIONS"],
+			allowedHeaders: ["Content-Type", "X-Device-ID"],
+			maxAge: 86400,
+		})
+	)
+	.use(
+		cron({
+			name: "score-updater",
+			pattern: "0 * * * *",
+			async run() {
+				const result = await updateScores(env)
+				console.log(`Score update: ${result.updated} lyrics updated`)
+			},
+		})
+	)
+	.get("/", () => ({
 		name: "Unison",
 		version: "1.0.0",
 		description: "Crowdsourced lyrics API for Better Lyrics",
@@ -35,33 +42,16 @@ app.get("/", (c) => {
 			removeVote: "DELETE /lyrics/:id/vote",
 			report: "POST /lyrics/:id/report",
 		},
+	}))
+	.get("/health", () => ({ status: "ok", timestamp: Date.now() }))
+	.use(compatRoutes(env))
+	.use(lyricsRoutes(env))
+	.use(voteRoutes(env))
+	.onError(({ error }) => {
+		console.error("Unhandled error:", error)
+		return { success: false, error: "Internal Server Error" }
 	})
-})
+	.listen(Number.parseInt(process.env.PORT || "3000", 10))
 
-app.get("/health", (c) => {
-	return c.json({ status: "ok", timestamp: Date.now() })
-})
-
-app.route("/", compat)
-app.route("/lyrics", lyrics)
-app.route("/lyrics", votes)
-
-app.notFound((c) => {
-	return c.json({ success: false, error: "Not Found" }, 404)
-})
-
-app.onError((err, c) => {
-	console.error("Unhandled error:", err)
-	return c.json({ success: false, error: "Internal Server Error" }, 500)
-})
-
-export default {
-	fetch: app.fetch,
-	async scheduled(event: ScheduledEvent, env: Env, ctx: ExecutionContext) {
-		ctx.waitUntil(
-			updateScores(env).then((result) => {
-				console.log(`Score update completed: ${result.updated} lyrics updated`)
-			})
-		)
-	},
-}
+const port = process.env.PORT || "3000"
+console.log(`Unison listening on port ${port}`)

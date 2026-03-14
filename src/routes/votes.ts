@@ -1,89 +1,94 @@
+import { Elysia, t } from "elysia"
 import { getLyricsById } from "@/db/lyrics"
 import { submitReport } from "@/db/reports"
 import { castVote, removeVote } from "@/db/votes"
-import { IdParamSchema, ReportSchema, VoteSchema } from "@/schemas"
-import type { ApiResponse, Env } from "@/types"
-import { createSignedRequestMiddleware } from "@/utils/auth"
-import { type } from "arktype"
-import { Hono } from "hono"
+import type { Env } from "@/types"
+import { signedRequest } from "@/utils/auth"
 
-type Variables = { keyId: string; userId: number; signedPayload: Record<string, unknown> }
+export const voteRoutes = (env: Env) =>
+	new Elysia({ prefix: "/lyrics" })
+		.decorate("env", env)
+		.use(signedRequest)
+		.post(
+			"/:id/vote",
+			async ({ params, env, userId, signedPayload, status }) => {
+				const id = Number(params.id)
+				if (Number.isNaN(id)) {
+					return status(400, { success: false, error: "Invalid ID" })
+				}
 
-const votes = new Hono<{ Bindings: Env; Variables: Variables }>()
+				const lyrics = await getLyricsById(env, id)
+				if (!lyrics) {
+					return status(404, { success: false, error: "Lyrics not found" })
+				}
 
-votes.post("/:id/vote", createSignedRequestMiddleware(), async (c) => {
-	const paramParsed = IdParamSchema({ id: c.req.param("id") })
-	if (paramParsed instanceof type.errors) {
-		return c.json<ApiResponse>({ success: false, error: "Invalid ID" }, 400)
-	}
+				const vote = signedPayload.vote
+				if (vote !== 1 && vote !== -1) {
+					return status(400, { success: false, error: "Vote must be 1 or -1" })
+				}
 
-	const lyrics = await getLyricsById(c.env, paramParsed.id)
-	if (!lyrics) {
-		return c.json<ApiResponse>({ success: false, error: "Lyrics not found" }, 404)
-	}
+				const result = await castVote(env, id, userId, vote)
 
-	const payload = c.get("signedPayload")
-	const parsed = VoteSchema(payload)
-	if (parsed instanceof type.errors) {
-		return c.json<ApiResponse>({ success: false, error: parsed.summary }, 400)
-	}
+				return status(result.success ? 200 : 409, {
+					success: result.success,
+					data: { message: result.message },
+				})
+			},
+			{ params: t.Object({ id: t.String() }) }
+		)
+		.delete(
+			"/:id/vote",
+			async ({ params, env, userId, status }) => {
+				const id = Number(params.id)
+				if (Number.isNaN(id)) {
+					return status(400, { success: false, error: "Invalid ID" })
+				}
 
-	const userId = c.get("userId")
-	const result = await castVote(c.env, paramParsed.id, userId, parsed.vote)
+				const lyrics = await getLyricsById(env, id)
+				if (!lyrics) {
+					return status(404, { success: false, error: "Lyrics not found" })
+				}
 
-	return c.json<ApiResponse<{ message: string }>>(
-		{ success: result.success, data: { message: result.message } },
-		result.success ? 200 : 409
-	)
-})
+				const result = await removeVote(env, id, userId)
 
-votes.delete("/:id/vote", createSignedRequestMiddleware(), async (c) => {
-	const paramParsed = IdParamSchema({ id: c.req.param("id") })
-	if (paramParsed instanceof type.errors) {
-		return c.json<ApiResponse>({ success: false, error: "Invalid ID" }, 400)
-	}
+				return status(result.success ? 200 : 404, {
+					success: result.success,
+					data: { message: result.message },
+				})
+			},
+			{ params: t.Object({ id: t.String() }) }
+		)
+		.post(
+			"/:id/report",
+			async ({ params, env, userId, signedPayload, status }) => {
+				const id = Number(params.id)
+				if (Number.isNaN(id)) {
+					return status(400, { success: false, error: "Invalid ID" })
+				}
 
-	const lyrics = await getLyricsById(c.env, paramParsed.id)
-	if (!lyrics) {
-		return c.json<ApiResponse>({ success: false, error: "Lyrics not found" }, 404)
-	}
+				const lyrics = await getLyricsById(env, id)
+				if (!lyrics) {
+					return status(404, { success: false, error: "Lyrics not found" })
+				}
 
-	const userId = c.get("userId")
-	const result = await removeVote(c.env, paramParsed.id, userId)
+				const reason = signedPayload.reason
+				const validReasons = ["wrong_song", "bad_sync", "offensive", "spam", "other"]
+				if (typeof reason !== "string" || !validReasons.includes(reason)) {
+					return status(400, { success: false, error: "Invalid report reason" })
+				}
 
-	return c.json<ApiResponse<{ message: string }>>(
-		{ success: result.success, data: { message: result.message } },
-		result.success ? 200 : 404
-	)
-})
+				const details =
+					typeof signedPayload.details === "string" ? signedPayload.details : undefined
 
-votes.post("/:id/report", createSignedRequestMiddleware(), async (c) => {
-	const paramParsed = IdParamSchema({ id: c.req.param("id") })
-	if (paramParsed instanceof type.errors) {
-		return c.json<ApiResponse>({ success: false, error: "Invalid ID" }, 400)
-	}
+				const result = await submitReport(env, id, userId, {
+					reason: reason as "wrong_song" | "bad_sync" | "offensive" | "spam" | "other",
+					details,
+				})
 
-	const lyrics = await getLyricsById(c.env, paramParsed.id)
-	if (!lyrics) {
-		return c.json<ApiResponse>({ success: false, error: "Lyrics not found" }, 404)
-	}
-
-	const payload = c.get("signedPayload")
-	const parsed = ReportSchema(payload)
-	if (parsed instanceof type.errors) {
-		return c.json<ApiResponse>({ success: false, error: parsed.summary }, 400)
-	}
-
-	const userId = c.get("userId")
-	const result = await submitReport(c.env, paramParsed.id, userId, {
-		reason: parsed.reason,
-		details: parsed.details,
-	})
-
-	return c.json<ApiResponse<{ message: string }>>(
-		{ success: result.success, data: { message: result.message } },
-		result.success ? 201 : 409
-	)
-})
-
-export default votes
+				return status(result.success ? 201 : 409, {
+					success: result.success,
+					data: { message: result.message },
+				})
+			},
+			{ params: t.Object({ id: t.String() }) }
+		)

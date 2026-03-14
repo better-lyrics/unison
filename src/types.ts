@@ -1,7 +1,11 @@
+import type { D1Compat } from "@/infra/database"
+import type { KVCompat } from "@/infra/cache"
+import type { RedisRateLimiter } from "@/infra/rate-limiter"
+
 export interface Env {
-	DB: D1Database
-	CACHE: KVNamespace
-	RATE_LIMITER: RateLimiter
+	DB: D1Compat
+	CACHE: KVCompat
+	RATE_LIMITER: RedisRateLimiter
 	CACHE_TTL_SECONDS: string
 }
 

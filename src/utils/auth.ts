@@ -1,15 +1,12 @@
-import type { Context, Next } from "hono"
-import type { ApiResponse, Env } from "@/types"
+import { Elysia } from "elysia"
+import type { Env } from "@/types"
 import { getPublicKey, registerPublicKey } from "@/db/publicKeys"
 import { getOrCreateUser } from "@/db/users"
 import { verifySignature, isTimestampFresh, verifyKeyId } from "./crypto"
 
 interface SignedRequestPayload {
-	/** Unix timestamp in milliseconds (from Date.now()) */
 	timestamp: number
-	/** Unique nonce (min 16 chars) to prevent replay attacks */
 	nonce: string
-	/** SHA-256 hash of the public key */
 	keyId: string
 	[key: string]: unknown
 }
@@ -42,89 +39,56 @@ function isValidSignedBody(body: unknown): body is SignedRequestBody {
 	return true
 }
 
-type AuthVariables = {
-	keyId: string
-	userId: number
-	signedPayload: SignedRequestPayload
-}
-
-export function createSignedRequestMiddleware() {
-	return async (
-		c: Context<{ Bindings: Env; Variables: AuthVariables }>,
-		next: Next
-	) => {
-		let body: unknown
-		try {
-			body = await c.req.json()
-		} catch {
-			return c.json<ApiResponse>(
-				{ success: false, error: "Invalid JSON" },
-				400
-			)
-		}
+export const signedRequest = new Elysia({ name: "signed-request" }).derive(
+	{ as: "scoped" },
+	async (ctx) => {
+		const body = ctx.body
+		const env = (ctx as unknown as { env: Env }).env
 
 		if (!isValidSignedBody(body)) {
-			return c.json<ApiResponse>(
-				{ success: false, error: "Invalid signed request format" },
-				400
-			)
+			throw new Error("Invalid signed request format")
 		}
 
 		const { payload, signature, publicKey } = body
 
 		if (!isTimestampFresh(payload.timestamp)) {
-			return c.json<ApiResponse>(
-				{ success: false, error: "Request timestamp expired" },
-				400
-			)
+			throw new Error("Request timestamp expired")
 		}
 
 		// Check for nonce replay attacks
 		const nonceKey = `nonce:${payload.keyId}:${payload.nonce}`
-		const existingNonce = await c.env.CACHE.get(nonceKey)
+		const existingNonce = await env.CACHE.get(nonceKey)
 		if (existingNonce) {
-			return c.json<ApiResponse>(
-				{ success: false, error: "Nonce already used" },
-				400
-			)
+			throw new Error("Nonce already used")
 		}
 		// Store nonce immediately to close the race window (TTL: 5 minutes = 300 seconds)
-		await c.env.CACHE.put(nonceKey, "1", { expirationTtl: 300 })
+		await env.CACHE.put(nonceKey, "1", { expirationTtl: 300 })
 
-		let keyRecord = await getPublicKey(c.env, payload.keyId)
+		let keyRecord = await getPublicKey(env, payload.keyId)
 
 		if (!keyRecord) {
 			if (!publicKey) {
-				return c.json<ApiResponse>(
-					{ success: false, error: "PUBLIC_KEY_REQUIRED" },
-					400
-				)
+				throw new Error("PUBLIC_KEY_REQUIRED")
 			}
 
 			if (!(await verifyKeyId(payload.keyId, publicKey))) {
-				return c.json<ApiResponse>(
-					{ success: false, error: "Key ID does not match public key" },
-					400
-				)
+				throw new Error("Key ID does not match public key")
 			}
 
-			keyRecord = await registerPublicKey(c.env, payload.keyId, publicKey)
+			keyRecord = await registerPublicKey(env, payload.keyId, publicKey)
 		}
 
 		const storedKey = JSON.parse(keyRecord.public_key) as JsonWebKey
 		if (!(await verifySignature(payload, signature, storedKey))) {
-			return c.json<ApiResponse>(
-				{ success: false, error: "Invalid signature" },
-				403
-			)
+			throw new Error("Invalid signature")
 		}
 
-		const user = await getOrCreateUser(c.env, payload.keyId)
+		const user = await getOrCreateUser(env, payload.keyId)
 
-		c.set("keyId", payload.keyId)
-		c.set("userId", user.id)
-		c.set("signedPayload", payload)
-
-		await next()
+		return {
+			keyId: payload.keyId,
+			userId: user.id,
+			signedPayload: payload as Record<string, unknown>,
+		}
 	}
-}
+)
