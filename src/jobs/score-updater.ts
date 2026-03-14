@@ -1,4 +1,5 @@
 import { config } from "@/config"
+import { invalidateCache } from "@/db/lyrics"
 import { Logger } from "@/infra/logger"
 import type { Confidence, Env } from "@/types"
 
@@ -19,6 +20,48 @@ interface LyricsScoreUpdate {
 	confidence: Confidence
 }
 
+export async function recalculateScore(env: Env, lyricsId: number): Promise<void> {
+	const votes = await env.DB.prepare(`
+		SELECT v.vote, u.reputation, u.avg_vote, v.is_self_vote
+		FROM votes v
+		JOIN users u ON v.user_id = u.id
+		WHERE v.lyrics_id = ?
+	`)
+		.bind(lyricsId)
+		.all<VoteWithUser>()
+
+	const update = calculateScore(lyricsId, votes.results || [])
+
+	await env.DB.prepare(`
+		UPDATE lyrics SET
+			effective_score = ?,
+			vote_count = ?,
+			diversity_bonus = ?,
+			confidence = ?,
+			score_updated_at = EXTRACT(EPOCH FROM NOW())::INTEGER
+		WHERE id = ?
+	`)
+		.bind(
+			update.effective_score,
+			update.vote_count,
+			update.diversity_bonus,
+			update.confidence,
+			update.id
+		)
+		.run()
+
+	// Invalidate cache for this entry's video_id
+	const row = await env.DB.prepare("SELECT video_id FROM lyrics WHERE id = ?")
+		.bind(lyricsId)
+		.first<{ video_id: string }>()
+
+	if (row) {
+		await invalidateCache(env, row.video_id)
+	}
+
+	log.debug("recalculated score", { lyricsId, effective_score: update.effective_score })
+}
+
 export async function updateScores(env: Env): Promise<{ updated: number }> {
 	// 1. Update user avg_vote for clustering
 	await env.DB.prepare(`
@@ -27,63 +70,31 @@ export async function updateScores(env: Env): Promise<{ updated: number }> {
 			vote_count = (SELECT COUNT(*) FROM votes WHERE votes.user_id = users.id)
 	`).run()
 
-	// 2. Get all lyrics with votes that need score updates
-	const lyricsWithVotes = await env.DB.prepare(`
-		SELECT DISTINCT lyrics_id FROM votes
-		WHERE created_at > (EXTRACT(EPOCH FROM NOW())::INTEGER - 3600)
-		UNION
-		SELECT id FROM lyrics WHERE score_updated_at IS NULL AND vote_count > 0
-	`).all<{ lyrics_id: number }>()
-
-	const updates: LyricsScoreUpdate[] = []
-
-	for (const { lyrics_id } of lyricsWithVotes.results || []) {
-		// Get votes with user data for this lyrics entry
-		const votes = await env.DB.prepare(`
-			SELECT v.vote, u.reputation, u.avg_vote, v.is_self_vote
-			FROM votes v
-			JOIN users u ON v.user_id = u.id
-			WHERE v.lyrics_id = ?
-		`)
-			.bind(lyrics_id)
-			.all<VoteWithUser>()
-
-		if (!votes.results || votes.results.length === 0) continue
-
-		const update = calculateScore(lyrics_id, votes.results)
-		updates.push(update)
-	}
-
-	log.debug("recalculated scores", { count: updates.length })
-
-	// 3. Batch update lyrics scores
-	for (const update of updates) {
-		await env.DB.prepare(`
-			UPDATE lyrics SET
-				effective_score = ?,
-				vote_count = ?,
-				diversity_bonus = ?,
-				confidence = ?,
-				score_updated_at = EXTRACT(EPOCH FROM NOW())::INTEGER
-			WHERE id = ?
-		`)
-			.bind(
-				update.effective_score,
-				update.vote_count,
-				update.diversity_bonus,
-				update.confidence,
-				update.id
-			)
-			.run()
-	}
-
-	// 4. Update user reputations based on consensus
+	// 2. Update user reputations based on consensus
 	await updateReputations(env)
 
-	return { updated: updates.length }
+	// 3. Safety net: recalculate entries that were never scored or voted on recently
+	//    (catches fire-and-forget recalculateScore failures from votes/reports)
+	const staleLyrics = await env.DB.prepare(`
+		SELECT id AS lyrics_id FROM lyrics
+		WHERE score_updated_at IS NULL AND vote_count > 0
+		UNION
+		SELECT DISTINCT lyrics_id FROM votes
+		WHERE created_at > (EXTRACT(EPOCH FROM NOW())::INTEGER - 21600)
+	`).all<{ lyrics_id: number }>()
+
+	let updated = 0
+	for (const { lyrics_id } of staleLyrics.results || []) {
+		await recalculateScore(env, lyrics_id)
+		updated++
+	}
+
+	log.debug("safety-net recalculated stale scores", { count: updated })
+
+	return { updated }
 }
 
-function calculateScore(lyricsId: number, votes: VoteWithUser[]): LyricsScoreUpdate {
+export function calculateScore(lyricsId: number, votes: VoteWithUser[]): LyricsScoreUpdate {
 	let weightedSum = 0
 	let totalWeight = 0
 	let harshUpvotes = 0

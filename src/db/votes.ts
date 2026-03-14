@@ -1,4 +1,5 @@
 import { Logger } from "@/infra/logger"
+import { recalculateScore } from "@/jobs/score-updater"
 import type { Env } from "@/types"
 import { updateUserAvgVote } from "./users"
 
@@ -45,6 +46,9 @@ export async function castVote(
 		])
 
 		await updateUserAvgVote(env, userId)
+		recalculateScore(env, lyricsId).catch((err) =>
+			log.error("background recalculation failed", { lyricsId, error: String(err) })
+		)
 		log.info("vote changed", { lyricsId, userId, vote })
 		return { success: true, message: "Vote updated" }
 	}
@@ -59,6 +63,7 @@ export async function castVote(
 				upvotes = upvotes + CASE WHEN ? = 1 THEN 1 ELSE 0 END,
 				downvotes = downvotes + CASE WHEN ? = -1 THEN 1 ELSE 0 END,
 				score = score + ?,
+				vote_count = vote_count + 1,
 				updated_at = EXTRACT(EPOCH FROM NOW())::INTEGER
 			WHERE id = ?
 			`
@@ -66,6 +71,9 @@ export async function castVote(
 	])
 
 	await updateUserAvgVote(env, userId)
+	recalculateScore(env, lyricsId).catch((err) =>
+		log.error("background recalculation failed", { lyricsId, error: String(err) })
+	)
 	log.info("vote cast", { lyricsId, userId, vote, selfVote: !!isSelfVote })
 	return { success: true, message: "Vote recorded" }
 }
@@ -95,6 +103,7 @@ export async function removeVote(
 				upvotes = upvotes - CASE WHEN ? = 1 THEN 1 ELSE 0 END,
 				downvotes = downvotes - CASE WHEN ? = -1 THEN 1 ELSE 0 END,
 				score = score - ?,
+				vote_count = vote_count - 1,
 				updated_at = EXTRACT(EPOCH FROM NOW())::INTEGER
 			WHERE id = ?
 			`
@@ -102,6 +111,9 @@ export async function removeVote(
 	])
 
 	await updateUserAvgVote(env, userId)
+	recalculateScore(env, lyricsId).catch((err) =>
+		log.error("background recalculation failed", { lyricsId, error: String(err) })
+	)
 	log.info("vote removed", { lyricsId, userId })
 	return { success: true, message: "Vote removed" }
 }

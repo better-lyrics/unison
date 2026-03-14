@@ -1,11 +1,11 @@
 export const config = {
 	protection: {
-		minScoreToProtect: 5,
+		minEffectiveScoreToProtect: 0.5,
+		minVotesToProtect: 5,
 	},
 
 	moderation: {
-		reportsBeforePenalty: 5,
-		penaltyScoreDeduction: 10,
+		reportsThreshold: 5,
 	},
 
 	reputation: {
@@ -15,6 +15,11 @@ export const config = {
 		consensusDelta: 0.1,
 		selfVoteWeight: 0.5,
 		minVotesForConfidence: 5,
+	},
+
+	ranking: {
+		recencyWeight: 0.5, // bonus for new entries, decays as 1/(1 + age_days)
+		confidenceBase: 2, // +N in ln(vote_count + N), keeps ln always positive
 	},
 
 	cache: {

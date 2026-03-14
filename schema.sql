@@ -69,7 +69,6 @@ CREATE TABLE IF NOT EXISTS lyrics (
 -- Indexes for lookups
 CREATE INDEX IF NOT EXISTS idx_lyrics_video_id ON lyrics(video_id);
 CREATE INDEX IF NOT EXISTS idx_lyrics_song_artist ON lyrics(song_norm, artist_norm);
-CREATE INDEX IF NOT EXISTS idx_lyrics_score ON lyrics(score DESC);
 
 -- Votes table (for quality control)
 CREATE TABLE IF NOT EXISTS votes (

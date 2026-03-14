@@ -1,5 +1,6 @@
 import { config } from "@/config"
 import { Logger } from "@/infra/logger"
+import { recalculateScore } from "@/jobs/score-updater"
 import type { Env, ReportRequest } from "@/types"
 
 const log = new Logger("db")
@@ -32,14 +33,16 @@ export async function submitReport(
 		.bind(lyricsId)
 		.first<{ count: number }>()
 
-	if (reportCount && reportCount.count >= config.moderation.reportsBeforePenalty) {
-		await env.DB.prepare("UPDATE lyrics SET score = score - ? WHERE id = ?")
-			.bind(config.moderation.penaltyScoreDeduction, lyricsId)
-			.run()
-		log.warn("score penalty applied", {
+	if (reportCount && reportCount.count >= config.moderation.reportsThreshold) {
+		recalculateScore(env, lyricsId).catch((err) =>
+			log.error("background recalculation failed after reports", {
+				lyricsId,
+				error: String(err),
+			})
+		)
+		log.warn("report threshold reached, recalculating score", {
 			lyricsId,
 			reports: reportCount.count,
-			penalty: config.moderation.penaltyScoreDeduction,
 		})
 	}
 

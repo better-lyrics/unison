@@ -26,7 +26,7 @@ const app = new Elysia({ adapter: node() })
 	.use(
 		cron({
 			name: "score-updater",
-			pattern: "0 * * * *",
+			pattern: "0 */6 * * *",
 			async run() {
 				cronLog.info("starting score update")
 				const result = await updateScores(env)

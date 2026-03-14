@@ -7,6 +7,14 @@ import { normalizeArtist, normalizeSong } from "@/utils/normalize"
 const log = new Logger("db")
 const cacheLog = new Logger("cache")
 
+// Composite ranking: community confidence + recency boost for unvoted entries
+// - effective_score × ln(vote_count + base): amplifies scores backed by more votes
+// - recencyWeight / (1 + age_days): surfaces new entries, decays within days
+const RANKING_EXPR = `(
+	effective_score * LN(vote_count + ${config.ranking.confidenceBase})
+	+ ${config.ranking.recencyWeight} / (1.0 + (EXTRACT(EPOCH FROM NOW())::INTEGER - created_at) / 86400.0)
+)`
+
 export async function findByVideoId(env: Env, videoId: string): Promise<LyricsRow | null> {
 	const cached = await env.CACHE.get(`v:${videoId}`)
 	if (cached) {
@@ -67,7 +75,7 @@ export async function findBySongArtist(
 	const query = `
 		SELECT * FROM lyrics
 		WHERE ${conditions.join(" AND ")}
-		ORDER BY score DESC
+		ORDER BY ${RANKING_EXPR} DESC
 		LIMIT 1
 	`
 
@@ -93,16 +101,22 @@ export async function submitLyrics(
 	const songNorm = normalizeSong(submission.song)
 	const artistNorm = normalizeArtist(submission.artist)
 
-	const existing = await env.DB.prepare("SELECT id, score FROM lyrics WHERE video_id = ?")
+	const existing = await env.DB.prepare(
+		"SELECT id, effective_score, vote_count FROM lyrics WHERE video_id = ?"
+	)
 		.bind(submission.videoId)
-		.first<{ id: number; score: number }>()
+		.first<{ id: number; effective_score: number; vote_count: number }>()
 
 	if (existing) {
-		if (existing.score >= config.protection.minScoreToProtect) {
+		if (
+			existing.effective_score >= config.protection.minEffectiveScoreToProtect &&
+			existing.vote_count >= config.protection.minVotesToProtect
+		) {
 			log.info("submission blocked by score protection", {
 				videoId: submission.videoId,
 				id: existing.id,
-				score: existing.score,
+				effective_score: existing.effective_score,
+				vote_count: existing.vote_count,
 			})
 			return { id: existing.id, updated: false }
 		}
@@ -214,7 +228,7 @@ export async function searchBySongArtist(
 		`
 		SELECT * FROM lyrics
 		WHERE ${conditions.join(" AND ")}
-		ORDER BY score DESC
+		ORDER BY ${RANKING_EXPR} DESC
 		LIMIT ?
 		`
 	)
@@ -250,6 +264,6 @@ async function cacheResult(env: Env, result: LyricsRow): Promise<void> {
 	})
 }
 
-async function invalidateCache(env: Env, videoId: string): Promise<void> {
+export async function invalidateCache(env: Env, videoId: string): Promise<void> {
 	await env.CACHE.delete(`v:${videoId}`)
 }

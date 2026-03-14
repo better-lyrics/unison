@@ -1,61 +1,10 @@
 import { describe, expect, it } from "vitest"
 import { config } from "@/config"
-import type { Confidence } from "@/types"
-
-interface VoteWithUser {
-	vote: number
-	reputation: number
-	avg_vote: number
-	is_self_vote: number
-}
-
-interface LyricsScoreUpdate {
-	id: number
-	effective_score: number
-	vote_count: number
-	diversity_bonus: number
-	confidence: Confidence
-}
-
-// Extract the calculateScore logic for testing
-function calculateScore(lyricsId: number, votes: VoteWithUser[]): LyricsScoreUpdate {
-	let weightedSum = 0
-	let totalWeight = 0
-	let harshUpvotes = 0
-	let generousUpvotes = 0
-
-	for (const v of votes) {
-		const weight = v.is_self_vote ? v.reputation * config.reputation.selfVoteWeight : v.reputation
-
-		weightedSum += v.vote * weight
-		totalWeight += weight
-
-		if (v.vote > 0) {
-			if (v.avg_vote < 0) harshUpvotes++
-			else generousUpvotes++
-		}
-	}
-
-	const effectiveScore = totalWeight > 0 ? weightedSum / totalWeight : 0
-	const diversityBonus = harshUpvotes > 0 && generousUpvotes > 0
-
-	let confidence: Confidence = "low"
-	if (votes.length >= config.reputation.minVotesForConfidence) {
-		confidence = diversityBonus ? "high" : "medium"
-	}
-
-	return {
-		id: lyricsId,
-		effective_score: effectiveScore,
-		vote_count: votes.length,
-		diversity_bonus: diversityBonus ? 1 : 0,
-		confidence,
-	}
-}
+import { calculateScore } from "@/jobs/score-updater"
 
 describe("calculateScore", () => {
 	it("returns correct weighted score for equal reputation votes", () => {
-		const votes: VoteWithUser[] = [
+		const votes = [
 			{ vote: 1, reputation: 1.0, avg_vote: 0.5, is_self_vote: 0 },
 			{ vote: 1, reputation: 1.0, avg_vote: 0.3, is_self_vote: 0 },
 			{ vote: -1, reputation: 1.0, avg_vote: -0.2, is_self_vote: 0 },
@@ -68,9 +17,9 @@ describe("calculateScore", () => {
 	})
 
 	it("weights votes by user reputation", () => {
-		const votes: VoteWithUser[] = [
-			{ vote: 1, reputation: 2.0, avg_vote: 0.5, is_self_vote: 0 }, // High rep upvote
-			{ vote: -1, reputation: 0.5, avg_vote: 0.3, is_self_vote: 0 }, // Low rep downvote
+		const votes = [
+			{ vote: 1, reputation: 2.0, avg_vote: 0.5, is_self_vote: 0 },
+			{ vote: -1, reputation: 0.5, avg_vote: 0.3, is_self_vote: 0 },
 		]
 
 		const result = calculateScore(1, votes)
@@ -80,9 +29,9 @@ describe("calculateScore", () => {
 	})
 
 	it("reduces self-vote weight by half", () => {
-		const votes: VoteWithUser[] = [
-			{ vote: 1, reputation: 1.0, avg_vote: 0.5, is_self_vote: 1 }, // Self-vote
-			{ vote: 1, reputation: 1.0, avg_vote: 0.3, is_self_vote: 0 }, // Normal vote
+		const votes = [
+			{ vote: 1, reputation: 1.0, avg_vote: 0.5, is_self_vote: 1 },
+			{ vote: 1, reputation: 1.0, avg_vote: 0.3, is_self_vote: 0 },
 		]
 
 		const result = calculateScore(1, votes)
@@ -92,9 +41,9 @@ describe("calculateScore", () => {
 	})
 
 	it("detects diversity bonus when both harsh and generous raters upvote", () => {
-		const votes: VoteWithUser[] = [
-			{ vote: 1, reputation: 1.0, avg_vote: -0.5, is_self_vote: 0 }, // Harsh rater (avg_vote < 0)
-			{ vote: 1, reputation: 1.0, avg_vote: 0.5, is_self_vote: 0 }, // Generous rater (avg_vote >= 0)
+		const votes = [
+			{ vote: 1, reputation: 1.0, avg_vote: -0.5, is_self_vote: 0 },
+			{ vote: 1, reputation: 1.0, avg_vote: 0.5, is_self_vote: 0 },
 		]
 
 		const result = calculateScore(1, votes)
@@ -103,10 +52,10 @@ describe("calculateScore", () => {
 	})
 
 	it("no diversity bonus when only one type of rater upvotes", () => {
-		const votes: VoteWithUser[] = [
+		const votes = [
 			{ vote: 1, reputation: 1.0, avg_vote: 0.5, is_self_vote: 0 },
 			{ vote: 1, reputation: 1.0, avg_vote: 0.3, is_self_vote: 0 },
-			{ vote: -1, reputation: 1.0, avg_vote: -0.2, is_self_vote: 0 }, // Harsh rater but downvoted
+			{ vote: -1, reputation: 1.0, avg_vote: -0.2, is_self_vote: 0 },
 		]
 
 		const result = calculateScore(1, votes)
@@ -115,7 +64,7 @@ describe("calculateScore", () => {
 	})
 
 	it("returns low confidence for fewer than 5 votes", () => {
-		const votes: VoteWithUser[] = [
+		const votes = [
 			{ vote: 1, reputation: 1.0, avg_vote: 0.5, is_self_vote: 0 },
 			{ vote: 1, reputation: 1.0, avg_vote: -0.5, is_self_vote: 0 },
 		]
@@ -126,7 +75,7 @@ describe("calculateScore", () => {
 	})
 
 	it("returns medium confidence for 5+ votes without diversity", () => {
-		const votes: VoteWithUser[] = Array.from({ length: 5 }, () => ({
+		const votes = Array.from({ length: 5 }, () => ({
 			vote: 1,
 			reputation: 1.0,
 			avg_vote: 0.5,
@@ -139,9 +88,9 @@ describe("calculateScore", () => {
 	})
 
 	it("returns high confidence for 5+ votes with diversity", () => {
-		const votes: VoteWithUser[] = [
-			{ vote: 1, reputation: 1.0, avg_vote: -0.5, is_self_vote: 0 }, // Harsh
-			{ vote: 1, reputation: 1.0, avg_vote: 0.5, is_self_vote: 0 }, // Generous
+		const votes = [
+			{ vote: 1, reputation: 1.0, avg_vote: -0.5, is_self_vote: 0 },
+			{ vote: 1, reputation: 1.0, avg_vote: 0.5, is_self_vote: 0 },
 			{ vote: 1, reputation: 1.0, avg_vote: 0.3, is_self_vote: 0 },
 			{ vote: 1, reputation: 1.0, avg_vote: 0.2, is_self_vote: 0 },
 			{ vote: 1, reputation: 1.0, avg_vote: -0.1, is_self_vote: 0 },
@@ -161,7 +110,7 @@ describe("calculateScore", () => {
 	})
 
 	it("handles all downvotes", () => {
-		const votes: VoteWithUser[] = [
+		const votes = [
 			{ vote: -1, reputation: 1.0, avg_vote: 0.5, is_self_vote: 0 },
 			{ vote: -1, reputation: 1.0, avg_vote: -0.2, is_self_vote: 0 },
 		]
@@ -169,18 +118,17 @@ describe("calculateScore", () => {
 		const result = calculateScore(1, votes)
 
 		expect(result.effective_score).toBe(-1)
-		expect(result.diversity_bonus).toBe(0) // No upvotes = no diversity check applies
+		expect(result.diversity_bonus).toBe(0)
 	})
 
 	it("handles mixed high and low reputation users", () => {
-		const votes: VoteWithUser[] = [
-			{ vote: 1, reputation: 2.0, avg_vote: 0.5, is_self_vote: 0 }, // Max rep
-			{ vote: -1, reputation: 0.0, avg_vote: -0.5, is_self_vote: 0 }, // Min rep (no weight)
+		const votes = [
+			{ vote: 1, reputation: 2.0, avg_vote: 0.5, is_self_vote: 0 },
+			{ vote: -1, reputation: 0.0, avg_vote: -0.5, is_self_vote: 0 },
 		]
 
 		const result = calculateScore(1, votes)
 
-		// Only the upvote counts since downvote has 0 reputation
 		expect(result.effective_score).toBe(1)
 	})
 })
