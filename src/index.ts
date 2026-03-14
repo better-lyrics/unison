@@ -3,12 +3,16 @@ import { node } from "@elysiajs/node"
 import { cors } from "@elysiajs/cors"
 import { cron } from "@elysiajs/cron"
 import { createEnv } from "@/infra/env"
+import { Logger } from "@/infra/logger"
 import { updateScores } from "@/jobs/score-updater"
 import { lyricsRoutes } from "@/routes/lyrics"
 import { voteRoutes } from "@/routes/votes"
 import { compatRoutes } from "@/routes/compat"
 
 const env = createEnv()
+const log = new Logger("app")
+const httpLog = new Logger("http")
+const cronLog = new Logger("cron")
 
 const app = new Elysia({ adapter: node() })
 	.use(
@@ -24,11 +28,34 @@ const app = new Elysia({ adapter: node() })
 			name: "score-updater",
 			pattern: "0 * * * *",
 			async run() {
+				cronLog.info("starting score update")
 				const result = await updateScores(env)
-				console.log(`Score update: ${result.updated} lyrics updated`)
+				cronLog.info("score update complete", { updated: result.updated })
 			},
 		})
 	)
+	.onBeforeHandle(({ request, store }) => {
+		;(store as Record<string, unknown>).__startTime = performance.now()
+		;(store as Record<string, unknown>).__method = request.method
+		;(store as Record<string, unknown>).__url = new URL(request.url).pathname
+	})
+	.onAfterHandle(({ store, set }) => {
+		const s = store as Record<string, unknown>
+		const duration = (performance.now() - (s.__startTime as number)).toFixed(1)
+		const status = typeof set.status === "number" ? set.status : 200
+		httpLog.info(`${s.__method} ${s.__url} ${status} ${duration}ms`)
+	})
+	.onError(({ error, store, set }) => {
+		const s = store as Record<string, unknown>
+		const duration = s.__startTime
+			? (performance.now() - (s.__startTime as number)).toFixed(1)
+			: "?"
+		const status = typeof set.status === "number" ? set.status : 500
+		httpLog.error(`${s.__method || "?"} ${s.__url || "?"} ${status} ${duration}ms`, {
+			error: "message" in error ? error.message : String(error),
+		})
+		return { success: false, error: "Internal Server Error" }
+	})
 	.get("/", () => ({
 		name: "Unison",
 		version: "1.1.0",
@@ -47,11 +74,7 @@ const app = new Elysia({ adapter: node() })
 	.use(compatRoutes(env))
 	.use(lyricsRoutes(env))
 	.use(voteRoutes(env))
-	.onError(({ error }) => {
-		console.error("Unhandled error:", error)
-		return { success: false, error: "Internal Server Error" }
-	})
 	.listen(Number.parseInt(process.env.PORT || "3000", 10))
 
 const port = process.env.PORT || "3000"
-console.log(`Unison listening on port ${port}`)
+log.info(`listening on port ${port}`)

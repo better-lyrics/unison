@@ -1,7 +1,11 @@
 import { config } from "@/config"
+import { Logger } from "@/infra/logger"
 import type { Env, LyricsRow, LyricsSubmission } from "@/types"
 import { compress, decompress, isCompressed } from "@/utils/compression"
 import { normalizeArtist, normalizeSong } from "@/utils/normalize"
+
+const log = new Logger("db")
+const cacheLog = new Logger("cache")
 
 export async function findByVideoId(env: Env, videoId: string): Promise<LyricsRow | null> {
 	const cached = await env.CACHE.get(`v:${videoId}`)
@@ -11,12 +15,15 @@ export async function findByVideoId(env: Env, videoId: string): Promise<LyricsRo
 			if (isCompressed(row.lyrics)) {
 				row.lyrics = await decompress(row.lyrics)
 			}
+			cacheLog.debug("hit", { key: `v:${videoId}` })
 			return row
 		} catch {
+			cacheLog.warn("corrupt entry, evicting", { key: `v:${videoId}` })
 			await env.CACHE.delete(`v:${videoId}`)
 		}
 	}
 
+	cacheLog.debug("miss", { key: `v:${videoId}` })
 	const result = await env.DB.prepare("SELECT * FROM lyrics WHERE video_id = ?")
 		.bind(videoId)
 		.first<LyricsRow>()
@@ -26,6 +33,9 @@ export async function findByVideoId(env: Env, videoId: string): Promise<LyricsRo
 			result.lyrics = await decompress(result.lyrics)
 		}
 		await cacheResult(env, result)
+		log.debug("found by videoId", { videoId, id: result.id })
+	} else {
+		log.debug("not found by videoId", { videoId })
 	}
 
 	return result
@@ -89,9 +99,15 @@ export async function submitLyrics(
 
 	if (existing) {
 		if (existing.score >= config.protection.minScoreToProtect) {
+			log.info("submission blocked by score protection", {
+				videoId: submission.videoId,
+				id: existing.id,
+				score: existing.score,
+			})
 			return { id: existing.id, updated: false }
 		}
 
+		log.info("updating existing lyrics", { videoId: submission.videoId, id: existing.id })
 		await env.DB.prepare(
 			`
 			UPDATE lyrics SET
@@ -160,6 +176,11 @@ export async function submitLyrics(
 		)
 		.first<{ id: number }>()
 
+	log.info("new lyrics submitted", {
+		videoId: submission.videoId,
+		id: result!.id,
+		format: submission.format,
+	})
 	return { id: result!.id, updated: false }
 }
 

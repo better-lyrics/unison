@@ -1,8 +1,11 @@
 import { Elysia } from "elysia"
+import { Logger } from "@/infra/logger"
 import type { Env } from "@/types"
 import { getPublicKey, registerPublicKey } from "@/db/publicKeys"
 import { getOrCreateUser } from "@/db/users"
 import { verifySignature, isTimestampFresh, verifyKeyId } from "./crypto"
+
+const log = new Logger("auth")
 
 interface SignedRequestPayload {
 	timestamp: number
@@ -46,12 +49,14 @@ export const signedRequest = new Elysia({ name: "signed-request" }).derive(
 		const env = (ctx as unknown as { env: Env }).env
 
 		if (!isValidSignedBody(body)) {
+			log.warn("invalid signed request format")
 			throw new Error("Invalid signed request format")
 		}
 
 		const { payload, signature, publicKey } = body
 
 		if (!isTimestampFresh(payload.timestamp)) {
+			log.warn("expired timestamp", { keyId: payload.keyId })
 			throw new Error("Request timestamp expired")
 		}
 
@@ -59,6 +64,7 @@ export const signedRequest = new Elysia({ name: "signed-request" }).derive(
 		const nonceKey = `nonce:${payload.keyId}:${payload.nonce}`
 		const existingNonce = await env.CACHE.get(nonceKey)
 		if (existingNonce) {
+			log.warn("nonce replay attempt", { keyId: payload.keyId })
 			throw new Error("Nonce already used")
 		}
 		// Store nonce immediately to close the race window (TTL: 5 minutes = 300 seconds)
@@ -68,22 +74,27 @@ export const signedRequest = new Elysia({ name: "signed-request" }).derive(
 
 		if (!keyRecord) {
 			if (!publicKey) {
+				log.info("new key requires registration", { keyId: payload.keyId })
 				throw new Error("PUBLIC_KEY_REQUIRED")
 			}
 
 			if (!(await verifyKeyId(payload.keyId, publicKey))) {
+				log.warn("key ID mismatch", { keyId: payload.keyId })
 				throw new Error("Key ID does not match public key")
 			}
 
 			keyRecord = await registerPublicKey(env, payload.keyId, publicKey)
+			log.info("new public key registered", { keyId: payload.keyId })
 		}
 
 		const storedKey = JSON.parse(keyRecord.public_key) as JsonWebKey
 		if (!(await verifySignature(payload, signature, storedKey))) {
+			log.warn("invalid signature", { keyId: payload.keyId })
 			throw new Error("Invalid signature")
 		}
 
 		const user = await getOrCreateUser(env, payload.keyId)
+		log.debug("authenticated", { keyId: payload.keyId, userId: user.id })
 
 		return {
 			keyId: payload.keyId,

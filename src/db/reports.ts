@@ -1,5 +1,8 @@
 import { config } from "@/config"
+import { Logger } from "@/infra/logger"
 import type { Env, ReportRequest } from "@/types"
+
+const log = new Logger("db")
 
 export async function submitReport(
 	env: Env,
@@ -33,7 +36,13 @@ export async function submitReport(
 		await env.DB.prepare("UPDATE lyrics SET score = score - ? WHERE id = ?")
 			.bind(config.moderation.penaltyScoreDeduction, lyricsId)
 			.run()
+		log.warn("score penalty applied", {
+			lyricsId,
+			reports: reportCount.count,
+			penalty: config.moderation.penaltyScoreDeduction,
+		})
 	}
 
+	log.info("report submitted", { lyricsId, userId, reason: report.reason })
 	return { success: true, message: "Report submitted" }
 }

@@ -1,13 +1,15 @@
 import fs from "node:fs"
 import path from "node:path"
 import pg from "pg"
+import { Logger } from "@/infra/logger"
 
 const { Pool } = pg
+const log = new Logger("db")
 
 async function migrate() {
 	const databaseUrl = process.env.DATABASE_URL
 	if (!databaseUrl) {
-		console.error("DATABASE_URL environment variable is required")
+		log.error("DATABASE_URL environment variable is required")
 		process.exit(1)
 	}
 
@@ -18,9 +20,9 @@ async function migrate() {
 
 	try {
 		await pool.query(schema)
-		console.log("Migration completed successfully")
+		log.info("migration completed successfully")
 	} catch (err) {
-		console.error("Migration failed:", err)
+		log.error("migration failed", { error: (err as Error).message })
 		process.exit(1)
 	} finally {
 		await pool.end()

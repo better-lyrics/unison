@@ -1,5 +1,8 @@
 import { config } from "@/config"
+import { Logger } from "@/infra/logger"
 import type { Confidence, Env } from "@/types"
+
+const log = new Logger("cron")
 
 interface VoteWithUser {
 	vote: number
@@ -50,6 +53,8 @@ export async function updateScores(env: Env): Promise<{ updated: number }> {
 		const update = calculateScore(lyrics_id, votes.results)
 		updates.push(update)
 	}
+
+	log.debug("recalculated scores", { count: updates.length })
 
 	// 3. Batch update lyrics scores
 	for (const update of updates) {

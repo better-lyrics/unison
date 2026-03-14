@@ -1,5 +1,8 @@
+import { Logger } from "@/infra/logger"
 import type { Env } from "@/types"
 import { updateUserAvgVote } from "./users"
+
+const log = new Logger("db")
 
 export async function castVote(
 	env: Env,
@@ -42,6 +45,7 @@ export async function castVote(
 		])
 
 		await updateUserAvgVote(env, userId)
+		log.info("vote changed", { lyricsId, userId, vote })
 		return { success: true, message: "Vote updated" }
 	}
 
@@ -62,6 +66,7 @@ export async function castVote(
 	])
 
 	await updateUserAvgVote(env, userId)
+	log.info("vote cast", { lyricsId, userId, vote, selfVote: !!isSelfVote })
 	return { success: true, message: "Vote recorded" }
 }
 
@@ -97,5 +102,6 @@ export async function removeVote(
 	])
 
 	await updateUserAvgVote(env, userId)
+	log.info("vote removed", { lyricsId, userId })
 	return { success: true, message: "Vote removed" }
 }
