@@ -25,7 +25,7 @@ CREATE TABLE IF NOT EXISTS lyrics (
     id SERIAL PRIMARY KEY,
 
     -- YouTube video identifier (primary lookup key)
-    video_id TEXT NOT NULL UNIQUE,
+    video_id TEXT NOT NULL,
 
     -- Metadata for display
     song TEXT NOT NULL,

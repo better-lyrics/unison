@@ -164,10 +164,8 @@ export const lyricsRoutes = (env: Env) =>
 		.get(
 			"/:videoId/variants",
 			async ({ params, query, env, status }) => {
-				const limit = Math.min(
-					Math.max(1, query.limit ? Number(query.limit) : 10),
-					50,
-				)
+				const parsed = query.limit ? Number(query.limit) : 10
+				const limit = Math.min(Math.max(1, Number.isNaN(parsed) ? 10 : parsed), 50)
 				const results = await findVariantsByVideoId(env, params.videoId, limit)
 				if (results.length === 0) {
 					return status(404, { success: false, error: "No lyrics found for this video" })
