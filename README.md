@@ -43,10 +43,13 @@ Duration matching uses ±2s tolerance (configurable in `src/config.ts`).
 Returns all matching entries sorted by score (highest first).
 
 ```
+GET /lyrics/search?q=<query>
 GET /lyrics/search?song=<song>&artist=<artist>
 GET /lyrics/search?song=<song>&artist=<artist>&album=<album>
 GET /lyrics/search?song=<song>&artist=<artist>&duration=<seconds>
 ```
+
+The `q` parameter searches across video ID, ISRC, metadata (song/artist/album via trigram similarity), and lyrics content (full-text search). Results are ranked in three tiers: exact identifier match > metadata similarity > lyrics content match.
 
 ### Get by ID
 
