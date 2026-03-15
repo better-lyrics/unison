@@ -72,6 +72,39 @@ export async function getGlobalFeed(
 	return result.results
 }
 
+export { FEED_COLUMNS }
+
+export async function getMySubmissions(
+	env: Env,
+	userId: number,
+	limit: number,
+	cursor?: number
+): Promise<FeedItem[]> {
+	const conditions = ["submitter_id = ?"]
+	const params: (number | string)[] = [userId]
+
+	if (cursor) {
+		conditions.push("created_at < ?")
+		params.push(cursor)
+	}
+
+	params.push(limit)
+
+	const sql = `
+		SELECT ${FEED_COLUMNS}
+		FROM lyrics
+		WHERE ${conditions.join(" AND ")}
+		ORDER BY created_at DESC
+		LIMIT ?
+	`
+
+	const result = await env.DB.prepare(sql)
+		.bind(...params)
+		.all<FeedItem>()
+
+	return result.results
+}
+
 export async function getPersonalizedFeed(
 	env: Env,
 	userId: number,

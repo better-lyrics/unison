@@ -88,6 +88,7 @@ export interface LyricsResponse {
 	effectiveScore: number
 	voteCount: number
 	confidence: Confidence
+	userVote?: 1 | -1 | null
 }
 
 export interface LyricsSearchResult {

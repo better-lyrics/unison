@@ -1,9 +1,10 @@
 import { Elysia, t } from "elysia"
 import { getGlobalFeed, getPersonalizedFeed } from "@/db/feed"
+import { getUserVotesForIds } from "@/db/votes"
 import { config } from "@/config"
 import type { Env, FeedItem } from "@/types"
 
-function toFeedResponse(row: FeedItem) {
+export function toFeedResponse(row: FeedItem) {
 	return {
 		id: row.id,
 		videoId: row.video_id,
@@ -51,9 +52,20 @@ export const feedRoutes = (env: Env) =>
 
 				const nextCursor = items.length === limit ? items[items.length - 1].created_at : undefined
 
+				const votesMap = feedUserId
+					? await getUserVotesForIds(
+							env,
+							items.map((i) => i.id),
+							feedUserId
+						)
+					: null
+
 				return {
 					success: true,
-					data: items.map(toFeedResponse),
+					data: items.map((item) => ({
+						...toFeedResponse(item),
+						userVote: votesMap?.get(item.id) ?? null,
+					})),
 					nextCursor,
 				}
 			},

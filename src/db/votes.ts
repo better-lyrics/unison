@@ -78,6 +78,36 @@ export async function castVote(
 	return { success: true, message: "Vote recorded" }
 }
 
+export async function getUserVote(
+	env: Env,
+	lyricsId: number,
+	userId: number
+): Promise<1 | -1 | null> {
+	const row = await env.DB.prepare("SELECT vote FROM votes WHERE lyrics_id = ? AND user_id = ?")
+		.bind(lyricsId, userId)
+		.first<{ vote: number }>()
+	return (row?.vote as 1 | -1) ?? null
+}
+
+export async function getUserVotesForIds(
+	env: Env,
+	lyricsIds: number[],
+	userId: number
+): Promise<Map<number, 1 | -1>> {
+	if (lyricsIds.length === 0) return new Map()
+	const placeholders = lyricsIds.map(() => "?").join(", ")
+	const result = await env.DB.prepare(
+		`SELECT lyrics_id, vote FROM votes WHERE user_id = ? AND lyrics_id IN (${placeholders})`
+	)
+		.bind(userId, ...lyricsIds)
+		.all<{ lyrics_id: number; vote: number }>()
+	const map = new Map<number, 1 | -1>()
+	for (const row of result.results) {
+		map.set(row.lyrics_id, row.vote as 1 | -1)
+	}
+	return map
+}
+
 export async function removeVote(
 	env: Env,
 	lyricsId: number,

@@ -8,6 +8,9 @@ import {
 	searchBySongArtist,
 	submitLyrics,
 } from "@/db/lyrics"
+import { getMySubmissions } from "@/db/feed"
+import { toFeedResponse } from "@/routes/feed"
+import { getUserVote, getUserVotesForIds } from "@/db/votes"
 import type { Confidence, Env, LyricsResponse, LyricsSearchResult, LyricsSubmission } from "@/types"
 import { signedRequest } from "@/utils/auth"
 import { config } from "@/config"
@@ -72,15 +75,26 @@ function toSearchResponse(row: LyricsSearchResult) {
 export const lyricsRoutes = (env: Env) =>
 	new Elysia({ prefix: "/lyrics" })
 		.decorate("env", env)
+		.derive({ as: "scoped" }, async ({ headers, env }) => {
+			const keyId = headers["x-key-id"]
+			if (!keyId) return { lyricsUserId: null as number | null }
+			const user = await env.DB.prepare("SELECT id FROM users WHERE key_id = ?")
+				.bind(keyId)
+				.first<{ id: number }>()
+			return { lyricsUserId: user?.id ?? null }
+		})
 		.get(
 			"/",
-			async ({ query, env, status }) => {
+			async ({ query, env, lyricsUserId, status }) => {
 				if (query.v) {
 					const result = await findByVideoId(env, query.v)
 					if (!result) {
 						return status(404, { success: false, error: "Lyrics not found" })
 					}
-					return { success: true, data: toResponse(result) }
+					const userVote = lyricsUserId
+						? await getUserVote(env, result.id, lyricsUserId)
+						: null
+					return { success: true, data: { ...toResponse(result), userVote } }
 				}
 
 				if (query.song && query.artist) {
@@ -95,7 +109,10 @@ export const lyricsRoutes = (env: Env) =>
 					if (!result) {
 						return status(404, { success: false, error: "Lyrics not found" })
 					}
-					return { success: true, data: toResponse(result) }
+					const userVote = lyricsUserId
+						? await getUserVote(env, result.id, lyricsUserId)
+						: null
+					return { success: true, data: { ...toResponse(result), userVote } }
 				}
 
 				return status(400, {
@@ -180,8 +197,46 @@ export const lyricsRoutes = (env: Env) =>
 			}
 		)
 		.get(
+			"/mine",
+			async ({ query, env, lyricsUserId, status }) => {
+				if (!lyricsUserId) {
+					return status(401, { success: false, error: "Authentication required" })
+				}
+
+				const parsed = query.limit ? Number(query.limit) : 20
+				const limit = Math.min(Math.max(1, Number.isNaN(parsed) ? 20 : parsed), 50)
+				const cursor = query.cursor ? Number(query.cursor) : undefined
+
+				const items = await getMySubmissions(env, lyricsUserId, limit, cursor)
+
+				const votesMap = await getUserVotesForIds(
+					env,
+					items.map((i) => i.id),
+					lyricsUserId
+				)
+
+				const nextCursor =
+					items.length === limit ? items[items.length - 1].created_at : undefined
+
+				return {
+					success: true,
+					data: items.map((item) => ({
+						...toFeedResponse(item),
+						userVote: votesMap.get(item.id) ?? null,
+					})),
+					nextCursor,
+				}
+			},
+			{
+				query: t.Object({
+					limit: t.Optional(t.String()),
+					cursor: t.Optional(t.String()),
+				}),
+			}
+		)
+		.get(
 			"/:id",
-			async ({ params, env, status }) => {
+			async ({ params, env, lyricsUserId, status }) => {
 				const id = Number(params.id)
 				if (Number.isNaN(id)) {
 					return status(400, { success: false, error: "Invalid ID" })
@@ -192,7 +247,10 @@ export const lyricsRoutes = (env: Env) =>
 					return status(404, { success: false, error: "Lyrics not found" })
 				}
 
-				return { success: true, data: toResponse(result) }
+				const userVote = lyricsUserId
+					? await getUserVote(env, result.id, lyricsUserId)
+					: null
+				return { success: true, data: { ...toResponse(result), userVote } }
 			},
 			{
 				params: t.Object({ id: t.String() }),

@@ -89,6 +89,7 @@ const app = new Elysia({ adapter: node() })
 			searchLyrics: "GET /lyrics/search?q=query OR ?song=...&artist=...&album=...&duration=...",
 			getLyricsVariants: "GET /lyrics/variants/:videoId?limit=...",
 			getLyricsById: "GET /lyrics/:id",
+			mySubmissions: "GET /lyrics/mine?limit=...&cursor=...",
 			submitLyrics: "POST /lyrics/submit (accepts TTML or LRC)",
 			vote: "POST /lyrics/:id/vote",
 			removeVote: "DELETE /lyrics/:id/vote",
