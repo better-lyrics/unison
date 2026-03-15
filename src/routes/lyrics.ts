@@ -2,6 +2,7 @@ import { Elysia, t } from "elysia"
 import {
 	findBySongArtist,
 	findByVideoId,
+	findVariantsByVideoId,
 	getLyricsById,
 	searchByQuery,
 	searchBySongArtist,
@@ -159,6 +160,26 @@ export const lyricsRoutes = (env: Env) =>
 					limit: t.Optional(t.String()),
 				}),
 			}
+		)
+		.get(
+			"/:videoId/variants",
+			async ({ params, query, env, status }) => {
+				const limit = Math.min(
+					Math.max(1, query.limit ? Number(query.limit) : 10),
+					50,
+				)
+				const results = await findVariantsByVideoId(env, params.videoId, limit)
+				if (results.length === 0) {
+					return status(404, { success: false, error: "No lyrics found for this video" })
+				}
+				return { success: true, data: results.map(toResponse) }
+			},
+			{
+				params: t.Object({ videoId: t.String() }),
+				query: t.Object({
+					limit: t.Optional(t.String()),
+				}),
+			},
 		)
 		.get(
 			"/:id",

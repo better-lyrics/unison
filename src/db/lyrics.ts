@@ -61,6 +61,31 @@ export async function findByVideoId(env: Env, videoId: string): Promise<LyricsRo
 	return result
 }
 
+export async function findVariantsByVideoId(
+	env: Env,
+	videoId: string,
+	limit: number,
+): Promise<LyricsRow[]> {
+	const results = await env.DB.prepare(
+		`
+		SELECT * FROM lyrics
+		WHERE video_id = ?
+		ORDER BY ${RANKING_EXPR} DESC
+		LIMIT ?
+		`,
+	)
+		.bind(videoId, limit)
+		.all<LyricsRow>()
+
+	for (const row of results.results) {
+		if (isCompressed(row.lyrics)) {
+			row.lyrics = await decompress(row.lyrics)
+		}
+	}
+
+	return results.results
+}
+
 export async function findBySongArtist(
 	env: Env,
 	song: string,
