@@ -53,6 +53,7 @@ export interface LyricsRow {
 	vote_count: number
 	diversity_bonus: number
 	confidence: Confidence
+	lyrics_text_search: string | null
 	score_updated_at: number | null
 	created_at: number
 	updated_at: number

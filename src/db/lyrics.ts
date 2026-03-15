@@ -2,6 +2,7 @@ import { config } from "@/config"
 import { Logger } from "@/infra/logger"
 import type { Env, LyricsRow, LyricsSearchResult, LyricsSubmission } from "@/types"
 import { compress, decompress, isCompressed } from "@/utils/compression"
+import { extractPlainText } from "@/utils/extract-text"
 import { normalize, normalizeArtist, normalizeSong } from "@/utils/normalize"
 
 const log = new Logger("db")
@@ -98,6 +99,7 @@ export async function submitLyrics(
 	submitterId: number
 ): Promise<{ id: number; updated: boolean }> {
 	const compressedLyrics = await compress(submission.lyrics)
+	const plainText = extractPlainText(submission.lyrics, submission.format)
 	const songNorm = normalizeSong(submission.song)
 	const artistNorm = normalizeArtist(submission.artist)
 	const albumNorm = submission.album ? normalize(submission.album) : null
@@ -139,6 +141,7 @@ export async function submitLyrics(
 				artist_norm = ?,
 				album_norm = ?,
 				submitter_id = ?,
+				lyrics_text_search = to_tsvector('simple', ?),
 				updated_at = EXTRACT(EPOCH FROM NOW())::INTEGER
 			WHERE id = ?
 			`
@@ -157,6 +160,7 @@ export async function submitLyrics(
 				artistNorm,
 				albumNorm,
 				submitterId,
+				plainText,
 				existing.id
 			)
 			.run()
@@ -171,8 +175,9 @@ export async function submitLyrics(
 		INSERT INTO lyrics (
 			video_id, song, artist, album, isrc,
 			duration, song_norm, artist_norm, album_norm,
-			lyrics, format, language, sync_type, submitter_id
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			lyrics, format, language, sync_type, submitter_id,
+			lyrics_text_search
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, to_tsvector('simple', ?))
 		RETURNING id
 		`
 	)
@@ -190,7 +195,8 @@ export async function submitLyrics(
 			submission.format,
 			submission.language || null,
 			submission.syncType || "linesync",
-			submitterId
+			submitterId,
+			plainText
 		)
 		.first<{ id: number }>()
 
@@ -292,6 +298,7 @@ export async function searchByQuery(
 
 	// Tier 1: exact identifier match (video_id or isrc)
 	// Tier 2: trigram similarity on song_norm, artist_norm, album_norm, and combined fields
+	// Tier 3: full-text search on lyrics content
 	const sql = `
 		SELECT DISTINCT ON (id) * FROM (
 			SELECT ${SEARCH_COLUMNS},
@@ -315,6 +322,14 @@ export async function searchByQuery(
 				OR similarity(artist_norm, ?) > ?
 				OR (album_norm IS NOT NULL AND similarity(album_norm, ?) > ?)
 				OR similarity(song_norm || ' ' || artist_norm, ?) > ?
+
+			UNION ALL
+
+			SELECT ${SEARCH_COLUMNS},
+				ts_rank(lyrics_text_search, plainto_tsquery('simple', ?))::DOUBLE PRECISION AS match_score,
+				3 AS tier
+			FROM lyrics
+			WHERE lyrics_text_search @@ plainto_tsquery('simple', ?)
 		) AS combined
 		ORDER BY id, tier ASC, match_score DESC
 	`
@@ -341,6 +356,8 @@ export async function searchByQuery(
 			threshold,
 			normalized,
 			threshold,
+			query.trim(),
+			query.trim(),
 			limit
 		)
 		.all<LyricsSearchResult>()

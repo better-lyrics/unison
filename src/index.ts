@@ -4,6 +4,7 @@ import { cors } from "@elysiajs/cors"
 import { cron } from "@elysiajs/cron"
 import { createEnv } from "@/infra/env"
 import { Logger } from "@/infra/logger"
+import { backfillTextSearch } from "@/jobs/backfill-text-search"
 import { updateScores } from "@/jobs/score-updater"
 import { lyricsRoutes } from "@/routes/lyrics"
 import { feedRoutes } from "@/routes/feed"
@@ -93,3 +94,9 @@ const app = new Elysia({ adapter: node() })
 
 const port = process.env.PORT || "3000"
 log.info(`listening on port ${port}`)
+
+backfillTextSearch(env)
+	.then(({ updated }) => {
+		if (updated > 0) log.info("text search backfill complete", { updated })
+	})
+	.catch((err) => log.error("text search backfill failed", { error: (err as Error).message }))

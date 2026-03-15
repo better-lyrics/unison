@@ -110,3 +110,7 @@ UPDATE lyrics SET album_norm = LOWER(TRIM(album)) WHERE album IS NOT NULL AND al
 CREATE INDEX IF NOT EXISTS idx_lyrics_song_norm_trgm ON lyrics USING GIN (song_norm gin_trgm_ops);
 CREATE INDEX IF NOT EXISTS idx_lyrics_artist_norm_trgm ON lyrics USING GIN (artist_norm gin_trgm_ops);
 CREATE INDEX IF NOT EXISTS idx_lyrics_album_norm_trgm ON lyrics USING GIN (album_norm gin_trgm_ops);
+
+-- Full-text search on lyrics content
+ALTER TABLE lyrics ADD COLUMN IF NOT EXISTS lyrics_text_search tsvector;
+CREATE INDEX IF NOT EXISTS idx_lyrics_text_search ON lyrics USING GIN (lyrics_text_search);
