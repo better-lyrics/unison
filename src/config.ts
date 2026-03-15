@@ -20,6 +20,11 @@ export const config = {
 	ranking: {
 		recencyWeight: 0.5, // bonus for new entries, decays as 1/(1 + age_days)
 		confidenceBase: 2, // +N in ln(vote_count + N), keeps ln always positive
+		syncTypeBoost: {
+			richsync: 1.3,
+			linesync: 1.0,
+			plain: 0.7,
+		},
 	},
 
 	search: {

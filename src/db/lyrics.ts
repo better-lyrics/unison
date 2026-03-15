@@ -8,12 +8,21 @@ import { normalize, normalizeArtist, normalizeSong } from "@/utils/normalize"
 const log = new Logger("db")
 const cacheLog = new Logger("cache")
 
-// Composite ranking: community confidence + recency boost for unvoted entries
+// Composite ranking: community confidence + recency boost + sync quality
 // - effective_score × ln(vote_count + base): amplifies scores backed by more votes
 // - recencyWeight / (1 + age_days): surfaces new entries, decays within days
+// - sync_type multiplier: richsync > linesync > plain
+const { syncTypeBoost } = config.ranking
+const SYNC_TYPE_BOOST = `CASE sync_type
+	WHEN 'richsync' THEN ${syncTypeBoost.richsync}
+	WHEN 'linesync' THEN ${syncTypeBoost.linesync}
+	ELSE ${syncTypeBoost.plain}
+END`
+
 export const RANKING_EXPR = `(
-	effective_score * LN(vote_count + ${config.ranking.confidenceBase})
-	+ ${config.ranking.recencyWeight} / (1.0 + (EXTRACT(EPOCH FROM NOW())::INTEGER - created_at) / 86400.0)
+	(effective_score * LN(vote_count + ${config.ranking.confidenceBase})
+	+ ${config.ranking.recencyWeight} / (1.0 + (EXTRACT(EPOCH FROM NOW())::INTEGER - created_at) / 86400.0))
+	* ${SYNC_TYPE_BOOST}
 )`
 
 export async function findByVideoId(env: Env, videoId: string): Promise<LyricsRow | null> {
