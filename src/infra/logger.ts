@@ -1,3 +1,5 @@
+import { Axiom } from "@axiomhq/js"
+
 type LogLevel = "debug" | "info" | "warn" | "error"
 
 const LEVELS: Record<LogLevel, number> = {
@@ -98,7 +100,23 @@ export class Logger {
 		} else {
 			console.log(output)
 		}
+
+		if (axiom) {
+			axiom.ingest(axiomDataset!, [
+				{ level, message, group: this.group, ...data },
+			])
+		}
 	}
 }
 
 export const log = new Logger("app")
+
+const axiomDataset = process.env.AXIOM_DATASET
+const axiom =
+	process.env.AXIOM_TOKEN && axiomDataset
+		? new Axiom({ token: process.env.AXIOM_TOKEN })
+		: null
+
+export async function flushLogs(): Promise<void> {
+	if (axiom) await axiom.flush()
+}

@@ -133,7 +133,12 @@ export async function submitLyrics(
 			return { id: existing.id, updated: false }
 		}
 
-		log.info("updating existing lyrics", { videoId: submission.videoId, id: existing.id })
+		log.info("updating existing lyrics", {
+			videoId: submission.videoId,
+			id: existing.id,
+			format: submission.format,
+			sync_type: submission.syncType || "linesync",
+		})
 		await env.DB.prepare(
 			`
 			UPDATE lyrics SET
@@ -213,6 +218,7 @@ export async function submitLyrics(
 		videoId: submission.videoId,
 		id: result!.id,
 		format: submission.format,
+		sync_type: submission.syncType || "linesync",
 	})
 	return { id: result!.id, updated: false }
 }

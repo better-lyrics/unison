@@ -3,7 +3,7 @@ import { node } from "@elysiajs/node"
 import { cors } from "@elysiajs/cors"
 import { cron } from "@elysiajs/cron"
 import { createEnv } from "@/infra/env"
-import { Logger } from "@/infra/logger"
+import { Logger, flushLogs } from "@/infra/logger"
 import { backfillTextSearch } from "@/jobs/backfill-text-search"
 import { updateScores } from "@/jobs/score-updater"
 import { lyricsRoutes } from "@/routes/lyrics"
@@ -48,7 +48,12 @@ const app = new Elysia({ adapter: node() })
 		const duration = (performance.now() - (s.__startTime as number)).toFixed(1)
 		const status = typeof set.status === "number" ? set.status : 200
 		if (status >= 400) return // already logged by onError
-		httpLog.info(`${s.__method} ${s.__url} ${status} ${duration}ms`)
+		httpLog.info(`${s.__method} ${s.__url} ${status} ${duration}ms`, {
+			method: s.__method as string,
+			path: s.__url as string,
+			status,
+			latency_ms: Number(duration),
+		})
 	})
 	.onError(({ code, error, request, store, set }) => {
 		const s = store as Record<string, unknown>
@@ -64,8 +69,14 @@ const app = new Elysia({ adapter: node() })
 		}
 
 		const status = typeof set.status === "number" ? set.status : 500
+		const message = "message" in error ? error.message : String(error)
 		httpLog.error(`${method} ${url} ${status} ${duration}ms`, {
-			error: "message" in error ? error.message : String(error),
+			method: method as string,
+			path: url as string,
+			status,
+			latency_ms: Number(duration),
+			error: message,
+			stack: "stack" in error ? error.stack : undefined,
 		})
 		return { success: false, error: "Internal Server Error" }
 	})
@@ -100,3 +111,11 @@ backfillTextSearch(env)
 		if (updated > 0) log.info("text search backfill complete", { updated })
 	})
 	.catch((err) => log.error("text search backfill failed", { error: (err as Error).message }))
+
+const shutdown = async () => {
+	log.info("shutting down")
+	await flushLogs()
+	process.exit(0)
+}
+process.on("SIGTERM", shutdown)
+process.on("SIGINT", shutdown)

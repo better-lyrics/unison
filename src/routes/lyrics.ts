@@ -10,6 +10,9 @@ import {
 import type { Confidence, Env, LyricsResponse, LyricsSearchResult, LyricsSubmission } from "@/types"
 import { signedRequest } from "@/utils/auth"
 import { config } from "@/config"
+import { Logger } from "@/infra/logger"
+
+const log = new Logger("app")
 
 function toResponse(row: {
 	id: number
@@ -119,6 +122,12 @@ export const lyricsRoutes = (env: Env) =>
 
 				if (query.q) {
 					const results = await searchByQuery(env, query.q, limit)
+					log.info("query search", {
+						query_length: query.q.length,
+						result_count: results.length,
+						top_tier: results[0]?.tier,
+						top_match_score: results[0]?.match_score,
+					})
 					return { success: true, data: results.map(toSearchResponse) }
 				}
 
