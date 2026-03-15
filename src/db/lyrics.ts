@@ -64,7 +64,7 @@ export async function findByVideoId(env: Env, videoId: string): Promise<LyricsRo
 export async function findVariantsByVideoId(
 	env: Env,
 	videoId: string,
-	limit: number,
+	limit: number
 ): Promise<LyricsRow[]> {
 	const results = await env.DB.prepare(
 		`
@@ -72,7 +72,7 @@ export async function findVariantsByVideoId(
 		WHERE video_id = ?
 		ORDER BY ${RANKING_EXPR} DESC
 		LIMIT ?
-		`,
+		`
 	)
 		.bind(videoId, limit)
 		.all<LyricsRow>()

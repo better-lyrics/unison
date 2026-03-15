@@ -49,8 +49,7 @@ export const feedRoutes = (env: Env) =>
 					? await getPersonalizedFeed(env, feedUserId, limit, cursor)
 					: await getGlobalFeed(env, limit, cursor)
 
-				const nextCursor =
-					items.length === limit ? items[items.length - 1].created_at : undefined
+				const nextCursor = items.length === limit ? items[items.length - 1].created_at : undefined
 
 				return {
 					success: true,

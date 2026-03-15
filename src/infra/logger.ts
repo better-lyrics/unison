@@ -102,9 +102,7 @@ export class Logger {
 		}
 
 		if (axiom) {
-			axiom.ingest(axiomDataset!, [
-				{ level, message, group: this.group, ...data },
-			])
+			axiom.ingest(axiomDataset!, [{ level, message, group: this.group, ...data }])
 		}
 	}
 }
@@ -113,9 +111,7 @@ export const log = new Logger("app")
 
 const axiomDataset = process.env.AXIOM_DATASET
 const axiom =
-	process.env.AXIOM_TOKEN && axiomDataset
-		? new Axiom({ token: process.env.AXIOM_TOKEN })
-		: null
+	process.env.AXIOM_TOKEN && axiomDataset ? new Axiom({ token: process.env.AXIOM_TOKEN }) : null
 
 export async function flushLogs(): Promise<void> {
 	if (axiom) await axiom.flush()

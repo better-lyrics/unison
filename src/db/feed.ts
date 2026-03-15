@@ -57,7 +57,9 @@ export async function getGlobalFeed(
 		LIMIT ?
 	`
 
-	const result = await env.DB.prepare(sql).bind(...params).all<FeedItem>()
+	const result = await env.DB.prepare(sql)
+		.bind(...params)
+		.all<FeedItem>()
 
 	// Cache default request
 	if (!cursor && (!excludeIds || excludeIds.length === 0)) {
@@ -131,7 +133,9 @@ export async function getPersonalizedFeed(
 		LIMIT ?
 	`
 
-	const personalizedResult = await env.DB.prepare(sql).bind(...params).all<FeedItem>()
+	const personalizedResult = await env.DB.prepare(sql)
+		.bind(...params)
+		.all<FeedItem>()
 	const personalized = personalizedResult.results
 
 	// Fill remaining slots with global feed if personalized results < limit

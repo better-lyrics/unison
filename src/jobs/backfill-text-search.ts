@@ -23,9 +23,7 @@ export async function backfillTextSearch(env: Env): Promise<{ updated: number }>
 
 		for (const row of rows) {
 			try {
-				const content = isCompressed(row.lyrics)
-					? await decompress(row.lyrics)
-					: row.lyrics
+				const content = isCompressed(row.lyrics) ? await decompress(row.lyrics) : row.lyrics
 				const plainText = extractPlainText(content, row.format)
 
 				await env.DB.prepare(

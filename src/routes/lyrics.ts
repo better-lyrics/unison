@@ -177,7 +177,7 @@ export const lyricsRoutes = (env: Env) =>
 				query: t.Object({
 					limit: t.Optional(t.String()),
 				}),
-			},
+			}
 		)
 		.get(
 			"/:id",
