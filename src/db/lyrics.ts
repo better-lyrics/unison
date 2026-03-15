@@ -42,7 +42,9 @@ export async function findByVideoId(env: Env, videoId: string): Promise<LyricsRo
 	}
 
 	cacheLog.debug("miss", { key: `v:${videoId}` })
-	const result = await env.DB.prepare("SELECT * FROM lyrics WHERE video_id = ?")
+	const result = await env.DB.prepare(
+		`SELECT * FROM lyrics WHERE video_id = ? ORDER BY ${RANKING_EXPR} DESC LIMIT 1`
+	)
 		.bind(videoId)
 		.first<LyricsRow>()
 
