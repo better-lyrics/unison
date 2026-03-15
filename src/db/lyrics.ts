@@ -1,8 +1,8 @@
 import { config } from "@/config"
 import { Logger } from "@/infra/logger"
-import type { Env, LyricsRow, LyricsSubmission } from "@/types"
+import type { Env, LyricsRow, LyricsSearchResult, LyricsSubmission } from "@/types"
 import { compress, decompress, isCompressed } from "@/utils/compression"
-import { normalizeArtist, normalizeSong } from "@/utils/normalize"
+import { normalize, normalizeArtist, normalizeSong } from "@/utils/normalize"
 
 const log = new Logger("db")
 const cacheLog = new Logger("cache")
@@ -10,7 +10,7 @@ const cacheLog = new Logger("cache")
 // Composite ranking: community confidence + recency boost for unvoted entries
 // - effective_score × ln(vote_count + base): amplifies scores backed by more votes
 // - recencyWeight / (1 + age_days): surfaces new entries, decays within days
-const RANKING_EXPR = `(
+export const RANKING_EXPR = `(
 	effective_score * LN(vote_count + ${config.ranking.confidenceBase})
 	+ ${config.ranking.recencyWeight} / (1.0 + (EXTRACT(EPOCH FROM NOW())::INTEGER - created_at) / 86400.0)
 )`
@@ -100,6 +100,7 @@ export async function submitLyrics(
 	const compressedLyrics = await compress(submission.lyrics)
 	const songNorm = normalizeSong(submission.song)
 	const artistNorm = normalizeArtist(submission.artist)
+	const albumNorm = submission.album ? normalize(submission.album) : null
 
 	const existing = await env.DB.prepare(
 		"SELECT id, effective_score, vote_count FROM lyrics WHERE video_id = ?"
@@ -136,6 +137,7 @@ export async function submitLyrics(
 				duration = ?,
 				song_norm = ?,
 				artist_norm = ?,
+				album_norm = ?,
 				submitter_id = ?,
 				updated_at = EXTRACT(EPOCH FROM NOW())::INTEGER
 			WHERE id = ?
@@ -153,6 +155,7 @@ export async function submitLyrics(
 				submission.duration,
 				songNorm,
 				artistNorm,
+				albumNorm,
 				submitterId,
 				existing.id
 			)
@@ -167,9 +170,9 @@ export async function submitLyrics(
 		`
 		INSERT INTO lyrics (
 			video_id, song, artist, album, isrc,
-			duration, song_norm, artist_norm,
+			duration, song_norm, artist_norm, album_norm,
 			lyrics, format, language, sync_type, submitter_id
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		RETURNING id
 		`
 	)
@@ -182,6 +185,7 @@ export async function submitLyrics(
 			submission.duration,
 			songNorm,
 			artistNorm,
+			albumNorm,
 			compressedLyrics,
 			submission.format,
 			submission.language || null,
@@ -266,4 +270,80 @@ async function cacheResult(env: Env, result: LyricsRow): Promise<void> {
 
 export async function invalidateCache(env: Env, videoId: string): Promise<void> {
 	await env.CACHE.delete(`v:${videoId}`)
+}
+
+const SEARCH_COLUMNS = `
+	id, video_id, song, artist, album, isrc, duration,
+	format, language, sync_type, score, effective_score,
+	vote_count, confidence, created_at
+`
+
+export async function searchByQuery(
+	env: Env,
+	query: string,
+	limit: number
+): Promise<LyricsSearchResult[]> {
+	const normalized = normalize(query)
+	if (normalized.length < config.search.minQueryLength) {
+		return []
+	}
+
+	const threshold = config.search.similarityThreshold
+
+	// Tier 1: exact identifier match (video_id or isrc)
+	// Tier 2: trigram similarity on song_norm, artist_norm, album_norm, and combined fields
+	const sql = `
+		SELECT DISTINCT ON (id) * FROM (
+			SELECT ${SEARCH_COLUMNS},
+				1.0::DOUBLE PRECISION AS match_score,
+				1 AS tier
+			FROM lyrics
+			WHERE video_id = ? OR isrc = ?
+
+			UNION ALL
+
+			SELECT ${SEARCH_COLUMNS},
+				GREATEST(
+					similarity(song_norm, ?),
+					similarity(artist_norm, ?),
+					COALESCE(similarity(album_norm, ?), 0),
+					similarity(song_norm || ' ' || artist_norm, ?)
+				)::DOUBLE PRECISION AS match_score,
+				2 AS tier
+			FROM lyrics
+			WHERE similarity(song_norm, ?) > ?
+				OR similarity(artist_norm, ?) > ?
+				OR (album_norm IS NOT NULL AND similarity(album_norm, ?) > ?)
+				OR similarity(song_norm || ' ' || artist_norm, ?) > ?
+		) AS combined
+		ORDER BY id, tier ASC, match_score DESC
+	`
+
+	const ranked = `
+		SELECT * FROM (${sql}) AS deduped
+		ORDER BY tier ASC, (match_score * ${RANKING_EXPR}) DESC
+		LIMIT ?
+	`
+
+	const result = await env.DB.prepare(ranked)
+		.bind(
+			query.trim(),
+			query.trim(),
+			normalized,
+			normalized,
+			normalized,
+			normalized,
+			normalized,
+			threshold,
+			normalized,
+			threshold,
+			normalized,
+			threshold,
+			normalized,
+			threshold,
+			limit
+		)
+		.all<LyricsSearchResult>()
+
+	return result.results
 }

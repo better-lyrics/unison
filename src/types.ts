@@ -41,6 +41,7 @@ export interface LyricsRow {
 	duration: number
 	song_norm: string
 	artist_norm: string
+	album_norm: string | null
 	lyrics: string
 	format: LyricsFormat
 	language: string | null
@@ -86,6 +87,44 @@ export interface LyricsResponse {
 	effectiveScore: number
 	voteCount: number
 	confidence: Confidence
+}
+
+export interface LyricsSearchResult {
+	id: number
+	video_id: string
+	song: string
+	artist: string
+	album: string | null
+	isrc: string | null
+	duration: number
+	format: LyricsFormat
+	language: string | null
+	sync_type: "richsync" | "linesync" | "plain"
+	score: number
+	effective_score: number
+	vote_count: number
+	confidence: Confidence
+	created_at: number
+	match_score: number
+	tier: number
+}
+
+export interface FeedItem {
+	id: number
+	video_id: string
+	song: string
+	artist: string
+	album: string | null
+	isrc: string | null
+	duration: number
+	format: LyricsFormat
+	language: string | null
+	sync_type: "richsync" | "linesync" | "plain"
+	score: number
+	effective_score: number
+	vote_count: number
+	confidence: Confidence
+	created_at: number
 }
 
 export interface VoteRequest {

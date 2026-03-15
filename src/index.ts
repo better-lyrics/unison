@@ -6,6 +6,7 @@ import { createEnv } from "@/infra/env"
 import { Logger } from "@/infra/logger"
 import { updateScores } from "@/jobs/score-updater"
 import { lyricsRoutes } from "@/routes/lyrics"
+import { feedRoutes } from "@/routes/feed"
 import { voteRoutes } from "@/routes/votes"
 import { compatRoutes } from "@/routes/compat"
 
@@ -73,17 +74,20 @@ const app = new Elysia({ adapter: node() })
 		description: "Crowdsourced lyrics API for Better Lyrics",
 		endpoints: {
 			getLyrics: "GET /lyrics?v=videoId OR ?song=...&artist=...&album=...&duration=...",
-			searchLyrics: "GET /lyrics/search?song=...&artist=...&album=...&duration=...",
+			searchLyrics:
+				"GET /lyrics/search?q=query OR ?song=...&artist=...&album=...&duration=...",
 			getLyricsById: "GET /lyrics/:id",
 			submitLyrics: "POST /lyrics/submit (accepts TTML or LRC)",
 			vote: "POST /lyrics/:id/vote",
 			removeVote: "DELETE /lyrics/:id/vote",
 			report: "POST /lyrics/:id/report",
+			feed: "GET /feed?limit=...&cursor=...",
 		},
 	}))
 	.get("/health", () => ({ status: "ok", timestamp: Date.now() }))
 	.use(compatRoutes(env))
 	.use(lyricsRoutes(env))
+	.use(feedRoutes(env))
 	.use(voteRoutes(env))
 	.listen(Number.parseInt(process.env.PORT || "3000", 10))
 

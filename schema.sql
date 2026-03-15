@@ -102,3 +102,11 @@ CREATE INDEX IF NOT EXISTS idx_lyrics_effective_score ON lyrics(effective_score 
 
 -- Migrations
 ALTER TABLE lyrics ADD COLUMN IF NOT EXISTS isrc TEXT;
+
+-- Trigram search support
+CREATE EXTENSION IF NOT EXISTS pg_trgm;
+ALTER TABLE lyrics ADD COLUMN IF NOT EXISTS album_norm TEXT;
+UPDATE lyrics SET album_norm = LOWER(TRIM(album)) WHERE album IS NOT NULL AND album_norm IS NULL;
+CREATE INDEX IF NOT EXISTS idx_lyrics_song_norm_trgm ON lyrics USING GIN (song_norm gin_trgm_ops);
+CREATE INDEX IF NOT EXISTS idx_lyrics_artist_norm_trgm ON lyrics USING GIN (artist_norm gin_trgm_ops);
+CREATE INDEX IF NOT EXISTS idx_lyrics_album_norm_trgm ON lyrics USING GIN (album_norm gin_trgm_ops);

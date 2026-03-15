@@ -22,6 +22,20 @@ export const config = {
 		confidenceBase: 2, // +N in ln(vote_count + N), keeps ln always positive
 	},
 
+	search: {
+		defaultLimit: 20,
+		maxLimit: 50,
+		minQueryLength: 2,
+		similarityThreshold: 0.15,
+	},
+
+	feed: {
+		defaultLimit: 20,
+		maxLimit: 50,
+		maxArtists: 20,
+		globalCacheTtl: 300, // 5 min Redis cache for global feed
+	},
+
 	cache: {
 		ttlSeconds: 604800, // 1 week
 	},

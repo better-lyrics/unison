@@ -3,10 +3,11 @@ import {
 	findBySongArtist,
 	findByVideoId,
 	getLyricsById,
+	searchByQuery,
 	searchBySongArtist,
 	submitLyrics,
 } from "@/db/lyrics"
-import type { Confidence, Env, LyricsResponse, LyricsSubmission } from "@/types"
+import type { Confidence, Env, LyricsResponse, LyricsSearchResult, LyricsSubmission } from "@/types"
 import { signedRequest } from "@/utils/auth"
 import { config } from "@/config"
 
@@ -41,6 +42,26 @@ function toResponse(row: {
 		effectiveScore: row.effective_score,
 		voteCount: row.vote_count,
 		confidence: row.confidence,
+	}
+}
+
+function toSearchResponse(row: LyricsSearchResult) {
+	return {
+		id: row.id,
+		videoId: row.video_id,
+		song: row.song,
+		artist: row.artist,
+		album: row.album || undefined,
+		isrc: row.isrc || undefined,
+		duration: row.duration,
+		format: row.format,
+		language: row.language || undefined,
+		syncType: row.sync_type,
+		score: row.score,
+		effectiveScore: row.effective_score,
+		voteCount: row.vote_count,
+		confidence: row.confidence,
+		matchScore: row.match_score,
 	}
 }
 
@@ -91,27 +112,42 @@ export const lyricsRoutes = (env: Env) =>
 		.get(
 			"/search",
 			async ({ query, env, status }) => {
-				if (!query.song || !query.artist) {
-					return status(400, { success: false, error: "Provide 'song' and 'artist'" })
-				}
-
-				const duration = query.duration ? Number(query.duration) : undefined
-				const results = await searchBySongArtist(
-					env,
-					query.song,
-					query.artist,
-					duration,
-					query.album
+				const limit = Math.min(
+					Math.max(1, query.limit ? Number(query.limit) : config.search.defaultLimit),
+					config.search.maxLimit
 				)
 
-				return { success: true, data: results.map(toResponse) }
+				if (query.q) {
+					const results = await searchByQuery(env, query.q, limit)
+					return { success: true, data: results.map(toSearchResponse) }
+				}
+
+				if (query.song && query.artist) {
+					const duration = query.duration ? Number(query.duration) : undefined
+					const results = await searchBySongArtist(
+						env,
+						query.song,
+						query.artist,
+						duration,
+						query.album,
+						limit
+					)
+					return { success: true, data: results.map(toResponse) }
+				}
+
+				return status(400, {
+					success: false,
+					error: "Provide 'q' for fuzzy search, or 'song' + 'artist' for exact match",
+				})
 			},
 			{
 				query: t.Object({
+					q: t.Optional(t.String()),
 					song: t.Optional(t.String()),
 					artist: t.Optional(t.String()),
 					album: t.Optional(t.String()),
 					duration: t.Optional(t.String()),
+					limit: t.Optional(t.String()),
 				}),
 			}
 		)
