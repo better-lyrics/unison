@@ -47,9 +47,12 @@ export async function getGlobalFeed(
 	params.push(limit)
 
 	const sql = `
-		SELECT ${FEED_COLUMNS}
-		FROM lyrics
-		WHERE ${conditions.join(" AND ")}
+		SELECT * FROM (
+			SELECT DISTINCT ON (video_id) ${FEED_COLUMNS}
+			FROM lyrics
+			WHERE ${conditions.join(" AND ")}
+			ORDER BY video_id, ${RANKING_EXPR} DESC
+		) AS unique_videos
 		ORDER BY ${RANKING_EXPR} DESC
 		LIMIT ?
 	`
@@ -118,9 +121,12 @@ export async function getPersonalizedFeed(
 	params.push(limit)
 
 	const sql = `
-		SELECT ${FEED_COLUMNS}
-		FROM lyrics
-		WHERE ${conditions.join(" AND ")}
+		SELECT * FROM (
+			SELECT DISTINCT ON (video_id) ${FEED_COLUMNS}
+			FROM lyrics
+			WHERE ${conditions.join(" AND ")}
+			ORDER BY video_id, ${RANKING_EXPR} DESC
+		) AS unique_videos
 		ORDER BY ${RANKING_EXPR} DESC
 		LIMIT ?
 	`
