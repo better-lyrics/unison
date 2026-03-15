@@ -1,9 +1,4 @@
 export const config = {
-	protection: {
-		minEffectiveScoreToProtect: 0.5,
-		minVotesToProtect: 5,
-	},
-
 	moderation: {
 		reportsThreshold: 5,
 	},

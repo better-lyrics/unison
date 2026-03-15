@@ -237,7 +237,7 @@ export const lyricsRoutes = (env: Env) =>
 
 			const result = await submitLyrics(env, submission, userId)
 
-			return status(result.updated ? 200 : 201, {
+			return status(result.created ? 201 : 409, {
 				success: true,
 				data: result,
 			})

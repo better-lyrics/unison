@@ -106,82 +106,27 @@ export async function submitLyrics(
 	env: Env,
 	submission: LyricsSubmission,
 	submitterId: number
-): Promise<{ id: number; updated: boolean }> {
+): Promise<{ id: number; created: boolean }> {
 	const compressedLyrics = await compress(submission.lyrics)
 	const plainText = extractPlainText(submission.lyrics, submission.format)
 	const songNorm = normalizeSong(submission.song)
 	const artistNorm = normalizeArtist(submission.artist)
 	const albumNorm = submission.album ? normalize(submission.album) : null
 
+	// Check if this user already submitted for this video
 	const existing = await env.DB.prepare(
-		"SELECT id, effective_score, vote_count FROM lyrics WHERE video_id = ?"
+		"SELECT id FROM lyrics WHERE video_id = ? AND submitter_id = ?"
 	)
-		.bind(submission.videoId)
-		.first<{ id: number; effective_score: number; vote_count: number }>()
+		.bind(submission.videoId, submitterId)
+		.first<{ id: number }>()
 
 	if (existing) {
-		if (
-			existing.effective_score >= config.protection.minEffectiveScoreToProtect &&
-			existing.vote_count >= config.protection.minVotesToProtect
-		) {
-			log.info("submission blocked by score protection", {
-				videoId: submission.videoId,
-				id: existing.id,
-				effective_score: existing.effective_score,
-				vote_count: existing.vote_count,
-			})
-			return { id: existing.id, updated: false }
-		}
-
-		log.info("updating existing lyrics", {
+		log.info("duplicate submission by same user", {
 			videoId: submission.videoId,
 			id: existing.id,
-			format: submission.format,
-			sync_type: submission.syncType || "linesync",
+			submitter_id: submitterId,
 		})
-		await env.DB.prepare(
-			`
-			UPDATE lyrics SET
-				lyrics = ?,
-				format = ?,
-				sync_type = ?,
-				language = ?,
-				song = ?,
-				artist = ?,
-				album = ?,
-				isrc = ?,
-				duration = ?,
-				song_norm = ?,
-				artist_norm = ?,
-				album_norm = ?,
-				submitter_id = ?,
-				lyrics_text_search = to_tsvector('simple', ?),
-				updated_at = EXTRACT(EPOCH FROM NOW())::INTEGER
-			WHERE id = ?
-			`
-		)
-			.bind(
-				compressedLyrics,
-				submission.format,
-				submission.syncType || "linesync",
-				submission.language || null,
-				submission.song.trim(),
-				submission.artist.trim(),
-				submission.album?.trim() || null,
-				submission.isrc || null,
-				submission.duration,
-				songNorm,
-				artistNorm,
-				albumNorm,
-				submitterId,
-				plainText,
-				existing.id
-			)
-			.run()
-
-		await invalidateCache(env, submission.videoId)
-
-		return { id: existing.id, updated: true }
+		return { id: existing.id, created: false }
 	}
 
 	const result = await env.DB.prepare(
@@ -220,7 +165,11 @@ export async function submitLyrics(
 		format: submission.format,
 		sync_type: submission.syncType || "linesync",
 	})
-	return { id: result!.id, updated: false }
+
+	// Invalidate cache so the new variant competes in ranking
+	await invalidateCache(env, submission.videoId)
+
+	return { id: result!.id, created: true }
 }
 
 export async function searchBySongArtist(
