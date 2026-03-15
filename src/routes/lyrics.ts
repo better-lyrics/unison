@@ -256,7 +256,15 @@ export const lyricsRoutes = (env: Env) =>
 
 			const result = await submitLyrics(env, submission, userId)
 
-			return status(result.created ? 201 : 409, {
+			if (!result.created) {
+				return status(409, {
+					success: false,
+					error:
+						"You've reached the maximum submissions for this video. Contact unison@boidu.dev to request removal of older entries.",
+				})
+			}
+
+			return status(201, {
 				success: true,
 				data: result,
 			})

@@ -119,9 +119,8 @@ CREATE INDEX IF NOT EXISTS idx_lyrics_text_search ON lyrics USING GIN (lyrics_te
 -- Drop the unique constraint so multiple submissions can coexist
 ALTER TABLE lyrics DROP CONSTRAINT IF EXISTS lyrics_video_id_key;
 
--- Prevent the same user from submitting multiple variants for the same video
-CREATE UNIQUE INDEX IF NOT EXISTS idx_lyrics_video_submitter
-    ON lyrics(video_id, submitter_id);
+-- Drop the unique submitter constraint (users can submit multiple variants, capped in app logic)
+DROP INDEX IF EXISTS idx_lyrics_video_submitter;
 
 -- Composite index for efficient "best variant" lookups
 CREATE INDEX IF NOT EXISTS idx_lyrics_video_id_ranking

@@ -1,4 +1,8 @@
 export const config = {
+	submission: {
+		maxVariantsPerUserPerVideo: 3,
+	},
+
 	moderation: {
 		reportsThreshold: 5,
 	},

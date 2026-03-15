@@ -140,20 +140,20 @@ export async function submitLyrics(
 	const artistNorm = normalizeArtist(submission.artist)
 	const albumNorm = submission.album ? normalize(submission.album) : null
 
-	// Check if this user already submitted for this video
-	const existing = await env.DB.prepare(
-		"SELECT id FROM lyrics WHERE video_id = ? AND submitter_id = ?"
+	// Check per-user-per-video variant cap
+	const variantCount = await env.DB.prepare(
+		"SELECT COUNT(*)::INTEGER AS count FROM lyrics WHERE video_id = ? AND submitter_id = ?"
 	)
 		.bind(submission.videoId, submitterId)
-		.first<{ id: number }>()
+		.first<{ count: number }>()
 
-	if (existing) {
-		log.info("duplicate submission by same user", {
+	if (variantCount && variantCount.count >= config.submission.maxVariantsPerUserPerVideo) {
+		log.info("variant cap reached", {
 			videoId: submission.videoId,
-			id: existing.id,
 			submitter_id: submitterId,
+			count: variantCount.count,
 		})
-		return { id: existing.id, created: false }
+		return { id: -1, created: false }
 	}
 
 	const result = await env.DB.prepare(
