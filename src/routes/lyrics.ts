@@ -162,18 +162,18 @@ export const lyricsRoutes = (env: Env) =>
 			}
 		)
 		.get(
-			"/:videoId/variants",
+			"/:id/variants",
 			async ({ params, query, env, status }) => {
 				const parsed = query.limit ? Number(query.limit) : 10
 				const limit = Math.min(Math.max(1, Number.isNaN(parsed) ? 10 : parsed), 50)
-				const results = await findVariantsByVideoId(env, params.videoId, limit)
+				const results = await findVariantsByVideoId(env, params.id, limit)
 				if (results.length === 0) {
 					return status(404, { success: false, error: "No lyrics found for this video" })
 				}
 				return { success: true, data: results.map(toResponse) }
 			},
 			{
-				params: t.Object({ videoId: t.String() }),
+				params: t.Object({ id: t.String() }),
 				query: t.Object({
 					limit: t.Optional(t.String()),
 				}),
