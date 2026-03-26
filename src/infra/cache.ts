@@ -5,8 +5,18 @@ let redis: Redis | null = null
 export function getRedis(redisUrl: string): Redis {
 	if (!redis) {
 		redis = new Redis(redisUrl)
+		redis.on("error", (err) => {
+			console.error("redis connection error", err.message)
+		})
 	}
 	return redis
+}
+
+export async function closeRedis(): Promise<void> {
+	if (redis) {
+		redis.disconnect()
+		redis = null
+	}
 }
 
 export class KVCompat {

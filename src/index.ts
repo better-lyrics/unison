@@ -3,6 +3,8 @@ import { node } from "@elysiajs/node"
 import { cors } from "@elysiajs/cors"
 import { cron } from "@elysiajs/cron"
 import { createEnv } from "@/infra/env"
+import { closePool } from "@/infra/database"
+import { closeRedis } from "@/infra/cache"
 import { Logger, flushLogs } from "@/infra/logger"
 import { backfillTextSearch } from "@/jobs/backfill-text-search"
 import { updateScores } from "@/jobs/score-updater"
@@ -113,8 +115,18 @@ backfillTextSearch(env)
 	})
 	.catch((err) => log.error("text search backfill failed", { error: (err as Error).message }))
 
+process.on("unhandledRejection", (reason) => {
+	log.error("unhandled rejection", { error: String(reason) })
+})
+
+process.on("uncaughtException", (err) => {
+	log.error("uncaught exception", { error: err.message, stack: err.stack })
+	flushLogs().finally(() => process.exit(1))
+})
+
 const shutdown = async () => {
 	log.info("shutting down")
+	await Promise.allSettled([closePool(), closeRedis()])
 	await flushLogs()
 	process.exit(0)
 }
