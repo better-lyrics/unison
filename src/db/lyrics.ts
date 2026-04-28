@@ -13,17 +13,27 @@ const cacheLog = new Logger("cache")
 // - recencyWeight / (1 + age_days): surfaces new entries, decays within days
 // - sync_type multiplier: richsync > linesync > plain
 const { syncTypeBoost } = config.ranking
-const SYNC_TYPE_BOOST = `CASE sync_type
-	WHEN 'richsync' THEN ${syncTypeBoost.richsync}
-	WHEN 'linesync' THEN ${syncTypeBoost.linesync}
-	ELSE ${syncTypeBoost.plain}
-END`
+const buildRankingExpr = (prefix: string) => {
+	const syncTypeBoostExpr = `CASE ${prefix}sync_type
+		WHEN 'richsync' THEN ${syncTypeBoost.richsync}
+		WHEN 'linesync' THEN ${syncTypeBoost.linesync}
+		ELSE ${syncTypeBoost.plain}
+	END`
+	return `(
+		(${prefix}effective_score * LN(${prefix}vote_count + ${config.ranking.confidenceBase})
+		+ ${config.ranking.recencyWeight} / (1.0 + (EXTRACT(EPOCH FROM NOW())::INTEGER - ${prefix}created_at) / 86400.0))
+		* ${syncTypeBoostExpr}
+	)`
+}
 
-export const RANKING_EXPR = `(
-	(effective_score * LN(vote_count + ${config.ranking.confidenceBase})
-	+ ${config.ranking.recencyWeight} / (1.0 + (EXTRACT(EPOCH FROM NOW())::INTEGER - created_at) / 86400.0))
-	* ${SYNC_TYPE_BOOST}
-)`
+export const RANKING_EXPR = buildRankingExpr("")
+const RANKING_EXPR_JOINED = buildRankingExpr("l.")
+
+const LYRICS_WITH_SUBMITTER = `
+	SELECT l.*, u.key_id AS submitter_key_id, u.reputation AS submitter_reputation
+	FROM lyrics l
+	LEFT JOIN users u ON l.submitter_id = u.id
+`
 
 export async function findByVideoId(env: Env, videoId: string): Promise<LyricsRow | null> {
 	const cached = await env.CACHE.get(`v:${videoId}`)
@@ -43,7 +53,7 @@ export async function findByVideoId(env: Env, videoId: string): Promise<LyricsRo
 
 	cacheLog.debug("miss", { key: `v:${videoId}` })
 	const result = await env.DB.prepare(
-		`SELECT * FROM lyrics WHERE video_id = ? ORDER BY ${RANKING_EXPR} DESC LIMIT 1`
+		`${LYRICS_WITH_SUBMITTER} WHERE l.video_id = ? ORDER BY ${RANKING_EXPR_JOINED} DESC LIMIT 1`
 	)
 		.bind(videoId)
 		.first<LyricsRow>()
@@ -68,9 +78,9 @@ export async function findVariantsByVideoId(
 ): Promise<LyricsRow[]> {
 	const results = await env.DB.prepare(
 		`
-		SELECT * FROM lyrics
-		WHERE video_id = ?
-		ORDER BY ${RANKING_EXPR} DESC
+		${LYRICS_WITH_SUBMITTER}
+		WHERE l.video_id = ?
+		ORDER BY ${RANKING_EXPR_JOINED} DESC
 		LIMIT ?
 		`
 	)
@@ -96,23 +106,23 @@ export async function findBySongArtist(
 	const songNorm = normalizeSong(song)
 	const artistNorm = normalizeArtist(artist)
 
-	const conditions = ["song_norm = ?", "artist_norm = ?"]
+	const conditions = ["l.song_norm = ?", "l.artist_norm = ?"]
 	const params: (string | number)[] = [songNorm, artistNorm]
 
 	if (duration !== undefined) {
-		conditions.push("ABS(duration - ?) <= ?")
+		conditions.push("ABS(l.duration - ?) <= ?")
 		params.push(duration, config.matching.durationTolerance)
 	}
 
 	if (album) {
-		conditions.push("album = ?")
+		conditions.push("l.album = ?")
 		params.push(album.trim())
 	}
 
 	const query = `
-		SELECT * FROM lyrics
+		${LYRICS_WITH_SUBMITTER}
 		WHERE ${conditions.join(" AND ")}
-		ORDER BY ${RANKING_EXPR} DESC
+		ORDER BY ${RANKING_EXPR_JOINED} DESC
 		LIMIT 1
 	`
 
@@ -210,16 +220,16 @@ export async function searchBySongArtist(
 	const songNorm = normalizeSong(song)
 	const artistNorm = normalizeArtist(artist)
 
-	const conditions = ["song_norm = ?", "artist_norm = ?"]
+	const conditions = ["l.song_norm = ?", "l.artist_norm = ?"]
 	const params: (string | number)[] = [songNorm, artistNorm]
 
 	if (duration !== undefined) {
-		conditions.push("ABS(duration - ?) <= ?")
+		conditions.push("ABS(l.duration - ?) <= ?")
 		params.push(duration, config.matching.durationTolerance)
 	}
 
 	if (album) {
-		conditions.push("album = ?")
+		conditions.push("l.album = ?")
 		params.push(album.trim())
 	}
 
@@ -227,9 +237,9 @@ export async function searchBySongArtist(
 
 	const results = await env.DB.prepare(
 		`
-		SELECT * FROM lyrics
+		${LYRICS_WITH_SUBMITTER}
 		WHERE ${conditions.join(" AND ")}
-		ORDER BY ${RANKING_EXPR} DESC
+		ORDER BY ${RANKING_EXPR_JOINED} DESC
 		LIMIT ?
 		`
 	)
@@ -246,7 +256,7 @@ export async function searchBySongArtist(
 }
 
 export async function getLyricsById(env: Env, id: number): Promise<LyricsRow | null> {
-	const result = await env.DB.prepare("SELECT * FROM lyrics WHERE id = ?")
+	const result = await env.DB.prepare(`${LYRICS_WITH_SUBMITTER} WHERE l.id = ?`)
 		.bind(id)
 		.first<LyricsRow>()
 

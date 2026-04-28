@@ -1,4 +1,5 @@
-import { Elysia, t } from "elysia"
+import { config } from "@/config"
+import { getMySubmissions } from "@/db/feed"
 import {
 	findBySongArtist,
 	findByVideoId,
@@ -8,69 +9,15 @@ import {
 	searchBySongArtist,
 	submitLyrics,
 } from "@/db/lyrics"
-import { getMySubmissions } from "@/db/feed"
-import { toFeedResponse } from "@/routes/feed"
 import { getUserVote, getUserVotesForIds } from "@/db/votes"
-import type { Confidence, Env, LyricsResponse, LyricsSearchResult, LyricsSubmission } from "@/types"
-import { signedRequest } from "@/utils/auth"
-import { config } from "@/config"
 import { Logger } from "@/infra/logger"
+import { toFeedResponse } from "@/routes/feed"
+import { toResponse, toSearchResponse } from "@/routes/lyrics.transformers"
+import type { Env, LyricsSubmission } from "@/types"
+import { signedRequest } from "@/utils/auth"
+import { Elysia, t } from "elysia"
 
 const log = new Logger("app")
-
-function toResponse(row: {
-	id: number
-	video_id: string
-	song: string
-	artist: string
-	album: string | null
-	isrc: string | null
-	lyrics: string
-	format: "ttml" | "lrc" | "plain"
-	language: string | null
-	sync_type: string
-	score: number
-	effective_score: number
-	vote_count: number
-	confidence: Confidence
-}): LyricsResponse {
-	return {
-		id: row.id,
-		videoId: row.video_id,
-		song: row.song,
-		artist: row.artist,
-		album: row.album || undefined,
-		isrc: row.isrc || undefined,
-		lyrics: row.lyrics,
-		format: row.format,
-		language: row.language || undefined,
-		syncType: row.sync_type,
-		score: row.score,
-		effectiveScore: row.effective_score,
-		voteCount: row.vote_count,
-		confidence: row.confidence,
-	}
-}
-
-function toSearchResponse(row: LyricsSearchResult) {
-	return {
-		id: row.id,
-		videoId: row.video_id,
-		song: row.song,
-		artist: row.artist,
-		album: row.album || undefined,
-		isrc: row.isrc || undefined,
-		duration: row.duration,
-		format: row.format,
-		language: row.language || undefined,
-		syncType: row.sync_type,
-		score: row.score,
-		effectiveScore: row.effective_score,
-		voteCount: row.vote_count,
-		confidence: row.confidence,
-		matchScore: row.match_score,
-	}
-}
 
 export const lyricsRoutes = (env: Env) =>
 	new Elysia({ prefix: "/lyrics" })
@@ -91,9 +38,7 @@ export const lyricsRoutes = (env: Env) =>
 					if (!result) {
 						return status(404, { success: false, error: "Lyrics not found" })
 					}
-					const userVote = lyricsUserId
-						? await getUserVote(env, result.id, lyricsUserId)
-						: null
+					const userVote = lyricsUserId ? await getUserVote(env, result.id, lyricsUserId) : null
 					return { success: true, data: { ...toResponse(result), userVote } }
 				}
 
@@ -109,9 +54,7 @@ export const lyricsRoutes = (env: Env) =>
 					if (!result) {
 						return status(404, { success: false, error: "Lyrics not found" })
 					}
-					const userVote = lyricsUserId
-						? await getUserVote(env, result.id, lyricsUserId)
-						: null
+					const userVote = lyricsUserId ? await getUserVote(env, result.id, lyricsUserId) : null
 					return { success: true, data: { ...toResponse(result), userVote } }
 				}
 
@@ -215,8 +158,7 @@ export const lyricsRoutes = (env: Env) =>
 					lyricsUserId
 				)
 
-				const nextCursor =
-					items.length === limit ? items[items.length - 1].created_at : undefined
+				const nextCursor = items.length === limit ? items[items.length - 1].created_at : undefined
 
 				return {
 					success: true,
@@ -247,9 +189,7 @@ export const lyricsRoutes = (env: Env) =>
 					return status(404, { success: false, error: "Lyrics not found" })
 				}
 
-				const userVote = lyricsUserId
-					? await getUserVote(env, result.id, lyricsUserId)
-					: null
+				const userVote = lyricsUserId ? await getUserVote(env, result.id, lyricsUserId) : null
 				return { success: true, data: { ...toResponse(result), userVote } }
 			},
 			{

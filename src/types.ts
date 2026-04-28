@@ -58,6 +58,13 @@ export interface LyricsRow {
 	created_at: number
 	updated_at: number
 	submitter_id: number | null
+	submitter_key_id?: string | null
+	submitter_reputation?: number | null
+}
+
+export interface SubmitterInfo {
+	keyId: string
+	reputation: number
 }
 
 export interface LyricsSubmission {
@@ -88,6 +95,7 @@ export interface LyricsResponse {
 	effectiveScore: number
 	voteCount: number
 	confidence: Confidence
+	submitter?: SubmitterInfo
 	userVote?: 1 | -1 | null
 }
 
