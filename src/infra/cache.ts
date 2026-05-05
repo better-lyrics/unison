@@ -41,4 +41,9 @@ export class KVCompat {
 	async delete(key: string): Promise<void> {
 		await this.redis.del(key)
 	}
+
+	async setNX(key: string, value: string, ttlSeconds: number): Promise<boolean> {
+		const result = await this.redis.set(key, value, "EX", ttlSeconds, "NX")
+		return result === "OK"
+	}
 }

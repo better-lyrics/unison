@@ -60,15 +60,12 @@ export const signedRequest = new Elysia({ name: "signed-request" }).derive(
 			throw new Error("Request timestamp expired")
 		}
 
-		// Check for nonce replay attacks
 		const nonceKey = `nonce:${payload.keyId}:${payload.nonce}`
-		const existingNonce = await env.CACHE.get(nonceKey)
-		if (existingNonce) {
+		const claimed = await env.CACHE.setNX(nonceKey, "1", 300)
+		if (!claimed) {
 			log.warn("nonce replay attempt", { keyId: payload.keyId })
 			throw new Error("Nonce already used")
 		}
-		// Store nonce immediately to close the race window (TTL: 5 minutes = 300 seconds)
-		await env.CACHE.put(nonceKey, "1", { expirationTtl: 300 })
 
 		let keyRecord = await getPublicKey(env, payload.keyId)
 
