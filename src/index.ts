@@ -116,7 +116,9 @@ backfillTextSearch(env)
 	.catch((err) => log.error("text search backfill failed", { error: (err as Error).message }))
 
 process.on("unhandledRejection", (reason) => {
-	log.error("unhandled rejection", { error: String(reason) })
+	const err = reason instanceof Error ? reason : new Error(String(reason))
+	log.error("unhandled rejection", { error: err.message, stack: err.stack })
+	flushLogs().finally(() => process.exit(1))
 })
 
 process.on("uncaughtException", (err) => {
