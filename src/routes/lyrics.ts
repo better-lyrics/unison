@@ -15,6 +15,7 @@ import { toFeedResponse } from "@/routes/feed"
 import { toResponse, toSearchResponse } from "@/routes/lyrics.transformers"
 import type { Env, LyricsSubmission } from "@/types"
 import { signedRequest } from "@/utils/auth"
+import { readRateLimit } from "@/utils/read-rate-limit"
 import { Elysia, t } from "elysia"
 
 const log = new Logger("app")
@@ -22,6 +23,7 @@ const log = new Logger("app")
 export const lyricsRoutes = (env: Env) =>
 	new Elysia({ prefix: "/lyrics" })
 		.decorate("env", env)
+		.use(readRateLimit)
 		.derive({ as: "scoped" }, async ({ headers, env }) => {
 			const keyId = headers["x-key-id"]
 			if (!keyId) return { lyricsUserId: null as number | null }

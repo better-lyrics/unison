@@ -103,6 +103,7 @@ function createEnv(db: MockDB, cache: MockCache): Env {
 		DB: db as unknown as Env["DB"],
 		CACHE: cache as unknown as Env["CACHE"],
 		RATE_LIMITER: {} as Env["RATE_LIMITER"],
+		READ_RATE_LIMITER: {} as Env["READ_RATE_LIMITER"],
 		CACHE_TTL_SECONDS: "300",
 	}
 }

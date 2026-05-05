@@ -44,6 +44,17 @@ export const config = {
 		ttlSeconds: 604800, // 1 week
 	},
 
+	rateLimit: {
+		read: {
+			maxRequests: 120,
+			windowSeconds: 60,
+		},
+		write: {
+			maxRequests: 10,
+			windowSeconds: 60,
+		},
+	},
+
 	matching: {
 		durationTolerance: 2, // ±2 seconds for duration matching
 	},
