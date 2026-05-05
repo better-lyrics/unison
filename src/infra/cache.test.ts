@@ -29,3 +29,31 @@ describe("KVCompat.setNX", () => {
 		expect(await kv.setNX("k", "v", 60)).toBe(false)
 	})
 })
+
+describe("KVCompat resilience", () => {
+	const broken = (method: string) => ({
+		[method]: vi.fn(async () => {
+			throw new Error("ECONNRESET")
+		}),
+	})
+
+	it("get returns null when redis throws", async () => {
+		const kv = new KVCompat(broken("get") as never)
+		expect(await kv.get("k")).toBeNull()
+	})
+
+	it("put swallows errors", async () => {
+		const kv = new KVCompat(broken("setex") as never)
+		await expect(kv.put("k", "v", { expirationTtl: 60 })).resolves.toBeUndefined()
+	})
+
+	it("delete swallows errors", async () => {
+		const kv = new KVCompat(broken("del") as never)
+		await expect(kv.delete("k")).resolves.toBeUndefined()
+	})
+
+	it("setNX returns true (fail-open) when redis throws", async () => {
+		const kv = new KVCompat(broken("set") as never)
+		expect(await kv.setNX("k", "v", 60)).toBe(true)
+	})
+})
