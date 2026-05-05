@@ -45,7 +45,7 @@ export const config = {
 	},
 
 	http: {
-		maxBodyBytes: 6 * 1024 * 1024,
+		maxBodyBytes: 8 * 1024 * 1024,
 	},
 
 	rateLimit: {
