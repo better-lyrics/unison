@@ -132,7 +132,7 @@ export function calculateScore(lyricsId: number, votes: VoteWithUser[]): LyricsS
 	}
 }
 
-async function updateReputations(env: Env): Promise<void> {
+export async function updateReputations(env: Env): Promise<void> {
 	await env.DB.prepare(`
 		WITH consensus_lyrics AS (
 			SELECT id, CASE WHEN effective_score > 0 THEN 1 ELSE -1 END AS consensus

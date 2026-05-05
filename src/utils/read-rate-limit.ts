@@ -1,7 +1,7 @@
 import { Elysia } from "elysia"
 import type { Env } from "@/types"
 
-function clientIp(headers: Record<string, string | undefined>): string {
+export function clientIp(headers: Record<string, string | undefined>): string {
 	const xff = headers["x-forwarded-for"]
 	if (xff) return xff.split(",")[0].trim()
 	const real = headers["x-real-ip"]
