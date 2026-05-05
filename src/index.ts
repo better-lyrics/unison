@@ -2,6 +2,7 @@ import { Elysia } from "elysia"
 import { node } from "@elysiajs/node"
 import { cors } from "@elysiajs/cors"
 import { cron } from "@elysiajs/cron"
+import { config } from "@/config"
 import { createEnv } from "@/infra/env"
 import { closePool } from "@/infra/database"
 import { closeRedis } from "@/infra/cache"
@@ -27,6 +28,13 @@ const app = new Elysia({ adapter: node() })
 			maxAge: 86400,
 		})
 	)
+	.onParse(({ request, set }) => {
+		const len = request.headers.get("content-length")
+		if (len && Number(len) > config.http.maxBodyBytes) {
+			set.status = 413
+			return { success: false, error: "Payload too large" }
+		}
+	})
 	.use(
 		cron({
 			name: "score-updater",

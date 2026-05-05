@@ -44,6 +44,10 @@ export const config = {
 		ttlSeconds: 604800, // 1 week
 	},
 
+	http: {
+		maxBodyBytes: 6 * 1024 * 1024,
+	},
+
 	rateLimit: {
 		read: {
 			maxRequests: 120,
