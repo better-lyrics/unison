@@ -8,7 +8,7 @@ export function getPool(databaseUrl: string): pg.Pool {
 	if (!pool) {
 		pool = new Pool({
 			connectionString: databaseUrl,
-			max: 10,
+			max: 30,
 			idleTimeoutMillis: 30_000,
 			connectionTimeoutMillis: 5_000,
 			allowExitOnIdle: true,
