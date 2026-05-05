@@ -6,6 +6,7 @@ export interface Env {
 	DB: D1Compat
 	CACHE: KVCompat
 	RATE_LIMITER: RedisRateLimiter
+	READ_RATE_LIMITER: RedisRateLimiter
 	CACHE_TTL_SECONDS: string
 }
 

@@ -3,6 +3,7 @@ import { getGlobalFeed, getPersonalizedFeed } from "@/db/feed"
 import { getUserVotesForIds } from "@/db/votes"
 import { config } from "@/config"
 import type { Env, FeedItem } from "@/types"
+import { readRateLimit } from "@/utils/read-rate-limit"
 
 export function toFeedResponse(row: FeedItem) {
 	return {
@@ -27,6 +28,7 @@ export function toFeedResponse(row: FeedItem) {
 export const feedRoutes = (env: Env) =>
 	new Elysia({ prefix: "/feed" })
 		.decorate("env", env)
+		.use(readRateLimit)
 		.derive({ as: "scoped" }, async ({ headers, env }) => {
 			const keyId = headers["x-key-id"]
 			if (!keyId) return { feedUserId: null as number | null }

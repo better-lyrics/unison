@@ -132,39 +132,32 @@ export function calculateScore(lyricsId: number, votes: VoteWithUser[]): LyricsS
 	}
 }
 
-async function updateReputations(env: Env): Promise<void> {
-	// Find lyrics with strong consensus (effective_score > 0.5 or < -0.5)
-	const consensusLyrics = await env.DB.prepare(`
-		SELECT id, effective_score FROM lyrics
-		WHERE ABS(effective_score) > 0.5
-		AND vote_count >= ?
+export async function updateReputations(env: Env): Promise<void> {
+	await env.DB.prepare(`
+		WITH consensus_lyrics AS (
+			SELECT id, CASE WHEN effective_score > 0 THEN 1 ELSE -1 END AS consensus
+			FROM lyrics
+			WHERE ABS(effective_score) > 0.5 AND vote_count >= ?
+		),
+		deltas AS (
+			SELECT v.user_id,
+				SUM(CASE WHEN v.vote = cl.consensus THEN ? ELSE -? END) AS delta
+			FROM votes v
+			JOIN consensus_lyrics cl ON v.lyrics_id = cl.id
+			WHERE v.is_self_vote = 0
+			GROUP BY v.user_id
+		)
+		UPDATE users
+		SET reputation = GREATEST(?, LEAST(?, reputation + d.delta))
+		FROM deltas d
+		WHERE users.id = d.user_id
 	`)
-		.bind(config.reputation.minVotesForConfidence)
-		.all<{ id: number; effective_score: number }>()
-
-	for (const { id, effective_score } of consensusLyrics.results || []) {
-		const consensus = effective_score > 0 ? 1 : -1
-
-		// Get all non-self votes for this lyrics
-		const votes = await env.DB.prepare(`
-			SELECT user_id, vote FROM votes
-			WHERE lyrics_id = ? AND is_self_vote = 0
-		`)
-			.bind(id)
-			.all<{ user_id: number; vote: number }>()
-
-		for (const { user_id, vote } of votes.results || []) {
-			const votedWithConsensus = vote === consensus
-			const delta = votedWithConsensus
-				? config.reputation.consensusDelta
-				: -config.reputation.consensusDelta
-
-			await env.DB.prepare(`
-				UPDATE users SET reputation = MAX(?, MIN(?, reputation + ?))
-				WHERE id = ?
-			`)
-				.bind(config.reputation.min, config.reputation.max, delta, user_id)
-				.run()
-		}
-	}
+		.bind(
+			config.reputation.minVotesForConfidence,
+			config.reputation.consensusDelta,
+			config.reputation.consensusDelta,
+			config.reputation.min,
+			config.reputation.max
+		)
+		.run()
 }

@@ -1,3 +1,4 @@
+import { config } from "@/config"
 import type { Env } from "@/types"
 import { D1Compat, getPool } from "./database"
 import { KVCompat, getRedis } from "./cache"
@@ -16,7 +17,16 @@ export function createEnv(): Env {
 	return {
 		DB: new D1Compat(pool),
 		CACHE: new KVCompat(redis),
-		RATE_LIMITER: new RedisRateLimiter(redis),
+		RATE_LIMITER: new RedisRateLimiter(
+			redis,
+			config.rateLimit.write.maxRequests,
+			config.rateLimit.write.windowSeconds
+		),
+		READ_RATE_LIMITER: new RedisRateLimiter(
+			redis,
+			config.rateLimit.read.maxRequests,
+			config.rateLimit.read.windowSeconds
+		),
 		CACHE_TTL_SECONDS: process.env.CACHE_TTL_SECONDS || "604800",
 	}
 }
