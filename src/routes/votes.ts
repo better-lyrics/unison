@@ -1,4 +1,5 @@
 import { Elysia, t } from "elysia"
+import { config } from "@/config"
 import { getLyricsById } from "@/db/lyrics"
 import { submitReport } from "@/db/reports"
 import { castVote, removeVote } from "@/db/votes"
@@ -79,6 +80,9 @@ export const voteRoutes = (env: Env) =>
 
 				const details =
 					typeof signedPayload.details === "string" ? signedPayload.details : undefined
+				if (details && details.length > config.validation.report.maxDetailsLength) {
+					return status(400, { success: false, error: "Report details too long" })
+				}
 
 				const result = await submitReport(env, id, userId, {
 					reason: reason as "wrong_song" | "bad_sync" | "offensive" | "spam" | "other",
