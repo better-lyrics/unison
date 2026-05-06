@@ -13,6 +13,12 @@ function mockRedis() {
 		get: vi.fn(async (key: string) => store.get(key) ?? null),
 		setex: vi.fn(),
 		del: vi.fn(),
+		scan: vi.fn(async (cursor: string, _match: string, pattern: string) => {
+			if (cursor !== "0") return ["0", []]
+			const re = new RegExp(`^${pattern.replace(/\*/g, ".*")}$`)
+			return ["0", [...store.keys()].filter((k) => re.test(k))]
+		}),
+		store,
 	}
 }
 
@@ -55,5 +61,22 @@ describe("KVCompat resilience", () => {
 	it("setNX returns true (fail-open) when redis throws", async () => {
 		const kv = new KVCompat(broken("set") as never)
 		expect(await kv.setNX("k", "v", 60)).toBe(true)
+	})
+
+	it("keys returns [] when redis throws", async () => {
+		const kv = new KVCompat(broken("scan") as never)
+		expect(await kv.keys("foo:*")).toEqual([])
+	})
+})
+
+describe("KVCompat.keys", () => {
+	it("returns matching keys via SCAN", async () => {
+		const redis = mockRedis()
+		redis.store.set("feed:global:20", "x")
+		redis.store.set("feed:global:50", "y")
+		redis.store.set("v:abc", "z")
+		const kv = new KVCompat(redis as never)
+		const result = await kv.keys("feed:global:*")
+		expect(result.sort()).toEqual(["feed:global:20", "feed:global:50"])
 	})
 })

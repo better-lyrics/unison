@@ -279,6 +279,14 @@ export async function invalidateCache(env: Env, videoId: string): Promise<void> 
 	await env.CACHE.delete(`v:${videoId}`)
 }
 
+export async function invalidateCacheAfterDelete(env: Env, videoId: string): Promise<void> {
+	await env.CACHE.delete(`v:${videoId}`)
+	const feedKeys = await env.CACHE.keys("feed:global:*")
+	for (const key of feedKeys) {
+		await env.CACHE.delete(key)
+	}
+}
+
 const SEARCH_COLUMNS = `
 	id, video_id, song, artist, album, isrc, duration,
 	format, language, sync_type, score, effective_score,

@@ -6,6 +6,7 @@ import {
 	findByVideoId,
 	findVariantsByVideoId,
 	getLyricsById,
+	invalidateCacheAfterDelete,
 	searchByQuery,
 } from "./lyrics"
 
@@ -55,9 +56,11 @@ interface MockCache {
 	getCalls: string[]
 	putCalls: { key: string; value: string }[]
 	deleteCalls: string[]
+	keysCalls: string[]
 	get(key: string): Promise<string | null>
 	put(key: string, value: string, opts?: { expirationTtl?: number }): Promise<void>
 	delete(key: string): Promise<void>
+	keys(pattern: string): Promise<string[]>
 }
 
 function createMockCache(initial: Record<string, string> = {}): MockCache {
@@ -65,12 +68,14 @@ function createMockCache(initial: Record<string, string> = {}): MockCache {
 	const getCalls: string[] = []
 	const putCalls: { key: string; value: string }[] = []
 	const deleteCalls: string[] = []
+	const keysCalls: string[] = []
 
 	return {
 		store,
 		getCalls,
 		putCalls,
 		deleteCalls,
+		keysCalls,
 		async get(key: string) {
 			getCalls.push(key)
 			return store.get(key) ?? null
@@ -82,6 +87,11 @@ function createMockCache(initial: Record<string, string> = {}): MockCache {
 		async delete(key: string) {
 			deleteCalls.push(key)
 			store.delete(key)
+		},
+		async keys(pattern: string) {
+			keysCalls.push(pattern)
+			const re = new RegExp(`^${pattern.replace(/\*/g, ".*")}$`)
+			return [...store.keys()].filter((k) => re.test(k))
 		},
 	}
 }
@@ -489,5 +499,26 @@ describe("RANKING_EXPR", () => {
 	it("contains all three sync_type weights", () => {
 		expect(RANKING_EXPR).toContain("'richsync'")
 		expect(RANKING_EXPR).toContain("'linesync'")
+	})
+})
+
+
+describe("invalidateCacheAfterDelete", () => {
+	it("deletes per-video key and all feed:global:* keys, leaves others", async () => {
+		const db = createMockDB()
+		const cache = createMockCache({
+			"v:abc123": "row",
+			"feed:global:20": "feed",
+			"feed:global:50": "feed",
+			"unrelated:key": "stay",
+		})
+		const env = createEnv(db, cache)
+
+		await invalidateCacheAfterDelete(env, "abc123")
+
+		expect(cache.deleteCalls).toContain("v:abc123")
+		expect(cache.deleteCalls).toContain("feed:global:20")
+		expect(cache.deleteCalls).toContain("feed:global:50")
+		expect(cache.deleteCalls).not.toContain("unrelated:key")
 	})
 })
