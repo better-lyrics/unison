@@ -125,3 +125,25 @@ DROP INDEX IF EXISTS idx_lyrics_video_submitter;
 -- Composite index for efficient "best variant" lookups
 CREATE INDEX IF NOT EXISTS idx_lyrics_video_id_ranking
     ON lyrics(video_id, effective_score DESC);
+
+-- Soft delete for submissions: preserves vote/reputation signal
+ALTER TABLE lyrics ADD COLUMN IF NOT EXISTS deleted_at INTEGER;
+ALTER TABLE lyrics ADD COLUMN IF NOT EXISTS deleted_by_user_id INTEGER REFERENCES users(id);
+ALTER TABLE lyrics ADD COLUMN IF NOT EXISTS deleted_by_role TEXT
+    CHECK (deleted_by_role IN ('submitter', 'admin'));
+ALTER TABLE lyrics ADD COLUMN IF NOT EXISTS deletion_reason TEXT;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.table_constraints
+        WHERE constraint_name = 'lyrics_deletion_consistency'
+    ) THEN
+        ALTER TABLE lyrics ADD CONSTRAINT lyrics_deletion_consistency CHECK (
+            (deleted_at IS NULL AND deleted_by_user_id IS NULL AND deleted_by_role IS NULL)
+            OR (deleted_at IS NOT NULL AND deleted_by_user_id IS NOT NULL AND deleted_by_role IS NOT NULL)
+        );
+    END IF;
+END $$;
+
+CREATE INDEX IF NOT EXISTS idx_lyrics_active ON lyrics(id) WHERE deleted_at IS NULL;
