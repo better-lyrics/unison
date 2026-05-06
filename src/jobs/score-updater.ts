@@ -21,6 +21,14 @@ interface LyricsScoreUpdate {
 }
 
 export async function recalculateScore(env: Env, lyricsId: number): Promise<void> {
+	const row = await env.DB.prepare(
+		"SELECT video_id, deleted_at FROM lyrics WHERE id = ?"
+	)
+		.bind(lyricsId)
+		.first<{ video_id: string; deleted_at: number | null }>()
+
+	if (!row || row.deleted_at !== null) return
+
 	const votes = await env.DB.prepare(`
 		SELECT v.vote, u.reputation, u.avg_vote, v.is_self_vote
 		FROM votes v
@@ -50,14 +58,7 @@ export async function recalculateScore(env: Env, lyricsId: number): Promise<void
 		)
 		.run()
 
-	// Invalidate cache for this entry's video_id
-	const row = await env.DB.prepare("SELECT video_id FROM lyrics WHERE id = ?")
-		.bind(lyricsId)
-		.first<{ video_id: string }>()
-
-	if (row) {
-		await invalidateCache(env, row.video_id)
-	}
+	await invalidateCache(env, row.video_id)
 
 	log.debug("recalculated score", { lyricsId, effective_score: update.effective_score })
 }
@@ -77,10 +78,12 @@ export async function updateScores(env: Env): Promise<{ updated: number }> {
 	//    (catches fire-and-forget recalculateScore failures from votes/reports)
 	const staleLyrics = await env.DB.prepare(`
 		SELECT id AS lyrics_id FROM lyrics
-		WHERE score_updated_at IS NULL AND vote_count > 0
+		WHERE score_updated_at IS NULL AND vote_count > 0 AND deleted_at IS NULL
 		UNION
-		SELECT DISTINCT lyrics_id FROM votes
-		WHERE created_at > (EXTRACT(EPOCH FROM NOW())::INTEGER - 21600)
+		SELECT DISTINCT v.lyrics_id FROM votes v
+		JOIN lyrics l ON l.id = v.lyrics_id
+		WHERE v.created_at > (EXTRACT(EPOCH FROM NOW())::INTEGER - 21600)
+			AND l.deleted_at IS NULL
 	`).all<{ lyrics_id: number }>()
 
 	let updated = 0
@@ -133,6 +136,9 @@ export function calculateScore(lyricsId: number, votes: VoteWithUser[]): LyricsS
 }
 
 export async function updateReputations(env: Env): Promise<void> {
+	// Do NOT add `deleted_at IS NULL` here. Reputation depends on historical
+	// voting signal; filtering deleted lyrics destroys it (and reintroduces the
+	// cascade-delete problem soft-delete was meant to solve).
 	await env.DB.prepare(`
 		WITH consensus_lyrics AS (
 			SELECT id, CASE WHEN effective_score > 0 THEN 1 ELSE -1 END AS consensus
