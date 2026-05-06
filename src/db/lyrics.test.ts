@@ -126,6 +126,10 @@ const baseRow: LyricsRow = {
 	created_at: 1700000000,
 	updated_at: 1700000000,
 	submitter_id: null,
+	deleted_at: null,
+	deleted_by_user_id: null,
+	deleted_by_role: null,
+	deletion_reason: null,
 }
 
 // -- Tests -----------------------------------------------------------------
