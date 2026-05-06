@@ -16,7 +16,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
-    "submit": "tsx cli/submit.ts"
+    "submit": "tsx cli/submit.ts",
+    "admin:delete": "tsx scripts/admin-delete.ts"
   },
   "dependencies": {
     "@axiomhq/js": "^1.4.0",
