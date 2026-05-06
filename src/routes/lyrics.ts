@@ -7,6 +7,7 @@ import {
 	getLyricsById,
 	searchByQuery,
 	searchBySongArtist,
+	softDeleteLyrics,
 	submitLyrics,
 } from "@/db/lyrics"
 import { getUserVote, getUserVotesForIds } from "@/db/votes"
@@ -260,7 +261,7 @@ export const lyricsRoutes = (env: Env) =>
 				return status(409, {
 					success: false,
 					error:
-						"You've reached the maximum submissions for this video. Contact unison@boidu.dev to request removal of older entries.",
+						"You've reached the maximum active variants for this video. Delete one of your existing variants to submit another.",
 				})
 			}
 
@@ -269,3 +270,23 @@ export const lyricsRoutes = (env: Env) =>
 				data: result,
 			})
 		})
+		.delete(
+			"/:id",
+			async ({ params, env, userId, status }) => {
+				const id = Number(params.id)
+				if (Number.isNaN(id)) {
+					return status(400, { success: false, error: "Invalid ID" })
+				}
+
+				const result = await softDeleteLyrics(env, id, userId, "submitter")
+
+				if (result.deleted) {
+					return { success: true }
+				}
+				if (result.reason === "forbidden") {
+					return status(403, { success: false, error: "Not your submission" })
+				}
+				return status(404, { success: false, error: "Lyrics not found" })
+			},
+			{ params: t.Object({ id: t.String() }) }
+		)
