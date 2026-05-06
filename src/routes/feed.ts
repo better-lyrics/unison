@@ -46,13 +46,13 @@ export const feedRoutes = (env: Env) =>
 					Math.max(1, query.limit ? Number(query.limit) : config.feed.defaultLimit),
 					config.feed.maxLimit
 				)
-				const cursor = query.cursor ? Number(query.cursor) : undefined
+				const offset = query.cursor ? Math.max(0, Number(query.cursor)) : 0
 
 				const items = feedUserId
-					? await getPersonalizedFeed(env, feedUserId, limit, cursor)
-					: await getGlobalFeed(env, limit, cursor)
+					? await getPersonalizedFeed(env, feedUserId, limit, offset)
+					: await getGlobalFeed(env, limit, offset)
 
-				const nextCursor = items.length === limit ? items[items.length - 1].created_at : undefined
+				const nextCursor = items.length === limit ? offset + items.length : undefined
 
 				const votesMap = feedUserId
 					? await getUserVotesForIds(
