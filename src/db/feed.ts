@@ -14,11 +14,13 @@ const FEED_COLUMNS = `
 export async function getGlobalFeed(
 	env: Env,
 	limit: number,
-	cursor?: number,
+	offset?: number,
 	excludeIds?: number[]
 ): Promise<FeedItem[]> {
-	// Try cache for default request (no cursor, no exclusions)
-	if (!cursor && (!excludeIds || excludeIds.length === 0)) {
+	const hasOffset = offset !== undefined && offset > 0
+	const hasExclusions = excludeIds && excludeIds.length > 0
+
+	if (!hasOffset && !hasExclusions) {
 		const cacheKey = `feed:global:${limit}`
 		const cached = await env.CACHE.get(cacheKey)
 		if (cached) {
@@ -33,18 +35,14 @@ export async function getGlobalFeed(
 	const conditions = ["effective_score > 0"]
 	const params: (number | string)[] = []
 
-	if (cursor) {
-		conditions.push("created_at < ?")
-		params.push(cursor)
-	}
-
-	if (excludeIds && excludeIds.length > 0) {
+	if (hasExclusions) {
 		const placeholders = excludeIds.map(() => "?").join(", ")
 		conditions.push(`id NOT IN (${placeholders})`)
 		params.push(...excludeIds)
 	}
 
 	params.push(limit)
+	if (hasOffset) params.push(offset)
 
 	const sql = `
 		SELECT * FROM (
@@ -54,15 +52,14 @@ export async function getGlobalFeed(
 			ORDER BY video_id, ${RANKING_EXPR} DESC
 		) AS unique_videos
 		ORDER BY ${RANKING_EXPR} DESC
-		LIMIT ?
+		LIMIT ?${hasOffset ? " OFFSET ?" : ""}
 	`
 
 	const result = await env.DB.prepare(sql)
 		.bind(...params)
 		.all<FeedItem>()
 
-	// Cache default request
-	if (!cursor && (!excludeIds || excludeIds.length === 0)) {
+	if (!hasOffset && !hasExclusions) {
 		const cacheKey = `feed:global:${limit}`
 		env.CACHE.put(cacheKey, JSON.stringify(result.results), {
 			expirationTtl: config.feed.globalCacheTtl,
@@ -109,7 +106,7 @@ export async function getPersonalizedFeed(
 	env: Env,
 	userId: number,
 	limit: number,
-	cursor?: number
+	offset?: number
 ): Promise<FeedItem[]> {
 	// Get user's preferred artists from upvoted lyrics + submissions
 	const artistsResult = await env.DB.prepare(
@@ -136,7 +133,7 @@ export async function getPersonalizedFeed(
 
 	if (artists.length === 0) {
 		log.debug("no history for user, falling back to global", { userId })
-		return getGlobalFeed(env, limit, cursor)
+		return getGlobalFeed(env, limit, offset)
 	}
 
 	// Fetch quality lyrics from preferred artists, excluding already-voted
@@ -148,12 +145,9 @@ export async function getPersonalizedFeed(
 	]
 	const params: (number | string)[] = [...artists, userId]
 
-	if (cursor) {
-		conditions.push("created_at < ?")
-		params.push(cursor)
-	}
-
+	const hasOffset = offset !== undefined && offset > 0
 	params.push(limit)
+	if (hasOffset) params.push(offset)
 
 	const sql = `
 		SELECT * FROM (
@@ -163,7 +157,7 @@ export async function getPersonalizedFeed(
 			ORDER BY video_id, ${RANKING_EXPR} DESC
 		) AS unique_videos
 		ORDER BY ${RANKING_EXPR} DESC
-		LIMIT ?
+		LIMIT ?${hasOffset ? " OFFSET ?" : ""}
 	`
 
 	const personalizedResult = await env.DB.prepare(sql)
@@ -175,7 +169,7 @@ export async function getPersonalizedFeed(
 	if (personalized.length < limit) {
 		const remaining = limit - personalized.length
 		const excludeIds = personalized.map((r) => r.id)
-		const global = await getGlobalFeed(env, remaining, cursor, excludeIds)
+		const global = await getGlobalFeed(env, remaining, offset, excludeIds)
 		return [...personalized, ...global]
 	}
 
