@@ -136,42 +136,32 @@ export async function getPersonalizedFeed(
 		return getGlobalFeed(env, limit, offset)
 	}
 
-	// Fetch quality lyrics from preferred artists, excluding already-voted
+	// Single-stream query: rank everything globally, then boost preferred-artist
+	// items (excluding already-voted) to the top. This keeps offset pagination
+	// duplicate-free and gap-free since LIMIT/OFFSET applies to one stable order.
 	const artistPlaceholders = artists.map(() => "?").join(", ")
-	const conditions = [
-		`artist_norm IN (${artistPlaceholders})`,
-		"effective_score > 0",
-		"id NOT IN (SELECT lyrics_id FROM votes WHERE user_id = ?)",
-	]
-	const params: (number | string)[] = [...artists, userId]
-
 	const hasOffset = offset !== undefined && offset > 0
-	params.push(limit)
+	const params: (number | string)[] = [...artists, userId, limit]
 	if (hasOffset) params.push(offset)
 
 	const sql = `
 		SELECT * FROM (
-			SELECT DISTINCT ON (video_id) ${FEED_COLUMNS}
+			SELECT DISTINCT ON (video_id) ${FEED_COLUMNS}, artist_norm,
+				CASE
+					WHEN artist_norm IN (${artistPlaceholders})
+						AND id NOT IN (SELECT lyrics_id FROM votes WHERE user_id = ?)
+					THEN 1 ELSE 0
+				END AS is_personalized
 			FROM lyrics
-			WHERE ${conditions.join(" AND ")}
+			WHERE effective_score > 0
 			ORDER BY video_id, ${RANKING_EXPR} DESC
 		) AS unique_videos
-		ORDER BY ${RANKING_EXPR} DESC
+		ORDER BY is_personalized DESC, ${RANKING_EXPR} DESC
 		LIMIT ?${hasOffset ? " OFFSET ?" : ""}
 	`
 
-	const personalizedResult = await env.DB.prepare(sql)
+	const result = await env.DB.prepare(sql)
 		.bind(...params)
 		.all<FeedItem>()
-	const personalized = personalizedResult.results
-
-	// Fill remaining slots with global feed if personalized results < limit
-	if (personalized.length < limit) {
-		const remaining = limit - personalized.length
-		const excludeIds = personalized.map((r) => r.id)
-		const global = await getGlobalFeed(env, remaining, offset, excludeIds)
-		return [...personalized, ...global]
-	}
-
-	return personalized
+	return result.results
 }
