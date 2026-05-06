@@ -287,6 +287,46 @@ export async function invalidateCacheAfterDelete(env: Env, videoId: string): Pro
 	}
 }
 
+export type SoftDeleteResult =
+	| { deleted: true }
+	| { deleted: false; reason: "not_found" | "forbidden" | "already_deleted" }
+
+export async function softDeleteLyrics(
+	env: Env,
+	lyricsId: number,
+	actingUserId: number,
+	role: "submitter" | "admin",
+	reason: string | null = null
+): Promise<SoftDeleteResult> {
+	const row = await env.DB.prepare(
+		"SELECT id, video_id, submitter_id, deleted_at FROM lyrics WHERE id = ?"
+	)
+		.bind(lyricsId)
+		.first<{ id: number; video_id: string; submitter_id: number; deleted_at: number | null }>()
+
+	if (!row) return { deleted: false, reason: "not_found" }
+	if (row.deleted_at !== null) return { deleted: false, reason: "already_deleted" }
+	if (role === "submitter" && row.submitter_id !== actingUserId) {
+		return { deleted: false, reason: "forbidden" }
+	}
+
+	await env.DB.prepare(
+		`UPDATE lyrics SET
+			deleted_at = EXTRACT(EPOCH FROM NOW())::INTEGER,
+			deleted_by_user_id = ?,
+			deleted_by_role = ?,
+			deletion_reason = ?
+		WHERE id = ? AND deleted_at IS NULL`
+	)
+		.bind(actingUserId, role, reason, lyricsId)
+		.run()
+
+	await invalidateCacheAfterDelete(env, row.video_id)
+	log.info("lyrics deleted", { lyricsId, role, actingUserId, videoId: row.video_id })
+
+	return { deleted: true }
+}
+
 const SEARCH_COLUMNS = `
 	id, video_id, song, artist, album, isrc, duration,
 	format, language, sync_type, score, effective_score,

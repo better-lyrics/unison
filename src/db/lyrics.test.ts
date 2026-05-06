@@ -8,6 +8,7 @@ import {
 	getLyricsById,
 	invalidateCacheAfterDelete,
 	searchByQuery,
+	softDeleteLyrics,
 } from "./lyrics"
 
 // -- Mocks -----------------------------------------------------------------
@@ -21,6 +22,7 @@ interface MockDB {
 		bind(...args: unknown[]): {
 			first<T>(): Promise<T | null>
 			all<T>(): Promise<{ results: T[] }>
+			run(): Promise<void>
 		}
 	}
 }
@@ -43,6 +45,10 @@ function createMockDB(queue: unknown[] = []): MockDB {
 							calls.push({ sql, params: args })
 							const next = queue.shift()
 							return { results: (next as T[]) ?? [] }
+						},
+						async run(): Promise<void> {
+							calls.push({ sql, params: args })
+							queue.shift()
 						},
 					}
 				},
@@ -520,5 +526,79 @@ describe("invalidateCacheAfterDelete", () => {
 		expect(cache.deleteCalls).toContain("feed:global:20")
 		expect(cache.deleteCalls).toContain("feed:global:50")
 		expect(cache.deleteCalls).not.toContain("unrelated:key")
+	})
+})
+
+describe("softDeleteLyrics", () => {
+	it("returns not_found when the row does not exist", async () => {
+		const db = createMockDB([null])
+		const cache = createMockCache()
+		const env = createEnv(db, cache)
+
+		const result = await softDeleteLyrics(env, 999, 1, "submitter")
+
+		expect(result).toEqual({ deleted: false, reason: "not_found" })
+	})
+
+	it("returns already_deleted when the row is already deleted", async () => {
+		const db = createMockDB([
+			{ id: 1, video_id: "v1", submitter_id: 1, deleted_at: 1234567890 },
+		])
+		const cache = createMockCache()
+		const env = createEnv(db, cache)
+
+		const result = await softDeleteLyrics(env, 1, 1, "submitter")
+
+		expect(result).toEqual({ deleted: false, reason: "already_deleted" })
+	})
+
+	it("returns forbidden when submitter does not own the row", async () => {
+		const db = createMockDB([
+			{ id: 1, video_id: "v1", submitter_id: 99, deleted_at: null },
+		])
+		const cache = createMockCache()
+		const env = createEnv(db, cache)
+
+		const result = await softDeleteLyrics(env, 1, 1, "submitter")
+
+		expect(result).toEqual({ deleted: false, reason: "forbidden" })
+	})
+
+	it("performs UPDATE with the four audit fields and invalidates cache", async () => {
+		const db = createMockDB([
+			{ id: 1, video_id: "v1", submitter_id: 1, deleted_at: null },
+			null,
+		])
+		const cache = createMockCache({ "v:v1": "row", "feed:global:20": "feed" })
+		const env = createEnv(db, cache)
+
+		const result = await softDeleteLyrics(env, 1, 1, "submitter", "typo")
+
+		expect(result.deleted).toBe(true)
+		const update = db.calls.find((c) => c.sql.includes("UPDATE lyrics"))
+		expect(update).toBeDefined()
+		expect(update?.sql).toMatch(/deleted_at\s*=/)
+		expect(update?.sql).toMatch(/deleted_by_user_id\s*=/)
+		expect(update?.sql).toMatch(/deleted_by_role\s*=/)
+		expect(update?.sql).toMatch(/deletion_reason\s*=/)
+		expect(update?.sql).toMatch(/WHERE\s+id\s*=\s*\?\s+AND\s+deleted_at\s+IS\s+NULL/i)
+		expect(update?.params).toEqual([1, "submitter", "typo", 1])
+		expect(cache.deleteCalls).toContain("v:v1")
+		expect(cache.deleteCalls).toContain("feed:global:20")
+	})
+
+	it("admin role bypasses ownership check", async () => {
+		const db = createMockDB([
+			{ id: 1, video_id: "v1", submitter_id: 99, deleted_at: null },
+			null,
+		])
+		const cache = createMockCache()
+		const env = createEnv(db, cache)
+
+		const result = await softDeleteLyrics(env, 1, 1, "admin", "DMCA")
+
+		expect(result.deleted).toBe(true)
+		const update = db.calls.find((c) => c.sql.includes("UPDATE lyrics"))
+		expect(update?.params).toEqual([1, "admin", "DMCA", 1])
 	})
 })
