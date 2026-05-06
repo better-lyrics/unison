@@ -12,9 +12,15 @@ export async function castVote(
 	userId: number,
 	vote: 1 | -1
 ): Promise<{ success: boolean; message: string }> {
-	const lyrics = await env.DB.prepare("SELECT submitter_id, video_id FROM lyrics WHERE id = ?")
+	const lyrics = await env.DB.prepare(
+		"SELECT submitter_id, video_id, deleted_at FROM lyrics WHERE id = ?"
+	)
 		.bind(lyricsId)
-		.first<{ submitter_id: number | null; video_id: string }>()
+		.first<{ submitter_id: number | null; video_id: string; deleted_at: number | null }>()
+
+	if (lyrics?.deleted_at != null) {
+		return { success: false, message: "Lyrics no longer available" }
+	}
 
 	const isSelfVote = lyrics?.submitter_id === userId ? 1 : 0
 

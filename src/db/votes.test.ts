@@ -267,3 +267,19 @@ describe("removeVote", () => {
 		expect(updateCall?.params[3]).toBe(1) // lyricsId
 	})
 })
+
+describe("castVote on deleted lyrics", () => {
+	it("refuses to vote on a soft-deleted row", async () => {
+		const cache = createMockCache()
+		const db = createMockDB([
+			{ submitter_id: 5, video_id: "v1", deleted_at: 1700000000 },
+		])
+		const env = createEnv(db, cache)
+
+		const result = await castVote(env, 1, 42, 1)
+
+		expect(result).toEqual({ success: false, message: "Lyrics no longer available" })
+		const updates = db.calls.filter((c) => c.sql.includes("UPDATE lyrics"))
+		expect(updates).toHaveLength(0)
+	})
+})

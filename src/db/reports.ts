@@ -11,6 +11,14 @@ export async function submitReport(
 	userId: number,
 	report: ReportRequest
 ): Promise<{ success: boolean; message: string }> {
+	const lyrics = await env.DB.prepare("SELECT deleted_at FROM lyrics WHERE id = ?")
+		.bind(lyricsId)
+		.first<{ deleted_at: number | null }>()
+
+	if (!lyrics || lyrics.deleted_at != null) {
+		return { success: false, message: "Lyrics no longer available" }
+	}
+
 	const existing = await env.DB.prepare(
 		"SELECT id FROM reports WHERE lyrics_id = ? AND user_id = ?"
 	)
