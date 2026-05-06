@@ -32,7 +32,7 @@ export async function getGlobalFeed(
 		}
 	}
 
-	const conditions = ["effective_score > 0"]
+	const conditions = ["effective_score > 0", "deleted_at IS NULL"]
 	const params: (number | string)[] = []
 
 	if (hasExclusions) {
@@ -77,7 +77,7 @@ export async function getMySubmissions(
 	limit: number,
 	cursor?: number
 ): Promise<FeedItem[]> {
-	const conditions = ["submitter_id = ?"]
+	const conditions = ["submitter_id = ?", "deleted_at IS NULL"]
 	const params: (number | string)[] = [userId]
 
 	if (cursor) {
@@ -153,7 +153,7 @@ export async function getPersonalizedFeed(
 					THEN 1 ELSE 0
 				END AS is_personalized
 			FROM lyrics
-			WHERE effective_score > 0
+			WHERE effective_score > 0 AND deleted_at IS NULL
 			ORDER BY video_id, ${RANKING_EXPR} DESC
 		) AS unique_videos
 		ORDER BY is_personalized DESC, ${RANKING_EXPR} DESC
