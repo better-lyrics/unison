@@ -53,7 +53,7 @@ export async function findByVideoId(env: Env, videoId: string): Promise<LyricsRo
 
 	cacheLog.debug("miss", { key: `v:${videoId}` })
 	const result = await env.DB.prepare(
-		`${LYRICS_WITH_SUBMITTER} WHERE l.video_id = ? ORDER BY ${RANKING_EXPR_JOINED} DESC LIMIT 1`
+		`${LYRICS_WITH_SUBMITTER} WHERE l.video_id = ? AND l.deleted_at IS NULL ORDER BY ${RANKING_EXPR_JOINED} DESC LIMIT 1`
 	)
 		.bind(videoId)
 		.first<LyricsRow>()
@@ -79,7 +79,7 @@ export async function findVariantsByVideoId(
 	const results = await env.DB.prepare(
 		`
 		${LYRICS_WITH_SUBMITTER}
-		WHERE l.video_id = ?
+		WHERE l.video_id = ? AND l.deleted_at IS NULL
 		ORDER BY ${RANKING_EXPR_JOINED} DESC
 		LIMIT ?
 		`
@@ -106,7 +106,7 @@ export async function findBySongArtist(
 	const songNorm = normalizeSong(song)
 	const artistNorm = normalizeArtist(artist)
 
-	const conditions = ["l.song_norm = ?", "l.artist_norm = ?"]
+	const conditions = ["l.song_norm = ?", "l.artist_norm = ?", "l.deleted_at IS NULL"]
 	const params: (string | number)[] = [songNorm, artistNorm]
 
 	if (duration !== undefined) {
@@ -152,7 +152,7 @@ export async function submitLyrics(
 
 	// Check per-user-per-video variant cap
 	const variantCount = await env.DB.prepare(
-		"SELECT COUNT(*)::INTEGER AS count FROM lyrics WHERE video_id = ? AND submitter_id = ?"
+		"SELECT COUNT(*)::INTEGER AS count FROM lyrics WHERE video_id = ? AND submitter_id = ? AND deleted_at IS NULL"
 	)
 		.bind(submission.videoId, submitterId)
 		.first<{ count: number }>()
@@ -220,7 +220,7 @@ export async function searchBySongArtist(
 	const songNorm = normalizeSong(song)
 	const artistNorm = normalizeArtist(artist)
 
-	const conditions = ["l.song_norm = ?", "l.artist_norm = ?"]
+	const conditions = ["l.song_norm = ?", "l.artist_norm = ?", "l.deleted_at IS NULL"]
 	const params: (string | number)[] = [songNorm, artistNorm]
 
 	if (duration !== undefined) {
@@ -256,7 +256,9 @@ export async function searchBySongArtist(
 }
 
 export async function getLyricsById(env: Env, id: number): Promise<LyricsRow | null> {
-	const result = await env.DB.prepare(`${LYRICS_WITH_SUBMITTER} WHERE l.id = ?`)
+	const result = await env.DB.prepare(
+		`${LYRICS_WITH_SUBMITTER} WHERE l.id = ? AND l.deleted_at IS NULL`
+	)
 		.bind(id)
 		.first<LyricsRow>()
 
@@ -277,6 +279,54 @@ async function cacheResult(env: Env, result: LyricsRow): Promise<void> {
 
 export async function invalidateCache(env: Env, videoId: string): Promise<void> {
 	await env.CACHE.delete(`v:${videoId}`)
+}
+
+export async function invalidateCacheAfterDelete(env: Env, videoId: string): Promise<void> {
+	await env.CACHE.delete(`v:${videoId}`)
+	const feedKeys = await env.CACHE.keys("feed:global:*")
+	for (const key of feedKeys) {
+		await env.CACHE.delete(key)
+	}
+}
+
+export type SoftDeleteResult =
+	| { deleted: true }
+	| { deleted: false; reason: "not_found" | "forbidden" | "already_deleted" }
+
+export async function softDeleteLyrics(
+	env: Env,
+	lyricsId: number,
+	actingUserId: number,
+	role: "submitter" | "admin",
+	reason: string | null = null
+): Promise<SoftDeleteResult> {
+	const row = await env.DB.prepare(
+		"SELECT id, video_id, submitter_id, deleted_at FROM lyrics WHERE id = ?"
+	)
+		.bind(lyricsId)
+		.first<{ id: number; video_id: string; submitter_id: number; deleted_at: number | null }>()
+
+	if (!row) return { deleted: false, reason: "not_found" }
+	if (row.deleted_at !== null) return { deleted: false, reason: "already_deleted" }
+	if (role === "submitter" && row.submitter_id !== actingUserId) {
+		return { deleted: false, reason: "forbidden" }
+	}
+
+	await env.DB.prepare(
+		`UPDATE lyrics SET
+			deleted_at = EXTRACT(EPOCH FROM NOW())::INTEGER,
+			deleted_by_user_id = ?,
+			deleted_by_role = ?,
+			deletion_reason = ?
+		WHERE id = ? AND deleted_at IS NULL`
+	)
+		.bind(actingUserId, role, reason, lyricsId)
+		.run()
+
+	await invalidateCacheAfterDelete(env, row.video_id)
+	log.info("lyrics deleted", { lyricsId, role, actingUserId, videoId: row.video_id })
+
+	return { deleted: true }
 }
 
 const SEARCH_COLUMNS = `
@@ -306,7 +356,7 @@ export async function searchByQuery(
 				1.0::DOUBLE PRECISION AS match_score,
 				1 AS tier
 			FROM lyrics
-			WHERE video_id = ? OR isrc = ?
+			WHERE (video_id = ? OR isrc = ?) AND deleted_at IS NULL
 
 			UNION ALL
 
@@ -319,10 +369,11 @@ export async function searchByQuery(
 				)::DOUBLE PRECISION AS match_score,
 				2 AS tier
 			FROM lyrics
-			WHERE similarity(song_norm, ?) > ?
-				OR similarity(artist_norm, ?) > ?
-				OR (album_norm IS NOT NULL AND similarity(album_norm, ?) > ?)
-				OR similarity(song_norm || ' ' || artist_norm, ?) > ?
+			WHERE deleted_at IS NULL
+				AND (similarity(song_norm, ?) > ?
+					OR similarity(artist_norm, ?) > ?
+					OR (album_norm IS NOT NULL AND similarity(album_norm, ?) > ?)
+					OR similarity(song_norm || ' ' || artist_norm, ?) > ?)
 
 			UNION ALL
 
@@ -330,7 +381,7 @@ export async function searchByQuery(
 				ts_rank(lyrics_text_search, plainto_tsquery('simple', ?))::DOUBLE PRECISION AS match_score,
 				3 AS tier
 			FROM lyrics
-			WHERE lyrics_text_search @@ plainto_tsquery('simple', ?)
+			WHERE lyrics_text_search @@ plainto_tsquery('simple', ?) AND deleted_at IS NULL
 		) AS combined
 		ORDER BY id, tier ASC, match_score DESC
 	`

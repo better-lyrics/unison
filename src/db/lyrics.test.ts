@@ -6,7 +6,9 @@ import {
 	findByVideoId,
 	findVariantsByVideoId,
 	getLyricsById,
+	invalidateCacheAfterDelete,
 	searchByQuery,
+	softDeleteLyrics,
 } from "./lyrics"
 
 // -- Mocks -----------------------------------------------------------------
@@ -20,6 +22,7 @@ interface MockDB {
 		bind(...args: unknown[]): {
 			first<T>(): Promise<T | null>
 			all<T>(): Promise<{ results: T[] }>
+			run(): Promise<void>
 		}
 	}
 }
@@ -43,6 +46,10 @@ function createMockDB(queue: unknown[] = []): MockDB {
 							const next = queue.shift()
 							return { results: (next as T[]) ?? [] }
 						},
+						async run(): Promise<void> {
+							calls.push({ sql, params: args })
+							queue.shift()
+						},
 					}
 				},
 			}
@@ -55,9 +62,11 @@ interface MockCache {
 	getCalls: string[]
 	putCalls: { key: string; value: string }[]
 	deleteCalls: string[]
+	keysCalls: string[]
 	get(key: string): Promise<string | null>
 	put(key: string, value: string, opts?: { expirationTtl?: number }): Promise<void>
 	delete(key: string): Promise<void>
+	keys(pattern: string): Promise<string[]>
 }
 
 function createMockCache(initial: Record<string, string> = {}): MockCache {
@@ -65,12 +74,14 @@ function createMockCache(initial: Record<string, string> = {}): MockCache {
 	const getCalls: string[] = []
 	const putCalls: { key: string; value: string }[] = []
 	const deleteCalls: string[] = []
+	const keysCalls: string[] = []
 
 	return {
 		store,
 		getCalls,
 		putCalls,
 		deleteCalls,
+		keysCalls,
 		async get(key: string) {
 			getCalls.push(key)
 			return store.get(key) ?? null
@@ -82,6 +93,11 @@ function createMockCache(initial: Record<string, string> = {}): MockCache {
 		async delete(key: string) {
 			deleteCalls.push(key)
 			store.delete(key)
+		},
+		async keys(pattern: string) {
+			keysCalls.push(pattern)
+			const re = new RegExp(`^${pattern.replace(/\*/g, ".*")}$`)
+			return [...store.keys()].filter((k) => re.test(k))
 		},
 	}
 }
@@ -126,6 +142,10 @@ const baseRow: LyricsRow = {
 	created_at: 1700000000,
 	updated_at: 1700000000,
 	submitter_id: null,
+	deleted_at: null,
+	deleted_by_user_id: null,
+	deleted_by_role: null,
+	deletion_reason: null,
 }
 
 // -- Tests -----------------------------------------------------------------
@@ -486,4 +506,120 @@ describe("RANKING_EXPR", () => {
 		expect(RANKING_EXPR).toContain("'richsync'")
 		expect(RANKING_EXPR).toContain("'linesync'")
 	})
+})
+
+
+describe("invalidateCacheAfterDelete", () => {
+	it("deletes per-video key and all feed:global:* keys, leaves others", async () => {
+		const db = createMockDB()
+		const cache = createMockCache({
+			"v:abc123": "row",
+			"feed:global:20": "feed",
+			"feed:global:50": "feed",
+			"unrelated:key": "stay",
+		})
+		const env = createEnv(db, cache)
+
+		await invalidateCacheAfterDelete(env, "abc123")
+
+		expect(cache.deleteCalls).toContain("v:abc123")
+		expect(cache.deleteCalls).toContain("feed:global:20")
+		expect(cache.deleteCalls).toContain("feed:global:50")
+		expect(cache.deleteCalls).not.toContain("unrelated:key")
+	})
+})
+
+describe("softDeleteLyrics", () => {
+	it("returns not_found when the row does not exist", async () => {
+		const db = createMockDB([null])
+		const cache = createMockCache()
+		const env = createEnv(db, cache)
+
+		const result = await softDeleteLyrics(env, 999, 1, "submitter")
+
+		expect(result).toEqual({ deleted: false, reason: "not_found" })
+	})
+
+	it("returns already_deleted when the row is already deleted", async () => {
+		const db = createMockDB([
+			{ id: 1, video_id: "v1", submitter_id: 1, deleted_at: 1234567890 },
+		])
+		const cache = createMockCache()
+		const env = createEnv(db, cache)
+
+		const result = await softDeleteLyrics(env, 1, 1, "submitter")
+
+		expect(result).toEqual({ deleted: false, reason: "already_deleted" })
+	})
+
+	it("returns forbidden when submitter does not own the row", async () => {
+		const db = createMockDB([
+			{ id: 1, video_id: "v1", submitter_id: 99, deleted_at: null },
+		])
+		const cache = createMockCache()
+		const env = createEnv(db, cache)
+
+		const result = await softDeleteLyrics(env, 1, 1, "submitter")
+
+		expect(result).toEqual({ deleted: false, reason: "forbidden" })
+	})
+
+	it("performs UPDATE with the four audit fields and invalidates cache", async () => {
+		const db = createMockDB([
+			{ id: 1, video_id: "v1", submitter_id: 1, deleted_at: null },
+			null,
+		])
+		const cache = createMockCache({ "v:v1": "row", "feed:global:20": "feed" })
+		const env = createEnv(db, cache)
+
+		const result = await softDeleteLyrics(env, 1, 1, "submitter", "typo")
+
+		expect(result.deleted).toBe(true)
+		const update = db.calls.find((c) => c.sql.includes("UPDATE lyrics"))
+		expect(update).toBeDefined()
+		expect(update?.sql).toMatch(/deleted_at\s*=/)
+		expect(update?.sql).toMatch(/deleted_by_user_id\s*=/)
+		expect(update?.sql).toMatch(/deleted_by_role\s*=/)
+		expect(update?.sql).toMatch(/deletion_reason\s*=/)
+		expect(update?.sql).toMatch(/WHERE\s+id\s*=\s*\?\s+AND\s+deleted_at\s+IS\s+NULL/i)
+		expect(update?.params).toEqual([1, "submitter", "typo", 1])
+		expect(cache.deleteCalls).toContain("v:v1")
+		expect(cache.deleteCalls).toContain("feed:global:20")
+	})
+
+	it("admin role bypasses ownership check", async () => {
+		const db = createMockDB([
+			{ id: 1, video_id: "v1", submitter_id: 99, deleted_at: null },
+			null,
+		])
+		const cache = createMockCache()
+		const env = createEnv(db, cache)
+
+		const result = await softDeleteLyrics(env, 1, 1, "admin", "DMCA")
+
+		expect(result.deleted).toBe(true)
+		const update = db.calls.find((c) => c.sql.includes("UPDATE lyrics"))
+		expect(update?.params).toEqual([1, "admin", "DMCA", 1])
+	})
+})
+
+describe("read paths filter deleted rows", () => {
+	const cases: Array<{ name: string; run: (env: Env) => Promise<unknown> }> = [
+		{ name: "findByVideoId", run: (env) => findByVideoId(env, "v1") },
+		{ name: "findVariantsByVideoId", run: (env) => findVariantsByVideoId(env, "v1", 5) },
+		{ name: "findBySongArtist", run: (env) => findBySongArtist(env, "s", "a") },
+		{ name: "getLyricsById", run: (env) => getLyricsById(env, 1) },
+		{ name: "searchByQuery", run: (env) => searchByQuery(env, "hello world", 10) },
+	]
+
+	for (const c of cases) {
+		it(`${c.name} adds deleted_at IS NULL to its WHERE`, async () => {
+			const db = createMockDB([null])
+			const cache = createMockCache()
+			const env = createEnv(db, cache)
+			await c.run(env)
+			const sql = db.calls.map((x) => x.sql).join("\n")
+			expect(sql).toMatch(/deleted_at\s+IS\s+NULL/i)
+		})
+	}
 })

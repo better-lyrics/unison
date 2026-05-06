@@ -203,3 +203,29 @@ describe("getMySubmissions", () => {
 		expect(db.calls[0].params).toEqual([42, 1700000000, 20])
 	})
 })
+
+// -- soft-delete filtering --------------------------------------------------
+
+describe("feed queries filter deleted rows", () => {
+	it("getGlobalFeed adds deleted_at IS NULL", async () => {
+		const db = createMockDB([[]])
+		await getGlobalFeed(createEnv(db), 20)
+		const sql = db.calls.map((c) => c.sql).join("\n")
+		expect(sql).toMatch(/deleted_at\s+IS\s+NULL/i)
+	})
+
+	it("getMySubmissions hides the submitter's own deleted entries", async () => {
+		const db = createMockDB([[]])
+		await getMySubmissions(createEnv(db), 42, 20)
+		expect(db.calls[0].sql).toMatch(/deleted_at\s+IS\s+NULL/i)
+	})
+
+	it("getPersonalizedFeed filters outer query but NOT artist-discovery sub-query", async () => {
+		const db = createMockDB([[{ artist_norm: "x" }], []])
+		await getPersonalizedFeed(createEnv(db), 42, 20)
+		const artistSql = db.calls[0].sql
+		const feedSql = db.calls[1].sql
+		expect(artistSql).not.toMatch(/deleted_at\s+IS\s+NULL/i)
+		expect(feedSql).toMatch(/deleted_at\s+IS\s+NULL/i)
+	})
+})

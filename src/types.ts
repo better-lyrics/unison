@@ -61,6 +61,10 @@ export interface LyricsRow {
 	submitter_id: number | null
 	submitter_key_id?: string | null
 	submitter_reputation?: number | null
+	deleted_at: number | null
+	deleted_by_user_id: number | null
+	deleted_by_role: "submitter" | "admin" | null
+	deletion_reason: string | null
 }
 
 export interface SubmitterInfo {

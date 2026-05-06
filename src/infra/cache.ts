@@ -58,6 +58,22 @@ export class KVCompat {
 		}
 	}
 
+	async keys(pattern: string): Promise<string[]> {
+		try {
+			const found: string[] = []
+			let cursor = "0"
+			do {
+				const [next, batch] = await this.redis.scan(cursor, "MATCH", pattern, "COUNT", 100)
+				found.push(...batch)
+				cursor = next
+			} while (cursor !== "0")
+			return found
+		} catch (err) {
+			log.warn("cache keys failed", { pattern, error: (err as Error).message })
+			return []
+		}
+	}
+
 	// Fail-open: brief Redis outages disable nonce replay protection,
 	// but the ±5min timestamp window in isTimestampFresh is the secondary defense.
 	async setNX(key: string, value: string, ttlSeconds: number): Promise<boolean> {

@@ -1,7 +1,11 @@
 import type { Env } from "@/types"
-import { describe, expect, it } from "vitest"
+import { describe, expect, it, vi } from "vitest"
 import { config } from "@/config"
-import { calculateScore, updateReputations } from "@/jobs/score-updater"
+import { calculateScore, recalculateScore, updateReputations, updateScores } from "@/jobs/score-updater"
+
+vi.mock("@/db/lyrics", () => ({
+	invalidateCache: vi.fn(() => Promise.resolve()),
+}))
 
 describe("calculateScore", () => {
 	it("returns correct weighted score for equal reputation votes", () => {
@@ -192,6 +196,75 @@ describe("updateReputations", () => {
 			config.reputation.min,
 			config.reputation.max,
 		])
+	})
+})
+
+describe("soft-delete handling", () => {
+	function createMockDB(queue: unknown[]): { db: Env["DB"]; calls: { sql: string; params: unknown[] }[] } {
+		const calls: { sql: string; params: unknown[] }[] = []
+		const db = {
+			prepare(sql: string) {
+				let params: unknown[] = []
+				return {
+					bind(...args: unknown[]) {
+						params = args
+						return this
+					},
+					async first<T>(): Promise<T | null> {
+						calls.push({ sql, params })
+						return (queue.shift() as T) ?? null
+					},
+					async all<T>(): Promise<{ results: T[] }> {
+						calls.push({ sql, params })
+						return { results: (queue.shift() as T[]) ?? [] }
+					},
+					async run(): Promise<void> {
+						calls.push({ sql, params })
+					},
+				}
+			},
+		}
+		return { db: db as unknown as Env["DB"], calls }
+	}
+
+	it("recalculateScore early-returns when the row is deleted (no UPDATE)", async () => {
+		const { db, calls } = createMockDB([{ video_id: "v1", deleted_at: 1700000000 }])
+		const env = { DB: db } as unknown as Env
+
+		await recalculateScore(env, 1)
+
+		expect(calls).toHaveLength(1)
+		expect(calls[0].sql).toMatch(/SELECT\s+video_id,\s+deleted_at/i)
+	})
+
+	it("recalculateScore early-returns when the row does not exist", async () => {
+		const { db, calls } = createMockDB([null])
+		const env = { DB: db } as unknown as Env
+
+		await recalculateScore(env, 999)
+
+		expect(calls).toHaveLength(1)
+	})
+
+	it("staleLyrics query filters deleted rows in both UNION branches", async () => {
+		const { db, calls } = createMockDB([null, null, []])
+		const env = { DB: db } as unknown as Env
+
+		await updateScores(env)
+
+		const staleSql = calls.find((c) => c.sql.includes("staleLyrics") || c.sql.includes("score_updated_at IS NULL"))
+		expect(staleSql).toBeDefined()
+		const occurrences = (staleSql?.sql.match(/deleted_at\s+IS\s+NULL/gi) ?? []).length
+		expect(occurrences).toBeGreaterThanOrEqual(2)
+	})
+
+	it("updateReputations query does NOT filter deleted rows (load-bearing)", async () => {
+		const { db, calls } = createMockDB([null])
+		const env = { DB: db } as unknown as Env
+
+		await updateReputations(env)
+
+		expect(calls[0].sql).not.toMatch(/deleted_at/i)
 	})
 })
 
