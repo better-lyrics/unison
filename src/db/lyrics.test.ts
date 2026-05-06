@@ -602,3 +602,24 @@ describe("softDeleteLyrics", () => {
 		expect(update?.params).toEqual([1, "admin", "DMCA", 1])
 	})
 })
+
+describe("read paths filter deleted rows", () => {
+	const cases: Array<{ name: string; run: (env: Env) => Promise<unknown> }> = [
+		{ name: "findByVideoId", run: (env) => findByVideoId(env, "v1") },
+		{ name: "findVariantsByVideoId", run: (env) => findVariantsByVideoId(env, "v1", 5) },
+		{ name: "findBySongArtist", run: (env) => findBySongArtist(env, "s", "a") },
+		{ name: "getLyricsById", run: (env) => getLyricsById(env, 1) },
+		{ name: "searchByQuery", run: (env) => searchByQuery(env, "hello world", 10) },
+	]
+
+	for (const c of cases) {
+		it(`${c.name} adds deleted_at IS NULL to its WHERE`, async () => {
+			const db = createMockDB([null])
+			const cache = createMockCache()
+			const env = createEnv(db, cache)
+			await c.run(env)
+			const sql = db.calls.map((x) => x.sql).join("\n")
+			expect(sql).toMatch(/deleted_at\s+IS\s+NULL/i)
+		})
+	}
+})
