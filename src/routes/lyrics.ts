@@ -21,6 +21,17 @@ import { Elysia, t } from "elysia"
 
 const log = new Logger("app")
 
+function parseDuration(raw: string | undefined): number | undefined {
+	if (!raw) return undefined
+	const n = Number(raw)
+	if (!Number.isFinite(n)) return undefined
+	const rounded = Math.round(n)
+	if (rounded < config.validation.duration.min || rounded > config.validation.duration.max) {
+		return undefined
+	}
+	return rounded
+}
+
 export const lyricsRoutes = (env: Env) =>
 	new Elysia({ prefix: "/lyrics" })
 		.decorate("env", env)
@@ -46,7 +57,7 @@ export const lyricsRoutes = (env: Env) =>
 				}
 
 				if (query.song && query.artist) {
-					const duration = query.duration ? Number(query.duration) : undefined
+					const duration = parseDuration(query.duration)
 					const result = await findBySongArtist(
 						env,
 						query.song,
@@ -96,7 +107,7 @@ export const lyricsRoutes = (env: Env) =>
 				}
 
 				if (query.song && query.artist) {
-					const duration = query.duration ? Number(query.duration) : undefined
+					const duration = parseDuration(query.duration)
 					const results = await searchBySongArtist(
 						env,
 						query.song,
