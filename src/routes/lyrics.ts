@@ -17,6 +17,7 @@ import { toResponse, toSearchResponse } from "@/routes/lyrics.transformers"
 import type { Env, LyricsSubmission } from "@/types"
 import { signedRequest } from "@/utils/auth"
 import { readRateLimit } from "@/utils/read-rate-limit"
+import { detectSyncType } from "@/utils/validation"
 import { Elysia, t } from "elysia"
 
 const log = new Logger("app")
@@ -250,6 +251,24 @@ export const lyricsRoutes = (env: Env) =>
 				return status(400, { success: false, error: "Invalid duration" })
 			}
 
+			const format = p.format as "ttml" | "lrc" | "plain"
+			const detectedSyncType = detectSyncType(p.lyrics as string, format)
+
+			const claimedSyncType =
+				typeof p.syncType === "string" && ["richsync", "linesync", "plain"].includes(p.syncType)
+					? (p.syncType as "richsync" | "linesync" | "plain")
+					: undefined
+
+			if (claimedSyncType && claimedSyncType !== detectedSyncType) {
+				log.warn("syncType mismatch, overriding with detected", {
+					keyId,
+					videoId: p.videoId as string,
+					format,
+					claimed: claimedSyncType,
+					detected: detectedSyncType,
+				})
+			}
+
 			const submission: LyricsSubmission = {
 				videoId: p.videoId as string,
 				song: p.song as string,
@@ -258,12 +277,9 @@ export const lyricsRoutes = (env: Env) =>
 				isrc: typeof p.isrc === "string" ? p.isrc : undefined,
 				duration: p.duration as number,
 				lyrics: p.lyrics as string,
-				format: p.format as "ttml" | "lrc" | "plain",
+				format,
 				language: typeof p.language === "string" ? p.language : undefined,
-				syncType:
-					typeof p.syncType === "string" && ["richsync", "linesync", "plain"].includes(p.syncType)
-						? (p.syncType as "richsync" | "linesync" | "plain")
-						: undefined,
+				syncType: detectedSyncType,
 			}
 
 			const result = await submitLyrics(env, submission, userId)

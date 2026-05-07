@@ -7,6 +7,7 @@ import { createEnv } from "@/infra/env"
 import { closePool } from "@/infra/database"
 import { closeRedis } from "@/infra/cache"
 import { Logger, flushLogs } from "@/infra/logger"
+import { backfillSyncType } from "@/jobs/backfill-synctype"
 import { backfillTextSearch } from "@/jobs/backfill-text-search"
 import { updateScores } from "@/jobs/score-updater"
 import { lyricsRoutes } from "@/routes/lyrics"
@@ -122,6 +123,12 @@ backfillTextSearch(env)
 		if (updated > 0) log.info("text search backfill complete", { updated })
 	})
 	.catch((err) => log.error("text search backfill failed", { error: (err as Error).message }))
+
+backfillSyncType(env)
+	.then(({ scanned, changed }) => {
+		if (changed > 0) log.info("sync_type backfill complete", { scanned, changed })
+	})
+	.catch((err) => log.error("sync_type backfill failed", { error: (err as Error).message }))
 
 process.on("unhandledRejection", (reason) => {
 	const err = reason instanceof Error ? reason : new Error(String(reason))

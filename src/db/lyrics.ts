@@ -190,7 +190,7 @@ export async function submitLyrics(
 			compressedLyrics,
 			submission.format,
 			submission.language || null,
-			submission.syncType || "linesync",
+			submission.syncType,
 			submitterId,
 			plainText
 		)
@@ -200,7 +200,7 @@ export async function submitLyrics(
 		videoId: submission.videoId,
 		id: result!.id,
 		format: submission.format,
-		sync_type: submission.syncType || "linesync",
+		sync_type: submission.syncType,
 	})
 
 	// Invalidate cache so the new variant competes in ranking
