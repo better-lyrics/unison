@@ -82,7 +82,7 @@ export interface LyricsSubmission {
 	lyrics: string
 	format: LyricsFormat
 	language?: string
-	syncType?: "richsync" | "linesync" | "plain"
+	syncType: "richsync" | "linesync" | "plain"
 }
 
 export interface LyricsResponse {
