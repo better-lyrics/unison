@@ -192,10 +192,16 @@ describe("updateReputations", () => {
 		expect(calls[0].params).toEqual([
 			config.reputation.minVotesForConfidence,
 			config.reputation.consensusDelta,
-			config.reputation.consensusDelta,
+			-config.reputation.consensusDelta,
 			config.reputation.min,
 			config.reputation.max,
 		])
+	})
+
+	it("does not apply unary minus to a bind placeholder", async () => {
+		const { env, calls } = createMockEnv()
+		await updateReputations(env)
+		expect(calls[0].sql).not.toMatch(/-\s*\?/)
 	})
 })
 

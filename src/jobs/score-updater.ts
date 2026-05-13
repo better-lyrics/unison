@@ -147,7 +147,7 @@ export async function updateReputations(env: Env): Promise<void> {
 		),
 		deltas AS (
 			SELECT v.user_id,
-				SUM(CASE WHEN v.vote = cl.consensus THEN ? ELSE -? END) AS delta
+				SUM(CASE WHEN v.vote = cl.consensus THEN ?::DOUBLE PRECISION ELSE ?::DOUBLE PRECISION END) AS delta
 			FROM votes v
 			JOIN consensus_lyrics cl ON v.lyrics_id = cl.id
 			WHERE v.is_self_vote = 0
@@ -161,7 +161,7 @@ export async function updateReputations(env: Env): Promise<void> {
 		.bind(
 			config.reputation.minVotesForConfidence,
 			config.reputation.consensusDelta,
-			config.reputation.consensusDelta,
+			-config.reputation.consensusDelta,
 			config.reputation.min,
 			config.reputation.max
 		)
