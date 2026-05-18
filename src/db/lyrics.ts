@@ -29,6 +29,24 @@ const buildRankingExpr = (prefix: string) => {
 export const RANKING_EXPR = buildRankingExpr("")
 const RANKING_EXPR_JOINED = buildRankingExpr("l.")
 
+const { autoHide } = config.moderation
+
+const buildAutoHidePredicate = (prefix: string) => `(
+	(
+		${prefix}vote_count >= ${autoHide.minVotes}
+		AND ${prefix}downvotes >= ${autoHide.downvoteRatio} * ${prefix}vote_count
+		AND ${prefix}effective_score < ${autoHide.maxEffectiveScore}
+	)
+	OR
+	(
+		${prefix}vote_count >= ${autoHide.decisiveMinVotes}
+		AND ${prefix}downvotes = ${prefix}vote_count
+		AND EXTRACT(EPOCH FROM NOW())::INTEGER - ${prefix}created_at >= ${autoHide.decisiveMinAgeDays * 86400}
+	)
+)`
+
+export const AUTO_HIDE_PREDICATE = buildAutoHidePredicate("")
+
 const LYRICS_WITH_SUBMITTER = `
 	SELECT l.*, u.key_id AS submitter_key_id, u.reputation AS submitter_reputation
 	FROM lyrics l

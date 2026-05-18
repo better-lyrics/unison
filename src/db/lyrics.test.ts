@@ -1,6 +1,7 @@
 import type { Env, LyricsRow, LyricsSearchResult } from "@/types"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import {
+	AUTO_HIDE_PREDICATE,
 	RANKING_EXPR,
 	findBySongArtist,
 	findByVideoId,
@@ -622,4 +623,26 @@ describe("read paths filter deleted rows", () => {
 			expect(sql).toMatch(/deleted_at\s+IS\s+NULL/i)
 		})
 	}
+})
+
+describe("AUTO_HIDE_PREDICATE", () => {
+	it("encodes the standard path: 5 votes, 80% downvotes, effective_score < -0.5", () => {
+		expect(AUTO_HIDE_PREDICATE).toContain("vote_count >= 5")
+		expect(AUTO_HIDE_PREDICATE).toContain("downvotes >= 0.8 * vote_count")
+		expect(AUTO_HIDE_PREDICATE).toContain("effective_score < -0.5")
+	})
+
+	it("encodes the decisive path: 3 unanimous downvotes aged 3 days", () => {
+		expect(AUTO_HIDE_PREDICATE).toContain("vote_count >= 3")
+		expect(AUTO_HIDE_PREDICATE).toContain("downvotes = vote_count")
+		expect(AUTO_HIDE_PREDICATE).toContain("- created_at >= 259200")
+	})
+
+	it("combines the two paths with OR", () => {
+		expect(AUTO_HIDE_PREDICATE).toMatch(/\)\s*OR\s*\(/)
+	})
+
+	it("uses unprefixed columns so it is safe inside the search subqueries", () => {
+		expect(AUTO_HIDE_PREDICATE).not.toMatch(/\bl\./)
+	})
 })
