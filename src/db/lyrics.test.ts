@@ -324,7 +324,7 @@ describe("findBySongArtist", () => {
 
 		// First two bound params are the normalized song and artist.
 		// (Exact normalization rules are tested elsewhere; we just verify
-		// they were normalized — i.e., not the raw input.)
+		// they were normalized, i.e., not the raw input.)
 		const params = db.calls[0].params
 		expect(params[0]).not.toBe("  Hello WORLD  ")
 		expect(params[0]).toBe(String(params[0]).toLowerCase().trim())
