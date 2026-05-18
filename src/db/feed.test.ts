@@ -202,6 +202,12 @@ describe("getMySubmissions", () => {
 		expect(sql).toContain("ORDER BY created_at DESC")
 		expect(db.calls[0].params).toEqual([42, 1700000000, 20])
 	})
+
+	it("selects the auto-hide predicate as a hidden column", async () => {
+		const db = createMockDB([[]])
+		await getMySubmissions(createEnv(db), 42, 20)
+		expect(db.calls[0].sql).toMatch(/AS\s+hidden/i)
+	})
 })
 
 // -- soft-delete filtering --------------------------------------------------
