@@ -65,6 +65,7 @@ export interface LyricsRow {
 	deleted_by_user_id: number | null
 	deleted_by_role: "submitter" | "admin" | null
 	deletion_reason: string | null
+	hidden?: boolean
 }
 
 export interface SubmitterInfo {
@@ -100,6 +101,7 @@ export interface LyricsResponse {
 	effectiveScore: number
 	voteCount: number
 	confidence: Confidence
+	hidden: boolean
 	submitter?: SubmitterInfo
 	userVote?: 1 | -1 | null
 }
@@ -140,6 +142,7 @@ export interface FeedItem {
 	vote_count: number
 	confidence: Confidence
 	created_at: number
+	hidden?: boolean
 }
 
 export interface VoteRequest {

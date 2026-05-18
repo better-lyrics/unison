@@ -1,6 +1,7 @@
 import type { Env } from "@/types"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { getGlobalFeed, getMySubmissions, getPersonalizedFeed } from "./feed"
+import { AUTO_HIDE_PREDICATE } from "./lyrics"
 
 // -- Mocks -----------------------------------------------------------------
 
@@ -201,6 +202,14 @@ describe("getMySubmissions", () => {
 		expect(sql).toContain("created_at < ?")
 		expect(sql).toContain("ORDER BY created_at DESC")
 		expect(db.calls[0].params).toEqual([42, 1700000000, 20])
+	})
+
+	it("selects the auto-hide predicate as a hidden column", async () => {
+		const db = createMockDB([[]])
+		await getMySubmissions(createEnv(db), 42, 20)
+		const sql = db.calls[0].sql
+		expect(sql).toMatch(/AS\s+hidden/i)
+		expect(sql).toContain(AUTO_HIDE_PREDICATE)
 	})
 })
 

@@ -5,6 +5,13 @@ export const config = {
 
 	moderation: {
 		reportsThreshold: 5,
+		autoHide: {
+			minVotes: 5,
+			downvoteRatio: 0.8,
+			maxEffectiveScore: -0.5,
+			decisiveMinVotes: 3,
+			decisiveMinAgeDays: 3,
+		},
 	},
 
 	reputation: {

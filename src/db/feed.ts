@@ -1,5 +1,5 @@
 import { config } from "@/config"
-import { RANKING_EXPR } from "@/db/lyrics"
+import { AUTO_HIDE_PREDICATE, RANKING_EXPR } from "@/db/lyrics"
 import { Logger } from "@/infra/logger"
 import type { Env, FeedItem } from "@/types"
 
@@ -88,7 +88,7 @@ export async function getMySubmissions(
 	params.push(limit)
 
 	const sql = `
-		SELECT ${FEED_COLUMNS}
+		SELECT ${FEED_COLUMNS}, ${AUTO_HIDE_PREDICATE} AS hidden
 		FROM lyrics
 		WHERE ${conditions.join(" AND ")}
 		ORDER BY created_at DESC

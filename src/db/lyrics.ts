@@ -29,8 +29,28 @@ const buildRankingExpr = (prefix: string) => {
 export const RANKING_EXPR = buildRankingExpr("")
 const RANKING_EXPR_JOINED = buildRankingExpr("l.")
 
+const { autoHide } = config.moderation
+
+const buildAutoHidePredicate = (prefix: string) => `(
+	(
+		${prefix}vote_count >= ${autoHide.minVotes}
+		AND ${prefix}downvotes >= ${autoHide.downvoteRatio} * ${prefix}vote_count
+		AND ${prefix}effective_score < ${autoHide.maxEffectiveScore}
+	)
+	OR
+	(
+		${prefix}vote_count >= ${autoHide.decisiveMinVotes}
+		AND ${prefix}downvotes = ${prefix}vote_count
+		AND EXTRACT(EPOCH FROM NOW())::INTEGER - ${prefix}created_at >= ${autoHide.decisiveMinAgeDays * 86400}
+	)
+)`
+
+export const AUTO_HIDE_PREDICATE = buildAutoHidePredicate("")
+const AUTO_HIDE_PREDICATE_JOINED = buildAutoHidePredicate("l.")
+
 const LYRICS_WITH_SUBMITTER = `
-	SELECT l.*, u.key_id AS submitter_key_id, u.reputation AS submitter_reputation
+	SELECT l.*, u.key_id AS submitter_key_id, u.reputation AS submitter_reputation,
+		${AUTO_HIDE_PREDICATE_JOINED} AS hidden
 	FROM lyrics l
 	LEFT JOIN users u ON l.submitter_id = u.id
 `
@@ -53,7 +73,7 @@ export async function findByVideoId(env: Env, videoId: string): Promise<LyricsRo
 
 	cacheLog.debug("miss", { key: `v:${videoId}` })
 	const result = await env.DB.prepare(
-		`${LYRICS_WITH_SUBMITTER} WHERE l.video_id = ? AND l.deleted_at IS NULL ORDER BY ${RANKING_EXPR_JOINED} DESC LIMIT 1`
+		`${LYRICS_WITH_SUBMITTER} WHERE l.video_id = ? AND l.deleted_at IS NULL AND NOT ${AUTO_HIDE_PREDICATE_JOINED} ORDER BY ${RANKING_EXPR_JOINED} DESC LIMIT 1`
 	)
 		.bind(videoId)
 		.first<LyricsRow>()
@@ -106,7 +126,12 @@ export async function findBySongArtist(
 	const songNorm = normalizeSong(song)
 	const artistNorm = normalizeArtist(artist)
 
-	const conditions = ["l.song_norm = ?", "l.artist_norm = ?", "l.deleted_at IS NULL"]
+	const conditions = [
+		"l.song_norm = ?",
+		"l.artist_norm = ?",
+		"l.deleted_at IS NULL",
+		`NOT ${AUTO_HIDE_PREDICATE_JOINED}`,
+	]
 	const params: (string | number)[] = [songNorm, artistNorm]
 
 	if (duration !== undefined) {
@@ -220,7 +245,12 @@ export async function searchBySongArtist(
 	const songNorm = normalizeSong(song)
 	const artistNorm = normalizeArtist(artist)
 
-	const conditions = ["l.song_norm = ?", "l.artist_norm = ?", "l.deleted_at IS NULL"]
+	const conditions = [
+		"l.song_norm = ?",
+		"l.artist_norm = ?",
+		"l.deleted_at IS NULL",
+		`NOT ${AUTO_HIDE_PREDICATE_JOINED}`,
+	]
 	const params: (string | number)[] = [songNorm, artistNorm]
 
 	if (duration !== undefined) {
@@ -356,7 +386,7 @@ export async function searchByQuery(
 				1.0::DOUBLE PRECISION AS match_score,
 				1 AS tier
 			FROM lyrics
-			WHERE (video_id = ? OR isrc = ?) AND deleted_at IS NULL
+			WHERE (video_id = ? OR isrc = ?) AND deleted_at IS NULL AND NOT ${AUTO_HIDE_PREDICATE}
 
 			UNION ALL
 
@@ -370,6 +400,7 @@ export async function searchByQuery(
 				2 AS tier
 			FROM lyrics
 			WHERE deleted_at IS NULL
+				AND NOT ${AUTO_HIDE_PREDICATE}
 				AND (similarity(song_norm, ?) > ?
 					OR similarity(artist_norm, ?) > ?
 					OR (album_norm IS NOT NULL AND similarity(album_norm, ?) > ?)
@@ -381,7 +412,7 @@ export async function searchByQuery(
 				ts_rank(lyrics_text_search, plainto_tsquery('simple', ?))::DOUBLE PRECISION AS match_score,
 				3 AS tier
 			FROM lyrics
-			WHERE lyrics_text_search @@ plainto_tsquery('simple', ?) AND deleted_at IS NULL
+			WHERE lyrics_text_search @@ plainto_tsquery('simple', ?) AND deleted_at IS NULL AND NOT ${AUTO_HIDE_PREDICATE}
 		) AS combined
 		ORDER BY id, tier ASC, match_score DESC
 	`
