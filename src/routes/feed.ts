@@ -22,6 +22,7 @@ export function toFeedResponse(row: FeedItem) {
 		voteCount: row.vote_count,
 		confidence: row.confidence,
 		createdAt: row.created_at,
+		hidden: row.hidden ?? false,
 	}
 }
 

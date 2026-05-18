@@ -17,6 +17,7 @@ export interface LyricsRowForResponse {
 	confidence: Confidence
 	submitter_key_id?: string | null
 	submitter_reputation?: number | null
+	hidden?: boolean
 }
 
 export function toResponse(row: LyricsRowForResponse): LyricsResponse {
@@ -40,6 +41,7 @@ export function toResponse(row: LyricsRowForResponse): LyricsResponse {
 		effectiveScore: row.effective_score,
 		voteCount: row.vote_count,
 		confidence: row.confidence,
+		hidden: row.hidden ?? false,
 		submitter,
 	}
 }

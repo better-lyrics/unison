@@ -109,6 +109,11 @@ describe("toResponse", () => {
 		const result = toResponse({ ...baseRow, album: "" })
 		expect(result.album).toBeUndefined()
 	})
+
+	it("maps hidden, defaulting to false when the row omits it", () => {
+		expect(toResponse(baseRow).hidden).toBe(false)
+		expect(toResponse({ ...baseRow, hidden: true }).hidden).toBe(true)
+	})
 })
 
 describe("toSearchResponse", () => {
