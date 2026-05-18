@@ -9,6 +9,7 @@ import {
 	getLyricsById,
 	invalidateCacheAfterDelete,
 	searchByQuery,
+	searchBySongArtist,
 	softDeleteLyrics,
 } from "./lyrics"
 
@@ -644,5 +645,48 @@ describe("AUTO_HIDE_PREDICATE", () => {
 
 	it("uses unprefixed columns so it is safe inside the search subqueries", () => {
 		expect(AUTO_HIDE_PREDICATE).not.toMatch(/\bl\./)
+	})
+})
+
+describe("auto-hide filter on lookups and search", () => {
+	const hideCases: Array<{ name: string; run: (env: Env) => Promise<unknown> }> = [
+		{ name: "findByVideoId", run: (env) => findByVideoId(env, "v1") },
+		{ name: "findBySongArtist", run: (env) => findBySongArtist(env, "s", "a") },
+		{ name: "searchBySongArtist", run: (env) => searchBySongArtist(env, "s", "a") },
+		{ name: "searchByQuery", run: (env) => searchByQuery(env, "hello world", 10) },
+	]
+
+	for (const c of hideCases) {
+		it(`${c.name} excludes auto-hidden variants`, async () => {
+			const db = createMockDB([null])
+			const env = createEnv(db, createMockCache())
+			await c.run(env)
+			const sql = db.calls.map((x) => x.sql).join("\n")
+			expect(sql).toContain("NOT (")
+			expect(sql).toMatch(/downvotes >= 0\.8 \* (?:l\.)?vote_count/)
+		})
+	}
+})
+
+describe("hidden flag on browse surfaces", () => {
+	const flagCases: Array<{ name: string; run: (env: Env) => Promise<unknown> }> = [
+		{ name: "findVariantsByVideoId", run: (env) => findVariantsByVideoId(env, "v1", 5) },
+		{ name: "getLyricsById", run: (env) => getLyricsById(env, 1) },
+	]
+
+	for (const c of flagCases) {
+		it(`${c.name} selects the predicate as a hidden column`, async () => {
+			const db = createMockDB([null])
+			const env = createEnv(db, createMockCache())
+			await c.run(env)
+			expect(db.calls[0].sql).toMatch(/AS\s+hidden/i)
+		})
+	}
+
+	it("findVariantsByVideoId does NOT filter hidden variants out", async () => {
+		const db = createMockDB([[]])
+		const env = createEnv(db, createMockCache())
+		await findVariantsByVideoId(env, "v1", 5)
+		expect(db.calls[0].sql).not.toContain("AND NOT")
 	})
 })
