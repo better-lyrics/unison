@@ -1,4 +1,5 @@
 import { Elysia } from "elysia"
+import { config } from "@/config"
 import { createRequest } from "@/db/requests"
 import { getUserById } from "@/db/users"
 import type { Env } from "@/types"
@@ -24,6 +25,13 @@ export const requestRoutes = (env: Env) =>
 				!p.artist
 			) {
 				return status(400, { success: false, error: "Invalid request payload" })
+			}
+
+			if (p.song.length > config.validation.song.maxLength) {
+				return status(400, { success: false, error: "Song name too long" })
+			}
+			if (p.artist.length > config.validation.artist.maxLength) {
+				return status(400, { success: false, error: "Artist name too long" })
 			}
 
 			const thumbnailUrl =

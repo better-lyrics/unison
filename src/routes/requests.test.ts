@@ -169,4 +169,36 @@ describe("POST /requests", () => {
 
 		expect(res.status).toBe(400)
 	})
+
+	it("rejects a payload whose song name is too long with 400", async () => {
+		const keyPair = await generateKeyPair()
+		const publicJwk = await exportPublicJwk(keyPair)
+		const keyId = await hashPublicKey(publicJwk)
+
+		const db = makeMockDB([
+			{ key_id: keyId, public_key: JSON.stringify(publicJwk), created_at: 0 }, // getPublicKey
+			{ id: 7, key_id: keyId }, // getOrCreateUser
+		])
+		const env = makeEnv(db)
+		const app = requestRoutes(env)
+
+		const payload = {
+			timestamp: Date.now(),
+			nonce: "n".repeat(32),
+			keyId,
+			videoId: "vid1",
+			song: "x".repeat(501),
+			artist: "Artist",
+		}
+		const signature = await signPayload(payload, keyPair.privateKey)
+		const res = await app.handle(
+			new Request("http://localhost/requests", {
+				method: "POST",
+				headers: { "content-type": "application/json" },
+				body: JSON.stringify({ payload, signature }),
+			})
+		)
+
+		expect(res.status).toBe(400)
+	})
 })
