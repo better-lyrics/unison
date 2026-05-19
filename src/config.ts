@@ -14,6 +14,17 @@ export const config = {
 		},
 	},
 
+	requests: {
+		windowDays: 30,
+		discordNeutralWeight: 1.0,
+		needsFixingReportThreshold: 5,
+		leaderboard: {
+			cacheTtl: 300,
+			topN: 200,
+			rankScanLimit: 5000,
+		},
+	},
+
 	reputation: {
 		default: 1.0,
 		min: 0.0,
