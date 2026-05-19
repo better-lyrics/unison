@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 import type { Env } from "@/types"
-import { getSongLeaderboard } from "./leaderboard"
+import { getCuratorLeaderboard, getSongLeaderboard } from "./leaderboard"
 
 interface DBCall {
 	sql: string
@@ -111,5 +111,20 @@ describe("getSongLeaderboard", () => {
 			rank: 1,
 			section: "needs_fixing",
 		})
+	})
+})
+
+describe("getCuratorLeaderboard", () => {
+	it("returns curators ranked by summed effective score", async () => {
+		const db = makeMockDB([
+			[
+				{ key_id: "k1", reputation: 1.8, score: 42.5, submission_count: 12, total_upvotes: 80 },
+				{ key_id: "k2", reputation: 1.1, score: 9.0, submission_count: 3, total_upvotes: 11 },
+			],
+		])
+		const env = makeEnv(db)
+		const result = await getCuratorLeaderboard(env, 200)
+		expect(result[0]).toMatchObject({ keyId: "k1", rank: 1, score: 42.5 })
+		expect(result[1].rank).toBe(2)
 	})
 })

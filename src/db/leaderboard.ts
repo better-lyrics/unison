@@ -132,3 +132,63 @@ export async function getSongRank(
 		needsFixing.find((r) => r.videoId === videoId)
 	return hit ? { section: hit.section, rank: hit.rank, demand: hit.demand } : null
 }
+
+export interface CuratorLeaderboardRow {
+	keyId: string
+	reputation: number
+	score: number
+	submissionCount: number
+	totalUpvotes: number
+	rank: number
+}
+
+interface CuratorRow {
+	key_id: string
+	reputation: number
+	score: number
+	submission_count: number
+	total_upvotes: number
+}
+
+export async function getCuratorLeaderboard(
+	env: Env,
+	limit: number
+): Promise<CuratorLeaderboardRow[]> {
+	const res = await env.DB.prepare(
+		`SELECT u.key_id, u.reputation,
+		        agg.score, agg.submission_count, agg.total_upvotes
+		 FROM (
+		   SELECT submitter_id,
+		          SUM(effective_score) AS score,
+		          COUNT(*) AS submission_count,
+		          SUM(upvotes) AS total_upvotes
+		   FROM lyrics
+		   WHERE deleted_at IS NULL
+		     AND submitter_id IS NOT NULL
+		     AND NOT ${AUTO_HIDE_PREDICATE}
+		   GROUP BY submitter_id
+		 ) agg
+		 JOIN users u ON u.id = agg.submitter_id
+		 ORDER BY agg.score DESC
+		 LIMIT ?`
+	)
+		.bind(limit)
+		.all<CuratorRow>()
+
+	return res.results.map((r, i) => ({
+		keyId: r.key_id,
+		reputation: Number(r.reputation),
+		score: Number(r.score),
+		submissionCount: Number(r.submission_count),
+		totalUpvotes: Number(r.total_upvotes),
+		rank: i + 1,
+	}))
+}
+
+export async function getCuratorRank(
+	env: Env,
+	keyId: string
+): Promise<CuratorLeaderboardRow | null> {
+	const all = await getCuratorLeaderboard(env, config.requests.leaderboard.rankScanLimit)
+	return all.find((r) => r.keyId === keyId) ?? null
+}
