@@ -16,7 +16,7 @@ export const config = {
 
 	requests: {
 		windowDays: 30,
-		discordNeutralWeight: 1.0,
+		discordNeutralWeight: 1.0, // reserved for deferred Discord-origin requests
 		needsFixingReportThreshold: 5,
 		leaderboard: {
 			cacheTtl: 300,

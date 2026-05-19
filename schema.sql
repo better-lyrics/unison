@@ -169,5 +169,4 @@ CREATE TABLE IF NOT EXISTS lyrics_requests (
     UNIQUE(video_id, requester_id, requester_type)
 );
 
-CREATE INDEX IF NOT EXISTS idx_lyrics_requests_video ON lyrics_requests(video_id);
 CREATE INDEX IF NOT EXISTS idx_lyrics_requests_created ON lyrics_requests(created_at);
