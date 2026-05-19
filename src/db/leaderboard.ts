@@ -9,6 +9,7 @@ export interface SongLeaderboardRow {
 	artist: string
 	thumbnailUrl: string | null
 	demand: number
+	/** Request count for `most_wanted` rows; in-window `bad_sync` report count for `needs_fixing` rows. */
 	requestCount: number
 	section: "most_wanted" | "needs_fixing"
 	rank: number
