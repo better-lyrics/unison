@@ -4,48 +4,69 @@ export function AboutPage() {
       <section className="space-y-3">
         <h2 className="text-lg font-semibold text-unison-text">What Unison is</h2>
         <p className="text-sm leading-relaxed text-unison-text-secondary">
-          Unison is a public lyrics database for synced lyrics on YouTube Music. No label deal, no licensing arrangement,
-          no proprietary scraper. Every line in here was submitted by someone in the community.{" "}
+          A public database for synced lyrics on YouTube Music. Everything in here was submitted by someone using{" "}
           <a
-            href="https://better-lyrics.boidu.dev"
+            href="https://betterlyrics.org"
             target="_blank"
             rel="noopener noreferrer"
             className="text-unison-text underline underline-offset-2 hover:no-underline"
           >
             Better Lyrics
           </a>
-          , the browser extension that overlays synced lyrics on YT Music, reads from this database. Submitting and
-          voting is what keeps it alive.
+          , the browser extension for YT Music. Better Lyrics checks a few sources when it overlays lyrics on a song;
+          Unison is the community-fed one.
         </p>
       </section>
 
       <section className="space-y-3">
         <h2 className="text-lg font-semibold text-unison-text">How the leaderboards work</h2>
         <p className="text-sm leading-relaxed text-unison-text-secondary">
-          Two song boards. <span className="font-medium text-unison-text">Most Wanted</span> covers songs with no synced
-          lyrics yet, ranked by reputation-weighted demand. <span className="font-medium text-unison-text">Needs Fixing</span>{" "}
-          is the opposite problem: songs that already have synced lyrics, but enough people flagged the timing that it's
-          worth a second pass.
+          Two song boards. Most Wanted is songs nobody's submitted lyrics for yet, ranked by reputation-weighted demand.
+          One request from a long-time contributor outranks a hundred from throwaway accounts, so the top of the board
+          reflects what people actually care about and not who has the most browser tabs open. Needs Fixing is the
+          inverse: songs that already have synced lyrics, but enough listeners flagged the timing for it to be worth a
+          second pass.
         </p>
         <p className="text-sm leading-relaxed text-unison-text-secondary">
-          The <span className="font-medium text-unison-text">Curators</span> board ranks contributors by the quality and
-          quantity of their submissions. Display names like "BrightVivaceRoll" are derived deterministically from each
-          contributor's public key. No usernames, no accounts to remember.
+          The Curators board ranks people by submission volume and how much of that work survived voting. Names like
+          "BrightVivaceRoll" come from each contributor's public key, which means no accounts and no usernames to fight
+          over. Sign-in is coming for anyone who wants a real handle later.
         </p>
       </section>
 
       <section className="space-y-3">
         <h2 className="text-lg font-semibold text-unison-text">How to contribute</h2>
         <p className="text-sm leading-relaxed text-unison-text-secondary">
-          Install Better Lyrics. The extension handles the keypair, the signing, and the submission UI. With a YT Music
-          song page open, you can submit lyrics in TTML or LRC format. Voting nudges accurate submissions up and
-          inaccurate ones down. Sync-problem reports feed the Needs Fixing board.
+          Install Better Lyrics. With a YT Music page open, the extension gives you a panel for pasting in lyrics,
+          either TTML or LRC. Voting on existing submissions decides which version everyone else sees by default, and
+          bad sync gets reported from the same panel. Those reports populate Needs Fixing.
         </p>
         <p className="text-sm leading-relaxed text-unison-text-secondary">
-          Sign-in for this website (so you can see your own rank highlighted and claim a handle later) is on the way.
-          The server side is live; the extension half ships when Better Lyrics does its next release.
+          Sign-in for this site is wired up on the server already. The extension half ships with the next Better Lyrics
+          release.
         </p>
       </section>
+
+      <footer className="border-t border-unison-border pt-6 text-xs text-unison-text-muted">
+        <span className="text-unison-text-secondary">Built with</span>{" "}
+        <a
+          href="https://betterlyrics.org"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-unison-text underline underline-offset-2 hover:no-underline"
+        >
+          Better Lyrics
+        </a>
+        <span className="px-1.5 opacity-60">·</span>
+        <a
+          href="https://composer.boidu.dev"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-unison-text underline underline-offset-2 hover:no-underline"
+        >
+          Composer
+        </a>
+      </footer>
     </div>
   )
 }
