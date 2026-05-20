@@ -22,6 +22,10 @@ export function CuratorRow({ entry }: CuratorRowProps) {
         <p className="truncate font-mono text-[11px] text-unison-text-muted">{entry.keyId.slice(0, 16)}…</p>
       </div>
       <div className="hidden text-right sm:block">
+        <p className="font-mono text-sm text-unison-text">{entry.submissionCount}</p>
+        <p className="text-[10px] uppercase tracking-wider text-unison-text-muted">subs</p>
+      </div>
+      <div className="hidden text-right sm:block">
         <p className="font-mono text-sm text-unison-text">{formatVotes(entry.totalUpvotes)}</p>
         <p className="text-[10px] uppercase tracking-wider text-unison-text-muted">upvotes</p>
       </div>
