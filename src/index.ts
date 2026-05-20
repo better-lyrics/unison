@@ -25,8 +25,9 @@ const log = new Logger("app")
 const httpLog = new Logger("http")
 const cronLog = new Logger("cron")
 
+// @elysiajs/static on the Node adapter omits content-type headers and ignores
+// indexHTML for unmatched routes, so we serve the SPA dist ourselves.
 const SPA_DIST = resolve(process.cwd(), "web/dist")
-const SPA_INDEX_PATH = resolve(SPA_DIST, "index.html")
 const API_PREFIXES = [
 	"/lyrics",
 	"/feed",
@@ -57,7 +58,7 @@ const MIME_TYPES: Record<string, string> = {
 
 let spaIndexHtml: string | null = null
 try {
-	spaIndexHtml = readFileSync(SPA_INDEX_PATH, "utf8")
+	spaIndexHtml = readFileSync(resolve(SPA_DIST, "index.html"), "utf8")
 } catch {
 	spaIndexHtml = null
 }
@@ -130,7 +131,7 @@ const app = new Elysia({ adapter: node() })
 			latency_ms: Number(duration),
 		})
 	})
-	.onError(({ code, error, request, store, set, status }) => {
+	.onError(({ code, error, request, store, set }) => {
 		const s = store as Record<string, unknown>
 		const method = s.__method || request.method
 		const url = s.__url || new URL(request.url).pathname
@@ -153,9 +154,16 @@ const app = new Elysia({ adapter: node() })
 							status: 200,
 							latency_ms: Number(duration),
 						})
-						return status(200, file.body)
+						return new Response(file.body, {
+							status: 200,
+							headers: {
+								"content-type": file.contentType,
+								"cache-control": "public, max-age=31536000, immutable",
+							},
+						})
 					}
-				} else if (spaIndexHtml) {
+				}
+				if (spaIndexHtml) {
 					httpLog.info(`${m} ${u} 200 ${duration}ms (spa)`, {
 						method: m,
 						path: u,
@@ -169,15 +177,15 @@ const app = new Elysia({ adapter: node() })
 				}
 			}
 			httpLog.warn(`${method} ${url} 404 ${duration}ms`)
-			return status(404, { success: false, error: "Not Found" })
+			return { success: false, error: "Not Found" }
 		}
 
-		const statusCode = typeof set.status === "number" ? set.status : 500
+		const status = typeof set.status === "number" ? set.status : 500
 		const message = "message" in error ? error.message : String(error)
-		httpLog.error(`${method} ${url} ${statusCode} ${duration}ms`, {
+		httpLog.error(`${method} ${url} ${status} ${duration}ms`, {
 			method: method as string,
 			path: url as string,
-			status: statusCode,
+			status,
 			latency_ms: Number(duration),
 			error: message,
 			stack: "stack" in error ? error.stack : undefined,
@@ -199,7 +207,7 @@ log.info(`listening on port ${port}`)
 log.info("spa serving", {
 	cwd: process.cwd(),
 	spaDist: SPA_DIST,
-	indexLoaded: spaIndexHtml !== null,
+	indexHtmlLoaded: spaIndexHtml !== null,
 	assetsDirExists: existsSync(resolve(SPA_DIST, "assets")),
 })
 
