@@ -15,7 +15,7 @@ export function AppHeader() {
     <header className="sticky top-0 z-10 border-b border-unison-border bg-unison-bg/80 backdrop-blur">
       <div className="mx-auto flex max-w-5xl items-center justify-between px-6 py-4">
         <div className="flex items-center gap-2">
-          <BetterLyricsLogo size={20} className="text-unison-accent" />
+          <BetterLyricsLogo size={20} />
           <span className="text-base font-semibold tracking-tight">Unison</span>
         </div>
         <nav className="flex items-center gap-1">
