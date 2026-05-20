@@ -25,6 +25,9 @@ export function AppHeader() {
           <NavLink to="/curators" className={tabClass}>
             Curators
           </NavLink>
+          <NavLink to="/about" className={tabClass}>
+            About
+          </NavLink>
         </nav>
       </div>
     </header>
