@@ -1,11 +1,11 @@
 @import "tailwindcss";
 
 @theme {
-  --color-unison-bg: #0d0d10;
-  --color-unison-bg-elevated: #16161a;
-  --color-unison-bg-hover: #1d1d22;
-  --color-unison-border: rgba(255, 255, 255, 0.08);
-  --color-unison-border-strong: rgba(255, 255, 255, 0.16);
+  --color-unison-bg: #28292c;
+  --color-unison-bg-elevated: #3e3e41;
+  --color-unison-bg-hover: rgba(255, 255, 255, 0.06);
+  --color-unison-border: rgba(255, 255, 255, 0.1);
+  --color-unison-border-strong: rgba(255, 255, 255, 0.18);
   --color-unison-text: #f5f5f7;
   --color-unison-text-secondary: rgba(245, 245, 247, 0.72);
   --color-unison-text-muted: rgba(245, 245, 247, 0.48);
