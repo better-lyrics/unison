@@ -30,7 +30,7 @@ export function AboutPage() {
         <p className="text-sm leading-relaxed text-unison-text-secondary">
           The Curators board ranks people by submission volume and how much of that work survived voting. Names like
           "BrightVivaceRoll" come from each contributor's public key, which means no accounts and no usernames to fight
-          over. Sign-in is coming for anyone who wants a real handle later.
+          over.
         </p>
       </section>
 
