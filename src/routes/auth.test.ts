@@ -60,7 +60,7 @@ describe("GET /auth/challenge", () => {
 			data: { nonce: string; expiresAt: number }
 		}
 		expect(json.success).toBe(true)
-		expect(json.data.nonce.length).toBeGreaterThanOrEqual(16)
+		expect(json.data.nonce).toHaveLength(32)
 		const entry = cache.store.get(`challenge:${json.data.nonce}`)
 		expect(entry).toBeDefined()
 		expect(entry!.ttl).toBe(5 * 60)
