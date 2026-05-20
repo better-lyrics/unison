@@ -20,7 +20,11 @@ export const leaderboardRoutes = (env: Env) =>
 		.get("/songs", async ({ env }) => {
 			const cached = await env.CACHE.get(SONGS_CACHE_KEY)
 			if (cached) {
-				return { success: true, data: JSON.parse(cached) }
+				try {
+					return { success: true, data: JSON.parse(cached) }
+				} catch {
+					await env.CACHE.delete(SONGS_CACHE_KEY)
+				}
 			}
 			const data = await getSongLeaderboard(env, config.requests.leaderboard.topN)
 			await env.CACHE.put(SONGS_CACHE_KEY, JSON.stringify(data), {
@@ -31,7 +35,11 @@ export const leaderboardRoutes = (env: Env) =>
 		.get("/users", async ({ env }) => {
 			const cached = await env.CACHE.get(USERS_CACHE_KEY)
 			if (cached) {
-				return { success: true, data: JSON.parse(cached) }
+				try {
+					return { success: true, data: JSON.parse(cached) }
+				} catch {
+					await env.CACHE.delete(USERS_CACHE_KEY)
+				}
 			}
 			const rows = await getCuratorLeaderboard(env, config.requests.leaderboard.topN)
 			const curators = rows.map((r) => ({ ...r, displayName: generatePetName(r.keyId) }))

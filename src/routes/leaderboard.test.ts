@@ -35,15 +35,26 @@ function makeMockDB(queue: unknown[] = []) {
 	return db
 }
 
-function makeMockCache() {
+function makeMockCache(seed: Record<string, string> = {}) {
+	const store: Record<string, string> = { ...seed }
+	const puts: Array<{ key: string; value: string }> = []
+	const deletes: string[] = []
 	return {
-		async get() {
-			return null
+		puts,
+		deletes,
+		async get(key: string) {
+			return store[key] ?? null
 		},
-		async put() {},
-		async delete() {},
+		async put(key: string, value: string) {
+			store[key] = value
+			puts.push({ key, value })
+		},
+		async delete(key: string) {
+			delete store[key]
+			deletes.push(key)
+		},
 		async keys() {
-			return []
+			return Object.keys(store)
 		},
 		async setNX() {
 			return true
@@ -51,7 +62,10 @@ function makeMockCache() {
 	}
 }
 
-function makeEnv(db: ReturnType<typeof makeMockDB>): Env {
+function makeEnv(
+	db: ReturnType<typeof makeMockDB>,
+	cache: ReturnType<typeof makeMockCache> = makeMockCache()
+): Env & { cache: ReturnType<typeof makeMockCache> } {
 	const limiter = {
 		async limit() {
 			return { success: true }
@@ -59,10 +73,11 @@ function makeEnv(db: ReturnType<typeof makeMockDB>): Env {
 	}
 	return {
 		DB: db as unknown as Env["DB"],
-		CACHE: makeMockCache() as unknown as Env["CACHE"],
+		CACHE: cache as unknown as Env["CACHE"],
 		RATE_LIMITER: limiter as unknown as Env["RATE_LIMITER"],
 		READ_RATE_LIMITER: limiter as unknown as Env["READ_RATE_LIMITER"],
 		CACHE_TTL_SECONDS: "300",
+		cache,
 	}
 }
 
@@ -120,6 +135,50 @@ describe("GET /leaderboard/users", () => {
 		}
 		expect(json.data.curators[0].displayName.length).toBeGreaterThan(0)
 		expect(json.data.curators[0].rank).toBe(1)
+		expect(json.data.curators[0].keyId).toBe("a".repeat(64))
+	})
+})
+
+describe("GET /leaderboard/songs cache hit", () => {
+	it("returns cached data without hitting the DB", async () => {
+		const cached = JSON.stringify({
+			mostWanted: [{ videoId: "vCACHED", rank: 1, section: "most_wanted" }],
+			needsFixing: [],
+		})
+		const db = makeMockDB([])
+		const env = makeEnv(db, makeMockCache({ "leaderboard:songs": cached }))
+		const app = leaderboardRoutes(env)
+		const res = await app.handle(new Request("http://localhost/leaderboard/songs"))
+		expect(res.status).toBe(200)
+		const json = (await res.json()) as {
+			data: { mostWanted: Array<{ videoId: string }> }
+		}
+		expect(json.data.mostWanted[0].videoId).toBe("vCACHED")
+		expect(db.calls.length).toBe(0)
+	})
+})
+
+describe("GET /leaderboard/users corrupt cache", () => {
+	it("evicts the corrupt entry and recomputes from the DB", async () => {
+		const db = makeMockDB([
+			[
+				{
+					key_id: "a".repeat(64),
+					reputation: 1.0,
+					score: 1,
+					submission_count: 1,
+					total_upvotes: 1,
+				},
+			],
+		])
+		const env = makeEnv(db, makeMockCache({ "leaderboard:users": "not json {" }))
+		const app = leaderboardRoutes(env)
+		const res = await app.handle(new Request("http://localhost/leaderboard/users"))
+		expect(res.status).toBe(200)
+		expect(env.cache.deletes).toContain("leaderboard:users")
+		const json = (await res.json()) as {
+			data: { curators: Array<{ keyId: string }> }
+		}
 		expect(json.data.curators[0].keyId).toBe("a".repeat(64))
 	})
 })
