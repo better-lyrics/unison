@@ -17,7 +17,7 @@ export function SongRow({ entry }: SongRowProps) {
         {entry.thumbnailUrl ? (
           <img src={entry.thumbnailUrl} alt="" className="size-full object-cover" loading="lazy" />
         ) : (
-          <IconMusic className="size-5 text-unison-text-muted" />
+          <IconMusic className="size-6 opacity-50 text-unison-text" stroke={1.5} />
         )}
       </div>
       <div className="min-w-0 flex-1">
