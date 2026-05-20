@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "start": "tsx src/index.ts",
+    "build": "pnpm -C web build",
     "db:migrate": "tsx src/db/migrate.ts",
     "db:migrate:prod": "DATABASE_URL=$DATABASE_URL tsx src/db/migrate.ts",
     "lint": "biome lint ./src",
@@ -29,6 +30,7 @@
     "@elysiajs/cors": "^1.3.3",
     "@elysiajs/cron": "^1.3.3",
     "@elysiajs/node": "^1.3.3",
+    "@elysiajs/static": "^1.4.10",
     "elysia": "^1.3.3",
     "fast-xml-parser": "^5.5.5",
     "ioredis": "^5.4.0",

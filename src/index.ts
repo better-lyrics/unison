@@ -1,7 +1,10 @@
+import { readFileSync } from "node:fs"
+import { resolve } from "node:path"
 import { Elysia } from "elysia"
 import { node } from "@elysiajs/node"
 import { cors } from "@elysiajs/cors"
 import { cron } from "@elysiajs/cron"
+import { staticPlugin } from "@elysiajs/static"
 import { config } from "@/config"
 import { createEnv } from "@/infra/env"
 import { closePool } from "@/infra/database"
@@ -22,6 +25,38 @@ const env = createEnv()
 const log = new Logger("app")
 const httpLog = new Logger("http")
 const cronLog = new Logger("cron")
+
+const SPA_INDEX_PATH = resolve(process.cwd(), "web/dist/index.html")
+const API_PREFIXES = [
+	"/lyrics",
+	"/feed",
+	"/votes",
+	"/requests",
+	"/leaderboard",
+	"/auth",
+	"/health",
+	"/getLyrics",
+]
+
+let spaIndexHtml: string | null = null
+function loadSpaIndex(): string | null {
+	if (spaIndexHtml !== null) return spaIndexHtml
+	try {
+		spaIndexHtml = readFileSync(SPA_INDEX_PATH, "utf8")
+	} catch {
+		spaIndexHtml = ""
+	}
+	return spaIndexHtml || null
+}
+
+function isSpaRoute(method: string, pathname: string): boolean {
+	if (method !== "GET") return false
+	if (pathname.includes(".")) return false
+	for (const prefix of API_PREFIXES) {
+		if (pathname === prefix || pathname.startsWith(`${prefix}/`)) return false
+	}
+	return true
+}
 
 const app = new Elysia({ adapter: node() })
 	.use(
@@ -78,6 +113,23 @@ const app = new Elysia({ adapter: node() })
 			: "?"
 
 		if (code === "NOT_FOUND") {
+			if (isSpaRoute(method as string, url as string)) {
+				const html = loadSpaIndex()
+				if (html) {
+					set.status = 200
+					set.headers["content-type"] = "text/html; charset=utf-8"
+					httpLog.info(`${method} ${url} 200 ${duration}ms (spa)`, {
+						method: method as string,
+						path: url as string,
+						status: 200,
+						latency_ms: Number(duration),
+					})
+					return new Response(html, {
+						status: 200,
+						headers: { "content-type": "text/html; charset=utf-8" },
+					})
+				}
+			}
 			httpLog.warn(`${method} ${url} 404 ${duration}ms`)
 			return { success: false, error: "Not Found" }
 		}
@@ -94,31 +146,6 @@ const app = new Elysia({ adapter: node() })
 		})
 		return { success: false, error: "Internal Server Error" }
 	})
-	.get("/", () => ({
-		name: "Unison",
-		version: "1.1.0",
-		description: "Crowdsourced lyrics API for Better Lyrics",
-		endpoints: {
-			getLyrics: "GET /lyrics?v=videoId OR ?song=...&artist=...&album=...&duration=...",
-			searchLyrics: "GET /lyrics/search?q=query OR ?song=...&artist=...&album=...&duration=...",
-			getLyricsVariants: "GET /lyrics/variants/:videoId?limit=...",
-			getLyricsById: "GET /lyrics/:id",
-			mySubmissions: "GET /lyrics/mine?limit=...&cursor=...",
-			submitLyrics: "POST /lyrics/submit (accepts TTML or LRC)",
-			vote: "POST /lyrics/:id/vote",
-			removeVote: "DELETE /lyrics/:id/vote",
-			report: "POST /lyrics/:id/report",
-			feed: "GET /feed?limit=...&cursor=...",
-			submitRequest: "POST /requests",
-			songLeaderboard: "GET /leaderboard/songs",
-			curatorLeaderboard: "GET /leaderboard/users",
-			songRank: "GET /leaderboard/songs/:videoId",
-			curatorRank: "GET /leaderboard/users/:keyId",
-			authChallenge: "GET /auth/challenge",
-			authSession: "POST /auth/session",
-			authMe: "GET /auth/me",
-		},
-	}))
 	.get("/health", () => ({ status: "ok", timestamp: Date.now() }))
 	.use(compatRoutes(env))
 	.use(lyricsRoutes(env))
@@ -127,6 +154,13 @@ const app = new Elysia({ adapter: node() })
 	.use(requestRoutes(env))
 	.use(leaderboardRoutes(env))
 	.use(authRoutes(env))
+	.use(
+		staticPlugin({
+			assets: "web/dist",
+			prefix: "/",
+			indexHTML: true,
+		})
+	)
 	.listen(Number.parseInt(process.env.PORT || "3000", 10))
 
 const port = process.env.PORT || "3000"
