@@ -10,7 +10,7 @@ export function CuratorRow({ entry }: CuratorRowProps) {
   const avatar = dicebearThumbsDataUri(entry.keyId)
   return (
     <li className="flex items-center gap-4 rounded-lg border border-unison-border bg-unison-bg-elevated px-4 py-3 transition-colors hover:border-unison-border-strong">
-      <span className="w-10 shrink-0 font-mono text-xs text-unison-text-muted">{formatRank(entry.rank)}</span>
+      <span className="shrink-0 font-mono text-xs tabular-nums text-unison-text-muted">{formatRank(entry.rank)}</span>
       <img
         src={avatar}
         alt=""

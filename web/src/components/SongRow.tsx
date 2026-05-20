@@ -12,7 +12,7 @@ export function SongRow({ entry }: SongRowProps) {
 
   return (
     <li className="flex items-center gap-4 rounded-lg border border-unison-border bg-unison-bg-elevated px-4 py-3 transition-colors hover:border-unison-border-strong">
-      <span className="w-10 shrink-0 font-mono text-xs text-unison-text-muted">{formatRank(entry.rank)}</span>
+      <span className="shrink-0 font-mono text-xs tabular-nums text-unison-text-muted">{formatRank(entry.rank)}</span>
       <div className="flex size-12 shrink-0 items-center justify-center overflow-hidden rounded-md bg-unison-bg-hover">
         {entry.thumbnailUrl ? (
           <img src={entry.thumbnailUrl} alt="" className="size-full object-cover" loading="lazy" />
