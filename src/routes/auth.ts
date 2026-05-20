@@ -28,28 +28,22 @@ export const authRoutes = (env: Env) =>
 			return { success: true, data: { nonce, expiresAt } }
 		})
 		.use(signedRequest)
-		.post("/session", async (ctx) => {
-			const env = ctx.env
-			const signedPayload = (ctx as unknown as { signedPayload: Record<string, unknown> })
-				.signedPayload
-			const keyId = (ctx as unknown as { keyId: string }).keyId
+		.post("/session", async ({ env, keyId, signedPayload, headers, set }) => {
 			const signedOrigin = signedPayload.origin
-
-			const requestOrigin = (ctx.headers as Record<string, string | undefined>)?.origin
+			const requestOrigin = headers.origin
 			if (
 				typeof signedOrigin !== "string" ||
 				!requestOrigin ||
 				requestOrigin !== signedOrigin
 			) {
-				ctx.set.status = 403
+				set.status = 403
 				return { success: false, error: "ORIGIN_MISMATCH" }
 			}
 
-			const nonce = signedPayload.nonce as string
-			const challengeKey = `${CHALLENGE_PREFIX}${nonce}`
+			const challengeKey = `${CHALLENGE_PREFIX}${signedPayload.nonce}`
 			const exists = await env.CACHE.get(challengeKey)
 			if (!exists) {
-				ctx.set.status = 401
+				set.status = 401
 				return { success: false, error: "CHALLENGE_INVALID" }
 			}
 			await env.CACHE.delete(challengeKey)
