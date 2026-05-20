@@ -10,6 +10,7 @@ import { Logger, flushLogs } from "@/infra/logger"
 import { backfillSyncType } from "@/jobs/backfill-synctype"
 import { backfillTextSearch } from "@/jobs/backfill-text-search"
 import { updateScores } from "@/jobs/score-updater"
+import { authRoutes } from "@/routes/auth"
 import { lyricsRoutes } from "@/routes/lyrics"
 import { feedRoutes } from "@/routes/feed"
 import { voteRoutes } from "@/routes/votes"
@@ -113,6 +114,9 @@ const app = new Elysia({ adapter: node() })
 			curatorLeaderboard: "GET /leaderboard/users",
 			songRank: "GET /leaderboard/songs/:videoId",
 			curatorRank: "GET /leaderboard/users/:keyId",
+			authChallenge: "GET /auth/challenge",
+			authSession: "POST /auth/session",
+			authMe: "GET /auth/me",
 		},
 	}))
 	.get("/health", () => ({ status: "ok", timestamp: Date.now() }))
@@ -122,6 +126,7 @@ const app = new Elysia({ adapter: node() })
 	.use(voteRoutes(env))
 	.use(requestRoutes(env))
 	.use(leaderboardRoutes(env))
+	.use(authRoutes(env))
 	.listen(Number.parseInt(process.env.PORT || "3000", 10))
 
 const port = process.env.PORT || "3000"

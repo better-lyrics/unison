@@ -1,0 +1,330 @@
+import { describe, expect, it } from "vitest"
+import type { Env } from "@/types"
+import { canonicalJson, hashPublicKey } from "@/utils/crypto"
+import { authRoutes } from "./auth"
+
+function makeMockCache(seed: Record<string, string> = {}) {
+	const store = new Map<string, { value: string; ttl: number }>()
+	for (const [k, v] of Object.entries(seed)) store.set(k, { value: v, ttl: 0 })
+	const setNXKeys: string[] = []
+	return {
+		store,
+		setNXKeys,
+		async get(key: string) {
+			return store.get(key)?.value ?? null
+		},
+		async put(key: string, value: string, opts?: { expirationTtl?: number }) {
+			store.set(key, { value, ttl: opts?.expirationTtl ?? 0 })
+		},
+		async delete(key: string) {
+			store.delete(key)
+		},
+		async keys() {
+			return Array.from(store.keys())
+		},
+		async setNX(key: string, _value: string, _ttl: number) {
+			setNXKeys.push(key)
+			if (store.has(key)) return false
+			store.set(key, { value: _value, ttl: _ttl })
+			return true
+		},
+	}
+}
+
+function makeEnv(cache: ReturnType<typeof makeMockCache>): Env & {
+	cache: ReturnType<typeof makeMockCache>
+} {
+	const limiter = {
+		async limit() {
+			return { success: true }
+		},
+	}
+	return {
+		DB: {} as Env["DB"],
+		CACHE: cache as unknown as Env["CACHE"],
+		RATE_LIMITER: limiter as unknown as Env["RATE_LIMITER"],
+		READ_RATE_LIMITER: limiter as unknown as Env["READ_RATE_LIMITER"],
+		CACHE_TTL_SECONDS: "300",
+		cache,
+	}
+}
+
+interface DBCall {
+	sql: string
+	params: unknown[]
+}
+
+function makeMockDB(queue: unknown[] = []) {
+	const calls: DBCall[] = []
+	const db = {
+		calls,
+		prepare(sql: string) {
+			return {
+				bind(...args: unknown[]) {
+					return {
+						async first<T>(): Promise<T | null> {
+							calls.push({ sql, params: args })
+							return (queue.shift() as T) ?? null
+						},
+						async all<T>(): Promise<{ results: T[] }> {
+							calls.push({ sql, params: args })
+							return { results: (queue.shift() as T[]) ?? [] }
+						},
+						async run(): Promise<void> {
+							calls.push({ sql, params: args })
+							queue.shift()
+						},
+					}
+				},
+			}
+		},
+	}
+	return db
+}
+
+function makeEnvFull(
+	db: ReturnType<typeof makeMockDB>,
+	cache: ReturnType<typeof makeMockCache>
+): Env & { cache: ReturnType<typeof makeMockCache> } {
+	const limiter = {
+		async limit() {
+			return { success: true }
+		},
+	}
+	return {
+		DB: db as unknown as Env["DB"],
+		CACHE: cache as unknown as Env["CACHE"],
+		RATE_LIMITER: limiter as unknown as Env["RATE_LIMITER"],
+		READ_RATE_LIMITER: limiter as unknown as Env["READ_RATE_LIMITER"],
+		CACHE_TTL_SECONDS: "300",
+		cache,
+	}
+}
+
+async function makeIdentity() {
+	const pair = await crypto.subtle.generateKey(
+		{ name: "ECDSA", namedCurve: "P-256" },
+		true,
+		["sign", "verify"]
+	)
+	const publicKey = (await crypto.subtle.exportKey("jwk", pair.publicKey)) as JsonWebKey
+	const keyId = await hashPublicKey(publicKey)
+	return { pair, publicKey, keyId }
+}
+
+type GeneratedIdentity = Awaited<ReturnType<typeof makeIdentity>>
+
+async function signPayload(
+	privKey: GeneratedIdentity["pair"]["privateKey"],
+	payload: object
+): Promise<string> {
+	const data = new TextEncoder().encode(canonicalJson(payload))
+	const sig = await crypto.subtle.sign({ name: "ECDSA", hash: "SHA-256" }, privKey, data)
+	const bytes = new Uint8Array(sig)
+	let bin = ""
+	for (const b of bytes) bin += String.fromCharCode(b)
+	return btoa(bin)
+}
+
+describe("GET /auth/challenge", () => {
+	it("returns a fresh nonce and stores it with the challenge TTL", async () => {
+		const cache = makeMockCache()
+		const env = makeEnv(cache)
+		const app = authRoutes(env)
+		const res = await app.handle(new Request("http://localhost/auth/challenge"))
+		expect(res.status).toBe(200)
+		const json = (await res.json()) as {
+			success: boolean
+			data: { nonce: string; expiresAt: number }
+		}
+		expect(json.success).toBe(true)
+		expect(json.data.nonce).toHaveLength(32)
+		const entry = cache.store.get(`challenge:${json.data.nonce}`)
+		expect(entry).toBeDefined()
+		expect(entry!.ttl).toBe(5 * 60)
+		const nowSec = Math.floor(Date.now() / 1000)
+		expect(json.data.expiresAt).toBeGreaterThanOrEqual(nowSec + 5 * 60 - 2)
+		expect(json.data.expiresAt).toBeLessThanOrEqual(nowSec + 5 * 60 + 2)
+	})
+
+	it("produces unique nonces across calls", async () => {
+		const cache = makeMockCache()
+		const env = makeEnv(cache)
+		const app = authRoutes(env)
+		const nonces = new Set<string>()
+		for (let i = 0; i < 5; i++) {
+			const res = await app.handle(new Request("http://localhost/auth/challenge"))
+			const json = (await res.json()) as { data: { nonce: string } }
+			nonces.add(json.data.nonce)
+		}
+		expect(nonces.size).toBe(5)
+	})
+})
+
+describe("POST /auth/session", () => {
+	const validNonce = "nonce-".padEnd(24, "x")
+
+	async function buildBody(opts: {
+		nonce: string
+		origin: string
+		timestamp?: number
+	}) {
+		const { pair, publicKey, keyId } = await makeIdentity()
+		const payload = {
+			nonce: opts.nonce,
+			origin: opts.origin,
+			keyId,
+			timestamp: opts.timestamp ?? Date.now(),
+		}
+		const signature = await signPayload(pair.privateKey, payload)
+		return { keyId, publicKey, body: { payload, signature, publicKey } }
+	}
+
+	function registrationQueue(keyId: string, publicKey: JsonWebKey): unknown[] {
+		return [
+			null,
+			null,
+			{ key_id: keyId, public_key: JSON.stringify(publicKey), created_at: 0 },
+			null,
+			{ id: 1, key_id: keyId, reputation: 1.0, vote_count: 0, avg_vote: 0, created_at: 0 },
+		]
+	}
+
+	it("issues a session token on a fresh, well-formed assertion", async () => {
+		const cache = makeMockCache({ [`challenge:${validNonce}`]: "1" })
+		const { keyId, publicKey, body } = await buildBody({
+			nonce: validNonce,
+			origin: "https://example.com",
+		})
+		const db = makeMockDB(registrationQueue(keyId, publicKey))
+		const env = makeEnvFull(db, cache)
+		const app = authRoutes(env)
+		const res = await app.handle(
+			new Request("http://localhost/auth/session", {
+				method: "POST",
+				headers: { "content-type": "application/json", origin: "https://example.com" },
+				body: JSON.stringify(body),
+			})
+		)
+		expect(res.status).toBe(200)
+		const json = (await res.json()) as {
+			success: boolean
+			data: { sessionToken: string; keyId: string; displayName: string; expiresAt: number }
+		}
+		expect(json.success).toBe(true)
+		expect(json.data.sessionToken.length).toBeGreaterThanOrEqual(32)
+		expect(json.data.displayName.length).toBeGreaterThan(0)
+		expect(json.data.keyId).toBe(keyId)
+		expect(cache.store.has(`challenge:${validNonce}`)).toBe(false)
+	})
+
+	it("rejects when the signed origin does not match the request Origin header", async () => {
+		const cache = makeMockCache({ [`challenge:${validNonce}`]: "1" })
+		const { keyId, publicKey, body } = await buildBody({
+			nonce: validNonce,
+			origin: "https://example.com",
+		})
+		const db = makeMockDB(registrationQueue(keyId, publicKey))
+		const env = makeEnvFull(db, cache)
+		const app = authRoutes(env)
+		const res = await app.handle(
+			new Request("http://localhost/auth/session", {
+				method: "POST",
+				headers: { "content-type": "application/json", origin: "https://attacker.example" },
+				body: JSON.stringify(body),
+			})
+		)
+		expect(res.status).toBe(403)
+		const json = (await res.json()) as { success: boolean; error: string }
+		expect(json.success).toBe(false)
+		expect(json.error).toBe("ORIGIN_MISMATCH")
+		expect(cache.store.has(`challenge:${validNonce}`)).toBe(true)
+	})
+
+	it("rejects when the challenge nonce was never issued or already consumed", async () => {
+		const cache = makeMockCache()
+		const { keyId, publicKey, body } = await buildBody({
+			nonce: validNonce,
+			origin: "https://example.com",
+		})
+		const db = makeMockDB(registrationQueue(keyId, publicKey))
+		const env = makeEnvFull(db, cache)
+		const app = authRoutes(env)
+		const res = await app.handle(
+			new Request("http://localhost/auth/session", {
+				method: "POST",
+				headers: { "content-type": "application/json", origin: "https://example.com" },
+				body: JSON.stringify(body),
+			})
+		)
+		expect(res.status).toBe(401)
+		const json = (await res.json()) as { error: string }
+		expect(json.error).toBe("CHALLENGE_INVALID")
+	})
+
+	it("rejects when the Origin header is missing", async () => {
+		const cache = makeMockCache({ [`challenge:${validNonce}`]: "1" })
+		const { keyId, publicKey, body } = await buildBody({
+			nonce: validNonce,
+			origin: "https://example.com",
+		})
+		const db = makeMockDB(registrationQueue(keyId, publicKey))
+		const env = makeEnvFull(db, cache)
+		const app = authRoutes(env)
+		const res = await app.handle(
+			new Request("http://localhost/auth/session", {
+				method: "POST",
+				headers: { "content-type": "application/json" },
+				body: JSON.stringify(body),
+			})
+		)
+		expect(res.status).toBe(403)
+		const json = (await res.json()) as { error: string }
+		expect(json.error).toBe("ORIGIN_MISMATCH")
+	})
+})
+
+describe("GET /auth/me", () => {
+	it("returns the identity bound to a valid bearer token", async () => {
+		const cache = makeMockCache()
+		const keyId = "d".repeat(64)
+		const ttl = 30 * 24 * 60 * 60
+		const issuedAt = Math.floor(Date.now() / 1000)
+		cache.store.set("session:tok-good", {
+			value: JSON.stringify({ keyId, issuedAt, expiresAt: issuedAt + ttl }),
+			ttl,
+		})
+		const env = makeEnv(cache)
+		const app = authRoutes(env)
+		const res = await app.handle(
+			new Request("http://localhost/auth/me", {
+				headers: { authorization: "Bearer tok-good" },
+			})
+		)
+		expect(res.status).toBe(200)
+		const json = (await res.json()) as {
+			data: { keyId: string; displayName: string; expiresAt: number }
+		}
+		expect(json.data.keyId).toBe(keyId)
+		expect(json.data.displayName.length).toBeGreaterThan(0)
+		expect(json.data.expiresAt).toBe(issuedAt + ttl)
+	})
+
+	it("returns 401 when no Authorization header is sent", async () => {
+		const env = makeEnv(makeMockCache())
+		const app = authRoutes(env)
+		const res = await app.handle(new Request("http://localhost/auth/me"))
+		expect(res.status).toBe(401)
+	})
+
+	it("returns 401 when the token is unknown", async () => {
+		const env = makeEnv(makeMockCache())
+		const app = authRoutes(env)
+		const res = await app.handle(
+			new Request("http://localhost/auth/me", {
+				headers: { authorization: "Bearer missing" },
+			})
+		)
+		expect(res.status).toBe(401)
+	})
+})

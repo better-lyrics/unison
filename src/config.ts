@@ -103,6 +103,15 @@ export const config = {
 			maxDetailsLength: 1000,
 		},
 	},
+
+	auth: {
+		session: {
+			ttlSeconds: 30 * 24 * 60 * 60,
+		},
+		challenge: {
+			ttlSeconds: 5 * 60,
+		},
+	},
 } as const
 
 export type Config = typeof config
