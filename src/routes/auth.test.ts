@@ -283,3 +283,48 @@ describe("POST /auth/session", () => {
 		expect(json.error).toBe("ORIGIN_MISMATCH")
 	})
 })
+
+describe("GET /auth/me", () => {
+	it("returns the identity bound to a valid bearer token", async () => {
+		const cache = makeMockCache()
+		const keyId = "d".repeat(64)
+		const ttl = 30 * 24 * 60 * 60
+		const issuedAt = Math.floor(Date.now() / 1000)
+		cache.store.set("session:tok-good", {
+			value: JSON.stringify({ keyId, issuedAt, expiresAt: issuedAt + ttl }),
+			ttl,
+		})
+		const env = makeEnv(cache)
+		const app = authRoutes(env)
+		const res = await app.handle(
+			new Request("http://localhost/auth/me", {
+				headers: { authorization: "Bearer tok-good" },
+			})
+		)
+		expect(res.status).toBe(200)
+		const json = (await res.json()) as {
+			data: { keyId: string; displayName: string; expiresAt: number }
+		}
+		expect(json.data.keyId).toBe(keyId)
+		expect(json.data.displayName.length).toBeGreaterThan(0)
+		expect(json.data.expiresAt).toBe(issuedAt + ttl)
+	})
+
+	it("returns 401 when no Authorization header is sent", async () => {
+		const env = makeEnv(makeMockCache())
+		const app = authRoutes(env)
+		const res = await app.handle(new Request("http://localhost/auth/me"))
+		expect(res.status).toBe(401)
+	})
+
+	it("returns 401 when the token is unknown", async () => {
+		const env = makeEnv(makeMockCache())
+		const app = authRoutes(env)
+		const res = await app.handle(
+			new Request("http://localhost/auth/me", {
+				headers: { authorization: "Bearer missing" },
+			})
+		)
+		expect(res.status).toBe(401)
+	})
+})
