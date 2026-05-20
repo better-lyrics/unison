@@ -158,6 +158,38 @@ describe("GET /leaderboard/songs cache hit", () => {
 	})
 })
 
+describe("GET /leaderboard/songs/:videoId", () => {
+	it("returns ranked: false when the video is not on either section", async () => {
+		const db = makeMockDB([[], []])
+		const env = makeEnv(db)
+		const app = leaderboardRoutes(env)
+		const res = await app.handle(new Request("http://localhost/leaderboard/songs/missing"))
+		expect(res.status).toBe(200)
+		const json = (await res.json()) as { data: { ranked: boolean } }
+		expect(json.data.ranked).toBe(false)
+	})
+})
+
+describe("GET /leaderboard/users/:keyId", () => {
+	it("returns ranked: true with displayName when the user is on the board", async () => {
+		const keyId = "a".repeat(64)
+		const db = makeMockDB([
+			[{ key_id: keyId, reputation: 1.2, score: 5, submission_count: 2, total_upvotes: 8 }],
+		])
+		const env = makeEnv(db)
+		const app = leaderboardRoutes(env)
+		const res = await app.handle(new Request(`http://localhost/leaderboard/users/${keyId}`))
+		expect(res.status).toBe(200)
+		const json = (await res.json()) as {
+			data: { ranked: boolean; keyId?: string; rank?: number; displayName?: string }
+		}
+		expect(json.data.ranked).toBe(true)
+		expect(json.data.keyId).toBe(keyId)
+		expect(json.data.rank).toBe(1)
+		expect(json.data.displayName?.length).toBeGreaterThan(0)
+	})
+})
+
 describe("GET /leaderboard/users corrupt cache", () => {
 	it("evicts the corrupt entry and recomputes from the DB", async () => {
 		const db = makeMockDB([

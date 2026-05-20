@@ -54,8 +54,8 @@ export const leaderboardRoutes = (env: Env) =>
 			async ({ params, env }) => {
 				const rank = await getSongRank(env, params.videoId)
 				return rank
-					? { success: true, data: rank }
-					: { success: true, data: { unranked: true } }
+					? { success: true, data: { ranked: true, ...rank } }
+					: { success: true, data: { ranked: false } }
 			},
 			{ params: t.Object({ videoId: t.String() }) }
 		)
@@ -64,8 +64,11 @@ export const leaderboardRoutes = (env: Env) =>
 			async ({ params, env }) => {
 				const row = await getCuratorRank(env, params.keyId)
 				return row
-					? { success: true, data: { ...row, displayName: generatePetName(row.keyId) } }
-					: { success: true, data: { unranked: true } }
+					? {
+							success: true,
+							data: { ranked: true, ...row, displayName: generatePetName(row.keyId) },
+						}
+					: { success: true, data: { ranked: false } }
 			},
 			{ params: t.Object({ keyId: t.String() }) }
 		)
