@@ -147,3 +147,26 @@ BEGIN
 END $$;
 
 CREATE INDEX IF NOT EXISTS idx_lyrics_active ON lyrics(id) WHERE deleted_at IS NULL;
+
+-- Lyrics requests: demand signal for songs missing synced lyrics
+CREATE TABLE IF NOT EXISTS requested_songs (
+    video_id TEXT PRIMARY KEY,
+    song TEXT NOT NULL,
+    artist TEXT NOT NULL,
+    thumbnail_url TEXT,
+    first_requested_at INTEGER NOT NULL DEFAULT (EXTRACT(EPOCH FROM NOW())::INTEGER),
+    last_requested_at INTEGER NOT NULL DEFAULT (EXTRACT(EPOCH FROM NOW())::INTEGER)
+);
+
+CREATE TABLE IF NOT EXISTS lyrics_requests (
+    id BIGSERIAL PRIMARY KEY,
+    video_id TEXT NOT NULL REFERENCES requested_songs(video_id) ON DELETE CASCADE,
+    requester_id TEXT NOT NULL,
+    requester_type TEXT CHECK(requester_type IN ('extension', 'discord')) NOT NULL DEFAULT 'extension',
+    weight DOUBLE PRECISION NOT NULL DEFAULT 1.0,
+    created_at INTEGER NOT NULL DEFAULT (EXTRACT(EPOCH FROM NOW())::INTEGER),
+
+    UNIQUE(video_id, requester_id, requester_type)
+);
+
+CREATE INDEX IF NOT EXISTS idx_lyrics_requests_created ON lyrics_requests(created_at);

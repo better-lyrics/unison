@@ -13,6 +13,8 @@ import { updateScores } from "@/jobs/score-updater"
 import { lyricsRoutes } from "@/routes/lyrics"
 import { feedRoutes } from "@/routes/feed"
 import { voteRoutes } from "@/routes/votes"
+import { requestRoutes } from "@/routes/requests"
+import { leaderboardRoutes } from "@/routes/leaderboard"
 import { compatRoutes } from "@/routes/compat"
 
 const env = createEnv()
@@ -106,6 +108,11 @@ const app = new Elysia({ adapter: node() })
 			removeVote: "DELETE /lyrics/:id/vote",
 			report: "POST /lyrics/:id/report",
 			feed: "GET /feed?limit=...&cursor=...",
+			submitRequest: "POST /requests",
+			songLeaderboard: "GET /leaderboard/songs",
+			curatorLeaderboard: "GET /leaderboard/users",
+			songRank: "GET /leaderboard/songs/:videoId",
+			curatorRank: "GET /leaderboard/users/:keyId",
 		},
 	}))
 	.get("/health", () => ({ status: "ok", timestamp: Date.now() }))
@@ -113,6 +120,8 @@ const app = new Elysia({ adapter: node() })
 	.use(lyricsRoutes(env))
 	.use(feedRoutes(env))
 	.use(voteRoutes(env))
+	.use(requestRoutes(env))
+	.use(leaderboardRoutes(env))
 	.listen(Number.parseInt(process.env.PORT || "3000", 10))
 
 const port = process.env.PORT || "3000"
