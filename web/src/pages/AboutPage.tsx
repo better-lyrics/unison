@@ -58,24 +58,34 @@ export function AboutPage() {
         </p>
       </section>
 
-      <footer className="border-t border-unison-border pt-6 text-xs text-unison-text-muted">
-        <span className="text-unison-text-secondary">Built with</span>{" "}
+      <footer className="flex flex-wrap items-center justify-between gap-3 border-t border-unison-border pt-6 text-xs text-unison-text-muted">
+        <div>
+          <span className="text-unison-text-secondary">Built with</span>{" "}
+          <a
+            href="https://betterlyrics.org"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-unison-text transition-colors hover:text-unison-text-secondary"
+          >
+            Better Lyrics
+          </a>
+          <span className="px-1.5 opacity-60">·</span>
+          <a
+            href="https://composer.boidu.dev"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-unison-text transition-colors hover:text-unison-text-secondary"
+          >
+            Composer
+          </a>
+        </div>
         <a
-          href="https://betterlyrics.org"
+          href="https://github.com/better-lyrics/unison"
           target="_blank"
           rel="noopener noreferrer"
           className="text-unison-text transition-colors hover:text-unison-text-secondary"
         >
-          Better Lyrics
-        </a>
-        <span className="px-1.5 opacity-60">·</span>
-        <a
-          href="https://composer.boidu.dev"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="text-unison-text transition-colors hover:text-unison-text-secondary"
-        >
-          Composer
+          Source on GitHub
         </a>
       </footer>
     </div>
