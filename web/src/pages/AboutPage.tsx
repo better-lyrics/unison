@@ -49,7 +49,7 @@ export function AboutPage() {
           >
             Composer
           </a>{" "}
-          lets you sync them line by line. Voting on existing submissions is what decides which version Better Lyrics
+          lets you sync lyrics yourself. Voting on existing submissions is what decides which version Better Lyrics
           shows everyone else by default.
         </p>
         <p className="text-sm leading-relaxed text-unison-text-secondary">
@@ -60,7 +60,8 @@ export function AboutPage() {
 
       <footer className="flex flex-wrap items-center justify-between gap-3 border-t border-unison-border pt-6 text-xs text-unison-text-muted">
         <div>
-          <span className="text-unison-text-secondary">Built with</span>{" "}
+          <span className="text-unison-text-secondary">Related projects</span>
+          <span className="px-1.5 opacity-60">·</span>
           <a
             href="https://betterlyrics.org"
             target="_blank"
@@ -85,7 +86,7 @@ export function AboutPage() {
           rel="noopener noreferrer"
           className="text-unison-text transition-colors hover:text-unison-text-secondary"
         >
-          Source on GitHub
+          GitHub
         </a>
       </footer>
     </div>
