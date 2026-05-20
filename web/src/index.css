@@ -1,0 +1,29 @@
+@import "tailwindcss";
+
+@theme {
+  --color-unison-bg: #0d0d10;
+  --color-unison-bg-elevated: #16161a;
+  --color-unison-bg-hover: #1d1d22;
+  --color-unison-border: rgba(255, 255, 255, 0.08);
+  --color-unison-border-strong: rgba(255, 255, 255, 0.16);
+  --color-unison-text: #f5f5f7;
+  --color-unison-text-secondary: rgba(245, 245, 247, 0.72);
+  --color-unison-text-muted: rgba(245, 245, 247, 0.48);
+  --color-unison-accent: rgb(129, 140, 248);
+  --color-unison-accent-hover: rgb(165, 180, 252);
+  --color-unison-warn: #f5a623;
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+}
+
+html, body, #root {
+  height: 100%;
+}
+
+body {
+  background-color: var(--color-unison-bg);
+  color: var(--color-unison-text);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
