@@ -9,7 +9,7 @@ export function AboutPage() {
             href="https://betterlyrics.org"
             target="_blank"
             rel="noopener noreferrer"
-            className="text-unison-text underline underline-offset-2 hover:no-underline"
+            className="text-unison-text transition-colors hover:text-unison-text-secondary"
           >
             Better Lyrics
           </a>
@@ -37,9 +37,20 @@ export function AboutPage() {
       <section className="space-y-3">
         <h2 className="text-lg font-semibold text-unison-text">How to contribute</h2>
         <p className="text-sm leading-relaxed text-unison-text-secondary">
-          Install Better Lyrics. With a YT Music page open, the extension gives you a panel for pasting in lyrics,
-          either TTML or LRC. Voting on existing submissions decides which version everyone else sees by default, and
-          bad sync gets reported from the same panel. Those reports populate Needs Fixing.
+          Install Better Lyrics. With a YT Music song open, the player footer has the buttons you need. Click "Request
+          lyrics" to push a song onto Most Wanted, or report bad sync on a song that already has lyrics to feed it into
+          Needs Fixing. To submit lyrics yourself, click "Submit lyrics with Unison" at the bottom of the page; if you
+          don't have a synced version handy,{" "}
+          <a
+            href="https://composer.boidu.dev"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-unison-text transition-colors hover:text-unison-text-secondary"
+          >
+            Composer
+          </a>{" "}
+          lets you sync them line by line. Voting on existing submissions is what decides which version Better Lyrics
+          shows everyone else by default.
         </p>
         <p className="text-sm leading-relaxed text-unison-text-secondary">
           Sign-in for this site is wired up on the server already. The extension half ships with the next Better Lyrics
@@ -53,7 +64,7 @@ export function AboutPage() {
           href="https://betterlyrics.org"
           target="_blank"
           rel="noopener noreferrer"
-          className="text-unison-text underline underline-offset-2 hover:no-underline"
+          className="text-unison-text transition-colors hover:text-unison-text-secondary"
         >
           Better Lyrics
         </a>
@@ -62,7 +73,7 @@ export function AboutPage() {
           href="https://composer.boidu.dev"
           target="_blank"
           rel="noopener noreferrer"
-          className="text-unison-text underline underline-offset-2 hover:no-underline"
+          className="text-unison-text transition-colors hover:text-unison-text-secondary"
         >
           Composer
         </a>
