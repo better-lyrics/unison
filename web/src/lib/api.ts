@@ -4,9 +4,7 @@ async function getJson<T>(path: string): Promise<T> {
   const res = await fetch(path)
   if (!res.ok) throw new Error(`HTTP ${res.status} for ${path}`)
   const envelope = (await res.json()) as ApiEnvelope<T>
-  if (!envelope.success || !envelope.data) {
-    throw new Error(envelope.error ?? `request ${path} did not succeed`)
-  }
+  if (!envelope.success) throw new Error(envelope.error)
   return envelope.data
 }
 
