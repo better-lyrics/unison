@@ -1,10 +1,9 @@
-import { readFileSync } from "node:fs"
-import { resolve } from "node:path"
+import { existsSync, readFileSync, statSync } from "node:fs"
+import { extname, resolve, sep } from "node:path"
 import { Elysia } from "elysia"
 import { node } from "@elysiajs/node"
 import { cors } from "@elysiajs/cors"
 import { cron } from "@elysiajs/cron"
-import { staticPlugin } from "@elysiajs/static"
 import { config } from "@/config"
 import { createEnv } from "@/infra/env"
 import { closePool } from "@/infra/database"
@@ -26,7 +25,8 @@ const log = new Logger("app")
 const httpLog = new Logger("http")
 const cronLog = new Logger("cron")
 
-const SPA_INDEX_PATH = resolve(process.cwd(), "web/dist/index.html")
+const SPA_DIST = resolve(process.cwd(), "web/dist")
+const SPA_INDEX_PATH = resolve(SPA_DIST, "index.html")
 const API_PREFIXES = [
 	"/lyrics",
 	"/feed",
@@ -37,25 +37,51 @@ const API_PREFIXES = [
 	"/health",
 	"/getLyrics",
 ]
-
-let spaIndexHtml: string | null = null
-function loadSpaIndex(): string | null {
-	if (spaIndexHtml !== null) return spaIndexHtml
-	try {
-		spaIndexHtml = readFileSync(SPA_INDEX_PATH, "utf8")
-	} catch {
-		spaIndexHtml = ""
-	}
-	return spaIndexHtml || null
+const MIME_TYPES: Record<string, string> = {
+	".html": "text/html; charset=utf-8",
+	".css": "text/css; charset=utf-8",
+	".js": "application/javascript; charset=utf-8",
+	".mjs": "application/javascript; charset=utf-8",
+	".json": "application/json; charset=utf-8",
+	".svg": "image/svg+xml",
+	".png": "image/png",
+	".jpg": "image/jpeg",
+	".jpeg": "image/jpeg",
+	".webp": "image/webp",
+	".ico": "image/x-icon",
+	".woff": "font/woff",
+	".woff2": "font/woff2",
+	".map": "application/json; charset=utf-8",
+	".txt": "text/plain; charset=utf-8",
 }
 
-function isSpaRoute(method: string, pathname: string): boolean {
-	if (method !== "GET") return false
-	if (pathname.includes(".")) return false
+let spaIndexHtml: string | null = null
+try {
+	spaIndexHtml = readFileSync(SPA_INDEX_PATH, "utf8")
+} catch {
+	spaIndexHtml = null
+}
+
+function isApiPath(pathname: string): boolean {
 	for (const prefix of API_PREFIXES) {
-		if (pathname === prefix || pathname.startsWith(`${prefix}/`)) return false
+		if (pathname === prefix || pathname.startsWith(`${prefix}/`)) return true
 	}
-	return true
+	return false
+}
+
+function readSpaFile(pathname: string): { body: Buffer; contentType: string } | null {
+	const cleaned = pathname.replace(/^\/+/, "")
+	if (!cleaned) return null
+	const fullPath = resolve(SPA_DIST, cleaned)
+	if (fullPath !== SPA_DIST && !fullPath.startsWith(`${SPA_DIST}${sep}`)) return null
+	try {
+		if (!statSync(fullPath).isFile()) return null
+	} catch {
+		return null
+	}
+	const body = readFileSync(fullPath)
+	const contentType = MIME_TYPES[extname(fullPath).toLowerCase()] ?? "application/octet-stream"
+	return { body, contentType }
 }
 
 const app = new Elysia({ adapter: node() })
@@ -104,7 +130,7 @@ const app = new Elysia({ adapter: node() })
 			latency_ms: Number(duration),
 		})
 	})
-	.onError(({ code, error, request, store, set }) => {
+	.onError(({ code, error, request, store, set, status }) => {
 		const s = store as Record<string, unknown>
 		const method = s.__method || request.method
 		const url = s.__url || new URL(request.url).pathname
@@ -113,33 +139,45 @@ const app = new Elysia({ adapter: node() })
 			: "?"
 
 		if (code === "NOT_FOUND") {
-			if (isSpaRoute(method as string, url as string)) {
-				const html = loadSpaIndex()
-				if (html) {
-					set.status = 200
-					set.headers["content-type"] = "text/html; charset=utf-8"
-					httpLog.info(`${method} ${url} 200 ${duration}ms (spa)`, {
-						method: method as string,
-						path: url as string,
+			const m = method as string
+			const u = url as string
+			if ((m === "GET" || m === "HEAD") && !isApiPath(u)) {
+				if (u.includes(".")) {
+					const file = readSpaFile(u)
+					if (file) {
+						set.headers["content-type"] = file.contentType
+						set.headers["cache-control"] = "public, max-age=31536000, immutable"
+						httpLog.info(`${m} ${u} 200 ${duration}ms (asset)`, {
+							method: m,
+							path: u,
+							status: 200,
+							latency_ms: Number(duration),
+						})
+						return status(200, file.body)
+					}
+				} else if (spaIndexHtml) {
+					httpLog.info(`${m} ${u} 200 ${duration}ms (spa)`, {
+						method: m,
+						path: u,
 						status: 200,
 						latency_ms: Number(duration),
 					})
-					return new Response(html, {
+					return new Response(spaIndexHtml, {
 						status: 200,
 						headers: { "content-type": "text/html; charset=utf-8" },
 					})
 				}
 			}
 			httpLog.warn(`${method} ${url} 404 ${duration}ms`)
-			return { success: false, error: "Not Found" }
+			return status(404, { success: false, error: "Not Found" })
 		}
 
-		const status = typeof set.status === "number" ? set.status : 500
+		const statusCode = typeof set.status === "number" ? set.status : 500
 		const message = "message" in error ? error.message : String(error)
-		httpLog.error(`${method} ${url} ${status} ${duration}ms`, {
+		httpLog.error(`${method} ${url} ${statusCode} ${duration}ms`, {
 			method: method as string,
 			path: url as string,
-			status,
+			status: statusCode,
 			latency_ms: Number(duration),
 			error: message,
 			stack: "stack" in error ? error.stack : undefined,
@@ -154,17 +192,16 @@ const app = new Elysia({ adapter: node() })
 	.use(requestRoutes(env))
 	.use(leaderboardRoutes(env))
 	.use(authRoutes(env))
-	.use(
-		staticPlugin({
-			assets: "web/dist",
-			prefix: "/",
-			indexHTML: true,
-		})
-	)
 	.listen(Number.parseInt(process.env.PORT || "3000", 10))
 
 const port = process.env.PORT || "3000"
 log.info(`listening on port ${port}`)
+log.info("spa serving", {
+	cwd: process.cwd(),
+	spaDist: SPA_DIST,
+	indexLoaded: spaIndexHtml !== null,
+	assetsDirExists: existsSync(resolve(SPA_DIST, "assets")),
+})
 
 backfillTextSearch(env)
 	.then(({ updated }) => {
