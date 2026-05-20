@@ -5,6 +5,7 @@ type State<T> =
   | { status: "success"; data: T; error: undefined }
   | { status: "error"; data: undefined; error: Error }
 
+/** `fetcher` must be referentially stable: a module-level function, or wrapped in useCallback. */
 export function useAsyncData<T>(fetcher: () => Promise<T>): State<T> {
   const [state, setState] = useState<State<T>>({ status: "loading", data: undefined, error: undefined })
 

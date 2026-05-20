@@ -1,4 +1,3 @@
-import { useCallback } from "react"
 import { EmptyState } from "@/components/EmptyState"
 import { LeaderboardSection } from "@/components/LeaderboardSection"
 import { LoadingPlaceholder } from "@/components/LoadingPlaceholder"
@@ -7,8 +6,7 @@ import { useAsyncData } from "@/hooks/useAsyncData"
 import { fetchSongLeaderboard } from "@/lib/api"
 
 export function SongsPage() {
-  const fetcher = useCallback(() => fetchSongLeaderboard(), [])
-  const { status, data, error } = useAsyncData(fetcher)
+  const { status, data, error } = useAsyncData(fetchSongLeaderboard)
 
   if (status === "loading") {
     return (
