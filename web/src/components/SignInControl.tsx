@@ -61,7 +61,7 @@ export function SignInControl() {
           aria-haspopup="menu"
           aria-expanded={open}
           aria-label={identity.displayName}
-          className="flex cursor-pointer items-center gap-2 rounded-md p-1 transition-colors hover:bg-unison-bg-hover"
+          className="flex cursor-pointer items-center gap-2 rounded-full p-1 pr-2 transition-colors hover:bg-unison-bg-hover"
         >
           <img
             src={dicebearThumbsDataUri(identity.keyId)}
@@ -74,12 +74,17 @@ export function SignInControl() {
           <div
             role="menu"
             data-state="open"
-            className="absolute right-0 z-20 mt-2 w-72 rounded-lg border border-unison-border bg-unison-bg-elevated p-3 shadow-lg"
+            className="absolute right-0 z-20 mt-2 w-56 rounded-lg border border-unison-border bg-unison-bg-elevated p-3 shadow-lg"
           >
             <div className="space-y-2 pb-3">
               <p className="text-[10px] uppercase tracking-wider text-unison-text-muted">Key ID</p>
               <div className="flex items-center gap-2">
-                <code className="min-w-0 flex-1 truncate font-mono text-xs text-unison-text">{identity.keyId}</code>
+                <code
+                  title={identity.keyId}
+                  className="min-w-0 flex-1 font-mono text-xs text-unison-text"
+                >
+                  {`${identity.keyId.slice(0, 6)}…${identity.keyId.slice(-6)}`}
+                </code>
                 <button
                   type="button"
                   onClick={copyKey}

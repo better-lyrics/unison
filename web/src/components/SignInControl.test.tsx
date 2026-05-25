@@ -167,12 +167,14 @@ describe("SignInControl", () => {
     await waitFor(() => expect(screen.queryByRole("menu")).toBeNull())
   })
 
-  it("renders the full keyId, copy button, view stats link, and sign out in the dropdown", async () => {
+  it("renders the keyId preview, copy button, view stats link, and sign out in the dropdown", async () => {
     saveStoredSession(valid)
     stubSessionFetch()
     renderControl()
     await openDropdown()
-    expect(screen.getByText(valid.keyId)).toBeTruthy()
+    const preview = `${valid.keyId.slice(0, 6)}…${valid.keyId.slice(-6)}`
+    const code = screen.getByText(preview)
+    expect(code.getAttribute("title")).toBe(valid.keyId)
     expect(screen.getByRole("button", { name: /copy key id/i })).toBeTruthy()
     expect(screen.getByRole("menuitem", { name: /view stats/i })).toBeTruthy()
     expect(screen.getByRole("menuitem", { name: /sign out/i })).toBeTruthy()
