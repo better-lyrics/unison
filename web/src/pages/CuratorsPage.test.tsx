@@ -409,7 +409,7 @@ describe("CuratorsPage", () => {
       }),
     )
     renderPage()
-    await waitFor(() => expect(screen.getByText("No curators yet")).toBeTruthy())
+    await waitFor(() => expect(screen.getByText("No one ranked yet")).toBeTruthy())
     expect(screen.getByText(/Be the first by submitting lyrics from Better Lyrics/i)).toBeTruthy()
   })
 

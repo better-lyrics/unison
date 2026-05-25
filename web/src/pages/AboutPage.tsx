@@ -28,7 +28,7 @@ export function AboutPage() {
           second pass.
         </p>
         <p className="text-sm leading-relaxed text-unison-text-secondary">
-          The Curators board ranks people by submission volume and how much of that work survived voting. Names like
+          The Leaderboard ranks people by submission volume and how much of that work survived voting. Names like
           "BrightVivaceRoll" come from each contributor's public key, which means no accounts and no usernames to fight
           over.
         </p>
@@ -53,7 +53,7 @@ export function AboutPage() {
           shows everyone else by default.
         </p>
         <p className="text-sm leading-relaxed text-unison-text-secondary">
-          You don't need to sign in to use any of this. If you do, your row on Curators gets marked when you're
+          You don't need to sign in to use any of this. If you do, your row on the Leaderboard gets marked when you're
           ranked, and there's a /me page with your stats. It reuses the keypair Better Lyrics already keeps for you,
           so there's nothing extra to set up.
         </p>
