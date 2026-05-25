@@ -129,6 +129,16 @@ describe("fetchMe", () => {
     ))
     await expect(fetchMe("anything")).rejects.toThrow("HTTP 502")
   })
+
+  it("throws HTTP <status> when a 5xx returns JSON without a success/error envelope", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ message: "Bad Gateway" }), {
+        status: 502,
+        headers: { "content-type": "application/json" },
+      }),
+    ))
+    await expect(fetchMe("anything")).rejects.toThrow("HTTP 502")
+  })
 })
 
 describe("network failure propagation", () => {

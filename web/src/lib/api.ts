@@ -26,7 +26,7 @@ export function fetchUserRank(keyId: string): Promise<UserRankResponse> {
   return getJson<UserRankResponse>(`/leaderboard/users/${encodeURIComponent(keyId)}`)
 }
 
-export function fetchUserSubmissions(keyId: string, cursor?: number): Promise<UserSubmissionsResponse> {
-  const params = cursor !== undefined ? `?cursor=${cursor}` : ""
+export function fetchUserSubmissions(keyId: string, cursor?: string): Promise<UserSubmissionsResponse> {
+  const params = cursor !== undefined ? `?cursor=${encodeURIComponent(cursor)}` : ""
   return getJson<UserSubmissionsResponse>(`/users/${encodeURIComponent(keyId)}/submissions${params}`)
 }

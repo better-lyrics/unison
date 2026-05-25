@@ -12,13 +12,21 @@ interface SubmissionsListProps {
 interface PageState {
   keyId: string
   extra: UserSubmission[]
-  cursor: number | undefined
+  cursor: string | undefined
   cursorInitialized: boolean
   loadingMore: boolean
+  loadMoreError: string | null
 }
 
 function emptyState(keyId: string): PageState {
-  return { keyId, extra: [], cursor: undefined, cursorInitialized: false, loadingMore: false }
+  return {
+    keyId,
+    extra: [],
+    cursor: undefined,
+    cursorInitialized: false,
+    loadingMore: false,
+    loadMoreError: null,
+  }
 }
 
 export function SubmissionsList({ keyId }: SubmissionsListProps) {
@@ -53,7 +61,7 @@ export function SubmissionsList({ keyId }: SubmissionsListProps) {
 
   const loadMore = async () => {
     if (cursor === undefined || page.loadingMore) return
-    setPage((prev) => ({ ...prev, loadingMore: true }))
+    setPage((prev) => ({ ...prev, loadingMore: true, loadMoreError: null }))
     try {
       const next = await fetchUserSubmissions(keyId, cursor)
       setPage((prev) =>
@@ -63,12 +71,15 @@ export function SubmissionsList({ keyId }: SubmissionsListProps) {
               extra: [...prev.extra, ...next.submissions],
               cursor: next.nextCursor,
               loadingMore: false,
+              loadMoreError: null,
             }
           : prev,
       )
     } catch (err) {
-      setPage((prev) => ({ ...prev, loadingMore: false }))
-      throw err
+      const message = err instanceof Error ? err.message : "Could not load more"
+      setPage((prev) =>
+        prev.keyId === keyId ? { ...prev, loadingMore: false, loadMoreError: message } : prev,
+      )
     }
   }
 
@@ -99,14 +110,21 @@ export function SubmissionsList({ keyId }: SubmissionsListProps) {
         ))}
       </ul>
       {cursor !== undefined ? (
-        <button
-          type="button"
-          onClick={loadMore}
-          disabled={page.loadingMore}
-          className="cursor-pointer rounded-md border border-unison-border bg-unison-bg-elevated px-3 py-1.5 text-xs text-unison-text-secondary transition-colors hover:bg-unison-bg-hover hover:text-unison-text disabled:opacity-50"
-        >
-          {page.loadingMore ? "Loading..." : "Load more"}
-        </button>
+        <div className="space-y-2">
+          <button
+            type="button"
+            onClick={loadMore}
+            disabled={page.loadingMore}
+            className="cursor-pointer rounded-md border border-unison-border bg-unison-bg-elevated px-3 py-1.5 text-xs text-unison-text-secondary transition-colors hover:bg-unison-bg-hover hover:text-unison-text disabled:opacity-50"
+          >
+            {page.loadingMore ? "Loading..." : page.loadMoreError ? "Retry" : "Load more"}
+          </button>
+          {page.loadMoreError ? (
+            <p role="alert" className="text-xs text-unison-text-muted">
+              {page.loadMoreError}
+            </p>
+          ) : null}
+        </div>
       ) : null}
     </div>
   )

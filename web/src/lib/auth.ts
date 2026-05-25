@@ -66,14 +66,18 @@ export function clearStoredSession(): void {
 }
 
 async function unwrap<T>(res: Response): Promise<T> {
-  let envelope: ApiEnvelope<T>
+  let body: unknown
   try {
-    envelope = (await res.json()) as ApiEnvelope<T>
+    body = await res.json()
   } catch {
     throw new Error(`HTTP ${res.status}`)
   }
+  if (!res.ok) {
+    const err = (body as { error?: unknown }).error
+    throw new Error(typeof err === "string" && err.length > 0 ? err : `HTTP ${res.status}`)
+  }
+  const envelope = body as ApiEnvelope<T>
   if (!envelope.success) throw new Error(envelope.error)
-  if (!res.ok) throw new Error(`HTTP ${res.status}`)
   return envelope.data
 }
 

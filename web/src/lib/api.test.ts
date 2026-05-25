@@ -121,7 +121,7 @@ describe("fetchUserSubmissions", () => {
                 hidden: false,
               },
             ],
-            nextCursor: 1699999999,
+            nextCursor: "1699999999:42",
           },
         }),
         { status: 200 },
@@ -130,7 +130,7 @@ describe("fetchUserSubmissions", () => {
     const data = await fetchUserSubmissions("k")
     expect(data.submissions).toHaveLength(1)
     expect(data.submissions[0].id).toBe(1)
-    expect(data.nextCursor).toBe(1699999999)
+    expect(data.nextCursor).toBe("1699999999:42")
     expect(fetchSpy).toHaveBeenCalledWith("/users/k/submissions")
   })
 
@@ -144,10 +144,10 @@ describe("fetchUserSubmissions", () => {
         { status: 200 },
       ),
     )
-    const data = await fetchUserSubmissions("k", 1699999999)
+    const data = await fetchUserSubmissions("k", "1699999999:42")
     expect(data.submissions).toEqual([])
     expect(data.nextCursor).toBeUndefined()
-    expect(fetchSpy).toHaveBeenCalledWith("/users/k/submissions?cursor=1699999999")
+    expect(fetchSpy).toHaveBeenCalledWith("/users/k/submissions?cursor=1699999999%3A42")
   })
 
   it("url-encodes the keyId", async () => {

@@ -70,5 +70,5 @@ export interface UserSubmission {
 
 export interface UserSubmissionsResponse {
   submissions: UserSubmission[]
-  nextCursor?: number
+  nextCursor?: string
 }
