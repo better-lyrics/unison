@@ -20,6 +20,7 @@ import { requestRoutes } from "@/routes/requests"
 import { leaderboardRoutes } from "@/routes/leaderboard"
 import { userRoutes } from "@/routes/users"
 import { compatRoutes } from "@/routes/compat"
+import { isApiPath } from "@/utils/spa-routing"
 
 const env = createEnv()
 const log = new Logger("app")
@@ -29,17 +30,6 @@ const cronLog = new Logger("cron")
 // @elysiajs/static on the Node adapter omits content-type headers and ignores
 // indexHTML for unmatched routes, so we serve the SPA dist ourselves.
 const SPA_DIST = resolve(process.cwd(), "web/dist")
-const API_PREFIXES = [
-	"/lyrics",
-	"/feed",
-	"/votes",
-	"/requests",
-	"/leaderboard",
-	"/users",
-	"/auth",
-	"/health",
-	"/getLyrics",
-]
 const MIME_TYPES: Record<string, string> = {
 	".html": "text/html; charset=utf-8",
 	".css": "text/css; charset=utf-8",
@@ -63,13 +53,6 @@ try {
 	spaIndexHtml = readFileSync(resolve(SPA_DIST, "index.html"), "utf8")
 } catch {
 	spaIndexHtml = null
-}
-
-function isApiPath(pathname: string): boolean {
-	for (const prefix of API_PREFIXES) {
-		if (pathname === prefix || pathname.startsWith(`${prefix}/`)) return true
-	}
-	return false
 }
 
 function readSpaFile(pathname: string): { body: Buffer; contentType: string } | null {
