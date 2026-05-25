@@ -1,4 +1,6 @@
-import { NavLink } from "react-router-dom"
+import { IconMenu2, IconX } from "@tabler/icons-react"
+import { useEffect, useRef, useState } from "react"
+import { Link, NavLink } from "react-router-dom"
 import { cn } from "@/lib/cn"
 import { BetterLyricsLogo } from "./BetterLyricsLogo"
 import { SignInControl } from "./SignInControl"
@@ -12,14 +14,41 @@ const tabClass = ({ isActive }: { isActive: boolean }) =>
   )
 
 export function AppHeader() {
+  const [menuOpen, setMenuOpen] = useState(false)
+  const headerRef = useRef<HTMLElement | null>(null)
+  const closeMenu = () => setMenuOpen(false)
+
+  useEffect(() => {
+    if (!menuOpen) return
+    const onClick = (e: MouseEvent) => {
+      if (!headerRef.current?.contains(e.target as Node)) setMenuOpen(false)
+    }
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setMenuOpen(false)
+    }
+    document.addEventListener("mousedown", onClick)
+    document.addEventListener("keydown", onKey)
+    return () => {
+      document.removeEventListener("mousedown", onClick)
+      document.removeEventListener("keydown", onKey)
+    }
+  }, [menuOpen])
+
   return (
-    <header className="sticky top-0 z-10 border-b border-unison-border bg-unison-bg/80 backdrop-blur">
-      <div className="mx-auto grid max-w-5xl grid-cols-[1fr_auto_1fr] items-center gap-6 px-6 py-4">
-        <div className="flex items-center gap-2 justify-self-start">
+    <header
+      ref={headerRef}
+      className="sticky top-0 z-10 border-b border-unison-border bg-unison-bg/80 backdrop-blur"
+    >
+      <div className="mx-auto flex max-w-5xl items-center justify-between gap-6 px-6 py-4 sm:grid sm:grid-cols-[1fr_auto_1fr]">
+        <Link
+          to="/"
+          aria-label="Unison home"
+          className="flex items-center gap-2 transition-opacity hover:opacity-80 sm:justify-self-start"
+        >
           <BetterLyricsLogo size={20} />
           <span className="text-base font-semibold tracking-tight">Unison</span>
-        </div>
-        <nav className="flex items-center gap-1 justify-self-center">
+        </Link>
+        <nav className="hidden items-center gap-1 sm:flex sm:justify-self-center">
           <NavLink to="/" end className={tabClass}>
             Songs
           </NavLink>
@@ -30,10 +59,43 @@ export function AppHeader() {
             About
           </NavLink>
         </nav>
-        <div className="justify-self-end">
-          <SignInControl />
+        <div className="flex items-center gap-2 sm:justify-self-end">
+          <div className="hidden sm:block">
+            <SignInControl />
+          </div>
+          <button
+            type="button"
+            onClick={() => setMenuOpen((o) => !o)}
+            aria-label={menuOpen ? "Close menu" : "Open menu"}
+            aria-expanded={menuOpen}
+            aria-haspopup="menu"
+            className="cursor-pointer rounded-md p-1.5 text-unison-text-secondary transition-colors hover:bg-unison-bg-hover hover:text-unison-text sm:hidden"
+          >
+            {menuOpen ? <IconX className="size-5" stroke={1.5} /> : <IconMenu2 className="size-5" stroke={1.5} />}
+          </button>
         </div>
       </div>
+      {menuOpen ? (
+        <div
+          role="menu"
+          className="absolute right-6 top-full mt-2 flex w-56 flex-col gap-2 rounded-lg border border-unison-border bg-unison-bg-elevated p-3 shadow-lg sm:hidden"
+        >
+          <nav className="flex flex-col gap-1">
+            <NavLink to="/" end role="menuitem" onClick={closeMenu} className={tabClass}>
+              Songs
+            </NavLink>
+            <NavLink to="/leaderboard" role="menuitem" onClick={closeMenu} className={tabClass}>
+              Leaderboard
+            </NavLink>
+            <NavLink to="/about" role="menuitem" onClick={closeMenu} className={tabClass}>
+              About
+            </NavLink>
+          </nav>
+          <div className="flex items-center justify-end border-t border-unison-border pt-2">
+            <SignInControl />
+          </div>
+        </div>
+      ) : null}
     </header>
   )
 }
