@@ -21,9 +21,7 @@ interface LyricsScoreUpdate {
 }
 
 export async function recalculateScore(env: Env, lyricsId: number): Promise<void> {
-	const row = await env.DB.prepare(
-		"SELECT video_id, deleted_at FROM lyrics WHERE id = ?"
-	)
+	const row = await env.DB.prepare("SELECT video_id, deleted_at FROM lyrics WHERE id = ?")
 		.bind(lyricsId)
 		.first<{ video_id: string; deleted_at: number | null }>()
 

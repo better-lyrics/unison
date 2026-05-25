@@ -271,9 +271,7 @@ describe("removeVote", () => {
 describe("castVote on deleted lyrics", () => {
 	it("refuses to vote on a soft-deleted row", async () => {
 		const cache = createMockCache()
-		const db = createMockDB([
-			{ submitter_id: 5, video_id: "v1", deleted_at: 1700000000 },
-		])
+		const db = createMockDB([{ submitter_id: 5, video_id: "v1", deleted_at: 1700000000 }])
 		const env = createEnv(db, cache)
 
 		const result = await castVote(env, 1, 42, 1)

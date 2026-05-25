@@ -114,11 +114,10 @@ function makeEnvFull(
 }
 
 async function makeIdentity() {
-	const pair = await crypto.subtle.generateKey(
-		{ name: "ECDSA", namedCurve: "P-256" },
-		true,
-		["sign", "verify"]
-	)
+	const pair = await crypto.subtle.generateKey({ name: "ECDSA", namedCurve: "P-256" }, true, [
+		"sign",
+		"verify",
+	])
 	const publicKey = (await crypto.subtle.exportKey("jwk", pair.publicKey)) as JsonWebKey
 	const keyId = await hashPublicKey(publicKey)
 	return { pair, publicKey, keyId }
@@ -375,9 +374,7 @@ describe("POST /auth/logout", () => {
 		const cache = makeMockCache()
 		const env = makeEnv(cache)
 		const app = authRoutes(env)
-		const res = await app.handle(
-			new Request("http://localhost/auth/logout", { method: "POST" })
-		)
+		const res = await app.handle(new Request("http://localhost/auth/logout", { method: "POST" }))
 		expect(res.status).toBe(401)
 		const json = (await res.json()) as { success: boolean; error: string }
 		expect(json.success).toBe(false)

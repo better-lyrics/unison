@@ -74,9 +74,7 @@ describe("GET /lyrics duration query parsing", () => {
 		const app = lyricsRoutes(env)
 
 		const res = await app.handle(
-			new Request(
-				"http://localhost/lyrics?song=Foo&artist=Bar&duration=29.917460140589583"
-			)
+			new Request("http://localhost/lyrics?song=Foo&artist=Bar&duration=29.917460140589583")
 		)
 
 		expect(res.status).toBe(404)
@@ -106,9 +104,7 @@ describe("GET /lyrics duration query parsing", () => {
 		const env = makeEnv(db)
 		const app = lyricsRoutes(env)
 
-		await app.handle(
-			new Request("http://localhost/lyrics?song=Foo&artist=Bar&duration=200")
-		)
+		await app.handle(new Request("http://localhost/lyrics?song=Foo&artist=Bar&duration=200"))
 
 		const findCall = db.calls.find((c) => /ABS\(l\.duration - \?\)/.test(c.sql))
 		expect(findCall?.params[2]).toBe(200)
@@ -122,9 +118,7 @@ describe("GET /lyrics/search duration query parsing", () => {
 		const app = lyricsRoutes(env)
 
 		const res = await app.handle(
-			new Request(
-				"http://localhost/lyrics/search?song=Foo&artist=Bar&duration=29.917460140589583"
-			)
+			new Request("http://localhost/lyrics/search?song=Foo&artist=Bar&duration=29.917460140589583")
 		)
 
 		expect(res.status).toBe(200)
@@ -135,11 +129,10 @@ describe("GET /lyrics/search duration query parsing", () => {
 })
 
 async function generateKeyPair() {
-	return await crypto.subtle.generateKey(
-		{ name: "ECDSA", namedCurve: "P-256" },
-		true,
-		["sign", "verify"]
-	)
+	return await crypto.subtle.generateKey({ name: "ECDSA", namedCurve: "P-256" }, true, [
+		"sign",
+		"verify",
+	])
 }
 
 type GeneratedKeyPair = Awaited<ReturnType<typeof generateKeyPair>>

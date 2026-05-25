@@ -510,7 +510,6 @@ describe("RANKING_EXPR", () => {
 	})
 })
 
-
 describe("invalidateCacheAfterDelete", () => {
 	it("deletes per-video key and all feed:global:* keys, leaves others", async () => {
 		const db = createMockDB()
@@ -543,9 +542,7 @@ describe("softDeleteLyrics", () => {
 	})
 
 	it("returns already_deleted when the row is already deleted", async () => {
-		const db = createMockDB([
-			{ id: 1, video_id: "v1", submitter_id: 1, deleted_at: 1234567890 },
-		])
+		const db = createMockDB([{ id: 1, video_id: "v1", submitter_id: 1, deleted_at: 1234567890 }])
 		const cache = createMockCache()
 		const env = createEnv(db, cache)
 
@@ -555,9 +552,7 @@ describe("softDeleteLyrics", () => {
 	})
 
 	it("returns forbidden when submitter does not own the row", async () => {
-		const db = createMockDB([
-			{ id: 1, video_id: "v1", submitter_id: 99, deleted_at: null },
-		])
+		const db = createMockDB([{ id: 1, video_id: "v1", submitter_id: 99, deleted_at: null }])
 		const cache = createMockCache()
 		const env = createEnv(db, cache)
 
@@ -567,10 +562,7 @@ describe("softDeleteLyrics", () => {
 	})
 
 	it("performs UPDATE with the four audit fields and invalidates cache", async () => {
-		const db = createMockDB([
-			{ id: 1, video_id: "v1", submitter_id: 1, deleted_at: null },
-			null,
-		])
+		const db = createMockDB([{ id: 1, video_id: "v1", submitter_id: 1, deleted_at: null }, null])
 		const cache = createMockCache({ "v:v1": "row", "feed:global:20": "feed" })
 		const env = createEnv(db, cache)
 
@@ -590,10 +582,7 @@ describe("softDeleteLyrics", () => {
 	})
 
 	it("admin role bypasses ownership check", async () => {
-		const db = createMockDB([
-			{ id: 1, video_id: "v1", submitter_id: 99, deleted_at: null },
-			null,
-		])
+		const db = createMockDB([{ id: 1, video_id: "v1", submitter_id: 99, deleted_at: null }, null])
 		const cache = createMockCache()
 		const env = createEnv(db, cache)
 

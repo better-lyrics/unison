@@ -65,10 +65,7 @@ function makeMockCache(initial: Record<string, string> = {}) {
 	}
 }
 
-function makeEnv(
-	db: ReturnType<typeof makeMockDB>,
-	cache: ReturnType<typeof makeMockCache>
-): Env {
+function makeEnv(db: ReturnType<typeof makeMockDB>, cache: ReturnType<typeof makeMockCache>): Env {
 	return {
 		DB: db as unknown as Env["DB"],
 		CACHE: cache as unknown as Env["CACHE"],

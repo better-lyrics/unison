@@ -62,11 +62,7 @@ export const authRoutes = (env: Env) =>
 		.post("/session", async ({ env, keyId, signedPayload, headers, set }) => {
 			const signedOrigin = signedPayload.origin
 			const requestOrigin = headers.origin
-			if (
-				typeof signedOrigin !== "string" ||
-				!requestOrigin ||
-				requestOrigin !== signedOrigin
-			) {
+			if (typeof signedOrigin !== "string" || !requestOrigin || requestOrigin !== signedOrigin) {
 				set.status = 403
 				return { success: false, error: "ORIGIN_MISMATCH" }
 			}
