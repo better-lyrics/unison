@@ -217,6 +217,14 @@ describe("GET /leaderboard/users/:keyId", () => {
 		expect(json.data.displayName?.length).toBeGreaterThan(0)
 		expect(json.data.lastVoteAt).toBeNull()
 	})
+
+	it("rejects a keyId that is not 64 hex characters", async () => {
+		const db = makeMockDB([])
+		const env = makeEnv(db)
+		const app = leaderboardRoutes(env)
+		const res = await app.handle(new Request("http://localhost/leaderboard/users/ab"))
+		expect(res.status).toBeGreaterThanOrEqual(400)
+	})
 })
 
 describe("GET /leaderboard/users corrupt cache", () => {

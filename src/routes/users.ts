@@ -6,6 +6,11 @@ import { readRateLimit } from "@/utils/read-rate-limit"
 const DEFAULT_LIMIT = 20
 const MAX_LIMIT = 50
 
+function parseCursor(raw: string): { createdAt: number; id: number } {
+	const [createdAtStr, idStr] = raw.split(":")
+	return { createdAt: Number(createdAtStr), id: Number(idStr) }
+}
+
 export const userRoutes = (env: Env) =>
 	new Elysia({ prefix: "/users" })
 		.decorate("env", env)
@@ -14,7 +19,7 @@ export const userRoutes = (env: Env) =>
 			"/:keyId/submissions",
 			async ({ params, query, env }) => {
 				const limit = query.limit ?? DEFAULT_LIMIT
-				const cursor = query.cursor ?? null
+				const cursor = query.cursor ? parseCursor(query.cursor) : null
 
 				const rows = await getSubmissionsByUser(env, params.keyId, limit + 1, cursor)
 
@@ -22,17 +27,20 @@ export const userRoutes = (env: Env) =>
 				const submissions = hasMore ? rows.slice(0, limit) : rows
 				const data: {
 					submissions: typeof submissions
-					nextCursor?: number
+					nextCursor?: string
 				} = { submissions }
-				if (hasMore) data.nextCursor = submissions[submissions.length - 1].createdAt
+				if (hasMore) {
+					const last = submissions[submissions.length - 1]
+					data.nextCursor = `${last.createdAt}:${last.id}`
+				}
 
 				return { success: true, data }
 			},
 			{
-				params: t.Object({ keyId: t.String() }),
+				params: t.Object({ keyId: t.String({ pattern: "^[0-9a-fA-F]{64}$" }) }),
 				query: t.Object({
 					limit: t.Optional(t.Numeric({ minimum: 1, maximum: MAX_LIMIT })),
-					cursor: t.Optional(t.Numeric({ minimum: 0 })),
+					cursor: t.Optional(t.String({ pattern: "^[0-9]+:[0-9]+$" })),
 				}),
 			}
 		)

@@ -1,4 +1,4 @@
-import { AUTO_HIDE_PREDICATE } from "@/db/lyrics"
+import { AUTO_HIDE_PREDICATE_JOINED } from "@/db/lyrics"
 import type { Confidence, Env, LyricsFormat } from "@/types"
 
 export interface SubmissionRow {
@@ -53,13 +53,13 @@ export async function getSubmissionsByUser(
 	env: Env,
 	keyId: string,
 	limit: number,
-	cursor: number | null
+	cursor: { createdAt: number; id: number } | null
 ): Promise<SubmissionRow[]> {
 	const params: unknown[] = [keyId]
 	let where = "u.key_id = ? AND l.deleted_at IS NULL"
 	if (cursor !== null) {
-		where += " AND l.created_at < ?"
-		params.push(cursor)
+		where += " AND (l.created_at, l.id) < (?, ?)"
+		params.push(cursor.createdAt, cursor.id)
 	}
 	params.push(limit)
 
@@ -67,11 +67,11 @@ export async function getSubmissionsByUser(
 		`SELECT l.id, l.video_id, l.song, l.artist, l.album, l.duration,
 		        l.format, l.sync_type, l.language, l.effective_score,
 		        l.vote_count, l.confidence, l.created_at,
-		        ${AUTO_HIDE_PREDICATE} AS hidden
+		        ${AUTO_HIDE_PREDICATE_JOINED} AS hidden
 		 FROM lyrics l
 		 JOIN users u ON u.id = l.submitter_id
 		 WHERE ${where}
-		 ORDER BY l.created_at DESC
+		 ORDER BY l.created_at DESC, l.id DESC
 		 LIMIT ?`
 	)
 		.bind(...params)

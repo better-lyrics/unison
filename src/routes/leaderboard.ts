@@ -88,5 +88,5 @@ export const leaderboardRoutes = (env: Env) =>
 							},
 						}
 			},
-			{ params: t.Object({ keyId: t.String() }) }
+			{ params: t.Object({ keyId: t.String({ pattern: "^[0-9a-fA-F]{64}$" }) }) }
 		)

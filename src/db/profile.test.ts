@@ -160,11 +160,24 @@ describe("getSubmissionsByUser", () => {
 		expect(result).toEqual([])
 	})
 
-	it("passes the cursor as a created_at upper bound when provided", async () => {
+	it("passes the cursor as a (created_at, id) upper bound when provided", async () => {
 		const db = makeMockDB([[]])
 		const env = makeEnv(db)
-		await getSubmissionsByUser(env, "k1", 21, 1700000050)
-		expect(db.calls[0].params).toEqual(["k1", 1700000050, 21])
-		expect(db.calls[0].sql).toContain("l.created_at < ?")
+		await getSubmissionsByUser(env, "k1", 21, { createdAt: 1700000050, id: 42 })
+		expect(db.calls[0].params).toEqual(["k1", 1700000050, 42, 21])
+		expect(db.calls[0].sql).toContain("(l.created_at, l.id) < (?, ?)")
+	})
+
+	it("qualifies AUTO_HIDE columns so the JOIN does not introduce ambiguity", async () => {
+		const db = makeMockDB([[]])
+		const env = makeEnv(db)
+		await getSubmissionsByUser(env, "k1", 21, null)
+		const sql = db.calls[0].sql
+		expect(sql).toContain("l.vote_count")
+		expect(sql).toContain("l.downvotes")
+		expect(sql).toContain("l.effective_score")
+		expect(sql).not.toMatch(/[\s(]vote_count\b/)
+		expect(sql).not.toMatch(/[\s(]downvotes\b/)
+		expect(sql).not.toMatch(/[\s(]effective_score\b/)
 	})
 })

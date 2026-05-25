@@ -86,6 +86,9 @@ function rawRow(over: Partial<Record<string, unknown>> = {}) {
 	}
 }
 
+const KEY = "a".repeat(64)
+const OTHER_KEY = "b".repeat(64)
+
 describe("GET /users/:keyId/submissions", () => {
 	it("returns submissions for a known user", async () => {
 		const db = makeMockDB([
@@ -96,7 +99,7 @@ describe("GET /users/:keyId/submissions", () => {
 		])
 		const env = makeEnv(db)
 		const app = userRoutes(env)
-		const res = await app.handle(new Request("http://localhost/users/k1/submissions"))
+		const res = await app.handle(new Request(`http://localhost/users/${KEY}/submissions`))
 		expect(res.status).toBe(200)
 		const json = (await res.json()) as {
 			success: boolean
@@ -107,7 +110,7 @@ describe("GET /users/:keyId/submissions", () => {
 					createdAt: number
 					hidden: boolean
 				}>
-				nextCursor?: number
+				nextCursor?: string
 			}
 		}
 		expect(json.success).toBe(true)
@@ -122,32 +125,32 @@ describe("GET /users/:keyId/submissions", () => {
 		const db = makeMockDB([[]])
 		const env = makeEnv(db)
 		const app = userRoutes(env)
-		const res = await app.handle(new Request("http://localhost/users/nobody/submissions"))
+		const res = await app.handle(new Request(`http://localhost/users/${OTHER_KEY}/submissions`))
 		expect(res.status).toBe(200)
 		const json = (await res.json()) as {
 			success: boolean
-			data: { submissions: unknown[]; nextCursor?: number }
+			data: { submissions: unknown[]; nextCursor?: string }
 		}
 		expect(json.success).toBe(true)
 		expect(json.data.submissions).toEqual([])
 		expect(json.data.nextCursor).toBeUndefined()
 	})
 
-	it("sets nextCursor to the last kept row's created_at when limit+1 rows are returned", async () => {
+	it("sets nextCursor to the last kept row's (createdAt:id) when limit+1 rows are returned", async () => {
 		const rows = Array.from({ length: 3 }, (_, i) =>
 			rawRow({ id: i + 1, video_id: `v${i + 1}`, created_at: 1700000000 - i })
 		)
 		const db = makeMockDB([rows])
 		const env = makeEnv(db)
 		const app = userRoutes(env)
-		const res = await app.handle(new Request("http://localhost/users/k1/submissions?limit=2"))
+		const res = await app.handle(new Request(`http://localhost/users/${KEY}/submissions?limit=2`))
 		expect(res.status).toBe(200)
 		const json = (await res.json()) as {
-			data: { submissions: unknown[]; nextCursor?: number }
+			data: { submissions: unknown[]; nextCursor?: string }
 		}
 		expect(json.data.submissions.length).toBe(2)
-		expect(json.data.nextCursor).toBe(1700000000 - 1)
-		expect(db.calls[0].params).toEqual(["k1", 3])
+		expect(json.data.nextCursor).toBe(`${1700000000 - 1}:2`)
+		expect(db.calls[0].params).toEqual([KEY, 3])
 	})
 
 	it("omits nextCursor when fewer than limit+1 rows are returned", async () => {
@@ -155,16 +158,16 @@ describe("GET /users/:keyId/submissions", () => {
 		const db = makeMockDB([rows])
 		const env = makeEnv(db)
 		const app = userRoutes(env)
-		const res = await app.handle(new Request("http://localhost/users/k1/submissions?limit=2"))
+		const res = await app.handle(new Request(`http://localhost/users/${KEY}/submissions?limit=2`))
 		expect(res.status).toBe(200)
 		const json = (await res.json()) as {
-			data: { submissions: unknown[]; nextCursor?: number }
+			data: { submissions: unknown[]; nextCursor?: string }
 		}
 		expect(json.data.submissions.length).toBe(2)
 		expect(json.data.nextCursor).toBeUndefined()
 	})
 
-	it("respects an explicit cursor and uses it as a created_at upper bound", async () => {
+	it("respects an explicit cursor and uses it as a (createdAt, id) upper bound", async () => {
 		const rows = [
 			rawRow({ id: 10, created_at: 1699999900 }),
 			rawRow({ id: 11, created_at: 1699999800 }),
@@ -174,22 +177,23 @@ describe("GET /users/:keyId/submissions", () => {
 		const env = makeEnv(db)
 		const app = userRoutes(env)
 		const res = await app.handle(
-			new Request("http://localhost/users/k1/submissions?limit=2&cursor=1700000000")
+			new Request(`http://localhost/users/${KEY}/submissions?limit=2&cursor=1700000000:99`)
 		)
 		expect(res.status).toBe(200)
 		const json = (await res.json()) as {
-			data: { submissions: unknown[]; nextCursor?: number }
+			data: { submissions: unknown[]; nextCursor?: string }
 		}
-		expect(json.data.nextCursor).toBe(1699999800)
-		expect(db.calls[0].params).toEqual(["k1", 1700000000, 3])
+		expect(json.data.nextCursor).toBe("1699999800:11")
+		expect(db.calls[0].params).toEqual([KEY, 1700000000, 99, 3])
+		expect(db.calls[0].sql).toContain("(l.created_at, l.id) < (?, ?)")
 	})
 
-	it("rejects a negative cursor", async () => {
+	it("rejects a malformed cursor", async () => {
 		const db = makeMockDB([[]])
 		const env = makeEnv(db)
 		const app = userRoutes(env)
 		const res = await app.handle(
-			new Request("http://localhost/users/k1/submissions?cursor=-1")
+			new Request(`http://localhost/users/${KEY}/submissions?cursor=not-a-cursor`)
 		)
 		expect(res.status).toBeGreaterThanOrEqual(400)
 	})
@@ -199,8 +203,17 @@ describe("GET /users/:keyId/submissions", () => {
 		const env = makeEnv(db)
 		const app = userRoutes(env)
 		const res = await app.handle(
-			new Request("http://localhost/users/k1/submissions?limit=100")
+			new Request(`http://localhost/users/${KEY}/submissions?limit=100`)
 		)
 		expect(res.status).toBeGreaterThanOrEqual(400)
+	})
+
+	it("rejects a keyId that is not 64 hex characters", async () => {
+		const db = makeMockDB([])
+		const env = makeEnv(db)
+		const app = userRoutes(env)
+		const res = await app.handle(new Request("http://localhost/users/ab/submissions"))
+		expect(res.status).toBeGreaterThanOrEqual(400)
+		expect(db.calls.length).toBe(0)
 	})
 })

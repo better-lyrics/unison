@@ -46,7 +46,7 @@ const buildAutoHidePredicate = (prefix: string) => `(
 )`
 
 export const AUTO_HIDE_PREDICATE = buildAutoHidePredicate("")
-const AUTO_HIDE_PREDICATE_JOINED = buildAutoHidePredicate("l.")
+export const AUTO_HIDE_PREDICATE_JOINED = buildAutoHidePredicate("l.")
 
 const LYRICS_WITH_SUBMITTER = `
 	SELECT l.*, u.key_id AS submitter_key_id, u.reputation AS submitter_reputation,
