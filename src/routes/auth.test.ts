@@ -7,9 +7,13 @@ function makeMockCache(seed: Record<string, string> = {}) {
 	const store = new Map<string, { value: string; ttl: number }>()
 	for (const [k, v] of Object.entries(seed)) store.set(k, { value: v, ttl: 0 })
 	const setNXKeys: string[] = []
+	const getDelCalls: string[] = []
+	const deleteCalls: string[] = []
 	return {
 		store,
 		setNXKeys,
+		getDelCalls,
+		deleteCalls,
 		async get(key: string) {
 			return store.get(key)?.value ?? null
 		},
@@ -17,7 +21,15 @@ function makeMockCache(seed: Record<string, string> = {}) {
 			store.set(key, { value, ttl: opts?.expirationTtl ?? 0 })
 		},
 		async delete(key: string) {
+			deleteCalls.push(key)
 			store.delete(key)
+		},
+		async getDel(key: string) {
+			getDelCalls.push(key)
+			const entry = store.get(key)
+			if (!entry) return null
+			store.delete(key)
+			return entry.value
 		},
 		async keys() {
 			return Array.from(store.keys())
@@ -216,6 +228,39 @@ describe("POST /auth/session", () => {
 		expect(json.data.displayName.length).toBeGreaterThan(0)
 		expect(json.data.keyId).toBe(keyId)
 		expect(cache.store.has(`challenge:${validNonce}`)).toBe(false)
+		expect(cache.getDelCalls).toEqual([`challenge:${validNonce}`])
+		expect(cache.deleteCalls).toEqual([])
+	})
+
+	it("consumes the challenge atomically so a replay returns CHALLENGE_INVALID", async () => {
+		const cache = makeMockCache({ [`challenge:${validNonce}`]: "1" })
+		const first = await buildBody({ nonce: validNonce, origin: "https://example.com" })
+		const second = await buildBody({ nonce: validNonce, origin: "https://example.com" })
+		const db = makeMockDB([
+			...registrationQueue(first.keyId, first.publicKey),
+			...registrationQueue(second.keyId, second.publicKey),
+		])
+		const env = makeEnvFull(db, cache)
+		const app = authRoutes(env)
+		const firstRes = await app.handle(
+			new Request("http://localhost/auth/session", {
+				method: "POST",
+				headers: { "content-type": "application/json", origin: "https://example.com" },
+				body: JSON.stringify(first.body),
+			})
+		)
+		expect(firstRes.status).toBe(200)
+		const secondRes = await app.handle(
+			new Request("http://localhost/auth/session", {
+				method: "POST",
+				headers: { "content-type": "application/json", origin: "https://example.com" },
+				body: JSON.stringify(second.body),
+			})
+		)
+		expect(secondRes.status).toBe(401)
+		const json = (await secondRes.json()) as { error: string }
+		expect(json.error).toBe("CHALLENGE_INVALID")
+		expect(cache.getDelCalls).toHaveLength(2)
 	})
 
 	it("rejects when the signed origin does not match the request Origin header", async () => {
@@ -281,6 +326,63 @@ describe("POST /auth/session", () => {
 		expect(res.status).toBe(403)
 		const json = (await res.json()) as { error: string }
 		expect(json.error).toBe("ORIGIN_MISMATCH")
+	})
+})
+
+describe("POST /auth/logout", () => {
+	it("deletes the session for a valid bearer token", async () => {
+		const cache = makeMockCache()
+		const ttl = 30 * 24 * 60 * 60
+		const issuedAt = Math.floor(Date.now() / 1000)
+		cache.store.set("session:tok-good", {
+			value: JSON.stringify({ keyId: "k".repeat(64), issuedAt, expiresAt: issuedAt + ttl }),
+			ttl,
+		})
+		const env = makeEnv(cache)
+		const app = authRoutes(env)
+		const res = await app.handle(
+			new Request("http://localhost/auth/logout", {
+				method: "POST",
+				headers: { authorization: "Bearer tok-good" },
+			})
+		)
+		expect(res.status).toBe(200)
+		const json = (await res.json()) as { success: boolean; data: { revoked: boolean } }
+		expect(json.success).toBe(true)
+		expect(json.data.revoked).toBe(true)
+		expect(cache.store.has("session:tok-good")).toBe(false)
+		expect(cache.deleteCalls).toContain("session:tok-good")
+	})
+
+	it("returns success even when the token is unknown so it does not leak validity", async () => {
+		const cache = makeMockCache()
+		const env = makeEnv(cache)
+		const app = authRoutes(env)
+		const res = await app.handle(
+			new Request("http://localhost/auth/logout", {
+				method: "POST",
+				headers: { authorization: "Bearer tok-missing" },
+			})
+		)
+		expect(res.status).toBe(200)
+		const json = (await res.json()) as { success: boolean; data: { revoked: boolean } }
+		expect(json.success).toBe(true)
+		expect(json.data.revoked).toBe(true)
+		expect(cache.deleteCalls).toContain("session:tok-missing")
+	})
+
+	it("returns 401 when no Authorization header is sent", async () => {
+		const cache = makeMockCache()
+		const env = makeEnv(cache)
+		const app = authRoutes(env)
+		const res = await app.handle(
+			new Request("http://localhost/auth/logout", { method: "POST" })
+		)
+		expect(res.status).toBe(401)
+		const json = (await res.json()) as { success: boolean; error: string }
+		expect(json.success).toBe(false)
+		expect(json.error).toBe("MISSING_TOKEN")
+		expect(cache.deleteCalls).toEqual([])
 	})
 })
 

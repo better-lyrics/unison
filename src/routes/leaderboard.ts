@@ -6,6 +6,7 @@ import {
 	getSongLeaderboard,
 	getSongRank,
 } from "@/db/leaderboard"
+import { getLastVoteAt } from "@/db/profile"
 import type { Env } from "@/types"
 import { generatePetName } from "@/utils/petname"
 import { readRateLimit } from "@/utils/read-rate-limit"
@@ -62,13 +63,30 @@ export const leaderboardRoutes = (env: Env) =>
 		.get(
 			"/users/:keyId",
 			async ({ params, env }) => {
-				const row = await getCuratorRank(env, params.keyId)
+				const [row, lastVoteAt] = await Promise.all([
+					getCuratorRank(env, params.keyId),
+					getLastVoteAt(env, params.keyId),
+				])
+				const displayName = generatePetName(params.keyId)
 				return row
 					? {
 							success: true,
-							data: { ranked: true, ...row, displayName: generatePetName(row.keyId) },
+							data: {
+								ranked: true,
+								...row,
+								displayName,
+								lastVoteAt,
+							},
 						}
-					: { success: true, data: { ranked: false } }
+					: {
+							success: true,
+							data: {
+								ranked: false,
+								keyId: params.keyId,
+								displayName,
+								lastVoteAt,
+							},
+						}
 			},
-			{ params: t.Object({ keyId: t.String() }) }
+			{ params: t.Object({ keyId: t.String({ pattern: "^[0-9a-fA-F]{64}$" }) }) }
 		)

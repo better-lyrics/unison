@@ -148,6 +148,10 @@ END $$;
 
 CREATE INDEX IF NOT EXISTS idx_lyrics_active ON lyrics(id) WHERE deleted_at IS NULL;
 
+CREATE INDEX IF NOT EXISTS idx_lyrics_submitter_created
+    ON lyrics(submitter_id, created_at DESC)
+    WHERE deleted_at IS NULL;
+
 -- Lyrics requests: demand signal for songs missing synced lyrics
 CREATE TABLE IF NOT EXISTS requested_songs (
     video_id TEXT PRIMARY KEY,

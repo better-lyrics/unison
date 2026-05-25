@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "start": "tsx src/index.ts",
+    "build": "pnpm -C web install --frozen-lockfile && pnpm -C web build",
     "db:migrate": "tsx src/db/migrate.ts",
     "db:migrate:prod": "DATABASE_URL=$DATABASE_URL tsx src/db/migrate.ts",
     "lint": "biome lint ./src",
@@ -17,7 +18,12 @@
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "submit": "tsx cli/submit.ts",
-    "admin:delete": "tsx scripts/admin-delete.ts"
+    "admin:delete": "tsx scripts/admin-delete.ts",
+    "web:dev": "pnpm -C web dev",
+    "web:build": "pnpm -C web build",
+    "web:typecheck": "pnpm -C web typecheck",
+    "web:lint": "pnpm -C web lint",
+    "web:test": "pnpm -C web test"
   },
   "dependencies": {
     "@axiomhq/js": "^1.4.0",

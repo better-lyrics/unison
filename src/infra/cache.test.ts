@@ -67,6 +67,23 @@ describe("KVCompat resilience", () => {
 		const kv = new KVCompat(broken("scan") as never)
 		expect(await kv.keys("foo:*")).toEqual([])
 	})
+
+	it("getDel returns null when redis throws", async () => {
+		const kv = new KVCompat(broken("getdel") as never)
+		expect(await kv.getDel("k")).toBeNull()
+	})
+})
+
+describe("KVCompat.getDel", () => {
+	it("returns the value and deletes the key atomically", async () => {
+		const redis = {
+			getdel: vi.fn(async (key: string) => (key === "challenge:abc" ? "1" : null)),
+		}
+		const kv = new KVCompat(redis as never)
+		expect(await kv.getDel("challenge:abc")).toBe("1")
+		expect(await kv.getDel("challenge:missing")).toBeNull()
+		expect(redis.getdel).toHaveBeenCalledWith("challenge:abc")
+	})
 })
 
 describe("KVCompat.keys", () => {

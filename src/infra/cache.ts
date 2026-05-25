@@ -58,6 +58,15 @@ export class KVCompat {
 		}
 	}
 
+	async getDel(key: string): Promise<string | null> {
+		try {
+			return await this.redis.getdel(key)
+		} catch (err) {
+			log.warn("cache getDel failed", { key, error: (err as Error).message })
+			return null
+		}
+	}
+
 	async keys(pattern: string): Promise<string[]> {
 		try {
 			const found: string[] = []

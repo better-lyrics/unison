@@ -171,22 +171,59 @@ describe("GET /leaderboard/songs/:videoId", () => {
 })
 
 describe("GET /leaderboard/users/:keyId", () => {
-	it("returns ranked: true with displayName when the user is on the board", async () => {
+	it("returns ranked: true with displayName and lastVoteAt when the user is on the board", async () => {
 		const keyId = "a".repeat(64)
 		const db = makeMockDB([
 			[{ key_id: keyId, reputation: 1.2, score: 5, submission_count: 2, total_upvotes: 8 }],
+			{ last_vote_at: 1700000123 },
 		])
 		const env = makeEnv(db)
 		const app = leaderboardRoutes(env)
 		const res = await app.handle(new Request(`http://localhost/leaderboard/users/${keyId}`))
 		expect(res.status).toBe(200)
 		const json = (await res.json()) as {
-			data: { ranked: boolean; keyId?: string; rank?: number; displayName?: string }
+			data: {
+				ranked: boolean
+				keyId?: string
+				rank?: number
+				displayName?: string
+				lastVoteAt?: number | null
+			}
 		}
 		expect(json.data.ranked).toBe(true)
 		expect(json.data.keyId).toBe(keyId)
 		expect(json.data.rank).toBe(1)
 		expect(json.data.displayName?.length).toBeGreaterThan(0)
+		expect(json.data.lastVoteAt).toBe(1700000123)
+	})
+
+	it("returns ranked: false with displayName and null lastVoteAt for an unknown user", async () => {
+		const keyId = "b".repeat(64)
+		const db = makeMockDB([[], { last_vote_at: null }])
+		const env = makeEnv(db)
+		const app = leaderboardRoutes(env)
+		const res = await app.handle(new Request(`http://localhost/leaderboard/users/${keyId}`))
+		expect(res.status).toBe(200)
+		const json = (await res.json()) as {
+			data: {
+				ranked: boolean
+				keyId?: string
+				displayName?: string
+				lastVoteAt?: number | null
+			}
+		}
+		expect(json.data.ranked).toBe(false)
+		expect(json.data.keyId).toBe(keyId)
+		expect(json.data.displayName?.length).toBeGreaterThan(0)
+		expect(json.data.lastVoteAt).toBeNull()
+	})
+
+	it("rejects a keyId that is not 64 hex characters", async () => {
+		const db = makeMockDB([])
+		const env = makeEnv(db)
+		const app = leaderboardRoutes(env)
+		const res = await app.handle(new Request("http://localhost/leaderboard/users/ab"))
+		expect(res.status).toBeGreaterThanOrEqual(400)
 	})
 })
 
