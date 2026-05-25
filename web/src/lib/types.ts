@@ -29,3 +29,7 @@ export interface CuratorsLeaderboardResponse {
 }
 
 export type ApiEnvelope<T> = { success: true; data: T } | { success: false; error: string }
+
+export type MyCuratorRankResponse =
+  | { ranked: false }
+  | ({ ranked: true } & CuratorLeaderboardEntry)

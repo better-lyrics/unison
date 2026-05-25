@@ -1,4 +1,9 @@
-import type { ApiEnvelope, CuratorsLeaderboardResponse, SongsLeaderboardResponse } from "./types"
+import type {
+  ApiEnvelope,
+  CuratorsLeaderboardResponse,
+  MyCuratorRankResponse,
+  SongsLeaderboardResponse,
+} from "./types"
 
 async function getJson<T>(path: string): Promise<T> {
   const res = await fetch(path)
@@ -14,4 +19,8 @@ export function fetchSongLeaderboard(): Promise<SongsLeaderboardResponse> {
 
 export function fetchCuratorLeaderboard(): Promise<CuratorsLeaderboardResponse> {
   return getJson<CuratorsLeaderboardResponse>("/leaderboard/users")
+}
+
+export function fetchMyCuratorRank(keyId: string): Promise<MyCuratorRankResponse> {
+  return getJson<MyCuratorRankResponse>(`/leaderboard/users/${encodeURIComponent(keyId)}`)
 }
