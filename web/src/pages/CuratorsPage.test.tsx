@@ -290,6 +290,109 @@ describe("CuratorsPage", () => {
     expect(selfRows).toHaveLength(1)
   })
 
+  it("shows the not-ranked hint when signed-in user is not on the list", async () => {
+    saveStoredSession(valid)
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockImplementation((url: string) => {
+        if (url === "/auth/me") {
+          return Promise.resolve(
+            jsonResponse({
+              success: true,
+              data: { keyId: ownKeyId, displayName: valid.displayName, expiresAt: valid.expiresAt },
+            }),
+          )
+        }
+        if (url === "/leaderboard/users") {
+          return Promise.resolve(
+            jsonResponse({
+              success: true,
+              data: {
+                curators: [
+                  {
+                    keyId: otherKeyId,
+                    displayName: "Other",
+                    reputation: 1,
+                    score: 9.9,
+                    submissionCount: 5,
+                    totalUpvotes: 12,
+                    rank: 1,
+                  },
+                ],
+              },
+            }),
+          )
+        }
+        if (url === `/leaderboard/users/${ownKeyId}`) {
+          return Promise.resolve(jsonResponse({ success: true, data: { ranked: false } }))
+        }
+        return Promise.reject(new Error(`unexpected url ${url}`))
+      }),
+    )
+    renderPage()
+    await waitFor(() => expect(screen.getByText("Other")).toBeTruthy())
+    expect(screen.getByText(/You haven't ranked yet/i)).toBeTruthy()
+  })
+
+  it("does not show the not-ranked hint when signed-out", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockImplementation((url: string) => {
+        if (url === "/leaderboard/users") {
+          return Promise.resolve(
+            jsonResponse({
+              success: true,
+              data: {
+                curators: [
+                  {
+                    keyId: otherKeyId,
+                    displayName: "Other",
+                    reputation: 1,
+                    score: 9.9,
+                    submissionCount: 5,
+                    totalUpvotes: 12,
+                    rank: 1,
+                  },
+                ],
+              },
+            }),
+          )
+        }
+        return Promise.reject(new Error(`unexpected url ${url}`))
+      }),
+    )
+    renderPage()
+    await waitFor(() => expect(screen.getByText("Other")).toBeTruthy())
+    expect(screen.queryByText(/You haven't ranked yet/i)).toBeNull()
+  })
+
+  it("shows the identity-aware empty state when signed-in and curators list is empty", async () => {
+    saveStoredSession(valid)
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockImplementation((url: string) => {
+        if (url === "/auth/me") {
+          return Promise.resolve(
+            jsonResponse({
+              success: true,
+              data: { keyId: ownKeyId, displayName: valid.displayName, expiresAt: valid.expiresAt },
+            }),
+          )
+        }
+        if (url === "/leaderboard/users") {
+          return Promise.resolve(jsonResponse({ success: true, data: { curators: [] } }))
+        }
+        if (url === `/leaderboard/users/${ownKeyId}`) {
+          return Promise.resolve(jsonResponse({ success: true, data: { ranked: false } }))
+        }
+        return Promise.reject(new Error(`unexpected url ${url}`))
+      }),
+    )
+    renderPage()
+    await waitFor(() => expect(screen.getByText("No curators yet")).toBeTruthy())
+    expect(screen.getByText(/Be the first by submitting lyrics from Better Lyrics/i)).toBeTruthy()
+  })
+
   it("does not append when the user is signed-in but not ranked", async () => {
     saveStoredSession(valid)
     vi.stubGlobal(
