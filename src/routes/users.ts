@@ -14,9 +14,9 @@ export const userRoutes = (env: Env) =>
 			"/:keyId/submissions",
 			async ({ params, query, env }) => {
 				const limit = query.limit ?? DEFAULT_LIMIT
-				const offset = query.cursor ?? 0
+				const cursor = query.cursor ?? null
 
-				const rows = await getSubmissionsByUser(env, params.keyId, limit + 1, offset)
+				const rows = await getSubmissionsByUser(env, params.keyId, limit + 1, cursor)
 
 				const hasMore = rows.length > limit
 				const submissions = hasMore ? rows.slice(0, limit) : rows
@@ -24,7 +24,7 @@ export const userRoutes = (env: Env) =>
 					submissions: typeof submissions
 					nextCursor?: number
 				} = { submissions }
-				if (hasMore) data.nextCursor = offset + limit
+				if (hasMore) data.nextCursor = submissions[submissions.length - 1].createdAt
 
 				return { success: true, data }
 			},

@@ -81,6 +81,7 @@ function rawRow(over: Partial<Record<string, unknown>> = {}) {
 		vote_count: 1,
 		confidence: "low",
 		created_at: 1700000000,
+		hidden: false,
 		...over,
 	}
 }
@@ -89,8 +90,8 @@ describe("GET /users/:keyId/submissions", () => {
 	it("returns submissions for a known user", async () => {
 		const db = makeMockDB([
 			[
-				rawRow({ id: 10, video_id: "vA", created_at: 1700000200 }),
-				rawRow({ id: 11, video_id: "vB", created_at: 1700000100 }),
+				rawRow({ id: 10, video_id: "vA", created_at: 1700000200, hidden: false }),
+				rawRow({ id: 11, video_id: "vB", created_at: 1700000100, hidden: true }),
 			],
 		])
 		const env = makeEnv(db)
@@ -100,13 +101,20 @@ describe("GET /users/:keyId/submissions", () => {
 		const json = (await res.json()) as {
 			success: boolean
 			data: {
-				submissions: Array<{ id: number; videoId: string; createdAt: number }>
+				submissions: Array<{
+					id: number
+					videoId: string
+					createdAt: number
+					hidden: boolean
+				}>
 				nextCursor?: number
 			}
 		}
 		expect(json.success).toBe(true)
 		expect(json.data.submissions.length).toBe(2)
 		expect(json.data.submissions[0].videoId).toBe("vA")
+		expect(json.data.submissions[0].hidden).toBe(false)
+		expect(json.data.submissions[1].hidden).toBe(true)
 		expect(json.data.nextCursor).toBeUndefined()
 	})
 
@@ -125,7 +133,7 @@ describe("GET /users/:keyId/submissions", () => {
 		expect(json.data.nextCursor).toBeUndefined()
 	})
 
-	it("sets nextCursor when limit+1 rows are returned", async () => {
+	it("sets nextCursor to the last kept row's created_at when limit+1 rows are returned", async () => {
 		const rows = Array.from({ length: 3 }, (_, i) =>
 			rawRow({ id: i + 1, video_id: `v${i + 1}`, created_at: 1700000000 - i })
 		)
@@ -138,8 +146,8 @@ describe("GET /users/:keyId/submissions", () => {
 			data: { submissions: unknown[]; nextCursor?: number }
 		}
 		expect(json.data.submissions.length).toBe(2)
-		expect(json.data.nextCursor).toBe(2)
-		expect(db.calls[0].params).toEqual(["k1", 3, 0])
+		expect(json.data.nextCursor).toBe(1700000000 - 1)
+		expect(db.calls[0].params).toEqual(["k1", 3])
 	})
 
 	it("omits nextCursor when fewer than limit+1 rows are returned", async () => {
@@ -156,20 +164,24 @@ describe("GET /users/:keyId/submissions", () => {
 		expect(json.data.nextCursor).toBeUndefined()
 	})
 
-	it("respects an explicit cursor offset", async () => {
-		const rows = Array.from({ length: 3 }, (_, i) => rawRow({ id: i + 10 }))
+	it("respects an explicit cursor and uses it as a created_at upper bound", async () => {
+		const rows = [
+			rawRow({ id: 10, created_at: 1699999900 }),
+			rawRow({ id: 11, created_at: 1699999800 }),
+			rawRow({ id: 12, created_at: 1699999700 }),
+		]
 		const db = makeMockDB([rows])
 		const env = makeEnv(db)
 		const app = userRoutes(env)
 		const res = await app.handle(
-			new Request("http://localhost/users/k1/submissions?limit=2&cursor=20")
+			new Request("http://localhost/users/k1/submissions?limit=2&cursor=1700000000")
 		)
 		expect(res.status).toBe(200)
 		const json = (await res.json()) as {
 			data: { submissions: unknown[]; nextCursor?: number }
 		}
-		expect(json.data.nextCursor).toBe(22)
-		expect(db.calls[0].params).toEqual(["k1", 3, 20])
+		expect(json.data.nextCursor).toBe(1699999800)
+		expect(db.calls[0].params).toEqual(["k1", 1700000000, 3])
 	})
 
 	it("rejects a negative cursor", async () => {

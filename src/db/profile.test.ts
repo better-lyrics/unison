@@ -108,6 +108,7 @@ describe("getSubmissionsByUser", () => {
 					vote_count: 4,
 					confidence: "medium",
 					created_at: 1700000111,
+					hidden: false,
 				},
 				{
 					id: 2,
@@ -123,11 +124,12 @@ describe("getSubmissionsByUser", () => {
 					vote_count: 1,
 					confidence: "low",
 					created_at: 1700000100,
+					hidden: true,
 				},
 			],
 		])
 		const env = makeEnv(db)
-		const result = await getSubmissionsByUser(env, "k1", 21, 0)
+		const result = await getSubmissionsByUser(env, "k1", 21, null)
 		expect(result.length).toBe(2)
 		expect(result[0]).toMatchObject({
 			id: 1,
@@ -143,16 +145,26 @@ describe("getSubmissionsByUser", () => {
 			voteCount: 4,
 			confidence: "medium",
 			createdAt: 1700000111,
+			hidden: false,
 		})
 		expect(result[1].album).toBeNull()
 		expect(result[1].language).toBeNull()
-		expect(db.calls[0].params).toEqual(["k1", 21, 0])
+		expect(result[1].hidden).toBe(true)
+		expect(db.calls[0].params).toEqual(["k1", 21])
 	})
 
 	it("returns an empty array when there are no submissions", async () => {
 		const db = makeMockDB([[]])
 		const env = makeEnv(db)
-		const result = await getSubmissionsByUser(env, "unknown", 21, 0)
+		const result = await getSubmissionsByUser(env, "unknown", 21, null)
 		expect(result).toEqual([])
+	})
+
+	it("passes the cursor as a created_at upper bound when provided", async () => {
+		const db = makeMockDB([[]])
+		const env = makeEnv(db)
+		await getSubmissionsByUser(env, "k1", 21, 1700000050)
+		expect(db.calls[0].params).toEqual(["k1", 1700000050, 21])
+		expect(db.calls[0].sql).toContain("l.created_at < ?")
 	})
 })

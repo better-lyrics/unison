@@ -1,3 +1,4 @@
+import { AUTO_HIDE_PREDICATE } from "@/db/lyrics"
 import type { Confidence, Env, LyricsFormat } from "@/types"
 
 export interface SubmissionRow {
@@ -14,6 +15,7 @@ export interface SubmissionRow {
 	voteCount: number
 	confidence: Confidence
 	createdAt: number
+	hidden: boolean
 }
 
 interface RawSubmissionRow {
@@ -30,6 +32,7 @@ interface RawSubmissionRow {
 	vote_count: number
 	confidence: Confidence
 	created_at: number
+	hidden: boolean
 }
 
 export async function getLastVoteAt(env: Env, keyId: string): Promise<number | null> {
@@ -50,19 +53,28 @@ export async function getSubmissionsByUser(
 	env: Env,
 	keyId: string,
 	limit: number,
-	offset: number
+	cursor: number | null
 ): Promise<SubmissionRow[]> {
+	const params: unknown[] = [keyId]
+	let where = "u.key_id = ? AND l.deleted_at IS NULL"
+	if (cursor !== null) {
+		where += " AND l.created_at < ?"
+		params.push(cursor)
+	}
+	params.push(limit)
+
 	const result = await env.DB.prepare(
 		`SELECT l.id, l.video_id, l.song, l.artist, l.album, l.duration,
 		        l.format, l.sync_type, l.language, l.effective_score,
-		        l.vote_count, l.confidence, l.created_at
+		        l.vote_count, l.confidence, l.created_at,
+		        ${AUTO_HIDE_PREDICATE} AS hidden
 		 FROM lyrics l
 		 JOIN users u ON u.id = l.submitter_id
-		 WHERE u.key_id = ? AND l.deleted_at IS NULL
+		 WHERE ${where}
 		 ORDER BY l.created_at DESC
-		 LIMIT ? OFFSET ?`
+		 LIMIT ?`
 	)
-		.bind(keyId, limit, offset)
+		.bind(...params)
 		.all<RawSubmissionRow>()
 
 	return result.results.map((r) => ({
@@ -79,5 +91,6 @@ export async function getSubmissionsByUser(
 		voteCount: Number(r.vote_count),
 		confidence: r.confidence,
 		createdAt: Number(r.created_at),
+		hidden: Boolean(r.hidden),
 	}))
 }
