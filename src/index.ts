@@ -18,6 +18,7 @@ import { feedRoutes } from "@/routes/feed"
 import { voteRoutes } from "@/routes/votes"
 import { requestRoutes } from "@/routes/requests"
 import { leaderboardRoutes } from "@/routes/leaderboard"
+import { userRoutes } from "@/routes/users"
 import { compatRoutes } from "@/routes/compat"
 
 const env = createEnv()
@@ -34,6 +35,7 @@ const API_PREFIXES = [
 	"/votes",
 	"/requests",
 	"/leaderboard",
+	"/users",
 	"/auth",
 	"/health",
 	"/getLyrics",
@@ -199,6 +201,7 @@ const app = new Elysia({ adapter: node() })
 	.use(voteRoutes(env))
 	.use(requestRoutes(env))
 	.use(leaderboardRoutes(env))
+	.use(userRoutes(env))
 	.use(authRoutes(env))
 	.listen(Number.parseInt(process.env.PORT || "3000", 10))
 
