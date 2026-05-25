@@ -5,10 +5,15 @@ import { EmptyState } from "@/components/EmptyState"
 import { LeaderboardSection } from "@/components/LeaderboardSection"
 import { LoadingPlaceholder } from "@/components/LoadingPlaceholder"
 import { useAsyncData } from "@/hooks/useAsyncData"
-import { fetchCuratorLeaderboard, fetchMyCuratorRank } from "@/lib/api"
-import type { CuratorLeaderboardEntry, MyCuratorRankResponse } from "@/lib/types"
+import { fetchCuratorLeaderboard, fetchUserRank } from "@/lib/api"
+import type { CuratorLeaderboardEntry, UserRankResponse } from "@/lib/types"
 
-const NOT_RANKED: MyCuratorRankResponse = { ranked: false }
+const NOT_RANKED: UserRankResponse = {
+  ranked: false,
+  keyId: "",
+  displayName: "",
+  lastVoteAt: null,
+}
 
 export function CuratorsPage() {
   const session = useSession()
@@ -17,7 +22,7 @@ export function CuratorsPage() {
 
   const myRankFetcher = useCallback(() => {
     if (!selfKeyId) return Promise.resolve(NOT_RANKED)
-    return fetchMyCuratorRank(selfKeyId)
+    return fetchUserRank(selfKeyId)
   }, [selfKeyId])
   const myRank = useAsyncData(myRankFetcher, selfKeyId ? `leaderboard:user:${selfKeyId}` : undefined)
 
@@ -44,7 +49,7 @@ export function CuratorsPage() {
     if (myRank.status !== "success" || !myRank.data.ranked) {
       return { list: top, appendedKeyId: null }
     }
-    const { ranked: _ranked, ...entry } = myRank.data
+    const { ranked: _ranked, lastVoteAt: _lastVoteAt, ...entry } = myRank.data
     if (top.some((c) => c.keyId === entry.keyId)) {
       return { list: top, appendedKeyId: null }
     }
@@ -52,17 +57,13 @@ export function CuratorsPage() {
   })()
 
   const signedIn = session.status === "signed-in"
-  const showNotRankedHint =
-    signedIn && myRank.status === "success" && !myRank.data.ranked && merged.list.length > 0
+  const showNotRankedHint = signedIn && myRank.status === "success" && !myRank.data.ranked && merged.list.length > 0
 
   return (
     <LeaderboardSection title="Curators" subtitle="Ranked by total reputation-weighted contribution score">
       {merged.list.length === 0 ? (
         signedIn ? (
-          <EmptyState
-            title="No curators yet"
-            hint="Be the first by submitting lyrics from Better Lyrics."
-          />
+          <EmptyState title="No curators yet" hint="Be the first by submitting lyrics from Better Lyrics." />
         ) : (
           <EmptyState title="No curators yet" />
         )

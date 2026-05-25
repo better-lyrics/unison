@@ -324,7 +324,17 @@ describe("CuratorsPage", () => {
           )
         }
         if (url === `/leaderboard/users/${ownKeyId}`) {
-          return Promise.resolve(jsonResponse({ success: true, data: { ranked: false } }))
+          return Promise.resolve(
+            jsonResponse({
+              success: true,
+              data: {
+                ranked: false,
+                keyId: ownKeyId,
+                displayName: valid.displayName,
+                lastVoteAt: null,
+              },
+            }),
+          )
         }
         return Promise.reject(new Error(`unexpected url ${url}`))
       }),
@@ -383,7 +393,17 @@ describe("CuratorsPage", () => {
           return Promise.resolve(jsonResponse({ success: true, data: { curators: [] } }))
         }
         if (url === `/leaderboard/users/${ownKeyId}`) {
-          return Promise.resolve(jsonResponse({ success: true, data: { ranked: false } }))
+          return Promise.resolve(
+            jsonResponse({
+              success: true,
+              data: {
+                ranked: false,
+                keyId: ownKeyId,
+                displayName: valid.displayName,
+                lastVoteAt: null,
+              },
+            }),
+          )
         }
         return Promise.reject(new Error(`unexpected url ${url}`))
       }),
@@ -427,7 +447,17 @@ describe("CuratorsPage", () => {
           )
         }
         if (url === `/leaderboard/users/${ownKeyId}`) {
-          return Promise.resolve(jsonResponse({ success: true, data: { ranked: false } }))
+          return Promise.resolve(
+            jsonResponse({
+              success: true,
+              data: {
+                ranked: false,
+                keyId: ownKeyId,
+                displayName: valid.displayName,
+                lastVoteAt: null,
+              },
+            }),
+          )
         }
         return Promise.reject(new Error(`unexpected url ${url}`))
       }),

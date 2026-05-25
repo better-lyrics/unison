@@ -1,8 +1,9 @@
 import type {
   ApiEnvelope,
   CuratorsLeaderboardResponse,
-  MyCuratorRankResponse,
   SongsLeaderboardResponse,
+  UserRankResponse,
+  UserSubmissionsResponse,
 } from "./types"
 
 async function getJson<T>(path: string): Promise<T> {
@@ -21,6 +22,11 @@ export function fetchCuratorLeaderboard(): Promise<CuratorsLeaderboardResponse> 
   return getJson<CuratorsLeaderboardResponse>("/leaderboard/users")
 }
 
-export function fetchMyCuratorRank(keyId: string): Promise<MyCuratorRankResponse> {
-  return getJson<MyCuratorRankResponse>(`/leaderboard/users/${encodeURIComponent(keyId)}`)
+export function fetchUserRank(keyId: string): Promise<UserRankResponse> {
+  return getJson<UserRankResponse>(`/leaderboard/users/${encodeURIComponent(keyId)}`)
+}
+
+export function fetchUserSubmissions(keyId: string, cursor?: number): Promise<UserSubmissionsResponse> {
+  const params = cursor !== undefined ? `?cursor=${cursor}` : ""
+  return getJson<UserSubmissionsResponse>(`/users/${encodeURIComponent(keyId)}/submissions${params}`)
 }
