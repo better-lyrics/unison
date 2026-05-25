@@ -62,12 +62,11 @@ export const authRoutes = (env: Env) =>
 			}
 
 			const challengeKey = `${CHALLENGE_PREFIX}${signedPayload.nonce}`
-			const exists = await env.CACHE.get(challengeKey)
-			if (!exists) {
+			const claimed = await env.CACHE.getDel(challengeKey)
+			if (!claimed) {
 				set.status = 401
 				return { success: false, error: "CHALLENGE_INVALID" }
 			}
-			await env.CACHE.delete(challengeKey)
 
 			const session = await createSession(env, keyId)
 			return {
