@@ -1,15 +1,23 @@
 import { dicebearThumbsDataUri } from "@/lib/avatar"
+import { cn } from "@/lib/cn"
 import { formatRank, formatVotes } from "@/lib/format"
 import type { CuratorLeaderboardEntry } from "@/lib/types"
 
 interface CuratorRowProps {
   entry: CuratorLeaderboardEntry
+  isSelf?: boolean
 }
 
-export function CuratorRow({ entry }: CuratorRowProps) {
+export function CuratorRow({ entry, isSelf = false }: CuratorRowProps) {
   const avatar = dicebearThumbsDataUri(entry.keyId)
   return (
-    <li className="flex items-center gap-4 rounded-lg border border-unison-border bg-unison-bg-elevated px-4 py-3 transition-colors hover:border-unison-border-strong">
+    <li
+      data-self={isSelf || undefined}
+      className={cn(
+        "flex items-center gap-4 rounded-lg border bg-unison-bg-elevated px-4 py-3 transition-colors hover:border-unison-border-strong",
+        isSelf ? "border-unison-border-strong" : "border-unison-border",
+      )}
+    >
       <span className="shrink-0 font-mono text-xs tabular-nums text-unison-text-muted">{formatRank(entry.rank)}</span>
       <img
         src={avatar}
@@ -18,7 +26,14 @@ export function CuratorRow({ entry }: CuratorRowProps) {
         loading="lazy"
       />
       <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-medium text-unison-text">{entry.displayName}</p>
+        <p className="flex items-center gap-2 truncate text-sm font-medium text-unison-text">
+          <span className="truncate">{entry.displayName}</span>
+          {isSelf ? (
+            <span className="shrink-0 rounded bg-unison-bg-hover px-1.5 py-0.5 text-[10px] uppercase tracking-wider text-unison-text-secondary">
+              you
+            </span>
+          ) : null}
+        </p>
         <p className="truncate font-mono text-[11px] text-unison-text-muted">{entry.keyId.slice(0, 16)}…</p>
       </div>
       <div className="hidden text-right sm:block">
