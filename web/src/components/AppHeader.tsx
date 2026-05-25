@@ -14,12 +14,12 @@ const tabClass = ({ isActive }: { isActive: boolean }) =>
 export function AppHeader() {
   return (
     <header className="sticky top-0 z-10 border-b border-unison-border bg-unison-bg/80 backdrop-blur">
-      <div className="mx-auto flex max-w-5xl items-center gap-6 px-6 py-4">
-        <div className="flex items-center gap-2">
+      <div className="mx-auto grid max-w-5xl grid-cols-[1fr_auto_1fr] items-center gap-6 px-6 py-4">
+        <div className="flex items-center gap-2 justify-self-start">
           <BetterLyricsLogo size={20} />
           <span className="text-base font-semibold tracking-tight">Unison</span>
         </div>
-        <nav className="flex flex-1 items-center justify-center gap-1">
+        <nav className="flex items-center gap-1 justify-self-center">
           <NavLink to="/" end className={tabClass}>
             Songs
           </NavLink>
@@ -30,7 +30,9 @@ export function AppHeader() {
             About
           </NavLink>
         </nav>
-        <SignInControl />
+        <div className="justify-self-end">
+          <SignInControl />
+        </div>
       </div>
     </header>
   )

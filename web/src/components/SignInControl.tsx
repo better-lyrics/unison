@@ -1,3 +1,4 @@
+import { IconLogout } from "@tabler/icons-react"
 import { useEffect, useState } from "react"
 import { useSession } from "@/auth/useSession"
 import { dicebearThumbsDataUri } from "@/lib/avatar"
@@ -33,23 +34,38 @@ export function SignInControl() {
         <button
           type="button"
           onClick={session.signOut}
-          className="text-xs text-unison-text-muted transition-colors hover:text-unison-text"
+          aria-label="Sign out"
+          className="cursor-pointer rounded-md p-1 text-unison-text-muted transition-colors hover:bg-unison-bg-hover hover:text-unison-text"
         >
-          Sign out
+          <IconLogout className="size-4" stroke={1.5} />
         </button>
       </div>
     )
   }
 
-  if (extensionReady !== true) {
-    return <div data-state="signed-out" className="h-8 w-44" />
+  if (extensionReady === null) {
+    return <div data-state="loading" className="h-8 w-44" />
+  }
+
+  if (extensionReady === false) {
+    return (
+      <a
+        href="https://betterlyrics.org"
+        target="_blank"
+        rel="noopener noreferrer"
+        data-state="no-extension"
+        className="text-sm text-unison-text-secondary transition-colors hover:text-unison-text"
+      >
+        Get Better Lyrics
+      </a>
+    )
   }
 
   return (
     <button
       type="button"
       onClick={session.signIn}
-      className="rounded-md bg-unison-bg-elevated px-3 py-1.5 text-sm font-medium text-unison-text transition-colors hover:bg-unison-bg-hover"
+      className="cursor-pointer rounded-md bg-unison-bg-elevated px-3 py-1.5 text-sm font-medium text-unison-text transition-colors hover:bg-unison-bg-hover"
       data-state="signed-out"
     >
       Sign in with Better Lyrics

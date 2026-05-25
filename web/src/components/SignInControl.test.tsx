@@ -22,14 +22,16 @@ afterEach(() => {
 })
 
 describe("SignInControl", () => {
-  it("hides the sign-in button when the extension is not available", async () => {
+  it("shows a Get Better Lyrics link when the extension is not available", async () => {
     const { container } = render(
       <AuthProvider>
         <SignInControl />
       </AuthProvider>,
     )
-    await waitFor(() => expect(container.querySelector('[data-state="signed-out"]')).toBeTruthy())
+    await waitFor(() => expect(container.querySelector('[data-state="no-extension"]')).toBeTruthy())
     expect(screen.queryByRole("button", { name: /sign in/i })).toBeNull()
+    const link = screen.getByRole("link", { name: /get better lyrics/i })
+    expect(link.getAttribute("href")).toBe("https://betterlyrics.org")
   })
 
   it("shows the sign-in button when the extension is available", async () => {
