@@ -23,7 +23,7 @@ export function SignInControl() {
 
   if (session.status === "signed-in") {
     return (
-      <div className="flex items-center gap-2" data-state="signed-in">
+      <div className="flex items-center gap-2" data-state="signed-in" aria-label={session.identity.displayName}>
         <img
           src={dicebearThumbsDataUri(session.identity.keyId)}
           alt=""
@@ -42,7 +42,7 @@ export function SignInControl() {
   }
 
   if (extensionReady !== true) {
-    return <div data-state="signed-out" />
+    return <div data-state="signed-out" className="h-8 w-44" />
   }
 
   return (

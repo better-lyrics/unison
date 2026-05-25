@@ -1,4 +1,4 @@
-import { cleanup, render, screen, waitFor } from "@testing-library/react"
+import { act, cleanup, render, screen, waitFor } from "@testing-library/react"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { AuthProvider } from "@/auth/AuthProvider"
 import { saveStoredSession, type StoredSession } from "@/lib/auth"
@@ -92,5 +92,73 @@ describe("SignInControl", () => {
       </AuthProvider>,
     )
     await waitFor(() => expect(screen.getByRole("button", { name: /sign in/i })).toBeTruthy())
+  })
+
+  it("calls the sign-in flow when the button is clicked", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ success: true, data: { nonce: "n1", expiresAt: 1 } }), { status: 200 }),
+      )
+      .mockResolvedValueOnce(new Response(JSON.stringify({ success: true, data: valid }), { status: 200 }))
+    vi.stubGlobal("fetch", fetchMock)
+    vi.stubGlobal("chrome", {
+      runtime: {
+        async sendMessage(_id: string, msg: { type: string }) {
+          if (msg.type === "bl-auth-request") {
+            return { ok: true, signedBody: { payload: {}, signature: "", publicKey: {} } }
+          }
+          return { ok: true }
+        },
+      },
+    })
+    render(
+      <AuthProvider>
+        <SignInControl />
+      </AuthProvider>,
+    )
+    const button = await screen.findByRole("button", { name: /sign in/i })
+    await act(async () => {
+      button.click()
+    })
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith("/auth/challenge"))
+    await waitFor(() => expect(screen.getByText(valid.displayName)).toBeTruthy())
+  })
+
+  it("calls signOut when the sign-out button is clicked", async () => {
+    saveStoredSession(valid)
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            success: true,
+            data: { keyId: valid.keyId, displayName: valid.displayName, expiresAt: valid.expiresAt },
+          }),
+          { status: 200 },
+        ),
+      ),
+    )
+    render(
+      <AuthProvider>
+        <SignInControl />
+      </AuthProvider>,
+    )
+    const signOutButton = await screen.findByRole("button", { name: /sign out/i })
+    await act(async () => {
+      signOutButton.click()
+    })
+    await waitFor(() => expect(localStorage.getItem("unison.session.v1")).toBeNull())
+  })
+
+  it("renders the loading skeleton on initial render", () => {
+    saveStoredSession(valid)
+    vi.stubGlobal("fetch", vi.fn().mockReturnValue(new Promise(() => {})))
+    const { container } = render(
+      <AuthProvider>
+        <SignInControl />
+      </AuthProvider>,
+    )
+    expect(container.querySelector('[data-state="loading"]')).toBeTruthy()
   })
 })
