@@ -65,7 +65,9 @@ export function UserProfileView({ keyId, title = "Profile" }: UserProfileViewPro
           <div className="min-w-0 flex-1 space-y-1">
             <p className="text-lg font-semibold text-unison-text">{data.displayName}</p>
             <div className="flex items-center gap-2">
-              <code className="truncate font-mono text-xs text-unison-text-muted">{data.keyId}</code>
+              <code title={data.keyId} className="font-mono text-xs text-unison-text-muted">
+                {`${data.keyId.slice(0, 6)}…${data.keyId.slice(-6)}`}
+              </code>
               <button
                 type="button"
                 onClick={copyKey}

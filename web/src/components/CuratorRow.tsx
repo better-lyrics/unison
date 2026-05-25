@@ -38,7 +38,9 @@ export function CuratorRow({ entry, isSelf = false, appended = false }: CuratorR
               </span>
             ) : null}
           </p>
-          <p className="truncate font-mono text-[11px] text-unison-text-muted">{entry.keyId.slice(0, 16)}…</p>
+          <p title={entry.keyId} className="truncate font-mono text-[11px] text-unison-text-muted">
+            {`${entry.keyId.slice(0, 6)}…${entry.keyId.slice(-6)}`}
+          </p>
         </div>
         <div className="hidden text-right sm:block">
           <p className="font-mono text-sm text-unison-text">{entry.submissionCount}</p>
