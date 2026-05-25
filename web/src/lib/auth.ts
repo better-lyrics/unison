@@ -66,8 +66,14 @@ export function clearStoredSession(): void {
 }
 
 async function unwrap<T>(res: Response): Promise<T> {
-  const envelope = (await res.json()) as ApiEnvelope<T>
+  let envelope: ApiEnvelope<T>
+  try {
+    envelope = (await res.json()) as ApiEnvelope<T>
+  } catch {
+    throw new Error(`HTTP ${res.status}`)
+  }
   if (!envelope.success) throw new Error(envelope.error)
+  if (!res.ok) throw new Error(`HTTP ${res.status}`)
   return envelope.data
 }
 
@@ -89,6 +95,5 @@ export async function fetchMe(token: string): Promise<Identity> {
   const res = await fetch("/auth/me", {
     headers: { authorization: `Bearer ${token}` },
   })
-  if (!res.ok) throw new Error(`HTTP ${res.status}`)
   return unwrap<Identity>(res)
 }

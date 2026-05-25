@@ -1,4 +1,3 @@
-// web/src/lib/auth.test.ts
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import {
   clearStoredSession,
@@ -117,10 +116,32 @@ describe("fetchMe", () => {
     })
   })
 
-  it("throws when the response status is not ok", async () => {
+  it("surfaces envelope.error for a 401 with a JSON envelope", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(
       new Response(JSON.stringify({ success: false, error: "INVALID_TOKEN" }), { status: 401 }),
     ))
-    await expect(fetchMe("bad")).rejects.toThrow()
+    await expect(fetchMe("bad")).rejects.toThrow("INVALID_TOKEN")
+  })
+
+  it("throws HTTP <status> when a failure response has no JSON envelope", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(
+      new Response("<html>502</html>", { status: 502, headers: { "content-type": "text/html" } }),
+    ))
+    await expect(fetchMe("anything")).rejects.toThrow("HTTP 502")
+  })
+})
+
+describe("network failure propagation", () => {
+  it("fetchChallenge propagates a fetch rejection", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new TypeError("Failed to fetch")))
+    await expect(fetchChallenge()).rejects.toThrow("Failed to fetch")
+  })
+  it("postSession propagates a fetch rejection", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new TypeError("Failed to fetch")))
+    await expect(postSession({ payload: {}, signature: "", publicKey: {} })).rejects.toThrow("Failed to fetch")
+  })
+  it("fetchMe propagates a fetch rejection", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new TypeError("Failed to fetch")))
+    await expect(fetchMe("tok")).rejects.toThrow("Failed to fetch")
   })
 })
