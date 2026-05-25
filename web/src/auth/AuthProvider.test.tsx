@@ -17,6 +17,7 @@ function Probe() {
     <>
       <span data-testid="status">{session.status}</span>
       {session.status === "signed-in" ? <span data-testid="name">{session.identity.displayName}</span> : null}
+      {session.status === "error" ? <span data-testid="error">{session.error.message}</span> : null}
       {session.status === "signed-out" || session.status === "error" ? (
         <button type="button" onClick={() => session.signIn()}>
           sign-in
@@ -153,6 +154,48 @@ describe("AuthProvider signIn flow", () => {
       screen.getByText("sign-in").click()
     })
     await waitFor(() => expect(screen.getByTestId("status").textContent).toBe("error"))
+    expect(screen.getByTestId("error").textContent).toBe("USER_CANCELLED")
+  })
+
+  it("retries from error and lands in signed-in", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ success: true, data: { nonce: "n1", expiresAt: 1 } }), { status: 200 }),
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ success: true, data: { nonce: "n2", expiresAt: 2 } }), { status: 200 }),
+      )
+      .mockResolvedValueOnce(new Response(JSON.stringify({ success: true, data: valid }), { status: 200 }))
+    vi.stubGlobal("fetch", fetchMock)
+    let cancelled = true
+    vi.stubGlobal("chrome", {
+      runtime: {
+        async sendMessage(_id: string, msg: { type: string }) {
+          if (msg.type !== "bl-auth-request") return { ok: true }
+          if (cancelled) {
+            cancelled = false
+            return { ok: false, reason: "USER_CANCELLED" }
+          }
+          return { ok: true, signedBody: { payload: {}, signature: "", publicKey: {} } }
+        },
+      },
+    })
+    render(
+      <AuthProvider>
+        <Probe />
+      </AuthProvider>,
+    )
+    await waitFor(() => expect(screen.getByText("sign-in")).toBeTruthy())
+    await act(async () => {
+      screen.getByText("sign-in").click()
+    })
+    await waitFor(() => expect(screen.getByTestId("status").textContent).toBe("error"))
+    await act(async () => {
+      screen.getByText("sign-in").click()
+    })
+    await waitFor(() => expect(screen.getByTestId("status").textContent).toBe("signed-in"))
+    expect(screen.getByTestId("name").textContent).toBe(valid.displayName)
   })
 })
 

@@ -47,7 +47,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     fetchMe(stored.sessionToken).then(
       (identity) => {
         if (cancelled) return
-        saveStoredSession({ ...stored, ...identity })
+        saveStoredSession({ sessionToken: stored.sessionToken, ...identity })
         setPhase({ kind: "signed-in", identity })
       },
       () => {
