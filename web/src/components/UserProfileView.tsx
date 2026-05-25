@@ -91,7 +91,7 @@ export function UserProfileView({ keyId, title = "Profile" }: UserProfileViewPro
         ) : (
           <EmptyState
             title="No leaderboard activity yet"
-            hint="Submit lyrics via Better Lyrics to start showing up on the curator board."
+            hint="Submit lyrics via Better Lyrics to start showing up on the leaderboard."
           />
         )}
 

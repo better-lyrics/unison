@@ -23,8 +23,8 @@ export function AppHeader() {
           <NavLink to="/" end className={tabClass}>
             Songs
           </NavLink>
-          <NavLink to="/curators" className={tabClass}>
-            Curators
+          <NavLink to="/leaderboard" className={tabClass}>
+            Leaderboard
           </NavLink>
           <NavLink to="/about" className={tabClass}>
             About

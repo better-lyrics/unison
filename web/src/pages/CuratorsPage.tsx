@@ -34,14 +34,14 @@ export function CuratorsPage() {
 
   if (status === "loading" || (selfKeyId !== null && myRank.status === "loading")) {
     return (
-      <LeaderboardSection title="Curators">
+      <LeaderboardSection title="Leaderboard">
         <LoadingPlaceholder />
       </LeaderboardSection>
     )
   }
 
   if (status === "error") {
-    return <EmptyState title="Could not load curators" hint={error.message} />
+    return <EmptyState title="Could not load leaderboard" hint={error.message} />
   }
 
   const merged: { list: CuratorLeaderboardEntry[]; appendedKeyId: string | null } = (() => {
@@ -60,12 +60,12 @@ export function CuratorsPage() {
   const showNotRankedHint = signedIn && myRank.status === "success" && !myRank.data.ranked && merged.list.length > 0
 
   return (
-    <LeaderboardSection title="Curators" subtitle="Ranked by total reputation-weighted contribution score">
+    <LeaderboardSection title="Leaderboard" subtitle="Ranked by total reputation-weighted contribution score">
       {merged.list.length === 0 ? (
         signedIn ? (
-          <EmptyState title="No curators yet" hint="Be the first by submitting lyrics from Better Lyrics." />
+          <EmptyState title="No one ranked yet" hint="Be the first by submitting lyrics from Better Lyrics." />
         ) : (
-          <EmptyState title="No curators yet" />
+          <EmptyState title="No one ranked yet" />
         )
       ) : (
         <>
