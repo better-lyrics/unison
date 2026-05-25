@@ -71,4 +71,9 @@ describe("requestSignedAssertion", () => {
     })
     await expect(requestSignedAssertion("n", "https://x.test")).rejects.toThrow("EXTENSION_UNAVAILABLE")
   })
+
+  it("throws SIGN_FAILED when reply is an object missing ok and reason", async () => {
+    installChromeMock(async () => ({}))
+    await expect(requestSignedAssertion("n", "https://x.test")).rejects.toThrow("SIGN_FAILED")
+  })
 })

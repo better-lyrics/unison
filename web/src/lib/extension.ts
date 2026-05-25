@@ -25,9 +25,7 @@ export async function isExtensionAvailable(): Promise<boolean> {
   }
 }
 
-type AuthResponse =
-  | { ok: true; signedBody: SignedBody }
-  | { ok: false; reason: string }
+type AuthResponse = { ok: true; signedBody: SignedBody } | { ok: false; reason: string }
 
 export async function requestSignedAssertion(nonce: string, origin: string): Promise<SignedBody> {
   const runtime = getRuntime()
