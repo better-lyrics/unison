@@ -20,6 +20,10 @@ html, body, #root {
   height: 100%;
 }
 
+html {
+  scrollbar-gutter: stable;
+}
+
 body {
   background-color: var(--color-unison-bg);
   color: var(--color-unison-text);
