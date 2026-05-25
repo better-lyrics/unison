@@ -19,7 +19,7 @@ export function MePage() {
 		() => (keyId ? fetchMyCuratorRank(keyId) : Promise.resolve(NOT_RANKED)),
 		[keyId],
 	)
-	const rank = useAsyncData(fetcher)
+	const rank = useAsyncData(fetcher, keyId ? `leaderboard:user:${keyId}` : undefined)
 	const [copied, setCopied] = useState(false)
 
 	const copyKey = async () => {

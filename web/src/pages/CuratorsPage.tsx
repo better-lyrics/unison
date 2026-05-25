@@ -12,14 +12,14 @@ const NOT_RANKED: MyCuratorRankResponse = { ranked: false }
 
 export function CuratorsPage() {
   const session = useSession()
-  const { status, data, error } = useAsyncData(fetchCuratorLeaderboard)
+  const { status, data, error } = useAsyncData(fetchCuratorLeaderboard, "leaderboard:curators")
   const selfKeyId = session.status === "signed-in" ? session.identity.keyId : null
 
   const myRankFetcher = useCallback(() => {
     if (!selfKeyId) return Promise.resolve(NOT_RANKED)
     return fetchMyCuratorRank(selfKeyId)
   }, [selfKeyId])
-  const myRank = useAsyncData(myRankFetcher)
+  const myRank = useAsyncData(myRankFetcher, selfKeyId ? `leaderboard:user:${selfKeyId}` : undefined)
 
   useEffect(() => {
     if (myRank.status === "error") {

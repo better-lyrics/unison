@@ -2,6 +2,7 @@ import { cleanup, render, screen, waitFor } from "@testing-library/react"
 import { MemoryRouter } from "react-router-dom"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { AuthProvider } from "@/auth/AuthProvider"
+import { clearAsyncDataCache } from "@/hooks/useAsyncData"
 import { type StoredSession, saveStoredSession } from "@/lib/auth"
 import { MePage } from "./MePage"
 
@@ -24,6 +25,7 @@ function renderPage() {
 }
 
 beforeEach(() => {
+	clearAsyncDataCache()
 	localStorage.clear()
 	vi.unstubAllGlobals()
 })
@@ -31,6 +33,7 @@ afterEach(() => {
 	cleanup()
 	localStorage.clear()
 	vi.unstubAllGlobals()
+	clearAsyncDataCache()
 })
 
 describe("MePage", () => {

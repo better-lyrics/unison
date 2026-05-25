@@ -5,31 +5,45 @@ type State<T> =
   | { status: "success"; data: T; error: undefined }
   | { status: "error"; data: undefined; error: Error }
 
-/** `fetcher` must be referentially stable: a module-level function, or wrapped in useCallback. */
-export function useAsyncData<T>(fetcher: () => Promise<T>): State<T> {
-  const [state, setState] = useState<State<T>>({ status: "loading", data: undefined, error: undefined })
+const cache = new Map<string, unknown>()
+
+export function clearAsyncDataCache(): void {
+  cache.clear()
+}
+
+export function useAsyncData<T>(fetcher: () => Promise<T>, cacheKey?: string): State<T> {
+  const cached = cacheKey !== undefined ? (cache.get(cacheKey) as T | undefined) : undefined
+  const [state, setState] = useState<State<T>>(
+    cached !== undefined
+      ? { status: "success", data: cached, error: undefined }
+      : { status: "loading", data: undefined, error: undefined },
+  )
 
   useEffect(() => {
     let cancelled = false
-    setState({ status: "loading", data: undefined, error: undefined })
+    if (cacheKey === undefined || !cache.has(cacheKey)) {
+      setState({ status: "loading", data: undefined, error: undefined })
+    }
     fetcher().then(
       (data) => {
-        if (!cancelled) setState({ status: "success", data, error: undefined })
+        if (cancelled) return
+        if (cacheKey !== undefined) cache.set(cacheKey, data)
+        setState({ status: "success", data, error: undefined })
       },
       (err: unknown) => {
-        if (!cancelled) {
-          setState({
-            status: "error",
-            data: undefined,
-            error: err instanceof Error ? err : new Error(String(err)),
-          })
+        if (cancelled) return
+        const error = err instanceof Error ? err : new Error(String(err))
+        if (cacheKey !== undefined && cache.has(cacheKey)) {
+          console.error(`useAsyncData revalidation failed for ${cacheKey}`, error)
+          return
         }
+        setState({ status: "error", data: undefined, error })
       },
     )
     return () => {
       cancelled = true
     }
-  }, [fetcher])
+  }, [fetcher, cacheKey])
 
   return state
 }

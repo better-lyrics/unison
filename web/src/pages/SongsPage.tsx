@@ -6,7 +6,7 @@ import { useAsyncData } from "@/hooks/useAsyncData"
 import { fetchSongLeaderboard } from "@/lib/api"
 
 export function SongsPage() {
-  const { status, data, error } = useAsyncData(fetchSongLeaderboard)
+  const { status, data, error } = useAsyncData(fetchSongLeaderboard, "leaderboard:songs")
 
   if (status === "loading") {
     return (
