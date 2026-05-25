@@ -202,9 +202,7 @@ describe("GET /users/:keyId/submissions", () => {
 		const db = makeMockDB([[]])
 		const env = makeEnv(db)
 		const app = userRoutes(env)
-		const res = await app.handle(
-			new Request(`http://localhost/users/${KEY}/submissions?limit=100`)
-		)
+		const res = await app.handle(new Request(`http://localhost/users/${KEY}/submissions?limit=100`))
 		expect(res.status).toBeGreaterThanOrEqual(400)
 	})
 

@@ -68,11 +68,10 @@ function makeEnv(db: ReturnType<typeof makeMockDB>): Env {
 }
 
 async function generateKeyPair() {
-	return await crypto.subtle.generateKey(
-		{ name: "ECDSA", namedCurve: "P-256" },
-		true,
-		["sign", "verify"]
-	)
+	return await crypto.subtle.generateKey({ name: "ECDSA", namedCurve: "P-256" }, true, [
+		"sign",
+		"verify",
+	])
 }
 
 type GeneratedKeyPair = Awaited<ReturnType<typeof generateKeyPair>>

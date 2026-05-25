@@ -128,8 +128,7 @@ export async function getSongRank(
 		config.requests.leaderboard.rankScanLimit
 	)
 	const hit =
-		mostWanted.find((r) => r.videoId === videoId) ??
-		needsFixing.find((r) => r.videoId === videoId)
+		mostWanted.find((r) => r.videoId === videoId) ?? needsFixing.find((r) => r.videoId === videoId)
 	return hit ? { section: hit.section, rank: hit.rank, demand: hit.demand } : null
 }
 

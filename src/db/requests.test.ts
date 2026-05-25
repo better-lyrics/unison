@@ -83,12 +83,7 @@ describe("createRequest", () => {
 	})
 
 	it("returns created with demand when the request is newly inserted", async () => {
-		const db = makeMockDB([
-			null,
-			null,
-			{ id: 10 },
-			{ demand: 2.5, request_count: 3 },
-		])
+		const db = makeMockDB([null, null, { id: 10 }, { demand: 2.5, request_count: 3 }])
 		const env = makeEnv(db)
 		const result = await createRequest(env, {
 			videoId: "v1",
@@ -103,12 +98,7 @@ describe("createRequest", () => {
 	})
 
 	it("returns already_requested when the unique constraint blocks the insert", async () => {
-		const db = makeMockDB([
-			null,
-			null,
-			null,
-			{ demand: 1.0, request_count: 1 },
-		])
+		const db = makeMockDB([null, null, null, { demand: 1.0, request_count: 1 }])
 		const env = makeEnv(db)
 		const result = await createRequest(env, {
 			videoId: "v1",

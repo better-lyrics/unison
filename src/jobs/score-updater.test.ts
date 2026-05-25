@@ -1,7 +1,12 @@
 import type { Env } from "@/types"
 import { describe, expect, it, vi } from "vitest"
 import { config } from "@/config"
-import { calculateScore, recalculateScore, updateReputations, updateScores } from "@/jobs/score-updater"
+import {
+	calculateScore,
+	recalculateScore,
+	updateReputations,
+	updateScores,
+} from "@/jobs/score-updater"
 
 vi.mock("@/db/lyrics", () => ({
 	invalidateCache: vi.fn(() => Promise.resolve()),
@@ -206,7 +211,10 @@ describe("updateReputations", () => {
 })
 
 describe("soft-delete handling", () => {
-	function createMockDB(queue: unknown[]): { db: Env["DB"]; calls: { sql: string; params: unknown[] }[] } {
+	function createMockDB(queue: unknown[]): {
+		db: Env["DB"]
+		calls: { sql: string; params: unknown[] }[]
+	} {
 		const calls: { sql: string; params: unknown[] }[] = []
 		const db = {
 			prepare(sql: string) {
@@ -258,7 +266,9 @@ describe("soft-delete handling", () => {
 
 		await updateScores(env)
 
-		const staleSql = calls.find((c) => c.sql.includes("staleLyrics") || c.sql.includes("score_updated_at IS NULL"))
+		const staleSql = calls.find(
+			(c) => c.sql.includes("staleLyrics") || c.sql.includes("score_updated_at IS NULL")
+		)
 		expect(staleSql).toBeDefined()
 		const occurrences = (staleSql?.sql.match(/deleted_at\s+IS\s+NULL/gi) ?? []).length
 		expect(occurrences).toBeGreaterThanOrEqual(2)

@@ -117,10 +117,7 @@ function detectTtmlSyncType(ttml: string): "richsync" | "linesync" | "plain" {
 	}
 
 	function visitParagraph(pChildren: unknown[], pAttrs: ParsedNode | undefined): void {
-		if (
-			pAttrs &&
-			(typeof pAttrs["@_begin"] === "string" || typeof pAttrs["@_end"] === "string")
-		) {
+		if (pAttrs && (typeof pAttrs["@_begin"] === "string" || typeof pAttrs["@_end"] === "string")) {
 			hasLineTiming = true
 		}
 		for (const node of pChildren) {
