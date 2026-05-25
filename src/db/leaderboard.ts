@@ -49,7 +49,7 @@ async function queryMostWanted(env: Env, limit: number): Promise<MostWantedRow[]
 		       AND NOT ${AUTO_HIDE_PREDICATE}
 		   )
 		 GROUP BY rs.video_id, rs.song, rs.artist, rs.thumbnail_url
-		 ORDER BY demand DESC
+		 ORDER BY demand DESC, rs.video_id ASC
 		 LIMIT ?`
 	)
 		.bind(windowCutoff(), limit)
@@ -77,7 +77,7 @@ async function queryNeedsFixing(env: Env, limit: number): Promise<NeedsFixingRow
 		 LEFT JOIN requested_songs rs ON rs.video_id = ts.video_id
 		 GROUP BY ts.video_id, ts.song, ts.artist, rs.thumbnail_url
 		 HAVING COUNT(r.id) >= ?
-		 ORDER BY demand DESC
+		 ORDER BY demand DESC, ts.video_id ASC
 		 LIMIT ?`
 	)
 		.bind(windowCutoff(), config.requests.needsFixingReportThreshold, limit)
@@ -169,7 +169,7 @@ export async function getCuratorLeaderboard(
 		   GROUP BY submitter_id
 		 ) agg
 		 JOIN users u ON u.id = agg.submitter_id
-		 ORDER BY agg.score DESC
+		 ORDER BY agg.score DESC, u.key_id ASC
 		 LIMIT ?`
 	)
 		.bind(limit)
