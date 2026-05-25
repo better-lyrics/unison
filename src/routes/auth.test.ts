@@ -329,6 +329,63 @@ describe("POST /auth/session", () => {
 	})
 })
 
+describe("POST /auth/logout", () => {
+	it("deletes the session for a valid bearer token", async () => {
+		const cache = makeMockCache()
+		const ttl = 30 * 24 * 60 * 60
+		const issuedAt = Math.floor(Date.now() / 1000)
+		cache.store.set("session:tok-good", {
+			value: JSON.stringify({ keyId: "k".repeat(64), issuedAt, expiresAt: issuedAt + ttl }),
+			ttl,
+		})
+		const env = makeEnv(cache)
+		const app = authRoutes(env)
+		const res = await app.handle(
+			new Request("http://localhost/auth/logout", {
+				method: "POST",
+				headers: { authorization: "Bearer tok-good" },
+			})
+		)
+		expect(res.status).toBe(200)
+		const json = (await res.json()) as { success: boolean; data: { revoked: boolean } }
+		expect(json.success).toBe(true)
+		expect(json.data.revoked).toBe(true)
+		expect(cache.store.has("session:tok-good")).toBe(false)
+		expect(cache.deleteCalls).toContain("session:tok-good")
+	})
+
+	it("returns success even when the token is unknown so it does not leak validity", async () => {
+		const cache = makeMockCache()
+		const env = makeEnv(cache)
+		const app = authRoutes(env)
+		const res = await app.handle(
+			new Request("http://localhost/auth/logout", {
+				method: "POST",
+				headers: { authorization: "Bearer tok-missing" },
+			})
+		)
+		expect(res.status).toBe(200)
+		const json = (await res.json()) as { success: boolean; data: { revoked: boolean } }
+		expect(json.success).toBe(true)
+		expect(json.data.revoked).toBe(true)
+		expect(cache.deleteCalls).toContain("session:tok-missing")
+	})
+
+	it("returns 401 when no Authorization header is sent", async () => {
+		const cache = makeMockCache()
+		const env = makeEnv(cache)
+		const app = authRoutes(env)
+		const res = await app.handle(
+			new Request("http://localhost/auth/logout", { method: "POST" })
+		)
+		expect(res.status).toBe(401)
+		const json = (await res.json()) as { success: boolean; error: string }
+		expect(json.success).toBe(false)
+		expect(json.error).toBe("MISSING_TOKEN")
+		expect(cache.deleteCalls).toEqual([])
+	})
+})
+
 describe("GET /auth/me", () => {
 	it("returns the identity bound to a valid bearer token", async () => {
 		const cache = makeMockCache()

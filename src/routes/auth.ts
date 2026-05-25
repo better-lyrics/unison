@@ -4,7 +4,7 @@ import type { Env } from "@/types"
 import { signedRequest } from "@/utils/auth"
 import { generatePetName } from "@/utils/petname"
 import { readRateLimit } from "@/utils/read-rate-limit"
-import { createSession, getSession } from "@/utils/session"
+import { createSession, deleteSession, getSession } from "@/utils/session"
 
 const CHALLENGE_PREFIX = "challenge:"
 
@@ -26,6 +26,16 @@ export const authRoutes = (env: Env) =>
 			await env.CACHE.put(`${CHALLENGE_PREFIX}${nonce}`, "1", { expirationTtl: ttl })
 			const expiresAt = Math.floor(Date.now() / 1000) + ttl
 			return { success: true, data: { nonce, expiresAt } }
+		})
+		.post("/logout", async ({ env, headers, set }) => {
+			const auth = headers.authorization
+			const token = auth?.startsWith("Bearer ") ? auth.slice(7).trim() : null
+			if (!token) {
+				set.status = 401
+				return { success: false, error: "MISSING_TOKEN" }
+			}
+			await deleteSession(env, token)
+			return { success: true, data: { revoked: true } }
 		})
 		.get("/me", async ({ env, headers, set }) => {
 			const auth = headers.authorization
