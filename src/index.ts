@@ -154,7 +154,7 @@ const app = new Elysia({ adapter: node() })
 							status: 200,
 							latency_ms: Number(duration),
 						})
-						return new Response(file.body, {
+						return new Response(m === "HEAD" ? null : file.body, {
 							status: 200,
 							headers: {
 								"content-type": file.contentType,
@@ -170,7 +170,7 @@ const app = new Elysia({ adapter: node() })
 						status: 200,
 						latency_ms: Number(duration),
 					})
-					return new Response(spaIndexHtml, {
+					return new Response(m === "HEAD" ? null : spaIndexHtml, {
 						status: 200,
 						headers: { "content-type": "text/html; charset=utf-8" },
 					})
