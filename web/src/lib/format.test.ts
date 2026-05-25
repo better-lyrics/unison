@@ -55,4 +55,11 @@ describe("formatRelativeTime", () => {
   it("renders years for older timestamps", () => {
     expect(formatRelativeTime(now - 400 * 86400)).toMatch(/year/)
   })
+
+  it("handles now and future timestamps", () => {
+    const now = Math.floor(Date.now() / 1000)
+    expect(formatRelativeTime(now)).toBeTruthy()
+    const futureRendered = formatRelativeTime(now + 30)
+    expect(futureRendered.length).toBeGreaterThan(0)
+  })
 })
