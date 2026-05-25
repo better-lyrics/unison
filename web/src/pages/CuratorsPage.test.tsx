@@ -214,6 +214,7 @@ describe("CuratorsPage", () => {
     expect(selfRow?.textContent).toContain(valid.displayName)
     expect(selfRow?.textContent?.toLowerCase()).toContain("you")
     expect(rows[rows.length - 1]).toBe(selfRow)
+    expect(rows[2].className).toContain("mt-4")
   })
 
   it("does not duplicate the row when the user is already in the top N", async () => {

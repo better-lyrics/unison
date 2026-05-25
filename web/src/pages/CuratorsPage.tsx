@@ -1,4 +1,4 @@
-import { useCallback } from "react"
+import { useCallback, useEffect } from "react"
 import { useSession } from "@/auth/useSession"
 import { CuratorRow } from "@/components/CuratorRow"
 import { EmptyState } from "@/components/EmptyState"
@@ -21,7 +21,13 @@ export function CuratorsPage() {
   }, [selfKeyId])
   const myRank = useAsyncData(myRankFetcher)
 
-  if (status === "loading") {
+  useEffect(() => {
+    if (myRank.status === "error") {
+      console.error("failed to fetch own curator rank", myRank.error)
+    }
+  }, [myRank.status, myRank.error])
+
+  if (status === "loading" || (selfKeyId !== null && myRank.status === "loading")) {
     return (
       <LeaderboardSection title="Curators">
         <LoadingPlaceholder />
@@ -33,22 +39,31 @@ export function CuratorsPage() {
     return <EmptyState title="Could not load curators" hint={error.message} />
   }
 
-  const list: CuratorLeaderboardEntry[] = (() => {
+  const merged: { list: CuratorLeaderboardEntry[]; appendedKeyId: string | null } = (() => {
     const top = data.curators
-    if (myRank.status !== "success" || !myRank.data.ranked) return top
+    if (myRank.status !== "success" || !myRank.data.ranked) {
+      return { list: top, appendedKeyId: null }
+    }
     const { ranked: _ranked, ...entry } = myRank.data
-    if (top.some((c) => c.keyId === entry.keyId)) return top
-    return [...top, entry]
+    if (top.some((c) => c.keyId === entry.keyId)) {
+      return { list: top, appendedKeyId: null }
+    }
+    return { list: [...top, entry], appendedKeyId: entry.keyId }
   })()
 
   return (
     <LeaderboardSection title="Curators" subtitle="Ranked by total reputation-weighted contribution score">
-      {list.length === 0 ? (
+      {merged.list.length === 0 ? (
         <EmptyState title="No curators yet" />
       ) : (
         <ul className="space-y-2">
-          {list.map((entry) => (
-            <CuratorRow key={entry.keyId} entry={entry} isSelf={selfKeyId === entry.keyId} />
+          {merged.list.map((entry) => (
+            <CuratorRow
+              key={entry.keyId}
+              entry={entry}
+              isSelf={selfKeyId === entry.keyId}
+              appended={entry.keyId === merged.appendedKeyId}
+            />
           ))}
         </ul>
       )}

@@ -6,9 +6,10 @@ import type { CuratorLeaderboardEntry } from "@/lib/types"
 interface CuratorRowProps {
   entry: CuratorLeaderboardEntry
   isSelf?: boolean
+  appended?: boolean
 }
 
-export function CuratorRow({ entry, isSelf = false }: CuratorRowProps) {
+export function CuratorRow({ entry, isSelf = false, appended = false }: CuratorRowProps) {
   const avatar = dicebearThumbsDataUri(entry.keyId)
   return (
     <li
@@ -16,6 +17,7 @@ export function CuratorRow({ entry, isSelf = false }: CuratorRowProps) {
       className={cn(
         "flex items-center gap-4 rounded-lg border bg-unison-bg-elevated px-4 py-3 transition-colors hover:border-unison-border-strong",
         isSelf ? "border-unison-border-strong" : "border-unison-border",
+        appended && "!mt-4",
       )}
     >
       <span className="shrink-0 font-mono text-xs tabular-nums text-unison-text-muted">{formatRank(entry.rank)}</span>
