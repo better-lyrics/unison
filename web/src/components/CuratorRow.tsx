@@ -19,9 +19,7 @@ export function CuratorRow({ entry, isSelf = false, appended = false }: CuratorR
         to={href}
         className={cn(
           "flex items-center gap-4 rounded-lg border bg-unison-bg-elevated px-4 py-3 transition-colors hover:border-unison-border-strong",
-          isSelf
-            ? "border-unison-border-strong border-l-2 border-l-unison-text bg-unison-bg-hover"
-            : "border-unison-border",
+          isSelf ? "border-unison-border-strong" : "border-unison-border",
         )}
       >
         <span className="shrink-0 font-mono text-xs tabular-nums text-unison-text-muted">{formatRank(entry.rank)}</span>
@@ -32,12 +30,7 @@ export function CuratorRow({ entry, isSelf = false, appended = false }: CuratorR
           loading="lazy"
         />
         <div className="min-w-0 flex-1">
-          <p
-            className={cn(
-              "flex items-center gap-2 truncate text-sm text-unison-text",
-              isSelf ? "font-semibold" : "font-medium",
-            )}
-          >
+          <p className="flex items-center gap-2 truncate text-sm font-medium text-unison-text">
             <span className="truncate">{entry.displayName}</span>
             {isSelf ? (
               <span className="shrink-0 rounded bg-unison-text px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-unison-bg">
