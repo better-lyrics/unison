@@ -3,14 +3,14 @@ export function AboutPage() {
     <div className="max-w-2xl space-y-10">
       <section className="rounded-md border border-unison-border bg-unison-bg-elevated px-4 py-3 text-sm leading-relaxed text-unison-text-secondary">
         Heads up: this isn't wired up in the stable Better Lyrics build yet. The request, submit, and vote buttons
-        ship in an upcoming canary release of the extension. Grab the canary from{" "}
+        ship in an upcoming canary release of the extension. Grab the canary from the{" "}
         <a
-          href="https://github.com/better-lyrics"
+          href="https://github.com/better-lyrics/better-lyrics/releases"
           target="_blank"
           rel="noopener noreferrer"
           className="text-unison-text transition-colors hover:text-unison-text-secondary"
         >
-          our GitHub
+          Better Lyrics releases page
         </a>{" "}
         if you want to try it now.
       </section>
