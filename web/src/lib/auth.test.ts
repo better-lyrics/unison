@@ -5,6 +5,7 @@ import {
   fetchMe,
   loadStoredSession,
   postSession,
+  revokeSession,
   saveStoredSession,
   STORAGE_KEY,
   type StoredSession,
@@ -153,5 +154,29 @@ describe("network failure propagation", () => {
   it("fetchMe propagates a fetch rejection", async () => {
     vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new TypeError("Failed to fetch")))
     await expect(fetchMe("tok")).rejects.toThrow("Failed to fetch")
+  })
+})
+
+describe("revokeSession", () => {
+  it("POSTs to /auth/logout with the bearer token", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ success: true, data: { revoked: true } }), { status: 200 }),
+    )
+    vi.stubGlobal("fetch", fetchMock)
+    await revokeSession("tok-xyz")
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/auth/logout",
+      expect.objectContaining({
+        method: "POST",
+        headers: expect.objectContaining({ authorization: "Bearer tok-xyz" }),
+      }),
+    )
+  })
+
+  it("resolves silently on a non-2xx response", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ success: false, error: "MISSING_TOKEN" }), { status: 401 }),
+    ))
+    await expect(revokeSession("tok")).resolves.toBeUndefined()
   })
 })

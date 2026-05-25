@@ -5,6 +5,7 @@ import {
   fetchMe,
   loadStoredSession,
   postSession,
+  revokeSession,
   saveStoredSession,
 } from "@/lib/auth"
 import { requestSignedAssertion } from "@/lib/extension"
@@ -81,6 +82,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
   }, [])
 
   const signOut = useCallback(() => {
+    const stored = loadStoredSession()
+    if (stored) revokeSession(stored.sessionToken).catch(() => {})
     clearStoredSession()
     setPhase({ kind: "signed-out" })
   }, [])

@@ -101,3 +101,10 @@ export async function fetchMe(token: string): Promise<Identity> {
   })
   return unwrap<Identity>(res)
 }
+
+export async function revokeSession(token: string): Promise<void> {
+  await fetch("/auth/logout", {
+    method: "POST",
+    headers: { authorization: `Bearer ${token}` },
+  })
+}

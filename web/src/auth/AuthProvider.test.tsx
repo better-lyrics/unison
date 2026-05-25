@@ -200,11 +200,43 @@ describe("AuthProvider signIn flow", () => {
 })
 
 describe("AuthProvider signOut", () => {
-  it("clears storage and returns to signed-out", async () => {
+  it("clears storage, revokes the server session, and returns to signed-out", async () => {
     saveStoredSession(valid)
-    vi.stubGlobal(
-      "fetch",
-      vi.fn().mockResolvedValue(
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          success: true,
+          data: { keyId: valid.keyId, displayName: valid.displayName, expiresAt: valid.expiresAt },
+        }),
+        { status: 200 },
+      ),
+    )
+    vi.stubGlobal("fetch", fetchMock)
+    render(
+      <AuthProvider>
+        <Probe />
+      </AuthProvider>,
+    )
+    await waitFor(() => expect(screen.getByText("sign-out")).toBeTruthy())
+    await act(async () => {
+      screen.getByText("sign-out").click()
+    })
+    await waitFor(() => expect(screen.getByTestId("status").textContent).toBe("signed-out"))
+    expect(localStorage.getItem(STORAGE_KEY)).toBeNull()
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/auth/logout",
+      expect.objectContaining({
+        method: "POST",
+        headers: expect.objectContaining({ authorization: `Bearer ${valid.sessionToken}` }),
+      }),
+    )
+  })
+
+  it("still signs the user out locally when the revoke fetch fails", async () => {
+    saveStoredSession(valid)
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
         new Response(
           JSON.stringify({
             success: true,
@@ -212,8 +244,9 @@ describe("AuthProvider signOut", () => {
           }),
           { status: 200 },
         ),
-      ),
-    )
+      )
+      .mockRejectedValueOnce(new TypeError("Failed to fetch"))
+    vi.stubGlobal("fetch", fetchMock)
     render(
       <AuthProvider>
         <Probe />
