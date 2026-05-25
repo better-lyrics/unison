@@ -53,8 +53,9 @@ export function AboutPage() {
           shows everyone else by default.
         </p>
         <p className="text-sm leading-relaxed text-unison-text-secondary">
-          Sign-in for this site is wired up on the server already. The extension half ships with the next Better Lyrics
-          release.
+          You don't need to sign in to use any of this. If you do, your row on Curators gets marked when you're
+          ranked, and there's a /me page with your stats. It reuses the keypair Better Lyrics already keeps for you,
+          so there's nothing extra to set up.
         </p>
       </section>
 
