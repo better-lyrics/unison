@@ -1,7 +1,35 @@
 import { describe, expect, it } from "vitest"
-import type { Env } from "@/types"
+import type { Env, FeedItem } from "@/types"
 import { canonicalJson, hashPublicKey } from "@/utils/crypto"
 import { lyricsRoutes } from "./lyrics"
+
+const baseFeedItem: FeedItem = {
+	id: 1,
+	video_id: "v",
+	song: "S",
+	artist: "A",
+	album: null,
+	isrc: null,
+	duration: 100,
+	format: "lrc",
+	language: null,
+	sync_type: "linesync",
+	score: 0,
+	effective_score: 0,
+	vote_count: 0,
+	confidence: "low",
+	created_at: 1700000000,
+}
+
+function makeFeedRow(overrides: Partial<FeedItem> = {}): FeedItem {
+	return { ...baseFeedItem, ...overrides }
+}
+
+function mineSqlFrom(db: ReturnType<typeof makeMockDB>) {
+	const call = db.calls.find((c) => /FROM lyrics\b/i.test(c.sql) && /submitter_id = \?/.test(c.sql))
+	if (!call) throw new Error("expected a /mine submissions SELECT call")
+	return call
+}
 
 interface DBCall {
 	sql: string
@@ -274,5 +302,194 @@ describe("POST /lyrics/submit syncType override", () => {
 		expect(res.status).toBe(201)
 		const insertCall = db.calls.find((c) => /INSERT INTO lyrics/i.test(c.sql))
 		expect(insertCall?.params[12]).toBe("richsync")
+	})
+})
+
+describe("GET /lyrics/mine", () => {
+	it("returns 401 when no x-key-id header is present", async () => {
+		const db = makeMockDB()
+		const app = lyricsRoutes(makeEnv(db))
+
+		const res = await app.handle(new Request("http://localhost/lyrics/mine"))
+
+		expect(res.status).toBe(401)
+	})
+
+	it("returns an empty page and undefined nextCursor when no rows match", async () => {
+		const db = makeMockDB([{ id: 42 }, []])
+		const app = lyricsRoutes(makeEnv(db))
+
+		const res = await app.handle(
+			new Request("http://localhost/lyrics/mine", {
+				headers: { "x-key-id": "user-key" },
+			})
+		)
+		const body = (await res.json()) as { data: unknown[]; nextCursor?: number }
+
+		expect(res.status).toBe(200)
+		expect(body.data).toEqual([])
+		expect(body.nextCursor).toBeUndefined()
+	})
+
+	it("uses the default stable ORDER BY when no sort params are provided", async () => {
+		const db = makeMockDB([{ id: 42 }, []])
+		const app = lyricsRoutes(makeEnv(db))
+
+		const res = await app.handle(
+			new Request("http://localhost/lyrics/mine", {
+				headers: { "x-key-id": "user-key" },
+			})
+		)
+
+		expect(res.status).toBe(200)
+		const { sql, params } = mineSqlFrom(db)
+		expect(sql).toMatch(/ORDER BY\s+created_at DESC,\s+id DESC/)
+		expect(params[0]).toBe(42)
+	})
+
+	it("floors fractional cursor values before binding offset", async () => {
+		const rows = Array.from({ length: 20 }, (_, i) => makeFeedRow({ id: i + 1 }))
+		const db = makeMockDB([{ id: 42 }, rows])
+		const app = lyricsRoutes(makeEnv(db))
+
+		const res = await app.handle(
+			new Request("http://localhost/lyrics/mine?limit=20&cursor=40.7", {
+				headers: { "x-key-id": "user-key" },
+			})
+		)
+
+		const { params } = mineSqlFrom(db)
+		expect(res.status).toBe(200)
+		expect(params).toContain(40)
+		expect(params).not.toContain(40.7)
+	})
+
+	it("forwards sort=most-voted into the ORDER BY clause", async () => {
+		const db = makeMockDB([{ id: 42 }, []])
+		const app = lyricsRoutes(makeEnv(db))
+
+		const res = await app.handle(
+			new Request("http://localhost/lyrics/mine?sort=most-voted&sortDir=desc", {
+				headers: { "x-key-id": "user-key" },
+			})
+		)
+
+		expect(res.status).toBe(200)
+		const { sql } = mineSqlFrom(db)
+		expect(sql).toMatch(/ORDER BY\s+vote_count DESC,\s+id DESC/)
+	})
+
+	it("forwards syncType and tier filters into SQL and bound params", async () => {
+		const db = makeMockDB([{ id: 42 }, []])
+		const app = lyricsRoutes(makeEnv(db))
+
+		const res = await app.handle(
+			new Request("http://localhost/lyrics/mine?syncType=richsync&tier=top-rated", {
+				headers: { "x-key-id": "user-key" },
+			})
+		)
+
+		expect(res.status).toBe(200)
+		const { sql, params } = mineSqlFrom(db)
+		expect(sql).toContain("sync_type = ?")
+		expect(sql).toContain("confidence = 'high'")
+		expect(params).toContain("richsync")
+	})
+
+	it("treats a non-numeric cursor as offset 0 and omits OFFSET from SQL", async () => {
+		const db = makeMockDB([{ id: 42 }, []])
+		const app = lyricsRoutes(makeEnv(db))
+
+		const res = await app.handle(
+			new Request("http://localhost/lyrics/mine?cursor=abc", {
+				headers: { "x-key-id": "user-key" },
+			})
+		)
+
+		expect(res.status).toBe(200)
+		expect(mineSqlFrom(db).sql).not.toContain("OFFSET")
+	})
+
+	it("treats a negative cursor as offset 0 and omits OFFSET from SQL", async () => {
+		const db = makeMockDB([{ id: 42 }, []])
+		const app = lyricsRoutes(makeEnv(db))
+
+		const res = await app.handle(
+			new Request("http://localhost/lyrics/mine?cursor=-5", {
+				headers: { "x-key-id": "user-key" },
+			})
+		)
+
+		expect(res.status).toBe(200)
+		expect(mineSqlFrom(db).sql).not.toContain("OFFSET")
+	})
+
+	it("emits nextCursor = offset + items.length when the page is full", async () => {
+		const rows = Array.from({ length: 20 }, (_, i) => makeFeedRow({ id: i + 1 }))
+		const db = makeMockDB([{ id: 42 }, rows, []])
+		const app = lyricsRoutes(makeEnv(db))
+
+		const res = await app.handle(
+			new Request("http://localhost/lyrics/mine?limit=20", {
+				headers: { "x-key-id": "user-key" },
+			})
+		)
+		const body = (await res.json()) as { data: unknown[]; nextCursor?: number }
+
+		expect(res.status).toBe(200)
+		expect(body.data).toHaveLength(20)
+		expect(body.nextCursor).toBe(20)
+	})
+
+	it("accumulates nextCursor across pages by adding offset to items.length", async () => {
+		const rows = Array.from({ length: 20 }, (_, i) => makeFeedRow({ id: i + 1 }))
+		const db = makeMockDB([{ id: 42 }, rows, []])
+		const app = lyricsRoutes(makeEnv(db))
+
+		const res = await app.handle(
+			new Request("http://localhost/lyrics/mine?limit=20&cursor=40", {
+				headers: { "x-key-id": "user-key" },
+			})
+		)
+		const body = (await res.json()) as { data: unknown[]; nextCursor?: number }
+
+		expect(res.status).toBe(200)
+		expect(body.nextCursor).toBe(60)
+	})
+
+	it("omits nextCursor when the page is short", async () => {
+		const rows = Array.from({ length: 3 }, (_, i) => makeFeedRow({ id: i + 1 }))
+		const db = makeMockDB([{ id: 42 }, rows, []])
+		const app = lyricsRoutes(makeEnv(db))
+
+		const res = await app.handle(
+			new Request("http://localhost/lyrics/mine?limit=20", {
+				headers: { "x-key-id": "user-key" },
+			})
+		)
+		const body = (await res.json()) as { data: unknown[]; nextCursor?: number }
+
+		expect(res.status).toBe(200)
+		expect(body.data).toHaveLength(3)
+		expect(body.nextCursor).toBeUndefined()
+	})
+
+	it("returns 200 with default ORDER BY when sort and syncType are unknown", async () => {
+		const db = makeMockDB([{ id: 42 }, []])
+		const app = lyricsRoutes(makeEnv(db))
+
+		const res = await app.handle(
+			new Request("http://localhost/lyrics/mine?sort=garbage&syncType=xml", {
+				headers: { "x-key-id": "user-key" },
+			})
+		)
+
+		expect(res.status).toBe(200)
+		const { sql } = mineSqlFrom(db)
+		expect(sql).toMatch(/ORDER BY\s+created_at DESC,\s+id DESC/)
+		expect(sql).not.toMatch(/ORDER BY\s+vote_count/)
+		expect(sql).not.toMatch(/ORDER BY\s+effective_score/)
+		expect(sql).not.toMatch(/ORDER BY\s+created_at ASC/)
+		expect(sql).not.toContain("sync_type = ?")
 	})
 })

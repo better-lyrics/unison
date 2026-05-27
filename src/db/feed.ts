@@ -1,4 +1,10 @@
 import { config } from "@/config"
+import {
+	buildFilterFragments,
+	buildOrderByClause,
+	type FeedFilters,
+	hasAnyFilter,
+} from "@/db/feed-filters"
 import { AUTO_HIDE_PREDICATE, RANKING_EXPR } from "@/db/lyrics"
 import { Logger } from "@/infra/logger"
 import type { Env, FeedItem } from "@/types"
@@ -15,12 +21,14 @@ export async function getGlobalFeed(
 	env: Env,
 	limit: number,
 	offset?: number,
-	excludeIds?: number[]
+	excludeIds?: number[],
+	filters: FeedFilters = {}
 ): Promise<FeedItem[]> {
 	const hasOffset = offset !== undefined && offset > 0
 	const hasExclusions = excludeIds && excludeIds.length > 0
+	const cacheEligible = !hasOffset && !hasExclusions && !hasAnyFilter(filters)
 
-	if (!hasOffset && !hasExclusions) {
+	if (cacheEligible) {
 		const cacheKey = `feed:global:${limit}`
 		const cached = await env.CACHE.get(cacheKey)
 		if (cached) {
@@ -35,6 +43,10 @@ export async function getGlobalFeed(
 	const conditions = ["effective_score > 0", "deleted_at IS NULL"]
 	const params: (number | string)[] = []
 
+	const fragments = buildFilterFragments(filters)
+	conditions.push(...fragments.conditions)
+	params.push(...fragments.params)
+
 	if (hasExclusions) {
 		const placeholders = excludeIds.map(() => "?").join(", ")
 		conditions.push(`id NOT IN (${placeholders})`)
@@ -44,6 +56,8 @@ export async function getGlobalFeed(
 	params.push(limit)
 	if (hasOffset) params.push(offset)
 
+	const orderBy = buildOrderByClause(filters, `${RANKING_EXPR} DESC`)
+
 	const sql = `
 		SELECT * FROM (
 			SELECT DISTINCT ON (video_id) ${FEED_COLUMNS}
@@ -51,7 +65,7 @@ export async function getGlobalFeed(
 			WHERE ${conditions.join(" AND ")}
 			ORDER BY video_id, ${RANKING_EXPR} DESC
 		) AS unique_videos
-		ORDER BY ${RANKING_EXPR} DESC
+		ORDER BY ${orderBy}
 		LIMIT ?${hasOffset ? " OFFSET ?" : ""}
 	`
 
@@ -59,7 +73,7 @@ export async function getGlobalFeed(
 		.bind(...params)
 		.all<FeedItem>()
 
-	if (!hasOffset && !hasExclusions) {
+	if (cacheEligible) {
 		const cacheKey = `feed:global:${limit}`
 		env.CACHE.put(cacheKey, JSON.stringify(result.results), {
 			expirationTtl: config.feed.globalCacheTtl,
@@ -75,24 +89,28 @@ export async function getMySubmissions(
 	env: Env,
 	userId: number,
 	limit: number,
-	cursor?: number
+	offset?: number,
+	filters: FeedFilters = {}
 ): Promise<FeedItem[]> {
+	const hasOffset = offset !== undefined && offset > 0
 	const conditions = ["submitter_id = ?", "deleted_at IS NULL"]
 	const params: (number | string)[] = [userId]
 
-	if (cursor) {
-		conditions.push("created_at < ?")
-		params.push(cursor)
-	}
+	const fragments = buildFilterFragments(filters)
+	conditions.push(...fragments.conditions)
+	params.push(...fragments.params)
 
 	params.push(limit)
+	if (hasOffset) params.push(offset)
+
+	const orderBy = buildOrderByClause(filters, "created_at DESC, id DESC")
 
 	const sql = `
 		SELECT ${FEED_COLUMNS}, ${AUTO_HIDE_PREDICATE} AS hidden
 		FROM lyrics
 		WHERE ${conditions.join(" AND ")}
-		ORDER BY created_at DESC
-		LIMIT ?
+		ORDER BY ${orderBy}
+		LIMIT ?${hasOffset ? " OFFSET ?" : ""}
 	`
 
 	const result = await env.DB.prepare(sql)
@@ -106,9 +124,9 @@ export async function getPersonalizedFeed(
 	env: Env,
 	userId: number,
 	limit: number,
-	offset?: number
+	offset?: number,
+	filters: FeedFilters = {}
 ): Promise<FeedItem[]> {
-	// Get user's preferred artists from upvoted lyrics + submissions
 	const artistsResult = await env.DB.prepare(
 		`
 		SELECT DISTINCT artist_norm FROM (
@@ -133,17 +151,22 @@ export async function getPersonalizedFeed(
 
 	if (artists.length === 0) {
 		log.debug("no history for user, falling back to global", { userId })
-		return getGlobalFeed(env, limit, offset)
+		return getGlobalFeed(env, limit, offset, undefined, filters)
 	}
 
-	// Single-stream query: rank everything globally, then boost preferred-artist
-	// items (excluding already-voted) to the top. This keeps offset pagination
-	// duplicate-free and gap-free since LIMIT/OFFSET applies to one stable order.
 	const artistPlaceholders = artists.map(() => "?").join(", ")
 	const hasOffset = offset !== undefined && offset > 0
-	const params: (number | string)[] = [...artists, userId, limit]
+	const fragments = buildFilterFragments(filters)
+	const innerWhere = ["effective_score > 0", "deleted_at IS NULL", ...fragments.conditions]
+
+	const params: (number | string)[] = [...artists, userId, ...fragments.params, limit]
 	if (hasOffset) params.push(offset)
 
+	const outerOrderBy = buildOrderByClause(filters, `${RANKING_EXPR} DESC`)
+
+	// Single-stream query so OFFSET applies to one stable order; preferred-artist
+	// items boost to the top via is_personalized DESC without a second SELECT,
+	// which would otherwise let the same item reappear across page boundaries.
 	const sql = `
 		SELECT * FROM (
 			SELECT DISTINCT ON (video_id) ${FEED_COLUMNS}, artist_norm,
@@ -153,10 +176,10 @@ export async function getPersonalizedFeed(
 					THEN 1 ELSE 0
 				END AS is_personalized
 			FROM lyrics
-			WHERE effective_score > 0 AND deleted_at IS NULL
+			WHERE ${innerWhere.join(" AND ")}
 			ORDER BY video_id, ${RANKING_EXPR} DESC
 		) AS unique_videos
-		ORDER BY is_personalized DESC, ${RANKING_EXPR} DESC
+		ORDER BY is_personalized DESC, ${outerOrderBy}
 		LIMIT ?${hasOffset ? " OFFSET ?" : ""}
 	`
 
