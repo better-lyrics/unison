@@ -9,6 +9,7 @@ import { createEnv } from "@/infra/env"
 import { closePool } from "@/infra/database"
 import { closeRedis } from "@/infra/cache"
 import { Logger, flushLogs } from "@/infra/logger"
+import { backfillFormatDetection } from "@/jobs/backfill-format-detection"
 import { backfillSyncType } from "@/jobs/backfill-synctype"
 import { backfillTextSearch } from "@/jobs/backfill-text-search"
 import { updateScores } from "@/jobs/score-updater"
@@ -208,6 +209,12 @@ backfillSyncType(env)
 		if (changed > 0) log.info("sync_type backfill complete", { scanned, changed })
 	})
 	.catch((err) => log.error("sync_type backfill failed", { error: (err as Error).message }))
+
+backfillFormatDetection(env)
+	.then(({ scanned, changed }) => {
+		if (changed > 0) log.info("format backfill complete", { scanned, changed })
+	})
+	.catch((err) => log.error("format backfill failed", { error: (err as Error).message }))
 
 process.on("unhandledRejection", (reason) => {
 	const err = reason instanceof Error ? reason : new Error(String(reason))
