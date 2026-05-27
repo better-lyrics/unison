@@ -275,25 +275,30 @@ describe("backfillFormatDetection", () => {
 		expect(selects[2].params[0]).toBe(12)
 	})
 
-	it("advances the cursor even when a row throws, so the scan does not stall", async () => {
-		const failingDecompress = "       corrupt"
+	it("advances the cursor and continues scanning when a row throws mid-loop", async () => {
 		const db = makeMockDB([
 			[
-				{ id: 1, video_id: "v1", format: "plain", lyrics: failingDecompress, sync_type: "plain" },
-				{ id: 2, video_id: "v2", format: "plain", lyrics: RICHSYNC_TTML, sync_type: "plain" },
+				{ id: 1, video_id: "v_boom", format: "plain", lyrics: RICHSYNC_TTML, sync_type: "plain" },
+				{ id: 2, video_id: "v_ok", format: "plain", lyrics: RICHSYNC_TTML, sync_type: "plain" },
 			],
+			null,
 			null,
 			[],
 		])
 		const cache = makeMockCache()
+		cache.delete = async (key: string) => {
+			if (key === "v:v_boom") throw new Error("cache outage")
+		}
 		const env = makeEnv(db, cache)
 
 		const result = await backfillFormatDetection(env)
 
 		expect(result.scanned).toBe(2)
-		expect(result.changed).toBe(1)
 		const selects = db.calls.filter((c) => /SELECT\b.*FROM\s+lyrics/i.test(c.sql))
+		expect(selects).toHaveLength(2)
 		expect(selects[1].params[0]).toBe(2)
+		const updates = db.calls.filter((c) => /UPDATE\s+lyrics/i.test(c.sql))
+		expect(updates).toHaveLength(2)
 	})
 
 	it("filters out soft-deleted rows in the SELECT", async () => {
