@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
-import { formatRank, formatRelativeTime, formatVotes } from "./format"
+import { formatCompact, formatExact, formatRank, formatRelativeTime } from "./format"
 
 describe("formatRank", () => {
   it("renders rank as #N", () => {
@@ -8,15 +8,49 @@ describe("formatRank", () => {
   })
 })
 
-describe("formatVotes", () => {
-  it("renders integers verbatim", () => {
-    expect(formatVotes(0)).toBe("0")
-    expect(formatVotes(7)).toBe("7")
+describe("formatCompact", () => {
+  it("renders small integers verbatim", () => {
+    expect(formatCompact(0)).toBe("0")
+    expect(formatCompact(7)).toBe("7")
+    expect(formatCompact(999)).toBe("999")
   })
 
-  it("renders thousands with k suffix", () => {
-    expect(formatVotes(1200)).toBe("1.2k")
-    expect(formatVotes(12345)).toBe("12.3k")
+  it("renders thousands with K suffix", () => {
+    expect(formatCompact(1000)).toBe("1K")
+    expect(formatCompact(1200)).toBe("1.2K")
+    expect(formatCompact(12_345)).toBe("12.3K")
+    expect(formatCompact(123_456)).toBe("123.5K")
+  })
+
+  it("crosses into M only at one million", () => {
+    expect(formatCompact(999_500)).toBe("999.5K")
+    expect(formatCompact(1_000_000)).toBe("1M")
+  })
+
+  it("renders millions with M suffix", () => {
+    expect(formatCompact(1_234_567)).toBe("1.2M")
+    expect(formatCompact(12_345_678)).toBe("12.3M")
+  })
+
+  it("renders billions with B suffix", () => {
+    expect(formatCompact(1_000_000_000)).toBe("1B")
+    expect(formatCompact(1_234_567_890)).toBe("1.2B")
+  })
+})
+
+describe("formatExact", () => {
+  it("renders small integers verbatim", () => {
+    expect(formatExact(0)).toBe("0")
+    expect(formatExact(42)).toBe("42")
+  })
+
+  it("renders thousands with a comma separator", () => {
+    expect(formatExact(1234)).toBe("1,234")
+    expect(formatExact(12_345)).toBe("12,345")
+  })
+
+  it("renders millions with two comma separators", () => {
+    expect(formatExact(1_234_567)).toBe("1,234,567")
   })
 })
 

@@ -7,7 +7,7 @@ import { SubmissionsList } from "@/components/SubmissionsList"
 import { useAsyncData } from "@/hooks/useAsyncData"
 import { fetchUserRank } from "@/lib/api"
 import { dicebearThumbsDataUri } from "@/lib/avatar"
-import { formatRank, formatRelativeTime, formatVotes } from "@/lib/format"
+import { formatExact, formatRank, formatRelativeTime } from "@/lib/format"
 
 interface UserProfileViewProps {
   keyId: string
@@ -86,9 +86,9 @@ export function UserProfileView({ keyId, title = "Profile" }: UserProfileViewPro
         {data.ranked ? (
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             <Stat label="Rank" value={formatRank(data.rank)} />
-            <Stat label="Score" value={data.score.toFixed(1)} />
-            <Stat label="Submissions" value={String(data.submissionCount)} />
-            <Stat label="Upvotes" value={formatVotes(data.totalUpvotes)} />
+            <Stat label="Score" value={formatExact(data.score)} />
+            <Stat label="Submissions" value={formatExact(data.submissionCount)} />
+            <Stat label="Upvotes" value={formatExact(data.totalUpvotes)} />
           </div>
         ) : (
           <EmptyState

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react"
 import { EmptyState } from "@/components/EmptyState"
 import { useAsyncData } from "@/hooks/useAsyncData"
 import { fetchUserSubmissions } from "@/lib/api"
-import { formatRelativeTime, formatVotes } from "@/lib/format"
+import { formatCompact, formatExact, formatRelativeTime } from "@/lib/format"
 import type { UserSubmission } from "@/lib/types"
 
 interface SubmissionsListProps {
@@ -186,7 +186,12 @@ export function SubmissionsList({ keyId }: SubmissionsListProps) {
                     {s.artist} · {s.syncType} · {formatRelativeTime(s.createdAt)}
                   </p>
                 </div>
-                <p className="shrink-0 font-mono text-xs text-unison-text-muted">{formatVotes(s.voteCount)} votes</p>
+                <p
+                  title={`${formatExact(s.voteCount)} votes`}
+                  className="shrink-0 font-mono text-xs text-unison-text-muted"
+                >
+                  {formatCompact(s.voteCount)} votes
+                </p>
               </a>
             </li>
           ))}
