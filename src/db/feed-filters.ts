@@ -60,3 +60,46 @@ export function hasAnyFilter(filters: FeedFilters): boolean {
 	if (filters.sort && filters.sort !== "default") return true
 	return false
 }
+
+export interface FilterFragments {
+	conditions: string[]
+	params: (string | number)[]
+}
+
+export function buildFilterFragments(filters: FeedFilters): FilterFragments {
+	const conditions: string[] = []
+	const params: (string | number)[] = []
+
+	if (filters.syncType) {
+		conditions.push("sync_type = ?")
+		params.push(filters.syncType)
+	}
+	if (filters.format) {
+		conditions.push("format = ?")
+		params.push(filters.format)
+	}
+	if (filters.tier === "trusted-plus") {
+		conditions.push("confidence IN ('medium', 'high')")
+	} else if (filters.tier === "top-rated") {
+		conditions.push("confidence = 'high'")
+	}
+	if (filters.language) {
+		conditions.push("language = ?")
+		params.push(filters.language)
+	}
+
+	return { conditions, params }
+}
+
+const SORT_COLUMN: Record<Exclude<FeedSort, "default">, string> = {
+	newest: "created_at",
+	"top-rated": "effective_score",
+	"most-voted": "vote_count",
+}
+
+export function buildOrderByClause(filters: FeedFilters, defaultExpr: string): string {
+	if (!filters.sort || filters.sort === "default") return defaultExpr
+	const column = SORT_COLUMN[filters.sort]
+	const dir = filters.sortDir === "asc" ? "ASC" : "DESC"
+	return `${column} ${dir}, id ${dir}`
+}
