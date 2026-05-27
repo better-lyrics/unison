@@ -342,8 +342,26 @@ describe("GET /lyrics/mine", () => {
 		)
 
 		expect(res.status).toBe(200)
-		const { sql } = mineSqlFrom(db)
+		const { sql, params } = mineSqlFrom(db)
 		expect(sql).toMatch(/ORDER BY\s+created_at DESC,\s+id DESC/)
+		expect(params[0]).toBe(42)
+	})
+
+	it("floors fractional cursor values before binding offset", async () => {
+		const rows = Array.from({ length: 20 }, (_, i) => makeFeedRow({ id: i + 1 }))
+		const db = makeMockDB([{ id: 42 }, rows])
+		const app = lyricsRoutes(makeEnv(db))
+
+		const res = await app.handle(
+			new Request("http://localhost/lyrics/mine?limit=20&cursor=40.7", {
+				headers: { "x-key-id": "user-key" },
+			})
+		)
+
+		const { params } = mineSqlFrom(db)
+		expect(res.status).toBe(200)
+		expect(params).toContain(40)
+		expect(params).not.toContain(40.7)
 	})
 
 	it("forwards sort=most-voted into the ORDER BY clause", async () => {

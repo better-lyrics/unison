@@ -49,7 +49,9 @@ export const feedRoutes = (env: Env) =>
 					config.feed.maxLimit
 				)
 				const parsedCursor = query.cursor ? Number(query.cursor) : 0
-				const offset = Number.isFinite(parsedCursor) ? Math.max(0, parsedCursor) : 0
+				const offset = Number.isFinite(parsedCursor)
+					? Math.floor(Math.max(0, parsedCursor))
+					: 0
 
 				const filters = parseFeedFilters(query)
 

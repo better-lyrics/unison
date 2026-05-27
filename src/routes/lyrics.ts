@@ -166,7 +166,9 @@ export const lyricsRoutes = (env: Env) =>
 				const limit = Math.min(Math.max(1, Number.isNaN(parsed) ? 20 : parsed), 50)
 
 				const parsedCursor = query.cursor ? Number(query.cursor) : 0
-				const offset = Number.isFinite(parsedCursor) ? Math.max(0, parsedCursor) : 0
+				const offset = Number.isFinite(parsedCursor)
+					? Math.floor(Math.max(0, parsedCursor))
+					: 0
 
 				const filters = parseFeedFilters(query)
 
