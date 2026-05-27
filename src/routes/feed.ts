@@ -1,5 +1,6 @@
 import { Elysia, t } from "elysia"
 import { getGlobalFeed, getPersonalizedFeed } from "@/db/feed"
+import { parseFeedFilters } from "@/db/feed-filters"
 import { getUserVotesForIds } from "@/db/votes"
 import { config } from "@/config"
 import type { Env, FeedItem } from "@/types"
@@ -47,11 +48,14 @@ export const feedRoutes = (env: Env) =>
 					Math.max(1, query.limit ? Number(query.limit) : config.feed.defaultLimit),
 					config.feed.maxLimit
 				)
-				const offset = query.cursor ? Math.max(0, Number(query.cursor)) : 0
+				const parsedCursor = query.cursor ? Number(query.cursor) : 0
+				const offset = Number.isFinite(parsedCursor) ? Math.max(0, parsedCursor) : 0
+
+				const filters = parseFeedFilters(query)
 
 				const items = feedUserId
-					? await getPersonalizedFeed(env, feedUserId, limit, offset)
-					: await getGlobalFeed(env, limit, offset)
+					? await getPersonalizedFeed(env, feedUserId, limit, offset, filters)
+					: await getGlobalFeed(env, limit, offset, undefined, filters)
 
 				const nextCursor = items.length === limit ? offset + items.length : undefined
 
@@ -76,6 +80,12 @@ export const feedRoutes = (env: Env) =>
 				query: t.Object({
 					limit: t.Optional(t.String()),
 					cursor: t.Optional(t.String()),
+					sort: t.Optional(t.String()),
+					sortDir: t.Optional(t.String()),
+					syncType: t.Optional(t.String()),
+					format: t.Optional(t.String()),
+					tier: t.Optional(t.String()),
+					language: t.Optional(t.String()),
 				}),
 			}
 		)
