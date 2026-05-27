@@ -298,6 +298,81 @@ describe("getPersonalizedFeed", () => {
 		expect(db.calls[1].sql).toContain("LIMIT ? OFFSET ?")
 		expect(db.calls[1].params).toEqual(["limbo", 42, 20, 40])
 	})
+
+	it("appends filter predicates to the inner WHERE alongside the baseline gate", async () => {
+		const db = createMockDB([[{ artist_norm: "limbo" }], []])
+		await getPersonalizedFeed(createEnv(db), 42, 20, 0, {
+			syncType: "richsync",
+			tier: "top-rated",
+		})
+
+		const feedSql = db.calls[1].sql
+		expect(feedSql).toContain("sync_type = ?")
+		expect(feedSql).toContain("confidence = 'high'")
+		expect(feedSql).toContain("effective_score > 0")
+		expect(feedSql).toContain("deleted_at IS NULL")
+		expect(feedSql).not.toContain("confidence IN ('medium', 'high')")
+	})
+
+	it("keeps the effective_score quality gate even with sort=newest", async () => {
+		const db = createMockDB([[{ artist_norm: "limbo" }], []])
+		await getPersonalizedFeed(createEnv(db), 42, 20, 0, { sort: "newest", sortDir: "desc" })
+
+		const feedSql = db.calls[1].sql
+		expect(feedSql).toContain("effective_score > 0")
+		expect(feedSql).toMatch(/ORDER BY\s+is_personalized DESC,\s+created_at DESC,\s+id DESC/)
+		expect(feedSql).toMatch(/ORDER BY video_id,.*LN\(/s)
+	})
+
+	it("binds artists, userId, filter params, limit in left-to-right SQL order", async () => {
+		const db = createMockDB([[{ artist_norm: "limbo" }], []])
+		await getPersonalizedFeed(createEnv(db), 42, 20, 0, {
+			syncType: "richsync",
+			language: "ja",
+		})
+
+		expect(db.calls[1].params).toEqual(["limbo", 42, "richsync", "ja", 20])
+	})
+
+	it("binds offset last when offset > 0 with filters present", async () => {
+		const db = createMockDB([[{ artist_norm: "limbo" }], []])
+		await getPersonalizedFeed(createEnv(db), 42, 20, 40, {
+			syncType: "richsync",
+			language: "ja",
+		})
+
+		expect(db.calls[1].sql).toContain("LIMIT ? OFFSET ?")
+		expect(db.calls[1].params).toEqual(["limbo", 42, "richsync", "ja", 20, 40])
+	})
+
+	it("forwards filters to the global fallback when user has no preferred artists", async () => {
+		const db = createMockDB([[], []])
+		await getPersonalizedFeed(createEnv(db), 42, 20, 0, { sort: "newest", sortDir: "desc" })
+
+		const feedSql = db.calls[1].sql
+		expect(feedSql).toMatch(/ORDER BY\s+created_at DESC,\s+id DESC/)
+		expect(feedSql).not.toContain("is_personalized")
+	})
+
+	it("keeps is_personalized DESC as the primary outer sort key with sort=most-voted", async () => {
+		const db = createMockDB([[{ artist_norm: "limbo" }], []])
+		await getPersonalizedFeed(createEnv(db), 42, 20, 0, {
+			sort: "most-voted",
+			sortDir: "desc",
+		})
+
+		const feedSql = db.calls[1].sql
+		expect(feedSql).toMatch(/ORDER BY\s+is_personalized DESC,\s+vote_count DESC,\s+id DESC/)
+	})
+
+	it("keeps SQL shape unchanged when filters are absent (regression)", async () => {
+		const db = createMockDB([[{ artist_norm: "limbo" }], []])
+		await getPersonalizedFeed(createEnv(db), 42, 20, 0)
+
+		const feedSql = db.calls[1].sql
+		expect(feedSql).toMatch(/ORDER BY is_personalized DESC,.*LN\(/s)
+		expect(feedSql).not.toMatch(/\)\s*AS\s+unique_videos\s+ORDER BY[^L]*created_at DESC/)
+	})
 })
 
 // -- getMySubmissions ------------------------------------------------------
