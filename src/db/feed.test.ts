@@ -142,7 +142,7 @@ describe("getGlobalFeed", () => {
 		expect(sql).toContain("DISTINCT ON (video_id)")
 		expect(sql).toContain("effective_score > 0")
 		expect(sql).toContain("deleted_at IS NULL")
-		expect(sql).toContain("sync_type")
+		expect(sql).toContain("LN(")
 		expect(sql).not.toContain("created_at DESC, id DESC")
 	})
 
