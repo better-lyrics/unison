@@ -55,7 +55,7 @@ function createMockDB(queue: unknown[] = []): MockDB {
 
 interface MockCache {
 	get(key: string): Promise<string | null>
-	put(): Promise<void>
+	put(key?: string, value?: string, opts?: unknown): Promise<void>
 	delete(key: string): Promise<void>
 }
 
@@ -67,6 +67,26 @@ function createMockCache(): MockCache {
 		async put() {},
 		async delete() {},
 	}
+}
+
+function createRecordingCache() {
+	const gets: string[] = []
+	const puts: string[] = []
+	const cache: MockCache = {
+		async get(key: string) {
+			gets.push(key)
+			return null
+		},
+		async put(key?: string) {
+			puts.push(String(key))
+		},
+		async delete() {},
+	}
+	return { cache, gets, puts }
+}
+
+async function flushMicrotasks() {
+	await new Promise((r) => setImmediate(r))
 }
 
 function createEnv(db: MockDB, cache: MockCache = createMockCache()): Env {
@@ -112,6 +132,96 @@ describe("getGlobalFeed", () => {
 		const sql = db.calls[0].sql
 		expect(sql).toContain("id NOT IN (?, ?)")
 		expect(db.calls[0].params).toEqual([10, 20, 5])
+	})
+
+	it("keeps SQL shape unchanged when no filters supplied", async () => {
+		const db = createMockDB([[]])
+		await getGlobalFeed(createEnv(db), 20, 0)
+
+		const sql = db.calls[0].sql
+		expect(sql).toContain("DISTINCT ON (video_id)")
+		expect(sql).toContain("effective_score > 0")
+		expect(sql).toContain("deleted_at IS NULL")
+		expect(sql).toContain("sync_type")
+		expect(sql).not.toContain("created_at DESC, id DESC")
+	})
+
+	it("sort=newest changes outer ORDER BY but leaves inner DISTINCT ON alone", async () => {
+		const db = createMockDB([[]])
+		await getGlobalFeed(createEnv(db), 20, 0, undefined, { sort: "newest", sortDir: "desc" })
+
+		const sql = db.calls[0].sql
+		expect(sql).toMatch(/\)\s*AS\s+unique_videos\s+ORDER BY\s+created_at DESC,\s+id DESC/)
+		expect(sql).toMatch(/ORDER BY video_id,.*sync_type.*DESC/s)
+	})
+
+	it("appends syncType, tier, and language predicates to the inner WHERE", async () => {
+		const db = createMockDB([[]])
+		await getGlobalFeed(createEnv(db), 20, 0, undefined, {
+			syncType: "richsync",
+			tier: "trusted-plus",
+			language: "ja",
+		})
+
+		const sql = db.calls[0].sql
+		expect(sql).toContain("sync_type = ?")
+		expect(sql).toContain("confidence IN ('medium', 'high')")
+		expect(sql).toContain("language = ?")
+		expect(sql).not.toContain("OFFSET")
+		expect(db.calls[0].params).toEqual(["richsync", "ja", 20])
+	})
+
+	it("orders params as filterParams, excludeIds, limit, offset", async () => {
+		const db = createMockDB([[]])
+		await getGlobalFeed(createEnv(db), 20, 40, [10, 20], { syncType: "richsync" })
+
+		expect(db.calls[0].params).toEqual(["richsync", 10, 20, 20, 40])
+	})
+
+	it("does NOT read or write cache when any filter is present", async () => {
+		const { cache, gets, puts } = createRecordingCache()
+		const db = createMockDB([[{ id: 1 }]])
+		await getGlobalFeed(createEnv(db, cache), 20, 0, undefined, { sort: "newest" })
+
+		await flushMicrotasks()
+		expect(gets).toEqual([])
+		expect(puts).toEqual([])
+	})
+
+	it("reads and writes cache when no filters are present (regression)", async () => {
+		const { cache, gets, puts } = createRecordingCache()
+		const db = createMockDB([[{ id: 1 }]])
+		await getGlobalFeed(createEnv(db, cache), 20, 0)
+
+		await flushMicrotasks()
+		expect(gets).toEqual(["feed:global:20"])
+		expect(puts).toEqual(["feed:global:20"])
+	})
+
+	it("treats sort=default as no filter for cache purposes", async () => {
+		const { cache, gets, puts } = createRecordingCache()
+		const db = createMockDB([[{ id: 1 }]])
+		await getGlobalFeed(createEnv(db, cache), 20, 0, undefined, { sort: "default" })
+
+		await flushMicrotasks()
+		expect(gets).toEqual(["feed:global:20"])
+		expect(puts).toEqual(["feed:global:20"])
+	})
+
+	it("returns cached result without hitting the DB when cache HIT", async () => {
+		const cache: MockCache = {
+			async get(key: string) {
+				if (key === "feed:global:20") return JSON.stringify([{ id: 1 }])
+				return null
+			},
+			async put() {},
+			async delete() {},
+		}
+		const db = createMockDB([])
+		const result = await getGlobalFeed(createEnv(db, cache), 20, 0)
+
+		expect(db.calls).toHaveLength(0)
+		expect(result).toEqual([{ id: 1 }])
 	})
 })
 

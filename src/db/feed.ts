@@ -1,4 +1,10 @@
 import { config } from "@/config"
+import {
+	buildFilterFragments,
+	buildOrderByClause,
+	type FeedFilters,
+	hasAnyFilter,
+} from "@/db/feed-filters"
 import { AUTO_HIDE_PREDICATE, RANKING_EXPR } from "@/db/lyrics"
 import { Logger } from "@/infra/logger"
 import type { Env, FeedItem } from "@/types"
@@ -15,12 +21,14 @@ export async function getGlobalFeed(
 	env: Env,
 	limit: number,
 	offset?: number,
-	excludeIds?: number[]
+	excludeIds?: number[],
+	filters: FeedFilters = {}
 ): Promise<FeedItem[]> {
 	const hasOffset = offset !== undefined && offset > 0
 	const hasExclusions = excludeIds && excludeIds.length > 0
+	const cacheEligible = !hasOffset && !hasExclusions && !hasAnyFilter(filters)
 
-	if (!hasOffset && !hasExclusions) {
+	if (cacheEligible) {
 		const cacheKey = `feed:global:${limit}`
 		const cached = await env.CACHE.get(cacheKey)
 		if (cached) {
@@ -35,6 +43,10 @@ export async function getGlobalFeed(
 	const conditions = ["effective_score > 0", "deleted_at IS NULL"]
 	const params: (number | string)[] = []
 
+	const fragments = buildFilterFragments(filters)
+	conditions.push(...fragments.conditions)
+	params.push(...fragments.params)
+
 	if (hasExclusions) {
 		const placeholders = excludeIds.map(() => "?").join(", ")
 		conditions.push(`id NOT IN (${placeholders})`)
@@ -44,6 +56,8 @@ export async function getGlobalFeed(
 	params.push(limit)
 	if (hasOffset) params.push(offset)
 
+	const orderBy = buildOrderByClause(filters, `${RANKING_EXPR} DESC`)
+
 	const sql = `
 		SELECT * FROM (
 			SELECT DISTINCT ON (video_id) ${FEED_COLUMNS}
@@ -51,7 +65,7 @@ export async function getGlobalFeed(
 			WHERE ${conditions.join(" AND ")}
 			ORDER BY video_id, ${RANKING_EXPR} DESC
 		) AS unique_videos
-		ORDER BY ${RANKING_EXPR} DESC
+		ORDER BY ${orderBy}
 		LIMIT ?${hasOffset ? " OFFSET ?" : ""}
 	`
 
@@ -59,7 +73,7 @@ export async function getGlobalFeed(
 		.bind(...params)
 		.all<FeedItem>()
 
-	if (!hasOffset && !hasExclusions) {
+	if (cacheEligible) {
 		const cacheKey = `feed:global:${limit}`
 		env.CACHE.put(cacheKey, JSON.stringify(result.results), {
 			expirationTtl: config.feed.globalCacheTtl,
