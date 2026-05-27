@@ -18,7 +18,7 @@ import { toResponse, toSearchResponse } from "@/routes/lyrics.transformers"
 import type { Env, LyricsSubmission } from "@/types"
 import { signedRequest } from "@/utils/auth"
 import { readRateLimit } from "@/utils/read-rate-limit"
-import { detectSyncType } from "@/utils/validation"
+import { detectFormat, detectSyncType, validateTtmlStructure } from "@/utils/validation"
 import { Elysia, t } from "elysia"
 
 const log = new Logger("app")
@@ -264,8 +264,29 @@ export const lyricsRoutes = (env: Env) =>
 				return status(400, { success: false, error: "Invalid duration" })
 			}
 
-			const format = p.format as "ttml" | "lrc" | "plain"
-			const detectedSyncType = detectSyncType(p.lyrics as string, format)
+			const claimedFormat = p.format as "ttml" | "lrc" | "plain"
+			const lyricsContent = p.lyrics as string
+
+			if (claimedFormat === "ttml" && !validateTtmlStructure(lyricsContent)) {
+				log.warn("rejecting malformed ttml claim", {
+					keyId,
+					videoId: p.videoId as string,
+				})
+				return status(400, { success: false, error: "Malformed TTML content" })
+			}
+
+			const format = detectFormat(lyricsContent)
+
+			if (claimedFormat !== format) {
+				log.warn("format mismatch, overriding with detected", {
+					keyId,
+					videoId: p.videoId as string,
+					claimed: claimedFormat,
+					detected: format,
+				})
+			}
+
+			const detectedSyncType = detectSyncType(lyricsContent, format)
 
 			const claimedSyncType =
 				typeof p.syncType === "string" && ["richsync", "linesync", "plain"].includes(p.syncType)

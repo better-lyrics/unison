@@ -493,3 +493,201 @@ describe("GET /lyrics/mine", () => {
 		expect(sql).not.toContain("sync_type = ?")
 	})
 })
+
+describe("POST /lyrics/submit format override", () => {
+	const FORMAT_PARAM_INDEX = 10
+	const SYNC_TYPE_PARAM_INDEX = 12
+
+	function seedSubmitDB(keyId: string, publicJwk: JsonWebKey) {
+		return makeMockDB([
+			{ key_id: keyId, public_key: JSON.stringify(publicJwk), created_at: 0 },
+			{ id: 7, key_id: keyId },
+			{ count: 0 },
+			{ id: 99 },
+		])
+	}
+
+	async function submit(
+		body: Record<string, unknown>
+	): Promise<{ res: Response; db: ReturnType<typeof makeMockDB> }> {
+		const keyPair = await generateKeyPair()
+		const publicJwk = await exportPublicJwk(keyPair)
+		const keyId = await hashPublicKey(publicJwk)
+		const db = seedSubmitDB(keyId, publicJwk)
+		const env = makeEnv(db)
+		const app = lyricsRoutes(env)
+		const req = await buildSubmitRequest(keyPair, keyId, body)
+		const res = await app.handle(req)
+		return { res, db }
+	}
+
+	function findInsert(db: ReturnType<typeof makeMockDB>): DBCall | undefined {
+		return db.calls.find((c) => /INSERT INTO lyrics/i.test(c.sql))
+	}
+
+	it("overrides plain claim with ttml when content is well-formed TTML", async () => {
+		const { res, db } = await submit({
+			videoId: "abc123",
+			song: "Song",
+			artist: "Artist",
+			duration: 200,
+			lyrics: RICHSYNC_TTML,
+			format: "plain",
+		})
+
+		expect(res.status).toBe(201)
+		const insert = findInsert(db)
+		expect(insert).toBeDefined()
+		expect(insert?.params[FORMAT_PARAM_INDEX]).toBe("ttml")
+		expect(insert?.params[SYNC_TYPE_PARAM_INDEX]).toBe("richsync")
+	})
+
+	it("overrides plain claim with lrc when content has line tags", async () => {
+		const { res, db } = await submit({
+			videoId: "abc123",
+			song: "Song",
+			artist: "Artist",
+			duration: 200,
+			lyrics: "[00:01.00]Hello\n[00:03.00]World",
+			format: "plain",
+		})
+
+		expect(res.status).toBe(201)
+		const insert = findInsert(db)
+		expect(insert?.params[FORMAT_PARAM_INDEX]).toBe("lrc")
+		expect(insert?.params[SYNC_TYPE_PARAM_INDEX]).toBe("linesync")
+	})
+
+	it("overrides lrc claim with plain when content has no timestamps", async () => {
+		const { res, db } = await submit({
+			videoId: "abc123",
+			song: "Song",
+			artist: "Artist",
+			duration: 200,
+			lyrics: PLAIN_LRC,
+			format: "lrc",
+		})
+
+		expect(res.status).toBe(201)
+		const insert = findInsert(db)
+		expect(insert?.params[FORMAT_PARAM_INDEX]).toBe("plain")
+		expect(insert?.params[SYNC_TYPE_PARAM_INDEX]).toBe("plain")
+	})
+
+	it("re-derives syncType from the detected format, ignoring the claimed syncType", async () => {
+		const { res, db } = await submit({
+			videoId: "abc123",
+			song: "Song",
+			artist: "Artist",
+			duration: 200,
+			lyrics: "[00:01.00]Hello\n[00:03.00]World",
+			format: "plain",
+			syncType: "richsync",
+		})
+
+		expect(res.status).toBe(201)
+		const insert = findInsert(db)
+		expect(insert?.params[FORMAT_PARAM_INDEX]).toBe("lrc")
+		expect(insert?.params[SYNC_TYPE_PARAM_INDEX]).toBe("linesync")
+	})
+
+	it("leaves matching ttml/richsync claim untouched", async () => {
+		const { res, db } = await submit({
+			videoId: "abc123",
+			song: "Song",
+			artist: "Artist",
+			duration: 200,
+			lyrics: RICHSYNC_TTML,
+			format: "ttml",
+			syncType: "richsync",
+		})
+
+		expect(res.status).toBe(201)
+		const insert = findInsert(db)
+		expect(insert?.params[FORMAT_PARAM_INDEX]).toBe("ttml")
+		expect(insert?.params[SYNC_TYPE_PARAM_INDEX]).toBe("richsync")
+	})
+
+	it("rejects ttml claim with malformed content (no closing root) with 400", async () => {
+		const { res, db } = await submit({
+			videoId: "abc123",
+			song: "Song",
+			artist: "Artist",
+			duration: 200,
+			lyrics: "<tt><body><div><p>missing close",
+			format: "ttml",
+		})
+
+		expect(res.status).toBe(400)
+		const body = (await res.json()) as { success: boolean; error: string }
+		expect(body.success).toBe(false)
+		expect(body.error).toMatch(/malformed ttml/i)
+		expect(findInsert(db)).toBeUndefined()
+	})
+
+	it("rejects ttml claim with prose content with 400", async () => {
+		const { res, db } = await submit({
+			videoId: "abc123",
+			song: "Song",
+			artist: "Artist",
+			duration: 200,
+			lyrics: "Just prose, no markup at all",
+			format: "ttml",
+		})
+
+		expect(res.status).toBe(400)
+		expect(findInsert(db)).toBeUndefined()
+	})
+
+	it("rejects ttml claim with LRC content with 400 (lying TTML claim)", async () => {
+		const { res, db } = await submit({
+			videoId: "abc123",
+			song: "Song",
+			artist: "Artist",
+			duration: 200,
+			lyrics: "[00:01.00]Hello\n[00:03.00]World",
+			format: "ttml",
+		})
+
+		expect(res.status).toBe(400)
+		expect(findInsert(db)).toBeUndefined()
+	})
+
+	it("still enforces size cap before sniffing", async () => {
+		const huge = "x".repeat(6 * 1024 * 1024)
+		const { res, db } = await submit({
+			videoId: "abc123",
+			song: "Song",
+			artist: "Artist",
+			duration: 200,
+			lyrics: huge,
+			format: "plain",
+		})
+
+		expect(res.status).toBe(400)
+		const body = (await res.json()) as { error: string }
+		expect(body.error).toMatch(/too large/i)
+		expect(findInsert(db)).toBeUndefined()
+	})
+
+	it("classifies row-431 shape (TTML wrongly claimed plain) as ttml/richsync", async () => {
+		const row431 =
+			'<tt xmlns="http://www.w3.org/ns/ttml" xmlns:ttm="http://www.w3.org/ns/ttml#metadata">' +
+			'<body><div><p begin="0:01.428" end="0:04.847">' +
+			'<span begin="0:01.428" end="0:01.731">Whoa,</span></p></div></body></tt>'
+
+		const { res, db } = await submit({
+			videoId: "HMeQT3FLJ3k",
+			song: "Gravity",
+			artist: "IRyS",
+			duration: 240,
+			lyrics: row431,
+			format: "plain",
+		})
+
+		expect(res.status).toBe(201)
+		const insert = findInsert(db)
+		expect(insert?.params[FORMAT_PARAM_INDEX]).toBe("ttml")
+		expect(insert?.params[SYNC_TYPE_PARAM_INDEX]).toBe("richsync")
+	})
+})
