@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { detectSyncType, validateTtmlStructure } from "./validation"
+import { detectFormat, detectSyncType, validateTtmlStructure } from "./validation"
 
 describe("validateTtmlStructure", () => {
 	it("validates basic TTML structure", () => {
@@ -138,5 +138,139 @@ describe("detectSyncType plain format", () => {
 
 	it("returns plain even when content contains LRC-looking tags", () => {
 		expect(detectSyncType("[00:00.000]Trick", "plain")).toBe("plain")
+	})
+})
+
+describe("detectFormat", () => {
+	describe("TTML detection", () => {
+		it("detects minimal well-formed TTML", () => {
+			expect(detectFormat("<tt><body><div><p>Hello</p></div></body></tt>")).toBe("ttml")
+		})
+
+		it("detects TTML with declared namespaces and timing", () => {
+			const ttml = `<tt xmlns="http://www.w3.org/ns/ttml"><body><div><p begin="0:00.0" end="0:02.0"><span begin="0:00.0" end="0:01.0">Hi</span></p></div></body></tt>`
+			expect(detectFormat(ttml)).toBe("ttml")
+		})
+
+		it("detects TTML with self-closing body", () => {
+			expect(detectFormat("<tt><body/></tt>")).toBe("ttml")
+		})
+
+		it("detects TTML when root tag has attributes", () => {
+			expect(detectFormat(`<tt lang="en"><body><div><p>x</p></div></body></tt>`)).toBe("ttml")
+		})
+
+		it("TTML wins over LRC-looking line brackets in inner text", () => {
+			const ttml = "<tt><body><div><p><span>[00:01.00]Hello</span></p></div></body></tt>"
+			expect(detectFormat(ttml)).toBe("ttml")
+		})
+
+		it("TTML wins over raw LRC word markers inside a CDATA section", () => {
+			const ttml =
+				"<tt><body><div><p><![CDATA[Hello <00:01.00> world]]></p></div></body></tt>"
+			expect(detectFormat(ttml)).toBe("ttml")
+		})
+
+		it("detects TTML prefixed by a UTF-8 BOM", () => {
+			expect(detectFormat("﻿<tt><body><div><p>Hi</p></div></body></tt>")).toBe("ttml")
+		})
+
+		it("detects TTML preceded by an XML declaration prologue", () => {
+			const ttml =
+				'<?xml version="1.0" encoding="UTF-8"?><tt><body><div><p>Hi</p></div></body></tt>'
+			expect(detectFormat(ttml)).toBe("ttml")
+		})
+
+		it("is case insensitive on the root element", () => {
+			expect(detectFormat("<TT><BODY><DIV><P>x</P></DIV></BODY></TT>")).toBe("ttml")
+		})
+	})
+
+	describe("LRC detection", () => {
+		it("detects word-timed LRC", () => {
+			expect(detectFormat("[00:15.00]Hello <00:15.50>world")).toBe("lrc")
+		})
+
+		it("detects line-timed LRC", () => {
+			expect(detectFormat("[00:15.00]Hello world\n[00:18.00]Second")).toBe("lrc")
+		})
+
+		it("detects LRC with colon as fractional separator", () => {
+			expect(detectFormat("[00:15:00]Hello <00:15:50>world")).toBe("lrc")
+		})
+
+		it("detects LRC with 3-digit milliseconds", () => {
+			expect(detectFormat("[00:15.000]Hello world")).toBe("lrc")
+		})
+
+		it("detects LRC with CRLF line endings", () => {
+			expect(detectFormat("[00:01.00]Line one\r\n[00:02.00]Line two")).toBe("lrc")
+		})
+
+		it("detects LRC mixed with metadata header lines", () => {
+			const lrc = "[ar:Some Artist]\n[ti:Title]\n[00:15.00]Hello\n[00:18.00]World"
+			expect(detectFormat(lrc)).toBe("lrc")
+		})
+
+		it("detects LRC even when prose precedes the first timestamp", () => {
+			expect(detectFormat("Some intro\n[00:01.00]Line one")).toBe("lrc")
+		})
+
+		it("treats metadata-only LRC (no time-tagged lines) as plain", () => {
+			expect(detectFormat("[ar:Some Artist]\n[ti:Title]")).toBe("plain")
+		})
+	})
+
+	describe("plain fallback", () => {
+		it("returns plain for prose without markers", () => {
+			expect(detectFormat("Just lyrics with no timing\nAnother line")).toBe("plain")
+		})
+
+		it("returns plain for empty string", () => {
+			expect(detectFormat("")).toBe("plain")
+		})
+
+		it("returns plain for whitespace only", () => {
+			expect(detectFormat("   \n\t\n  ")).toBe("plain")
+		})
+
+		it("returns plain for malformed TTML missing closing root", () => {
+			expect(detectFormat("<tt><body><div><p>unclosed")).toBe("plain")
+		})
+
+		it("returns plain for empty <tt></tt> (no body, div, or p)", () => {
+			expect(detectFormat("<tt></tt>")).toBe("plain")
+		})
+
+		it("returns plain for prose containing angle brackets that aren't TTML", () => {
+			expect(detectFormat("She said <I think so> and walked away")).toBe("plain")
+		})
+
+		it("returns plain for unicode prose without timing", () => {
+			expect(detectFormat("こんにちは世界\n你好世界\nสวัสดี")).toBe("plain")
+		})
+	})
+
+	describe("regression boundaries", () => {
+		it("does not misclassify a malformed TTML doc with LRC tags as lrc", () => {
+			// validateTtmlStructure rejects (no closing </tt>) but content also has [mm:ss.xx] -> lrc wins
+			expect(detectFormat("<tt><body><p>[00:01.00]hi</p></body>")).toBe("lrc")
+		})
+
+		it("classifies pathological short input as plain", () => {
+			expect(detectFormat("<")).toBe("plain")
+			expect(detectFormat("[")).toBe("plain")
+			expect(detectFormat("[00")).toBe("plain")
+		})
+
+		it("treats partial LRC-looking timestamps as plain", () => {
+			// Missing closing bracket -> not a valid LRC line tag
+			expect(detectFormat("[00:15.00 Hello world")).toBe("plain")
+		})
+
+		it("classifies the row-431 doc shape (TTML wrongly claimed as plain) as ttml", () => {
+			const ttml = `<tt xmlns="http://www.w3.org/ns/ttml" xmlns:ttm="http://www.w3.org/ns/ttml#metadata"><body><div><p begin="0:01.428" end="0:04.847"><span begin="0:01.428" end="0:01.731">Whoa,</span></p></div></body></tt>`
+			expect(detectFormat(ttml)).toBe("ttml")
+		})
 	})
 })

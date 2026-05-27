@@ -34,8 +34,14 @@ export function detectSyncType(
 	}
 }
 
-const LRC_WORD_TAG = /<\d{1,2}:\d{2}[.:]\d{2,3}>/
-const LRC_LINE_TAG = /\[\d{1,2}:\d{2}[.:]\d{2,3}\]/
+export const LRC_WORD_TAG = /<\d{1,2}:\d{2}[.:]\d{2,3}>/
+export const LRC_LINE_TAG = /\[\d{1,2}:\d{2}[.:]\d{2,3}\]/
+
+export function detectFormat(content: string): LyricsFormat {
+	if (validateTtmlStructure(content)) return "ttml"
+	if (LRC_WORD_TAG.test(content) || LRC_LINE_TAG.test(content)) return "lrc"
+	return "plain"
+}
 
 function detectLrcSyncType(lrc: string): "richsync" | "linesync" | "plain" {
 	if (LRC_WORD_TAG.test(lrc)) return "richsync"
