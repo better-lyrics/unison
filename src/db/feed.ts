@@ -164,6 +164,9 @@ export async function getPersonalizedFeed(
 
 	const outerOrderBy = buildOrderByClause(filters, `${RANKING_EXPR} DESC`)
 
+	// Single-stream query so OFFSET applies to one stable order; preferred-artist
+	// items boost to the top via is_personalized DESC without a second SELECT,
+	// which would otherwise let the same item reappear across page boundaries.
 	const sql = `
 		SELECT * FROM (
 			SELECT DISTINCT ON (video_id) ${FEED_COLUMNS}, artist_norm,
