@@ -186,6 +186,30 @@ describe("GET /feed", () => {
 		expect(body.nextCursor).toBe(20)
 	})
 
+	it("routes authenticated requests to getPersonalizedFeed and forwards filters", async () => {
+		const db = makeMockDB([
+			{ id: 42 },
+			[{ artist_norm: "limbo" }],
+			[],
+		])
+		const app = feedRoutes(makeEnv(db))
+
+		const res = await app.handle(
+			new Request("http://localhost/feed?sort=newest&syncType=richsync", {
+				headers: { "x-key-id": "user-key" },
+			})
+		)
+
+		expect(res.status).toBe(200)
+		expect(db.calls[0].sql).toContain("FROM users WHERE key_id = ?")
+		expect(db.calls[1].sql).toContain("FROM votes")
+		const feedSql = db.calls[2].sql
+		expect(feedSql).toContain("is_personalized")
+		expect(feedSql).toContain("sync_type = ?")
+		expect(feedSql).toMatch(/ORDER BY\s+is_personalized DESC,\s+created_at DESC,\s+id DESC/)
+		expect(db.calls[2].params).toContain("richsync")
+	})
+
 	it("omits nextCursor when the page is short", async () => {
 		const rows = Array.from({ length: 3 }, (_, i) => makeFeedRow({ id: i + 1 }))
 		const db = makeMockDB([rows])
