@@ -160,13 +160,24 @@ describe("detectFormat", () => {
 			expect(detectFormat(`<tt lang="en"><body><div><p>x</p></div></body></tt>`)).toBe("ttml")
 		})
 
-		it("detects TTML containing LRC-looking brackets inside spans (order matters)", () => {
+		it("TTML wins over LRC-looking line brackets in inner text", () => {
 			const ttml = "<tt><body><div><p><span>[00:01.00]Hello</span></p></div></body></tt>"
 			expect(detectFormat(ttml)).toBe("ttml")
 		})
 
-		it("detects TTML containing inline word markers like <00:01.00> inside text", () => {
-			const ttml = "<tt><body><div><p>Hello &lt;00:01.00&gt; world</p></div></body></tt>"
+		it("TTML wins over raw LRC word markers inside a CDATA section", () => {
+			const ttml =
+				"<tt><body><div><p><![CDATA[Hello <00:01.00> world]]></p></div></body></tt>"
+			expect(detectFormat(ttml)).toBe("ttml")
+		})
+
+		it("detects TTML prefixed by a UTF-8 BOM", () => {
+			expect(detectFormat("﻿<tt><body><div><p>Hi</p></div></body></tt>")).toBe("ttml")
+		})
+
+		it("detects TTML preceded by an XML declaration prologue", () => {
+			const ttml =
+				'<?xml version="1.0" encoding="UTF-8"?><tt><body><div><p>Hi</p></div></body></tt>'
 			expect(detectFormat(ttml)).toBe("ttml")
 		})
 
