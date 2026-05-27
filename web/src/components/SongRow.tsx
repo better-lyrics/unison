@@ -1,5 +1,5 @@
 import { IconMusic } from "@tabler/icons-react"
-import { formatRank } from "@/lib/format"
+import { formatCompact, formatExact, formatRank } from "@/lib/format"
 import type { SongLeaderboardEntry } from "@/lib/types"
 
 interface SongRowProps {
@@ -31,7 +31,9 @@ export function SongRow({ entry }: SongRowProps) {
           <p className="truncate text-xs text-unison-text-secondary">{entry.artist}</p>
         </div>
         <div className="text-right">
-          <p className="font-mono text-sm text-unison-text">{metric}</p>
+          <p title={formatExact(metric)} className="font-mono text-sm text-unison-text">
+            {formatCompact(metric)}
+          </p>
           <p className="text-[10px] uppercase tracking-wider text-unison-text-muted">{metricLabel}</p>
         </div>
       </a>

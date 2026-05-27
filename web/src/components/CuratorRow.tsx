@@ -1,7 +1,7 @@
 import { Link } from "react-router-dom"
 import { dicebearThumbsDataUri } from "@/lib/avatar"
 import { cn } from "@/lib/cn"
-import { formatRank, formatVotes } from "@/lib/format"
+import { formatCompact, formatExact, formatRank } from "@/lib/format"
 import type { CuratorLeaderboardEntry } from "@/lib/types"
 
 interface CuratorRowProps {
@@ -43,15 +43,21 @@ export function CuratorRow({ entry, isSelf = false, appended = false }: CuratorR
           </p>
         </div>
         <div className="hidden text-right sm:block">
-          <p className="font-mono text-sm text-unison-text">{entry.submissionCount}</p>
+          <p title={formatExact(entry.submissionCount)} className="font-mono text-sm text-unison-text">
+            {formatCompact(entry.submissionCount)}
+          </p>
           <p className="text-[10px] uppercase tracking-wider text-unison-text-muted">subs</p>
         </div>
         <div className="hidden text-right sm:block">
-          <p className="font-mono text-sm text-unison-text">{formatVotes(entry.totalUpvotes)}</p>
+          <p title={formatExact(entry.totalUpvotes)} className="font-mono text-sm text-unison-text">
+            {formatCompact(entry.totalUpvotes)}
+          </p>
           <p className="text-[10px] uppercase tracking-wider text-unison-text-muted">upvotes</p>
         </div>
         <div className="text-right">
-          <p className="font-mono text-sm text-unison-text">{entry.score.toFixed(1)}</p>
+          <p title={formatExact(entry.score)} className="font-mono text-sm text-unison-text">
+            {formatCompact(entry.score)}
+          </p>
           <p className="text-[10px] uppercase tracking-wider text-unison-text-muted">score</p>
         </div>
       </Link>
