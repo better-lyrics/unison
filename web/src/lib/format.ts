@@ -1,11 +1,20 @@
+const compactFormatter = new Intl.NumberFormat("en-US", {
+  notation: "compact",
+  maximumFractionDigits: 1,
+})
+
+const exactFormatter = new Intl.NumberFormat("en-US")
+
 export function formatRank(rank: number): string {
   return `#${rank}`
 }
 
-export function formatVotes(n: number): string {
-  if (n < 1000) return String(n)
-  const k = n / 1000
-  return `${k.toFixed(1)}k`
+export function formatCompact(n: number): string {
+  return compactFormatter.format(n)
+}
+
+export function formatExact(n: number): string {
+  return exactFormatter.format(n)
 }
 
 export function formatRelativeTime(epochSec: number): string {
