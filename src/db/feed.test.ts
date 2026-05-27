@@ -378,15 +378,33 @@ describe("getPersonalizedFeed", () => {
 // -- getMySubmissions ------------------------------------------------------
 
 describe("getMySubmissions", () => {
-	it("orders by created_at DESC and matches its cursor semantics", async () => {
+	it("uses offset pagination with id tiebreaker in default order", async () => {
 		const db = createMockDB([[]])
-		await getMySubmissions(createEnv(db), 42, 20, 1700000000)
+		await getMySubmissions(createEnv(db), 42, 20, 40)
 
 		const sql = db.calls[0].sql
-		// cursor and sort align here, so this stream stays cursor-based
-		expect(sql).toContain("created_at < ?")
-		expect(sql).toContain("ORDER BY created_at DESC")
-		expect(db.calls[0].params).toEqual([42, 1700000000, 20])
+		expect(sql).toContain("LIMIT ? OFFSET ?")
+		expect(sql).toMatch(/ORDER BY\s+created_at DESC,\s+id DESC/)
+		expect(sql).not.toContain("created_at < ?")
+		expect(db.calls[0].params).toEqual([42, 20, 40])
+	})
+
+	it("omits OFFSET when offset is 0", async () => {
+		const db = createMockDB([[]])
+		await getMySubmissions(createEnv(db), 42, 20, 0)
+
+		const sql = db.calls[0].sql
+		expect(sql).not.toContain("OFFSET")
+		expect(db.calls[0].params).toEqual([42, 20])
+	})
+
+	it("omits OFFSET when offset is undefined", async () => {
+		const db = createMockDB([[]])
+		await getMySubmissions(createEnv(db), 42, 20)
+
+		const sql = db.calls[0].sql
+		expect(sql).not.toContain("OFFSET")
+		expect(db.calls[0].params).toEqual([42, 20])
 	})
 
 	it("selects the auto-hide predicate as a hidden column", async () => {
@@ -395,6 +413,64 @@ describe("getMySubmissions", () => {
 		const sql = db.calls[0].sql
 		expect(sql).toMatch(/AS\s+hidden/i)
 		expect(sql).toContain(AUTO_HIDE_PREDICATE)
+	})
+
+	it("sort=most-voted changes ORDER BY with desc tiebreaker", async () => {
+		const db = createMockDB([[]])
+		await getMySubmissions(createEnv(db), 42, 20, 0, {
+			sort: "most-voted",
+			sortDir: "desc",
+		})
+
+		const sql = db.calls[0].sql
+		expect(sql).toMatch(/ORDER BY\s+vote_count DESC,\s+id DESC/)
+	})
+
+	it("sort=top-rated asc matches the tiebreaker direction", async () => {
+		const db = createMockDB([[]])
+		await getMySubmissions(createEnv(db), 42, 20, 0, {
+			sort: "top-rated",
+			sortDir: "asc",
+		})
+
+		const sql = db.calls[0].sql
+		expect(sql).toMatch(/ORDER BY\s+effective_score ASC,\s+id ASC/)
+	})
+
+	it("applies filters without adding a quality gate", async () => {
+		const db = createMockDB([[]])
+		await getMySubmissions(createEnv(db), 42, 20, 0, {
+			syncType: "richsync",
+			tier: "top-rated",
+		})
+
+		const sql = db.calls[0].sql
+		expect(sql).toContain("sync_type = ?")
+		expect(sql).toContain("confidence = 'high'")
+		expect(sql).not.toContain("effective_score > 0")
+		expect(sql).toMatch(/deleted_at\s+IS\s+NULL/i)
+	})
+
+	it("binds userId, filter params, limit, offset in order", async () => {
+		const db = createMockDB([[]])
+		await getMySubmissions(createEnv(db), 42, 20, 40, {
+			syncType: "richsync",
+			language: "ja",
+		})
+
+		expect(db.calls[0].params).toEqual([42, "richsync", "ja", 20, 40])
+		expect(db.calls[0].params[0]).toBe(42)
+	})
+
+	it("keeps deleted_at IS NULL when filters are present", async () => {
+		const db = createMockDB([[]])
+		await getMySubmissions(createEnv(db), 42, 20, 0, {
+			sort: "newest",
+			syncType: "richsync",
+		})
+
+		const sql = db.calls[0].sql
+		expect(sql).toMatch(/deleted_at\s+IS\s+NULL/i)
 	})
 })
 

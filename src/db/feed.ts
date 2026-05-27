@@ -89,24 +89,28 @@ export async function getMySubmissions(
 	env: Env,
 	userId: number,
 	limit: number,
-	cursor?: number
+	offset?: number,
+	filters: FeedFilters = {}
 ): Promise<FeedItem[]> {
+	const hasOffset = offset !== undefined && offset > 0
 	const conditions = ["submitter_id = ?", "deleted_at IS NULL"]
 	const params: (number | string)[] = [userId]
 
-	if (cursor) {
-		conditions.push("created_at < ?")
-		params.push(cursor)
-	}
+	const fragments = buildFilterFragments(filters)
+	conditions.push(...fragments.conditions)
+	params.push(...fragments.params)
 
 	params.push(limit)
+	if (hasOffset) params.push(offset)
+
+	const orderBy = buildOrderByClause(filters, "created_at DESC, id DESC")
 
 	const sql = `
 		SELECT ${FEED_COLUMNS}, ${AUTO_HIDE_PREDICATE} AS hidden
 		FROM lyrics
 		WHERE ${conditions.join(" AND ")}
-		ORDER BY created_at DESC
-		LIMIT ?
+		ORDER BY ${orderBy}
+		LIMIT ?${hasOffset ? " OFFSET ?" : ""}
 	`
 
 	const result = await env.DB.prepare(sql)
