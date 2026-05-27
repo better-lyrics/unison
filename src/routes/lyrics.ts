@@ -1,5 +1,6 @@
 import { config } from "@/config"
 import { getMySubmissions } from "@/db/feed"
+import { parseFeedFilters } from "@/db/feed-filters"
 import {
 	findBySongArtist,
 	findByVideoId,
@@ -163,9 +164,13 @@ export const lyricsRoutes = (env: Env) =>
 
 				const parsed = query.limit ? Number(query.limit) : 20
 				const limit = Math.min(Math.max(1, Number.isNaN(parsed) ? 20 : parsed), 50)
-				const cursor = query.cursor ? Number(query.cursor) : undefined
 
-				const items = await getMySubmissions(env, lyricsUserId, limit, cursor)
+				const parsedCursor = query.cursor ? Number(query.cursor) : 0
+				const offset = Number.isFinite(parsedCursor) ? Math.max(0, parsedCursor) : 0
+
+				const filters = parseFeedFilters(query)
+
+				const items = await getMySubmissions(env, lyricsUserId, limit, offset, filters)
 
 				const votesMap = await getUserVotesForIds(
 					env,
@@ -173,7 +178,7 @@ export const lyricsRoutes = (env: Env) =>
 					lyricsUserId
 				)
 
-				const nextCursor = items.length === limit ? items[items.length - 1].created_at : undefined
+				const nextCursor = items.length === limit ? offset + items.length : undefined
 
 				return {
 					success: true,
@@ -188,6 +193,12 @@ export const lyricsRoutes = (env: Env) =>
 				query: t.Object({
 					limit: t.Optional(t.String()),
 					cursor: t.Optional(t.String()),
+					sort: t.Optional(t.String()),
+					sortDir: t.Optional(t.String()),
+					syncType: t.Optional(t.String()),
+					format: t.Optional(t.String()),
+					tier: t.Optional(t.String()),
+					language: t.Optional(t.String()),
 				}),
 			}
 		)
