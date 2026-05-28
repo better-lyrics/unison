@@ -12,6 +12,9 @@
   --color-unison-text-secondary: rgba(245, 245, 247, 0.72);
   --color-unison-text-muted: rgba(245, 245, 247, 0.48);
   --color-unison-warn: #f5a623;
+  --color-unison-medal-gold: #FFC83D;
+  --color-unison-medal-silver: #C0C7D1;
+  --color-unison-medal-bronze: #CD7F32;
   --font-sans: "Satoshi", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --font-mono: "Geist Mono", ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
 }
