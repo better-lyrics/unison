@@ -1,3 +1,5 @@
+// The `code` field is the stable contract for clients; switch on it.
+// The `error` and `hint` fields are display copy and may be reworded.
 export const ErrorCode = {
 	INVALID_PAYLOAD: "INVALID_PAYLOAD",
 	SONG_TOO_LONG: "SONG_TOO_LONG",
