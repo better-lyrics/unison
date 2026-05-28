@@ -15,24 +15,31 @@ const MEDAL_BY_RANK: Record<number, { color: string; label: string }> = {
 
 export function MedalRank({ rank, size = "sm" }: MedalRankProps) {
   const medal = MEDAL_BY_RANK[rank]
-  const wrapper = cn(
-    "inline-flex shrink-0 items-center justify-center",
-    size === "sm" ? "w-10" : "w-14",
-  )
 
+  if (size === "lg") {
+    if (medal) {
+      return (
+        <span className="inline-flex items-center gap-2" title={medal.label}>
+          <TrophyIcon className={cn("size-6", medal.color)} />
+          <span>{rank}</span>
+          <span className="sr-only">{medal.label}</span>
+        </span>
+      )
+    }
+    return <span>{formatRank(rank)}</span>
+  }
+
+  const wrapper = "inline-flex w-10 shrink-0 items-center justify-center"
   if (medal) {
-    const iconSize = size === "sm" ? "size-4" : "size-6"
     return (
       <span className={wrapper} title={medal.label}>
-        <TrophyIcon className={cn(iconSize, medal.color)} />
+        <TrophyIcon className={cn("size-4", medal.color)} />
         <span className="sr-only">{medal.label}</span>
       </span>
     )
   }
-
-  const textSize = size === "sm" ? "text-xs" : "text-lg"
   return (
-    <span className={cn(wrapper, "font-mono tabular-nums text-unison-text-muted", textSize)}>
+    <span className={cn(wrapper, "font-mono tabular-nums text-xs text-unison-text-muted")}>
       {formatRank(rank)}
     </span>
   )

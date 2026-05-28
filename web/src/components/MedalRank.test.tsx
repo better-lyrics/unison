@@ -33,12 +33,20 @@ describe("MedalRank", () => {
     expect(screen.getByText("#10")).toBeTruthy()
   })
 
-  it("applies the small wrapper width by default and a wider one when size is lg", () => {
-    const { container, rerender } = render(<MedalRank rank={1} />)
-    const small = container.firstChild as HTMLElement
-    expect(small.className).toContain("w-10")
-    rerender(<MedalRank rank={1} size="lg" />)
-    const large = container.firstChild as HTMLElement
-    expect(large.className).toContain("w-14")
+  it("applies the small wrapper width for the sm size", () => {
+    const { container } = render(<MedalRank rank={1} />)
+    expect((container.firstChild as HTMLElement).className).toContain("w-10")
+  })
+
+  it("renders trophy alongside the rank number when size is lg for top three", () => {
+    render(<MedalRank rank={2} size="lg" />)
+    expect(screen.getByText("2nd place")).toBeTruthy()
+    expect(screen.getByText("2")).toBeTruthy()
+  })
+
+  it("renders formatRank text without a trophy when size is lg for rank > 3", () => {
+    const { container } = render(<MedalRank rank={5} size="lg" />)
+    expect(container.querySelector("svg")).toBeNull()
+    expect(screen.getByText("#5")).toBeTruthy()
   })
 })
