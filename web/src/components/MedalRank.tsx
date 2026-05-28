@@ -17,7 +17,7 @@ export function MedalRank({ rank, size = "sm" }: MedalRankProps) {
   const medal = MEDAL_BY_RANK[rank]
   const wrapper = cn(
     "inline-flex shrink-0 items-center justify-center",
-    size === "sm" ? "w-8" : "w-10",
+    size === "sm" ? "w-10" : "w-14",
   )
 
   if (medal) {

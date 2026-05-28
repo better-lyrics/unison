@@ -36,9 +36,9 @@ describe("MedalRank", () => {
   it("applies the small wrapper width by default and a wider one when size is lg", () => {
     const { container, rerender } = render(<MedalRank rank={1} />)
     const small = container.firstChild as HTMLElement
-    expect(small.className).toContain("w-8")
+    expect(small.className).toContain("w-10")
     rerender(<MedalRank rank={1} size="lg" />)
     const large = container.firstChild as HTMLElement
-    expect(large.className).toContain("w-10")
+    expect(large.className).toContain("w-14")
   })
 })
