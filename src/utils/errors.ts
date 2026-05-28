@@ -66,8 +66,7 @@ const TEMPLATES: Record<ErrorCode, Template> = {
 		hint: "You're submitting too quickly. Wait a moment and try again.",
 	},
 	VARIANT_CAP_REACHED: {
-		error:
-			"You've reached the maximum active variants for this video. Delete one of your existing variants to submit another.",
+		error: "Maximum variants reached",
 		hint: "You've already submitted the maximum number of versions for this song. Delete one of your existing submissions to add a new one.",
 	},
 	AUTH_REQUIRED: {
