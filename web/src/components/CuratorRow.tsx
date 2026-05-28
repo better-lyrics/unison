@@ -1,7 +1,8 @@
 import { Link } from "react-router-dom"
+import { MedalRank } from "@/components/MedalRank"
 import { dicebearThumbsDataUri } from "@/lib/avatar"
 import { cn } from "@/lib/cn"
-import { formatCompact, formatExact, formatRank } from "@/lib/format"
+import { formatCompact, formatExact } from "@/lib/format"
 import type { CuratorLeaderboardEntry } from "@/lib/types"
 
 interface CuratorRowProps {
@@ -22,7 +23,7 @@ export function CuratorRow({ entry, isSelf = false, appended = false }: CuratorR
           isSelf ? "border-unison-border-strong" : "border-unison-border",
         )}
       >
-        <span className="shrink-0 font-mono text-xs tabular-nums text-unison-text-muted">{formatRank(entry.rank)}</span>
+        <MedalRank rank={entry.rank} size="sm" />
         <img
           src={avatar}
           alt=""
