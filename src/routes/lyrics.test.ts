@@ -1,6 +1,6 @@
-import { describe, expect, it } from "vitest"
 import type { Env, FeedItem } from "@/types"
 import { canonicalJson, hashPublicKey } from "@/utils/crypto"
+import { describe, expect, it } from "vitest"
 import { lyricsRoutes } from "./lyrics"
 
 const baseFeedItem: FeedItem = {

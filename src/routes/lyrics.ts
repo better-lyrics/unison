@@ -17,7 +17,7 @@ import { toFeedResponse } from "@/routes/feed"
 import { toResponse, toSearchResponse } from "@/routes/lyrics.transformers"
 import type { Env, LyricsSubmission } from "@/types"
 import { signedRequest } from "@/utils/auth"
-import { buildError, ErrorCode } from "@/utils/errors"
+import { ErrorCode, buildError } from "@/utils/errors"
 import { readRateLimit } from "@/utils/read-rate-limit"
 import {
 	detectFormat,
@@ -137,9 +137,12 @@ export const lyricsRoutes = (env: Env) =>
 					return { success: true, data: results.map(toResponse) }
 				}
 
-				return status(400, buildError(ErrorCode.MISSING_QUERY, {
-					hint: "Provide 'q' for fuzzy search, or both 'song' and 'artist' for exact match.",
-				}))
+				return status(
+					400,
+					buildError(ErrorCode.MISSING_QUERY, {
+						hint: "Provide 'q' for fuzzy search, or both 'song' and 'artist' for exact match.",
+					})
+				)
 			},
 			{
 				query: t.Object({
@@ -181,9 +184,7 @@ export const lyricsRoutes = (env: Env) =>
 				const limit = Math.min(Math.max(1, Number.isNaN(parsed) ? 20 : parsed), 50)
 
 				const parsedCursor = query.cursor ? Number(query.cursor) : 0
-				const offset = Number.isFinite(parsedCursor)
-					? Math.floor(Math.max(0, parsedCursor))
-					: 0
+				const offset = Number.isFinite(parsedCursor) ? Math.floor(Math.max(0, parsedCursor)) : 0
 
 				const filters = parseFeedFilters(query)
 
