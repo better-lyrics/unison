@@ -19,7 +19,12 @@ import type { Env, LyricsSubmission } from "@/types"
 import { signedRequest } from "@/utils/auth"
 import { buildError, ErrorCode } from "@/utils/errors"
 import { readRateLimit } from "@/utils/read-rate-limit"
-import { detectFormat, detectSyncType, validateTtmlStructure } from "@/utils/validation"
+import {
+	detectFormat,
+	detectPrettyPrintedTtml,
+	detectSyncType,
+	validateTtmlStructure,
+} from "@/utils/validation"
 import { Elysia, t } from "elysia"
 
 const log = new Logger("app")
@@ -33,6 +38,19 @@ function parseDuration(raw: string | undefined): number | undefined {
 		return undefined
 	}
 	return rounded
+}
+
+function prettyPrintHint(
+	reason: "inter-span-newline" | "span-trailing-whitespace" | "span-leading-whitespace"
+): string {
+	switch (reason) {
+		case "inter-span-newline":
+			return "The TTML file has line breaks between word tags, which throws off the word-by-word timing. Try re-exporting without auto-formatting."
+		case "span-trailing-whitespace":
+			return "Some words in the TTML have extra spaces tacked onto the end, which throws off the highlighting. Try re-exporting from a clean source."
+		case "span-leading-whitespace":
+			return "Some words in the TTML start with extra spaces, which throws off the highlighting. Try re-exporting from a clean source."
+	}
 }
 
 export const lyricsRoutes = (env: Env) =>
@@ -281,6 +299,23 @@ export const lyricsRoutes = (env: Env) =>
 					claimed: claimedFormat,
 					detected: format,
 				})
+			}
+
+			if (format === "ttml") {
+				const prettyCheck = detectPrettyPrintedTtml(lyricsContent)
+				if (!prettyCheck.ok) {
+					log.warn("rejecting pretty-printed ttml", {
+						keyId,
+						videoId: p.videoId as string,
+						reason: prettyCheck.reason,
+					})
+					return status(
+						400,
+						buildError(ErrorCode.TTML_FORMATTED, {
+							hint: prettyPrintHint(prettyCheck.reason),
+						})
+					)
+				}
 			}
 
 			const detectedSyncType = detectSyncType(lyricsContent, format)
