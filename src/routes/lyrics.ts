@@ -162,7 +162,12 @@ export const lyricsRoutes = (env: Env) =>
 				const limit = Math.min(Math.max(1, Number.isNaN(parsed) ? 10 : parsed), 50)
 				const results = await findVariantsByVideoId(env, params.videoId, limit)
 				if (results.length === 0) {
-					return status(404, buildError(ErrorCode.NOT_FOUND))
+					return status(
+						404,
+						buildError(ErrorCode.NOT_FOUND, {
+							error: "No lyrics found for this video",
+						})
+					)
 				}
 				return { success: true, data: results.map(toResponse) }
 			},

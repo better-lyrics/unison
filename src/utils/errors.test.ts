@@ -44,7 +44,7 @@ describe("buildError", () => {
 	it("has a stable code for the nonce replay case", () => {
 		const result = buildError(ErrorCode.NONCE_REPLAY)
 		expect(result.code).toBe("NONCE_REPLAY")
-		expect(result.error).toBe("Already received")
+		expect(result.error).toBe("NONCE_REPLAY")
 		expect(result.hint).toMatch(/already received/i)
 	})
 

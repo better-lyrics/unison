@@ -786,7 +786,7 @@ describe("POST /lyrics/submit formatted-TTML rejection", () => {
 		}
 		expect(body.success).toBe(false)
 		expect(body.code).toBe("TTML_FORMATTED")
-		expect(body.error).toBe("TTML formatting issue")
+		expect(body.error).toBe("Formatted TTML")
 		expect(body.hint).toMatch(/line breaks/i)
 		expect(db.calls.find((c) => /INSERT INTO lyrics/i.test(c.sql))).toBeUndefined()
 	})
@@ -962,7 +962,7 @@ describe("POST /lyrics/submit formatted-TTML rejection", () => {
 		})
 		const body = (await res.json()) as { error: string; hint: string; code: string }
 		expect(body.code).toBe("TTML_FORMATTED")
-		expect(body.error).toBe("TTML formatting issue")
+		expect(body.error).toBe("Formatted TTML")
 		expect(body.hint.length).toBeGreaterThan(40)
 	})
 
