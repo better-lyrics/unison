@@ -43,6 +43,30 @@ export function detectFormat(content: string): LyricsFormat {
 	return "plain"
 }
 
+export type PrettyPrintCheckResult =
+	| { ok: true }
+	| {
+			ok: false
+			reason: "inter-span-newline" | "span-trailing-whitespace" | "span-leading-whitespace"
+	  }
+
+const INTER_SPAN_NEWLINE_REGEX = /<\/span>\s*[\r\n]\s*<span\b/i
+const SPAN_TRAILING_WS_REGEX = /<span\b[^>]*>[^<]*?\S[ \t]+<\/span>/i
+const SPAN_LEADING_WS_REGEX = /<span\b[^>]*>[ \t]+\S[^<]*<\/span>/i
+
+export function detectPrettyPrintedTtml(content: string): PrettyPrintCheckResult {
+	if (INTER_SPAN_NEWLINE_REGEX.test(content)) {
+		return { ok: false, reason: "inter-span-newline" }
+	}
+	if (SPAN_TRAILING_WS_REGEX.test(content)) {
+		return { ok: false, reason: "span-trailing-whitespace" }
+	}
+	if (SPAN_LEADING_WS_REGEX.test(content)) {
+		return { ok: false, reason: "span-leading-whitespace" }
+	}
+	return { ok: true }
+}
+
 function detectLrcSyncType(lrc: string): "richsync" | "linesync" | "plain" {
 	if (LRC_WORD_TAG.test(lrc)) return "richsync"
 	if (LRC_LINE_TAG.test(lrc)) return "linesync"

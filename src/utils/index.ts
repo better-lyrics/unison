@@ -1,5 +1,5 @@
 export { hashIP } from "./hash"
 export { normalize, normalizeSong, normalizeArtist } from "./normalize"
-export { validateTtmlStructure, detectSyncType, detectFormat } from "./validation"
+export { detectFormat, detectPrettyPrintedTtml, detectSyncType, validateTtmlStructure } from "./validation"
 export { parseLrc, lrcToTtml, isLrcFormat } from "./lrc"
 export { compress, decompress, isCompressed } from "./compression"
