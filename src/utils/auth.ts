@@ -3,6 +3,7 @@ import { Logger } from "@/infra/logger"
 import type { Env } from "@/types"
 import { getPublicKey, registerPublicKey } from "@/db/publicKeys"
 import { getOrCreateUser } from "@/db/users"
+import { buildError, ErrorCode } from "@/utils/errors"
 import { verifySignature, isTimestampFresh, verifyKeyId } from "./crypto"
 
 const log = new Logger("auth")
@@ -50,21 +51,21 @@ export const signedRequest = new Elysia({ name: "signed-request" }).derive(
 
 		if (!isValidSignedBody(body)) {
 			log.warn("invalid signed request format")
-			return status(400, { success: false, error: "INVALID_SIGNED_BODY" })
+			return status(400, buildError(ErrorCode.INVALID_SIGNED_BODY))
 		}
 
 		const { payload, signature, publicKey } = body
 
 		if (!isTimestampFresh(payload.timestamp)) {
 			log.warn("expired timestamp", { keyId: payload.keyId })
-			return status(401, { success: false, error: "TIMESTAMP_EXPIRED" })
+			return status(401, buildError(ErrorCode.TIMESTAMP_EXPIRED))
 		}
 
 		const nonceKey = `nonce:${payload.keyId}:${payload.nonce}`
 		const claimed = await env.CACHE.setNX(nonceKey, "1", 300)
 		if (!claimed) {
 			log.warn("nonce replay attempt", { keyId: payload.keyId })
-			return status(409, { success: false, error: "NONCE_REPLAY" })
+			return status(409, buildError(ErrorCode.NONCE_REPLAY))
 		}
 
 		let keyRecord = await getPublicKey(env, payload.keyId)
@@ -72,12 +73,12 @@ export const signedRequest = new Elysia({ name: "signed-request" }).derive(
 		if (!keyRecord) {
 			if (!publicKey) {
 				log.info("new key requires registration", { keyId: payload.keyId })
-				return status(400, { success: false, error: "PUBLIC_KEY_REQUIRED" })
+				return status(400, buildError(ErrorCode.PUBLIC_KEY_REQUIRED))
 			}
 
 			if (!(await verifyKeyId(payload.keyId, publicKey))) {
 				log.warn("key ID mismatch", { keyId: payload.keyId })
-				return status(403, { success: false, error: "KEY_ID_MISMATCH" })
+				return status(403, buildError(ErrorCode.KEY_ID_MISMATCH))
 			}
 
 			keyRecord = await registerPublicKey(env, payload.keyId, publicKey)
@@ -87,7 +88,7 @@ export const signedRequest = new Elysia({ name: "signed-request" }).derive(
 		const storedKey = JSON.parse(keyRecord.public_key) as JsonWebKey
 		if (!(await verifySignature(payload, signature, storedKey))) {
 			log.warn("invalid signature", { keyId: payload.keyId })
-			return status(401, { success: false, error: "INVALID_SIGNATURE" })
+			return status(401, buildError(ErrorCode.INVALID_SIGNATURE))
 		}
 
 		const user = await getOrCreateUser(env, payload.keyId)
