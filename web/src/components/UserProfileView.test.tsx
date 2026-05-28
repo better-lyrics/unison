@@ -100,7 +100,7 @@ describe("UserProfileView", () => {
     renderView("Profile")
 
     await waitFor(() => expect(screen.getByText("AlphaUser")).toBeTruthy())
-    expect(screen.getByText(/#12/)).toBeTruthy()
+    expect(screen.getByText("#12")).toBeTruthy()
     expect(screen.getByText("7.4")).toBeTruthy()
     expect(screen.getByText("3")).toBeTruthy()
     expect(screen.getByText("11")).toBeTruthy()
@@ -109,6 +109,46 @@ describe("UserProfileView", () => {
     await waitFor(() => expect(screen.getByText("First Song")).toBeTruthy())
     expect(screen.getByText("Hidden Song")).toBeTruthy()
     expect(screen.getByText(/^hidden$/i)).toBeTruthy()
+  })
+
+  it("renders a gold trophy in the Rank tile for a rank-1 curator", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockImplementation((url: string) => {
+        if (url === `/leaderboard/users/${keyId}`) {
+          return Promise.resolve(
+            new Response(
+              JSON.stringify({
+                success: true,
+                data: {
+                  ranked: true,
+                  keyId,
+                  displayName: "TopUser",
+                  reputation: 1.6,
+                  score: 99.9,
+                  submissionCount: 50,
+                  totalUpvotes: 200,
+                  rank: 1,
+                  lastVoteAt: Math.floor(Date.now() / 1000) - 60,
+                },
+              }),
+              { status: 200 },
+            ),
+          )
+        }
+        if (url === `/users/${keyId}/submissions`) {
+          return Promise.resolve(
+            new Response(JSON.stringify({ success: true, data: { submissions: [] } }), { status: 200 }),
+          )
+        }
+        return Promise.reject(new Error(`unexpected url ${url}`))
+      }),
+    )
+
+    renderView("Profile")
+
+    await waitFor(() => expect(screen.getByText("TopUser")).toBeTruthy())
+    expect(screen.getByText("1st place")).toBeTruthy()
   })
 
   it("renders the unranked empty state and 'has not voted' line", async () => {

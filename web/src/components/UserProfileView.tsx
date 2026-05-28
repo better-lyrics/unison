@@ -1,13 +1,14 @@
 import { IconCheck, IconCopy } from "@tabler/icons-react"
-import { useCallback, useState } from "react"
+import { type ReactNode, useCallback, useState } from "react"
 import { EmptyState } from "@/components/EmptyState"
 import { LeaderboardSection } from "@/components/LeaderboardSection"
 import { LoadingPlaceholder } from "@/components/LoadingPlaceholder"
+import { MedalRank } from "@/components/MedalRank"
 import { SubmissionsList } from "@/components/SubmissionsList"
 import { useAsyncData } from "@/hooks/useAsyncData"
 import { fetchUserRank } from "@/lib/api"
 import { dicebearThumbsDataUri } from "@/lib/avatar"
-import { formatExact, formatRank, formatRelativeTime } from "@/lib/format"
+import { formatExact, formatRelativeTime } from "@/lib/format"
 
 interface UserProfileViewProps {
   keyId: string
@@ -16,13 +17,13 @@ interface UserProfileViewProps {
 
 interface StatProps {
   label: string
-  value: string
+  value: ReactNode
 }
 
 function Stat({ label, value }: StatProps) {
   return (
     <div className="rounded-lg border border-unison-border bg-unison-bg-elevated px-4 py-3">
-      <p className="font-mono text-lg text-unison-text">{value}</p>
+      <div className="font-mono text-lg text-unison-text">{value}</div>
       <p className="text-[10px] uppercase tracking-wider text-unison-text-muted">{label}</p>
     </div>
   )
@@ -85,7 +86,7 @@ export function UserProfileView({ keyId, title = "Profile" }: UserProfileViewPro
 
         {data.ranked ? (
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            <Stat label="Rank" value={formatRank(data.rank)} />
+            <Stat label="Rank" value={<MedalRank rank={data.rank} size="lg" />} />
             <Stat label="Score" value={formatExact(data.score)} />
             <Stat label="Submissions" value={formatExact(data.submissionCount)} />
             <Stat label="Upvotes" value={formatExact(data.totalUpvotes)} />
