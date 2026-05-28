@@ -916,4 +916,113 @@ describe("POST /lyrics/submit formatted-TTML rejection", () => {
 		expect(body.code).toBe("TTML_FORMATTED")
 		expect(body.hint).toMatch(/line breaks/i)
 	})
+
+	it("rejects pretty-printed TTML carried in a format=plain claim with no DB write", async () => {
+		const formatted =
+			'<tt><body><div><p>\n<span begin="0:00.0" end="0:01.0">Hi</span>\n<span begin="0:01.0" end="0:02.0">there</span>\n</p></div></body></tt>'
+		const { res, db } = await submit({
+			videoId: "abc",
+			song: "S",
+			artist: "A",
+			duration: 100,
+			lyrics: formatted,
+			format: "plain",
+		})
+		expect(res.status).toBe(400)
+		expect(db.calls.find((c) => /INSERT INTO lyrics/i.test(c.sql))).toBeUndefined()
+		expect(db.calls.find((c) => /UPDATE lyrics/i.test(c.sql))).toBeUndefined()
+	})
+
+	it("malformed-TTML gate fires before formatted-TTML gate when both would apply", async () => {
+		const both =
+			'<tt><body><div><p>\n<span begin="0:00.0" end="0:01.0">Hi</span>\n<span begin="0:01.0" end="0:02.0">there</span>\n</p></div></body>'
+		const { res } = await submit({
+			videoId: "abc",
+			song: "S",
+			artist: "A",
+			duration: 100,
+			lyrics: both,
+			format: "ttml",
+		})
+		expect(res.status).toBe(400)
+		const body = (await res.json()) as { code: string }
+		expect(body.code).toBe("TTML_MALFORMED")
+	})
+
+	it("rejects with the canonical TTML_FORMATTED error string", async () => {
+		const formatted =
+			'<tt><body><div><p>\n<span begin="0:00.0" end="0:01.0">Hi</span>\n<span begin="0:01.0" end="0:02.0">there</span>\n</p></div></body></tt>'
+		const { res } = await submit({
+			videoId: "abc",
+			song: "S",
+			artist: "A",
+			duration: 100,
+			lyrics: formatted,
+			format: "ttml",
+		})
+		const body = (await res.json()) as { error: string; hint: string; code: string }
+		expect(body.code).toBe("TTML_FORMATTED")
+		expect(body.error).toBe("TTML formatting issue")
+		expect(body.hint.length).toBeGreaterThan(40)
+	})
+
+	it("each reason returns a distinct, non-empty hint", async () => {
+		const interSpan =
+			'<tt><body><div><p>\n<span begin="0:00.0" end="0:01.0">a</span>\n<span begin="0:01.0" end="0:02.0">b</span>\n</p></div></body></tt>'
+		const trailing =
+			'<tt><body><div><p><span begin="0:00.0" end="0:01.0">a </span><span begin="0:01.0" end="0:02.0">b</span></p></div></body></tt>'
+		const leading =
+			'<tt><body><div><p><span begin="0:00.0" end="0:01.0">a</span><span begin="0:01.0" end="0:02.0"> b</span></p></div></body></tt>'
+
+		const results = await Promise.all(
+			[interSpan, trailing, leading].map((lyrics) =>
+				submit({
+					videoId: "abc",
+					song: "S",
+					artist: "A",
+					duration: 100,
+					lyrics,
+					format: "ttml",
+				}),
+			),
+		)
+		const hints = await Promise.all(results.map(({ res }) => res.json() as Promise<{ hint: string }>))
+		expect(new Set(hints.map((h) => h.hint)).size).toBe(3)
+	})
+
+	it("accepts adjacent-syllable spans without inter-span whitespace (regression guard)", async () => {
+		const ttml =
+			'<tt><body><div><p>' +
+			'<span begin="0:00.0" end="0:00.5">Hel</span>' +
+			'<span begin="0:00.5" end="0:01.0">lo</span>' +
+			'</p></div></body></tt>'
+		const { res } = await submit({
+			videoId: "abc",
+			song: "S",
+			artist: "A",
+			duration: 100,
+			lyrics: ttml,
+			format: "ttml",
+		})
+		expect(res.status).toBe(201)
+	})
+
+	it("accepts background-span container with clean inner spans", async () => {
+		const ttml =
+			'<tt><body><div><p>' +
+			'<span begin="0:00.0" end="0:01.0">Main</span> ' +
+			'<span ttm:role="x-bg">' +
+			'<span begin="0:00.5" end="0:01.0">bg</span>' +
+			'</span>' +
+			'</p></div></body></tt>'
+		const { res } = await submit({
+			videoId: "abc",
+			song: "S",
+			artist: "A",
+			duration: 100,
+			lyrics: ttml,
+			format: "ttml",
+		})
+		expect(res.status).toBe(201)
+	})
 })
