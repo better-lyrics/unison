@@ -6,6 +6,8 @@ import type {
   UserSubmissionsResponse,
 } from "./types"
 
+const USE_SEED = import.meta.env.MODE === "development" && import.meta.env.VITE_USE_API !== "1"
+
 async function getJson<T>(path: string): Promise<T> {
   const res = await fetch(path)
   if (!res.ok) throw new Error(`HTTP ${res.status} for ${path}`)
@@ -14,19 +16,23 @@ async function getJson<T>(path: string): Promise<T> {
   return envelope.data
 }
 
-export function fetchSongLeaderboard(): Promise<SongsLeaderboardResponse> {
+export async function fetchSongLeaderboard(): Promise<SongsLeaderboardResponse> {
+  if (USE_SEED) return (await import("./dev-seed")).seedSongs()
   return getJson<SongsLeaderboardResponse>("/leaderboard/songs")
 }
 
-export function fetchCuratorLeaderboard(): Promise<CuratorsLeaderboardResponse> {
+export async function fetchCuratorLeaderboard(): Promise<CuratorsLeaderboardResponse> {
+  if (USE_SEED) return (await import("./dev-seed")).seedCurators()
   return getJson<CuratorsLeaderboardResponse>("/leaderboard/users")
 }
 
-export function fetchUserRank(keyId: string): Promise<UserRankResponse> {
+export async function fetchUserRank(keyId: string): Promise<UserRankResponse> {
+  if (USE_SEED) return (await import("./dev-seed")).seedUserRank(keyId)
   return getJson<UserRankResponse>(`/leaderboard/users/${encodeURIComponent(keyId)}`)
 }
 
-export function fetchUserSubmissions(keyId: string, cursor?: string): Promise<UserSubmissionsResponse> {
+export async function fetchUserSubmissions(keyId: string, cursor?: string): Promise<UserSubmissionsResponse> {
+  if (USE_SEED) return (await import("./dev-seed")).seedUserSubmissions(keyId)
   const params = cursor !== undefined ? `?cursor=${encodeURIComponent(cursor)}` : ""
   return getJson<UserSubmissionsResponse>(`/users/${encodeURIComponent(keyId)}/submissions${params}`)
 }

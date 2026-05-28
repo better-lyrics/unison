@@ -413,6 +413,38 @@ describe("CuratorsPage", () => {
     expect(screen.getByText(/Be the first by submitting lyrics from Better Lyrics/i)).toBeTruthy()
   })
 
+  it("renders gold/silver/bronze trophies for the top three and text for rank 4+", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockImplementation((url: string) => {
+        if (url === "/leaderboard/users") {
+          return Promise.resolve(
+            jsonResponse({
+              success: true,
+              data: {
+                curators: [
+                  { rank: 1, keyId: "a".repeat(64), displayName: "Alice", reputation: 1, score: 9.9, submissionCount: 5, totalUpvotes: 20 },
+                  { rank: 2, keyId: "b".repeat(64), displayName: "Bob", reputation: 1, score: 8.8, submissionCount: 4, totalUpvotes: 15 },
+                  { rank: 3, keyId: "c".repeat(64), displayName: "Cara", reputation: 1, score: 7.7, submissionCount: 3, totalUpvotes: 12 },
+                  { rank: 4, keyId: "d".repeat(64), displayName: "Dan", reputation: 1, score: 6.6, submissionCount: 2, totalUpvotes: 9 },
+                ],
+              },
+            }),
+          )
+        }
+        return Promise.reject(new Error(`unexpected url ${url}`))
+      }),
+    )
+
+    renderPage()
+
+    await waitFor(() => expect(screen.getByText("Alice")).toBeTruthy())
+    expect(screen.getByText("1st place")).toBeTruthy()
+    expect(screen.getByText("2nd place")).toBeTruthy()
+    expect(screen.getByText("3rd place")).toBeTruthy()
+    expect(screen.getByText("#4")).toBeTruthy()
+  })
+
   it("does not append when the user is signed-in but not ranked", async () => {
     saveStoredSession(valid)
     vi.stubGlobal(
