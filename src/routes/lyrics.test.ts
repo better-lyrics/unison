@@ -619,9 +619,9 @@ describe("POST /lyrics/submit format override", () => {
 		})
 
 		expect(res.status).toBe(400)
-		const body = (await res.json()) as { success: boolean; error: string }
+		const body = (await res.json()) as { success: boolean; error: string; code: string }
 		expect(body.success).toBe(false)
-		expect(body.error).toMatch(/malformed ttml/i)
+		expect(body.code).toBe("TTML_MALFORMED")
 		expect(findInsert(db)).toBeUndefined()
 	})
 
@@ -739,5 +739,28 @@ describe("POST /lyrics/submit format override", () => {
 		const insert = findInsert(db)
 		expect(insert?.params[FORMAT_PARAM_INDEX]).toBe("ttml")
 		expect(insert?.params[SYNC_TYPE_PARAM_INDEX]).toBe("richsync")
+	})
+
+	it("4xx submission responses carry code, error, and hint fields", async () => {
+		const { res } = await submit({
+			videoId: "abc",
+			song: "S",
+			artist: "A",
+			duration: 100,
+			lyrics: "<tt><body><div><p>x",
+			format: "ttml",
+		})
+		expect(res.status).toBe(400)
+		const body = (await res.json()) as {
+			success: boolean
+			error: string
+			code: string
+			hint: string
+		}
+		expect(body.success).toBe(false)
+		expect(typeof body.error).toBe("string")
+		expect(body.code).toBe("TTML_MALFORMED")
+		expect(typeof body.hint).toBe("string")
+		expect(body.hint.length).toBeGreaterThan(40)
 	})
 })
