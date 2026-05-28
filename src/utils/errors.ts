@@ -62,7 +62,7 @@ const TEMPLATES: Record<ErrorCode, Template> = {
 	},
 	INVALID_ID: {
 		error: "Bad request",
-		hint: "Something looks off with the request. Try refreshing the page and trying again.",
+		hint: "The link or ID doesn't look right. Double-check it and try again.",
 	},
 	NOT_OWNER: {
 		error: "Not yours to delete",

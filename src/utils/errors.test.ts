@@ -14,7 +14,7 @@ describe("buildError", () => {
 
 	it("every defined code has a non-empty error and a non-empty hint", () => {
 		for (const code of Object.values(ErrorCode)) {
-			const result = buildError(code as ErrorCode)
+			const result = buildError(code)
 			expect(result.code).toBe(code)
 			expect(result.error.length).toBeGreaterThan(0)
 			expect(result.hint.length).toBeGreaterThan(0)
@@ -36,7 +36,7 @@ describe("buildError", () => {
 
 	it("error field is a single line (backwards-compatible single-string display)", () => {
 		for (const code of Object.values(ErrorCode)) {
-			const result = buildError(code as ErrorCode)
+			const result = buildError(code)
 			expect(result.error).not.toContain("\n")
 		}
 	})
