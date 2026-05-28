@@ -306,6 +306,24 @@ describe("detectPrettyPrintedTtml", () => {
 				'<tt><body><div><p><span begin="0:00.0" end="0:01.0">Hi</span> <span ttm:role="x-bg"><span begin="0:00.5" end="0:01.0">bg</span></span></p></div></body></tt>'
 			expect(detectPrettyPrintedTtml(ttml).ok).toBe(true)
 		})
+
+		it("accepts self-closing spans", () => {
+			const ttml =
+				'<tt><body><div><p><span begin="0:00.0" end="0:01.0"/> <span begin="0:01.0" end="0:02.0"/></p></div></body></tt>'
+			expect(detectPrettyPrintedTtml(ttml).ok).toBe(true)
+		})
+
+		it("accepts a single-span line-sync wrap with trailing whitespace inside (no sibling span)", () => {
+			const ttml =
+				'<tt><body><div><p begin="0:00.0" end="0:02.0"><span begin="0:00.0" end="0:02.0">whole line text </span></p></div></body></tt>'
+			expect(detectPrettyPrintedTtml(ttml).ok).toBe(true)
+		})
+
+		it("accepts a single-span line-sync wrap with leading whitespace inside (no sibling span)", () => {
+			const ttml =
+				'<tt><body><div><p begin="0:00.0" end="0:02.0"><span begin="0:00.0" end="0:02.0"> whole line text</span></p></div></body></tt>'
+			expect(detectPrettyPrintedTtml(ttml).ok).toBe(true)
+		})
 	})
 
 	describe("pretty-printed TTML (should flag)", () => {

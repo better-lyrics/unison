@@ -50,9 +50,13 @@ export type PrettyPrintCheckResult =
 			reason: "inter-span-newline" | "span-trailing-whitespace" | "span-leading-whitespace"
 	  }
 
+// Order matters: the inter-span newline check is the strongest signal and
+// subsumes most pretty-print shapes. The trailing/leading checks are
+// scoped to require an adjacent sibling span so they don't fire on
+// single-span line-sync wraps.
 const INTER_SPAN_NEWLINE_REGEX = /<\/span>\s*[\r\n]\s*<span\b/i
-const SPAN_TRAILING_WS_REGEX = /<span\b[^>]*>[^<]*?\S[ \t]+<\/span>/i
-const SPAN_LEADING_WS_REGEX = /<span\b[^>]*>[ \t]+\S[^<]*<\/span>/i
+const SPAN_TRAILING_WS_REGEX = /<span\b[^>]*>[^<]*?\S[ \t]+<\/span>\s*<span\b/i
+const SPAN_LEADING_WS_REGEX = /<\/span>\s*<span\b[^>]*>[ \t]+\S[^<]*<\/span>/i
 
 export function detectPrettyPrintedTtml(content: string): PrettyPrintCheckResult {
 	if (INTER_SPAN_NEWLINE_REGEX.test(content)) {
