@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { detectFormat, detectSyncType, validateTtmlStructure } from "./validation"
+import { detectFormat, detectPrettyPrintedTtml, detectSyncType, validateTtmlStructure } from "./validation"
 
 describe("validateTtmlStructure", () => {
 	it("validates basic TTML structure", () => {
@@ -271,6 +271,193 @@ describe("detectFormat", () => {
 		it("classifies the row-431 doc shape (TTML wrongly claimed as plain) as ttml", () => {
 			const ttml = `<tt xmlns="http://www.w3.org/ns/ttml" xmlns:ttm="http://www.w3.org/ns/ttml#metadata"><body><div><p begin="0:01.428" end="0:04.847"><span begin="0:01.428" end="0:01.731">Whoa,</span></p></div></body></tt>`
 			expect(detectFormat(ttml)).toBe("ttml")
+		})
+	})
+})
+
+describe("detectPrettyPrintedTtml", () => {
+	describe("clean TTML (should not flag)", () => {
+		it("accepts single-line word-synced TTML", () => {
+			const ttml =
+				'<tt><body><div><p><span begin="0:00.0" end="0:01.0">Hello</span> <span begin="0:01.0" end="0:02.0">world</span></p></div></body></tt>'
+			expect(detectPrettyPrintedTtml(ttml).ok).toBe(true)
+		})
+
+		it("accepts TTML with newlines between line elements but not between spans", () => {
+			const ttml =
+				'<tt><body><div>\n<p><span begin="0:00.0" end="0:01.0">Hi</span></p>\n<p><span begin="0:02.0" end="0:03.0">There</span></p>\n</div></body></tt>'
+			expect(detectPrettyPrintedTtml(ttml).ok).toBe(true)
+		})
+
+		it("accepts line-sync TTML with no spans", () => {
+			const ttml =
+				'<tt><body><div>\n  <p begin="0:00.0" end="0:01.0">Hello world</p>\n</div></body></tt>'
+			expect(detectPrettyPrintedTtml(ttml).ok).toBe(true)
+		})
+
+		it("accepts adjacent spans with no whitespace (syllable run)", () => {
+			const ttml =
+				'<tt><body><div><p><span begin="0:00.0" end="0:00.5">Hel</span><span begin="0:00.5" end="0:01.0">lo</span></p></div></body></tt>'
+			expect(detectPrettyPrintedTtml(ttml).ok).toBe(true)
+		})
+
+		it("accepts background span containers (x-bg)", () => {
+			const ttml =
+				'<tt><body><div><p><span begin="0:00.0" end="0:01.0">Hi</span> <span ttm:role="x-bg"><span begin="0:00.5" end="0:01.0">bg</span></span></p></div></body></tt>'
+			expect(detectPrettyPrintedTtml(ttml).ok).toBe(true)
+		})
+
+		it("accepts self-closing spans", () => {
+			const ttml =
+				'<tt><body><div><p><span begin="0:00.0" end="0:01.0"/> <span begin="0:01.0" end="0:02.0"/></p></div></body></tt>'
+			expect(detectPrettyPrintedTtml(ttml).ok).toBe(true)
+		})
+
+		it("accepts a single-span line-sync wrap with trailing whitespace inside (no sibling span)", () => {
+			const ttml =
+				'<tt><body><div><p begin="0:00.0" end="0:02.0"><span begin="0:00.0" end="0:02.0">whole line text </span></p></div></body></tt>'
+			expect(detectPrettyPrintedTtml(ttml).ok).toBe(true)
+		})
+
+		it("accepts a single-span line-sync wrap with leading whitespace inside (no sibling span)", () => {
+			const ttml =
+				'<tt><body><div><p begin="0:00.0" end="0:02.0"><span begin="0:00.0" end="0:02.0"> whole line text</span></p></div></body></tt>'
+			expect(detectPrettyPrintedTtml(ttml).ok).toBe(true)
+		})
+
+		it("accepts span content that is purely whitespace inside (no real text)", () => {
+			const ttml =
+				'<tt><body><div><p><span begin="0:00.0" end="0:01.0">   </span><span begin="0:01.0" end="0:02.0">word</span></p></div></body></tt>'
+			expect(detectPrettyPrintedTtml(ttml).ok).toBe(true)
+		})
+
+		it("accepts spans separated by a single space (canonical word boundary)", () => {
+			const ttml =
+				'<tt><body><div><p><span begin="0:00.0" end="0:01.0">Hi</span> <span begin="0:01.0" end="0:02.0">there</span></p></div></body></tt>'
+			expect(detectPrettyPrintedTtml(ttml).ok).toBe(true)
+		})
+
+		it("accepts spans separated by multiple spaces but no newline", () => {
+			const ttml =
+				'<tt><body><div><p><span begin="0:00.0" end="0:01.0">Hi</span>   <span begin="0:01.0" end="0:02.0">there</span></p></div></body></tt>'
+			expect(detectPrettyPrintedTtml(ttml).ok).toBe(true)
+		})
+
+		it("flags non-TTML markup with newline-separated <span> siblings (detector is permissive about wrapper structure)", () => {
+			const html = "<div><span>Hello</span>\n<span>World</span></div>"
+			expect(detectPrettyPrintedTtml(html).ok).toBe(false)
+		})
+	})
+
+	describe("pretty-printed TTML (should flag)", () => {
+		it("flags newline between span siblings", () => {
+			const ttml =
+				'<tt><body><div><p>\n<span begin="0:00.0" end="0:01.0">Hello</span>\n<span begin="0:01.0" end="0:02.0">world</span>\n</p></div></body></tt>'
+			const result = detectPrettyPrintedTtml(ttml)
+			expect(result.ok).toBe(false)
+			if (!result.ok) expect(result.reason).toBe("inter-span-newline")
+		})
+
+		it("flags trailing whitespace inside a span (row-69 pattern)", () => {
+			const ttml =
+				'<tt><body><div><p><span begin="0:00.0" end="0:01.0">Focus </span><span begin="0:01.0" end="0:02.0">Aim</span></p></div></body></tt>'
+			const result = detectPrettyPrintedTtml(ttml)
+			expect(result.ok).toBe(false)
+			if (!result.ok) expect(result.reason).toBe("span-trailing-whitespace")
+		})
+
+		it("flags leading whitespace inside a span", () => {
+			const ttml =
+				'<tt><body><div><p><span begin="0:00.0" end="0:01.0">Hello</span><span begin="0:01.0" end="0:02.0"> world</span></p></div></body></tt>'
+			const result = detectPrettyPrintedTtml(ttml)
+			expect(result.ok).toBe(false)
+			if (!result.ok) expect(result.reason).toBe("span-leading-whitespace")
+		})
+
+		it("flags row 69's exact shape", () => {
+			const row69 =
+				'<?xml version="1.0" ?>\n<tt xmlns="http://www.w3.org/ns/ttml">\n  <body>\n    <div>\n      <p begin="00:00:01.417" end="00:00:01.958">\n        <span begin="00:00:01.417" end="00:00:01.958">Focus </span>\n      </p>\n      <p begin="00:00:03.216" end="00:00:04.259">\n        <span begin="00:00:03.216" end="00:00:03.746">Ready </span>\n        <span ttm:role="x-bg">\n          <span begin="00:00:03.711" end="00:00:04.259">Ah </span>\n        </span>\n      </p>\n    </div>\n  </body>\n</tt>'
+			const result = detectPrettyPrintedTtml(row69)
+			expect(result.ok).toBe(false)
+		})
+
+		it("flags CRLF inter-span whitespace", () => {
+			const ttml =
+				'<tt><body><div><p>\r\n<span begin="0:00.0" end="0:01.0">a</span>\r\n<span begin="0:01.0" end="0:02.0">b</span>\r\n</p></div></body></tt>'
+			expect(detectPrettyPrintedTtml(ttml).ok).toBe(false)
+		})
+
+		it("does not flag tabs between span siblings without a newline (documents current regex scope)", () => {
+			const ttml =
+				'<tt><body><div><p><span begin="0:00.0" end="0:01.0">a</span>\t<span begin="0:01.0" end="0:02.0">b</span></p></div></body></tt>'
+			const result = detectPrettyPrintedTtml(ttml)
+			expect(result.ok).toBe(true)
+		})
+
+		it("flags newlines between siblings within an x-bg background container", () => {
+			const ttml =
+				'<tt><body><div><p>' +
+				'<span begin="0:00.0" end="0:01.0">main</span> ' +
+				'<span ttm:role="x-bg">' +
+				'\n  <span begin="0:00.5" end="0:01.0">bg1</span>' +
+				'\n  <span begin="0:01.0" end="0:01.5">bg2</span>' +
+				'\n</span>' +
+				'</p></div></body></tt>'
+			const result = detectPrettyPrintedTtml(ttml)
+			expect(result.ok).toBe(false)
+			if (!result.ok) expect(result.reason).toBe("inter-span-newline")
+		})
+
+		it("flags mixed-quality TTML (some lines clean, some pretty-printed)", () => {
+			const ttml =
+				'<tt><body><div>' +
+				'<p begin="0:00.0" end="0:02.0"><span begin="0:00.0" end="0:01.0">Clean</span> <span begin="0:01.0" end="0:02.0">line</span></p>' +
+				'<p begin="0:02.0" end="0:04.0">\n  <span begin="0:02.0" end="0:03.0">Dirty</span>\n  <span begin="0:03.0" end="0:04.0">line</span>\n</p>' +
+				"</div></body></tt>"
+			expect(detectPrettyPrintedTtml(ttml).ok).toBe(false)
+		})
+
+		it("flags trailing whitespace using a tab character (not just space)", () => {
+			const ttml =
+				'<tt><body><div><p><span begin="0:00.0" end="0:01.0">word\t</span><span begin="0:01.0" end="0:02.0">two</span></p></div></body></tt>'
+			const result = detectPrettyPrintedTtml(ttml)
+			expect(result.ok).toBe(false)
+			if (!result.ok) expect(result.reason).toBe("span-trailing-whitespace")
+		})
+
+		it("flags leading whitespace using a tab character", () => {
+			const ttml =
+				'<tt><body><div><p><span begin="0:00.0" end="0:01.0">one</span><span begin="0:01.0" end="0:02.0">\ttwo</span></p></div></body></tt>'
+			const result = detectPrettyPrintedTtml(ttml)
+			expect(result.ok).toBe(false)
+			if (!result.ok) expect(result.reason).toBe("span-leading-whitespace")
+		})
+
+		it("returns a result quickly on a large pretty-printed payload (smoke ReDoS)", () => {
+			let payload = "<tt><body><div>"
+			for (let i = 0; i < 500; i++) {
+				payload += `<p begin="0:${i}.0" end="0:${i + 1}.0">\n  <span begin="0:${i}.0" end="0:${i}.5">a${i}</span>\n  <span begin="0:${i}.5" end="0:${i + 1}.0">b${i}</span>\n</p>`
+			}
+			payload += "</div></body></tt>"
+			const start = Date.now()
+			const result = detectPrettyPrintedTtml(payload)
+			const elapsed = Date.now() - start
+			expect(result.ok).toBe(false)
+			expect(elapsed).toBeLessThan(100)
+		})
+	})
+
+	describe("non-TTML content", () => {
+		it("returns ok for plain prose (caller is expected to gate on detected format first)", () => {
+			expect(detectPrettyPrintedTtml("just some prose").ok).toBe(true)
+		})
+
+		it("returns ok for LRC", () => {
+			expect(detectPrettyPrintedTtml("[00:01.00]Hello\n[00:02.00]World").ok).toBe(true)
+		})
+
+		it("returns ok for empty string", () => {
+			expect(detectPrettyPrintedTtml("").ok).toBe(true)
 		})
 	})
 })

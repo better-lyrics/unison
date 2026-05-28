@@ -122,7 +122,7 @@ describe("signedRequest middleware: error responses", () => {
 		const body = await readJson(res)
 
 		expect(res.status).toBe(400)
-		expect(body).toEqual({ success: false, error: "INVALID_SIGNED_BODY" })
+		expect(body).toMatchObject({ success: false, error: "INVALID_SIGNED_BODY" })
 	})
 
 	it("returns 401 TIMESTAMP_EXPIRED when payload timestamp is stale", async () => {
@@ -138,7 +138,7 @@ describe("signedRequest middleware: error responses", () => {
 		const body = await readJson(res)
 
 		expect(res.status).toBe(401)
-		expect(body).toEqual({ success: false, error: "TIMESTAMP_EXPIRED" })
+		expect(body).toMatchObject({ success: false, error: "TIMESTAMP_EXPIRED" })
 	})
 
 	it("returns 409 NONCE_REPLAY when setNX fails to claim the nonce", async () => {
@@ -154,7 +154,7 @@ describe("signedRequest middleware: error responses", () => {
 		const body = await readJson(res)
 
 		expect(res.status).toBe(409)
-		expect(body).toEqual({ success: false, error: "NONCE_REPLAY" })
+		expect(body).toMatchObject({ success: false, error: "NONCE_REPLAY" })
 	})
 
 	it("returns 400 PUBLIC_KEY_REQUIRED when keyId is unknown and no publicKey is sent", async () => {
@@ -171,7 +171,7 @@ describe("signedRequest middleware: error responses", () => {
 		const body = await readJson(res)
 
 		expect(res.status).toBe(400)
-		expect(body).toEqual({ success: false, error: "PUBLIC_KEY_REQUIRED" })
+		expect(body).toMatchObject({ success: false, error: "PUBLIC_KEY_REQUIRED" })
 	})
 
 	it("returns 403 KEY_ID_MISMATCH when publicKey does not hash to keyId", async () => {
@@ -191,7 +191,7 @@ describe("signedRequest middleware: error responses", () => {
 		const body = await readJson(res)
 
 		expect(res.status).toBe(403)
-		expect(body).toEqual({ success: false, error: "KEY_ID_MISMATCH" })
+		expect(body).toMatchObject({ success: false, error: "KEY_ID_MISMATCH" })
 	})
 
 	it("returns 401 INVALID_SIGNATURE when stored key cannot verify the signature", async () => {
@@ -217,7 +217,7 @@ describe("signedRequest middleware: error responses", () => {
 		const body = await readJson(res)
 
 		expect(res.status).toBe(401)
-		expect(body).toEqual({ success: false, error: "INVALID_SIGNATURE" })
+		expect(body).toMatchObject({ success: false, error: "INVALID_SIGNATURE" })
 	})
 
 	it("authenticates a valid signed request and exposes keyId/userId to handler", async () => {

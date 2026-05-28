@@ -17,8 +17,14 @@ import { toFeedResponse } from "@/routes/feed"
 import { toResponse, toSearchResponse } from "@/routes/lyrics.transformers"
 import type { Env, LyricsSubmission } from "@/types"
 import { signedRequest } from "@/utils/auth"
+import { ErrorCode, buildError } from "@/utils/errors"
 import { readRateLimit } from "@/utils/read-rate-limit"
-import { detectFormat, detectSyncType, validateTtmlStructure } from "@/utils/validation"
+import {
+	detectFormat,
+	detectPrettyPrintedTtml,
+	detectSyncType,
+	validateTtmlStructure,
+} from "@/utils/validation"
 import { Elysia, t } from "elysia"
 
 const log = new Logger("app")
@@ -32,6 +38,19 @@ function parseDuration(raw: string | undefined): number | undefined {
 		return undefined
 	}
 	return rounded
+}
+
+function prettyPrintHint(
+	reason: "inter-span-newline" | "span-trailing-whitespace" | "span-leading-whitespace"
+): string {
+	switch (reason) {
+		case "inter-span-newline":
+			return "The TTML file has line breaks between word tags, which throws off the word-by-word timing. Try re-exporting without auto-formatting."
+		case "span-trailing-whitespace":
+			return "Some words in the TTML have extra spaces tacked onto the end, which throws off the highlighting. Try re-exporting from a clean source."
+		case "span-leading-whitespace":
+			return "Some words in the TTML start with extra spaces, which throws off the highlighting. Try re-exporting from a clean source."
+	}
 }
 
 export const lyricsRoutes = (env: Env) =>
@@ -52,7 +71,7 @@ export const lyricsRoutes = (env: Env) =>
 				if (query.v) {
 					const result = await findByVideoId(env, query.v)
 					if (!result) {
-						return status(404, { success: false, error: "Lyrics not found" })
+						return status(404, buildError(ErrorCode.NOT_FOUND))
 					}
 					const userVote = lyricsUserId ? await getUserVote(env, result.id, lyricsUserId) : null
 					return { success: true, data: { ...toResponse(result), userVote } }
@@ -68,16 +87,13 @@ export const lyricsRoutes = (env: Env) =>
 						query.album
 					)
 					if (!result) {
-						return status(404, { success: false, error: "Lyrics not found" })
+						return status(404, buildError(ErrorCode.NOT_FOUND))
 					}
 					const userVote = lyricsUserId ? await getUserVote(env, result.id, lyricsUserId) : null
 					return { success: true, data: { ...toResponse(result), userVote } }
 				}
 
-				return status(400, {
-					success: false,
-					error: "Provide either 'v' (videoId) or 'song' + 'artist'",
-				})
+				return status(400, buildError(ErrorCode.MISSING_QUERY))
 			},
 			{
 				query: t.Object({
@@ -121,10 +137,12 @@ export const lyricsRoutes = (env: Env) =>
 					return { success: true, data: results.map(toResponse) }
 				}
 
-				return status(400, {
-					success: false,
-					error: "Provide 'q' for fuzzy search, or 'song' + 'artist' for exact match",
-				})
+				return status(
+					400,
+					buildError(ErrorCode.MISSING_QUERY, {
+						hint: "Provide 'q' for fuzzy search, or both 'song' and 'artist' for exact match.",
+					})
+				)
 			},
 			{
 				query: t.Object({
@@ -144,7 +162,12 @@ export const lyricsRoutes = (env: Env) =>
 				const limit = Math.min(Math.max(1, Number.isNaN(parsed) ? 10 : parsed), 50)
 				const results = await findVariantsByVideoId(env, params.videoId, limit)
 				if (results.length === 0) {
-					return status(404, { success: false, error: "No lyrics found for this video" })
+					return status(
+						404,
+						buildError(ErrorCode.NOT_FOUND, {
+							error: "No lyrics found for this video",
+						})
+					)
 				}
 				return { success: true, data: results.map(toResponse) }
 			},
@@ -159,16 +182,14 @@ export const lyricsRoutes = (env: Env) =>
 			"/mine",
 			async ({ query, env, lyricsUserId, status }) => {
 				if (!lyricsUserId) {
-					return status(401, { success: false, error: "Authentication required" })
+					return status(401, buildError(ErrorCode.AUTH_REQUIRED))
 				}
 
 				const parsed = query.limit ? Number(query.limit) : 20
 				const limit = Math.min(Math.max(1, Number.isNaN(parsed) ? 20 : parsed), 50)
 
 				const parsedCursor = query.cursor ? Number(query.cursor) : 0
-				const offset = Number.isFinite(parsedCursor)
-					? Math.floor(Math.max(0, parsedCursor))
-					: 0
+				const offset = Number.isFinite(parsedCursor) ? Math.floor(Math.max(0, parsedCursor)) : 0
 
 				const filters = parseFeedFilters(query)
 
@@ -209,12 +230,12 @@ export const lyricsRoutes = (env: Env) =>
 			async ({ params, env, lyricsUserId, status }) => {
 				const id = Number(params.id)
 				if (Number.isNaN(id)) {
-					return status(400, { success: false, error: "Invalid ID" })
+					return status(400, buildError(ErrorCode.INVALID_ID))
 				}
 
 				const result = await getLyricsById(env, id)
 				if (!result) {
-					return status(404, { success: false, error: "Lyrics not found" })
+					return status(404, buildError(ErrorCode.NOT_FOUND))
 				}
 
 				const userVote = lyricsUserId ? await getUserVote(env, result.id, lyricsUserId) : null
@@ -228,7 +249,7 @@ export const lyricsRoutes = (env: Env) =>
 		.post("/submit", async ({ env, keyId, userId, signedPayload, status }) => {
 			const { success } = await env.RATE_LIMITER.limit({ key: keyId })
 			if (!success) {
-				return status(429, { success: false, error: "Rate limited. Try again later." })
+				return status(429, buildError(ErrorCode.RATE_LIMITED))
 			}
 
 			const p = signedPayload
@@ -245,23 +266,23 @@ export const lyricsRoutes = (env: Env) =>
 				typeof p.format !== "string" ||
 				!["ttml", "lrc", "plain"].includes(p.format)
 			) {
-				return status(400, { success: false, error: "Invalid submission payload" })
+				return status(400, buildError(ErrorCode.INVALID_PAYLOAD))
 			}
 
 			if ((p.song as string).length > config.validation.song.maxLength) {
-				return status(400, { success: false, error: "Song name too long" })
+				return status(400, buildError(ErrorCode.SONG_TOO_LONG))
 			}
 			if ((p.artist as string).length > config.validation.artist.maxLength) {
-				return status(400, { success: false, error: "Artist name too long" })
+				return status(400, buildError(ErrorCode.ARTIST_TOO_LONG))
 			}
 			if ((p.lyrics as string).length > config.validation.ttml.maxSizeBytes) {
-				return status(400, { success: false, error: "Lyrics content too large" })
+				return status(400, buildError(ErrorCode.PAYLOAD_TOO_LARGE))
 			}
 			if (
 				(p.duration as number) < config.validation.duration.min ||
 				(p.duration as number) > config.validation.duration.max
 			) {
-				return status(400, { success: false, error: "Invalid duration" })
+				return status(400, buildError(ErrorCode.INVALID_DURATION))
 			}
 
 			const claimedFormat = p.format as "ttml" | "lrc" | "plain"
@@ -272,7 +293,7 @@ export const lyricsRoutes = (env: Env) =>
 					keyId,
 					videoId: p.videoId as string,
 				})
-				return status(400, { success: false, error: "Malformed TTML content" })
+				return status(400, buildError(ErrorCode.TTML_MALFORMED))
 			}
 
 			const format = detectFormat(lyricsContent)
@@ -284,6 +305,23 @@ export const lyricsRoutes = (env: Env) =>
 					claimed: claimedFormat,
 					detected: format,
 				})
+			}
+
+			if (format === "ttml") {
+				const prettyCheck = detectPrettyPrintedTtml(lyricsContent)
+				if (!prettyCheck.ok) {
+					log.warn("rejecting pretty-printed ttml", {
+						keyId,
+						videoId: p.videoId as string,
+						reason: prettyCheck.reason,
+					})
+					return status(
+						400,
+						buildError(ErrorCode.TTML_FORMATTED, {
+							hint: prettyPrintHint(prettyCheck.reason),
+						})
+					)
+				}
 			}
 
 			const detectedSyncType = detectSyncType(lyricsContent, format)
@@ -319,11 +357,7 @@ export const lyricsRoutes = (env: Env) =>
 			const result = await submitLyrics(env, submission, userId)
 
 			if (!result.created) {
-				return status(409, {
-					success: false,
-					error:
-						"You've reached the maximum active variants for this video. Delete one of your existing variants to submit another.",
-				})
+				return status(409, buildError(ErrorCode.VARIANT_CAP_REACHED))
 			}
 
 			return status(201, {
@@ -336,7 +370,7 @@ export const lyricsRoutes = (env: Env) =>
 			async ({ params, env, userId, status }) => {
 				const id = Number(params.id)
 				if (Number.isNaN(id)) {
-					return status(400, { success: false, error: "Invalid ID" })
+					return status(400, buildError(ErrorCode.INVALID_ID))
 				}
 
 				const result = await softDeleteLyrics(env, id, userId, "submitter")
@@ -345,9 +379,9 @@ export const lyricsRoutes = (env: Env) =>
 					return { success: true }
 				}
 				if (result.reason === "forbidden") {
-					return status(403, { success: false, error: "Not your submission" })
+					return status(403, buildError(ErrorCode.NOT_OWNER))
 				}
-				return status(404, { success: false, error: "Lyrics not found" })
+				return status(404, buildError(ErrorCode.NOT_FOUND))
 			},
 			{ params: t.Object({ id: t.String() }) }
 		)

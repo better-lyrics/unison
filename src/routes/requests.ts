@@ -4,6 +4,7 @@ import { createRequest } from "@/db/requests"
 import { getUserById } from "@/db/users"
 import type { Env } from "@/types"
 import { signedRequest } from "@/utils/auth"
+import { ErrorCode, buildError } from "@/utils/errors"
 
 export const requestRoutes = (env: Env) =>
 	new Elysia({ prefix: "/requests" })
@@ -12,7 +13,7 @@ export const requestRoutes = (env: Env) =>
 		.post("/", async ({ env, keyId, userId, signedPayload, status }) => {
 			const { success } = await env.RATE_LIMITER.limit({ key: keyId })
 			if (!success) {
-				return status(429, { success: false, error: "Rate limited. Try again later." })
+				return status(429, buildError(ErrorCode.RATE_LIMITED))
 			}
 
 			const p = signedPayload
@@ -24,14 +25,17 @@ export const requestRoutes = (env: Env) =>
 				typeof p.artist !== "string" ||
 				!p.artist
 			) {
-				return status(400, { success: false, error: "Invalid request payload" })
+				return status(
+					400,
+					buildError(ErrorCode.INVALID_PAYLOAD, { error: "Invalid request payload" })
+				)
 			}
 
 			if (p.song.length > config.validation.song.maxLength) {
-				return status(400, { success: false, error: "Song name too long" })
+				return status(400, buildError(ErrorCode.SONG_TOO_LONG))
 			}
 			if (p.artist.length > config.validation.artist.maxLength) {
-				return status(400, { success: false, error: "Artist name too long" })
+				return status(400, buildError(ErrorCode.ARTIST_TOO_LONG))
 			}
 
 			const thumbnailUrl =

@@ -5,6 +5,7 @@ import { submitReport } from "@/db/reports"
 import { castVote, removeVote } from "@/db/votes"
 import type { Env } from "@/types"
 import { signedRequest } from "@/utils/auth"
+import { ErrorCode, buildError } from "@/utils/errors"
 
 export const voteRoutes = (env: Env) =>
 	new Elysia({ prefix: "/lyrics" })
@@ -15,17 +16,17 @@ export const voteRoutes = (env: Env) =>
 			async ({ params, env, userId, signedPayload, status }) => {
 				const id = Number(params.id)
 				if (Number.isNaN(id)) {
-					return status(400, { success: false, error: "Invalid ID" })
+					return status(400, buildError(ErrorCode.INVALID_ID))
 				}
 
 				const lyrics = await getLyricsById(env, id)
 				if (!lyrics) {
-					return status(404, { success: false, error: "Lyrics not found" })
+					return status(404, buildError(ErrorCode.NOT_FOUND))
 				}
 
 				const vote = signedPayload.vote
 				if (vote !== 1 && vote !== -1) {
-					return status(400, { success: false, error: "Vote must be 1 or -1" })
+					return status(400, buildError(ErrorCode.INVALID_VOTE))
 				}
 
 				const result = await castVote(env, id, userId, vote)
@@ -42,12 +43,12 @@ export const voteRoutes = (env: Env) =>
 			async ({ params, env, userId, status }) => {
 				const id = Number(params.id)
 				if (Number.isNaN(id)) {
-					return status(400, { success: false, error: "Invalid ID" })
+					return status(400, buildError(ErrorCode.INVALID_ID))
 				}
 
 				const lyrics = await getLyricsById(env, id)
 				if (!lyrics) {
-					return status(404, { success: false, error: "Lyrics not found" })
+					return status(404, buildError(ErrorCode.NOT_FOUND))
 				}
 
 				const result = await removeVote(env, id, userId)
@@ -64,24 +65,24 @@ export const voteRoutes = (env: Env) =>
 			async ({ params, env, userId, signedPayload, status }) => {
 				const id = Number(params.id)
 				if (Number.isNaN(id)) {
-					return status(400, { success: false, error: "Invalid ID" })
+					return status(400, buildError(ErrorCode.INVALID_ID))
 				}
 
 				const lyrics = await getLyricsById(env, id)
 				if (!lyrics) {
-					return status(404, { success: false, error: "Lyrics not found" })
+					return status(404, buildError(ErrorCode.NOT_FOUND))
 				}
 
 				const reason = signedPayload.reason
 				const validReasons = ["wrong_song", "bad_sync", "offensive", "spam", "other"]
 				if (typeof reason !== "string" || !validReasons.includes(reason)) {
-					return status(400, { success: false, error: "Invalid report reason" })
+					return status(400, buildError(ErrorCode.INVALID_REPORT_REASON))
 				}
 
 				const details =
 					typeof signedPayload.details === "string" ? signedPayload.details : undefined
 				if (details && details.length > config.validation.report.maxDetailsLength) {
-					return status(400, { success: false, error: "Report details too long" })
+					return status(400, buildError(ErrorCode.REPORT_DETAILS_TOO_LONG))
 				}
 
 				const result = await submitReport(env, id, userId, {
