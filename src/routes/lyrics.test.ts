@@ -879,4 +879,41 @@ describe("POST /lyrics/submit formatted-TTML rejection", () => {
 		})
 		expect(res.status).toBe(201)
 	})
+
+	it("triggers on pretty-printed TTML content even when claim is plain", async () => {
+		const formatted =
+			'<tt><body><div><p begin="0:00.0" end="0:02.0">\n  <span begin="0:00.0" end="0:01.0">Hello</span>\n  <span begin="0:01.0" end="0:02.0">world</span>\n</p></div></body></tt>'
+		const { res, db } = await submit({
+			videoId: "abc",
+			song: "S",
+			artist: "A",
+			duration: 100,
+			lyrics: formatted,
+			format: "plain",
+		})
+		expect(res.status).toBe(400)
+		const body = (await res.json()) as { code: string }
+		expect(body.code).toBe("TTML_FORMATTED")
+		expect(db.calls.find((c) => /INSERT INTO lyrics/i.test(c.sql))).toBeUndefined()
+	})
+
+	it("prefers inter-span-newline hint over trailing-whitespace when both are present", async () => {
+		const both =
+			'<tt><body><div><p begin="0:00.0" end="0:02.0">\n' +
+			'<span begin="0:00.0" end="0:01.0">Focus </span>\n' +
+			'<span begin="0:01.0" end="0:02.0">Aim </span>\n' +
+			"</p></div></body></tt>"
+		const { res } = await submit({
+			videoId: "abc",
+			song: "S",
+			artist: "A",
+			duration: 100,
+			lyrics: both,
+			format: "ttml",
+		})
+		expect(res.status).toBe(400)
+		const body = (await res.json()) as { code: string; hint: string }
+		expect(body.code).toBe("TTML_FORMATTED")
+		expect(body.hint).toMatch(/line breaks/i)
+	})
 })
