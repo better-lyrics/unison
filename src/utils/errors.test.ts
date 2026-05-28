@@ -40,4 +40,17 @@ describe("buildError", () => {
 			expect(result.error).not.toContain("\n")
 		}
 	})
+
+	it("has a stable code for the nonce replay case", () => {
+		const result = buildError(ErrorCode.NONCE_REPLAY)
+		expect(result.code).toBe("NONCE_REPLAY")
+		expect(result.error).toBe("Already received")
+		expect(result.hint).toMatch(/already received/i)
+	})
+
+	it("has a stable code for the report-details-too-long case", () => {
+		const result = buildError(ErrorCode.REPORT_DETAILS_TOO_LONG)
+		expect(result.code).toBe("REPORT_DETAILS_TOO_LONG")
+		expect(result.hint).toMatch(/1000 characters/i)
+	})
 })

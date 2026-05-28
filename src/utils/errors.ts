@@ -15,6 +15,15 @@ export const ErrorCode = {
 	NOT_OWNER: "NOT_OWNER",
 	NOT_FOUND: "NOT_FOUND",
 	MISSING_QUERY: "MISSING_QUERY",
+	INVALID_SIGNED_BODY: "INVALID_SIGNED_BODY",
+	TIMESTAMP_EXPIRED: "TIMESTAMP_EXPIRED",
+	NONCE_REPLAY: "NONCE_REPLAY",
+	PUBLIC_KEY_REQUIRED: "PUBLIC_KEY_REQUIRED",
+	KEY_ID_MISMATCH: "KEY_ID_MISMATCH",
+	INVALID_SIGNATURE: "INVALID_SIGNATURE",
+	INVALID_VOTE: "INVALID_VOTE",
+	INVALID_REPORT_REASON: "INVALID_REPORT_REASON",
+	REPORT_DETAILS_TOO_LONG: "REPORT_DETAILS_TOO_LONG",
 } as const
 
 export type ErrorCode = (typeof ErrorCode)[keyof typeof ErrorCode]
@@ -77,6 +86,42 @@ const TEMPLATES: Record<ErrorCode, Template> = {
 	MISSING_QUERY: {
 		error: "Search needs more info",
 		hint: "To search, add either a video link or both the song and artist names.",
+	},
+	INVALID_SIGNED_BODY: {
+		error: "Request looks broken",
+		hint: "Something looks off with this request. Try again. If it keeps happening, the extension may need an update.",
+	},
+	TIMESTAMP_EXPIRED: {
+		error: "Request expired",
+		hint: "This took too long to reach us, or your device's clock might be off. Check the time on your device and try again.",
+	},
+	NONCE_REPLAY: {
+		error: "Already received",
+		hint: "We already received this exact request. If you meant to send a new submission, refresh and try again.",
+	},
+	PUBLIC_KEY_REQUIRED: {
+		error: "Setup incomplete",
+		hint: "This device isn't fully set up yet. Try again in a moment. If it keeps happening, the extension may need an update.",
+	},
+	KEY_ID_MISMATCH: {
+		error: "Identity check failed",
+		hint: "Something's off with how this request was signed. Try again. If it keeps happening, the extension may need an update.",
+	},
+	INVALID_SIGNATURE: {
+		error: "Signature check failed",
+		hint: "Couldn't verify this request. Try again. If it keeps happening, the extension may need an update.",
+	},
+	INVALID_VOTE: {
+		error: "Vote failed",
+		hint: "Couldn't register your vote. Try again. If it keeps happening, the extension may need an update.",
+	},
+	INVALID_REPORT_REASON: {
+		error: "Report failed",
+		hint: "Couldn't submit this report. Pick one of the available reasons and try again.",
+	},
+	REPORT_DETAILS_TOO_LONG: {
+		error: "Report details too long",
+		hint: "The extra details on this report are too long. Try a shorter explanation (under 1000 characters).",
 	},
 }
 
