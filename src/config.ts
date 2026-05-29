@@ -115,6 +115,7 @@ export const config = {
 
 	dump: {
 		minBytes: 10 * 1024 * 1024,
+		retentionDays: 7,
 	},
 } as const
 

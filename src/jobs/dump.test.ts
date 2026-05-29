@@ -13,6 +13,7 @@ import {
 	type DumpManifest,
 	LYRICS_KEEP_COLUMNS,
 	materializeDumpSchema,
+	pruneOldDumps,
 	REQUEST_KEEP_COLUMNS,
 	runPgDump,
 	uploadDump,
@@ -527,5 +528,98 @@ describe("uploadDump", () => {
 			expect(latest?.contentType).toBe("application/octet-stream")
 			expect(latest?.bodyKind).toBe("stream")
 		})
+	})
+})
+
+function buildMockStorageWithObjects(objects: { key: string; lastModified: Date }[]) {
+	const deleted: string[] = []
+	const storage: Storage = {
+		putObject: vi.fn(),
+		listObjects: vi.fn(async () => objects),
+		deleteObject: vi.fn(async (key) => {
+			deleted.push(key)
+		}),
+		__client: null as never,
+	}
+	return { storage, deleted }
+}
+
+describe("pruneOldDumps", () => {
+	const now = new Date("2026-05-29T00:00:00.000Z")
+	const recent = new Date("2026-05-28T00:00:00.000Z")
+	const old = new Date("2026-05-21T00:00:00.000Z")
+	const veryOld = new Date("2026-05-01T00:00:00.000Z")
+
+	it("deletes dated dumps older than retentionDays past now", async () => {
+		const { storage, deleted } = buildMockStorageWithObjects([
+			{ key: "dumps/unison-2026-05-29.dump", lastModified: now },
+			{ key: "dumps/unison-2026-05-21.dump", lastModified: old },
+			{ key: "dumps/latest.dump", lastModified: now },
+			{ key: "dumps/manifest.json", lastModified: now },
+		])
+		const result = await pruneOldDumps({ storage, now })
+		expect(result).toEqual({ deleted: ["dumps/unison-2026-05-21.dump"] })
+		expect(deleted).toEqual(["dumps/unison-2026-05-21.dump"])
+	})
+
+	it("never deletes latest.dump even when older than retention", async () => {
+		const { storage, deleted } = buildMockStorageWithObjects([
+			{ key: "dumps/latest.dump", lastModified: veryOld },
+		])
+		const result = await pruneOldDumps({ storage, now })
+		expect(result.deleted).toEqual([])
+		expect(deleted).toEqual([])
+	})
+
+	it("never deletes manifest.json even when older than retention", async () => {
+		const { storage, deleted } = buildMockStorageWithObjects([
+			{ key: "dumps/manifest.json", lastModified: veryOld },
+		])
+		const result = await pruneOldDumps({ storage, now })
+		expect(result.deleted).toEqual([])
+		expect(deleted).toEqual([])
+	})
+
+	it("also deletes the .sha256 sidecar of an old dump", async () => {
+		const { storage, deleted } = buildMockStorageWithObjects([
+			{ key: "dumps/unison-2026-05-21.dump", lastModified: old },
+			{ key: "dumps/unison-2026-05-21.dump.sha256", lastModified: old },
+			{ key: "dumps/latest.dump", lastModified: now },
+			{ key: "dumps/manifest.json", lastModified: now },
+		])
+		const result = await pruneOldDumps({ storage, now })
+		expect(result.deleted.sort()).toEqual([
+			"dumps/unison-2026-05-21.dump",
+			"dumps/unison-2026-05-21.dump.sha256",
+		])
+		expect(deleted.sort()).toEqual([
+			"dumps/unison-2026-05-21.dump",
+			"dumps/unison-2026-05-21.dump.sha256",
+		])
+	})
+
+	it("returns an empty deleted list when nothing is past retention", async () => {
+		const { storage, deleted } = buildMockStorageWithObjects([
+			{ key: "dumps/unison-2026-05-29.dump", lastModified: now },
+			{ key: "dumps/unison-2026-05-28.dump", lastModified: recent },
+			{ key: "dumps/latest.dump", lastModified: now },
+			{ key: "dumps/manifest.json", lastModified: now },
+		])
+		const result = await pruneOldDumps({ storage, now })
+		expect(result.deleted).toEqual([])
+		expect(deleted).toEqual([])
+	})
+
+	it("uses input.now when provided for the cutoff math", async () => {
+		const fixedNow = new Date("2026-06-15T12:00:00.000Z")
+		const justInside = new Date("2026-06-09T12:00:01.000Z")
+		const justOutside = new Date("2026-06-08T11:59:59.000Z")
+		const { storage, deleted } = buildMockStorageWithObjects([
+			{ key: "dumps/unison-2026-06-09.dump", lastModified: justInside },
+			{ key: "dumps/unison-2026-06-08.dump", lastModified: justOutside },
+		])
+		const result = await pruneOldDumps({ storage, now: fixedNow })
+		expect(result.deleted).toEqual(["dumps/unison-2026-06-08.dump"])
+		expect(deleted).toEqual(["dumps/unison-2026-06-08.dump"])
 	})
 })

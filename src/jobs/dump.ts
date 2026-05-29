@@ -198,6 +198,29 @@ export interface UploadDumpInput {
 	datedKey: string
 }
 
+const DATED_DUMP_KEY_PATTERN = /^dumps\/unison-\d{4}-\d{2}-\d{2}\.dump(\.sha256)?$/
+
+export interface PruneOldDumpsInput {
+	storage: Storage
+	now?: Date
+}
+
+export async function pruneOldDumps(
+	input: PruneOldDumpsInput
+): Promise<{ deleted: string[] }> {
+	const now = input.now ?? new Date()
+	const cutoff = now.getTime() - config.dump.retentionDays * 24 * 60 * 60 * 1000
+	const objects = await input.storage.listObjects("dumps/")
+	const deleted: string[] = []
+	for (const obj of objects) {
+		if (!DATED_DUMP_KEY_PATTERN.test(obj.key)) continue
+		if (obj.lastModified.getTime() >= cutoff) continue
+		await input.storage.deleteObject(obj.key)
+		deleted.push(obj.key)
+	}
+	return { deleted }
+}
+
 export async function uploadDump(input: UploadDumpInput): Promise<void> {
 	const datedName = basename(input.datedKey)
 	const sidecarKey = `${input.datedKey}.sha256`
