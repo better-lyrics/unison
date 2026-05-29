@@ -96,6 +96,9 @@ function createEnv(db: MockDB, cache: MockCache = createMockCache()): Env {
 		RATE_LIMITER: {} as Env["RATE_LIMITER"],
 		READ_RATE_LIMITER: {} as Env["READ_RATE_LIMITER"],
 		CACHE_TTL_SECONDS: "300",
+		DUMPS_ENABLED: false,
+		DUMP_PUBLIC_BASE_URL: "",
+		B2: null,
 	}
 }
 

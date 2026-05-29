@@ -1,8 +1,19 @@
 import { config } from "@/config"
-import type { Env } from "@/types"
+import type { B2Config, Env } from "@/types"
 import { D1Compat, getPool } from "./database"
 import { KVCompat, getRedis } from "./cache"
 import { RedisRateLimiter } from "./rate-limiter"
+
+function readB2Config(): B2Config | null {
+	const keyId = process.env.B2_KEY_ID
+	const applicationKey = process.env.B2_APPLICATION_KEY
+	const bucket = process.env.B2_BUCKET
+	const endpoint = process.env.B2_ENDPOINT
+
+	if (!keyId || !applicationKey || !bucket || !endpoint) return null
+
+	return { keyId, applicationKey, bucket, endpoint }
+}
 
 export function createEnv(): Env {
 	const databaseUrl = process.env.DATABASE_URL
@@ -28,5 +39,8 @@ export function createEnv(): Env {
 			config.rateLimit.read.windowSeconds
 		),
 		CACHE_TTL_SECONDS: process.env.CACHE_TTL_SECONDS || "604800",
+		DUMPS_ENABLED: process.env.DUMPS_ENABLED === "true",
+		DUMP_PUBLIC_BASE_URL: process.env.DUMP_PUBLIC_BASE_URL || "",
+		B2: readB2Config(),
 	}
 }
