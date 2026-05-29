@@ -3,7 +3,9 @@ import { createHash } from "node:crypto"
 import { createReadStream, promises as fsPromises } from "node:fs"
 import { tmpdir } from "node:os"
 import { basename, join } from "node:path"
+import pg from "pg"
 import { config } from "@/config"
+import { D1Compat } from "@/infra/database"
 import { Logger } from "@/infra/logger"
 import { createStorage, type Storage } from "@/infra/storage"
 import type { Env } from "@/types"
@@ -278,17 +280,25 @@ export async function runDumpJob(
 	const datedKey = `dumps/unison-${dateStr}.dump`
 	const localPath = join(opts.tmpDir ?? tmpdir(), `unison-${dateStr}.dump`)
 
+	const dumpDatabaseUrl = env.DUMP_DATABASE_URL ?? process.env.DATABASE_URL ?? null
+	let dumpPool: pg.Pool | null = null
+	let dumpEnv = env
+
 	let result: RunDumpJobResult
 	try {
-		const databaseUrl = process.env.DATABASE_URL
-		if (!databaseUrl) {
+		if (!dumpDatabaseUrl) {
 			throw new Error("DATABASE_URL is not set")
 		}
 
-		await self.materializeDumpSchema(env)
-		await self.runPgDump({ databaseUrl, outPath: localPath })
+		if (env.DUMP_DATABASE_URL) {
+			dumpPool = new pg.Pool({ connectionString: env.DUMP_DATABASE_URL })
+			dumpEnv = { ...env, DB: new D1Compat(dumpPool) }
+		}
+
+		await self.materializeDumpSchema(dumpEnv)
+		await self.runPgDump({ databaseUrl: dumpDatabaseUrl, outPath: localPath })
 		const { sha256, bytes } = await self.verifyDump(localPath)
-		const manifest = await self.buildManifest(env, {
+		const manifest = await self.buildManifest(dumpEnv, {
 			sha256,
 			bytes,
 			datedKey,
@@ -312,10 +322,18 @@ export async function runDumpJob(
 		result = { status: "failed", reason: message }
 	} finally {
 		try {
-			await env.DB.prepare("DROP SCHEMA IF EXISTS public_dump CASCADE").run()
+			await dumpEnv.DB.prepare("DROP SCHEMA IF EXISTS public_dump CASCADE").run()
 		} catch (cleanupErr) {
 			const message = cleanupErr instanceof Error ? cleanupErr.message : String(cleanupErr)
 			log.error("dump schema cleanup failed", { error: message })
+		}
+		if (dumpPool) {
+			try {
+				await dumpPool.end()
+			} catch (cleanupErr) {
+				const message = cleanupErr instanceof Error ? cleanupErr.message : String(cleanupErr)
+				log.error("dump pool cleanup failed", { error: message })
+			}
 		}
 		try {
 			await fsPromises.rm(localPath, { force: true })

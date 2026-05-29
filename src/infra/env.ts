@@ -41,6 +41,7 @@ export function createEnv(): Env {
 		CACHE_TTL_SECONDS: process.env.CACHE_TTL_SECONDS || "604800",
 		DUMPS_ENABLED: process.env.DUMPS_ENABLED === "true",
 		DUMP_PUBLIC_BASE_URL: process.env.DUMP_PUBLIC_BASE_URL || "",
+		DUMP_DATABASE_URL: process.env.DUMP_DATABASE_URL || null,
 		B2: readB2Config(),
 	}
 }

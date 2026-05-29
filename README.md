@@ -173,6 +173,29 @@ psql unison_mirror -c "CREATE INDEX idx_lyrics_text_search ON public_dump.lyrics
 The `lyrics` column is gzip-compressed (matches storage in the live DB).
 Decompress in your client of choice.
 
+### Production-DB safety
+
+The dump pipeline only ever writes to the `public_dump` schema. There are no
+`INSERT`, `UPDATE`, `DELETE`, or `ALTER` statements targeting `public.*` tables
+anywhere in the code, and a unit test in `src/jobs/dump.test.ts` enforces this
+on every change (a future write to `public.*` would fail CI).
+
+For belt-and-suspenders, you can run the dump under a restricted Postgres role
+so even a buggy code change physically cannot mutate prod tables:
+
+```sql
+CREATE ROLE unison_dump WITH LOGIN PASSWORD '<choose-one>';
+GRANT USAGE ON SCHEMA public TO unison_dump;
+GRANT SELECT ON ALL TABLES IN SCHEMA public TO unison_dump;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT ON TABLES TO unison_dump;
+CREATE SCHEMA IF NOT EXISTS public_dump AUTHORIZATION unison_dump;
+```
+
+Then point the dump pipeline at this role by setting `DUMP_DATABASE_URL` to a
+connection string that authenticates as `unison_dump`. The pipeline falls back
+to `DATABASE_URL` when `DUMP_DATABASE_URL` is unset, so the safety upgrade is
+opt-in.
+
 ## License
 
 Source code: MIT.

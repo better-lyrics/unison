@@ -17,6 +17,7 @@ export interface Env {
 	CACHE_TTL_SECONDS: string
 	DUMPS_ENABLED: boolean
 	DUMP_PUBLIC_BASE_URL: string
+	DUMP_DATABASE_URL: string | null
 	B2: B2Config | null
 }
 

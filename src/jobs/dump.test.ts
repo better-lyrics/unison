@@ -178,6 +178,19 @@ describe("materializeDumpSchema", () => {
 		}
 	})
 
+	it("never writes to anything outside the public_dump schema", async () => {
+		const { env, batches } = createMockEnv()
+		await materializeDumpSchema(env)
+		const stmts = batches[0].map((s) => s.sql)
+		const writeKeyword = /\b(INSERT|UPDATE|DELETE|TRUNCATE|ALTER\s+TABLE|DROP\s+TABLE|CREATE\s+TABLE|CREATE\s+INDEX|DROP\s+INDEX|GRANT|REVOKE)\b/i
+		for (const sql of stmts) {
+			if (!writeKeyword.test(sql)) continue
+			const writeTarget = sql.match(/\b(?:INSERT\s+INTO|UPDATE|DELETE\s+FROM|TRUNCATE(?:\s+TABLE)?|ALTER\s+TABLE|DROP\s+TABLE(?:\s+IF\s+EXISTS)?|CREATE\s+TABLE|CREATE\s+(?:UNIQUE\s+)?INDEX(?:\s+IF\s+NOT\s+EXISTS)?\s+(?:\w+\s+)?ON|DROP\s+INDEX(?:\s+IF\s+EXISTS)?|GRANT\s+\w+\s+ON|REVOKE\s+\w+\s+ON)\s+(\w+\.\w+)/i)
+			if (!writeTarget) continue
+			expect(writeTarget[1], `write target outside public_dump: ${sql}`).toMatch(/^public_dump\./)
+		}
+	})
+
 	it("creates trigram GIN indexes on song_norm, artist_norm, album_norm", async () => {
 		const { env, batches } = createMockEnv()
 		await materializeDumpSchema(env)
@@ -651,6 +664,7 @@ function createRunDumpJobEnv(opts: { dumpsEnabled: boolean; hasB2: boolean }): R
 		DB: db,
 		DUMPS_ENABLED: opts.dumpsEnabled,
 		DUMP_PUBLIC_BASE_URL: "https://unison-dumps.boidu.dev",
+		DUMP_DATABASE_URL: null,
 		B2: opts.hasB2
 			? {
 					keyId: "k",

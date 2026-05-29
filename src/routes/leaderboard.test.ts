@@ -79,6 +79,7 @@ function makeEnv(
 		CACHE_TTL_SECONDS: "300",
 		DUMPS_ENABLED: false,
 		DUMP_PUBLIC_BASE_URL: "",
+		DUMP_DATABASE_URL: null,
 		B2: null,
 		cache,
 	}
