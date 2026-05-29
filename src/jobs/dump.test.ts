@@ -377,7 +377,7 @@ describe("buildManifest", () => {
 		expect(manifest.license).toBe("ODbL-1.0")
 		expect(manifest.attribution_text).toContain("Unison")
 		expect(manifest.enterprise_contact).toBe("enterprise@boidu.dev")
-		expect(manifest.format).toBe("pg_dump custom (-Fc), Postgres 16")
+		expect(manifest.format).toBe("pg_dump custom (-Fc), Postgres 18")
 	})
 
 	it("populates row_counts from the three COUNT(*) queries against public_dump", async () => {
@@ -446,7 +446,7 @@ const sampleManifest: DumpManifest = {
 	dump_url: "https://dumps.unison.boidu.dev/unison-2026-05-29.dump",
 	latest_url: "https://dumps.unison.boidu.dev/latest.dump",
 	row_counts: { lyrics: 100, requested_songs: 10, lyrics_requests: 5 },
-	format: "pg_dump custom (-Fc), Postgres 16",
+	format: "pg_dump custom (-Fc), Postgres 18",
 	license: "ODbL-1.0",
 	attribution_text: "Lyrics from Unison (https://unison.boidu.dev)",
 	enterprise_contact: "enterprise@boidu.dev",

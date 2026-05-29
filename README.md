@@ -145,7 +145,7 @@ A daily snapshot of the public lyrics corpus is published at
 `https://dumps.unison.boidu.dev/manifest.json` (sha256, row counts, timestamp,
 schema version, dump URL).
 
-Format: PostgreSQL custom-format (`pg_dump -Fc`), Postgres 16. The dump
+Format: PostgreSQL custom-format (`pg_dump -Fc`), Postgres 18. The dump
 contains the `public_dump` schema with `lyrics`, `requested_songs`, and
 `lyrics_requests` tables. User identifiers, votes, reports, and auth data
 are excluded.

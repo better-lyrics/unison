@@ -1,2 +1,2 @@
 [phases.setup]
-nixPkgs = ["nodejs_20", "nodePackages.pnpm", "postgresql_16"]
+nixPkgs = ["nodejs_20", "nodePackages.pnpm", "postgresql_18"]

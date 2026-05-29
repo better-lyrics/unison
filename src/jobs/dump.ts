@@ -141,7 +141,7 @@ export interface DumpManifest {
 		requested_songs: number
 		lyrics_requests: number
 	}
-	format: "pg_dump custom (-Fc), Postgres 16"
+	format: "pg_dump custom (-Fc), Postgres 18"
 	license: "ODbL-1.0"
 	attribution_text: "Lyrics from Unison (https://unison.boidu.dev)"
 	enterprise_contact: "enterprise@boidu.dev"
@@ -187,7 +187,7 @@ export async function buildManifest(
 		dump_url: `${input.publicBaseUrl}/${filename}`,
 		latest_url: `${input.publicBaseUrl}/latest.dump`,
 		row_counts: { lyrics, requested_songs, lyrics_requests },
-		format: "pg_dump custom (-Fc), Postgres 16",
+		format: "pg_dump custom (-Fc), Postgres 18",
 		license: "ODbL-1.0",
 		attribution_text: "Lyrics from Unison (https://unison.boidu.dev)",
 		enterprise_contact: "enterprise@boidu.dev",
