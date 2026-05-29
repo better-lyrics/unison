@@ -176,9 +176,6 @@ export async function buildManifest(
 		countRows(env, "lyrics_requests"),
 	])
 
-	// Bucket keys are organized under `dumps/`, but the public CDN base is rooted
-	// at that prefix, so we strip it to avoid `unison-dumps.boidu.dev/dumps/...`.
-	const filename = input.datedKey.replace(/^dumps\//, "")
 	const generatedAt = (input.now ?? new Date()).toISOString()
 
 	return {
@@ -186,8 +183,8 @@ export async function buildManifest(
 		generated_at: generatedAt,
 		sha256: input.sha256,
 		bytes: input.bytes,
-		dump_url: `${input.publicBaseUrl}/${filename}`,
-		latest_url: `${input.publicBaseUrl}/latest.dump`,
+		dump_url: `${input.publicBaseUrl}/${input.datedKey}`,
+		latest_url: `${input.publicBaseUrl}/dumps/latest.dump`,
 		row_counts: { lyrics, requested_songs, lyrics_requests },
 		format: "pg_dump custom (-Fc), Postgres 18",
 		license: "ODbL-1.0",
@@ -200,6 +197,7 @@ export interface UploadDumpInput {
 	storage: Storage
 	localPath: string
 	sha256: string
+	bytes: number
 	manifest: DumpManifest
 	datedKey: string
 }
@@ -236,7 +234,8 @@ export async function uploadDump(input: UploadDumpInput): Promise<void> {
 	await input.storage.putObject(
 		input.datedKey,
 		createReadStream(input.localPath),
-		"application/octet-stream"
+		"application/octet-stream",
+		input.bytes
 	)
 	await input.storage.putObject(sidecarKey, Buffer.from(sidecarBody), "text/plain")
 	await input.storage.putObject(
@@ -247,7 +246,8 @@ export async function uploadDump(input: UploadDumpInput): Promise<void> {
 	await input.storage.putObject(
 		"dumps/latest.dump",
 		createReadStream(input.localPath),
-		"application/octet-stream"
+		"application/octet-stream",
+		input.bytes
 	)
 }
 
@@ -283,6 +283,7 @@ export async function runDumpJob(
 	const dumpDatabaseUrl = env.DUMP_DATABASE_URL ?? process.env.DATABASE_URL ?? null
 	let dumpPool: pg.Pool | null = null
 	let dumpEnv = env
+	let materialized = false
 
 	let result: RunDumpJobResult
 	try {
@@ -292,10 +293,14 @@ export async function runDumpJob(
 
 		if (env.DUMP_DATABASE_URL) {
 			dumpPool = new pg.Pool({ connectionString: env.DUMP_DATABASE_URL })
+			dumpPool.on("error", (err) => {
+				log.error("dump pool emitted error", { error: err.message })
+			})
 			dumpEnv = { ...env, DB: new D1Compat(dumpPool) }
 		}
 
 		await self.materializeDumpSchema(dumpEnv)
+		materialized = true
 		await self.runPgDump({ databaseUrl: dumpDatabaseUrl, outPath: localPath })
 		const { sha256, bytes } = await self.verifyDump(localPath)
 		const manifest = await self.buildManifest(dumpEnv, {
@@ -305,7 +310,7 @@ export async function runDumpJob(
 			publicBaseUrl: env.DUMP_PUBLIC_BASE_URL,
 			now,
 		})
-		await self.uploadDump({ storage, localPath, sha256, manifest, datedKey })
+		await self.uploadDump({ storage, localPath, sha256, bytes, manifest, datedKey })
 		const { deleted } = await self.pruneOldDumps({ storage, now })
 
 		log.info("dump complete", {
@@ -321,11 +326,13 @@ export async function runDumpJob(
 		log.error("dump failed", { error: message })
 		result = { status: "failed", reason: message }
 	} finally {
-		try {
-			await dumpEnv.DB.prepare("DROP SCHEMA IF EXISTS public_dump CASCADE").run()
-		} catch (cleanupErr) {
-			const message = cleanupErr instanceof Error ? cleanupErr.message : String(cleanupErr)
-			log.error("dump schema cleanup failed", { error: message })
+		if (materialized) {
+			try {
+				await dumpEnv.DB.prepare("DROP SCHEMA IF EXISTS public_dump CASCADE").run()
+			} catch (cleanupErr) {
+				const message = cleanupErr instanceof Error ? cleanupErr.message : String(cleanupErr)
+				log.error("dump schema cleanup failed", { error: message })
+			}
 		}
 		if (dumpPool) {
 			try {

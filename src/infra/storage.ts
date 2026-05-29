@@ -8,7 +8,12 @@ import {
 } from "@aws-sdk/client-s3"
 
 export interface Storage {
-	putObject(key: string, body: Buffer | NodeJS.ReadableStream, contentType: string): Promise<void>
+	putObject(
+		key: string,
+		body: Buffer | NodeJS.ReadableStream,
+		contentType: string,
+		contentLength?: number
+	): Promise<void>
 	listObjects(prefix: string): Promise<{ key: string; lastModified: Date }[]>
 	deleteObject(key: string): Promise<void>
 	__client: S3Client
@@ -29,13 +34,14 @@ export function createStorage(cfg: B2Config | null): Storage | null {
 
 	return {
 		__client: client,
-		async putObject(key, body, contentType) {
+		async putObject(key, body, contentType, contentLength) {
 			await client.send(
 				new PutObjectCommand({
 					Bucket: cfg.bucket,
 					Key: key,
 					Body: body as PutObjectCommandInput["Body"],
 					ContentType: contentType,
+					ContentLength: contentLength,
 				})
 			)
 		},

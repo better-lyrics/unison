@@ -406,13 +406,13 @@ describe("buildManifest", () => {
 		expect(prepared[2]).toMatch(/public_dump\.lyrics_requests\b/i)
 	})
 
-	it("constructs dump_url from the public base url and dump filename without doubling dumps/", async () => {
+	it("constructs dump_url and latest_url with the dumps/ prefix carried through", async () => {
 		const { env } = createManifestMockEnv([1, 2, 3])
 		const manifest = await buildManifest(env, baseInput)
 		expect(manifest.dump_url).toBe(
-			"https://unison-dumps.boidu.dev/unison-2026-05-29.dump"
+			"https://unison-dumps.boidu.dev/dumps/unison-2026-05-29.dump"
 		)
-		expect(manifest.latest_url).toBe("https://unison-dumps.boidu.dev/latest.dump")
+		expect(manifest.latest_url).toBe("https://unison-dumps.boidu.dev/dumps/latest.dump")
 	})
 
 	it("generated_at is a UTC ISO 8601 string derived from input.now", async () => {
@@ -427,6 +427,7 @@ describe("buildManifest", () => {
 interface RecordedPut {
 	key: string
 	contentType: string
+	contentLength: number | undefined
 	bodyKind: "buffer" | "string" | "stream"
 	body: string
 }
@@ -434,7 +435,7 @@ interface RecordedPut {
 function buildMockStorage() {
 	const puts: RecordedPut[] = []
 	const storage: Storage = {
-		putObject: vi.fn(async (key, body, contentType) => {
+		putObject: vi.fn(async (key, body, contentType, contentLength) => {
 			const bodyKind: RecordedPut["bodyKind"] = Buffer.isBuffer(body)
 				? "buffer"
 				: typeof body === "string"
@@ -442,7 +443,7 @@ function buildMockStorage() {
 					: "stream"
 			const bodyText =
 				typeof body === "string" || Buffer.isBuffer(body) ? body.toString() : "<stream>"
-			puts.push({ key, contentType, bodyKind, body: bodyText })
+			puts.push({ key, contentType, contentLength, bodyKind, body: bodyText })
 		}),
 		listObjects: vi.fn(async () => []),
 		deleteObject: vi.fn(async () => {}),
@@ -456,8 +457,8 @@ const sampleManifest: DumpManifest = {
 	generated_at: "2026-05-29T12:34:56.000Z",
 	sha256: "b".repeat(64),
 	bytes: 4096,
-	dump_url: "https://unison-dumps.boidu.dev/unison-2026-05-29.dump",
-	latest_url: "https://unison-dumps.boidu.dev/latest.dump",
+	dump_url: "https://unison-dumps.boidu.dev/dumps/unison-2026-05-29.dump",
+	latest_url: "https://unison-dumps.boidu.dev/dumps/latest.dump",
 	row_counts: { lyrics: 100, requested_songs: 10, lyrics_requests: 5 },
 	format: "pg_dump custom (-Fc), Postgres 18",
 	license: "ODbL-1.0",
@@ -475,6 +476,7 @@ describe("uploadDump", () => {
 				storage,
 				localPath: path,
 				sha256: sampleManifest.sha256,
+				bytes: 2048,
 				manifest: sampleManifest,
 				datedKey,
 			})
@@ -496,6 +498,7 @@ describe("uploadDump", () => {
 				storage,
 				localPath: path,
 				sha256: sampleManifest.sha256,
+				bytes: 2048,
 				manifest: sampleManifest,
 				datedKey,
 			})
@@ -515,6 +518,7 @@ describe("uploadDump", () => {
 				storage,
 				localPath: path,
 				sha256: sampleManifest.sha256,
+				bytes: 2048,
 				manifest: sampleManifest,
 				datedKey,
 			})
@@ -534,6 +538,7 @@ describe("uploadDump", () => {
 				storage,
 				localPath: path,
 				sha256: sampleManifest.sha256,
+				bytes: 2048,
 				manifest: sampleManifest,
 				datedKey,
 			})
@@ -541,8 +546,10 @@ describe("uploadDump", () => {
 			const latest = puts.find((p) => p.key === "dumps/latest.dump")
 			expect(dated?.contentType).toBe("application/octet-stream")
 			expect(dated?.bodyKind).toBe("stream")
+			expect(dated?.contentLength).toBe(2048)
 			expect(latest?.contentType).toBe("application/octet-stream")
 			expect(latest?.bodyKind).toBe("stream")
+			expect(latest?.contentLength).toBe(2048)
 		})
 	})
 })
@@ -823,7 +830,7 @@ describe("runDumpJob", () => {
 	})
 
 	it("fails before materializing the schema when DATABASE_URL is unset", async () => {
-		const { env } = createRunDumpJobEnv({ dumpsEnabled: true, hasB2: true })
+		const { env, runCalls } = createRunDumpJobEnv({ dumpsEnabled: true, hasB2: true })
 		process.env.DATABASE_URL = ""
 		const materializeSpy = vi.spyOn(dump, "materializeDumpSchema").mockResolvedValue()
 		vi.spyOn(fs.promises, "rm").mockResolvedValue()
@@ -832,6 +839,7 @@ describe("runDumpJob", () => {
 
 		expect(result.status).toBe("failed")
 		expect(materializeSpy).not.toHaveBeenCalled()
+		expect(runCalls).not.toContain("DROP SCHEMA IF EXISTS public_dump CASCADE")
 	})
 
 	it("does not rethrow on pipeline failure; resolves with status failed", async () => {
