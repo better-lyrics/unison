@@ -1,5 +1,5 @@
 import { IconCheck, IconCopy, IconDownload } from "@tabler/icons-react"
-import { useState } from "react"
+import { Fragment, type ReactNode, useState } from "react"
 import { useAsyncData } from "@/hooks/useAsyncData"
 import { fetchDumpManifest } from "@/lib/api"
 import { formatExact, formatRelativeTime } from "@/lib/format"
@@ -56,6 +56,53 @@ function CopyButton({ value, label }: { value: string; label: string }) {
   )
 }
 
+function highlightBashLine(line: string, lineIdx: number): ReactNode[] {
+  if (line.trimStart().startsWith("#")) {
+    return [
+      <span key={`${lineIdx}-c`} className="text-unison-text-muted">
+        {line}
+      </span>,
+    ]
+  }
+  if (line.length === 0) return [""]
+  const tokens = line.split(/(\s+)/)
+  let seenCommand = false
+  return tokens.map((tok, idx) => {
+    const key = `${lineIdx}-${idx}`
+    if (tok.length === 0 || /^\s+$/.test(tok)) return <Fragment key={key}>{tok}</Fragment>
+    let cls: string | undefined
+    if (!seenCommand) {
+      cls = "text-unison-text"
+      seenCommand = true
+    } else if (/^--?\w/.test(tok)) {
+      cls = "text-purple-400/80"
+    } else if (tok.startsWith('"') || tok.startsWith("'")) {
+      cls = "text-green-400/80"
+    }
+    return cls ? (
+      <span key={key} className={cls}>
+        {tok}
+      </span>
+    ) : (
+      <Fragment key={key}>{tok}</Fragment>
+    )
+  })
+}
+
+function HighlightedBash({ code }: { code: string }) {
+  const lines = code.split("\n")
+  return (
+    <>
+      {lines.map((line, lineIdx) => (
+        <Fragment key={`line-${lineIdx}-${line.slice(0, 8)}`}>
+          {lineIdx > 0 ? "\n" : null}
+          {highlightBashLine(line, lineIdx)}
+        </Fragment>
+      ))}
+    </>
+  )
+}
+
 function HeroSection({ manifest }: { manifest: DumpManifest }) {
   const { lyrics, requested_songs, lyrics_requests } = manifest.row_counts
   return (
@@ -63,10 +110,9 @@ function HeroSection({ manifest }: { manifest: DumpManifest }) {
       <div className="space-y-3">
         <h2 className="text-lg font-semibold text-unison-text">Download the Unison database</h2>
         <p className="text-sm leading-relaxed text-unison-text-secondary">
-          A daily snapshot of everything public: every accepted lyric variant, every requested song, and how often each
-          one's been asked for. There are no user identifiers, no votes, and no reports in the dump, just the lyrics and
-          the demand. The URL is stable: each day's snapshot replaces the previous one at <code>latest.dump</code>, so
-          you can point a cron job at it and forget about it.
+          A daily snapshot of the lyrics corpus and the request queue. No user IDs, votes, or
+          reports. Each day's snapshot lands at the same <code>latest.dump</code> URL, so a cron
+          pointed at it stays current with no extra plumbing.
         </p>
       </div>
       <div className="flex flex-wrap items-center gap-3">
@@ -108,13 +154,12 @@ function HeroError({ message }: { message: string }) {
       <div className="space-y-3">
         <h2 className="text-lg font-semibold text-unison-text">Download the Unison database</h2>
         <p className="text-sm leading-relaxed text-unison-text-secondary">
-          A daily snapshot of everything public: every accepted lyric variant, every requested song, and how often each
-          one's been asked for. There are no user identifiers, no votes, and no reports in the dump, just the lyrics and
-          the demand.
+          A daily snapshot of the lyrics corpus and the request queue. No user IDs, votes, or
+          reports.
         </p>
       </div>
       <div className="space-y-2 rounded-2xl border border-unison-border/50 bg-unison-bg-elevated/50 px-4 py-3 text-sm leading-relaxed text-unison-text-secondary">
-        <p>Couldn't load the dump manifest ({message}). You can still grab the latest snapshot directly:</p>
+        <p>Couldn't load the dump manifest ({message}). The latest snapshot is still at:</p>
         <p>
           <a href={FALLBACK_LATEST_URL} className="text-unison-text transition-colors hover:text-unison-text-secondary">
             {FALLBACK_LATEST_URL}
@@ -130,12 +175,16 @@ function RestoreSection() {
     <section className="space-y-3">
       <h2 className="text-lg font-semibold text-unison-text">Restore</h2>
       <p className="text-sm leading-relaxed text-unison-text-secondary">
-        Verify the checksum, then restore into a fresh Postgres 18 database. The full-text search index is dropped from
-        the dump to keep it small; rebuild it locally after restore.
+        Verify the checksum, then restore into a fresh Postgres 18 database.
       </p>
-      <pre className="overflow-x-auto rounded-2xl border border-unison-border/50 bg-unison-bg-elevated/50 px-4 py-3 font-mono text-xs leading-relaxed text-unison-text-secondary">
-        {RESTORE_SNIPPET}
-      </pre>
+      <div className="relative">
+        <pre className="overflow-x-auto rounded-2xl border border-unison-border/50 bg-unison-bg-elevated/50 px-4 py-3 pr-12 font-mono text-xs leading-relaxed text-unison-text-secondary">
+          <HighlightedBash code={RESTORE_SNIPPET} />
+        </pre>
+        <div className="absolute right-2 top-2">
+          <CopyButton value={RESTORE_SNIPPET} label="Copy restore commands" />
+        </div>
+      </div>
     </section>
   )
 }
@@ -145,9 +194,9 @@ function LicenseSection() {
     <section className="space-y-3">
       <h2 className="text-lg font-semibold text-unison-text">License</h2>
       <p className="text-sm leading-relaxed text-unison-text-secondary">
-        The dump is dual-licensed. For open-source use (your own player, research, hobby projects), it's available under
-        the Open Database License (ODbL 1.0): credit Unison and you're done. If you're using it commercially (a
-        streaming service, distributor, label), reach out for a commercial license.
+        The dump is dual-licensed. ODbL 1.0 covers FOSS use; credit Unison and you're done. For
+        anything commercial (streaming platforms, labels, distributors), reach out for a
+        commercial license.
       </p>
       <div className="space-y-2">
         <p className="text-xs uppercase tracking-wider text-unison-text-muted">Required attribution</p>
