@@ -155,7 +155,9 @@ export interface BuildManifestInput {
 	now?: Date
 }
 
-async function countRows(env: Env, table: string): Promise<number> {
+type DumpTable = "lyrics" | "requested_songs" | "lyrics_requests"
+
+async function countRows(env: Env, table: DumpTable): Promise<number> {
 	const row = await env.DB.prepare(
 		`SELECT COUNT(*)::INT AS c FROM public_dump.${table}`
 	).first<{ c: number }>()
