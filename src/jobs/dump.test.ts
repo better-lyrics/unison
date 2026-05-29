@@ -1,4 +1,9 @@
+import { createHash } from "node:crypto"
 import { EventEmitter } from "node:events"
+import { mkdtemp, rm, writeFile } from "node:fs/promises"
+import { tmpdir } from "node:os"
+import { join } from "node:path"
+import { config } from "@/config"
 import type { Env } from "@/types"
 import { describe, expect, it, vi } from "vitest"
 import {
@@ -6,6 +11,7 @@ import {
 	materializeDumpSchema,
 	REQUEST_KEEP_COLUMNS,
 	runPgDump,
+	verifyDump,
 } from "@/jobs/dump"
 
 interface FakeStatement {
@@ -275,5 +281,39 @@ describe("runPgDump", () => {
 				spawnFn: spawnFn as unknown as typeof import("node:child_process").spawn,
 			})
 		).rejects.toThrow(/ENOENT/)
+	})
+})
+
+async function withTempFile(bytes: Buffer, fn: (path: string) => Promise<void>) {
+	const dir = await mkdtemp(join(tmpdir(), "dump-test-"))
+	const path = join(dir, "test.dump")
+	try {
+		await writeFile(path, bytes)
+		await fn(path)
+	} finally {
+		await rm(dir, { recursive: true, force: true })
+	}
+}
+
+describe("verifyDump", () => {
+	it("returns the correct sha256 and byte count for a file at or above the floor", async () => {
+		const size = config.dump.minBytes + 1024
+		const buf = Buffer.alloc(size, 0x61)
+		const expectedSha = createHash("sha256").update(buf).digest("hex")
+		await withTempFile(buf, async (path) => {
+			const result = await verifyDump(path)
+			expect(result.bytes).toBe(size)
+			expect(result.sha256).toBe(expectedSha)
+			expect(result.sha256).toMatch(/^[0-9a-f]{64}$/)
+		})
+	})
+
+	it("throws when the file is below the floor", async () => {
+		const buf = Buffer.alloc(100, 0x61)
+		await withTempFile(buf, async (path) => {
+			await expect(verifyDump(path)).rejects.toThrow(
+				new RegExp(`dump size 100 bytes is below floor ${config.dump.minBytes} bytes`)
+			)
+		})
 	})
 })

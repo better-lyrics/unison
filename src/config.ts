@@ -112,6 +112,10 @@ export const config = {
 			ttlSeconds: 5 * 60,
 		},
 	},
+
+	dump: {
+		minBytes: 10 * 1024 * 1024,
+	},
 } as const
 
 export type Config = typeof config

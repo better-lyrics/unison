@@ -1,4 +1,7 @@
 import { spawn as nodeSpawn } from "node:child_process"
+import { createHash } from "node:crypto"
+import { createReadStream } from "node:fs"
+import { config } from "@/config"
 import { Logger } from "@/infra/logger"
 import type { Env } from "@/types"
 
@@ -95,4 +98,31 @@ export async function materializeDumpSchema(env: Env): Promise<void> {
 	])
 
 	log.info("materialized public_dump schema")
+}
+
+export interface VerifyDumpResult {
+	sha256: string
+	bytes: number
+}
+
+export function verifyDump(filePath: string): Promise<VerifyDumpResult> {
+	return new Promise((resolve, reject) => {
+		const hash = createHash("sha256")
+		const stream = createReadStream(filePath)
+		let bytes = 0
+		stream.on("data", (chunk) => {
+			hash.update(chunk)
+			bytes += chunk.length
+		})
+		stream.on("error", reject)
+		stream.on("end", () => {
+			if (bytes < config.dump.minBytes) {
+				reject(
+					new Error(`dump size ${bytes} bytes is below floor ${config.dump.minBytes} bytes`)
+				)
+				return
+			}
+			resolve({ sha256: hash.digest("hex"), bytes })
+		})
+	})
 }
