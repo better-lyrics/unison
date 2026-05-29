@@ -43,5 +43,9 @@ const DUMP_MANIFEST_URL = "https://unison-dumps.boidu.dev/dumps/manifest.json"
 export async function fetchDumpManifest(): Promise<DumpManifest> {
   const res = await fetch(DUMP_MANIFEST_URL)
   if (!res.ok) throw new Error(`HTTP ${res.status} fetching dump manifest`)
-  return (await res.json()) as DumpManifest
+  try {
+    return (await res.json()) as DumpManifest
+  } catch {
+    throw new Error("manifest is malformed")
+  }
 }
