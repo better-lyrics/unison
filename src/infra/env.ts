@@ -1,8 +1,24 @@
 import { config } from "@/config"
 import type { B2Config, Env } from "@/types"
+import { Logger } from "./logger"
 import { D1Compat, getPool } from "./database"
 import { KVCompat, getRedis } from "./cache"
 import { RedisRateLimiter } from "./rate-limiter"
+
+const log = new Logger("env")
+const DUMPS_ENABLED_TRUTHY = new Set(["true", "1", "yes"])
+
+function readDumpsEnabled(): boolean {
+	const raw = process.env.DUMPS_ENABLED?.trim().toLowerCase() ?? ""
+	if (raw === "") return false
+	const enabled = DUMPS_ENABLED_TRUTHY.has(raw)
+	if (!enabled) {
+		log.warn("DUMPS_ENABLED is set but did not normalize to a truthy value", {
+			raw: process.env.DUMPS_ENABLED,
+		})
+	}
+	return enabled
+}
 
 function readB2Config(): B2Config | null {
 	const keyId = process.env.B2_KEY_ID
@@ -39,7 +55,7 @@ export function createEnv(): Env {
 			config.rateLimit.read.windowSeconds
 		),
 		CACHE_TTL_SECONDS: process.env.CACHE_TTL_SECONDS || "604800",
-		DUMPS_ENABLED: process.env.DUMPS_ENABLED === "true",
+		DUMPS_ENABLED: readDumpsEnabled(),
 		DUMP_PUBLIC_BASE_URL: process.env.DUMP_PUBLIC_BASE_URL || "",
 		DUMP_DATABASE_URL: process.env.DUMP_DATABASE_URL || null,
 		B2: readB2Config(),
