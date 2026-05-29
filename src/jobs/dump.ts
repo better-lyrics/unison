@@ -1,8 +1,10 @@
 import { spawn } from "node:child_process"
 import { createHash } from "node:crypto"
 import { createReadStream } from "node:fs"
+import { basename } from "node:path"
 import { config } from "@/config"
 import { Logger } from "@/infra/logger"
+import type { Storage } from "@/infra/storage"
 import type { Env } from "@/types"
 
 const log = new Logger("dump")
@@ -186,4 +188,36 @@ export async function buildManifest(
 		attribution_text: "Lyrics from Unison (https://unison.boidu.dev)",
 		enterprise_contact: "enterprise@boidu.dev",
 	}
+}
+
+export interface UploadDumpInput {
+	storage: Storage
+	localPath: string
+	sha256: string
+	manifest: DumpManifest
+	datedKey: string
+}
+
+export async function uploadDump(input: UploadDumpInput): Promise<void> {
+	const datedName = basename(input.datedKey)
+	const sidecarKey = `${input.datedKey}.sha256`
+	const sidecarBody = `${input.sha256}  ${datedName}\n`
+	const manifestBody = JSON.stringify(input.manifest, null, 2)
+
+	await input.storage.putObject(
+		input.datedKey,
+		createReadStream(input.localPath),
+		"application/octet-stream"
+	)
+	await input.storage.putObject(sidecarKey, Buffer.from(sidecarBody), "text/plain")
+	await input.storage.putObject(
+		"dumps/manifest.json",
+		Buffer.from(manifestBody),
+		"application/json"
+	)
+	await input.storage.putObject(
+		"dumps/latest.dump",
+		createReadStream(input.localPath),
+		"application/octet-stream"
+	)
 }

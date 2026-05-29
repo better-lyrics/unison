@@ -3,16 +3,19 @@ import { createHash } from "node:crypto"
 import { EventEmitter } from "node:events"
 import { mkdtemp, rm, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
-import { join } from "node:path"
+import { basename, join } from "node:path"
 import { config } from "@/config"
+import type { Storage } from "@/infra/storage"
 import type { Env } from "@/types"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 import {
 	buildManifest,
+	type DumpManifest,
 	LYRICS_KEEP_COLUMNS,
 	materializeDumpSchema,
 	REQUEST_KEEP_COLUMNS,
 	runPgDump,
+	uploadDump,
 	verifyDump,
 } from "@/jobs/dump"
 
@@ -401,5 +404,128 @@ describe("buildManifest", () => {
 		const manifest = await buildManifest(env, { ...baseInput, now })
 		expect(manifest.generated_at).toBe(now.toISOString())
 		expect(manifest.generated_at).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/)
+	})
+})
+
+interface RecordedPut {
+	key: string
+	contentType: string
+	bodyKind: "buffer" | "string" | "stream"
+	body: string
+}
+
+function buildMockStorage() {
+	const puts: RecordedPut[] = []
+	const storage: Storage = {
+		putObject: vi.fn(async (key, body, contentType) => {
+			const bodyKind: RecordedPut["bodyKind"] = Buffer.isBuffer(body)
+				? "buffer"
+				: typeof body === "string"
+					? "string"
+					: "stream"
+			const bodyText =
+				typeof body === "string" || Buffer.isBuffer(body) ? body.toString() : "<stream>"
+			puts.push({ key, contentType, bodyKind, body: bodyText })
+		}),
+		listObjects: vi.fn(async () => []),
+		deleteObject: vi.fn(async () => {}),
+		__client: null as never,
+	}
+	return { storage, puts }
+}
+
+const sampleManifest: DumpManifest = {
+	schema_version: 1,
+	generated_at: "2026-05-29T12:34:56.000Z",
+	sha256: "b".repeat(64),
+	bytes: 4096,
+	dump_url: "https://dumps.unison.boidu.dev/unison-2026-05-29.dump",
+	latest_url: "https://dumps.unison.boidu.dev/latest.dump",
+	row_counts: { lyrics: 100, requested_songs: 10, lyrics_requests: 5 },
+	format: "pg_dump custom (-Fc), Postgres 16",
+	license: "ODbL-1.0",
+	attribution_text: "Lyrics from Unison (https://unison.boidu.dev)",
+	enterprise_contact: "enterprise@boidu.dev",
+}
+
+describe("uploadDump", () => {
+	it("uploads the four keys in the documented order", async () => {
+		const fileBytes = Buffer.alloc(2048, 0x7a)
+		await withTempFile(fileBytes, async (path) => {
+			const { storage, puts } = buildMockStorage()
+			const datedKey = "dumps/unison-2026-05-29.dump"
+			await uploadDump({
+				storage,
+				localPath: path,
+				sha256: sampleManifest.sha256,
+				manifest: sampleManifest,
+				datedKey,
+			})
+			expect(puts.map((p) => p.key)).toEqual([
+				"dumps/unison-2026-05-29.dump",
+				"dumps/unison-2026-05-29.dump.sha256",
+				"dumps/manifest.json",
+				"dumps/latest.dump",
+			])
+		})
+	})
+
+	it("uploads the manifest as application/json with JSON that round-trips", async () => {
+		const fileBytes = Buffer.alloc(2048, 0x7a)
+		await withTempFile(fileBytes, async (path) => {
+			const { storage, puts } = buildMockStorage()
+			const datedKey = "dumps/unison-2026-05-29.dump"
+			await uploadDump({
+				storage,
+				localPath: path,
+				sha256: sampleManifest.sha256,
+				manifest: sampleManifest,
+				datedKey,
+			})
+			const manifestPut = puts.find((p) => p.key === "dumps/manifest.json")
+			expect(manifestPut).toBeDefined()
+			expect(manifestPut?.contentType).toBe("application/json")
+			expect(JSON.parse(manifestPut?.body ?? "")).toEqual(sampleManifest)
+		})
+	})
+
+	it("writes the sha256 sidecar as text/plain in sha256sum -c format", async () => {
+		const fileBytes = Buffer.alloc(2048, 0x7a)
+		await withTempFile(fileBytes, async (path) => {
+			const { storage, puts } = buildMockStorage()
+			const datedKey = "dumps/unison-2026-05-29.dump"
+			await uploadDump({
+				storage,
+				localPath: path,
+				sha256: sampleManifest.sha256,
+				manifest: sampleManifest,
+				datedKey,
+			})
+			const sidecar = puts.find((p) => p.key === "dumps/unison-2026-05-29.dump.sha256")
+			expect(sidecar).toBeDefined()
+			expect(sidecar?.contentType).toBe("text/plain")
+			expect(sidecar?.body).toBe(`${sampleManifest.sha256}  ${basename(datedKey)}\n`)
+		})
+	})
+
+	it("streams the dated and latest dump bodies as application/octet-stream", async () => {
+		const fileBytes = Buffer.alloc(2048, 0x7a)
+		await withTempFile(fileBytes, async (path) => {
+			const { storage, puts } = buildMockStorage()
+			const datedKey = "dumps/unison-2026-05-29.dump"
+			await uploadDump({
+				storage,
+				localPath: path,
+				sha256: sampleManifest.sha256,
+				manifest: sampleManifest,
+				datedKey,
+			})
+			const dated = puts.find((p) => p.key === datedKey)
+			const latest = puts.find((p) => p.key === "dumps/latest.dump")
+			expect(dated?.contentType).toBe("application/octet-stream")
+			expect(dated?.bodyKind).toBe("stream")
+			expect(latest?.contentType).toBe("application/octet-stream")
+			expect(latest?.bodyKind).toBe("stream")
+		})
 	})
 })
