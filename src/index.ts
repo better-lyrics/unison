@@ -102,7 +102,7 @@ const app = new Elysia({ adapter: node() })
 	.use(
 		cron({
 			name: "dump",
-			pattern: "0 15 * * *",
+			pattern: "15 15 * * *",
 			timezone: "UTC",
 			async run() {
 				cronLog.info("starting daily dump")
