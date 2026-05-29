@@ -187,7 +187,7 @@ function RestoreSection() {
         Verify the checksum, then restore into a fresh Postgres 18 database.
       </p>
       <div className="relative">
-        <pre className="overflow-x-auto rounded-2xl border border-unison-border/50 bg-unison-bg-elevated/50 px-4 py-3 pr-12 font-mono text-xs leading-relaxed text-unison-text-secondary">
+        <pre className="overflow-x-auto rounded-2xl border border-unison-border/50 bg-unison-bg-elevated/50 px-4 py-3 pr-12 font-mono text-xs leading-relaxed text-unison-text-secondary [font-variant-ligatures:none]">
           <HighlightedBash code={RESTORE_SNIPPET} />
         </pre>
         <div className="absolute right-2 top-2">
