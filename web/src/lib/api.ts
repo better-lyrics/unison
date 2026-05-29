@@ -1,6 +1,7 @@
 import type {
   ApiEnvelope,
   CuratorsLeaderboardResponse,
+  DumpManifest,
   SongsLeaderboardResponse,
   UserRankResponse,
   UserSubmissionsResponse,
@@ -35,4 +36,16 @@ export async function fetchUserSubmissions(keyId: string, cursor?: string): Prom
   if (USE_SEED) return (await import("./dev-seed")).seedUserSubmissions(keyId)
   const params = cursor !== undefined ? `?cursor=${encodeURIComponent(cursor)}` : ""
   return getJson<UserSubmissionsResponse>(`/users/${encodeURIComponent(keyId)}/submissions${params}`)
+}
+
+const DUMP_MANIFEST_URL = "https://unison-dumps.boidu.dev/dumps/manifest.json"
+
+export async function fetchDumpManifest(): Promise<DumpManifest> {
+  const res = await fetch(DUMP_MANIFEST_URL)
+  if (!res.ok) throw new Error(`HTTP ${res.status} fetching dump manifest`)
+  try {
+    return (await res.json()) as DumpManifest
+  } catch {
+    throw new Error("manifest is malformed")
+  }
 }

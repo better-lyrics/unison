@@ -138,6 +138,69 @@ pnpm run test     # tests
 pnpm run check    # lint
 ```
 
+## Database dump
+
+There's a daily snapshot of the public lyrics corpus at
+`https://unison-dumps.boidu.dev/dumps/latest.dump`. Sha256, row counts, and
+the rest of the metadata are at `dumps/manifest.json` on the same host.
+
+It's a `pg_dump -Fc` against Postgres 18, scoped to a `public_dump` schema
+with `lyrics`, `requested_songs`, and `lyrics_requests`. No user IDs, no
+votes, no reports, no auth.
+
+### Restore
+
+```bash
+# 1. Download and verify
+curl -O https://unison-dumps.boidu.dev/dumps/latest.dump
+curl -O https://unison-dumps.boidu.dev/dumps/latest.dump.sha256
+sha256sum -c latest.dump.sha256
+
+# 2. Create a fresh database
+createdb unison_mirror
+
+# 3. Restore
+pg_restore -d unison_mirror --no-owner --no-privileges latest.dump
+```
+
+The `lyrics` column is stored gzip-compressed, same as in the live DB. Full-text
+search is omitted from the dump. If you need search on a mirror, decompress the
+column and run the project's `backfill-text-search` job against your restored
+DB (see `src/jobs/backfill-text-search.ts`).
+
+### Production-DB safety
+
+The dump pipeline only writes to the `public_dump` schema. There's no
+`INSERT`, `UPDATE`, `DELETE`, or `ALTER` against `public.*` anywhere in the
+code, and a test in `src/jobs/dump.test.ts` fails CI if anyone adds one.
+
+If you want database-level enforcement on top of that, run the dump under a
+restricted Postgres role:
+
+```sql
+CREATE ROLE unison_dump WITH LOGIN PASSWORD '<choose-one>';
+GRANT USAGE ON SCHEMA public TO unison_dump;
+GRANT SELECT ON ALL TABLES IN SCHEMA public TO unison_dump;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT ON TABLES TO unison_dump;
+GRANT CREATE ON DATABASE <db-name> TO unison_dump;
+CREATE SCHEMA IF NOT EXISTS public_dump AUTHORIZATION unison_dump;
+```
+
+Set `DUMP_DATABASE_URL` to a connection string that authenticates as that
+role. If it's unset, the pipeline uses `DATABASE_URL` as before.
+
 ## License
 
-MIT
+Source code: MIT.
+
+The dump itself is dual-licensed.
+
+- Open: [ODbL-1.0](https://opendatacommons.org/licenses/odbl/1-0/). Attribution
+  and share-alike on derivative databases. If you're building a FOSS player
+  that displays the lyrics, you only need to attribute (the "Produced Works"
+  clause).
+- Commercial: anyone selling a product on top of the corpus (streaming
+  services, labels, distributors) needs a commercial license. Email
+  `enterprise@boidu.dev` with "Unison" in the subject.
+
+Required attribution: `Lyrics from Unison (https://unison.boidu.dev)`.

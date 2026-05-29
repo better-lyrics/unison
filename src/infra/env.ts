@@ -1,8 +1,35 @@
 import { config } from "@/config"
-import type { Env } from "@/types"
+import type { B2Config, Env } from "@/types"
+import { Logger } from "./logger"
 import { D1Compat, getPool } from "./database"
 import { KVCompat, getRedis } from "./cache"
 import { RedisRateLimiter } from "./rate-limiter"
+
+const log = new Logger("env")
+const DUMPS_ENABLED_TRUTHY = new Set(["true", "1", "yes"])
+
+function readDumpsEnabled(): boolean {
+	const raw = process.env.DUMPS_ENABLED?.trim().toLowerCase() ?? ""
+	if (raw === "") return false
+	const enabled = DUMPS_ENABLED_TRUTHY.has(raw)
+	if (!enabled) {
+		log.warn("DUMPS_ENABLED is set but did not normalize to a truthy value", {
+			raw: process.env.DUMPS_ENABLED,
+		})
+	}
+	return enabled
+}
+
+function readB2Config(): B2Config | null {
+	const keyId = process.env.B2_KEY_ID
+	const applicationKey = process.env.B2_APPLICATION_KEY
+	const bucket = process.env.B2_BUCKET
+	const endpoint = process.env.B2_ENDPOINT
+
+	if (!keyId || !applicationKey || !bucket || !endpoint) return null
+
+	return { keyId, applicationKey, bucket, endpoint }
+}
 
 export function createEnv(): Env {
 	const databaseUrl = process.env.DATABASE_URL
@@ -28,5 +55,9 @@ export function createEnv(): Env {
 			config.rateLimit.read.windowSeconds
 		),
 		CACHE_TTL_SECONDS: process.env.CACHE_TTL_SECONDS || "604800",
+		DUMPS_ENABLED: readDumpsEnabled(),
+		DUMP_PUBLIC_BASE_URL: process.env.DUMP_PUBLIC_BASE_URL || "",
+		DUMP_DATABASE_URL: process.env.DUMP_DATABASE_URL || null,
+		B2: readB2Config(),
 	}
 }

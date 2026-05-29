@@ -2,6 +2,7 @@ import { RouterProvider, createBrowserRouter } from "react-router-dom"
 import { AppLayout } from "./components/AppLayout"
 import { AboutPage } from "./pages/AboutPage"
 import { CuratorsPage } from "./pages/CuratorsPage"
+import { DownloadsPage } from "./pages/DownloadsPage"
 import { MePage } from "./pages/MePage"
 import { SongsPage } from "./pages/SongsPage"
 import { UserPage } from "./pages/UserPage"
@@ -16,6 +17,7 @@ const router = createBrowserRouter([
       { path: "me", element: <MePage /> },
       { path: "users/:keyId", element: <UserPage /> },
       { path: "about", element: <AboutPage /> },
+      { path: "downloads", element: <DownloadsPage /> },
     ],
   },
 ])

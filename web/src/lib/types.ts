@@ -72,3 +72,21 @@ export interface UserSubmissionsResponse {
   submissions: UserSubmission[]
   nextCursor?: string
 }
+
+export interface DumpManifest {
+  schema_version: 1
+  generated_at: string
+  sha256: string
+  bytes: number
+  dump_url: string
+  latest_url: string
+  row_counts: {
+    lyrics: number
+    requested_songs: number
+    lyrics_requests: number
+  }
+  format: string
+  license: string
+  attribution_text: string
+  enterprise_contact: string
+}

@@ -57,6 +57,10 @@ function makeEnv(cache: ReturnType<typeof makeMockCache>): Env & {
 		RATE_LIMITER: limiter as unknown as Env["RATE_LIMITER"],
 		READ_RATE_LIMITER: limiter as unknown as Env["READ_RATE_LIMITER"],
 		CACHE_TTL_SECONDS: "300",
+		DUMPS_ENABLED: false,
+		DUMP_PUBLIC_BASE_URL: "",
+		DUMP_DATABASE_URL: null,
+		B2: null,
 		cache,
 	}
 }
@@ -109,6 +113,10 @@ function makeEnvFull(
 		RATE_LIMITER: limiter as unknown as Env["RATE_LIMITER"],
 		READ_RATE_LIMITER: limiter as unknown as Env["READ_RATE_LIMITER"],
 		CACHE_TTL_SECONDS: "300",
+		DUMPS_ENABLED: false,
+		DUMP_PUBLIC_BASE_URL: "",
+		DUMP_DATABASE_URL: null,
+		B2: null,
 		cache,
 	}
 }

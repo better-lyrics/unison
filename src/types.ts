@@ -2,12 +2,23 @@ import type { D1Compat } from "@/infra/database"
 import type { KVCompat } from "@/infra/cache"
 import type { RedisRateLimiter } from "@/infra/rate-limiter"
 
+export interface B2Config {
+	keyId: string
+	applicationKey: string
+	bucket: string
+	endpoint: string
+}
+
 export interface Env {
 	DB: D1Compat
 	CACHE: KVCompat
 	RATE_LIMITER: RedisRateLimiter
 	READ_RATE_LIMITER: RedisRateLimiter
 	CACHE_TTL_SECONDS: string
+	DUMPS_ENABLED: boolean
+	DUMP_PUBLIC_BASE_URL: string
+	DUMP_DATABASE_URL: string | null
+	B2: B2Config | null
 }
 
 export interface RateLimiter {

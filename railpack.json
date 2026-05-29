@@ -1,0 +1,36 @@
+{
+	"$schema": "https://schema.railpack.com",
+	"provider": "node",
+	"steps": {
+		"pg-client": {
+			"assets": {
+				"pgdg-source": "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt bookworm-pgdg main\n"
+			},
+			"commands": [
+				"apt-get update && apt-get install -y --no-install-recommends curl ca-certificates gnupg",
+				"install -d /usr/share/postgresql-common/pgdg",
+				"curl -fsSL -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc https://www.postgresql.org/media/keys/ACCC4CF8.asc",
+				{ "path": "/etc/apt/sources.list.d/pgdg.list", "name": "pgdg-source" },
+				"cat /etc/apt/sources.list.d/pgdg.list",
+				"apt-get update",
+				"apt-get install -y --no-install-recommends postgresql-client-18"
+			]
+		}
+	},
+	"deploy": {
+		"inputs": [
+			"...",
+			{
+				"step": "pg-client",
+				"include": [
+					"/usr/bin/pg_dump",
+					"/usr/bin/pg_restore",
+					"/usr/bin/psql",
+					"/usr/lib/postgresql/18",
+					"/usr/share/postgresql/18",
+					"/usr/lib/x86_64-linux-gnu/libpq.so.5"
+				]
+			}
+		]
+	}
+}
