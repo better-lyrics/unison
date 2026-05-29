@@ -19,6 +19,7 @@
     "test:coverage": "vitest run --coverage",
     "submit": "tsx cli/submit.ts",
     "admin:delete": "tsx scripts/admin-delete.ts",
+    "dump:dry-run": "tsx scripts/dump-dry-run.ts",
     "web:dev": "pnpm -C web dev",
     "web:build": "pnpm -C web build",
     "web:typecheck": "pnpm -C web typecheck",
