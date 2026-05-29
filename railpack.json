@@ -18,19 +18,6 @@
 		}
 	},
 	"deploy": {
-		"inputs": [
-			"...",
-			{
-				"step": "pg-client",
-				"include": [
-					"/usr/bin/pg_dump",
-					"/usr/bin/pg_restore",
-					"/usr/bin/psql",
-					"/usr/lib/postgresql/18",
-					"/usr/share/postgresql/18",
-					"/usr/lib/x86_64-linux-gnu/libpq.so.5"
-				]
-			}
-		]
+		"inputs": ["...", { "step": "pg-client", "include": ["/"] }]
 	}
 }
