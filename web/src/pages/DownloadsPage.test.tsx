@@ -9,8 +9,8 @@ const manifest = {
   generated_at: new Date(Date.now() - 4 * 60 * 60 * 1000).toISOString(),
   sha256: "abc123",
   bytes: 100_000_000,
-  dump_url: "https://dumps.unison.boidu.dev/unison-2026-05-29.dump",
-  latest_url: "https://dumps.unison.boidu.dev/latest.dump",
+  dump_url: "https://unison-dumps.boidu.dev/unison-2026-05-29.dump",
+  latest_url: "https://unison-dumps.boidu.dev/latest.dump",
   row_counts: { lyrics: 184231, requested_songs: 9821, lyrics_requests: 14502 },
   format: "pg_dump custom (-Fc), Postgres 16",
   license: "ODbL-1.0",
@@ -118,9 +118,9 @@ describe("DownloadsPage", () => {
     )
     renderPage()
     const fallback = await waitFor(() =>
-      screen.getByRole("link", { name: "https://dumps.unison.boidu.dev/latest.dump" }),
+      screen.getByRole("link", { name: "https://unison-dumps.boidu.dev/latest.dump" }),
     )
-    expect(fallback.getAttribute("href")).toBe("https://dumps.unison.boidu.dev/latest.dump")
+    expect(fallback.getAttribute("href")).toBe("https://unison-dumps.boidu.dev/latest.dump")
     expect(screen.queryByRole("link", { name: /Download latest dump/i })).toBeNull()
   })
 })

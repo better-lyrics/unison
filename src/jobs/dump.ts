@@ -175,7 +175,7 @@ export async function buildManifest(
 	])
 
 	// Bucket keys are organized under `dumps/`, but the public CDN base is rooted
-	// at that prefix, so we strip it to avoid `dumps.unison.boidu.dev/dumps/...`.
+	// at that prefix, so we strip it to avoid `unison-dumps.boidu.dev/dumps/...`.
 	const filename = input.datedKey.replace(/^dumps\//, "")
 	const generatedAt = (input.now ?? new Date()).toISOString()
 

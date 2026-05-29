@@ -5,13 +5,13 @@ import { fetchDumpManifest } from "@/lib/api"
 import { formatExact, formatRelativeTime } from "@/lib/format"
 import type { DumpManifest } from "@/lib/types"
 
-const FALLBACK_LATEST_URL = "https://dumps.unison.boidu.dev/latest.dump"
+const FALLBACK_LATEST_URL = "https://unison-dumps.boidu.dev/latest.dump"
 const ATTRIBUTION = "Lyrics from Unison (https://unison.boidu.dev)"
 const ENTERPRISE_MAILTO = "mailto:enterprise@boidu.dev?subject=Unison%20commercial%20license%20inquiry"
 
 const RESTORE_SNIPPET = `# 1. Download and verify
-curl -O https://dumps.unison.boidu.dev/latest.dump
-curl -O https://dumps.unison.boidu.dev/latest.dump.sha256
+curl -O https://unison-dumps.boidu.dev/latest.dump
+curl -O https://unison-dumps.boidu.dev/latest.dump.sha256
 sha256sum -c latest.dump.sha256
 
 # 2. Create a fresh database
@@ -134,7 +134,7 @@ function RestoreSection() {
     <section className="space-y-3">
       <h2 className="text-lg font-semibold text-unison-text">Restore</h2>
       <p className="text-sm leading-relaxed text-unison-text-secondary">
-        Verify the checksum, then restore into a fresh Postgres 16 database. The full-text search index is dropped from
+        Verify the checksum, then restore into a fresh Postgres 18 database. The full-text search index is dropped from
         the dump to keep it small; rebuild it locally after restore.
       </p>
       <pre className="overflow-x-auto rounded-2xl border border-unison-border/50 bg-unison-bg-elevated/50 px-4 py-3 font-mono text-xs leading-relaxed text-unison-text-secondary">

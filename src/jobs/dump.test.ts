@@ -363,7 +363,7 @@ describe("buildManifest", () => {
 		sha256: "a".repeat(64),
 		bytes: 12_345_678,
 		datedKey: "dumps/unison-2026-05-29.dump",
-		publicBaseUrl: "https://dumps.unison.boidu.dev",
+		publicBaseUrl: "https://unison-dumps.boidu.dev",
 		now: new Date("2026-05-29T12:34:56.000Z"),
 	}
 
@@ -397,9 +397,9 @@ describe("buildManifest", () => {
 		const { env } = createManifestMockEnv([1, 2, 3])
 		const manifest = await buildManifest(env, baseInput)
 		expect(manifest.dump_url).toBe(
-			"https://dumps.unison.boidu.dev/unison-2026-05-29.dump"
+			"https://unison-dumps.boidu.dev/unison-2026-05-29.dump"
 		)
-		expect(manifest.latest_url).toBe("https://dumps.unison.boidu.dev/latest.dump")
+		expect(manifest.latest_url).toBe("https://unison-dumps.boidu.dev/latest.dump")
 	})
 
 	it("generated_at is a UTC ISO 8601 string derived from input.now", async () => {
@@ -443,8 +443,8 @@ const sampleManifest: DumpManifest = {
 	generated_at: "2026-05-29T12:34:56.000Z",
 	sha256: "b".repeat(64),
 	bytes: 4096,
-	dump_url: "https://dumps.unison.boidu.dev/unison-2026-05-29.dump",
-	latest_url: "https://dumps.unison.boidu.dev/latest.dump",
+	dump_url: "https://unison-dumps.boidu.dev/unison-2026-05-29.dump",
+	latest_url: "https://unison-dumps.boidu.dev/latest.dump",
 	row_counts: { lyrics: 100, requested_songs: 10, lyrics_requests: 5 },
 	format: "pg_dump custom (-Fc), Postgres 18",
 	license: "ODbL-1.0",
@@ -650,7 +650,7 @@ function createRunDumpJobEnv(opts: { dumpsEnabled: boolean; hasB2: boolean }): R
 	const env = {
 		DB: db,
 		DUMPS_ENABLED: opts.dumpsEnabled,
-		DUMP_PUBLIC_BASE_URL: "https://dumps.unison.boidu.dev",
+		DUMP_PUBLIC_BASE_URL: "https://unison-dumps.boidu.dev",
 		B2: opts.hasB2
 			? {
 					keyId: "k",

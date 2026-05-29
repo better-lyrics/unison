@@ -141,8 +141,8 @@ pnpm run check    # lint
 ## Database dump
 
 A daily snapshot of the public lyrics corpus is published at
-`https://dumps.unison.boidu.dev/latest.dump`. Machine-readable index lives at
-`https://dumps.unison.boidu.dev/manifest.json` (sha256, row counts, timestamp,
+`https://unison-dumps.boidu.dev/latest.dump`. Machine-readable index lives at
+`https://unison-dumps.boidu.dev/manifest.json` (sha256, row counts, timestamp,
 schema version, dump URL).
 
 Format: PostgreSQL custom-format (`pg_dump -Fc`), Postgres 18. The dump
@@ -154,8 +154,8 @@ are excluded.
 
 ```bash
 # 1. Download and verify
-curl -O https://dumps.unison.boidu.dev/latest.dump
-curl -O https://dumps.unison.boidu.dev/latest.dump.sha256
+curl -O https://unison-dumps.boidu.dev/latest.dump
+curl -O https://unison-dumps.boidu.dev/latest.dump.sha256
 sha256sum -c latest.dump.sha256
 
 # 2. Create a fresh database
