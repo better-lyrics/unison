@@ -138,6 +138,52 @@ pnpm run test     # tests
 pnpm run check    # lint
 ```
 
+## Database dump
+
+A daily snapshot of the public lyrics corpus is published at
+`https://dumps.unison.boidu.dev/latest.dump`. Machine-readable index lives at
+`https://dumps.unison.boidu.dev/manifest.json` (sha256, row counts, timestamp,
+schema version, dump URL).
+
+Format: PostgreSQL custom-format (`pg_dump -Fc`), Postgres 16. The dump
+contains the `public_dump` schema with `lyrics`, `requested_songs`, and
+`lyrics_requests` tables. User identifiers, votes, reports, and auth data
+are excluded.
+
+### Restore
+
+```bash
+# 1. Download and verify
+curl -O https://dumps.unison.boidu.dev/latest.dump
+curl -O https://dumps.unison.boidu.dev/latest.dump.sha256
+sha256sum -c latest.dump.sha256
+
+# 2. Create a fresh database
+createdb unison_mirror
+
+# 3. Restore (takes a couple of minutes on the current corpus size)
+pg_restore -d unison_mirror --no-owner --no-privileges latest.dump
+
+# 4. Rebuild the full-text search index (omitted from the dump for size)
+psql unison_mirror -c "UPDATE public_dump.lyrics SET lyrics_text_search = to_tsvector('simple', lyrics);"
+psql unison_mirror -c "CREATE INDEX idx_lyrics_text_search ON public_dump.lyrics USING GIN (lyrics_text_search);"
+```
+
+The `lyrics` column is gzip-compressed (matches storage in the live DB).
+Decompress in your client of choice.
+
 ## License
 
-MIT
+Source code: MIT.
+
+Lyrics database dump: dual-licensed.
+
+- Open: [ODbL-1.0](https://opendatacommons.org/licenses/odbl/1-0/). Free to
+  use, share, and build on with attribution and share-alike for derivative
+  databases. FOSS projects displaying lyrics in a UI only owe attribution
+  ("Produced Works" clause).
+- Commercial: streaming services, distributors, labels, and any product
+  using the corpus commercially need a commercial license. Email
+  `enterprise@boidu.dev` with "Unison" in the subject.
+
+Required attribution: `Lyrics from Unison (https://unison.boidu.dev)`.
