@@ -106,7 +106,11 @@ const app = new Elysia({ adapter: node() })
 			async run() {
 				cronLog.info("starting daily dump")
 				const result = await runDumpJob(env)
-				cronLog.info("daily dump complete", result)
+				if (result.status === "failed") {
+					cronLog.error("daily dump failed", result)
+				} else {
+					cronLog.info("daily dump complete", result)
+				}
 			},
 		})
 	)
