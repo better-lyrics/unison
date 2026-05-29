@@ -5,25 +5,20 @@ import { fetchDumpManifest } from "@/lib/api"
 import { formatExact, formatRelativeTime } from "@/lib/format"
 import type { DumpManifest } from "@/lib/types"
 
-const FALLBACK_LATEST_URL = "https://unison-dumps.boidu.dev/latest.dump"
+const FALLBACK_LATEST_URL = "https://unison-dumps.boidu.dev/dumps/latest.dump"
 const ATTRIBUTION = "Lyrics from Unison (https://unison.boidu.dev)"
 const ENTERPRISE_MAILTO = "mailto:enterprise@boidu.dev?subject=Unison%20commercial%20license%20inquiry"
 
 const RESTORE_SNIPPET = `# 1. Download and verify
-curl -O https://unison-dumps.boidu.dev/latest.dump
-curl -O https://unison-dumps.boidu.dev/latest.dump.sha256
+curl -O https://unison-dumps.boidu.dev/dumps/latest.dump
+curl -O https://unison-dumps.boidu.dev/dumps/latest.dump.sha256
 sha256sum -c latest.dump.sha256
 
 # 2. Create a fresh database
 createdb unison_mirror
 
 # 3. Restore
-pg_restore -d unison_mirror --no-owner --no-privileges latest.dump
-
-# 4. Rebuild the full-text search column and index (omitted for size)
-psql unison_mirror -c "ALTER TABLE public_dump.lyrics ADD COLUMN lyrics_text_search tsvector;"
-psql unison_mirror -c "UPDATE public_dump.lyrics SET lyrics_text_search = to_tsvector('simple', lyrics);"
-psql unison_mirror -c "CREATE INDEX idx_lyrics_text_search ON public_dump.lyrics USING GIN (lyrics_text_search);"`
+pg_restore -d unison_mirror --no-owner --no-privileges latest.dump`
 
 function formatBytes(bytes: number): string {
   const mb = bytes / 1_000_000

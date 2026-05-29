@@ -161,14 +161,12 @@ createdb unison_mirror
 
 # 3. Restore
 pg_restore -d unison_mirror --no-owner --no-privileges latest.dump
-
-# 4. The full-text search column is dropped from the dump for size. Rebuild it:
-psql unison_mirror -c "ALTER TABLE public_dump.lyrics ADD COLUMN lyrics_text_search tsvector;"
-psql unison_mirror -c "UPDATE public_dump.lyrics SET lyrics_text_search = to_tsvector('simple', lyrics);"
-psql unison_mirror -c "CREATE INDEX idx_lyrics_text_search ON public_dump.lyrics USING GIN (lyrics_text_search);"
 ```
 
-The `lyrics` column is stored gzip-compressed, same as in the live DB.
+The `lyrics` column is stored gzip-compressed, same as in the live DB. Full-text
+search is omitted from the dump. If you need search on a mirror, decompress the
+column and run the project's `backfill-text-search` job against your restored
+DB (see `src/jobs/backfill-text-search.ts`).
 
 ### Production-DB safety
 
@@ -184,6 +182,7 @@ CREATE ROLE unison_dump WITH LOGIN PASSWORD '<choose-one>';
 GRANT USAGE ON SCHEMA public TO unison_dump;
 GRANT SELECT ON ALL TABLES IN SCHEMA public TO unison_dump;
 ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT ON TABLES TO unison_dump;
+GRANT CREATE ON DATABASE <db-name> TO unison_dump;
 CREATE SCHEMA IF NOT EXISTS public_dump AUTHORIZATION unison_dump;
 ```
 
