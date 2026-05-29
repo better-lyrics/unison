@@ -12,6 +12,7 @@ import { Logger, flushLogs } from "@/infra/logger"
 import { backfillFormatDetection } from "@/jobs/backfill-format-detection"
 import { backfillSyncType } from "@/jobs/backfill-synctype"
 import { backfillTextSearch } from "@/jobs/backfill-text-search"
+import { runDumpJob } from "@/jobs/dump"
 import { updateScores } from "@/jobs/score-updater"
 import { authRoutes } from "@/routes/auth"
 import { lyricsRoutes } from "@/routes/lyrics"
@@ -95,6 +96,17 @@ const app = new Elysia({ adapter: node() })
 				cronLog.info("starting score update")
 				const result = await updateScores(env)
 				cronLog.info("score update complete", { updated: result.updated })
+			},
+		})
+	)
+	.use(
+		cron({
+			name: "dump",
+			pattern: "0 4 * * *",
+			async run() {
+				cronLog.info("starting daily dump")
+				const result = await runDumpJob(env)
+				cronLog.info("daily dump complete", result)
 			},
 		})
 	)
