@@ -8,6 +8,7 @@ import { config } from "@/config"
 import type { Env } from "@/types"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 import {
+	buildManifest,
 	LYRICS_KEEP_COLUMNS,
 	materializeDumpSchema,
 	REQUEST_KEEP_COLUMNS,
@@ -322,5 +323,83 @@ describe("verifyDump", () => {
 				new RegExp(`dump size 100 bytes is below floor ${config.dump.minBytes} bytes`)
 			)
 		})
+	})
+})
+
+interface CountRow {
+	c: number
+}
+
+function createManifestMockEnv(counts: number[]): {
+	env: Env
+	prepared: string[]
+} {
+	const prepared: string[] = []
+	let callIdx = 0
+	const db = {
+		prepare(sql: string) {
+			prepared.push(sql)
+			return {
+				async first<T>(): Promise<T | null> {
+					const c = counts[callIdx++]
+					return { c } as unknown as T
+				},
+			}
+		},
+	}
+	const env = { DB: db } as unknown as Env
+	return { env, prepared }
+}
+
+describe("buildManifest", () => {
+	const baseInput = {
+		sha256: "a".repeat(64),
+		bytes: 12_345_678,
+		datedKey: "dumps/unison-2026-05-29.dump",
+		publicBaseUrl: "https://dumps.unison.boidu.dev",
+		now: new Date("2026-05-29T12:34:56.000Z"),
+	}
+
+	it("returns the documented static fields plus inputs", async () => {
+		const { env } = createManifestMockEnv([100, 10, 5])
+		const manifest = await buildManifest(env, baseInput)
+		expect(manifest.schema_version).toBe(1)
+		expect(manifest.sha256).toBe(baseInput.sha256)
+		expect(manifest.bytes).toBe(baseInput.bytes)
+		expect(manifest.generated_at).toBe("2026-05-29T12:34:56.000Z")
+		expect(manifest.license).toBe("ODbL-1.0")
+		expect(manifest.attribution_text).toContain("Unison")
+		expect(manifest.enterprise_contact).toBe("enterprise@boidu.dev")
+		expect(manifest.format).toBe("pg_dump custom (-Fc), Postgres 16")
+	})
+
+	it("populates row_counts from the three COUNT(*) queries against public_dump", async () => {
+		const { env, prepared } = createManifestMockEnv([100, 10, 5])
+		const manifest = await buildManifest(env, baseInput)
+		expect(manifest.row_counts.lyrics).toBe(100)
+		expect(manifest.row_counts.requested_songs).toBe(10)
+		expect(manifest.row_counts.lyrics_requests).toBe(5)
+		expect(prepared).toHaveLength(3)
+		expect(prepared[0]).toMatch(/COUNT\(\*\)/i)
+		expect(prepared[0]).toMatch(/public_dump\.lyrics\b/i)
+		expect(prepared[1]).toMatch(/public_dump\.requested_songs\b/i)
+		expect(prepared[2]).toMatch(/public_dump\.lyrics_requests\b/i)
+	})
+
+	it("constructs dump_url from the public base url and dump filename without doubling dumps/", async () => {
+		const { env } = createManifestMockEnv([1, 2, 3])
+		const manifest = await buildManifest(env, baseInput)
+		expect(manifest.dump_url).toBe(
+			"https://dumps.unison.boidu.dev/unison-2026-05-29.dump"
+		)
+		expect(manifest.latest_url).toBe("https://dumps.unison.boidu.dev/latest.dump")
+	})
+
+	it("generated_at is a UTC ISO 8601 string derived from input.now", async () => {
+		const { env } = createManifestMockEnv([0, 0, 0])
+		const now = new Date("2030-01-02T03:04:05.678Z")
+		const manifest = await buildManifest(env, { ...baseInput, now })
+		expect(manifest.generated_at).toBe(now.toISOString())
+		expect(manifest.generated_at).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/)
 	})
 })

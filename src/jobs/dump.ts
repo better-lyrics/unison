@@ -124,3 +124,66 @@ export function verifyDump(filePath: string): Promise<VerifyDumpResult> {
 		})
 	})
 }
+
+export interface DumpManifest {
+	schema_version: 1
+	generated_at: string
+	sha256: string
+	bytes: number
+	dump_url: string
+	latest_url: string
+	row_counts: {
+		lyrics: number
+		requested_songs: number
+		lyrics_requests: number
+	}
+	format: "pg_dump custom (-Fc), Postgres 16"
+	license: "ODbL-1.0"
+	attribution_text: "Lyrics from Unison (https://unison.boidu.dev)"
+	enterprise_contact: "enterprise@boidu.dev"
+}
+
+export interface BuildManifestInput {
+	sha256: string
+	bytes: number
+	datedKey: string
+	publicBaseUrl: string
+	now?: Date
+}
+
+async function countRows(env: Env, table: string): Promise<number> {
+	const row = await env.DB.prepare(
+		`SELECT COUNT(*)::INT AS c FROM public_dump.${table}`
+	).first<{ c: number }>()
+	return row?.c ?? 0
+}
+
+export async function buildManifest(
+	env: Env,
+	input: BuildManifestInput
+): Promise<DumpManifest> {
+	const [lyrics, requested_songs, lyrics_requests] = await Promise.all([
+		countRows(env, "lyrics"),
+		countRows(env, "requested_songs"),
+		countRows(env, "lyrics_requests"),
+	])
+
+	// Bucket keys are organized under `dumps/`, but the public CDN base is rooted
+	// at that prefix, so we strip it to avoid `dumps.unison.boidu.dev/dumps/...`.
+	const filename = input.datedKey.replace(/^dumps\//, "")
+	const generatedAt = (input.now ?? new Date()).toISOString()
+
+	return {
+		schema_version: 1,
+		generated_at: generatedAt,
+		sha256: input.sha256,
+		bytes: input.bytes,
+		dump_url: `${input.publicBaseUrl}/${filename}`,
+		latest_url: `${input.publicBaseUrl}/latest.dump`,
+		row_counts: { lyrics, requested_songs, lyrics_requests },
+		format: "pg_dump custom (-Fc), Postgres 16",
+		license: "ODbL-1.0",
+		attribution_text: "Lyrics from Unison (https://unison.boidu.dev)",
+		enterprise_contact: "enterprise@boidu.dev",
+	}
+}
