@@ -1,3 +1,5 @@
+import { Link } from "react-router-dom"
+
 export function AboutPage() {
   return (
     <div className="max-w-2xl space-y-10">
@@ -87,6 +89,17 @@ export function AboutPage() {
         </a>{" "}
         if you want to try it now.
       </section>
+
+      <p className="text-sm leading-relaxed text-unison-text-secondary">
+        Want the whole database? A daily snapshot is published at{" "}
+        <Link
+          to="/downloads"
+          className="text-unison-text transition-colors hover:text-unison-text-secondary"
+        >
+          /downloads
+        </Link>
+        .
+      </p>
 
       <footer className="flex flex-wrap items-center justify-between gap-3 border-t border-unison-border pt-6 text-xs text-unison-text-muted">
         <div>

@@ -58,6 +58,9 @@ export function AppHeader() {
           <NavLink to="/about" className={tabClass}>
             About
           </NavLink>
+          <NavLink to="/downloads" className={tabClass}>
+            Downloads
+          </NavLink>
         </nav>
         <div className="flex items-center gap-2 sm:justify-self-end">
           <div className="hidden sm:block">
@@ -89,6 +92,9 @@ export function AppHeader() {
             </NavLink>
             <NavLink to="/about" role="menuitem" onClick={closeMenu} className={tabClass}>
               About
+            </NavLink>
+            <NavLink to="/downloads" role="menuitem" onClick={closeMenu} className={tabClass}>
+              Downloads
             </NavLink>
           </nav>
           <div className="flex items-center justify-end border-t border-unison-border pt-2">
