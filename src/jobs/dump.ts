@@ -1,4 +1,4 @@
-import { spawn as nodeSpawn } from "node:child_process"
+import { spawn } from "node:child_process"
 import { createHash } from "node:crypto"
 import { createReadStream } from "node:fs"
 import { config } from "@/config"
@@ -10,11 +10,9 @@ const log = new Logger("dump")
 export interface RunPgDumpOptions {
 	databaseUrl: string
 	outPath: string
-	spawnFn?: typeof nodeSpawn
 }
 
 export function runPgDump(opts: RunPgDumpOptions): Promise<void> {
-	const spawnFn = opts.spawnFn ?? nodeSpawn
 	const args = [
 		"-Fc",
 		"--no-owner",
@@ -25,7 +23,7 @@ export function runPgDump(opts: RunPgDumpOptions): Promise<void> {
 		opts.databaseUrl,
 	]
 	return new Promise((resolve, reject) => {
-		const child = spawnFn("pg_dump", args, { stdio: ["ignore", "ignore", "pipe"] })
+		const child = spawn("pg_dump", args, { stdio: ["ignore", "ignore", "pipe"] })
 		let stderr = ""
 		child.stderr?.on("data", (chunk: Buffer | string) => {
 			stderr += chunk.toString()

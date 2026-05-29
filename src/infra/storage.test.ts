@@ -18,7 +18,7 @@ describe("createStorage", () => {
 		const sendMock = vi.fn().mockResolvedValue({})
 		const storage = createStorage(cfg)
 		if (!storage) throw new Error("storage should not be null")
-		storage.__client.send = sendMock as never
+		storage.__client.send = sendMock as typeof storage.__client.send
 
 		const body = Buffer.from("hi")
 		await storage.putObject("dumps/foo.dump", body, "application/octet-stream")
@@ -42,7 +42,7 @@ describe("createStorage", () => {
 		})
 		const storage = createStorage(cfg)
 		if (!storage) throw new Error("storage should not be null")
-		storage.__client.send = sendMock as never
+		storage.__client.send = sendMock as typeof storage.__client.send
 
 		const result = await storage.listObjects("dumps/")
 
@@ -61,7 +61,7 @@ describe("createStorage", () => {
 		const sendMock = vi.fn().mockResolvedValue({})
 		const storage = createStorage(cfg)
 		if (!storage) throw new Error("storage should not be null")
-		storage.__client.send = sendMock as never
+		storage.__client.send = sendMock as typeof storage.__client.send
 
 		expect(await storage.listObjects("dumps/")).toEqual([])
 	})
@@ -70,7 +70,7 @@ describe("createStorage", () => {
 		const sendMock = vi.fn().mockResolvedValue({})
 		const storage = createStorage(cfg)
 		if (!storage) throw new Error("storage should not be null")
-		storage.__client.send = sendMock as never
+		storage.__client.send = sendMock as typeof storage.__client.send
 
 		await storage.deleteObject("dumps/old.dump")
 

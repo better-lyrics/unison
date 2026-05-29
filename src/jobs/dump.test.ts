@@ -1,3 +1,4 @@
+import { spawn } from "node:child_process"
 import { createHash } from "node:crypto"
 import { EventEmitter } from "node:events"
 import { mkdtemp, rm, writeFile } from "node:fs/promises"
@@ -5,7 +6,7 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { config } from "@/config"
 import type { Env } from "@/types"
-import { describe, expect, it, vi } from "vitest"
+import { beforeEach, describe, expect, it, vi } from "vitest"
 import {
 	LYRICS_KEEP_COLUMNS,
 	materializeDumpSchema,
@@ -13,6 +14,8 @@ import {
 	runPgDump,
 	verifyDump,
 } from "@/jobs/dump"
+
+vi.mock("node:child_process", () => ({ spawn: vi.fn() }))
 
 interface FakeStatement {
 	sql: string
@@ -207,78 +210,82 @@ interface FakeChildOptions {
 	spawnError?: Error
 }
 
-function fakeSpawn(opts: FakeChildOptions) {
-	return vi.fn(() => {
-		const proc = new EventEmitter() as EventEmitter & {
-			stderr: EventEmitter
+function buildFakeProc(opts: FakeChildOptions) {
+	const proc = new EventEmitter() as EventEmitter & {
+		stderr: EventEmitter
+	}
+	proc.stderr = new EventEmitter()
+	setImmediate(() => {
+		if (opts.spawnError) {
+			proc.emit("error", opts.spawnError)
+			return
 		}
-		proc.stderr = new EventEmitter()
-		setImmediate(() => {
-			if (opts.spawnError) {
-				proc.emit("error", opts.spawnError)
-				return
-			}
-			if (opts.stderr) {
-				proc.stderr.emit("data", Buffer.from(opts.stderr))
-			}
-			proc.emit("close", opts.exitCode ?? 0)
-		})
-		return proc as unknown as ReturnType<typeof import("node:child_process").spawn>
+		if (opts.stderr) {
+			proc.stderr.emit("data", Buffer.from(opts.stderr))
+		}
+		proc.emit("close", opts.exitCode ?? 0)
 	})
+	return proc
 }
 
+const spawnMock = vi.mocked(spawn)
+
 describe("runPgDump", () => {
+	beforeEach(() => {
+		spawnMock.mockReset()
+	})
+
 	it("invokes pg_dump with the correct flags and connection string last", async () => {
-		const spawnFn = fakeSpawn({ exitCode: 0 })
+		spawnMock.mockReturnValueOnce(buildFakeProc({ exitCode: 0 }) as never)
 		await runPgDump({
 			databaseUrl: "postgres://user:pw@host:5432/db",
 			outPath: "/tmp/out.dump",
-			spawnFn: spawnFn as unknown as typeof import("node:child_process").spawn,
 		})
-		expect(spawnFn).toHaveBeenCalledTimes(1)
-		const call = spawnFn.mock.calls[0] as unknown as [string, string[]]
-		const [bin, args] = call
-		expect(bin).toBe("pg_dump")
-		expect(args).toContain("-Fc")
-		expect(args).toContain("--no-owner")
-		expect(args).toContain("--no-privileges")
-		expect(args).toContain("--schema=public_dump")
-		const fIdx = args.indexOf("-f")
-		expect(fIdx).toBeGreaterThanOrEqual(0)
-		expect(args[fIdx + 1]).toBe("/tmp/out.dump")
-		expect(args[args.length - 1]).toBe("postgres://user:pw@host:5432/db")
+		expect(spawnMock).toHaveBeenCalledTimes(1)
+		expect(spawnMock).toHaveBeenCalledWith(
+			"pg_dump",
+			[
+				"-Fc",
+				"--no-owner",
+				"--no-privileges",
+				"--schema=public_dump",
+				"-f",
+				"/tmp/out.dump",
+				"postgres://user:pw@host:5432/db",
+			],
+			expect.anything()
+		)
 	})
 
 	it("resolves on exit code 0", async () => {
-		const spawnFn = fakeSpawn({ exitCode: 0 })
+		spawnMock.mockReturnValueOnce(buildFakeProc({ exitCode: 0 }) as never)
 		await expect(
 			runPgDump({
 				databaseUrl: "postgres://localhost/db",
 				outPath: "/tmp/out.dump",
-				spawnFn: spawnFn as unknown as typeof import("node:child_process").spawn,
 			})
 		).resolves.toBeUndefined()
 	})
 
 	it("rejects with exit code and stderr on non-zero exit", async () => {
-		const spawnFn = fakeSpawn({ exitCode: 1, stderr: "connection refused" })
+		spawnMock.mockReturnValueOnce(
+			buildFakeProc({ exitCode: 1, stderr: "connection refused" }) as never
+		)
 		await expect(
 			runPgDump({
 				databaseUrl: "postgres://localhost/db",
 				outPath: "/tmp/out.dump",
-				spawnFn: spawnFn as unknown as typeof import("node:child_process").spawn,
 			})
 		).rejects.toThrow(/pg_dump exit 1.*connection refused/)
 	})
 
 	it("rejects when the child process emits an error event", async () => {
 		const err = Object.assign(new Error("spawn pg_dump ENOENT"), { code: "ENOENT" })
-		const spawnFn = fakeSpawn({ spawnError: err })
+		spawnMock.mockReturnValueOnce(buildFakeProc({ spawnError: err }) as never)
 		await expect(
 			runPgDump({
 				databaseUrl: "postgres://localhost/db",
 				outPath: "/tmp/out.dump",
-				spawnFn: spawnFn as unknown as typeof import("node:child_process").spawn,
 			})
 		).rejects.toThrow(/ENOENT/)
 	})
