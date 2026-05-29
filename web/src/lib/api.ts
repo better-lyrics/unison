@@ -38,7 +38,7 @@ export async function fetchUserSubmissions(keyId: string, cursor?: string): Prom
   return getJson<UserSubmissionsResponse>(`/users/${encodeURIComponent(keyId)}/submissions${params}`)
 }
 
-const DUMP_MANIFEST_URL = import.meta.env.VITE_DUMP_MANIFEST_URL ?? "/manifest.json"
+const DUMP_MANIFEST_URL = "https://unison-dumps.boidu.dev/dumps/manifest.json"
 
 export async function fetchDumpManifest(): Promise<DumpManifest> {
   const res = await fetch(DUMP_MANIFEST_URL)
