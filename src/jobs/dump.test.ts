@@ -1,13 +1,15 @@
 import { spawn } from "node:child_process"
 import { createHash } from "node:crypto"
 import { EventEmitter } from "node:events"
+import fs from "node:fs"
 import { mkdtemp, rm, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { basename, join } from "node:path"
 import { config } from "@/config"
 import type { Storage } from "@/infra/storage"
 import type { Env } from "@/types"
-import { beforeEach, describe, expect, it, vi } from "vitest"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import * as dump from "@/jobs/dump"
 import {
 	buildManifest,
 	type DumpManifest,
@@ -15,6 +17,7 @@ import {
 	materializeDumpSchema,
 	pruneOldDumps,
 	REQUEST_KEEP_COLUMNS,
+	runDumpJob,
 	runPgDump,
 	uploadDump,
 	verifyDump,
@@ -621,5 +624,209 @@ describe("pruneOldDumps", () => {
 		const result = await pruneOldDumps({ storage, now: fixedNow })
 		expect(result.deleted).toEqual(["dumps/unison-2026-06-08.dump"])
 		expect(deleted).toEqual(["dumps/unison-2026-06-08.dump"])
+	})
+})
+
+interface RunDumpJobMockEnv {
+	env: Env
+	runCalls: string[]
+}
+
+function createRunDumpJobEnv(opts: { dumpsEnabled: boolean; hasB2: boolean }): RunDumpJobMockEnv {
+	const runCalls: string[] = []
+	const db = {
+		prepare(sql: string) {
+			return {
+				async run() {
+					runCalls.push(sql)
+				},
+				async first<T>(): Promise<T | null> {
+					return null
+				},
+			}
+		},
+		async batch(): Promise<void> {},
+	}
+	const env = {
+		DB: db,
+		DUMPS_ENABLED: opts.dumpsEnabled,
+		DUMP_PUBLIC_BASE_URL: "https://dumps.unison.boidu.dev",
+		B2: opts.hasB2
+			? {
+					keyId: "k",
+					applicationKey: "a",
+					bucket: "b",
+					endpoint: "https://example.com",
+				}
+			: null,
+	} as unknown as Env
+	return { env, runCalls }
+}
+
+function buildInjectableStorage(): Storage {
+	return {
+		putObject: vi.fn(async () => {}),
+		listObjects: vi.fn(async () => []),
+		deleteObject: vi.fn(async () => {}),
+		__client: null as never,
+	}
+}
+
+describe("runDumpJob", () => {
+	const ORIGINAL_DATABASE_URL = process.env.DATABASE_URL
+
+	beforeEach(() => {
+		process.env.DATABASE_URL = "postgres://test:test@localhost/test"
+		vi.restoreAllMocks()
+	})
+
+	afterEach(() => {
+		process.env.DATABASE_URL = ORIGINAL_DATABASE_URL
+		vi.restoreAllMocks()
+	})
+
+	it("returns skipped/disabled when DUMPS_ENABLED is false without touching the DB", async () => {
+		const { env, runCalls } = createRunDumpJobEnv({ dumpsEnabled: false, hasB2: true })
+		const materializeSpy = vi.spyOn(dump, "materializeDumpSchema").mockResolvedValue()
+		const runSpy = vi.spyOn(dump, "runPgDump").mockResolvedValue()
+		const verifySpy = vi
+			.spyOn(dump, "verifyDump")
+			.mockResolvedValue({ sha256: "abc", bytes: 1234 })
+		const buildSpy = vi
+			.spyOn(dump, "buildManifest")
+			.mockResolvedValue({} as unknown as DumpManifest)
+		const uploadSpy = vi.spyOn(dump, "uploadDump").mockResolvedValue()
+		const pruneSpy = vi.spyOn(dump, "pruneOldDumps").mockResolvedValue({ deleted: [] })
+
+		const result = await runDumpJob(env, { storage: buildInjectableStorage() })
+
+		expect(result).toEqual({ status: "skipped", reason: "disabled" })
+		expect(materializeSpy).not.toHaveBeenCalled()
+		expect(runSpy).not.toHaveBeenCalled()
+		expect(verifySpy).not.toHaveBeenCalled()
+		expect(buildSpy).not.toHaveBeenCalled()
+		expect(uploadSpy).not.toHaveBeenCalled()
+		expect(pruneSpy).not.toHaveBeenCalled()
+		expect(runCalls).toEqual([])
+	})
+
+	it("returns skipped/no_storage when enabled but storage is null", async () => {
+		const { env } = createRunDumpJobEnv({ dumpsEnabled: true, hasB2: false })
+		const materializeSpy = vi.spyOn(dump, "materializeDumpSchema").mockResolvedValue()
+
+		const result = await runDumpJob(env, { storage: null })
+
+		expect(result).toEqual({ status: "skipped", reason: "no_storage" })
+		expect(materializeSpy).not.toHaveBeenCalled()
+	})
+
+	it("happy path: runs the pipeline in order and returns ok with datedKey/sha/bytes/deleted", async () => {
+		const { env } = createRunDumpJobEnv({ dumpsEnabled: true, hasB2: true })
+		const callOrder: string[] = []
+		vi.spyOn(dump, "materializeDumpSchema").mockImplementation(async () => {
+			callOrder.push("materialize")
+		})
+		vi.spyOn(dump, "runPgDump").mockImplementation(async () => {
+			callOrder.push("runPgDump")
+		})
+		vi.spyOn(dump, "verifyDump").mockImplementation(async () => {
+			callOrder.push("verify")
+			return { sha256: "deadbeef", bytes: 99 }
+		})
+		vi.spyOn(dump, "buildManifest").mockImplementation(async () => {
+			callOrder.push("build")
+			return {} as unknown as DumpManifest
+		})
+		vi.spyOn(dump, "uploadDump").mockImplementation(async () => {
+			callOrder.push("upload")
+		})
+		vi.spyOn(dump, "pruneOldDumps").mockImplementation(async () => {
+			callOrder.push("prune")
+			return { deleted: ["dumps/unison-2026-05-20.dump"] }
+		})
+		vi.spyOn(fs.promises, "rm").mockResolvedValue()
+
+		const now = new Date("2026-05-29T00:00:00.000Z")
+		const result = await runDumpJob(env, {
+			storage: buildInjectableStorage(),
+			now,
+			tmpDir: "/tmp",
+		})
+
+		expect(result).toEqual({
+			status: "ok",
+			datedKey: "dumps/unison-2026-05-29.dump",
+			sha256: "deadbeef",
+			bytes: 99,
+			deleted: ["dumps/unison-2026-05-20.dump"],
+		})
+		expect(callOrder).toEqual([
+			"materialize",
+			"runPgDump",
+			"verify",
+			"build",
+			"upload",
+			"prune",
+		])
+	})
+
+	it("runs DROP SCHEMA cleanup in finally even when uploadDump rejects", async () => {
+		const { env, runCalls } = createRunDumpJobEnv({ dumpsEnabled: true, hasB2: true })
+		vi.spyOn(dump, "materializeDumpSchema").mockResolvedValue()
+		vi.spyOn(dump, "runPgDump").mockResolvedValue()
+		vi.spyOn(dump, "verifyDump").mockResolvedValue({ sha256: "abc", bytes: 1234 })
+		vi.spyOn(dump, "buildManifest").mockResolvedValue({} as unknown as DumpManifest)
+		vi.spyOn(dump, "uploadDump").mockRejectedValueOnce(new Error("upload boom"))
+		vi.spyOn(dump, "pruneOldDumps").mockResolvedValue({ deleted: [] })
+		vi.spyOn(fs.promises, "rm").mockResolvedValue()
+
+		const result = await runDumpJob(env, { storage: buildInjectableStorage() })
+
+		expect(result).toEqual({ status: "failed", reason: "upload boom" })
+		expect(
+			runCalls.some((sql) => /DROP\s+SCHEMA\s+IF\s+EXISTS\s+public_dump\s+CASCADE/i.test(sql))
+		).toBe(true)
+	})
+
+	it("runs tempfile cleanup in finally with the expected path", async () => {
+		const { env } = createRunDumpJobEnv({ dumpsEnabled: true, hasB2: true })
+		vi.spyOn(dump, "materializeDumpSchema").mockResolvedValue()
+		vi.spyOn(dump, "runPgDump").mockResolvedValue()
+		vi.spyOn(dump, "verifyDump").mockResolvedValue({ sha256: "abc", bytes: 1234 })
+		vi.spyOn(dump, "buildManifest").mockResolvedValue({} as unknown as DumpManifest)
+		vi.spyOn(dump, "uploadDump").mockResolvedValue()
+		vi.spyOn(dump, "pruneOldDumps").mockResolvedValue({ deleted: [] })
+		const rmSpy = vi.spyOn(fs.promises, "rm").mockResolvedValue()
+
+		const now = new Date("2026-05-29T00:00:00.000Z")
+		await runDumpJob(env, {
+			storage: buildInjectableStorage(),
+			now,
+			tmpDir: "/var/tmp",
+		})
+
+		expect(rmSpy).toHaveBeenCalledWith("/var/tmp/unison-2026-05-29.dump", { force: true })
+	})
+
+	it("fails before materializing the schema when DATABASE_URL is unset", async () => {
+		const { env } = createRunDumpJobEnv({ dumpsEnabled: true, hasB2: true })
+		process.env.DATABASE_URL = ""
+		const materializeSpy = vi.spyOn(dump, "materializeDumpSchema").mockResolvedValue()
+		vi.spyOn(fs.promises, "rm").mockResolvedValue()
+
+		const result = await runDumpJob(env, { storage: buildInjectableStorage() })
+
+		expect(result.status).toBe("failed")
+		expect(materializeSpy).not.toHaveBeenCalled()
+	})
+
+	it("does not rethrow on pipeline failure; resolves with status failed", async () => {
+		const { env } = createRunDumpJobEnv({ dumpsEnabled: true, hasB2: true })
+		vi.spyOn(dump, "materializeDumpSchema").mockRejectedValueOnce(new Error("boom"))
+		vi.spyOn(fs.promises, "rm").mockResolvedValue()
+
+		const result = await runDumpJob(env, { storage: buildInjectableStorage() })
+
+		expect(result).toEqual({ status: "failed", reason: "boom" })
 	})
 })

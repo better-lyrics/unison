@@ -1,11 +1,13 @@
 import { spawn } from "node:child_process"
 import { createHash } from "node:crypto"
-import { createReadStream } from "node:fs"
-import { basename } from "node:path"
+import { createReadStream, promises as fsPromises } from "node:fs"
+import { tmpdir } from "node:os"
+import { basename, join } from "node:path"
 import { config } from "@/config"
 import { Logger } from "@/infra/logger"
-import type { Storage } from "@/infra/storage"
+import { createStorage, type Storage } from "@/infra/storage"
 import type { Env } from "@/types"
+import * as self from "./dump"
 
 const log = new Logger("dump")
 
@@ -243,4 +245,83 @@ export async function uploadDump(input: UploadDumpInput): Promise<void> {
 		createReadStream(input.localPath),
 		"application/octet-stream"
 	)
+}
+
+export type RunDumpJobResult =
+	| { status: "skipped"; reason: "disabled" | "no_storage" }
+	| { status: "ok"; datedKey: string; sha256: string; bytes: number; deleted: string[] }
+	| { status: "failed"; reason: string }
+
+export interface RunDumpJobOptions {
+	storage?: Storage | null
+	now?: Date
+	tmpDir?: string
+}
+
+export async function runDumpJob(
+	env: Env,
+	opts: RunDumpJobOptions = {}
+): Promise<RunDumpJobResult> {
+	if (!env.DUMPS_ENABLED) {
+		return { status: "skipped", reason: "disabled" }
+	}
+
+	const storage = opts.storage !== undefined ? opts.storage : createStorage(env.B2)
+	if (!storage) {
+		return { status: "skipped", reason: "no_storage" }
+	}
+
+	const now = opts.now ?? new Date()
+	const dateStr = now.toISOString().slice(0, 10)
+	const datedKey = `dumps/unison-${dateStr}.dump`
+	const localPath = join(opts.tmpDir ?? tmpdir(), `unison-${dateStr}.dump`)
+
+	let result: RunDumpJobResult
+	try {
+		const databaseUrl = process.env.DATABASE_URL
+		if (!databaseUrl) {
+			throw new Error("DATABASE_URL is not set")
+		}
+
+		await self.materializeDumpSchema(env)
+		await self.runPgDump({ databaseUrl, outPath: localPath })
+		const { sha256, bytes } = await self.verifyDump(localPath)
+		const manifest = await self.buildManifest(env, {
+			sha256,
+			bytes,
+			datedKey,
+			publicBaseUrl: env.DUMP_PUBLIC_BASE_URL,
+			now,
+		})
+		await self.uploadDump({ storage, localPath, sha256, manifest, datedKey })
+		const { deleted } = await self.pruneOldDumps({ storage, now })
+
+		log.info("dump complete", {
+			datedKey,
+			sha256,
+			bytes,
+			pruned: deleted.length,
+		})
+
+		result = { status: "ok", datedKey, sha256, bytes, deleted }
+	} catch (err) {
+		const message = err instanceof Error ? err.message : String(err)
+		log.error("dump failed", { error: message })
+		result = { status: "failed", reason: message }
+	} finally {
+		try {
+			await env.DB.prepare("DROP SCHEMA IF EXISTS public_dump CASCADE").run()
+		} catch (cleanupErr) {
+			const message = cleanupErr instanceof Error ? cleanupErr.message : String(cleanupErr)
+			log.error("dump schema cleanup failed", { error: message })
+		}
+		try {
+			await fsPromises.rm(localPath, { force: true })
+		} catch (cleanupErr) {
+			const message = cleanupErr instanceof Error ? cleanupErr.message : String(cleanupErr)
+			log.error("dump tempfile cleanup failed", { error: message })
+		}
+	}
+
+	return result
 }
