@@ -102,7 +102,7 @@ const app = new Elysia({ adapter: node() })
 	.use(
 		cron({
 			name: "dump",
-			pattern: "0 4 * * *",
+			pattern: "0 14 * * *",
 			async run() {
 				cronLog.info("starting daily dump")
 				const result = await runDumpJob(env)
