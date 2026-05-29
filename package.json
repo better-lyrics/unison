@@ -2,6 +2,7 @@
   "name": "unison",
   "version": "1.1.0",
   "description": "Crowdsourced lyrics API for Better Lyrics",
+  "license": "AGPL-3.0-only",
   "main": "src/index.ts",
   "scripts": {
     "dev": "tsx watch src/index.ts",

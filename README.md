@@ -191,7 +191,7 @@ role. If it's unset, the pipeline uses `DATABASE_URL` as before.
 
 ## License
 
-Source code: MIT.
+Source code: [AGPL-3.0](LICENSE).
 
 The dump itself is dual-licensed.
 
