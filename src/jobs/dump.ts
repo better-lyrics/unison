@@ -229,6 +229,7 @@ export async function uploadDump(input: UploadDumpInput): Promise<void> {
 	const datedName = basename(input.datedKey)
 	const sidecarKey = `${input.datedKey}.sha256`
 	const sidecarBody = `${input.sha256}  ${datedName}\n`
+	const latestSidecarBody = `${input.sha256}  latest.dump\n`
 	const manifestBody = JSON.stringify(input.manifest, null, 2)
 
 	await input.storage.putObject(
@@ -248,6 +249,11 @@ export async function uploadDump(input: UploadDumpInput): Promise<void> {
 		createReadStream(input.localPath),
 		"application/octet-stream",
 		input.bytes
+	)
+	await input.storage.putObject(
+		"dumps/latest.dump.sha256",
+		Buffer.from(latestSidecarBody),
+		"text/plain"
 	)
 }
 

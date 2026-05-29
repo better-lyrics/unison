@@ -485,7 +485,11 @@ describe("uploadDump", () => {
 				"dumps/unison-2026-05-29.dump.sha256",
 				"dumps/manifest.json",
 				"dumps/latest.dump",
+				"dumps/latest.dump.sha256",
 			])
+			const latestSidecar = puts.find((p) => p.key === "dumps/latest.dump.sha256")
+			expect(latestSidecar?.contentType).toBe("text/plain")
+			expect(latestSidecar?.body).toBe(`${sampleManifest.sha256}  latest.dump\n`)
 		})
 	})
 
