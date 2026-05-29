@@ -164,7 +164,8 @@ createdb unison_mirror
 # 3. Restore (takes a couple of minutes on the current corpus size)
 pg_restore -d unison_mirror --no-owner --no-privileges latest.dump
 
-# 4. Rebuild the full-text search index (omitted from the dump for size)
+# 4. Rebuild the full-text search column and index (omitted from the dump for size)
+psql unison_mirror -c "ALTER TABLE public_dump.lyrics ADD COLUMN lyrics_text_search tsvector;"
 psql unison_mirror -c "UPDATE public_dump.lyrics SET lyrics_text_search = to_tsvector('simple', lyrics);"
 psql unison_mirror -c "CREATE INDEX idx_lyrics_text_search ON public_dump.lyrics USING GIN (lyrics_text_search);"
 ```

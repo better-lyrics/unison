@@ -46,7 +46,7 @@ describe("DownloadsPage", () => {
     vi.stubGlobal(
       "fetch",
       vi.fn().mockImplementation((url: string) => {
-        if (url === "/manifest.json") return Promise.resolve(jsonResponse(manifest))
+        if (url === "https://unison-dumps.boidu.dev/dumps/manifest.json") return Promise.resolve(jsonResponse(manifest))
         return Promise.reject(new Error(`unexpected url ${url}`))
       }),
     )
@@ -59,7 +59,7 @@ describe("DownloadsPage", () => {
     vi.stubGlobal(
       "fetch",
       vi.fn().mockImplementation((url: string) => {
-        if (url === "/manifest.json") return Promise.resolve(jsonResponse(manifest))
+        if (url === "https://unison-dumps.boidu.dev/dumps/manifest.json") return Promise.resolve(jsonResponse(manifest))
         return Promise.reject(new Error(`unexpected url ${url}`))
       }),
     )
@@ -73,7 +73,7 @@ describe("DownloadsPage", () => {
     vi.stubGlobal(
       "fetch",
       vi.fn().mockImplementation((url: string) => {
-        if (url === "/manifest.json") return Promise.resolve(jsonResponse(manifest))
+        if (url === "https://unison-dumps.boidu.dev/dumps/manifest.json") return Promise.resolve(jsonResponse(manifest))
         return Promise.reject(new Error(`unexpected url ${url}`))
       }),
     )
@@ -85,7 +85,7 @@ describe("DownloadsPage", () => {
     vi.stubGlobal(
       "fetch",
       vi.fn().mockImplementation((url: string) => {
-        if (url === "/manifest.json") return Promise.resolve(jsonResponse(manifest))
+        if (url === "https://unison-dumps.boidu.dev/dumps/manifest.json") return Promise.resolve(jsonResponse(manifest))
         return Promise.reject(new Error(`unexpected url ${url}`))
       }),
     )
@@ -97,7 +97,7 @@ describe("DownloadsPage", () => {
     vi.stubGlobal(
       "fetch",
       vi.fn().mockImplementation((url: string) => {
-        if (url === "/manifest.json") return Promise.resolve(jsonResponse(manifest))
+        if (url === "https://unison-dumps.boidu.dev/dumps/manifest.json") return Promise.resolve(jsonResponse(manifest))
         return Promise.reject(new Error(`unexpected url ${url}`))
       }),
     )
@@ -112,7 +112,7 @@ describe("DownloadsPage", () => {
     vi.stubGlobal(
       "fetch",
       vi.fn().mockImplementation((url: string) => {
-        if (url === "/manifest.json") return Promise.resolve(new Response("nope", { status: 500 }))
+        if (url === "https://unison-dumps.boidu.dev/dumps/manifest.json") return Promise.resolve(new Response("nope", { status: 500 }))
         return Promise.reject(new Error(`unexpected url ${url}`))
       }),
     )
