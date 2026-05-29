@@ -65,28 +65,37 @@ function highlightBashLine(line: string, lineIdx: number): ReactNode[] {
     ]
   }
   if (line.length === 0) return [""]
-  const tokens = line.split(/(\s+)/)
+  const parts = line.split(/(\s+)/)
+  const out: ReactNode[] = []
   let seenCommand = false
-  return tokens.map((tok, idx) => {
-    const key = `${lineIdx}-${idx}`
-    if (tok.length === 0 || /^\s+$/.test(tok)) return <Fragment key={key}>{tok}</Fragment>
+  for (let i = 0; i < parts.length; i += 2) {
+    const word = parts[i] ?? ""
+    const ws = parts[i + 1] ?? ""
+    const key = `${lineIdx}-${i}`
+    if (word.length === 0) {
+      if (ws.length > 0) out.push(<span key={key}>{ws}</span>)
+      continue
+    }
     let cls: string | undefined
     if (!seenCommand) {
       cls = "text-unison-text"
       seenCommand = true
-    } else if (/^--?\w/.test(tok)) {
+    } else if (/^--?\w/.test(word)) {
       cls = "text-purple-400/80"
-    } else if (tok.startsWith('"') || tok.startsWith("'")) {
+    } else if (word.startsWith('"') || word.startsWith("'")) {
       cls = "text-green-400/80"
     }
-    return cls ? (
-      <span key={key} className={cls}>
-        {tok}
-      </span>
-    ) : (
-      <Fragment key={key}>{tok}</Fragment>
+    out.push(
+      cls ? (
+        <span key={key} className={cls}>
+          {word + ws}
+        </span>
+      ) : (
+        <span key={key}>{word + ws}</span>
+      )
     )
-  })
+  }
+  return out
 }
 
 function HighlightedBash({ code }: { code: string }) {
@@ -194,9 +203,17 @@ function LicenseSection() {
     <section className="space-y-3">
       <h2 className="text-lg font-semibold text-unison-text">License</h2>
       <p className="text-sm leading-relaxed text-unison-text-secondary">
-        The dump is dual-licensed. ODbL 1.0 covers FOSS use; credit Unison and you're done. For
-        anything commercial (streaming platforms, labels, distributors), reach out for a
-        commercial license.
+        The dump is dual-licensed.{" "}
+        <a
+          href="https://opendatacommons.org/licenses/odbl/1-0/"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-unison-text transition-colors hover:text-unison-text-secondary"
+        >
+          ODbL 1.0
+        </a>{" "}
+        covers FOSS use; credit Unison and you're done. For anything commercial (streaming
+        platforms, labels, distributors), reach out for a commercial license.
       </p>
       <div className="space-y-2">
         <p className="text-xs uppercase tracking-wider text-unison-text-muted">Required attribution</p>
