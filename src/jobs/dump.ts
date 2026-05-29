@@ -1,7 +1,42 @@
+import { spawn as nodeSpawn } from "node:child_process"
 import { Logger } from "@/infra/logger"
 import type { Env } from "@/types"
 
 const log = new Logger("dump")
+
+export interface RunPgDumpOptions {
+	databaseUrl: string
+	outPath: string
+	spawnFn?: typeof nodeSpawn
+}
+
+export function runPgDump(opts: RunPgDumpOptions): Promise<void> {
+	const spawnFn = opts.spawnFn ?? nodeSpawn
+	const args = [
+		"-Fc",
+		"--no-owner",
+		"--no-privileges",
+		"--schema=public_dump",
+		"-f",
+		opts.outPath,
+		opts.databaseUrl,
+	]
+	return new Promise((resolve, reject) => {
+		const child = spawnFn("pg_dump", args, { stdio: ["ignore", "ignore", "pipe"] })
+		let stderr = ""
+		child.stderr?.on("data", (chunk: Buffer | string) => {
+			stderr += chunk.toString()
+		})
+		child.on("error", reject)
+		child.on("close", (code) => {
+			if (code === 0) {
+				resolve()
+				return
+			}
+			reject(new Error(`pg_dump exit ${code}: ${stderr.trim()}`))
+		})
+	})
+}
 
 export const LYRICS_KEEP_COLUMNS = [
 	"id",

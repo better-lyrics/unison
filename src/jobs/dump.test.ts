@@ -1,9 +1,11 @@
+import { EventEmitter } from "node:events"
 import type { Env } from "@/types"
-import { describe, expect, it } from "vitest"
+import { describe, expect, it, vi } from "vitest"
 import {
 	LYRICS_KEEP_COLUMNS,
 	materializeDumpSchema,
 	REQUEST_KEEP_COLUMNS,
+	runPgDump,
 } from "@/jobs/dump"
 
 interface FakeStatement {
@@ -190,5 +192,88 @@ describe("materializeDumpSchema", () => {
 		expect(typeof REQUEST_KEEP_COLUMNS).toBe("string")
 		expect(LYRICS_KEEP_COLUMNS).toContain("video_id")
 		expect(REQUEST_KEEP_COLUMNS).toContain("requester_type")
+	})
+})
+
+interface FakeChildOptions {
+	exitCode?: number
+	stderr?: string
+	spawnError?: Error
+}
+
+function fakeSpawn(opts: FakeChildOptions) {
+	return vi.fn(() => {
+		const proc = new EventEmitter() as EventEmitter & {
+			stderr: EventEmitter
+		}
+		proc.stderr = new EventEmitter()
+		setImmediate(() => {
+			if (opts.spawnError) {
+				proc.emit("error", opts.spawnError)
+				return
+			}
+			if (opts.stderr) {
+				proc.stderr.emit("data", Buffer.from(opts.stderr))
+			}
+			proc.emit("close", opts.exitCode ?? 0)
+		})
+		return proc as unknown as ReturnType<typeof import("node:child_process").spawn>
+	})
+}
+
+describe("runPgDump", () => {
+	it("invokes pg_dump with the correct flags and connection string last", async () => {
+		const spawnFn = fakeSpawn({ exitCode: 0 })
+		await runPgDump({
+			databaseUrl: "postgres://user:pw@host:5432/db",
+			outPath: "/tmp/out.dump",
+			spawnFn: spawnFn as unknown as typeof import("node:child_process").spawn,
+		})
+		expect(spawnFn).toHaveBeenCalledTimes(1)
+		const call = spawnFn.mock.calls[0] as unknown as [string, string[]]
+		const [bin, args] = call
+		expect(bin).toBe("pg_dump")
+		expect(args).toContain("-Fc")
+		expect(args).toContain("--no-owner")
+		expect(args).toContain("--no-privileges")
+		expect(args).toContain("--schema=public_dump")
+		const fIdx = args.indexOf("-f")
+		expect(fIdx).toBeGreaterThanOrEqual(0)
+		expect(args[fIdx + 1]).toBe("/tmp/out.dump")
+		expect(args[args.length - 1]).toBe("postgres://user:pw@host:5432/db")
+	})
+
+	it("resolves on exit code 0", async () => {
+		const spawnFn = fakeSpawn({ exitCode: 0 })
+		await expect(
+			runPgDump({
+				databaseUrl: "postgres://localhost/db",
+				outPath: "/tmp/out.dump",
+				spawnFn: spawnFn as unknown as typeof import("node:child_process").spawn,
+			})
+		).resolves.toBeUndefined()
+	})
+
+	it("rejects with exit code and stderr on non-zero exit", async () => {
+		const spawnFn = fakeSpawn({ exitCode: 1, stderr: "connection refused" })
+		await expect(
+			runPgDump({
+				databaseUrl: "postgres://localhost/db",
+				outPath: "/tmp/out.dump",
+				spawnFn: spawnFn as unknown as typeof import("node:child_process").spawn,
+			})
+		).rejects.toThrow(/pg_dump exit 1.*connection refused/)
+	})
+
+	it("rejects when the child process emits an error event", async () => {
+		const err = Object.assign(new Error("spawn pg_dump ENOENT"), { code: "ENOENT" })
+		const spawnFn = fakeSpawn({ spawnError: err })
+		await expect(
+			runPgDump({
+				databaseUrl: "postgres://localhost/db",
+				outPath: "/tmp/out.dump",
+				spawnFn: spawnFn as unknown as typeof import("node:child_process").spawn,
+			})
+		).rejects.toThrow(/ENOENT/)
 	})
 })
