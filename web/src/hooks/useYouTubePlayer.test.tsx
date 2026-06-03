@@ -1,7 +1,7 @@
 import { act, render, renderHook } from "@testing-library/react"
 import { createElement } from "react"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
-import { useYouTubePlayer } from "./useYouTubePlayer"
+import { __resetForTests, useYouTubePlayer } from "./useYouTubePlayer"
 
 interface FakePlayerOptions {
   videoId: string
@@ -35,15 +35,19 @@ const PlayerState = { UNSTARTED: -1, ENDED: 0, PLAYING: 1, PAUSED: 2, BUFFERING:
 beforeEach(() => {
   vi.useFakeTimers()
   FakePlayer.instances = []
-  for (const s of Array.from(document.querySelectorAll('script[src*="iframe_api"]'))) {
+  for (const s of Array.from(document.querySelectorAll("script[data-unison-yt-loader]"))) {
     s.remove()
   }
-  ;(globalThis as unknown as { YT?: unknown }).YT = undefined
+  ;(globalThis as unknown as { YT?: unknown; onYouTubeIframeAPIReady?: unknown }).YT = undefined
+  ;(globalThis as unknown as { onYouTubeIframeAPIReady?: unknown }).onYouTubeIframeAPIReady = undefined
+  __resetForTests()
 })
 
 afterEach(() => {
   vi.useRealTimers()
-  ;(globalThis as unknown as { YT?: unknown }).YT = undefined
+  ;(globalThis as unknown as { YT?: unknown; onYouTubeIframeAPIReady?: unknown }).YT = undefined
+  ;(globalThis as unknown as { onYouTubeIframeAPIReady?: unknown }).onYouTubeIframeAPIReady = undefined
+  __resetForTests()
 })
 
 function installYT() {
@@ -72,16 +76,28 @@ describe("useYouTubePlayer", () => {
     const { result } = renderHook(() => useYouTubePlayer(null))
     expect(result.current.currentTimeMs).toBe(0)
     expect(result.current.playing).toBe(false)
-    expect(document.querySelectorAll('script[src*="iframe_api"]').length).toBe(0)
+    expect(document.querySelectorAll("script[data-unison-yt-loader]").length).toBe(0)
   })
 
-  it("injects the iframe API script exactly once across multiple mounts", () => {
-    installYT()
+  it("injects the iframe API script exactly once across multiple mounts when YT is not preloaded", async () => {
     const a = render(createElement(Harness, { videoId: "abc" }))
+    expect(document.querySelectorAll("script[data-unison-yt-loader]").length).toBe(1)
     a.unmount()
+
     const b = render(createElement(Harness, { videoId: "def" }))
+    expect(document.querySelectorAll("script[data-unison-yt-loader]").length).toBe(1)
     b.unmount()
-    expect(document.querySelectorAll('script[src*="iframe_api"]').length).toBeLessThanOrEqual(1)
+
+    installYT()
+    const ready = (globalThis as unknown as { onYouTubeIframeAPIReady?: () => void }).onYouTubeIframeAPIReady
+    if (ready) {
+      act(() => {
+        ready()
+      })
+    }
+    await act(async () => {
+      await Promise.resolve()
+    })
   })
 
   it("polls getCurrentTime and tracks play state via onStateChange", async () => {

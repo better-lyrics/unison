@@ -25,7 +25,7 @@ type WindowWithYT = Window & {
 
 const SCRIPT_URL = "https://www.youtube.com/iframe_api"
 const SCRIPT_ATTR = "data-unison-yt-loader"
-const readyWaiters: Array<() => void> = []
+const readyWaiters: Array<(yt: YTNamespace) => void> = []
 let scriptInjected = false
 
 function getWindow(): WindowWithYT | null {
@@ -33,42 +33,37 @@ function getWindow(): WindowWithYT | null {
   return window as WindowWithYT
 }
 
-function ensureScript(): Promise<YTNamespace> {
-  const win = getWindow()
-  if (!win) return new Promise(() => {})
-  if (win.YT?.Player) return Promise.resolve(win.YT)
-  if (!scriptInjected) {
-    scriptInjected = true
-    const existing = document.querySelector(`script[${SCRIPT_ATTR}]`)
-    if (!existing) {
-      const tag = document.createElement("script")
-      tag.src = SCRIPT_URL
-      tag.async = true
-      tag.setAttribute(SCRIPT_ATTR, "1")
-      document.head.appendChild(tag)
-    }
-    const prior = win.onYouTubeIframeAPIReady
-    win.onYouTubeIframeAPIReady = () => {
-      prior?.()
-      const yt = win.YT
-      if (!yt) return
-      while (readyWaiters.length > 0) {
-        const fn = readyWaiters.shift()
-        fn?.()
-      }
-    }
-  }
+function ensureScript(win: WindowWithYT): Promise<YTNamespace> {
   return new Promise((resolve) => {
-    const check = () => {
-      const yt = win.YT
-      if (yt?.Player) {
-        resolve(yt)
-        return
-      }
-      readyWaiters.push(check)
+    if (win.YT?.Player) {
+      resolve(win.YT)
+      return
     }
-    check()
+    if (!scriptInjected) {
+      scriptInjected = true
+      const existing = document.querySelector(`script[${SCRIPT_ATTR}]`)
+      if (!existing) {
+        const tag = document.createElement("script")
+        tag.src = SCRIPT_URL
+        tag.async = true
+        tag.setAttribute(SCRIPT_ATTR, "1")
+        document.head.appendChild(tag)
+      }
+      const prior = win.onYouTubeIframeAPIReady
+      win.onYouTubeIframeAPIReady = () => {
+        prior?.()
+        const yt = win.YT
+        if (!yt) return
+        for (const w of readyWaiters.splice(0)) w(yt)
+      }
+    }
+    readyWaiters.push(resolve)
   })
+}
+
+export function __resetForTests(): void {
+  scriptInjected = false
+  readyWaiters.length = 0
 }
 
 export interface UseYouTubePlayerResult {
@@ -96,7 +91,7 @@ export function useYouTubePlayer(videoId: string | null): UseYouTubePlayerResult
     let intervalId: ReturnType<typeof setInterval> | null = null
 
     const run = async () => {
-      const yt = await ensureScript()
+      const yt = await ensureScript(win)
       if (cancelled) return
       const node = ref.current
       if (!node) return
