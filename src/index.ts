@@ -21,7 +21,7 @@ import { voteRoutes } from "@/routes/votes"
 import { cors } from "@elysiajs/cors"
 import { cron } from "@elysiajs/cron"
 import { node } from "@elysiajs/node"
-import { Elysia } from "elysia"
+import { Elysia, NotFoundError } from "elysia"
 
 const env = createEnv()
 const log = new Logger("app")
@@ -169,7 +169,7 @@ const app = new Elysia({ adapter: node() })
 	.use(leaderboardRoutes(env))
 	.use(userRoutes(env))
 	.use(authRoutes(env))
-	.get("/*", ({ request, set }) => {
+	.get("/*", ({ request }) => {
 		const { pathname } = new URL(request.url)
 
 		if (pathname.includes(".")) {
@@ -183,8 +183,7 @@ const app = new Elysia({ adapter: node() })
 					},
 				})
 			}
-			set.status = 404
-			return { success: false, error: "Not Found" }
+			throw new NotFoundError()
 		}
 
 		if (spaIndexHtml) {
@@ -194,8 +193,7 @@ const app = new Elysia({ adapter: node() })
 			})
 		}
 
-		set.status = 404
-		return { success: false, error: "Not Found" }
+		throw new NotFoundError()
 	})
 	.listen(Number.parseInt(process.env.PORT || "3000", 10))
 
