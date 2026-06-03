@@ -175,17 +175,23 @@ const app = new Elysia({ adapter: node() })
 		if (pathname.includes(".")) {
 			const file = readSpaFile(pathname)
 			if (file) {
-				set.headers["content-type"] = file.contentType
-				set.headers["cache-control"] = "public, max-age=31536000, immutable"
-				return file.body
+				return new Response(file.body, {
+					status: 200,
+					headers: {
+						"content-type": file.contentType,
+						"cache-control": "public, max-age=31536000, immutable",
+					},
+				})
 			}
 			set.status = 404
 			return { success: false, error: "Not Found" }
 		}
 
 		if (spaIndexHtml) {
-			set.headers["content-type"] = "text/html; charset=utf-8"
-			return spaIndexHtml
+			return new Response(spaIndexHtml, {
+				status: 200,
+				headers: { "content-type": "text/html; charset=utf-8" },
+			})
 		}
 
 		set.status = 404
