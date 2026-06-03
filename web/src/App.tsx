@@ -1,5 +1,10 @@
+import { QueryProvider } from "./lib/queryClient"
 import { AppRouter } from "./router"
 
 export function App() {
-  return <AppRouter />
+  return (
+    <QueryProvider>
+      <AppRouter />
+    </QueryProvider>
+  )
 }

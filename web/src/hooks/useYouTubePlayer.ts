@@ -1,0 +1,130 @@
+import { type RefObject, useEffect, useRef, useState } from "react"
+
+interface YTPlayer {
+  getCurrentTime(): number
+  destroy(): void
+}
+
+interface YTPlayerCtorOptions {
+  videoId: string
+  events?: {
+    onReady?: (e: { target: YTPlayer }) => void
+    onStateChange?: (e: { data: number }) => void
+  }
+}
+
+interface YTNamespace {
+  Player: new (el: HTMLElement | string, opts: YTPlayerCtorOptions) => YTPlayer
+  PlayerState: { PLAYING: number; PAUSED: number; ENDED: number }
+}
+
+type WindowWithYT = Window & {
+  YT?: YTNamespace
+  onYouTubeIframeAPIReady?: () => void
+}
+
+const SCRIPT_URL = "https://www.youtube.com/iframe_api"
+const SCRIPT_ATTR = "data-unison-yt-loader"
+const readyWaiters: Array<() => void> = []
+let scriptInjected = false
+
+function getWindow(): WindowWithYT | null {
+  if (typeof window === "undefined") return null
+  return window as WindowWithYT
+}
+
+function ensureScript(): Promise<YTNamespace> {
+  const win = getWindow()
+  if (!win) return new Promise(() => {})
+  if (win.YT?.Player) return Promise.resolve(win.YT)
+  if (!scriptInjected) {
+    scriptInjected = true
+    const existing = document.querySelector(`script[${SCRIPT_ATTR}]`)
+    if (!existing) {
+      const tag = document.createElement("script")
+      tag.src = SCRIPT_URL
+      tag.async = true
+      tag.setAttribute(SCRIPT_ATTR, "1")
+      document.head.appendChild(tag)
+    }
+    const prior = win.onYouTubeIframeAPIReady
+    win.onYouTubeIframeAPIReady = () => {
+      prior?.()
+      const yt = win.YT
+      if (!yt) return
+      while (readyWaiters.length > 0) {
+        const fn = readyWaiters.shift()
+        fn?.()
+      }
+    }
+  }
+  return new Promise((resolve) => {
+    const check = () => {
+      const yt = win.YT
+      if (yt?.Player) {
+        resolve(yt)
+        return
+      }
+      readyWaiters.push(check)
+    }
+    check()
+  })
+}
+
+export interface UseYouTubePlayerResult {
+  ref: RefObject<HTMLDivElement | null>
+  currentTimeMs: number
+  playing: boolean
+}
+
+export function useYouTubePlayer(videoId: string | null): UseYouTubePlayerResult {
+  const ref = useRef<HTMLDivElement | null>(null)
+  const [currentTimeMs, setCurrentTimeMs] = useState(0)
+  const [playing, setPlaying] = useState(false)
+
+  useEffect(() => {
+    if (!videoId) {
+      setCurrentTimeMs(0)
+      setPlaying(false)
+      return
+    }
+    const win = getWindow()
+    if (!win) return
+
+    let cancelled = false
+    let player: YTPlayer | null = null
+    let intervalId: ReturnType<typeof setInterval> | null = null
+
+    const run = async () => {
+      const yt = await ensureScript()
+      if (cancelled) return
+      const node = ref.current
+      if (!node) return
+      player = new yt.Player(node, {
+        videoId,
+        events: {
+          onStateChange: (e) => {
+            if (e.data === yt.PlayerState.PLAYING) setPlaying(true)
+            else if (e.data === yt.PlayerState.PAUSED || e.data === yt.PlayerState.ENDED) setPlaying(false)
+          },
+        },
+      })
+      intervalId = setInterval(() => {
+        if (!player) return
+        const seconds = player.getCurrentTime()
+        setCurrentTimeMs(Math.round(seconds * 1000))
+      }, 100)
+    }
+    run()
+
+    return () => {
+      cancelled = true
+      if (intervalId !== null) clearInterval(intervalId)
+      if (player) player.destroy()
+      setCurrentTimeMs(0)
+      setPlaying(false)
+    }
+  }, [videoId])
+
+  return { ref, currentTimeMs, playing }
+}
