@@ -1,13 +1,9 @@
 import { existsSync, readFileSync, statSync } from "node:fs"
 import { extname, resolve, sep } from "node:path"
-import { Elysia } from "elysia"
-import { node } from "@elysiajs/node"
-import { cors } from "@elysiajs/cors"
-import { cron } from "@elysiajs/cron"
 import { config } from "@/config"
-import { createEnv } from "@/infra/env"
-import { closePool } from "@/infra/database"
 import { closeRedis } from "@/infra/cache"
+import { closePool } from "@/infra/database"
+import { createEnv } from "@/infra/env"
 import { Logger, flushLogs } from "@/infra/logger"
 import { backfillFormatDetection } from "@/jobs/backfill-format-detection"
 import { backfillSyncType } from "@/jobs/backfill-synctype"
@@ -15,14 +11,17 @@ import { backfillTextSearch } from "@/jobs/backfill-text-search"
 import { runDumpJob } from "@/jobs/dump"
 import { updateScores } from "@/jobs/score-updater"
 import { authRoutes } from "@/routes/auth"
-import { lyricsRoutes } from "@/routes/lyrics"
-import { feedRoutes } from "@/routes/feed"
-import { voteRoutes } from "@/routes/votes"
-import { requestRoutes } from "@/routes/requests"
-import { leaderboardRoutes } from "@/routes/leaderboard"
-import { userRoutes } from "@/routes/users"
 import { compatRoutes } from "@/routes/compat"
-import { isApiPath } from "@/utils/spa-routing"
+import { feedRoutes } from "@/routes/feed"
+import { leaderboardRoutes } from "@/routes/leaderboard"
+import { lyricsRoutes } from "@/routes/lyrics"
+import { requestRoutes } from "@/routes/requests"
+import { userRoutes } from "@/routes/users"
+import { voteRoutes } from "@/routes/votes"
+import { cors } from "@elysiajs/cors"
+import { cron } from "@elysiajs/cron"
+import { node } from "@elysiajs/node"
+import { Elysia, NotFoundError } from "elysia"
 
 const env = createEnv()
 const log = new Logger("app")
@@ -145,42 +144,6 @@ const app = new Elysia({ adapter: node() })
 			: "?"
 
 		if (code === "NOT_FOUND") {
-			const m = method as string
-			const u = url as string
-			if ((m === "GET" || m === "HEAD") && !isApiPath(u)) {
-				if (u.includes(".")) {
-					const file = readSpaFile(u)
-					if (file) {
-						set.headers["content-type"] = file.contentType
-						set.headers["cache-control"] = "public, max-age=31536000, immutable"
-						httpLog.info(`${m} ${u} 200 ${duration}ms (asset)`, {
-							method: m,
-							path: u,
-							status: 200,
-							latency_ms: Number(duration),
-						})
-						return new Response(m === "HEAD" ? null : file.body, {
-							status: 200,
-							headers: {
-								"content-type": file.contentType,
-								"cache-control": "public, max-age=31536000, immutable",
-							},
-						})
-					}
-				}
-				if (spaIndexHtml) {
-					httpLog.info(`${m} ${u} 200 ${duration}ms (spa)`, {
-						method: m,
-						path: u,
-						status: 200,
-						latency_ms: Number(duration),
-					})
-					return new Response(m === "HEAD" ? null : spaIndexHtml, {
-						status: 200,
-						headers: { "content-type": "text/html; charset=utf-8" },
-					})
-				}
-			}
 			httpLog.warn(`${method} ${url} 404 ${duration}ms`)
 			return { success: false, error: "Not Found" }
 		}
@@ -206,6 +169,32 @@ const app = new Elysia({ adapter: node() })
 	.use(leaderboardRoutes(env))
 	.use(userRoutes(env))
 	.use(authRoutes(env))
+	.get("/*", ({ request }) => {
+		const { pathname } = new URL(request.url)
+
+		if (pathname.includes(".")) {
+			const file = readSpaFile(pathname)
+			if (file) {
+				return new Response(file.body, {
+					status: 200,
+					headers: {
+						"content-type": file.contentType,
+						"cache-control": "public, max-age=31536000, immutable",
+					},
+				})
+			}
+			throw new NotFoundError()
+		}
+
+		if (spaIndexHtml) {
+			return new Response(spaIndexHtml, {
+				status: 200,
+				headers: { "content-type": "text/html; charset=utf-8" },
+			})
+		}
+
+		throw new NotFoundError()
+	})
 	.listen(Number.parseInt(process.env.PORT || "3000", 10))
 
 const port = process.env.PORT || "3000"
