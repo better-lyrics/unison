@@ -114,7 +114,29 @@ export interface LyricsResponse {
 	confidence: Confidence
 	hidden: boolean
 	submitter?: SubmitterInfo
+	fulfilled?: LyricsFulfillmentBadge | null
 	userVote?: 1 | -1 | null
+}
+
+export interface RequestFulfillment {
+	id: number
+	videoId: string
+	lyricsId: number
+	submitterId: number | null
+	demandSnapshot: number
+	requestCountSnapshot: number
+	fulfilledAt: number
+}
+
+export interface LyricsFulfillmentBadge {
+	demand: number
+	requestCount: number
+	fulfilledAt: number
+}
+
+export interface UserFulfillmentStats {
+	fulfilledCount: number
+	fulfilledDemand: number
 }
 
 export interface LyricsSearchResult {
