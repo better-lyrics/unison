@@ -192,11 +192,3 @@ CREATE INDEX IF NOT EXISTS idx_request_fulfillments_video_fulfilled
     ON request_fulfillments(video_id, fulfilled_at DESC);
 CREATE INDEX IF NOT EXISTS idx_request_fulfillments_lyrics
     ON request_fulfillments(lyrics_id);
-
--- One-shot zombie cleanup: drop request rows for videos that already have a
--- servable synced variant at deploy time. Idempotent.
-DELETE FROM lyrics_requests
-WHERE video_id IN (
-    SELECT DISTINCT video_id FROM lyrics
-    WHERE sync_type IN ('linesync','richsync') AND deleted_at IS NULL
-);
