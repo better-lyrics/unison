@@ -174,3 +174,29 @@ CREATE TABLE IF NOT EXISTS lyrics_requests (
 );
 
 CREATE INDEX IF NOT EXISTS idx_lyrics_requests_created ON lyrics_requests(created_at);
+
+-- Request fulfillments: recognition when a synced submission fills demand
+CREATE TABLE IF NOT EXISTS request_fulfillments (
+    id BIGSERIAL PRIMARY KEY,
+    video_id TEXT NOT NULL,
+    lyrics_id INTEGER NOT NULL REFERENCES lyrics(id) ON DELETE CASCADE,
+    submitter_id INTEGER REFERENCES users(id),
+    demand_snapshot DOUBLE PRECISION NOT NULL,
+    request_count_snapshot INTEGER NOT NULL,
+    fulfilled_at INTEGER NOT NULL DEFAULT (EXTRACT(EPOCH FROM NOW())::INTEGER)
+);
+
+CREATE INDEX IF NOT EXISTS idx_request_fulfillments_submitter
+    ON request_fulfillments(submitter_id);
+CREATE INDEX IF NOT EXISTS idx_request_fulfillments_video_fulfilled
+    ON request_fulfillments(video_id, fulfilled_at DESC);
+CREATE INDEX IF NOT EXISTS idx_request_fulfillments_lyrics
+    ON request_fulfillments(lyrics_id);
+
+-- One-shot zombie cleanup: drop request rows for videos that already have a
+-- servable synced variant at deploy time. Idempotent.
+DELETE FROM lyrics_requests
+WHERE video_id IN (
+    SELECT DISTINCT video_id FROM lyrics
+    WHERE sync_type IN ('linesync','richsync') AND deleted_at IS NULL
+);
