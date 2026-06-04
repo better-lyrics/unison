@@ -1,5 +1,5 @@
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react"
-import { MemoryRouter, useLocation } from "react-router-dom"
+import { MemoryRouter, useLocation, useSearchParams } from "react-router-dom"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { SearchBar } from "./SearchBar"
 
@@ -9,6 +9,21 @@ function LocationProbe() {
     <div data-testid="location" data-pathname={location.pathname} data-search={location.search}>
       {`${location.pathname}${location.search}`}
     </div>
+  )
+}
+
+function ExternalQSetter({ value }: { value: string }) {
+  const [, setSearchParams] = useSearchParams()
+  return (
+    <button
+      type="button"
+      data-testid="set-q"
+      onClick={() => {
+        setSearchParams({ q: value })
+      }}
+    >
+      set q
+    </button>
   )
 }
 
@@ -153,5 +168,23 @@ describe("SearchBar", () => {
       toggle.click()
     })
     expect(screen.getByRole("searchbox", { name: /search lyrics/i })).toBeTruthy()
+  })
+
+  it("reflects external q changes back into the input when on /search", () => {
+    render(
+      <MemoryRouter initialEntries={["/search?q=neon"]}>
+        <SearchBar />
+        <ExternalQSetter value="summer" />
+        <LocationProbe />
+      </MemoryRouter>,
+    )
+    const input = screen.getByRole("searchbox", { name: /search lyrics/i }) as HTMLInputElement
+    expect(input.value).toBe("neon")
+
+    act(() => {
+      screen.getByTestId("set-q").click()
+    })
+
+    expect(input.value).toBe("summer")
   })
 })
