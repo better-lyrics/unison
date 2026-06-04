@@ -11,7 +11,7 @@ const KIND_STYLES: Record<ToastKind, string> = {
 export function ToastViewport() {
   const toasts = useToasts()
   return (
-    <div aria-live="polite" className="pointer-events-none fixed right-4 bottom-4 z-50 flex flex-col gap-2">
+    <div className="pointer-events-none fixed right-4 bottom-4 z-50 flex flex-col gap-2">
       {toasts.map((toast) => (
         <ToastCard key={toast.id} toast={toast} />
       ))}

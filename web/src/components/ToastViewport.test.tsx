@@ -49,11 +49,18 @@ describe("ToastViewport", () => {
     expect(screen.queryByText("x")).toBeNull()
   })
 
-  it("sets aria-live polite on the container", () => {
+  it("exposes each toast as a live status region via the output element", () => {
     const { container } = render(<ToastViewport />)
-    const region = container.querySelector("[aria-live]")
-    expect(region).toBeTruthy()
-    expect(region?.getAttribute("aria-live")).toBe("polite")
+    expect(container.querySelector("[aria-live]")).toBeNull()
+    act(() => {
+      pushToast({ kind: "info", message: "one" })
+      pushToast({ kind: "success", message: "two" })
+    })
+    const statuses = screen.getAllByRole("status")
+    expect(statuses).toHaveLength(2)
+    for (const el of statuses) {
+      expect(el.tagName.toLowerCase()).toBe("output")
+    }
   })
 
   it("color-codes by kind via a data attribute", () => {
