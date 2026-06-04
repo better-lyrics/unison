@@ -24,6 +24,14 @@ export function SearchBar({ compact = false }: SearchBarProps) {
   const [expanded, setExpanded] = useState(!compact)
   const debounced = useDebouncedValue(value, DEBOUNCE_MS)
   const lastUrlQRef = useRef(urlQ)
+  const urlQRef = useRef(urlQ)
+  const searchParamsRef = useRef(searchParams)
+  const setSearchParamsRef = useRef(setSearchParams)
+  const onSearchRouteRef = useRef(onSearchRoute)
+  urlQRef.current = urlQ
+  searchParamsRef.current = searchParams
+  setSearchParamsRef.current = setSearchParams
+  onSearchRouteRef.current = onSearchRoute
 
   useEffect(() => {
     if (!onSearchRoute) {
@@ -37,15 +45,14 @@ export function SearchBar({ compact = false }: SearchBarProps) {
   }, [onSearchRoute, urlQ])
 
   useEffect(() => {
-    if (!onSearchRoute) return
-    if (debounced !== value) return
-    if (debounced === urlQ) return
-    const next = new URLSearchParams(searchParams)
+    if (!onSearchRouteRef.current) return
+    if (debounced === urlQRef.current) return
+    const next = new URLSearchParams(searchParamsRef.current)
     if (debounced.length > 0) next.set("q", debounced)
     else next.delete("q")
     lastUrlQRef.current = debounced
-    setSearchParams(next, { replace: true })
-  }, [debounced, onSearchRoute, searchParams, setSearchParams, urlQ, value])
+    setSearchParamsRef.current(next, { replace: true })
+  }, [debounced])
 
   const onKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter") {

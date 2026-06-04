@@ -187,4 +187,64 @@ describe("SearchBar", () => {
 
     expect(input.value).toBe("summer")
   })
+
+  it("does not stomp the URL back to the previous q when the URL changes externally", () => {
+    render(
+      <MemoryRouter initialEntries={["/search?q=neon"]}>
+        <SearchBar />
+        <ExternalQSetter value="summer" />
+        <LocationProbe />
+      </MemoryRouter>,
+    )
+    const input = screen.getByRole("searchbox", { name: /search lyrics/i }) as HTMLInputElement
+    expect(input.value).toBe("neon")
+
+    act(() => {
+      screen.getByTestId("set-q").click()
+    })
+
+    expect(input.value).toBe("summer")
+    let probe = screen.getByTestId("location")
+    expect(probe.getAttribute("data-pathname")).toBe("/search")
+    expect(probe.getAttribute("data-search")).toBe("?q=summer")
+
+    act(() => {
+      vi.advanceTimersByTime(500)
+    })
+
+    expect(input.value).toBe("summer")
+    probe = screen.getByTestId("location")
+    expect(probe.getAttribute("data-pathname")).toBe("/search")
+    expect(probe.getAttribute("data-search")).toBe("?q=summer")
+  })
+
+  it("pushes the typed query to the URL after an external URL change", () => {
+    render(
+      <MemoryRouter initialEntries={["/search?q=neon"]}>
+        <SearchBar />
+        <ExternalQSetter value="summer" />
+        <LocationProbe />
+      </MemoryRouter>,
+    )
+    const input = screen.getByRole("searchbox", { name: /search lyrics/i }) as HTMLInputElement
+
+    act(() => {
+      screen.getByTestId("set-q").click()
+    })
+    act(() => {
+      vi.advanceTimersByTime(500)
+    })
+    expect(input.value).toBe("summer")
+    expect(screen.getByTestId("location").getAttribute("data-search")).toBe("?q=summer")
+
+    act(() => {
+      fireEvent.change(input, { target: { value: "winter" } })
+    })
+    act(() => {
+      vi.advanceTimersByTime(200)
+    })
+
+    expect(input.value).toBe("winter")
+    expect(screen.getByTestId("location").getAttribute("data-search")).toBe("?q=winter")
+  })
 })
