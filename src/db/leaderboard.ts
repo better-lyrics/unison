@@ -57,6 +57,68 @@ async function queryMostWanted(env: Env, limit: number): Promise<MostWantedRow[]
 	return res.results
 }
 
+export interface MostWantedCursor {
+	demand: number
+	videoId: string
+}
+
+export async function getMostWantedPage(
+	env: Env,
+	cursor: MostWantedCursor | null,
+	limit: number
+): Promise<{ items: SongLeaderboardRow[]; nextCursor: MostWantedCursor | null }> {
+	const havingClause = cursor
+		? `HAVING SUM(lr.weight) < ?
+		    OR (SUM(lr.weight) = ? AND rs.video_id > ?)`
+		: ""
+
+	const sql = `SELECT rs.video_id, rs.song, rs.artist, rs.thumbnail_url,
+	        SUM(lr.weight) AS demand,
+	        COUNT(*) AS request_count
+	 FROM lyrics_requests lr
+	 JOIN requested_songs rs ON rs.video_id = lr.video_id
+	 WHERE lr.created_at > ?
+	   AND NOT EXISTS (
+	     SELECT 1 FROM lyrics
+	     WHERE lyrics.video_id = lr.video_id
+	       AND lyrics.sync_type IN ('linesync', 'richsync')
+	       AND lyrics.deleted_at IS NULL
+	       AND NOT ${AUTO_HIDE_PREDICATE}
+	   )
+	 GROUP BY rs.video_id, rs.song, rs.artist, rs.thumbnail_url
+	 ${havingClause}
+	 ORDER BY demand DESC, rs.video_id ASC
+	 LIMIT ?`
+
+	const params: unknown[] = [windowCutoff()]
+	if (cursor) {
+		params.push(cursor.demand, cursor.demand, cursor.videoId)
+	}
+	params.push(limit)
+
+	const res = await env.DB.prepare(sql)
+		.bind(...params)
+		.all<MostWantedRow>()
+
+	const items: SongLeaderboardRow[] = res.results.map((r, i) => ({
+		videoId: r.video_id,
+		song: r.song,
+		artist: r.artist,
+		thumbnailUrl: r.thumbnail_url,
+		demand: Number(r.demand),
+		requestCount: Number(r.request_count),
+		section: "most_wanted",
+		rank: i + 1,
+	}))
+
+	const nextCursor =
+		items.length < limit
+			? null
+			: { demand: items[items.length - 1].demand, videoId: items[items.length - 1].videoId }
+
+	return { items, nextCursor }
+}
+
 async function queryNeedsFixing(env: Env, limit: number): Promise<NeedsFixingRow[]> {
 	const res = await env.DB.prepare(
 		`WITH top_synced AS (

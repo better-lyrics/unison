@@ -117,6 +117,104 @@ describe("GET /leaderboard/songs", () => {
 	})
 })
 
+describe("GET /leaderboard/songs cursor pagination", () => {
+	function makeRow(videoId: string, demand: number) {
+		return {
+			video_id: videoId,
+			song: `S-${videoId}`,
+			artist: `A-${videoId}`,
+			thumbnail_url: null,
+			demand,
+			request_count: demand,
+		}
+	}
+
+	it("returns the first page when cursor is empty and bypasses the cache", async () => {
+		const cached = JSON.stringify({
+			mostWanted: [{ videoId: "vCACHED" }],
+			needsFixing: [],
+		})
+		const db = makeMockDB([[makeRow("v1", 9), makeRow("v2", 4)]])
+		const env = makeEnv(db, makeMockCache({ "leaderboard:songs": cached }))
+		const app = leaderboardRoutes(env)
+		const res = await app.handle(new Request("http://localhost/leaderboard/songs?cursor=&limit=2"))
+		expect(res.status).toBe(200)
+		const json = (await res.json()) as {
+			data: Array<{ videoId: string; rank: number }>
+			nextCursor: string | null
+		}
+		expect(json.data.map((r) => r.videoId)).toEqual(["v1", "v2"])
+		expect(json.data[0].rank).toBe(1)
+		expect(json.nextCursor).not.toBeNull()
+		const havingCall = db.calls[0]
+		expect(havingCall.sql).not.toContain("HAVING")
+	})
+
+	it("returns the next page when given the prior nextCursor", async () => {
+		const first = makeMockDB([[makeRow("v1", 9), makeRow("v2", 4)]])
+		const firstEnv = makeEnv(first)
+		const firstApp = leaderboardRoutes(firstEnv)
+		const firstRes = await firstApp.handle(
+			new Request("http://localhost/leaderboard/songs?cursor=&limit=2")
+		)
+		const firstJson = (await firstRes.json()) as { nextCursor: string | null }
+		const next = firstJson.nextCursor
+		expect(next).not.toBeNull()
+
+		const second = makeMockDB([[makeRow("v3", 3), makeRow("v4", 2)]])
+		const env = makeEnv(second)
+		const app = leaderboardRoutes(env)
+		const res = await app.handle(
+			new Request(
+				`http://localhost/leaderboard/songs?cursor=${encodeURIComponent(next as string)}&limit=2`
+			)
+		)
+		expect(res.status).toBe(200)
+		const json = (await res.json()) as {
+			data: Array<{ videoId: string }>
+			nextCursor: string | null
+		}
+		expect(json.data.map((r) => r.videoId)).toEqual(["v3", "v4"])
+		expect(json.nextCursor).not.toBeNull()
+		expect(second.calls[0].sql).toContain("HAVING")
+	})
+
+	it("returns a null nextCursor when the page is the last one", async () => {
+		const db = makeMockDB([[makeRow("vLast", 1)]])
+		const env = makeEnv(db)
+		const app = leaderboardRoutes(env)
+		const res = await app.handle(new Request("http://localhost/leaderboard/songs?cursor=&limit=50"))
+		expect(res.status).toBe(200)
+		const json = (await res.json()) as { nextCursor: string | null }
+		expect(json.nextCursor).toBeNull()
+	})
+
+	it("clamps an oversized limit to 50", async () => {
+		const db = makeMockDB([[]])
+		const env = makeEnv(db)
+		const app = leaderboardRoutes(env)
+		const res = await app.handle(
+			new Request("http://localhost/leaderboard/songs?cursor=&limit=200")
+		)
+		expect(res.status).toBe(200)
+		const limitParam = db.calls[0].params[db.calls[0].params.length - 1]
+		expect(limitParam).toBe(50)
+	})
+
+	it("returns 400 INVALID_CURSOR when the cursor is garbage", async () => {
+		const db = makeMockDB([])
+		const env = makeEnv(db)
+		const app = leaderboardRoutes(env)
+		const res = await app.handle(
+			new Request("http://localhost/leaderboard/songs?cursor=garbage&limit=10")
+		)
+		expect(res.status).toBe(400)
+		const json = (await res.json()) as { code: string }
+		expect(json.code).toBe("INVALID_CURSOR")
+		expect(db.calls.length).toBe(0)
+	})
+})
+
 describe("GET /leaderboard/users", () => {
 	it("returns curators with display names", async () => {
 		const db = makeMockDB([
