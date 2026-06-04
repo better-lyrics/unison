@@ -1,10 +1,13 @@
 import { Elysia, status } from "elysia"
 import { getPublicKey, registerPublicKey } from "@/db/publicKeys"
 import { getOrCreateUser } from "@/db/users"
+import { Logger } from "@/infra/logger"
 import type { Env } from "@/types"
 import { isTimestampFresh, verifyKeyId, verifySignature } from "@/utils/crypto"
 import { buildError, ErrorCode } from "@/utils/errors"
 import { getSession } from "@/utils/session"
+
+const log = new Logger("either-auth")
 
 interface SignedPayload {
 	timestamp: number
@@ -71,6 +74,7 @@ export const eitherAuth = new Elysia({ name: "either-auth" }).derive(
 				return status(401, buildError(ErrorCode.AUTH_REQUIRED))
 			}
 			const user = await getOrCreateUser(env, record.keyId)
+			log.debug("bearer authenticated", { keyId: record.keyId, userId: user.id })
 			return {
 				keyId: record.keyId,
 				userId: user.id,
@@ -80,18 +84,21 @@ export const eitherAuth = new Elysia({ name: "either-auth" }).derive(
 
 		const rawBody = ctx.body
 		if (!isValidSignedBody(rawBody)) {
+			log.warn("invalid signed request format")
 			return status(400, buildError(ErrorCode.INVALID_SIGNED_BODY))
 		}
 
 		const { payload, signature, publicKey } = rawBody
 
 		if (!isTimestampFresh(payload.timestamp)) {
+			log.warn("expired timestamp", { keyId: payload.keyId })
 			return status(401, buildError(ErrorCode.TIMESTAMP_EXPIRED))
 		}
 
 		const nonceKey = `nonce:${payload.keyId}:${payload.nonce}`
 		const claimed = await env.CACHE.setNX(nonceKey, "1", 300)
 		if (!claimed) {
+			log.warn("nonce replay attempt", { keyId: payload.keyId })
 			return status(409, buildError(ErrorCode.NONCE_REPLAY))
 		}
 
@@ -99,20 +106,25 @@ export const eitherAuth = new Elysia({ name: "either-auth" }).derive(
 
 		if (!keyRecord) {
 			if (!publicKey) {
+				log.info("new key requires registration", { keyId: payload.keyId })
 				return status(400, buildError(ErrorCode.PUBLIC_KEY_REQUIRED))
 			}
 			if (!(await verifyKeyId(payload.keyId, publicKey))) {
+				log.warn("key ID mismatch", { keyId: payload.keyId })
 				return status(403, buildError(ErrorCode.KEY_ID_MISMATCH))
 			}
 			keyRecord = await registerPublicKey(env, payload.keyId, publicKey)
+			log.info("new public key registered", { keyId: payload.keyId })
 		}
 
 		const storedKey = JSON.parse(keyRecord.public_key) as JsonWebKey
 		if (!(await verifySignature(payload, signature, storedKey))) {
+			log.warn("invalid signature", { keyId: payload.keyId })
 			return status(401, buildError(ErrorCode.INVALID_SIGNATURE))
 		}
 
 		const user = await getOrCreateUser(env, payload.keyId)
+		log.debug("authenticated", { keyId: payload.keyId, userId: user.id })
 		return {
 			keyId: payload.keyId,
 			userId: user.id,

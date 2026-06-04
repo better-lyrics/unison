@@ -94,14 +94,14 @@ export async function fetchLyricsVariant(
 async function unwrapMutationError(res: Response): Promise<never> {
   if (res.status === 401) throw new Error(AUTHED_FETCH_ERRORS.AUTH_REQUIRED)
   if (res.status === 429) throw new Error(AUTHED_FETCH_ERRORS.RATE_LIMITED)
+  let body: { error?: unknown } | null = null
   try {
-    const body = (await res.json()) as { error?: unknown }
-    const message = typeof body.error === "string" && body.error.length > 0 ? body.error : null
-    throw new Error(message ?? AUTHED_FETCH_ERRORS.REQUEST_FAILED)
-  } catch (err) {
-    if (err instanceof Error && err.message) throw err
-    throw new Error(AUTHED_FETCH_ERRORS.REQUEST_FAILED)
+    body = (await res.json()) as { error?: unknown }
+  } catch {
+    body = null
   }
+  const message = typeof body?.error === "string" && body.error.length > 0 ? body.error : null
+  throw new Error(message ?? AUTHED_FETCH_ERRORS.REQUEST_FAILED)
 }
 
 export async function voteVariant(id: number, value: 1 | -1): Promise<void> {
