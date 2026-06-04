@@ -1,4 +1,5 @@
 import { config } from "@/config"
+import { recordFulfillment } from "@/db/fulfillments"
 import { Logger } from "@/infra/logger"
 import type { Env, LyricsRow, LyricsSearchResult, LyricsSubmission } from "@/types"
 import { compress, decompress, isCompressed } from "@/utils/compression"
@@ -228,7 +229,21 @@ export async function submitLyrics(
 		sync_type: submission.syncType,
 	})
 
-	// Invalidate cache so the new variant competes in ranking
+	if (submission.syncType === "linesync" || submission.syncType === "richsync") {
+		const submitter = await env.DB.prepare("SELECT key_id FROM users WHERE id = ?")
+			.bind(submitterId)
+			.first<{ key_id: string }>()
+
+		if (submitter) {
+			await recordFulfillment(env, {
+				videoId: submission.videoId,
+				lyricsId: result!.id,
+				submitterId,
+				submitterKeyId: submitter.key_id,
+			})
+		}
+	}
+
 	await invalidateCache(env, submission.videoId)
 
 	return { id: result!.id, created: true }

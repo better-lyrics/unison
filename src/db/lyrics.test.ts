@@ -1,4 +1,4 @@
-import type { Env, LyricsRow, LyricsSearchResult } from "@/types"
+import type { Env, LyricsRow, LyricsSearchResult, LyricsSubmission } from "@/types"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import {
 	AUTO_HIDE_PREDICATE,
@@ -11,6 +11,7 @@ import {
 	searchByQuery,
 	searchBySongArtist,
 	softDeleteLyrics,
+	submitLyrics,
 } from "./lyrics"
 
 // -- Mocks -----------------------------------------------------------------
@@ -681,5 +682,68 @@ describe("hidden flag on browse surfaces", () => {
 		const env = createEnv(db, createMockCache())
 		await findVariantsByVideoId(env, "v1", 5)
 		expect(db.calls[0].sql).not.toContain("AND NOT")
+	})
+})
+
+function buildSubmission(over: Partial<LyricsSubmission> = {}): LyricsSubmission {
+	return {
+		videoId: "vid-sub",
+		song: "Song",
+		artist: "Artist",
+		duration: 200,
+		lyrics: SAMPLE_LYRICS,
+		format: "lrc",
+		syncType: "linesync",
+		...over,
+	}
+}
+
+describe("submitLyrics fulfillment integration", () => {
+	it("records a fulfillment for synced submissions with live demand", async () => {
+		const db = createMockDB([
+			{ count: 0 },
+			{ id: 555 },
+			{ key_id: "k1" },
+			null,
+			{ demand: 4, request_count: 2 },
+			{ id: 1 },
+			null,
+		])
+		const cache = createMockCache()
+		const env = createEnv(db, cache)
+
+		const result = await submitLyrics(env, buildSubmission({ syncType: "linesync" }), 7)
+
+		expect(result.created).toBe(true)
+		const sqls = db.calls.map((c) => c.sql).join("\n")
+		expect(sqls).toMatch(/INSERT INTO request_fulfillments/i)
+		expect(sqls).toMatch(/DELETE FROM lyrics_requests/i)
+	})
+
+	it("skips fulfillment for plain submissions", async () => {
+		const db = createMockDB([{ count: 0 }, { id: 556 }])
+		const cache = createMockCache()
+		const env = createEnv(db, cache)
+
+		await submitLyrics(env, buildSubmission({ syncType: "plain" }), 7)
+
+		const sqls = db.calls.map((c) => c.sql).join("\n")
+		expect(sqls).not.toMatch(/INSERT INTO request_fulfillments/i)
+	})
+
+	it("skips fulfillment when a prior synced variant exists", async () => {
+		const db = createMockDB([
+			{ count: 0 },
+			{ id: 557 },
+			{ key_id: "k1" },
+			{ "1": 1 },
+		])
+		const cache = createMockCache()
+		const env = createEnv(db, cache)
+
+		await submitLyrics(env, buildSubmission({ syncType: "richsync" }), 7)
+
+		const sqls = db.calls.map((c) => c.sql).join("\n")
+		expect(sqls).not.toMatch(/INSERT INTO request_fulfillments/i)
 	})
 })
