@@ -176,6 +176,52 @@ describe("LyricsPage", () => {
     expect(writeText).toHaveBeenCalledWith("to copy")
   })
 
+  it("shows the Copied! label on a successful write and reverts after the timer", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    try {
+      fetchVariants.mockResolvedValue({ variants: [makeSummary({ id: 1 })] })
+      fetchVariant.mockResolvedValue({ variant: makeFull({ id: 1, lyrics: "ok" }) })
+      const writeText = vi.fn().mockResolvedValue(undefined)
+      vi.stubGlobal("navigator", { ...navigator, clipboard: { writeText } })
+      renderAt(["/lyrics/v1"])
+      await waitFor(() => expect(screen.getByTestId("lyrics-renderer")).toBeTruthy())
+      fireEvent.click(screen.getByRole("button", { name: /raw/i }))
+      fireEvent.click(screen.getByRole("button", { name: /copy lyrics body to clipboard/i }))
+      await waitFor(() =>
+        expect(screen.getByRole("button", { name: /copy lyrics body to clipboard/i }).textContent).toBe("Copied!"),
+      )
+      vi.advanceTimersByTime(1500)
+      await waitFor(() =>
+        expect(screen.getByRole("button", { name: /copy lyrics body to clipboard/i }).textContent).toBe("Copy"),
+      )
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it("shows the Copy failed label when the clipboard write rejects and reverts after the timer", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    try {
+      fetchVariants.mockResolvedValue({ variants: [makeSummary({ id: 1 })] })
+      fetchVariant.mockResolvedValue({ variant: makeFull({ id: 1, lyrics: "ok" }) })
+      const writeText = vi.fn().mockRejectedValue(new DOMException("denied", "NotAllowedError"))
+      vi.stubGlobal("navigator", { ...navigator, clipboard: { writeText } })
+      renderAt(["/lyrics/v1"])
+      await waitFor(() => expect(screen.getByTestId("lyrics-renderer")).toBeTruthy())
+      fireEvent.click(screen.getByRole("button", { name: /raw/i }))
+      fireEvent.click(screen.getByRole("button", { name: /copy lyrics body to clipboard/i }))
+      await waitFor(() =>
+        expect(screen.getByRole("button", { name: /copy lyrics body to clipboard/i }).textContent).toBe("Copy failed"),
+      )
+      vi.advanceTimersByTime(2500)
+      await waitFor(() =>
+        expect(screen.getByRole("button", { name: /copy lyrics body to clipboard/i }).textContent).toBe("Copy"),
+      )
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it("renders the hidden banner when the selected variant is hidden", async () => {
     fetchVariants.mockResolvedValue({ variants: [makeSummary({ id: 1 })] })
     fetchVariant.mockResolvedValue({ variant: makeFull({ id: 1, hidden: true }) })

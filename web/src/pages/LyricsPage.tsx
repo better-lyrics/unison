@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query"
-import { useCallback, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { Link, useParams, useSearchParams } from "react-router-dom"
 import { EmptyState } from "@/components/EmptyState"
 import { LoadingPlaceholder } from "@/components/LoadingPlaceholder"
@@ -12,6 +12,18 @@ import { cn } from "@/lib/cn"
 import { fetchLyricsVariant, fetchLyricsVariants } from "@/lib/api"
 
 type Mode = "synced" | "raw"
+type CopyState = "idle" | "copied" | "failed"
+
+const COPY_RESET_MS: Record<Exclude<CopyState, "idle">, number> = {
+  copied: 1500,
+  failed: 2500,
+}
+
+const COPY_LABEL: Record<CopyState, string> = {
+  idle: "Copy",
+  copied: "Copied!",
+  failed: "Copy failed",
+}
 
 export function LyricsPage() {
   const { videoId } = useParams<{ videoId: string }>()
@@ -57,12 +69,45 @@ export function LyricsPage() {
 
   const handleLineClick = useCallback((seconds: number) => seekTo(seconds), [seekTo])
 
+  const [copyState, setCopyState] = useState<CopyState>("idle")
+  const copyResetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const isMountedRef = useRef(true)
+  useEffect(() => {
+    isMountedRef.current = true
+    return () => {
+      isMountedRef.current = false
+      if (copyResetTimerRef.current !== null) {
+        clearTimeout(copyResetTimerRef.current)
+        copyResetTimerRef.current = null
+      }
+    }
+  }, [])
+
+  const scheduleCopyReset = useCallback((state: Exclude<CopyState, "idle">) => {
+    if (copyResetTimerRef.current !== null) clearTimeout(copyResetTimerRef.current)
+    copyResetTimerRef.current = setTimeout(() => {
+      copyResetTimerRef.current = null
+      if (isMountedRef.current) setCopyState("idle")
+    }, COPY_RESET_MS[state])
+  }, [])
+
   const handleCopy = useCallback(() => {
     const body = variantQuery.data?.variant.lyrics
     if (!body) return
     if (!navigator.clipboard) return
-    void navigator.clipboard.writeText(body)
-  }, [variantQuery.data])
+    navigator.clipboard.writeText(body).then(
+      () => {
+        if (!isMountedRef.current) return
+        setCopyState("copied")
+        scheduleCopyReset("copied")
+      },
+      () => {
+        if (!isMountedRef.current) return
+        setCopyState("failed")
+        scheduleCopyReset("failed")
+      },
+    )
+  }, [variantQuery.data, scheduleCopyReset])
 
   if (!videoId) return <EmptyState title="No video specified" />
 
@@ -136,14 +181,18 @@ export function LyricsPage() {
                     onClick={handleCopy}
                     disabled={!canCopy}
                     aria-label="Copy lyrics body to clipboard"
+                    aria-live="polite"
                     className={cn(
-                      "rounded border border-unison-border px-2 py-1 text-xs",
+                      "rounded border border-unison-border px-2 py-1 text-xs transition-colors",
                       canCopy
-                        ? "text-unison-text-secondary hover:border-unison-border-strong hover:text-unison-text"
+                        ? "hover:border-unison-border-strong"
                         : "cursor-not-allowed text-unison-text-muted opacity-60",
+                      canCopy && copyState === "idle" && "text-unison-text-secondary hover:text-unison-text",
+                      canCopy && copyState === "copied" && "text-green-500",
+                      canCopy && copyState === "failed" && "text-amber-500",
                     )}
                   >
-                    Copy
+                    {COPY_LABEL[copyState]}
                   </button>
                 </div>
                 <pre className="whitespace-pre-wrap break-words font-mono text-xs text-unison-text">

@@ -125,6 +125,46 @@ describe("LyricsRenderer", () => {
     expect(onLineClick).not.toHaveBeenCalled()
   })
 
+  it("registers the braccato:line-click listener once across re-renders and dispatches to the latest handler", async () => {
+    const Renderer = await importRenderer()
+    const variant = makeVariant()
+    const addEventListener = vi.spyOn(HTMLElement.prototype, "addEventListener")
+    try {
+      const calls: string[] = []
+      const { container, rerender } = render(
+        <Renderer
+          variant={variant}
+          currentTimeMs={0}
+          playing={false}
+          onLineClick={(s) => calls.push(`first:${s}`)}
+        />,
+      )
+      rerender(
+        <Renderer
+          variant={variant}
+          currentTimeMs={0}
+          playing={false}
+          onLineClick={(s) => calls.push(`second:${s}`)}
+        />,
+      )
+      rerender(
+        <Renderer
+          variant={variant}
+          currentTimeMs={0}
+          playing={false}
+          onLineClick={(s) => calls.push(`third:${s}`)}
+        />,
+      )
+      const lineClickRegistrations = addEventListener.mock.calls.filter((args) => args[0] === "braccato:line-click")
+      expect(lineClickRegistrations).toHaveLength(1)
+      const el = container.querySelector("braccato-lyrics") as HTMLElement
+      el.dispatchEvent(new CustomEvent("braccato:line-click", { detail: { time: 1000 } }))
+      expect(calls).toEqual(["third:1"])
+    } finally {
+      addEventListener.mockRestore()
+    }
+  })
+
   it("creates a new blob URL when the variant changes", async () => {
     const Renderer = await importRenderer()
     const { rerender } = render(<Renderer variant={makeVariant()} currentTimeMs={0} playing={false} />)

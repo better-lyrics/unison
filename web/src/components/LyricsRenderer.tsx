@@ -34,17 +34,22 @@ export function LyricsRenderer({ variant, currentTimeMs, playing, onLineClick }:
     el.playing = playing
   }, [currentTimeMs, playing])
 
+  const onLineClickRef = useRef(onLineClick)
+  useEffect(() => {
+    onLineClickRef.current = onLineClick
+  })
+
   useEffect(() => {
     const el = elementRef.current
-    if (!el || !onLineClick) return
+    if (!el) return
     const handler = (e: Event) => {
       const detail = (e as CustomEvent<{ time?: number }>).detail
       if (detail?.time == null) return
-      onLineClick(detail.time / 1000)
+      onLineClickRef.current?.(detail.time / 1000)
     }
     el.addEventListener("braccato:line-click", handler)
     return () => el.removeEventListener("braccato:line-click", handler)
-  }, [onLineClick])
+  }, [])
 
   return (
     <braccato-lyrics
