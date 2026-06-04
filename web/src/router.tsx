@@ -4,6 +4,7 @@ import { AboutPage } from "./pages/AboutPage"
 import { CuratorsPage } from "./pages/CuratorsPage"
 import { DownloadsPage } from "./pages/DownloadsPage"
 import { MePage } from "./pages/MePage"
+import { SearchPage } from "./pages/SearchPage"
 import { SongsPage } from "./pages/SongsPage"
 import { UserPage } from "./pages/UserPage"
 
@@ -14,6 +15,7 @@ const router = createBrowserRouter([
     children: [
       { index: true, element: <SongsPage /> },
       { path: "leaderboard", element: <CuratorsPage /> },
+      { path: "search", element: <SearchPage /> },
       { path: "me", element: <MePage /> },
       { path: "users/:keyId", element: <UserPage /> },
       { path: "about", element: <AboutPage /> },

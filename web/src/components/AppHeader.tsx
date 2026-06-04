@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react"
 import { Link, NavLink } from "react-router-dom"
 import { cn } from "@/lib/cn"
 import { BetterLyricsLogo } from "./BetterLyricsLogo"
+import { SearchBar } from "./SearchBar"
 import { SignInControl } from "./SignInControl"
 
 const tabClass = ({ isActive }: { isActive: boolean }) =>
@@ -39,7 +40,7 @@ export function AppHeader() {
       ref={headerRef}
       className="sticky top-0 z-10 border-b border-unison-border bg-unison-bg/80 backdrop-blur"
     >
-      <div className="mx-auto flex max-w-5xl items-center justify-between gap-6 px-6 py-4 sm:grid sm:grid-cols-[1fr_auto_1fr]">
+      <div className="mx-auto flex max-w-5xl items-center justify-between gap-4 px-6 py-4 sm:grid sm:grid-cols-[auto_auto_1fr_auto] sm:gap-6">
         <Link
           to="/"
           aria-label="Unison home"
@@ -48,7 +49,7 @@ export function AppHeader() {
           <BetterLyricsLogo size={20} />
           <span className="text-base font-semibold tracking-tight">Unison</span>
         </Link>
-        <nav className="hidden items-center gap-1 sm:flex sm:justify-self-center">
+        <nav className="hidden items-center gap-1 sm:flex sm:justify-self-start">
           <NavLink to="/" end className={tabClass}>
             Songs
           </NavLink>
@@ -62,7 +63,13 @@ export function AppHeader() {
             Downloads
           </NavLink>
         </nav>
+        <div className="hidden sm:flex sm:justify-self-end sm:w-full sm:max-w-xs">
+          <SearchBar />
+        </div>
         <div className="flex items-center gap-2 sm:justify-self-end">
+          <div className="sm:hidden">
+            <SearchBar compact />
+          </div>
           <div className="hidden sm:block">
             <SignInControl />
           </div>
