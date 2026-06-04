@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query"
+import { useMemo } from "react"
 import { useSearchParams } from "react-router-dom"
 import { EmptyState } from "@/components/EmptyState"
 import { LoadingPlaceholder } from "@/components/LoadingPlaceholder"
@@ -15,7 +16,8 @@ export function SearchPage() {
   const song = params.get("song") ?? undefined
   const artist = params.get("artist") ?? undefined
 
-  const debounced = useDebouncedValue({ q, song, artist }, DEBOUNCE_MS)
+  const value = useMemo(() => ({ q, song, artist }), [q, song, artist])
+  const debounced = useDebouncedValue(value, DEBOUNCE_MS)
   const enabled = debounced.q.trim().length >= MIN_QUERY_LENGTH || !!debounced.song || !!debounced.artist
 
   const { data, isLoading, error } = useQuery({

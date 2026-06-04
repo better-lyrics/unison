@@ -101,11 +101,14 @@ export function SearchBar({ compact = false }: SearchBarProps) {
         placeholder="Search lyrics"
         className="min-w-0 flex-1 bg-transparent text-sm text-unison-text placeholder:text-unison-text-muted focus:outline-none"
       />
-      {compact && value.length === 0 ? (
+      {compact ? (
         <button
           type="button"
           aria-label="Close search"
-          onClick={() => setExpanded(false)}
+          onClick={() => {
+            setValue("")
+            setExpanded(false)
+          }}
           className="cursor-pointer rounded p-0.5 text-unison-text-muted transition-colors hover:bg-unison-bg-hover hover:text-unison-text"
         >
           <IconX className="size-4" stroke={1.5} aria-hidden="true" />

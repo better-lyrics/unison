@@ -170,6 +170,43 @@ describe("SearchBar", () => {
     expect(screen.getByRole("searchbox", { name: /search lyrics/i })).toBeTruthy()
   })
 
+  it("keeps the close button visible after typing in the compact, expanded bar", () => {
+    renderBar(["/"], { compact: true })
+    act(() => {
+      screen.getByRole("button", { name: /open search/i }).click()
+    })
+    const input = screen.getByRole("searchbox", { name: /search lyrics/i })
+    act(() => {
+      fireEvent.change(input, { target: { value: "neon" } })
+    })
+    expect(screen.getByRole("button", { name: /close search/i })).toBeTruthy()
+  })
+
+  it("clears the value and collapses back to icon-only when the close button is clicked", () => {
+    renderBar(["/"], { compact: true })
+    act(() => {
+      screen.getByRole("button", { name: /open search/i }).click()
+    })
+    const input = screen.getByRole("searchbox", { name: /search lyrics/i }) as HTMLInputElement
+    act(() => {
+      fireEvent.change(input, { target: { value: "neon" } })
+    })
+    expect(input.value).toBe("neon")
+
+    act(() => {
+      screen.getByRole("button", { name: /close search/i }).click()
+    })
+
+    expect(screen.queryByRole("searchbox", { name: /search lyrics/i })).toBeNull()
+    expect(screen.getByRole("button", { name: /open search/i })).toBeTruthy()
+
+    act(() => {
+      screen.getByRole("button", { name: /open search/i }).click()
+    })
+    const reopened = screen.getByRole("searchbox", { name: /search lyrics/i }) as HTMLInputElement
+    expect(reopened.value).toBe("")
+  })
+
   it("reflects external q changes back into the input when on /search", () => {
     render(
       <MemoryRouter initialEntries={["/search?q=neon"]}>
