@@ -25,6 +25,22 @@ vi.mock("@/components/LyricsRenderer", () => ({
   },
 }))
 
+vi.mock("@/components/VoteControls", () => ({
+  VoteControls: (props: {
+    variantId: number
+    videoId: string
+    variant: { voteCount: number; userVote: 1 | -1 | null }
+  }) => (
+    <div
+      data-testid="vote-controls"
+      data-variant-id={props.variantId}
+      data-video-id={props.videoId}
+      data-vote-count={props.variant.voteCount}
+      data-user-vote={props.variant.userVote === null ? "null" : String(props.variant.userVote)}
+    />
+  ),
+}))
+
 const fetchVariants = vi.fn()
 const fetchVariant = vi.fn()
 vi.mock("@/lib/api", () => ({
@@ -227,6 +243,17 @@ describe("LyricsPage", () => {
     fetchVariant.mockResolvedValue({ variant: makeFull({ id: 1, hidden: true }) })
     renderAt(["/lyrics/v1"])
     await waitFor(() => expect(screen.getByText(/auto-hidden/i)).toBeTruthy())
+  })
+
+  it("renders VoteControls with the selected variant's voteCount and userVote", async () => {
+    fetchVariants.mockResolvedValue({ variants: [makeSummary({ id: 1 })] })
+    fetchVariant.mockResolvedValue({ variant: makeFull({ id: 1, voteCount: 7, userVote: -1 }) })
+    renderAt(["/lyrics/v1"])
+    const controls = await screen.findByTestId("vote-controls")
+    expect(controls.getAttribute("data-variant-id")).toBe("1")
+    expect(controls.getAttribute("data-video-id")).toBe("v1")
+    expect(controls.getAttribute("data-vote-count")).toBe("7")
+    expect(controls.getAttribute("data-user-vote")).toBe("-1")
   })
 
   it("invokes seekTo on the player when the renderer fires an onLineClick", async () => {

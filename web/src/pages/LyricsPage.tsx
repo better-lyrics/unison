@@ -6,6 +6,7 @@ import { LoadingPlaceholder } from "@/components/LoadingPlaceholder"
 import { LyricsRenderer } from "@/components/LyricsRenderer"
 import { VariantList } from "@/components/VariantList"
 import { VariantMetadata } from "@/components/VariantMetadata"
+import { VoteControls } from "@/components/VoteControls"
 import { YouTubeEmbed } from "@/components/YouTubeEmbed"
 import { useYouTubePlayer } from "@/hooks/useYouTubePlayer"
 import { cn } from "@/lib/cn"
@@ -125,9 +126,18 @@ export function LyricsPage() {
 
   return (
     <div className="space-y-6">
-      <Link to="/" className="text-xs text-unison-text-muted hover:text-unison-text">
-        ‹ back
-      </Link>
+      <div className="flex items-center justify-between">
+        <Link to="/" className="text-xs text-unison-text-muted hover:text-unison-text">
+          ‹ back
+        </Link>
+        {variant && selectedId !== undefined ? (
+          <VoteControls
+            variantId={variant.id}
+            videoId={safeVideoId}
+            variant={{ voteCount: variant.voteCount, userVote: variant.userVote ?? null }}
+          />
+        ) : null}
+      </div>
       <div className="grid gap-6 sm:grid-cols-[minmax(0,320px)_minmax(0,1fr)]">
         <div className="space-y-4">
           <YouTubeEmbed playerRef={ref} />
