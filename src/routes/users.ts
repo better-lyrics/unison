@@ -1,6 +1,8 @@
 import { Elysia, t } from "elysia"
+import { getFulfillmentStatsBySubmitter } from "@/db/fulfillments"
 import { getSubmissionsByUser } from "@/db/profile"
 import type { Env } from "@/types"
+import { ErrorCode, buildError } from "@/utils/errors"
 import { readRateLimit } from "@/utils/read-rate-limit"
 
 const DEFAULT_LIMIT = 20
@@ -43,4 +45,18 @@ export const userRoutes = (env: Env) =>
 					cursor: t.Optional(t.String({ pattern: "^[0-9]+:[0-9]+$" })),
 				}),
 			}
+		)
+		.get(
+			"/:keyId/stats",
+			async ({ params, env, status }) => {
+				const user = await env.DB.prepare("SELECT id FROM users WHERE key_id = ?")
+					.bind(params.keyId)
+					.first<{ id: number }>()
+				if (!user) {
+					return status(404, buildError(ErrorCode.NOT_FOUND))
+				}
+				const stats = await getFulfillmentStatsBySubmitter(env, user.id)
+				return { success: true, data: stats }
+			},
+			{ params: t.Object({ keyId: t.String({ pattern: "^[0-9a-fA-F]{64}$" }) }) }
 		)

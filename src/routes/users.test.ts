@@ -219,3 +219,37 @@ describe("GET /users/:keyId/submissions", () => {
 		expect(db.calls.length).toBe(0)
 	})
 })
+
+describe("GET /users/:keyId/stats", () => {
+	it("returns zero stats when the user has no fulfillments", async () => {
+		const db = makeMockDB([{ id: 9 }, null])
+		const env = makeEnv(db)
+		const app = userRoutes(env)
+
+		const res = await app.handle(new Request(`http://localhost/users/${KEY}/stats`))
+		const body = (await res.json()) as { success: boolean; data: unknown }
+
+		expect(body.success).toBe(true)
+		expect(body.data).toEqual({ fulfilledCount: 0, fulfilledDemand: 0 })
+	})
+
+	it("returns counts when the user has fulfillments", async () => {
+		const db = makeMockDB([{ id: 9 }, { count: 3, demand: 7.5 }])
+		const env = makeEnv(db)
+		const app = userRoutes(env)
+
+		const res = await app.handle(new Request(`http://localhost/users/${KEY}/stats`))
+		const body = (await res.json()) as { success: boolean; data: unknown }
+
+		expect(body.data).toEqual({ fulfilledCount: 3, fulfilledDemand: 7.5 })
+	})
+
+	it("returns 404 when the user does not exist", async () => {
+		const db = makeMockDB([null])
+		const env = makeEnv(db)
+		const app = userRoutes(env)
+
+		const res = await app.handle(new Request(`http://localhost/users/${KEY}/stats`))
+		expect(res.status).toBe(404)
+	})
+})
