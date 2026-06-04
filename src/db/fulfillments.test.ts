@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest"
 import type { Env } from "@/types"
 import {
-	LIVE_FULFILLMENTS_CTE,
 	getFulfillmentByLyricsId,
 	getFulfillmentStatsBySubmitter,
 	recordFulfillment,
@@ -12,9 +11,21 @@ interface DBCall {
 	params: unknown[]
 }
 
-function makeMockDB(queue: unknown[] = []) {
+interface MockDB {
+	calls: DBCall[]
+	prepare(sql: string): {
+		bind(...args: unknown[]): {
+			first<T>(): Promise<T | null>
+			all<T>(): Promise<{ results: T[] }>
+			run(): Promise<void>
+		}
+	}
+	transaction<T>(fn: (tx: MockDB) => Promise<T>): Promise<T>
+}
+
+function makeMockDB(queue: unknown[] = []): MockDB {
 	const calls: DBCall[] = []
-	const db = {
+	const db: MockDB = {
 		calls,
 		prepare(sql: string) {
 			return {
@@ -35,6 +46,9 @@ function makeMockDB(queue: unknown[] = []) {
 					}
 				},
 			}
+		},
+		async transaction<T>(fn: (tx: MockDB) => Promise<T>): Promise<T> {
+			return fn(db)
 		},
 	}
 	return db
@@ -73,8 +87,23 @@ function makeEnv(db: ReturnType<typeof makeMockDB>): Env {
 }
 
 describe("recordFulfillment", () => {
+	it("takes a per-video advisory lock before any reads or writes", async () => {
+		const db = makeMockDB([null, null, { demand: 0, request_count: 0 }])
+		const env = makeEnv(db)
+
+		await recordFulfillment(env, {
+			videoId: "v1",
+			lyricsId: 42,
+			submitterId: 7,
+			submitterKeyId: "k7",
+		})
+
+		expect(db.calls[0].sql).toMatch(/pg_advisory_xact_lock\(hashtext\(\?\)\)/)
+		expect(db.calls[0].params).toEqual(["fulfillment:v1"])
+	})
+
 	it("skips when a servable synced variant already existed pre-insert", async () => {
-		const db = makeMockDB([{ "1": 1 }])
+		const db = makeMockDB([null, { "1": 1 }])
 		const env = makeEnv(db)
 
 		const result = await recordFulfillment(env, {
@@ -91,7 +120,7 @@ describe("recordFulfillment", () => {
 	})
 
 	it("skips when in-window demand is zero (no live requests)", async () => {
-		const db = makeMockDB([null, { demand: 0, request_count: 0 }])
+		const db = makeMockDB([null, null, { demand: 0, request_count: 0 }])
 		const env = makeEnv(db)
 
 		const result = await recordFulfillment(env, {
@@ -108,7 +137,7 @@ describe("recordFulfillment", () => {
 	})
 
 	it("writes the fulfillment row and sweeps lyrics_requests on success", async () => {
-		const db = makeMockDB([null, { demand: 5.0, request_count: 3 }, { id: 100 }, null])
+		const db = makeMockDB([null, null, { demand: 5.0, request_count: 3 }, { id: 100 }, null])
 		const env = makeEnv(db)
 
 		const result = await recordFulfillment(env, {
@@ -125,7 +154,7 @@ describe("recordFulfillment", () => {
 	})
 
 	it("excludes self-requests from the snapshot query", async () => {
-		const db = makeMockDB([null, { demand: 0, request_count: 0 }])
+		const db = makeMockDB([null, null, { demand: 0, request_count: 0 }])
 		const env = makeEnv(db)
 
 		await recordFulfillment(env, {
@@ -142,7 +171,7 @@ describe("recordFulfillment", () => {
 	})
 
 	it("pre-state check excludes the just-inserted lyrics_id", async () => {
-		const db = makeMockDB([null, { demand: 0, request_count: 0 }])
+		const db = makeMockDB([null, null, { demand: 0, request_count: 0 }])
 		const env = makeEnv(db)
 
 		await recordFulfillment(env, {
@@ -152,13 +181,13 @@ describe("recordFulfillment", () => {
 			submitterKeyId: "k7",
 		})
 
-		const preCheck = db.calls[0]
-		expect(preCheck.sql).toMatch(/id\s*!=\s*\?/)
-		expect(preCheck.params).toContain(42)
+		const preCheck = db.calls.find((c) => /id\s*!=\s*\?/.test(c.sql))
+		expect(preCheck).toBeDefined()
+		expect(preCheck?.params).toContain(42)
 	})
 
 	it("inserts with demand and count snapshots bound from the snapshot query", async () => {
-		const db = makeMockDB([null, { demand: 9.5, request_count: 7 }, { id: 100 }, null])
+		const db = makeMockDB([null, null, { demand: 9.5, request_count: 7 }, { id: 100 }, null])
 		const env = makeEnv(db)
 
 		await recordFulfillment(env, {
@@ -238,15 +267,3 @@ describe("getFulfillmentStatsBySubmitter", () => {
 	})
 })
 
-describe("LIVE_FULFILLMENTS_CTE", () => {
-	it("filters deleted lyrics and auto-hidden ones", () => {
-		expect(LIVE_FULFILLMENTS_CTE).toMatch(/l\.deleted_at\s+IS\s+NULL/i)
-		expect(LIVE_FULFILLMENTS_CTE).toContain("downvotes >= 0.8 * l.vote_count")
-	})
-
-	it("picks the most recent fulfillment per video via ROW_NUMBER", () => {
-		expect(LIVE_FULFILLMENTS_CTE).toMatch(
-			/ROW_NUMBER\(\)\s+OVER\s*\(\s*PARTITION\s+BY\s+f\.video_id\s+ORDER\s+BY\s+f\.fulfilled_at\s+DESC\s*\)/i,
-		)
-	})
-})

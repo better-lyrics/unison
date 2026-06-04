@@ -20,70 +20,73 @@ export async function recordFulfillment(
 	env: Env,
 	params: RecordFulfillmentParams,
 ): Promise<RecordFulfillmentResult> {
-	const priorServable = await env.DB.prepare(
-		`SELECT 1 FROM lyrics
-		 WHERE video_id = ?
-		   AND id != ?
-		   AND sync_type IN ('linesync', 'richsync')
-		   AND deleted_at IS NULL
-		   AND NOT ${AUTO_HIDE_PREDICATE}
-		 LIMIT 1`,
-	)
-		.bind(params.videoId, params.lyricsId)
-		.first()
+	return env.DB.transaction(async (tx) => {
+		await tx
+			.prepare("SELECT pg_advisory_xact_lock(hashtext(?))")
+			.bind(`fulfillment:${params.videoId}`)
+			.run()
 
-	if (priorServable !== null) {
-		return { recorded: false, reason: "already_fulfilled" }
-	}
+		const priorServable = await tx
+			.prepare(
+				`SELECT 1 FROM lyrics
+				 WHERE video_id = ?
+				   AND id != ?
+				   AND sync_type IN ('linesync', 'richsync')
+				   AND deleted_at IS NULL
+				   AND NOT ${AUTO_HIDE_PREDICATE}
+				 LIMIT 1`,
+			)
+			.bind(params.videoId, params.lyricsId)
+			.first()
 
-	const snapshot = await env.DB.prepare(
-		`SELECT COALESCE(SUM(weight), 0) AS demand, COUNT(*) AS request_count
-		 FROM lyrics_requests
-		 WHERE video_id = ?
-		   AND created_at > ?
-		   AND requester_id != ?`,
-	)
-		.bind(params.videoId, windowCutoff(), params.submitterKeyId)
-		.first<{ demand: number; request_count: number }>()
+		if (priorServable !== null) {
+			return { recorded: false, reason: "already_fulfilled" }
+		}
 
-	const demand = Number(snapshot?.demand ?? 0)
-	const requestCount = Number(snapshot?.request_count ?? 0)
+		const snapshot = await tx
+			.prepare(
+				`SELECT COALESCE(SUM(weight), 0) AS demand, COUNT(*) AS request_count
+				 FROM lyrics_requests
+				 WHERE video_id = ?
+				   AND created_at > ?
+				   AND requester_id != ?`,
+			)
+			.bind(params.videoId, windowCutoff(), params.submitterKeyId)
+			.first<{ demand: number; request_count: number }>()
 
-	if (requestCount === 0) {
-		return { recorded: false, reason: "no_live_demand" }
-	}
+		const demand = Number(snapshot?.demand ?? 0)
+		const requestCount = Number(snapshot?.request_count ?? 0)
 
-	const inserted = await env.DB.prepare(
-		`INSERT INTO request_fulfillments
-		   (video_id, lyrics_id, submitter_id, demand_snapshot, request_count_snapshot)
-		 VALUES (?, ?, ?, ?, ?)
-		 RETURNING id`,
-	)
-		.bind(params.videoId, params.lyricsId, params.submitterId, demand, requestCount)
-		.first<{ id: number }>()
+		if (requestCount === 0) {
+			return { recorded: false, reason: "no_live_demand" }
+		}
 
-	await env.DB.prepare("DELETE FROM lyrics_requests WHERE video_id = ?")
-		.bind(params.videoId)
-		.run()
+		const inserted = await tx
+			.prepare(
+				`INSERT INTO request_fulfillments
+				   (video_id, lyrics_id, submitter_id, demand_snapshot, request_count_snapshot)
+				 VALUES (?, ?, ?, ?, ?)
+				 RETURNING id`,
+			)
+			.bind(params.videoId, params.lyricsId, params.submitterId, demand, requestCount)
+			.first<{ id: number }>()
 
-	log.info("fulfillment recorded", {
-		videoId: params.videoId,
-		lyricsId: params.lyricsId,
-		submitterId: params.submitterId,
-		demand,
-		requestCount,
+		await tx
+			.prepare("DELETE FROM lyrics_requests WHERE video_id = ?")
+			.bind(params.videoId)
+			.run()
+
+		log.info("fulfillment recorded", {
+			videoId: params.videoId,
+			lyricsId: params.lyricsId,
+			submitterId: params.submitterId,
+			demand,
+			requestCount,
+		})
+
+		return { recorded: true, id: inserted!.id, demand, requestCount }
 	})
-
-	return { recorded: true, id: inserted!.id, demand, requestCount }
 }
-
-export const LIVE_FULFILLMENTS_CTE = `
-	SELECT f.*,
-	       ROW_NUMBER() OVER (PARTITION BY f.video_id ORDER BY f.fulfilled_at DESC) AS rn
-	FROM request_fulfillments f
-	JOIN lyrics l ON l.id = f.lyrics_id
-	WHERE l.deleted_at IS NULL AND NOT ${AUTO_HIDE_PREDICATE_JOINED}
-`
 
 export async function getFulfillmentByLyricsId(
 	env: Env,

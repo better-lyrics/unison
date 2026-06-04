@@ -27,14 +27,15 @@ export async function closePool(): Promise<void> {
 	}
 }
 
+type Queryable = pg.Pool | pg.PoolClient
+
 class PreparedStatement {
 	readonly sql: string
 	private params: unknown[] = []
-	private pool: pg.Pool
+	private queryable: Queryable
 
-	constructor(pool: pg.Pool, sql: string) {
-		this.pool = pool
-		// Convert ? placeholders to $1, $2, ... for PostgreSQL
+	constructor(queryable: Queryable, sql: string) {
+		this.queryable = queryable
 		let idx = 0
 		this.sql = sql.replace(/\?/g, () => `$${++idx}`)
 	}
@@ -45,17 +46,17 @@ class PreparedStatement {
 	}
 
 	async first<T>(): Promise<T | null> {
-		const result = await this.pool.query(this.sql, this.params)
+		const result = await this.queryable.query(this.sql, this.params)
 		return (result.rows[0] as T) ?? null
 	}
 
 	async all<T>(): Promise<{ results: T[] }> {
-		const result = await this.pool.query(this.sql, this.params)
+		const result = await this.queryable.query(this.sql, this.params)
 		return { results: result.rows as T[] }
 	}
 
 	async run(): Promise<void> {
-		await this.pool.query(this.sql, this.params)
+		await this.queryable.query(this.sql, this.params)
 	}
 
 	getSql(): string {
@@ -69,16 +70,28 @@ class PreparedStatement {
 
 export class D1Compat {
 	private pool: pg.Pool
+	private client: pg.PoolClient | null
 
-	constructor(pool: pg.Pool) {
+	constructor(pool: pg.Pool, client: pg.PoolClient | null = null) {
 		this.pool = pool
+		this.client = client
+	}
+
+	private get queryable(): Queryable {
+		return this.client ?? this.pool
 	}
 
 	prepare(sql: string): PreparedStatement {
-		return new PreparedStatement(this.pool, sql)
+		return new PreparedStatement(this.queryable, sql)
 	}
 
 	async batch(statements: PreparedStatement[]): Promise<void> {
+		if (this.client) {
+			for (const stmt of statements) {
+				await this.client.query(stmt.getSql(), stmt.getParams())
+			}
+			return
+		}
 		const client = await this.pool.connect()
 		try {
 			await client.query("BEGIN")
@@ -86,6 +99,25 @@ export class D1Compat {
 				await client.query(stmt.getSql(), stmt.getParams())
 			}
 			await client.query("COMMIT")
+		} catch (err) {
+			await client.query("ROLLBACK")
+			throw err
+		} finally {
+			client.release()
+		}
+	}
+
+	async transaction<T>(fn: (tx: D1Compat) => Promise<T>): Promise<T> {
+		if (this.client) {
+			return fn(this)
+		}
+		const client = await this.pool.connect()
+		try {
+			await client.query("BEGIN")
+			const tx = new D1Compat(this.pool, client)
+			const result = await fn(tx)
+			await client.query("COMMIT")
+			return result
 		} catch (err) {
 			await client.query("ROLLBACK")
 			throw err

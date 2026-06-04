@@ -27,11 +27,12 @@ interface MockDB {
 			run(): Promise<void>
 		}
 	}
+	transaction<T>(fn: (tx: MockDB) => Promise<T>): Promise<T>
 }
 
 function createMockDB(queue: unknown[] = []): MockDB {
 	const calls: Recorded[] = []
-	return {
+	const db: MockDB = {
 		calls,
 		queue,
 		prepare(sql: string) {
@@ -56,7 +57,11 @@ function createMockDB(queue: unknown[] = []): MockDB {
 				},
 			}
 		},
+		async transaction<T>(fn: (tx: MockDB) => Promise<T>): Promise<T> {
+			return fn(db)
+		},
 	}
+	return db
 }
 
 interface MockCache {
@@ -704,6 +709,7 @@ describe("submitLyrics fulfillment integration", () => {
 			{ id: 555 },
 			{ key_id: "k1" },
 			null,
+			null,
 			{ demand: 4, request_count: 2 },
 			{ id: 1 },
 			null,
@@ -735,6 +741,7 @@ describe("submitLyrics fulfillment integration", () => {
 			{ count: 0 },
 			{ id: 557 },
 			{ key_id: "k1" },
+			null,
 			{ "1": 1 },
 		])
 		const cache = createMockCache()
