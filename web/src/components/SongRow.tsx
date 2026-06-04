@@ -1,4 +1,5 @@
 import { IconMusic } from "@tabler/icons-react"
+import { Link } from "react-router-dom"
 import { formatCompact, formatExact, formatRank } from "@/lib/format"
 import type { SongLeaderboardEntry } from "@/lib/types"
 
@@ -11,12 +12,13 @@ export function SongRow({ entry }: SongRowProps) {
   const metricLabel = entry.section === "most_wanted" ? "demand" : "reports"
 
   return (
-    <li>
+    <li className="overflow-hidden rounded-lg border border-unison-border bg-unison-bg-elevated transition-colors hover:border-unison-border-strong">
       <a
         href={`https://music.youtube.com/watch?v=${entry.videoId}`}
         target="_blank"
         rel="noopener noreferrer"
-        className="flex items-center gap-4 rounded-lg border border-unison-border bg-unison-bg-elevated px-4 py-3 transition-colors hover:border-unison-border-strong hover:bg-unison-bg-hover"
+        aria-label={`Open ${entry.song} by ${entry.artist} in YouTube Music`}
+        className="flex items-center gap-4 px-4 py-3 transition-colors hover:bg-unison-bg-hover"
       >
         <span className="shrink-0 font-mono text-xs tabular-nums text-unison-text-muted">{formatRank(entry.rank)}</span>
         <div className="flex size-12 shrink-0 items-center justify-center overflow-hidden rounded-md bg-unison-bg-hover">
@@ -37,6 +39,15 @@ export function SongRow({ entry }: SongRowProps) {
           <p className="text-[10px] uppercase tracking-wider text-unison-text-muted">{metricLabel}</p>
         </div>
       </a>
+      <div className="flex justify-end border-t border-unison-border/60 px-4 py-1.5">
+        <Link
+          to={`/lyrics/${entry.videoId}`}
+          aria-label={`View details for ${entry.song} by ${entry.artist}`}
+          className="text-xs text-unison-text-muted transition-colors hover:text-unison-text"
+        >
+          View details →
+        </Link>
+      </div>
     </li>
   )
 }

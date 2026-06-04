@@ -106,6 +106,50 @@ describe("SongsPage", () => {
     expect(screen.getByText(/Reports below the threshold/i)).toBeTruthy()
   })
 
+  it("renders a 'See all' link in the Most Wanted header pointing to /queue", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockImplementation((url: string) => {
+        if (url === "/leaderboard/songs") {
+          return Promise.resolve(
+            jsonResponse({
+              success: true,
+              data: { mostWanted: [], needsFixing: [] },
+            }),
+          )
+        }
+        return Promise.reject(new Error(`unexpected url ${url}`))
+      }),
+    )
+    renderPage()
+    await waitFor(() => expect(screen.getByText("Nothing wanted right now")).toBeTruthy())
+    const seeAll = screen.getByRole("link", { name: /See all most wanted/i })
+    expect(seeAll.getAttribute("href")).toBe("/queue")
+  })
+
+  it("does not render a 'See all' link in the Needs Fixing header", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockImplementation((url: string) => {
+        if (url === "/leaderboard/songs") {
+          return Promise.resolve(
+            jsonResponse({
+              success: true,
+              data: { mostWanted: [], needsFixing: [] },
+            }),
+          )
+        }
+        return Promise.reject(new Error(`unexpected url ${url}`))
+      }),
+    )
+    renderPage()
+    await waitFor(() => expect(screen.getByText("Nothing flagged")).toBeTruthy())
+    expect(screen.queryByRole("link", { name: /needs fixing/i })).toBeNull()
+    const allLinks = screen.queryAllByRole("link", { name: /See all/i })
+    expect(allLinks).toHaveLength(1)
+    expect(allLinks[0].getAttribute("href")).toBe("/queue")
+  })
+
   it("shows signed-in empty states when signed-in and sections are empty", async () => {
     saveStoredSession(valid)
     vi.stubGlobal(
