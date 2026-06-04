@@ -14,6 +14,7 @@ interface FakePlayerOptions {
 class FakePlayer {
   destroyed = false
   currentTime = 0
+  seeks: Array<{ seconds: number; allowSeekAhead: boolean }> = []
   onStateChange: ((e: { data: number }) => void) | undefined
   static instances: FakePlayer[] = []
 
@@ -24,6 +25,10 @@ class FakePlayer {
   }
   getCurrentTime() {
     return this.currentTime
+  }
+  seekTo(seconds: number, allowSeekAhead: boolean) {
+    this.seeks.push({ seconds, allowSeekAhead })
+    this.currentTime = seconds
   }
   destroy() {
     this.destroyed = true
@@ -76,7 +81,34 @@ describe("useYouTubePlayer", () => {
     const { result } = renderHook(() => useYouTubePlayer(null))
     expect(result.current.currentTimeMs).toBe(0)
     expect(result.current.playing).toBe(false)
+    expect(typeof result.current.seekTo).toBe("function")
     expect(document.querySelectorAll("script[data-unison-yt-loader]").length).toBe(0)
+  })
+
+  it("seekTo is a no-op when the player is not ready", () => {
+    const { result } = renderHook(() => useYouTubePlayer(null))
+    expect(() => result.current.seekTo(12.5)).not.toThrow()
+  })
+
+  it("seekTo forwards to the underlying player once it is ready", async () => {
+    installYT()
+    let captured: { seekTo: (s: number) => void } | null = null
+    function CaptureHarness() {
+      const player = useYouTubePlayer("abc")
+      captured = { seekTo: player.seekTo }
+      return createElement("div", { ref: player.ref })
+    }
+    const { unmount } = render(createElement(CaptureHarness))
+    await act(async () => {
+      await Promise.resolve()
+    })
+    const player = FakePlayer.instances[0]
+    expect(player).toBeDefined()
+    act(() => {
+      captured?.seekTo(7.25)
+    })
+    expect(player.seeks).toEqual([{ seconds: 7.25, allowSeekAhead: true }])
+    unmount()
   })
 
   it("injects the iframe API script exactly once across multiple mounts when YT is not preloaded", async () => {

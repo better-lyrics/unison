@@ -1,7 +1,8 @@
-import { type RefObject, useEffect, useRef, useState } from "react"
+import { type RefObject, useCallback, useEffect, useRef, useState } from "react"
 
 interface YTPlayer {
   getCurrentTime(): number
+  seekTo(seconds: number, allowSeekAhead: boolean): void
   destroy(): void
 }
 
@@ -70,10 +71,12 @@ export interface UseYouTubePlayerResult {
   ref: RefObject<HTMLDivElement | null>
   currentTimeMs: number
   playing: boolean
+  seekTo: (seconds: number) => void
 }
 
 export function useYouTubePlayer(videoId: string | null): UseYouTubePlayerResult {
   const ref = useRef<HTMLDivElement | null>(null)
+  const playerRef = useRef<YTPlayer | null>(null)
   const [currentTimeMs, setCurrentTimeMs] = useState(0)
   const [playing, setPlaying] = useState(false)
 
@@ -87,7 +90,6 @@ export function useYouTubePlayer(videoId: string | null): UseYouTubePlayerResult
     if (!win) return
 
     let cancelled = false
-    let player: YTPlayer | null = null
     let intervalId: ReturnType<typeof setInterval> | null = null
 
     const run = async () => {
@@ -95,7 +97,7 @@ export function useYouTubePlayer(videoId: string | null): UseYouTubePlayerResult
       if (cancelled) return
       const node = ref.current
       if (!node) return
-      player = new yt.Player(node, {
+      const player = new yt.Player(node, {
         videoId,
         events: {
           onStateChange: (e) => {
@@ -104,9 +106,11 @@ export function useYouTubePlayer(videoId: string | null): UseYouTubePlayerResult
           },
         },
       })
+      playerRef.current = player
       intervalId = setInterval(() => {
-        if (!player) return
-        const seconds = player.getCurrentTime()
+        const current = playerRef.current
+        if (!current) return
+        const seconds = current.getCurrentTime()
         setCurrentTimeMs(Math.round(seconds * 1000))
       }, 100)
     }
@@ -115,11 +119,19 @@ export function useYouTubePlayer(videoId: string | null): UseYouTubePlayerResult
     return () => {
       cancelled = true
       if (intervalId !== null) clearInterval(intervalId)
+      const player = playerRef.current
       if (player) player.destroy()
+      playerRef.current = null
       setCurrentTimeMs(0)
       setPlaying(false)
     }
   }, [videoId])
 
-  return { ref, currentTimeMs, playing }
+  const seekTo = useCallback((seconds: number) => {
+    const player = playerRef.current
+    if (!player) return
+    player.seekTo(seconds, true)
+  }, [])
+
+  return { ref, currentTimeMs, playing, seekTo }
 }

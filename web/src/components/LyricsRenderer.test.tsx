@@ -1,0 +1,136 @@
+import { cleanup, render } from "@testing-library/react"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import type { VariantFull } from "@/lib/types"
+
+vi.mock("@braccato/core", () => ({}))
+
+const createObjectURL = vi.fn()
+const revokeObjectURL = vi.fn()
+
+beforeEach(() => {
+  createObjectURL.mockReset()
+  revokeObjectURL.mockReset()
+  let counter = 0
+  createObjectURL.mockImplementation(() => `blob:fake-${++counter}`)
+  Object.defineProperty(URL, "createObjectURL", { configurable: true, value: createObjectURL })
+  Object.defineProperty(URL, "revokeObjectURL", { configurable: true, value: revokeObjectURL })
+})
+
+afterEach(() => {
+  cleanup()
+  vi.restoreAllMocks()
+})
+
+function makeVariant(overrides: Partial<VariantFull> = {}): VariantFull {
+  return {
+    id: 1,
+    videoId: "vid",
+    song: "Song",
+    artist: "Artist",
+    format: "ttml",
+    syncType: "richsync",
+    score: 1,
+    effectiveScore: 1,
+    voteCount: 1,
+    confidence: "low",
+    hidden: false,
+    lyrics: "<tt><body><div><p>hello</p></div></body></tt>",
+    ...overrides,
+  }
+}
+
+async function importRenderer() {
+  const mod = await import("./LyricsRenderer")
+  return mod.LyricsRenderer
+}
+
+describe("LyricsRenderer", () => {
+  it("creates a blob URL from the variant lyrics and assigns it to src", async () => {
+    const Renderer = await importRenderer()
+    const variant = makeVariant()
+    const { container } = render(<Renderer variant={variant} currentTimeMs={0} playing={false} />)
+    const el = container.querySelector("braccato-lyrics") as HTMLElement
+    expect(el).toBeTruthy()
+    expect(createObjectURL).toHaveBeenCalledTimes(1)
+    expect(el.getAttribute("src")).toMatch(/^blob:fake-1$/)
+  })
+
+  it("uses application/ttml+xml for the ttml format", async () => {
+    const Renderer = await importRenderer()
+    render(<Renderer variant={makeVariant({ format: "ttml" })} currentTimeMs={0} playing={false} />)
+    const blob = createObjectURL.mock.calls[0][0] as Blob
+    expect(blob.type).toBe("application/ttml+xml")
+  })
+
+  it("uses text/lrc for the lrc format", async () => {
+    const Renderer = await importRenderer()
+    render(
+      <Renderer variant={makeVariant({ format: "lrc", lyrics: "[00:10.00]hi" })} currentTimeMs={0} playing={false} />,
+    )
+    const blob = createObjectURL.mock.calls[0][0] as Blob
+    expect(blob.type).toBe("text/lrc")
+  })
+
+  it("uses text/plain for the plain format", async () => {
+    const Renderer = await importRenderer()
+    render(<Renderer variant={makeVariant({ format: "plain", lyrics: "hi" })} currentTimeMs={0} playing={false} />)
+    const blob = createObjectURL.mock.calls[0][0] as Blob
+    expect(blob.type).toBe("text/plain")
+  })
+
+  it("forwards currentTimeMs and playing onto the element as properties", async () => {
+    const Renderer = await importRenderer()
+    const variant = makeVariant()
+    const { container, rerender } = render(<Renderer variant={variant} currentTimeMs={1234} playing={true} />)
+    const el = container.querySelector("braccato-lyrics") as HTMLElement & {
+      currentTime?: number
+      playing?: boolean
+    }
+    expect(el.currentTime).toBe(1234)
+    expect(el.playing).toBe(true)
+
+    rerender(<Renderer variant={variant} currentTimeMs={5000} playing={false} />)
+    expect(el.currentTime).toBe(5000)
+    expect(el.playing).toBe(false)
+  })
+
+  it("revokes the blob URL on unmount", async () => {
+    const Renderer = await importRenderer()
+    const { unmount } = render(<Renderer variant={makeVariant()} currentTimeMs={0} playing={false} />)
+    unmount()
+    expect(revokeObjectURL).toHaveBeenCalled()
+    const arg = revokeObjectURL.mock.calls[0][0]
+    expect(arg).toMatch(/^blob:fake-/)
+  })
+
+  it("invokes onLineClick with the time in seconds when the element fires braccato:line-click", async () => {
+    const Renderer = await importRenderer()
+    const onLineClick = vi.fn()
+    const { container } = render(
+      <Renderer variant={makeVariant()} currentTimeMs={0} playing={false} onLineClick={onLineClick} />,
+    )
+    const el = container.querySelector("braccato-lyrics") as HTMLElement
+    el.dispatchEvent(new CustomEvent("braccato:line-click", { detail: { time: 4500, lineIndex: 2 } }))
+    expect(onLineClick).toHaveBeenCalledWith(4.5)
+  })
+
+  it("does not throw when braccato:line-click fires without a detail.time", async () => {
+    const Renderer = await importRenderer()
+    const onLineClick = vi.fn()
+    const { container } = render(
+      <Renderer variant={makeVariant()} currentTimeMs={0} playing={false} onLineClick={onLineClick} />,
+    )
+    const el = container.querySelector("braccato-lyrics") as HTMLElement
+    expect(() => el.dispatchEvent(new CustomEvent("braccato:line-click", { detail: {} }))).not.toThrow()
+    expect(onLineClick).not.toHaveBeenCalled()
+  })
+
+  it("creates a new blob URL when the variant changes", async () => {
+    const Renderer = await importRenderer()
+    const { rerender } = render(<Renderer variant={makeVariant()} currentTimeMs={0} playing={false} />)
+    expect(createObjectURL).toHaveBeenCalledTimes(1)
+    rerender(<Renderer variant={makeVariant({ id: 2, lyrics: "different" })} currentTimeMs={0} playing={false} />)
+    expect(createObjectURL).toHaveBeenCalledTimes(2)
+    expect(revokeObjectURL).toHaveBeenCalledTimes(1)
+  })
+})

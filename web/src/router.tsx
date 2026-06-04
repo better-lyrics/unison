@@ -3,6 +3,7 @@ import { AppLayout } from "./components/AppLayout"
 import { AboutPage } from "./pages/AboutPage"
 import { CuratorsPage } from "./pages/CuratorsPage"
 import { DownloadsPage } from "./pages/DownloadsPage"
+import { LyricsPage } from "./pages/LyricsPage"
 import { MePage } from "./pages/MePage"
 import { SearchPage } from "./pages/SearchPage"
 import { SongsPage } from "./pages/SongsPage"
@@ -16,6 +17,7 @@ const router = createBrowserRouter([
       { index: true, element: <SongsPage /> },
       { path: "leaderboard", element: <CuratorsPage /> },
       { path: "search", element: <SearchPage /> },
+      { path: "lyrics/:videoId", element: <LyricsPage /> },
       { path: "me", element: <MePage /> },
       { path: "users/:keyId", element: <UserPage /> },
       { path: "about", element: <AboutPage /> },

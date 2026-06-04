@@ -1,0 +1,194 @@
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react"
+import { MemoryRouter, Route, Routes } from "react-router-dom"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import type { VariantFull, VariantSummary } from "@/lib/types"
+
+vi.mock("@braccato/core", () => ({}))
+
+const seekTo = vi.fn()
+let lastLineClick: ((seconds: number) => void) | null = null
+
+vi.mock("@/hooks/useYouTubePlayer", () => ({
+  useYouTubePlayer: () => ({
+    ref: { current: null },
+    currentTimeMs: 0,
+    playing: false,
+    seekTo,
+  }),
+}))
+
+vi.mock("@/components/LyricsRenderer", () => ({
+  LyricsRenderer: (props: { variant: VariantFull; onLineClick?: (s: number) => void }) => {
+    lastLineClick = props.onLineClick ?? null
+    return <div data-testid="lyrics-renderer">{`variant:${props.variant.id}`}</div>
+  },
+}))
+
+const fetchVariants = vi.fn()
+const fetchVariant = vi.fn()
+vi.mock("@/lib/api", () => ({
+  fetchLyricsVariants: (...args: unknown[]) => fetchVariants(...args),
+  fetchLyricsVariant: (...args: unknown[]) => fetchVariant(...args),
+}))
+
+import { LyricsPage } from "./LyricsPage"
+
+function makeSummary(overrides: Partial<VariantSummary> = {}): VariantSummary {
+  return {
+    id: 1,
+    videoId: "v1",
+    song: "Song",
+    artist: "Artist",
+    format: "ttml",
+    syncType: "richsync",
+    score: 1,
+    effectiveScore: 1.5,
+    voteCount: 2,
+    confidence: "medium",
+    hidden: false,
+    ...overrides,
+  }
+}
+
+function makeFull(overrides: Partial<VariantFull> = {}): VariantFull {
+  return {
+    ...makeSummary(overrides),
+    lyrics: "<tt></tt>",
+    ...overrides,
+  } as VariantFull
+}
+
+function createTestClient(): QueryClient {
+  return new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0, staleTime: 0 } } })
+}
+
+function renderAt(initialEntries: string[]) {
+  const client = createTestClient()
+  return render(
+    <MemoryRouter initialEntries={initialEntries}>
+      <QueryClientProvider client={client}>
+        <Routes>
+          <Route path="/lyrics/:videoId" element={<LyricsPage />} />
+        </Routes>
+      </QueryClientProvider>
+    </MemoryRouter>,
+  )
+}
+
+beforeEach(() => {
+  seekTo.mockReset()
+  lastLineClick = null
+  fetchVariants.mockReset()
+  fetchVariant.mockReset()
+})
+
+afterEach(() => {
+  cleanup()
+  vi.unstubAllGlobals()
+})
+
+describe("LyricsPage", () => {
+  it("shows the loading state while the variants list is pending", async () => {
+    fetchVariants.mockReturnValue(new Promise(() => {}))
+    const { container } = renderAt(["/lyrics/v1"])
+    await waitFor(() => expect(container.querySelector(".animate-pulse")).toBeTruthy())
+  })
+
+  it("shows the empty state when the variants list is empty", async () => {
+    fetchVariants.mockResolvedValue({ variants: [] })
+    renderAt(["/lyrics/v1"])
+    await waitFor(() => expect(screen.getByText(/No lyrics yet/i)).toBeTruthy())
+  })
+
+  it("shows an error state when the variants request fails", async () => {
+    fetchVariants.mockRejectedValue(new Error("boom"))
+    renderAt(["/lyrics/v1"])
+    await waitFor(() => expect(screen.getByText(/Could not load lyrics/i)).toBeTruthy())
+    expect(screen.getByText(/boom/)).toBeTruthy()
+  })
+
+  it("selects the first variant when no variantId is in the URL", async () => {
+    fetchVariants.mockResolvedValue({ variants: [makeSummary({ id: 1 }), makeSummary({ id: 2 })] })
+    fetchVariant.mockResolvedValue({ variant: makeFull({ id: 1 }) })
+    renderAt(["/lyrics/v1"])
+    await waitFor(() => expect(screen.getByTestId("lyrics-renderer").textContent).toContain("variant:1"))
+  })
+
+  it("selects the variant from the URL when variantId is set", async () => {
+    fetchVariants.mockResolvedValue({ variants: [makeSummary({ id: 1 }), makeSummary({ id: 2 })] })
+    fetchVariant.mockResolvedValue({ variant: makeFull({ id: 2 }) })
+    renderAt(["/lyrics/v1?variantId=2"])
+    await waitFor(() => expect(screen.getByTestId("lyrics-renderer").textContent).toContain("variant:2"))
+  })
+
+  it("switching variants updates the URL and refetches the variant", async () => {
+    fetchVariants.mockResolvedValue({ variants: [makeSummary({ id: 1 }), makeSummary({ id: 2 })] })
+    fetchVariant.mockResolvedValueOnce({ variant: makeFull({ id: 1 }) })
+    fetchVariant.mockResolvedValueOnce({ variant: makeFull({ id: 2 }) })
+    renderAt(["/lyrics/v1"])
+    await waitFor(() => expect(screen.getByTestId("lyrics-renderer")).toBeTruthy())
+    const rows = screen.getAllByRole("button", { name: /\#\d/i })
+    const target = rows.find((b) => b.getAttribute("aria-current") !== "true")
+    if (!target) throw new Error("expected a non-selected row")
+    fireEvent.click(target)
+    await waitFor(() => expect(fetchVariant).toHaveBeenCalledTimes(2))
+  })
+
+  it("defaults to the synced mode and shows the renderer", async () => {
+    fetchVariants.mockResolvedValue({ variants: [makeSummary({ id: 1 })] })
+    fetchVariant.mockResolvedValue({ variant: makeFull({ id: 1, lyrics: "hello world" }) })
+    renderAt(["/lyrics/v1"])
+    await waitFor(() => expect(screen.getByTestId("lyrics-renderer")).toBeTruthy())
+    expect(screen.queryByText("hello world")).toBeNull()
+  })
+
+  it("switches to raw mode and renders the body verbatim", async () => {
+    fetchVariants.mockResolvedValue({ variants: [makeSummary({ id: 1 })] })
+    fetchVariant.mockResolvedValue({ variant: makeFull({ id: 1, lyrics: "raw body lines" }) })
+    renderAt(["/lyrics/v1"])
+    await waitFor(() => expect(screen.getByTestId("lyrics-renderer")).toBeTruthy())
+    fireEvent.click(screen.getByRole("button", { name: /raw/i }))
+    expect(screen.getByText("raw body lines")).toBeTruthy()
+    expect(screen.queryByTestId("lyrics-renderer")).toBeNull()
+  })
+
+  it("toggles back to synced mode from raw", async () => {
+    fetchVariants.mockResolvedValue({ variants: [makeSummary({ id: 1 })] })
+    fetchVariant.mockResolvedValue({ variant: makeFull({ id: 1, lyrics: "body" }) })
+    renderAt(["/lyrics/v1"])
+    await waitFor(() => expect(screen.getByTestId("lyrics-renderer")).toBeTruthy())
+    fireEvent.click(screen.getByRole("button", { name: /raw/i }))
+    expect(screen.queryByTestId("lyrics-renderer")).toBeNull()
+    fireEvent.click(screen.getByRole("button", { name: /synced/i }))
+    expect(screen.getByTestId("lyrics-renderer")).toBeTruthy()
+  })
+
+  it("clicking copy writes the lyrics body to the clipboard", async () => {
+    fetchVariants.mockResolvedValue({ variants: [makeSummary({ id: 1 })] })
+    fetchVariant.mockResolvedValue({ variant: makeFull({ id: 1, lyrics: "to copy" }) })
+    const writeText = vi.fn().mockResolvedValue(undefined)
+    vi.stubGlobal("navigator", { ...navigator, clipboard: { writeText } })
+    renderAt(["/lyrics/v1"])
+    await waitFor(() => expect(screen.getByTestId("lyrics-renderer")).toBeTruthy())
+    fireEvent.click(screen.getByRole("button", { name: /raw/i }))
+    fireEvent.click(screen.getByRole("button", { name: /copy/i }))
+    expect(writeText).toHaveBeenCalledWith("to copy")
+  })
+
+  it("renders the hidden banner when the selected variant is hidden", async () => {
+    fetchVariants.mockResolvedValue({ variants: [makeSummary({ id: 1 })] })
+    fetchVariant.mockResolvedValue({ variant: makeFull({ id: 1, hidden: true }) })
+    renderAt(["/lyrics/v1"])
+    await waitFor(() => expect(screen.getByText(/auto-hidden/i)).toBeTruthy())
+  })
+
+  it("invokes seekTo on the player when the renderer fires an onLineClick", async () => {
+    fetchVariants.mockResolvedValue({ variants: [makeSummary({ id: 1 })] })
+    fetchVariant.mockResolvedValue({ variant: makeFull({ id: 1 }) })
+    renderAt(["/lyrics/v1"])
+    await waitFor(() => expect(lastLineClick).not.toBeNull())
+    lastLineClick?.(8.5)
+    expect(seekTo).toHaveBeenCalledWith(8.5)
+  })
+})
