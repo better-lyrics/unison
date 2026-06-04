@@ -1,4 +1,4 @@
-import { AUTO_HIDE_PREDICATE } from "@/db/lyrics"
+import { AUTO_HIDE_PREDICATE, AUTO_HIDE_PREDICATE_JOINED } from "@/db/lyrics"
 import { windowCutoff } from "@/db/requests"
 import { Logger } from "@/infra/logger"
 import type { Env } from "@/types"
@@ -75,4 +75,57 @@ export async function recordFulfillment(
 	})
 
 	return { recorded: true, id: inserted!.id, demand, requestCount }
+}
+
+export const LIVE_FULFILLMENTS_CTE = `
+	SELECT f.*,
+	       ROW_NUMBER() OVER (PARTITION BY f.video_id ORDER BY f.fulfilled_at DESC) AS rn
+	FROM request_fulfillments f
+	JOIN lyrics l ON l.id = f.lyrics_id
+	WHERE l.deleted_at IS NULL AND NOT ${AUTO_HIDE_PREDICATE_JOINED}
+`
+
+export async function getFulfillmentByLyricsId(
+	env: Env,
+	lyricsId: number,
+): Promise<{ demand: number; requestCount: number; fulfilledAt: number } | null> {
+	const row = await env.DB.prepare(
+		`SELECT f.demand_snapshot, f.request_count_snapshot, f.fulfilled_at
+		 FROM request_fulfillments f
+		 JOIN lyrics l ON l.id = f.lyrics_id
+		 WHERE f.lyrics_id = ?
+		   AND l.deleted_at IS NULL
+		   AND NOT ${AUTO_HIDE_PREDICATE_JOINED}
+		 LIMIT 1`,
+	)
+		.bind(lyricsId)
+		.first<{ demand_snapshot: number; request_count_snapshot: number; fulfilled_at: number }>()
+
+	if (!row) return null
+	return {
+		demand: Number(row.demand_snapshot),
+		requestCount: Number(row.request_count_snapshot),
+		fulfilledAt: Number(row.fulfilled_at),
+	}
+}
+
+export async function getFulfillmentStatsBySubmitter(
+	env: Env,
+	submitterId: number,
+): Promise<{ fulfilledCount: number; fulfilledDemand: number }> {
+	const row = await env.DB.prepare(
+		`SELECT COUNT(*) AS count, COALESCE(SUM(f.demand_snapshot), 0) AS demand
+		 FROM request_fulfillments f
+		 JOIN lyrics l ON l.id = f.lyrics_id
+		 WHERE f.submitter_id = ?
+		   AND l.deleted_at IS NULL
+		   AND NOT ${AUTO_HIDE_PREDICATE_JOINED}`,
+	)
+		.bind(submitterId)
+		.first<{ count: number; demand: number }>()
+
+	return {
+		fulfilledCount: Number(row?.count ?? 0),
+		fulfilledDemand: Number(row?.demand ?? 0),
+	}
 }

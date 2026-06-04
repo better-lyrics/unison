@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest"
 import type { Env } from "@/types"
-import { recordFulfillment } from "./fulfillments"
+import {
+	LIVE_FULFILLMENTS_CTE,
+	getFulfillmentByLyricsId,
+	getFulfillmentStatsBySubmitter,
+	recordFulfillment,
+} from "./fulfillments"
 
 interface DBCall {
 	sql: string
@@ -165,5 +170,83 @@ describe("recordFulfillment", () => {
 
 		const insertCall = db.calls.find((c) => c.sql.includes("INSERT INTO request_fulfillments"))
 		expect(insertCall?.params).toEqual(expect.arrayContaining(["v1", 42, 7, 9.5, 7]))
+	})
+})
+
+describe("getFulfillmentByLyricsId", () => {
+	it("filters out deleted and auto-hidden lyrics", async () => {
+		const db = makeMockDB([null])
+		const env = makeEnv(db)
+
+		await getFulfillmentByLyricsId(env, 42)
+
+		const sql = db.calls[0].sql
+		expect(sql).toMatch(/l\.deleted_at\s+IS\s+NULL/i)
+		expect(sql).toContain("downvotes >= 0.8 * l.vote_count")
+		expect(db.calls[0].params).toEqual([42])
+	})
+
+	it("returns the badge fields when present", async () => {
+		const db = makeMockDB([
+			{
+				demand_snapshot: 5.5,
+				request_count_snapshot: 3,
+				fulfilled_at: 1700000000,
+			},
+		])
+		const env = makeEnv(db)
+
+		const result = await getFulfillmentByLyricsId(env, 42)
+
+		expect(result).toEqual({
+			demand: 5.5,
+			requestCount: 3,
+			fulfilledAt: 1700000000,
+		})
+	})
+
+	it("returns null when no live fulfillment exists for the lyric", async () => {
+		const db = makeMockDB([null])
+		const env = makeEnv(db)
+
+		const result = await getFulfillmentByLyricsId(env, 42)
+
+		expect(result).toBeNull()
+	})
+})
+
+describe("getFulfillmentStatsBySubmitter", () => {
+	it("returns zero counts when the submitter has no live fulfillments", async () => {
+		const db = makeMockDB([null])
+		const env = makeEnv(db)
+
+		const result = await getFulfillmentStatsBySubmitter(env, 7)
+
+		expect(result).toEqual({ fulfilledCount: 0, fulfilledDemand: 0 })
+	})
+
+	it("aggregates count and demand for the submitter, filtering hidden lyrics", async () => {
+		const db = makeMockDB([{ count: 3, demand: 11.5 }])
+		const env = makeEnv(db)
+
+		const result = await getFulfillmentStatsBySubmitter(env, 7)
+
+		expect(result).toEqual({ fulfilledCount: 3, fulfilledDemand: 11.5 })
+		const sql = db.calls[0].sql
+		expect(sql).toMatch(/l\.deleted_at\s+IS\s+NULL/i)
+		expect(db.calls[0].params).toEqual([7])
+	})
+})
+
+describe("LIVE_FULFILLMENTS_CTE", () => {
+	it("filters deleted lyrics and auto-hidden ones", () => {
+		expect(LIVE_FULFILLMENTS_CTE).toMatch(/l\.deleted_at\s+IS\s+NULL/i)
+		expect(LIVE_FULFILLMENTS_CTE).toContain("downvotes >= 0.8 * l.vote_count")
+	})
+
+	it("picks the most recent fulfillment per video via ROW_NUMBER", () => {
+		expect(LIVE_FULFILLMENTS_CTE).toMatch(
+			/ROW_NUMBER\(\)\s+OVER\s*\(\s*PARTITION\s+BY\s+f\.video_id\s+ORDER\s+BY\s+f\.fulfilled_at\s+DESC\s*\)/i,
+		)
 	})
 })
