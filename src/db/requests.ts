@@ -1,5 +1,5 @@
 import { config } from "@/config"
-import { AUTO_HIDE_PREDICATE } from "@/db/lyrics"
+import { AUTO_HIDE_PREDICATE } from "@/db/predicates"
 import type { Env } from "@/types"
 
 export interface RequestDemand {

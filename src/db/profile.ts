@@ -1,4 +1,4 @@
-import { AUTO_HIDE_PREDICATE_JOINED } from "@/db/lyrics"
+import { AUTO_HIDE_PREDICATE_JOINED } from "@/db/predicates"
 import type { Confidence, Env, LyricsFormat } from "@/types"
 
 export interface SubmissionRow {

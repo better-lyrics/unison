@@ -1,8 +1,6 @@
 import type { Env, LyricsRow, LyricsSearchResult, LyricsSubmission } from "@/types"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import {
-	AUTO_HIDE_PREDICATE,
-	RANKING_EXPR,
 	findBySongArtist,
 	findByVideoId,
 	findVariantsByVideoId,
@@ -13,6 +11,7 @@ import {
 	softDeleteLyrics,
 	submitLyrics,
 } from "./lyrics"
+import { AUTO_HIDE_PREDICATE, RANKING_EXPR } from "./predicates"
 
 // -- Mocks -----------------------------------------------------------------
 

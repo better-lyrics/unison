@@ -5,7 +5,7 @@ import {
 	type FeedFilters,
 	hasAnyFilter,
 } from "@/db/feed-filters"
-import { AUTO_HIDE_PREDICATE, RANKING_EXPR } from "@/db/lyrics"
+import { AUTO_HIDE_PREDICATE, RANKING_EXPR } from "@/db/predicates"
 import { Logger } from "@/infra/logger"
 import type { Env, FeedItem } from "@/types"
 

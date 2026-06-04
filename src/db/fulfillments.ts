@@ -1,4 +1,4 @@
-import { AUTO_HIDE_PREDICATE, AUTO_HIDE_PREDICATE_JOINED } from "@/db/lyrics"
+import { AUTO_HIDE_PREDICATE, AUTO_HIDE_PREDICATE_JOINED } from "@/db/predicates"
 import { windowCutoff } from "@/db/requests"
 import { Logger } from "@/infra/logger"
 import type { Env } from "@/types"
