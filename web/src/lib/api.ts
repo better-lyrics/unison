@@ -1,4 +1,5 @@
 import { AUTHED_FETCH_ERRORS, authedFetch } from "./authedFetch"
+import { IS_SPA_EXPANSION_SEED } from "./seed-flag"
 import type {
   ApiEnvelope,
   CuratorsLeaderboardResponse,
@@ -23,6 +24,7 @@ async function getJson<T>(path: string): Promise<T> {
 }
 
 export async function fetchSongLeaderboard(): Promise<SongsLeaderboardResponse> {
+  if (IS_SPA_EXPANSION_SEED) return (await import("./dev-seed-spa-expansion")).seedSongs()
   if (USE_SEED) return (await import("./dev-seed")).seedSongs()
   return getJson<SongsLeaderboardResponse>("/leaderboard/songs")
 }
@@ -68,6 +70,13 @@ async function getJsonWithSignal<T>(path: string, signal?: AbortSignal): Promise
 }
 
 export async function searchLyrics(params: SearchLyricsParams): Promise<{ results: LyricsSearchHit[] }> {
+  if (IS_SPA_EXPANSION_SEED) {
+    return (await import("./dev-seed-spa-expansion")).seedSearch({
+      q: params.q,
+      song: params.song,
+      artist: params.artist,
+    })
+  }
   const hits = await getJsonWithSignal<LyricsSearchHit[]>(buildSearchPath(params), params.signal)
   return { results: hits }
 }
@@ -76,6 +85,7 @@ export async function fetchLyricsVariants(
   videoId: string,
   opts: { signal?: AbortSignal } = {},
 ): Promise<{ variants: VariantSummary[] }> {
+  if (IS_SPA_EXPANSION_SEED) return (await import("./dev-seed-spa-expansion")).seedLyricsVariants(videoId)
   const variants = await getJsonWithSignal<VariantSummary[]>(
     `/lyrics/variants/${encodeURIComponent(videoId)}`,
     opts.signal,
@@ -87,6 +97,7 @@ export async function fetchLyricsVariant(
   id: number,
   opts: { signal?: AbortSignal } = {},
 ): Promise<{ variant: VariantFull }> {
+  if (IS_SPA_EXPANSION_SEED) return (await import("./dev-seed-spa-expansion")).seedLyricsVariant(id)
   const variant = await getJsonWithSignal<VariantFull>(`/lyrics/${id}`, opts.signal)
   return { variant }
 }
@@ -105,6 +116,7 @@ async function unwrapMutationError(res: Response): Promise<never> {
 }
 
 export async function voteVariant(id: number, value: 1 | -1): Promise<void> {
+  if (IS_SPA_EXPANSION_SEED) return (await import("./dev-seed-spa-expansion")).seedVote(id, value)
   await authedFetch<unknown>(`/lyrics/${id}/vote`, {
     method: "POST",
     headers: { "content-type": "application/json" },
@@ -113,6 +125,7 @@ export async function voteVariant(id: number, value: 1 | -1): Promise<void> {
 }
 
 export async function unvoteVariant(id: number): Promise<void> {
+  if (IS_SPA_EXPANSION_SEED) return (await import("./dev-seed-spa-expansion")).seedUnvote(id)
   await authedFetch<unknown>(`/lyrics/${id}/vote`, { method: "DELETE" })
 }
 
@@ -121,6 +134,7 @@ export async function reportVariant(
   reason: "wrong_song" | "bad_sync" | "offensive" | "spam" | "other",
   details?: string,
 ): Promise<void> {
+  if (IS_SPA_EXPANSION_SEED) return (await import("./dev-seed-spa-expansion")).seedReport(id, reason, details)
   const body = details !== undefined ? { reason, details } : { reason }
   await authedFetch<unknown>(`/lyrics/${id}/report`, {
     method: "POST",
@@ -134,6 +148,7 @@ const QUEUE_PAGE_LIMIT = 50
 export async function fetchQueue(
   opts: { cursor?: string; signal?: AbortSignal } = {},
 ): Promise<{ items: QueueEntry[]; nextCursor: string | null }> {
+  if (IS_SPA_EXPANSION_SEED) return (await import("./dev-seed-spa-expansion")).seedQueue({ cursor: opts.cursor })
   const search = new URLSearchParams()
   search.set("cursor", opts.cursor ?? "")
   search.set("limit", String(QUEUE_PAGE_LIMIT))

@@ -1,3 +1,4 @@
+import { IS_SPA_EXPANSION_SEED, getSeedSession } from "./seed-flag"
 import type { ApiEnvelope } from "./types"
 
 export const STORAGE_KEY = "unison.session.v1"
@@ -38,6 +39,7 @@ function isValidStoredSession(value: unknown): value is StoredSession {
 }
 
 export function loadStoredSession(): StoredSession | null {
+  if (IS_SPA_EXPANSION_SEED) return getSeedSession()
   const raw = localStorage.getItem(STORAGE_KEY)
   if (!raw) return null
   try {
@@ -96,6 +98,10 @@ export async function postSession(signedBody: SignedBody): Promise<StoredSession
 }
 
 export async function fetchMe(token: string): Promise<Identity> {
+  if (IS_SPA_EXPANSION_SEED) {
+    const session = getSeedSession()
+    return { keyId: session.keyId, displayName: session.displayName, expiresAt: session.expiresAt }
+  }
   const res = await fetch("/auth/me", {
     headers: { authorization: `Bearer ${token}` },
   })
