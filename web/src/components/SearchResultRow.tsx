@@ -11,7 +11,7 @@ interface SearchResultRowProps {
 export function SearchResultRow({ entry, rank }: SearchResultRowProps) {
   const duration = formatDuration(entry.duration)
   const subline = [entry.album, duration].filter((s) => s && s.length > 0).join(" · ")
-  const matchScore = entry.matchScore !== undefined ? entry.matchScore.toFixed(2) : null
+  const matchScore = entry.matchScore !== undefined && entry.matchScore < 1 ? entry.matchScore.toFixed(2) : null
 
   return (
     <li>
