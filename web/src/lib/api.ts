@@ -1,3 +1,4 @@
+import { loadStoredSession } from "./auth"
 import { AUTHED_FETCH_ERRORS, authedFetch } from "./authedFetch"
 import { IS_SPA_EXPANSION_SEED } from "./seed-flag"
 import type {
@@ -62,7 +63,11 @@ function buildSearchPath(params: SearchLyricsParams): string {
 }
 
 async function getJsonWithSignal<T>(path: string, signal?: AbortSignal): Promise<T> {
-  const res = await fetch(path, signal ? { signal } : undefined)
+  const session = loadStoredSession()
+  const init: RequestInit = {}
+  if (signal) init.signal = signal
+  if (session) init.headers = { authorization: `Bearer ${session.sessionToken}` }
+  const res = await fetch(path, init)
   if (!res.ok) throw new Error(`HTTP ${res.status} for ${path}`)
   const envelope = (await res.json()) as ApiEnvelope<T>
   if (!envelope.success) throw new Error(envelope.error)

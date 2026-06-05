@@ -18,6 +18,7 @@ import { toResponse, toSearchResponse } from "@/routes/lyrics.transformers"
 import type { Env, LyricsSubmission } from "@/types"
 import { signedRequest } from "@/utils/auth"
 import { ErrorCode, buildError } from "@/utils/errors"
+import { getSession } from "@/utils/session"
 import { readRateLimit } from "@/utils/read-rate-limit"
 import {
 	detectFormat,
@@ -58,7 +59,15 @@ export const lyricsRoutes = (env: Env) =>
 		.decorate("env", env)
 		.use(readRateLimit)
 		.derive({ as: "scoped" }, async ({ headers, env }) => {
-			const keyId = headers["x-key-id"]
+			let keyId: string | null = headers["x-key-id"] ?? null
+			if (!keyId) {
+				const auth = headers.authorization
+				const token = auth?.startsWith("Bearer ") ? auth.slice(7).trim() : null
+				if (token) {
+					const session = await getSession(env, token)
+					keyId = session?.keyId ?? null
+				}
+			}
 			if (!keyId) return { lyricsUserId: null as number | null }
 			const user = await env.DB.prepare("SELECT id FROM users WHERE key_id = ?")
 				.bind(keyId)
@@ -157,7 +166,7 @@ export const lyricsRoutes = (env: Env) =>
 		)
 		.get(
 			"/variants/:videoId",
-			async ({ params, query, env, status }) => {
+			async ({ params, query, env, lyricsUserId, status }) => {
 				const parsed = query.limit ? Number(query.limit) : 10
 				const limit = Math.min(Math.max(1, Number.isNaN(parsed) ? 10 : parsed), 50)
 				const results = await findVariantsByVideoId(env, params.videoId, limit)
@@ -169,7 +178,20 @@ export const lyricsRoutes = (env: Env) =>
 						})
 					)
 				}
-				return { success: true, data: results.map(toResponse) }
+				const votesMap = lyricsUserId
+					? await getUserVotesForIds(
+							env,
+							results.map((r) => r.id),
+							lyricsUserId
+						)
+					: null
+				return {
+					success: true,
+					data: results.map((row) => ({
+						...toResponse(row),
+						userVote: votesMap?.get(row.id) ?? null,
+					})),
+				}
 			},
 			{
 				params: t.Object({ videoId: t.String() }),
