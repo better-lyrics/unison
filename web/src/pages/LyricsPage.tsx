@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
-import { Link, useParams, useSearchParams } from "react-router-dom"
+import { useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom"
 import { EmptyState } from "@/components/EmptyState"
 import { LoadingPlaceholder } from "@/components/LoadingPlaceholder"
 import { LyricsRenderer } from "@/components/LyricsRenderer"
@@ -31,6 +31,13 @@ export function LyricsPage() {
   const [params, setParams] = useSearchParams()
   const [mode, setMode] = useState<Mode>("synced")
   const variantIdParam = params.get("variantId")
+  const navigate = useNavigate()
+  const location = useLocation()
+
+  const handleBack = useCallback(() => {
+    if (location.key === "default") navigate("/")
+    else navigate(-1)
+  }, [location.key, navigate])
 
   const safeVideoId = videoId ?? ""
   const { ref, currentTimeMs, playing, seekTo } = useYouTubePlayer(safeVideoId.length > 0 ? safeVideoId : null)
@@ -63,7 +70,7 @@ export function LyricsPage() {
     (id: number) => {
       const next = new URLSearchParams(params)
       next.set("variantId", String(id))
-      setParams(next, { replace: false })
+      setParams(next, { replace: true })
     },
     [params, setParams],
   )
@@ -127,9 +134,13 @@ export function LyricsPage() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <Link to="/" className="text-xs text-unison-text-muted hover:text-unison-text">
+        <button
+          type="button"
+          onClick={handleBack}
+          className="cursor-pointer text-xs text-unison-text-muted transition-colors hover:text-unison-text"
+        >
           ‹ back
-        </Link>
+        </button>
         {variant && selectedId !== undefined ? (
           <VoteControls
             variantId={variant.id}
