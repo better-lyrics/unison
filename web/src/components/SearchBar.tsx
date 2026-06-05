@@ -76,7 +76,7 @@ export function SearchBar({ compact = false }: SearchBarProps) {
           setExpanded(true)
           window.setTimeout(() => inputRef.current?.focus(), 0)
         }}
-        className="cursor-pointer rounded-md p-1.5 text-unison-text-secondary transition-colors hover:bg-unison-bg-hover hover:text-unison-text"
+        className="flex h-9 w-9 cursor-pointer items-center justify-center rounded-md border border-transparent text-unison-text-secondary transition-colors hover:bg-unison-bg-hover hover:text-unison-text"
       >
         <IconSearch className="size-5" stroke={1.5} aria-hidden="true" />
       </button>
@@ -86,7 +86,7 @@ export function SearchBar({ compact = false }: SearchBarProps) {
   return (
     <div
       className={cn(
-        "flex items-center gap-2 rounded-md border border-unison-border bg-unison-bg-elevated px-2.5 py-1.5 transition-colors focus-within:border-unison-border-strong hover:border-unison-border-strong",
+        "flex h-9 items-center gap-2 rounded-md border border-unison-border bg-unison-bg-elevated px-2.5 transition-colors focus-within:border-unison-border-strong hover:border-unison-border-strong",
         compact ? "w-full" : "w-full max-w-xs",
       )}
     >
