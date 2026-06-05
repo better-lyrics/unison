@@ -60,19 +60,29 @@ export const lyricsRoutes = (env: Env) =>
 		.use(readRateLimit)
 		.derive({ as: "scoped" }, async ({ headers, env }) => {
 			let keyId: string | null = headers["x-key-id"] ?? null
+			let bearerVerified = false
 			if (!keyId) {
 				const auth = headers.authorization
 				const token = auth?.startsWith("Bearer ") ? auth.slice(7).trim() : null
 				if (token) {
 					const session = await getSession(env, token)
-					keyId = session?.keyId ?? null
+					if (session) {
+						keyId = session.keyId
+						bearerVerified = true
+					}
 				}
 			}
-			if (!keyId) return { lyricsUserId: null as number | null }
+			if (!keyId) {
+				return { lyricsUserId: null as number | null, lyricsBearerUserId: null as number | null }
+			}
 			const user = await env.DB.prepare("SELECT id FROM users WHERE key_id = ?")
 				.bind(keyId)
 				.first<{ id: number }>()
-			return { lyricsUserId: user?.id ?? null }
+			const userId = user?.id ?? null
+			return {
+				lyricsUserId: userId,
+				lyricsBearerUserId: bearerVerified ? userId : null,
+			}
 		})
 		.get(
 			"/",
@@ -166,7 +176,7 @@ export const lyricsRoutes = (env: Env) =>
 		)
 		.get(
 			"/variants/:videoId",
-			async ({ params, query, env, lyricsUserId, status }) => {
+			async ({ params, query, env, lyricsBearerUserId, status }) => {
 				const parsed = query.limit ? Number(query.limit) : 10
 				const limit = Math.min(Math.max(1, Number.isNaN(parsed) ? 10 : parsed), 50)
 				const results = await findVariantsByVideoId(env, params.videoId, limit)
@@ -178,11 +188,11 @@ export const lyricsRoutes = (env: Env) =>
 						})
 					)
 				}
-				const votesMap = lyricsUserId
+				const votesMap = lyricsBearerUserId
 					? await getUserVotesForIds(
 							env,
 							results.map((r) => r.id),
-							lyricsUserId
+							lyricsBearerUserId
 						)
 					: null
 				return {

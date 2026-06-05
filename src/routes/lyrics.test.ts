@@ -560,14 +560,10 @@ describe("GET /lyrics/variants/:videoId", () => {
 		expect(body.data[1].userVote).toBeNull()
 	})
 
-	it("hydrates userVote per row when an x-key-id header is sent", async () => {
+	it("returns userVote null when only an x-key-id header is sent (variants requires Bearer)", async () => {
 		const rows = [makeVariantRow({ id: 10 }), makeVariantRow({ id: 11 }), makeVariantRow({ id: 12 })]
 		const userRow = { id: 99 }
-		const votesRows = [
-			{ lyrics_id: 10, vote: 1 },
-			{ lyrics_id: 12, vote: -1 },
-		]
-		const db = makeMockDB([userRow, rows, votesRows])
+		const db = makeMockDB([userRow, rows])
 		const app = lyricsRoutes(makeEnv(db))
 		const res = await app.handle(
 			new Request("http://localhost/lyrics/variants/vid-A", {
@@ -576,9 +572,9 @@ describe("GET /lyrics/variants/:videoId", () => {
 		)
 		const body = (await res.json()) as { data: Array<{ id: number; userVote: 1 | -1 | null }> }
 		expect(res.status).toBe(200)
-		expect(body.data.find((v) => v.id === 10)?.userVote).toBe(1)
+		expect(body.data.find((v) => v.id === 10)?.userVote).toBeNull()
 		expect(body.data.find((v) => v.id === 11)?.userVote).toBeNull()
-		expect(body.data.find((v) => v.id === 12)?.userVote).toBe(-1)
+		expect(body.data.find((v) => v.id === 12)?.userVote).toBeNull()
 	})
 
 	it("hydrates userVote per row when a Bearer session token is sent", async () => {
