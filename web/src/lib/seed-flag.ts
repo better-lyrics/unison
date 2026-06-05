@@ -1,5 +1,8 @@
 import type { StoredSession } from "./auth"
 
+// Set VITE_SEED=spa-expansion (env) or ?seed=spa-expansion (URL) in dev to swap the API client
+// onto an in-memory corpus, so search, lyrics, voting, and queue pages can be poked locally with
+// no backend. Gated on import.meta.env.DEV so production builds tree-shake it.
 const seedEnv = (import.meta.env.VITE_SEED ?? "").toString().toLowerCase()
 const seedQuery = typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("seed") : null
 export const IS_SPA_EXPANSION_SEED =
