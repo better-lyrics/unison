@@ -15,6 +15,7 @@ import { generatePetName } from "@/utils/petname"
 import { readRateLimit } from "@/utils/read-rate-limit"
 
 const SONGS_CACHE_KEY = "leaderboard:songs"
+const QUEUE_FIRST_PAGE_CACHE_KEY_PREFIX = "leaderboard:songs:queue:first"
 const USERS_CACHE_KEY = "leaderboard:users"
 const QUEUE_DEFAULT_LIMIT = 20
 const QUEUE_MAX_LIMIT = 50
@@ -37,8 +38,15 @@ function decodeCursor(raw: string): MostWantedCursor | null | "empty" {
 		const parsed = JSON.parse(atob(raw)) as unknown
 		if (!parsed || typeof parsed !== "object") return null
 		const o = parsed as Record<string, unknown>
-		if (typeof o.demand !== "number" || typeof o.videoId !== "string") return null
-		return { demand: o.demand, videoId: o.videoId }
+		if (
+			typeof o.demand !== "number" ||
+			typeof o.videoId !== "string" ||
+			typeof o.cutoff !== "number" ||
+			typeof o.lastRank !== "number"
+		) {
+			return null
+		}
+		return { demand: o.demand, videoId: o.videoId, cutoff: o.cutoff, lastRank: o.lastRank }
 	} catch {
 		return null
 	}
@@ -58,12 +66,30 @@ export const leaderboardRoutes = (env: Env) =>
 						return status(400, buildError(ErrorCode.INVALID_CURSOR))
 					}
 					const cursor = decoded === "empty" ? null : decoded
+					const cacheKey =
+						cursor === null ? `${QUEUE_FIRST_PAGE_CACHE_KEY_PREFIX}:${limit}` : null
+					if (cacheKey) {
+						const cached = await env.CACHE.get(cacheKey)
+						if (cached) {
+							try {
+								return JSON.parse(cached)
+							} catch {
+								await env.CACHE.delete(cacheKey)
+							}
+						}
+					}
 					const { items, nextCursor } = await getMostWantedPage(env, cursor, limit)
-					return {
+					const payload = {
 						success: true,
 						data: items,
 						nextCursor: nextCursor ? encodeCursor(nextCursor) : null,
 					}
+					if (cacheKey) {
+						await env.CACHE.put(cacheKey, JSON.stringify(payload), {
+							expirationTtl: config.requests.leaderboard.cacheTtl,
+						})
+					}
+					return payload
 				}
 
 				const cached = await env.CACHE.get(SONGS_CACHE_KEY)

@@ -145,7 +145,8 @@ describe("getMostWantedPage", () => {
 		expect(items).toHaveLength(2)
 		expect(items[0]).toMatchObject({ videoId: "v1", rank: 1, section: "most_wanted" })
 		expect(items[1].rank).toBe(2)
-		expect(nextCursor).toEqual({ demand: 4, videoId: "v2" })
+		expect(nextCursor).toMatchObject({ demand: 4, videoId: "v2", lastRank: 2 })
+		expect(nextCursor?.cutoff).toEqual(expect.any(Number))
 		expect(db.calls[0].sql).not.toContain("HAVING")
 		expect(db.calls[0].params).toEqual([expect.any(Number), 2])
 	})
@@ -172,12 +173,17 @@ describe("getMostWantedPage", () => {
 			],
 		])
 		const env = makeEnv(db)
-		const { items, nextCursor } = await getMostWantedPage(env, { demand: 4, videoId: "v2" }, 2)
+		const { items, nextCursor } = await getMostWantedPage(
+			env,
+			{ demand: 4, videoId: "v2", cutoff: 1_700_000_000, lastRank: 20 },
+			2
+		)
 		expect(items).toHaveLength(2)
-		expect(items[0].videoId).toBe("v3")
-		expect(nextCursor).toEqual({ demand: 2, videoId: "v4" })
+		expect(items[0]).toMatchObject({ videoId: "v3", rank: 21 })
+		expect(items[1].rank).toBe(22)
+		expect(nextCursor).toEqual({ demand: 2, videoId: "v4", cutoff: 1_700_000_000, lastRank: 22 })
 		expect(db.calls[0].sql).toContain("HAVING")
-		expect(db.calls[0].params).toEqual([expect.any(Number), 4, 4, "v2", 2])
+		expect(db.calls[0].params).toEqual([1_700_000_000, 4, 4, "v2", 2])
 	})
 
 	it("breaks ties on equal demand by video_id ascending (cursor predicate)", async () => {
@@ -202,9 +208,13 @@ describe("getMostWantedPage", () => {
 			],
 		])
 		const env = makeEnv(db)
-		const { items } = await getMostWantedPage(env, { demand: 5, videoId: "v_tie_a" }, 5)
+		const { items } = await getMostWantedPage(
+			env,
+			{ demand: 5, videoId: "v_tie_a", cutoff: 1_700_000_000, lastRank: 0 },
+			5
+		)
 		expect(items.map((r) => r.videoId)).toEqual(["v_tie_b", "v_tie_c"])
-		expect(db.calls[0].params).toEqual([expect.any(Number), 5, 5, "v_tie_a", 5])
+		expect(db.calls[0].params).toEqual([1_700_000_000, 5, 5, "v_tie_a", 5])
 	})
 
 	it("returns a null nextCursor on the last page", async () => {
@@ -221,8 +231,13 @@ describe("getMostWantedPage", () => {
 			],
 		])
 		const env = makeEnv(db)
-		const { items, nextCursor } = await getMostWantedPage(env, { demand: 2, videoId: "v4" }, 50)
+		const { items, nextCursor } = await getMostWantedPage(
+			env,
+			{ demand: 2, videoId: "v4", cutoff: 1_700_000_000, lastRank: 30 },
+			50
+		)
 		expect(items).toHaveLength(1)
+		expect(items[0].rank).toBe(31)
 		expect(nextCursor).toBeNull()
 	})
 })

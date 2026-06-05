@@ -60,6 +60,8 @@ async function queryMostWanted(env: Env, limit: number): Promise<MostWantedRow[]
 export interface MostWantedCursor {
 	demand: number
 	videoId: string
+	cutoff: number
+	lastRank: number
 }
 
 export async function getMostWantedPage(
@@ -90,7 +92,9 @@ export async function getMostWantedPage(
 	 ORDER BY demand DESC, rs.video_id ASC
 	 LIMIT ?`
 
-	const params: unknown[] = [windowCutoff()]
+	const cutoff = cursor ? cursor.cutoff : windowCutoff()
+	const baseRank = cursor ? cursor.lastRank : 0
+	const params: unknown[] = [cutoff]
 	if (cursor) {
 		params.push(cursor.demand, cursor.demand, cursor.videoId)
 	}
@@ -108,13 +112,14 @@ export async function getMostWantedPage(
 		demand: Number(r.demand),
 		requestCount: Number(r.request_count),
 		section: "most_wanted",
-		rank: i + 1,
+		rank: baseRank + i + 1,
 	}))
 
+	const last = items[items.length - 1]
 	const nextCursor =
 		items.length < limit
 			? null
-			: { demand: items[items.length - 1].demand, videoId: items[items.length - 1].videoId }
+			: { demand: last.demand, videoId: last.videoId, cutoff, lastRank: last.rank }
 
 	return { items, nextCursor }
 }
