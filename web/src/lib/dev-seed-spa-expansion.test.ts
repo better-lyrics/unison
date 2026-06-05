@@ -220,16 +220,18 @@ describe("seedVote", () => {
     const after = (await seedLyricsVariant(neutralVariant.id)).variant
     expect(after.userVote).toBe(1)
     expect(after.voteCount).toBe(before.voteCount + 1)
+    expect(after.score).toBe(before.score + 1)
   })
 
-  it("flips a previous downvote to an upvote and adjusts the count by two", async () => {
+  it("flips a previous downvote to an upvote: voteCount stays, score swings by two", async () => {
     const downvoted = SEED_LYRICS_CORPUS.find((v) => v.userVote === -1)
     if (!downvoted) throw new Error("expected a downvoted variant")
     const before = (await seedLyricsVariant(downvoted.id)).variant
     await seedVote(downvoted.id, 1)
     const after = (await seedLyricsVariant(downvoted.id)).variant
     expect(after.userVote).toBe(1)
-    expect(after.voteCount).toBe(before.voteCount + 2)
+    expect(after.voteCount).toBe(before.voteCount)
+    expect(after.score).toBe(before.score + 2)
   })
 })
 
@@ -242,6 +244,7 @@ describe("seedUnvote", () => {
     const after = (await seedLyricsVariant(upvoted.id)).variant
     expect(after.userVote).toBeNull()
     expect(after.voteCount).toBe(before.voteCount - 1)
+    expect(after.score).toBe(before.score - 1)
   })
 })
 

@@ -24,14 +24,7 @@ function truncateKey(keyId: string): string {
   return `${keyId.slice(0, 8)}…${keyId.slice(-4)}`
 }
 
-function formatVoteCount(voteCount: number): string {
-  if (voteCount > 0) return `+${voteCount}`
-  if (voteCount < 0) return `${voteCount}`
-  return "0"
-}
-
 export function VariantMetadata({ variant }: VariantMetadataProps) {
-  const voteDisplay = formatVoteCount(variant.voteCount)
   return (
     <aside className="rounded-lg border border-unison-border bg-unison-bg-elevated p-4">
       {variant.hidden ? (
@@ -52,7 +45,7 @@ export function VariantMetadata({ variant }: VariantMetadataProps) {
           <span className="ml-1 font-mono text-xs tabular-nums text-unison-text-muted">{`(${variant.score})`}</span>
         </Row>
         <Row label="Votes">
-          <span className="font-mono tabular-nums">{voteDisplay}</span>
+          <span className="font-mono tabular-nums">{variant.voteCount}</span>
         </Row>
         <Row label="Confidence">{variant.confidence}</Row>
         {variant.submitter ? (

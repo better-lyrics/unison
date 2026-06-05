@@ -77,14 +77,9 @@ describe("VariantMetadata", () => {
     expect(screen.getByText(/\(12\)/)).toBeTruthy()
   })
 
-  it("prefixes a positive vote count with +", () => {
+  it("renders the vote count as a plain non-negative number", () => {
     renderMeta(makeVariant({ voteCount: 24 }))
-    expect(screen.getByText("+24")).toBeTruthy()
-  })
-
-  it("renders a negative vote count with its native minus sign", () => {
-    renderMeta(makeVariant({ voteCount: -3 }))
-    expect(screen.getByText("-3")).toBeTruthy()
+    expect(screen.getByText("24")).toBeTruthy()
   })
 
   it("renders 0 when vote count is zero", () => {

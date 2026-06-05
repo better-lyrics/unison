@@ -34,13 +34,13 @@ afterEach(() => {
 
 describe("VoteControls", () => {
   it("renders the vote count", () => {
-    render(<VoteControls variantId={1} videoId="v1" variant={{ voteCount: 42, userVote: null }} />)
+    render(<VoteControls variantId={1} videoId="v1" variant={{ score: 42, userVote: null }} />)
     expect(screen.getByText("42")).toBeTruthy()
   })
 
   it("signed-out: all three buttons disabled with sign-in title", () => {
     sessionStatus = "signed-out"
-    render(<VoteControls variantId={1} videoId="v1" variant={{ voteCount: 0, userVote: null }} />)
+    render(<VoteControls variantId={1} videoId="v1" variant={{ score: 0, userVote: null }} />)
     const up = screen.getByRole("button", { name: /upvote/i })
     const down = screen.getByRole("button", { name: /downvote/i })
     const flag = screen.getByRole("button", { name: /report/i })
@@ -53,31 +53,31 @@ describe("VoteControls", () => {
   })
 
   it("clicking upvote when userVote is null calls upvote", () => {
-    render(<VoteControls variantId={1} videoId="v1" variant={{ voteCount: 0, userVote: null }} />)
+    render(<VoteControls variantId={1} videoId="v1" variant={{ score: 0, userVote: null }} />)
     fireEvent.click(screen.getByRole("button", { name: /upvote/i }))
     expect(upvote).toHaveBeenCalledTimes(1)
   })
 
   it("clicking downvote calls downvote", () => {
-    render(<VoteControls variantId={1} videoId="v1" variant={{ voteCount: 0, userVote: null }} />)
+    render(<VoteControls variantId={1} videoId="v1" variant={{ score: 0, userVote: null }} />)
     fireEvent.click(screen.getByRole("button", { name: /downvote/i }))
     expect(downvote).toHaveBeenCalledTimes(1)
   })
 
   it("upvote button is aria-pressed=true when userVote=1", () => {
-    render(<VoteControls variantId={1} videoId="v1" variant={{ voteCount: 1, userVote: 1 }} />)
+    render(<VoteControls variantId={1} videoId="v1" variant={{ score: 1, userVote: 1 }} />)
     expect(screen.getByRole("button", { name: /upvote/i }).getAttribute("aria-pressed")).toBe("true")
     expect(screen.getByRole("button", { name: /downvote/i }).getAttribute("aria-pressed")).toBe("false")
   })
 
   it("downvote button is aria-pressed=true when userVote=-1", () => {
-    render(<VoteControls variantId={1} videoId="v1" variant={{ voteCount: -1, userVote: -1 }} />)
+    render(<VoteControls variantId={1} videoId="v1" variant={{ score: -1, userVote: -1 }} />)
     expect(screen.getByRole("button", { name: /upvote/i }).getAttribute("aria-pressed")).toBe("false")
     expect(screen.getByRole("button", { name: /downvote/i }).getAttribute("aria-pressed")).toBe("true")
   })
 
   it("report button opens a menu with five menuitems", () => {
-    render(<VoteControls variantId={1} videoId="v1" variant={{ voteCount: 0, userVote: null }} />)
+    render(<VoteControls variantId={1} videoId="v1" variant={{ score: 0, userVote: null }} />)
     const trigger = screen.getByRole("button", { name: /report/i })
     expect(trigger.getAttribute("aria-haspopup")).toBe("menu")
     expect(trigger.getAttribute("aria-expanded")).toBe("false")
@@ -88,7 +88,7 @@ describe("VoteControls", () => {
   })
 
   it("clicking a menuitem calls report with the reason and closes the menu", () => {
-    render(<VoteControls variantId={1} videoId="v1" variant={{ voteCount: 0, userVote: null }} />)
+    render(<VoteControls variantId={1} videoId="v1" variant={{ score: 0, userVote: null }} />)
     fireEvent.click(screen.getByRole("button", { name: /report/i }))
     fireEvent.click(screen.getByRole("menuitem", { name: /spam/i }))
     expect(report).toHaveBeenCalledWith("spam")
@@ -96,7 +96,7 @@ describe("VoteControls", () => {
   })
 
   it("each menuitem maps to the correct report reason", () => {
-    render(<VoteControls variantId={1} videoId="v1" variant={{ voteCount: 0, userVote: null }} />)
+    render(<VoteControls variantId={1} videoId="v1" variant={{ score: 0, userVote: null }} />)
     fireEvent.click(screen.getByRole("button", { name: /report/i }))
     fireEvent.click(screen.getByRole("menuitem", { name: /wrong song/i }))
     expect(report).toHaveBeenCalledWith("wrong_song")
@@ -115,7 +115,7 @@ describe("VoteControls", () => {
   })
 
   it("Escape closes the menu without firing a report", () => {
-    render(<VoteControls variantId={1} videoId="v1" variant={{ voteCount: 0, userVote: null }} />)
+    render(<VoteControls variantId={1} videoId="v1" variant={{ score: 0, userVote: null }} />)
     fireEvent.click(screen.getByRole("button", { name: /report/i }))
     expect(screen.getAllByRole("menuitem")).toHaveLength(5)
     fireEvent.keyDown(window, { key: "Escape" })
@@ -129,7 +129,7 @@ describe("VoteControls", () => {
         <button type="button" data-testid="outside">
           outside
         </button>
-        <VoteControls variantId={1} videoId="v1" variant={{ voteCount: 0, userVote: null }} />
+        <VoteControls variantId={1} videoId="v1" variant={{ score: 0, userVote: null }} />
       </div>,
     )
     fireEvent.click(screen.getByRole("button", { name: /report/i }))

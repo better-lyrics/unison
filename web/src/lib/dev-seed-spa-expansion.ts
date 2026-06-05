@@ -688,8 +688,12 @@ export async function seedVote(id: number, value: 1 | -1): Promise<void> {
   if (!target) throw new Error(`HTTP 404 for /lyrics/${id}/vote`)
   const prev = target.userVote ?? null
   if (prev === value) return
-  if (prev === null) target.voteCount += 1
-  else target.voteCount += value === 1 ? 2 : -2
+  if (prev === null) {
+    target.voteCount += 1
+    target.score += value
+  } else {
+    target.score += 2 * value
+  }
   target.userVote = value
 }
 
@@ -699,7 +703,8 @@ export async function seedUnvote(id: number): Promise<void> {
   if (!target) throw new Error(`HTTP 404 for /lyrics/${id}/vote`)
   const prev = target.userVote ?? null
   if (prev === null) return
-  target.voteCount += prev === 1 ? -1 : 1
+  target.voteCount -= 1
+  target.score -= prev
   target.userVote = null
 }
 

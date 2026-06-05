@@ -131,7 +131,7 @@ describe("useVoteMutations", () => {
     expect(voteVariant).not.toHaveBeenCalled()
   })
 
-  it("upvote when userVote is -1 swings vote count by 2", async () => {
+  it("upvote when userVote is -1 swings score by 2 and leaves voteCount unchanged", async () => {
     seedCaches(client, { variantId: 1, videoId: "v1", userVote: -1, voteCount: 5 })
     voteVariant.mockResolvedValue(undefined)
     const { result } = renderHook(() => useVoteMutations({ variantId: 1, videoId: "v1" }), {
@@ -144,14 +144,16 @@ describe("useVoteMutations", () => {
 
     const variants = readVariantsCache(client, "v1")
     expect(variants?.variants[0]?.userVote).toBe(1)
-    expect(variants?.variants[0]?.voteCount).toBe(7)
+    expect(variants?.variants[0]?.voteCount).toBe(5)
+    expect(variants?.variants[0]?.score).toBe(3)
     const variant = readVariantCache(client, 1)
-    expect(variant?.variant.voteCount).toBe(7)
+    expect(variant?.variant.voteCount).toBe(5)
+    expect(variant?.variant.score).toBe(3)
 
     await waitFor(() => expect(voteVariant).toHaveBeenCalledWith(1, 1))
   })
 
-  it("downvote when userVote is null calls voteVariant(-1) and decrements vote count", async () => {
+  it("downvote when userVote is null increments voteCount and decrements score", async () => {
     seedCaches(client, { variantId: 1, videoId: "v1", userVote: null, voteCount: 5 })
     voteVariant.mockResolvedValue(undefined)
     const { result } = renderHook(() => useVoteMutations({ variantId: 1, videoId: "v1" }), {
@@ -164,7 +166,8 @@ describe("useVoteMutations", () => {
 
     const variants = readVariantsCache(client, "v1")
     expect(variants?.variants[0]?.userVote).toBe(-1)
-    expect(variants?.variants[0]?.voteCount).toBe(4)
+    expect(variants?.variants[0]?.voteCount).toBe(6)
+    expect(variants?.variants[0]?.score).toBe(0)
 
     await waitFor(() => expect(voteVariant).toHaveBeenCalledWith(1, -1))
   })

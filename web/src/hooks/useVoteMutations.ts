@@ -29,12 +29,18 @@ interface RollbackSnapshot {
   variant: VariantCache
 }
 
-function computeVoteDelta(prev: 1 | -1 | null | undefined, next: 1 | -1 | null): number {
+interface VoteDeltas {
+  voteCount: number
+  score: number
+}
+
+function computeVoteDeltas(prev: 1 | -1 | null | undefined, next: 1 | -1 | null): VoteDeltas {
   const prevValue = prev ?? null
-  if (prevValue === next) return 0
-  if (prevValue === null) return next === null ? 0 : next
-  if (next === null) return -prevValue
-  return 2 * next
+  if (prevValue === next) return { voteCount: 0, score: 0 }
+  if (prevValue === null && next !== null) return { voteCount: 1, score: next }
+  if (next === null && prevValue !== null) return { voteCount: -1, score: -prevValue }
+  if (prevValue !== null && next !== null) return { voteCount: 0, score: 2 * next }
+  return { voteCount: 0, score: 0 }
 }
 
 function applyVoteToVariants(cache: VariantsCache, variantId: number, next: 1 | -1 | null): VariantsCache {
@@ -42,8 +48,8 @@ function applyVoteToVariants(cache: VariantsCache, variantId: number, next: 1 | 
   return {
     variants: cache.variants.map((v) => {
       if (v.id !== variantId) return v
-      const delta = computeVoteDelta(v.userVote, next)
-      return { ...v, userVote: next, voteCount: v.voteCount + delta }
+      const d = computeVoteDeltas(v.userVote, next)
+      return { ...v, userVote: next, voteCount: v.voteCount + d.voteCount, score: v.score + d.score }
     }),
   }
 }
@@ -51,8 +57,15 @@ function applyVoteToVariants(cache: VariantsCache, variantId: number, next: 1 | 
 function applyVoteToVariant(cache: VariantCache, variantId: number, next: 1 | -1 | null): VariantCache {
   if (!cache) return cache
   if (cache.variant.id !== variantId) return cache
-  const delta = computeVoteDelta(cache.variant.userVote, next)
-  return { variant: { ...cache.variant, userVote: next, voteCount: cache.variant.voteCount + delta } }
+  const d = computeVoteDeltas(cache.variant.userVote, next)
+  return {
+    variant: {
+      ...cache.variant,
+      userVote: next,
+      voteCount: cache.variant.voteCount + d.voteCount,
+      score: cache.variant.score + d.score,
+    },
+  }
 }
 
 function currentUserVote(cache: VariantCache, fallback: VariantsCache, variantId: number): 1 | -1 | null {

@@ -7,7 +7,7 @@ import { BlDownvoteIcon, BlReportIcon, BlUpvoteIcon } from "./icons/BlVoteIcons"
 interface VoteControlsProps {
   variantId: number
   videoId: string
-  variant: { voteCount: number; userVote: 1 | -1 | null }
+  variant: { score: number; userVote: 1 | -1 | null }
 }
 
 interface ReasonOption {
@@ -85,7 +85,7 @@ export function VoteControls({ variantId, videoId, variant }: VoteControlsProps)
         />
       </button>
       <span className="min-w-[2ch] text-center text-xs font-medium tabular-nums text-unison-text">
-        {variant.voteCount}
+        {variant.score}
       </span>
       <button
         type="button"

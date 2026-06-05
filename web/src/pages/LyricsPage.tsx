@@ -145,7 +145,7 @@ export function LyricsPage() {
           <VoteControls
             variantId={variant.id}
             videoId={safeVideoId}
-            variant={{ voteCount: variant.voteCount, userVote: variant.userVote ?? null }}
+            variant={{ score: variant.score, userVote: variant.userVote ?? null }}
           />
         ) : null}
       </div>
