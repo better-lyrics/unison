@@ -19,23 +19,6 @@ function toLeaderboardEntry(entry: QueueEntry, rank: number): SongLeaderboardEnt
   }
 }
 
-interface LoadMoreButtonProps {
-  onClick: () => void
-  pending: boolean
-}
-
-function LoadMoreButton({ onClick, pending }: LoadMoreButtonProps) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={pending}
-      className="mx-auto block rounded-md border border-unison-border bg-unison-bg-elevated px-4 py-2 text-sm transition-colors hover:border-unison-border-strong hover:bg-unison-bg-hover disabled:opacity-50"
-    >
-      {pending ? "Loading..." : "Load more"}
-    </button>
-  )
-}
 
 export function QueuePage() {
   const { data, isLoading, error, fetchNextPage, hasNextPage, isFetchingNextPage } = useInfiniteQuery({
@@ -91,7 +74,12 @@ export function QueuePage() {
           </ul>
           <div ref={sentinelRef} aria-hidden="true" />
           {hasNextPage ? (
-            <LoadMoreButton onClick={() => void fetchNextPage()} pending={isFetchingNextPage} />
+            <p
+              aria-live="polite"
+              className="unison-shimmer-text mx-auto block text-center text-sm font-medium tracking-wide"
+            >
+              Loading more…
+            </p>
           ) : (
             <p className="text-center text-xs text-unison-text-muted">You have reached the end of the queue.</p>
           )}

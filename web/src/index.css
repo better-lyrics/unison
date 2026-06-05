@@ -34,3 +34,27 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
+
+.unison-shimmer-text {
+  background: linear-gradient(
+      110deg,
+      rgba(255, 255, 255, 0.35) 30%,
+      rgba(255, 255, 255, 0.9) 50%,
+      rgba(255, 255, 255, 0.35) 70%
+    )
+    0 0 / 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  animation: unison-shimmer-text 3s linear infinite;
+}
+
+@keyframes unison-shimmer-text {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}

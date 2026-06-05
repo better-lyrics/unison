@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
-import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react"
+import { act, cleanup, render, screen, waitFor } from "@testing-library/react"
 import { MemoryRouter } from "react-router-dom"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import type { QueueEntry } from "@/lib/types"
@@ -108,7 +108,7 @@ describe("QueuePage", () => {
     expect(screen.getByText(/reputation-weighted demand/i)).toBeTruthy()
   })
 
-  it("renders rows for a single page and hides the Load more button", async () => {
+  it("renders rows for a single page and hides the loading-more indicator", async () => {
     fetchQueueMock.mockResolvedValue({
       items: [
         makeEntry({ videoId: "vid1", song: "Song One" }),
@@ -119,39 +119,19 @@ describe("QueuePage", () => {
     renderPage()
     await waitFor(() => expect(screen.getByText("Song One")).toBeTruthy())
     expect(screen.getByText("Song Two")).toBeTruthy()
-    expect(screen.queryByRole("button", { name: /load more/i })).toBeNull()
+    expect(screen.queryByText(/loading more/i)).toBeNull()
     expect(screen.getByText(/end of the queue/i)).toBeTruthy()
   })
 
-  it("shows the Load more button when more pages are available", async () => {
+  it("shows the loading-more shimmer indicator when more pages are available", async () => {
     fetchQueueMock.mockResolvedValue({
       items: [makeEntry({ videoId: "vid1", song: "Song One" })],
       nextCursor: "page2",
     })
     renderPage()
     await waitFor(() => expect(screen.getByText("Song One")).toBeTruthy())
-    const button = screen.getByRole("button", { name: /load more/i })
-    expect(button.getAttribute("type")).toBe("button")
-  })
-
-  it("loads more rows when the user clicks Load more", async () => {
-    fetchQueueMock
-      .mockResolvedValueOnce({
-        items: [makeEntry({ videoId: "vid1", song: "Song One" })],
-        nextCursor: "page2",
-      })
-      .mockResolvedValueOnce({
-        items: [makeEntry({ videoId: "vid2", song: "Song Two", rank: 51 })],
-        nextCursor: null,
-      })
-    renderPage()
-    await waitFor(() => expect(screen.getByText("Song One")).toBeTruthy())
-    const button = screen.getByRole("button", { name: /load more/i })
-    fireEvent.click(button)
-    await waitFor(() => expect(screen.getByText("Song Two")).toBeTruthy())
-    expect(screen.getByText("Song One")).toBeTruthy()
-    expect(fetchQueueMock).toHaveBeenCalledTimes(2)
-    expect(fetchQueueMock.mock.calls[1][0]).toMatchObject({ cursor: "page2" })
+    const indicator = screen.getByText(/loading more/i)
+    expect(indicator.className).toMatch(/unison-shimmer-text/)
   })
 
   it("renders a continuous rank sequence across paginated pages", async () => {
@@ -166,13 +146,16 @@ describe("QueuePage", () => {
       .mockResolvedValueOnce({ items: page2Items, nextCursor: null })
     renderPage()
     await waitFor(() => expect(screen.getByText("Page One Song 1")).toBeTruthy())
-    fireEvent.click(screen.getByRole("button", { name: /load more/i }))
+    await waitFor(() => expect(observerCallbacks.length).toBeGreaterThan(0))
+    act(() => {
+      observerCallbacks[observerCallbacks.length - 1]([{ isIntersecting: true }])
+    })
     await waitFor(() => expect(screen.getByText("Page Two Song 3")).toBeTruthy())
     const renderedRanks = screen.getAllByText(/^#\d+$/).map((node) => node.textContent)
     expect(renderedRanks).toEqual(["#1", "#2", "#3", "#4", "#5", "#6"])
   })
 
-  it("hides the Load more button once the last page resolves with no next cursor", async () => {
+  it("hides the loading-more indicator once the last page resolves with no next cursor", async () => {
     fetchQueueMock
       .mockResolvedValueOnce({
         items: [makeEntry({ videoId: "vid1", song: "Song One" })],
@@ -184,33 +167,13 @@ describe("QueuePage", () => {
       })
     renderPage()
     await waitFor(() => expect(screen.getByText("Song One")).toBeTruthy())
-    fireEvent.click(screen.getByRole("button", { name: /load more/i }))
+    await waitFor(() => expect(observerCallbacks.length).toBeGreaterThan(0))
+    act(() => {
+      observerCallbacks[observerCallbacks.length - 1]([{ isIntersecting: true }])
+    })
     await waitFor(() => expect(screen.getByText("Song Two")).toBeTruthy())
-    await waitFor(() => expect(screen.queryByRole("button", { name: /load more/i })).toBeNull())
+    await waitFor(() => expect(screen.queryByText(/loading more/i)).toBeNull())
     expect(screen.getByText(/end of the queue/i)).toBeTruthy()
-  })
-
-  it("disables the Load more button and shows the loading label while fetching the next page", async () => {
-    type PageResult = { items: QueueEntry[]; nextCursor: string | null }
-    const pending: { resolve?: (value: PageResult) => void } = {}
-    fetchQueueMock
-      .mockResolvedValueOnce({
-        items: [makeEntry({ videoId: "vid1", song: "Song One" })],
-        nextCursor: "page2",
-      })
-      .mockImplementationOnce(
-        () =>
-          new Promise<PageResult>((resolve) => {
-            pending.resolve = resolve
-          }),
-      )
-    renderPage()
-    await waitFor(() => expect(screen.getByText("Song One")).toBeTruthy())
-    fireEvent.click(screen.getByRole("button", { name: /load more/i }))
-    await waitFor(() => expect(screen.getByRole("button", { name: /loading/i })).toBeTruthy())
-    const button = screen.getByRole("button", { name: /loading/i }) as HTMLButtonElement
-    expect(button.disabled).toBe(true)
-    pending.resolve?.({ items: [], nextCursor: null })
   })
 
   it("auto-loads the next page when the sentinel intersects the viewport", async () => {
