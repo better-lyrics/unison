@@ -1,4 +1,4 @@
-import type { StoredSession } from "./auth"
+import type { StoredSession } from "./session-types"
 
 // Set VITE_SEED=spa-expansion (env) or ?seed=spa-expansion (URL) in dev to swap the API client
 // onto an in-memory corpus, so search, lyrics, voting, and queue pages can be poked locally with

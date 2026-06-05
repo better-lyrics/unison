@@ -1,14 +1,10 @@
 import { IS_SPA_EXPANSION_SEED, getSeedSession } from "./seed-flag"
+import type { StoredSession } from "./session-types"
 import type { ApiEnvelope } from "./types"
 
-export const STORAGE_KEY = "unison.session.v1"
+export type { StoredSession } from "./session-types"
 
-export interface StoredSession {
-  sessionToken: string
-  keyId: string
-  displayName: string
-  expiresAt: number
-}
+export const STORAGE_KEY = "unison.session.v1"
 
 export interface Identity {
   keyId: string
