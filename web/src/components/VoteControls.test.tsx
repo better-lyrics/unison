@@ -3,12 +3,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 const upvote = vi.fn()
 const downvote = vi.fn()
-const unvote = vi.fn()
 const report = vi.fn()
-let pending = false
 
 vi.mock("@/hooks/useVoteMutations", () => ({
-  useVoteMutations: () => ({ upvote, downvote, unvote, report, isPending: pending }),
+  useVoteMutations: () => ({ upvote, downvote, report }),
 }))
 
 let sessionStatus: "signed-in" | "signed-out" | "loading" = "signed-in"
@@ -22,9 +20,7 @@ import { VoteControls } from "./VoteControls"
 beforeEach(() => {
   upvote.mockReset()
   downvote.mockReset()
-  unvote.mockReset()
   report.mockReset()
-  pending = false
   sessionStatus = "signed-in"
 })
 

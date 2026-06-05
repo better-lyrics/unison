@@ -172,24 +172,6 @@ describe("useVoteMutations", () => {
     await waitFor(() => expect(voteVariant).toHaveBeenCalledWith(1, -1))
   })
 
-  it("unvote when userVote is 1 calls unvoteVariant and decrements vote count", async () => {
-    seedCaches(client, { variantId: 1, videoId: "v1", userVote: 1, voteCount: 5 })
-    unvoteVariant.mockResolvedValue(undefined)
-    const { result } = renderHook(() => useVoteMutations({ variantId: 1, videoId: "v1" }), {
-      wrapper: createWrapper(client),
-    })
-
-    act(() => {
-      result.current.unvote()
-    })
-
-    const variants = readVariantsCache(client, "v1")
-    expect(variants?.variants[0]?.userVote).toBeNull()
-    expect(variants?.variants[0]?.voteCount).toBe(4)
-
-    await waitFor(() => expect(unvoteVariant).toHaveBeenCalledWith(1))
-  })
-
   it("rolls back both caches when the mutation rejects", async () => {
     seedCaches(client, { variantId: 1, videoId: "v1", userVote: null, voteCount: 5 })
     voteVariant.mockRejectedValue(new Error("boom"))

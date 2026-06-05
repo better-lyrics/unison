@@ -16,9 +16,7 @@ export interface UseVoteMutationsArgs {
 export interface UseVoteMutationsResult {
   upvote: () => void
   downvote: () => void
-  unvote: () => void
   report: (reason: ReportReason) => void
-  isPending: boolean
 }
 
 type VariantsCache = { variants: VariantSummary[] } | undefined
@@ -180,10 +178,6 @@ export function useVoteMutations(args: UseVoteMutationsArgs): UseVoteMutationsRe
     else voteMutation.mutate(-1)
   }, [queryClient, variantKey, variantsKey, variantId, unvoteMutation, voteMutation])
 
-  const unvote = useCallback(() => {
-    unvoteMutation.mutate()
-  }, [unvoteMutation])
-
   const report = useCallback(
     (reason: ReportReason) => {
       reportMutation.mutate(reason)
@@ -191,11 +185,5 @@ export function useVoteMutations(args: UseVoteMutationsArgs): UseVoteMutationsRe
     [reportMutation],
   )
 
-  return {
-    upvote,
-    downvote,
-    unvote,
-    report,
-    isPending: voteMutation.isPending || unvoteMutation.isPending || reportMutation.isPending,
-  }
+  return { upvote, downvote, report }
 }

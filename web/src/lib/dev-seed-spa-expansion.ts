@@ -9,8 +9,6 @@ import type {
   VariantSummary,
 } from "./types"
 
-export { getSeedSession } from "./seed-flag"
-
 const SEEDED_SUBMITTERS = [
   { keyId: "1".repeat(64), reputation: 1.8 },
   { keyId: "2".repeat(64), reputation: 1.4 },

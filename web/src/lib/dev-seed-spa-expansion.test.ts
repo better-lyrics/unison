@@ -3,7 +3,6 @@ import {
   SEED_LYRICS_CORPUS,
   SEED_QUEUE_ENTRIES,
   __resetSpaExpansionSeedState,
-  getSeedSession,
   seedLyricsVariant,
   seedLyricsVariants,
   seedQueue,
@@ -13,6 +12,7 @@ import {
   seedUnvote,
   seedVote,
 } from "./dev-seed-spa-expansion"
+import { getSeedSession } from "./seed-flag"
 
 beforeEach(() => {
   __resetSpaExpansionSeedState()
