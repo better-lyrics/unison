@@ -1,5 +1,4 @@
 import { cleanup, render, screen } from "@testing-library/react"
-import { MemoryRouter } from "react-router-dom"
 import { afterEach, describe, expect, it } from "vitest"
 import type { SongLeaderboardEntry } from "@/lib/types"
 import { SongRow } from "./SongRow"
@@ -30,11 +29,9 @@ const needsFixingEntry: SongLeaderboardEntry = {
 
 function renderRow(entry: SongLeaderboardEntry) {
   return render(
-    <MemoryRouter>
-      <ul>
-        <SongRow entry={entry} />
-      </ul>
-    </MemoryRouter>,
+    <ul>
+      <SongRow entry={entry} />
+    </ul>,
   )
 }
 
@@ -79,33 +76,10 @@ describe("SongRow", () => {
     expect(ytmLink.getAttribute("rel")).toBe("noopener noreferrer")
   })
 
-  it("renders a 'View details' link pointing to the internal lyrics route", () => {
-    renderRow(mostWantedEntry)
-    const detailsLink = screen.getByRole("link", { name: /View details for Midnight City by M83/i })
-    expect(detailsLink.getAttribute("href")).toBe("/song/vid-mw")
-    expect(detailsLink.textContent).toMatch(/View details/)
-  })
-
-  it("exposes both the YTM link and the View details link in tab order", () => {
+  it("renders a single link per row pointing to YouTube Music", () => {
     renderRow(mostWantedEntry)
     const links = screen.getAllByRole("link")
-    expect(links).toHaveLength(2)
+    expect(links).toHaveLength(1)
     expect(links[0].getAttribute("href")).toBe("https://music.youtube.com/watch?v=vid-mw")
-    expect(links[1].getAttribute("href")).toBe("/song/vid-mw")
-  })
-
-  it("focuses each link independently", () => {
-    renderRow(mostWantedEntry)
-    const [ytm, details] = screen.getAllByRole("link")
-    ytm.focus()
-    expect(document.activeElement).toBe(ytm)
-    details.focus()
-    expect(document.activeElement).toBe(details)
-  })
-
-  it("does not nest anchors", () => {
-    renderRow(mostWantedEntry)
-    const ytm = screen.getByRole("link", { name: /Open .* in YouTube Music/i })
-    expect(ytm.querySelector("a")).toBeNull()
   })
 })
