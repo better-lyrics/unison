@@ -77,20 +77,21 @@ describe("VariantMetadata", () => {
     expect(screen.getByText(/\(12\)/)).toBeTruthy()
   })
 
-  it("shows an up arrow for an upvoted user vote", () => {
-    renderMeta(makeVariant({ userVote: 1 }))
-    expect(screen.getByText(/▲/)).toBeTruthy()
+  it("prefixes the vote count with + for an upvoted user vote", () => {
+    renderMeta(makeVariant({ voteCount: 24, userVote: 1 }))
+    expect(screen.getByText("+24")).toBeTruthy()
   })
 
-  it("shows a down arrow for a downvoted user vote", () => {
-    renderMeta(makeVariant({ userVote: -1 }))
-    expect(screen.getByText(/▼/)).toBeTruthy()
+  it("prefixes the vote count with - for a downvoted user vote", () => {
+    renderMeta(makeVariant({ voteCount: 24, userVote: -1 }))
+    expect(screen.getByText("-24")).toBeTruthy()
   })
 
-  it("shows neither arrow when userVote is null or missing", () => {
-    renderMeta(makeVariant({ userVote: null }))
-    expect(screen.queryByText(/▲/)).toBeNull()
-    expect(screen.queryByText(/▼/)).toBeNull()
+  it("renders the vote count without a prefix when userVote is null or missing", () => {
+    renderMeta(makeVariant({ voteCount: 7, userVote: null }))
+    expect(screen.getByText("7")).toBeTruthy()
+    expect(screen.queryByText("+7")).toBeNull()
+    expect(screen.queryByText("-7")).toBeNull()
   })
 
   it("renders the confidence label", () => {
@@ -102,7 +103,7 @@ describe("VariantMetadata", () => {
     const keyId = "abcdef0123456789012345678901wxyz"
     renderMeta(makeVariant({ submitter: { keyId, reputation: 1.3 } }))
     const link = screen.getByRole("link")
-    expect(link.getAttribute("href")).toBe(`/users/${keyId}`)
+    expect(link.getAttribute("href")).toBe(`/curator/${keyId}`)
     expect(link.textContent).toContain("abcdef01")
     expect(link.textContent).toContain("wxyz")
     expect(screen.getByText(/1\.3/)).toBeTruthy()

@@ -55,7 +55,7 @@ export function LyricsRenderer({ variant, currentTimeMs, playing, onLineClick }:
     <braccato-lyrics
       ref={elementRef}
       src={blobUrl ?? undefined}
-      className="mx-auto block h-[60vh] max-h-[640px] min-h-[420px] w-full max-w-3xl"
+      className="mx-auto block h-[420px] w-full max-w-3xl"
       style={
         {
           "--braccato-font-family": "'Satoshi', sans-serif",

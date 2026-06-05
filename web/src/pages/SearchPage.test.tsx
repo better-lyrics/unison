@@ -148,7 +148,7 @@ describe("SearchPage", () => {
     expect(url).toContain("artist=Taylor+Swift")
   })
 
-  it("links rows to /lyrics/:videoId?variantId=:id", async () => {
+  it("links rows to /song/:videoId?variantId=:id", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn().mockResolvedValue(
@@ -178,6 +178,6 @@ describe("SearchPage", () => {
     renderAt(["/search?q=link"])
     await waitFor(() => expect(screen.getByText("Linked")).toBeTruthy())
     const link = screen.getByRole("link")
-    expect(link.getAttribute("href")).toBe("/lyrics/vid99?variantId=99")
+    expect(link.getAttribute("href")).toBe("/song/vid99?variantId=99")
   })
 })

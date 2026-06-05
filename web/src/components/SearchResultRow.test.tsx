@@ -79,10 +79,10 @@ describe("SearchResultRow", () => {
     expect(screen.queryByText(/Lyric match/i)).toBeNull()
   })
 
-  it("links to the lyrics route with the variant id", () => {
+  it("links to the song route with the variant id", () => {
     renderRow(baseHit)
     const link = screen.getByRole("link")
-    expect(link.getAttribute("href")).toBe("/lyrics/vid-42?variantId=42")
+    expect(link.getAttribute("href")).toBe("/song/vid-42?variantId=42")
   })
 
   it("sets a descriptive aria-label on the link", () => {

@@ -40,7 +40,7 @@ export function SongRow({ entry }: SongRowProps) {
         </div>
       </a>
       <Link
-        to={`/lyrics/${entry.videoId}`}
+        to={`/song/${entry.videoId}`}
         aria-label={`View details for ${entry.song} by ${entry.artist}`}
         className="flex justify-end border-t border-unison-border/60 px-4 py-2 text-xs text-unison-text-muted transition-colors hover:bg-unison-bg-hover hover:text-unison-text"
       >

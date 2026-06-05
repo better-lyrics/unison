@@ -82,7 +82,7 @@ describe("SongRow", () => {
   it("renders a 'View details' link pointing to the internal lyrics route", () => {
     renderRow(mostWantedEntry)
     const detailsLink = screen.getByRole("link", { name: /View details for Midnight City by M83/i })
-    expect(detailsLink.getAttribute("href")).toBe("/lyrics/vid-mw")
+    expect(detailsLink.getAttribute("href")).toBe("/song/vid-mw")
     expect(detailsLink.textContent).toMatch(/View details/)
   })
 
@@ -91,7 +91,7 @@ describe("SongRow", () => {
     const links = screen.getAllByRole("link")
     expect(links).toHaveLength(2)
     expect(links[0].getAttribute("href")).toBe("https://music.youtube.com/watch?v=vid-mw")
-    expect(links[1].getAttribute("href")).toBe("/lyrics/vid-mw")
+    expect(links[1].getAttribute("href")).toBe("/song/vid-mw")
   })
 
   it("focuses each link independently", () => {

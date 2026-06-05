@@ -16,7 +16,7 @@ export function SearchResultRow({ entry, rank }: SearchResultRowProps) {
   return (
     <li>
       <Link
-        to={`/lyrics/${entry.videoId}?variantId=${entry.id}`}
+        to={`/song/${entry.videoId}?variantId=${entry.id}`}
         aria-label={`Open lyrics for ${entry.song} by ${entry.artist}`}
         className="flex items-center gap-4 rounded-lg border border-unison-border bg-unison-bg-elevated px-4 py-3 transition-colors hover:border-unison-border-strong hover:bg-unison-bg-hover"
       >

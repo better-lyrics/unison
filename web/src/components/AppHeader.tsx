@@ -53,7 +53,7 @@ export function AppHeader() {
           <NavLink to="/" end className={tabClass}>
             Songs
           </NavLink>
-          <NavLink to="/leaderboard" className={tabClass}>
+          <NavLink to="/curators" className={tabClass}>
             Leaderboard
           </NavLink>
           <NavLink to="/about" className={tabClass}>
@@ -94,7 +94,7 @@ export function AppHeader() {
             <NavLink to="/" end role="menuitem" onClick={closeMenu} className={tabClass}>
               Songs
             </NavLink>
-            <NavLink to="/leaderboard" role="menuitem" onClick={closeMenu} className={tabClass}>
+            <NavLink to="/curators" role="menuitem" onClick={closeMenu} className={tabClass}>
               Leaderboard
             </NavLink>
             <NavLink to="/about" role="menuitem" onClick={closeMenu} className={tabClass}>

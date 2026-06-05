@@ -144,72 +144,72 @@ export function LyricsPage() {
           {variant ? <VariantMetadata variant={variant} /> : null}
         </div>
         <div className="space-y-4">
-          <div className="flex items-center justify-end">
-            <fieldset className="inline-flex rounded-md border border-unison-border bg-unison-bg-elevated p-0.5">
-              <legend className="sr-only">Lyrics display mode</legend>
-              <button
-                type="button"
-                onClick={() => setMode("synced")}
-                className={cn(
-                  "rounded px-3 py-1 text-xs font-medium transition-colors",
-                  mode === "synced"
-                    ? "bg-unison-bg-hover text-unison-text"
-                    : "text-unison-text-muted hover:text-unison-text",
-                )}
-              >
-                Synced
-              </button>
-              <button
-                type="button"
-                onClick={() => setMode("raw")}
-                className={cn(
-                  "rounded px-3 py-1 text-xs font-medium transition-colors",
-                  mode === "raw"
-                    ? "bg-unison-bg-hover text-unison-text"
-                    : "text-unison-text-muted hover:text-unison-text",
-                )}
-              >
-                Raw
-              </button>
-            </fieldset>
-          </div>
-          <div className="rounded-lg border border-unison-border bg-unison-bg-elevated p-4">
-            {variantQuery.isLoading || !variant ? (
-              <LoadingPlaceholder rows={3} />
-            ) : mode === "synced" ? (
-              <LyricsRenderer
-                variant={variant}
-                currentTimeMs={currentTimeMs}
-                playing={playing}
-                onLineClick={handleLineClick}
-              />
-            ) : (
-              <div className="space-y-3">
-                <div className="flex justify-end">
-                  <button
-                    type="button"
-                    onClick={handleCopy}
-                    disabled={!canCopy}
-                    aria-label="Copy lyrics body to clipboard"
-                    aria-live="polite"
-                    className={cn(
-                      "rounded border border-unison-border px-2 py-1 text-xs transition-colors",
-                      canCopy
-                        ? "hover:border-unison-border-strong"
-                        : "cursor-not-allowed text-unison-text-muted opacity-60",
-                      canCopy && copyState === "idle" && "text-unison-text-secondary hover:text-unison-text",
-                      canCopy && copyState === "copied" && "text-green-500",
-                      canCopy && copyState === "failed" && "text-amber-500",
-                    )}
-                  >
-                    {COPY_LABEL[copyState]}
-                  </button>
-                </div>
+          <div className="overflow-hidden rounded-lg border border-unison-border bg-unison-bg-elevated">
+            <div className="flex items-center justify-between border-b border-unison-border/60 px-3 py-2">
+              <fieldset className="inline-flex rounded-md bg-unison-bg p-0.5">
+                <legend className="sr-only">Lyrics display mode</legend>
+                <button
+                  type="button"
+                  onClick={() => setMode("synced")}
+                  className={cn(
+                    "rounded px-3 py-1 text-xs font-medium transition-colors",
+                    mode === "synced"
+                      ? "bg-unison-bg-hover text-unison-text"
+                      : "text-unison-text-muted hover:text-unison-text",
+                  )}
+                >
+                  Synced
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setMode("raw")}
+                  className={cn(
+                    "rounded px-3 py-1 text-xs font-medium transition-colors",
+                    mode === "raw"
+                      ? "bg-unison-bg-hover text-unison-text"
+                      : "text-unison-text-muted hover:text-unison-text",
+                  )}
+                >
+                  Raw
+                </button>
+              </fieldset>
+              {mode === "raw" && variant ? (
+                <button
+                  type="button"
+                  onClick={handleCopy}
+                  disabled={!canCopy}
+                  aria-label="Copy lyrics body to clipboard"
+                  aria-live="polite"
+                  className={cn(
+                    "rounded border border-unison-border px-2 py-1 text-xs transition-colors",
+                    canCopy
+                      ? "hover:border-unison-border-strong"
+                      : "cursor-not-allowed text-unison-text-muted opacity-60",
+                    canCopy && copyState === "idle" && "text-unison-text-secondary hover:text-unison-text",
+                    canCopy && copyState === "copied" && "text-green-500",
+                    canCopy && copyState === "failed" && "text-amber-500",
+                  )}
+                >
+                  {COPY_LABEL[copyState]}
+                </button>
+              ) : null}
+            </div>
+            <div className="p-4">
+              {variantQuery.isLoading || !variant ? (
+                <LoadingPlaceholder rows={3} />
+              ) : mode === "synced" ? (
+                <LyricsRenderer
+                  variant={variant}
+                  currentTimeMs={currentTimeMs}
+                  playing={playing}
+                  onLineClick={handleLineClick}
+                />
+              ) : (
                 <pre className="whitespace-pre-wrap break-words font-mono text-xs text-unison-text">
                   {variant.lyrics}
                 </pre>
-              </div>
-            )}
+              )}
+            </div>
           </div>
           <VariantList variants={variants} selectedId={selectedId ?? -1} onSelect={handleSelect} />
         </div>

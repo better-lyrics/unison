@@ -13,7 +13,7 @@ interface CuratorRowProps {
 
 export function CuratorRow({ entry, isSelf = false, appended = false }: CuratorRowProps) {
   const avatar = dicebearThumbsDataUri(entry.keyId)
-  const href = isSelf ? "/me" : `/users/${entry.keyId}`
+  const href = isSelf ? "/me" : `/curator/${entry.keyId}`
   return (
     <li data-self={isSelf || undefined} className={cn(appended && "!mt-4")}>
       <Link

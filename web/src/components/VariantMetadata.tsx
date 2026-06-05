@@ -24,14 +24,14 @@ function truncateKey(keyId: string): string {
   return `${keyId.slice(0, 8)}…${keyId.slice(-4)}`
 }
 
-function voteArrow(userVote: 1 | -1 | null | undefined): string | null {
-  if (userVote === 1) return "▲"
-  if (userVote === -1) return "▼"
-  return null
+function formatVoteCount(voteCount: number, userVote: 1 | -1 | null | undefined): string {
+  if (userVote === 1) return `+${voteCount}`
+  if (userVote === -1) return `-${voteCount}`
+  return `${voteCount}`
 }
 
 export function VariantMetadata({ variant }: VariantMetadataProps) {
-  const arrow = voteArrow(variant.userVote)
+  const voteDisplay = formatVoteCount(variant.voteCount, variant.userVote)
   return (
     <aside className="rounded-lg border border-unison-border bg-unison-bg-elevated p-4">
       {variant.hidden ? (
@@ -52,14 +52,13 @@ export function VariantMetadata({ variant }: VariantMetadataProps) {
           <span className="ml-1 font-mono text-xs tabular-nums text-unison-text-muted">{`(${variant.score})`}</span>
         </Row>
         <Row label="Votes">
-          <span className="font-mono tabular-nums">{variant.voteCount}</span>
-          {arrow ? <span className="ml-2 text-unison-text-secondary">{arrow}</span> : null}
+          <span className="font-mono tabular-nums">{voteDisplay}</span>
         </Row>
         <Row label="Confidence">{variant.confidence}</Row>
         {variant.submitter ? (
           <Row label="Submitter">
             <Link
-              to={`/users/${variant.submitter.keyId}`}
+              to={`/curator/${variant.submitter.keyId}`}
               className="font-mono text-xs text-unison-text underline-offset-2 hover:underline"
             >
               {truncateKey(variant.submitter.keyId)}
