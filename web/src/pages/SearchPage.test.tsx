@@ -126,26 +126,26 @@ describe("SearchPage", () => {
     expect(screen.getByText(/search broken/)).toBeTruthy()
   })
 
-  it("fires the fetch when only song is provided", async () => {
+  it("fires the fetch when both song and artist are provided", async () => {
+    const fetchSpy = vi
+      .fn()
+      .mockResolvedValue(new Response(JSON.stringify({ success: true, data: [] }), { status: 200 }))
+    vi.stubGlobal("fetch", fetchSpy)
+    renderAt(["/search?song=Cruel+Summer&artist=Taylor+Swift"])
+    await waitFor(() => expect(fetchSpy).toHaveBeenCalled())
+    const url = fetchSpy.mock.calls[0][0] as string
+    expect(url).toContain("song=Cruel+Summer")
+    expect(url).toContain("artist=Taylor+Swift")
+  })
+
+  it("does not fire the fetch when only one of song or artist is provided", async () => {
     const fetchSpy = vi
       .fn()
       .mockResolvedValue(new Response(JSON.stringify({ success: true, data: [] }), { status: 200 }))
     vi.stubGlobal("fetch", fetchSpy)
     renderAt(["/search?song=Cruel+Summer"])
-    await waitFor(() => expect(fetchSpy).toHaveBeenCalled())
-    const url = fetchSpy.mock.calls[0][0] as string
-    expect(url).toContain("song=Cruel+Summer")
-  })
-
-  it("fires the fetch when only artist is provided", async () => {
-    const fetchSpy = vi
-      .fn()
-      .mockResolvedValue(new Response(JSON.stringify({ success: true, data: [] }), { status: 200 }))
-    vi.stubGlobal("fetch", fetchSpy)
-    renderAt(["/search?artist=Taylor+Swift"])
-    await waitFor(() => expect(fetchSpy).toHaveBeenCalled())
-    const url = fetchSpy.mock.calls[0][0] as string
-    expect(url).toContain("artist=Taylor+Swift")
+    await new Promise((r) => setTimeout(r, 50))
+    expect(fetchSpy).not.toHaveBeenCalled()
   })
 
   it("links rows to /song/:videoId?variantId=:id", async () => {

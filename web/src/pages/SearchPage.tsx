@@ -18,7 +18,8 @@ export function SearchPage() {
 
   const value = useMemo(() => ({ q, song, artist }), [q, song, artist])
   const debounced = useDebouncedValue(value, DEBOUNCE_MS)
-  const enabled = debounced.q.trim().length >= MIN_QUERY_LENGTH || !!debounced.song || !!debounced.artist
+  const enabled =
+    debounced.q.trim().length >= MIN_QUERY_LENGTH || (!!debounced.song && !!debounced.artist)
 
   const { data, isLoading, error } = useQuery({
     queryKey: ["lyrics", "search", debounced],
