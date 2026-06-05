@@ -223,6 +223,15 @@ describe("eitherAuth middleware: signed-envelope path", () => {
 		const body = (await res.json()) as { code: string }
 		expect(body.code).toBe("INVALID_SIGNED_BODY")
 	})
+
+	it("returns 401 AUTH_REQUIRED when no bearer is sent and the request has no body", async () => {
+		const env = makeEnv(makeMockDB(), makeMockCache())
+		const app = makeApp(env)
+		const res = await app.handle(new Request("http://localhost/act", { method: "POST" }))
+		expect(res.status).toBe(401)
+		const body = (await res.json()) as { code: string }
+		expect(body.code).toBe("AUTH_REQUIRED")
+	})
 })
 
 describe("eitherAuth middleware: bearer takes precedence", () => {

@@ -302,15 +302,15 @@ describe("DELETE /lyrics/:id/vote bearer path", () => {
 		expect(json.success).toBe(true)
 	})
 
-	it("falls through to the signed path and returns 400 INVALID_SIGNED_BODY when no auth is provided", async () => {
+	it("returns 401 AUTH_REQUIRED when neither auth nor body is provided", async () => {
 		const env = makeEnv(makeMockDB(), makeMockCache())
 		const app = voteRoutes(env)
 		const res = await app.handle(
 			new Request("http://localhost/lyrics/7/vote", { method: "DELETE" })
 		)
-		expect(res.status).toBe(400)
+		expect(res.status).toBe(401)
 		const json = (await res.json()) as { code: string }
-		expect(json.code).toBe("INVALID_SIGNED_BODY")
+		expect(json.code).toBe("AUTH_REQUIRED")
 	})
 
 	it("returns 401 AUTH_REQUIRED when the bearer token is unknown", async () => {

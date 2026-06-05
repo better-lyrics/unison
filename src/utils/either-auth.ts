@@ -83,6 +83,9 @@ export const eitherAuth = new Elysia({ name: "either-auth" }).derive(
 		}
 
 		const rawBody = ctx.body
+		if (rawBody === undefined || rawBody === null) {
+			return status(401, buildError(ErrorCode.AUTH_REQUIRED))
+		}
 		if (!isValidSignedBody(rawBody)) {
 			log.warn("invalid signed request format")
 			return status(400, buildError(ErrorCode.INVALID_SIGNED_BODY))
