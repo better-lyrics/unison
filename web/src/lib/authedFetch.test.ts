@@ -89,15 +89,37 @@ describe("authedFetch", () => {
     await expect(authedFetch("/x")).rejects.toThrow(AUTHED_FETCH_ERRORS.RATE_LIMITED)
   })
 
-  it("throws REQUEST_FAILED on other non-2xx", async () => {
+  it("surfaces the server error message on 500 when present", async () => {
     loadStoredSessionMock.mockReturnValue(null)
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse({ success: false, error: "boom" }, 500)))
+    await expect(authedFetch("/x")).rejects.toThrow("boom")
+  })
+
+  it("falls back to REQUEST_FAILED on 500 with no body", async () => {
+    loadStoredSessionMock.mockReturnValue(null)
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response("not json", { status: 500 })))
     await expect(authedFetch("/x")).rejects.toThrow(AUTHED_FETCH_ERRORS.REQUEST_FAILED)
+  })
+
+  it("surfaces the server error message on 409 Already voted", async () => {
+    loadStoredSessionMock.mockReturnValue(null)
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(jsonResponse({ success: false, error: "Already voted" }, 409)),
+    )
+    await expect(authedFetch("/x")).rejects.toThrow("Already voted")
+  })
+
+  it("falls back to CONFLICT on 409 with no body", async () => {
+    loadStoredSessionMock.mockReturnValue(null)
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response("not json", { status: 409 })))
+    await expect(authedFetch("/x")).rejects.toThrow(AUTHED_FETCH_ERRORS.CONFLICT)
   })
 
   it("exposes the error code constants", () => {
     expect(AUTHED_FETCH_ERRORS.AUTH_REQUIRED).toBe("AUTH_REQUIRED")
     expect(AUTHED_FETCH_ERRORS.RATE_LIMITED).toBe("RATE_LIMITED")
     expect(AUTHED_FETCH_ERRORS.REQUEST_FAILED).toBe("REQUEST_FAILED")
+    expect(AUTHED_FETCH_ERRORS.CONFLICT).toBe("CONFLICT")
   })
 })

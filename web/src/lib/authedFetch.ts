@@ -5,7 +5,17 @@ export const AUTHED_FETCH_ERRORS = {
   AUTH_REQUIRED: "AUTH_REQUIRED",
   RATE_LIMITED: "RATE_LIMITED",
   REQUEST_FAILED: "REQUEST_FAILED",
+  CONFLICT: "CONFLICT",
 } as const
+
+async function readServerError(res: Response): Promise<string | null> {
+  try {
+    const body = (await res.json()) as { error?: unknown }
+    return typeof body.error === "string" && body.error.length > 0 ? body.error : null
+  } catch {
+    return null
+  }
+}
 
 function normaliseHeaders(input: HeadersInit | undefined): Record<string, string> {
   if (!input) return {}
@@ -37,7 +47,14 @@ export async function authedFetch<T>(input: RequestInfo | URL, init?: RequestIni
   const res = await fetch(input, { ...init, headers })
   if (res.status === 401) throw new Error(AUTHED_FETCH_ERRORS.AUTH_REQUIRED)
   if (res.status === 429) throw new Error(AUTHED_FETCH_ERRORS.RATE_LIMITED)
-  if (!res.ok) throw new Error(AUTHED_FETCH_ERRORS.REQUEST_FAILED)
+  if (res.status === 409) {
+    const message = await readServerError(res)
+    throw new Error(message ?? AUTHED_FETCH_ERRORS.CONFLICT)
+  }
+  if (!res.ok) {
+    const message = await readServerError(res)
+    throw new Error(message ?? AUTHED_FETCH_ERRORS.REQUEST_FAILED)
+  }
   const body = (await res.json()) as ApiEnvelope<T>
   if (!body.success) throw new Error(AUTHED_FETCH_ERRORS.REQUEST_FAILED)
   return body.data

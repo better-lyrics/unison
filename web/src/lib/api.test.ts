@@ -417,12 +417,12 @@ describe("voteVariant", () => {
     await expect(voteVariant(42, 1)).rejects.toThrow(AUTHED_FETCH_ERRORS.RATE_LIMITED)
   })
 
-  it("rejects with REQUEST_FAILED on other non-2xx", async () => {
+  it("surfaces the server error message on other non-2xx", async () => {
     loadStoredSessionMock.mockReturnValue(session)
     vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
       new Response(JSON.stringify({ success: false, error: "boom" }), { status: 500 }),
     )
-    await expect(voteVariant(42, 1)).rejects.toThrow(AUTHED_FETCH_ERRORS.REQUEST_FAILED)
+    await expect(voteVariant(42, 1)).rejects.toThrow("boom")
   })
 
   it("propagates a network failure", async () => {
@@ -486,12 +486,12 @@ describe("reportVariant", () => {
     await expect(reportVariant(3, "spam")).rejects.toThrow(AUTHED_FETCH_ERRORS.AUTH_REQUIRED)
   })
 
-  it("rejects with REQUEST_FAILED on 500", async () => {
+  it("surfaces the server error message on 500", async () => {
     loadStoredSessionMock.mockReturnValue(session)
     vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
       new Response(JSON.stringify({ success: false, error: "boom" }), { status: 500 }),
     )
-    await expect(reportVariant(3, "spam")).rejects.toThrow(AUTHED_FETCH_ERRORS.REQUEST_FAILED)
+    await expect(reportVariant(3, "spam")).rejects.toThrow("boom")
   })
 })
 
