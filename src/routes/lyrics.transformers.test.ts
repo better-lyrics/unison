@@ -116,6 +116,31 @@ describe("toResponse", () => {
 	})
 })
 
+describe("toResponse fulfillment badge", () => {
+	it("omits fulfilled when no badge provided", () => {
+		const res = toResponse(baseRow)
+		expect(res.fulfilled).toBeUndefined()
+	})
+
+	it("includes fulfilled when badge provided", () => {
+		const res = toResponse(baseRow, {
+			demand: 3.5,
+			requestCount: 2,
+			fulfilledAt: 1700000000,
+		})
+		expect(res.fulfilled).toEqual({
+			demand: 3.5,
+			requestCount: 2,
+			fulfilledAt: 1700000000,
+		})
+	})
+
+	it("passes null through as undefined", () => {
+		const res = toResponse(baseRow, null)
+		expect(res.fulfilled).toBeUndefined()
+	})
+})
+
 describe("toSearchResponse", () => {
 	const baseSearchRow: LyricsSearchResult = {
 		id: 7,
