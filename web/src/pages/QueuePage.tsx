@@ -6,7 +6,7 @@ import { SongRow } from "@/components/SongRow"
 import { fetchQueue } from "@/lib/api"
 import type { QueueEntry, SongLeaderboardEntry } from "@/lib/types"
 
-function toLeaderboardEntry(entry: QueueEntry, index: number): SongLeaderboardEntry {
+function toLeaderboardEntry(entry: QueueEntry, rank: number): SongLeaderboardEntry {
   return {
     videoId: entry.videoId,
     song: entry.song,
@@ -15,7 +15,7 @@ function toLeaderboardEntry(entry: QueueEntry, index: number): SongLeaderboardEn
     demand: entry.demand,
     requestCount: entry.requestCount,
     section: "most_wanted",
-    rank: entry.rank ?? index + 1,
+    rank,
   }
 }
 
@@ -86,14 +86,14 @@ export function QueuePage() {
         <>
           <ul className="space-y-2">
             {entries.map((entry, index) => (
-              <SongRow key={entry.videoId} entry={toLeaderboardEntry(entry, index)} />
+              <SongRow key={entry.videoId} entry={toLeaderboardEntry(entry, index + 1)} />
             ))}
           </ul>
           <div ref={sentinelRef} aria-hidden="true" />
           {hasNextPage ? (
             <LoadMoreButton onClick={() => void fetchNextPage()} pending={isFetchingNextPage} />
           ) : (
-            <p className="text-center text-xs text-unison-text-muted">You have reached the end of queue.</p>
+            <p className="text-center text-xs text-unison-text-muted">You have reached the end of the queue.</p>
           )}
         </>
       )}

@@ -120,7 +120,7 @@ describe("QueuePage", () => {
     await waitFor(() => expect(screen.getByText("Song One")).toBeTruthy())
     expect(screen.getByText("Song Two")).toBeTruthy()
     expect(screen.queryByRole("button", { name: /load more/i })).toBeNull()
-    expect(screen.getByText(/end of queue/i)).toBeTruthy()
+    expect(screen.getByText(/end of the queue/i)).toBeTruthy()
   })
 
   it("shows the Load more button when more pages are available", async () => {
@@ -154,6 +154,24 @@ describe("QueuePage", () => {
     expect(fetchQueueMock.mock.calls[1][0]).toMatchObject({ cursor: "page2" })
   })
 
+  it("renders a continuous rank sequence across paginated pages", async () => {
+    const page1Items = Array.from({ length: 3 }, (_, i) =>
+      makeEntry({ videoId: `p1-${i + 1}`, song: `Page One Song ${i + 1}`, rank: i + 1 }),
+    )
+    const page2Items = Array.from({ length: 3 }, (_, i) =>
+      makeEntry({ videoId: `p2-${i + 1}`, song: `Page Two Song ${i + 1}`, rank: i + 1 }),
+    )
+    fetchQueueMock
+      .mockResolvedValueOnce({ items: page1Items, nextCursor: "p2" })
+      .mockResolvedValueOnce({ items: page2Items, nextCursor: null })
+    renderPage()
+    await waitFor(() => expect(screen.getByText("Page One Song 1")).toBeTruthy())
+    fireEvent.click(screen.getByRole("button", { name: /load more/i }))
+    await waitFor(() => expect(screen.getByText("Page Two Song 3")).toBeTruthy())
+    const renderedRanks = screen.getAllByText(/^#\d+$/).map((node) => node.textContent)
+    expect(renderedRanks).toEqual(["#1", "#2", "#3", "#4", "#5", "#6"])
+  })
+
   it("hides the Load more button once the last page resolves with no next cursor", async () => {
     fetchQueueMock
       .mockResolvedValueOnce({
@@ -169,7 +187,7 @@ describe("QueuePage", () => {
     fireEvent.click(screen.getByRole("button", { name: /load more/i }))
     await waitFor(() => expect(screen.getByText("Song Two")).toBeTruthy())
     await waitFor(() => expect(screen.queryByRole("button", { name: /load more/i })).toBeNull())
-    expect(screen.getByText(/end of queue/i)).toBeTruthy()
+    expect(screen.getByText(/end of the queue/i)).toBeTruthy()
   })
 
   it("disables the Load more button and shows the loading label while fetching the next page", async () => {
