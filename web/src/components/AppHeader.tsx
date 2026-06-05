@@ -79,9 +79,13 @@ export function AppHeader() {
             aria-label={menuOpen ? "Close menu" : "Open menu"}
             aria-expanded={menuOpen}
             aria-haspopup="menu"
-            className="cursor-pointer rounded-md p-1.5 text-unison-text-secondary transition-colors hover:bg-unison-bg-hover hover:text-unison-text sm:hidden"
+            className="group cursor-pointer rounded-md p-1.5 text-unison-text transition-colors hover:bg-unison-bg-hover sm:hidden"
           >
-            {menuOpen ? <IconX className="size-5" stroke={1.5} /> : <IconMenu2 className="size-5" stroke={1.5} />}
+            {menuOpen ? (
+              <IconX className="size-5 opacity-70 transition-opacity group-hover:opacity-100" stroke={1.5} />
+            ) : (
+              <IconMenu2 className="size-5 opacity-70 transition-opacity group-hover:opacity-100" stroke={1.5} />
+            )}
           </button>
         </div>
       </div>

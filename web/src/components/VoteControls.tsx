@@ -73,13 +73,16 @@ export function VoteControls({ variantId, videoId, variant }: VoteControlsProps)
         title={disabledTitle}
         onClick={handleUp}
         className={cn(
-          "inline-flex h-7 w-7 items-center justify-center rounded border border-unison-border text-unison-text-muted transition-colors",
-          !disabled && "hover:border-unison-border-strong hover:text-unison-text",
+          "group inline-flex h-7 w-7 items-center justify-center rounded border border-unison-border text-unison-text transition-colors",
+          !disabled && "hover:border-unison-border-strong",
           upActive && "border-green-500/60 bg-green-500/10 text-green-300",
           disabled && "cursor-not-allowed opacity-60",
         )}
       >
-        <BlUpvoteIcon size={16} />
+        <BlUpvoteIcon
+          size={16}
+          className={cn("transition-opacity", upActive ? "opacity-100" : "opacity-50 group-hover:opacity-100")}
+        />
       </button>
       <span className="min-w-[2ch] text-center text-xs font-medium tabular-nums text-unison-text">
         {variant.voteCount}
@@ -92,13 +95,16 @@ export function VoteControls({ variantId, videoId, variant }: VoteControlsProps)
         title={disabledTitle}
         onClick={handleDown}
         className={cn(
-          "inline-flex h-7 w-7 items-center justify-center rounded border border-unison-border text-unison-text-muted transition-colors",
-          !disabled && "hover:border-unison-border-strong hover:text-unison-text",
+          "group inline-flex h-7 w-7 items-center justify-center rounded border border-unison-border text-unison-text transition-colors",
+          !disabled && "hover:border-unison-border-strong",
           downActive && "border-amber-500/60 bg-amber-500/10 text-amber-300",
           disabled && "cursor-not-allowed opacity-60",
         )}
       >
-        <BlDownvoteIcon size={16} />
+        <BlDownvoteIcon
+          size={16}
+          className={cn("transition-opacity", downActive ? "opacity-100" : "opacity-50 group-hover:opacity-100")}
+        />
       </button>
       <button
         type="button"
@@ -114,7 +120,7 @@ export function VoteControls({ variantId, videoId, variant }: VoteControlsProps)
           disabled && "cursor-not-allowed opacity-60",
         )}
       >
-        <BlReportIcon size={14} />
+        <BlReportIcon size={14} className="text-unison-text opacity-50" />
         <span>Report</span>
       </button>
       {menuOpen && !disabled ? (

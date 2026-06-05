@@ -76,9 +76,9 @@ export function SearchBar({ compact = false }: SearchBarProps) {
           setExpanded(true)
           window.setTimeout(() => inputRef.current?.focus(), 0)
         }}
-        className="flex h-9 w-9 cursor-pointer items-center justify-center rounded-md border border-transparent text-unison-text-secondary transition-colors hover:bg-unison-bg-hover hover:text-unison-text"
+        className="flex h-9 w-9 cursor-pointer items-center justify-center rounded-md border border-transparent text-unison-text transition-colors hover:bg-unison-bg-hover"
       >
-        <IconSearch className="size-5" stroke={1.5} aria-hidden="true" />
+        <IconSearch className="size-5 opacity-70" stroke={1.5} aria-hidden="true" />
       </button>
     )
   }
@@ -90,7 +90,7 @@ export function SearchBar({ compact = false }: SearchBarProps) {
         compact ? "w-full" : "w-full max-w-xs",
       )}
     >
-      <IconSearch className="size-4 shrink-0 text-unison-text-muted" stroke={1.5} aria-hidden="true" />
+      <IconSearch className="size-4 shrink-0 text-unison-text opacity-50" stroke={1.5} aria-hidden="true" />
       <input
         ref={inputRef}
         type="search"
@@ -109,9 +109,9 @@ export function SearchBar({ compact = false }: SearchBarProps) {
             setValue("")
             setExpanded(false)
           }}
-          className="cursor-pointer rounded p-0.5 text-unison-text-muted transition-colors hover:bg-unison-bg-hover hover:text-unison-text"
+          className="cursor-pointer rounded p-0.5 text-unison-text transition-colors hover:bg-unison-bg-hover"
         >
-          <IconX className="size-4" stroke={1.5} aria-hidden="true" />
+          <IconX className="size-4 opacity-50 transition-opacity hover:opacity-100" stroke={1.5} aria-hidden="true" />
         </button>
       ) : null}
     </div>
