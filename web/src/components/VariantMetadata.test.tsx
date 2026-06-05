@@ -77,21 +77,19 @@ describe("VariantMetadata", () => {
     expect(screen.getByText(/\(12\)/)).toBeTruthy()
   })
 
-  it("prefixes the vote count with + for an upvoted user vote", () => {
-    renderMeta(makeVariant({ voteCount: 24, userVote: 1 }))
+  it("prefixes a positive vote count with +", () => {
+    renderMeta(makeVariant({ voteCount: 24 }))
     expect(screen.getByText("+24")).toBeTruthy()
   })
 
-  it("prefixes the vote count with - for a downvoted user vote", () => {
-    renderMeta(makeVariant({ voteCount: 24, userVote: -1 }))
-    expect(screen.getByText("-24")).toBeTruthy()
+  it("renders a negative vote count with its native minus sign", () => {
+    renderMeta(makeVariant({ voteCount: -3 }))
+    expect(screen.getByText("-3")).toBeTruthy()
   })
 
-  it("renders the vote count without a prefix when userVote is null or missing", () => {
-    renderMeta(makeVariant({ voteCount: 7, userVote: null }))
-    expect(screen.getByText("7")).toBeTruthy()
-    expect(screen.queryByText("+7")).toBeNull()
-    expect(screen.queryByText("-7")).toBeNull()
+  it("renders 0 when vote count is zero", () => {
+    renderMeta(makeVariant({ voteCount: 0 }))
+    expect(screen.getByText("0")).toBeTruthy()
   })
 
   it("renders the confidence label", () => {

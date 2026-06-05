@@ -24,14 +24,14 @@ function truncateKey(keyId: string): string {
   return `${keyId.slice(0, 8)}…${keyId.slice(-4)}`
 }
 
-function formatVoteCount(voteCount: number, userVote: 1 | -1 | null | undefined): string {
-  if (userVote === 1) return `+${voteCount}`
-  if (userVote === -1) return `-${voteCount}`
-  return `${voteCount}`
+function formatVoteCount(voteCount: number): string {
+  if (voteCount > 0) return `+${voteCount}`
+  if (voteCount < 0) return `${voteCount}`
+  return "0"
 }
 
 export function VariantMetadata({ variant }: VariantMetadataProps) {
-  const voteDisplay = formatVoteCount(variant.voteCount, variant.userVote)
+  const voteDisplay = formatVoteCount(variant.voteCount)
   return (
     <aside className="rounded-lg border border-unison-border bg-unison-bg-elevated p-4">
       {variant.hidden ? (
