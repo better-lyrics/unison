@@ -1,8 +1,8 @@
-import { IconChevronDown, IconChevronUp, IconFlag } from "@tabler/icons-react"
 import { useCallback, useEffect, useRef, useState } from "react"
 import { useSession } from "@/auth/useSession"
 import { type ReportReason, useVoteMutations } from "@/hooks/useVoteMutations"
 import { cn } from "@/lib/cn"
+import { BlDownvoteIcon, BlReportIcon, BlUpvoteIcon } from "./icons/BlVoteIcons"
 
 interface VoteControlsProps {
   variantId: number
@@ -79,7 +79,7 @@ export function VoteControls({ variantId, videoId, variant }: VoteControlsProps)
           disabled && "cursor-not-allowed opacity-60",
         )}
       >
-        <IconChevronUp size={16} aria-hidden />
+        <BlUpvoteIcon size={16} />
       </button>
       <span className="min-w-[2ch] text-center text-xs font-medium tabular-nums text-unison-text">
         {variant.voteCount}
@@ -98,7 +98,7 @@ export function VoteControls({ variantId, videoId, variant }: VoteControlsProps)
           disabled && "cursor-not-allowed opacity-60",
         )}
       >
-        <IconChevronDown size={16} aria-hidden />
+        <BlDownvoteIcon size={16} />
       </button>
       <button
         type="button"
@@ -114,7 +114,7 @@ export function VoteControls({ variantId, videoId, variant }: VoteControlsProps)
           disabled && "cursor-not-allowed opacity-60",
         )}
       >
-        <IconFlag size={14} aria-hidden />
+        <BlReportIcon size={14} />
         <span>Report</span>
       </button>
       {menuOpen && !disabled ? (

@@ -39,15 +39,13 @@ export function SongRow({ entry }: SongRowProps) {
           <p className="text-[10px] uppercase tracking-wider text-unison-text-muted">{metricLabel}</p>
         </div>
       </a>
-      <div className="flex justify-end border-t border-unison-border/60 px-4 py-1.5">
-        <Link
-          to={`/lyrics/${entry.videoId}`}
-          aria-label={`View details for ${entry.song} by ${entry.artist}`}
-          className="text-xs text-unison-text-muted transition-colors hover:text-unison-text"
-        >
-          View details →
-        </Link>
-      </div>
+      <Link
+        to={`/lyrics/${entry.videoId}`}
+        aria-label={`View details for ${entry.song} by ${entry.artist}`}
+        className="flex justify-end border-t border-unison-border/60 px-4 py-2 text-xs text-unison-text-muted transition-colors hover:bg-unison-bg-hover hover:text-unison-text"
+      >
+        View details →
+      </Link>
     </li>
   )
 }
