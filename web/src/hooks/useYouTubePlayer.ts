@@ -1,4 +1,4 @@
-import { type RefObject, useCallback, useEffect, useRef, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 
 interface YTPlayer {
   getCurrentTime(): number
@@ -8,6 +8,9 @@ interface YTPlayer {
 
 interface YTPlayerCtorOptions {
   videoId: string
+  width?: string | number
+  height?: string | number
+  playerVars?: { origin?: string }
   events?: {
     onReady?: (e: { target: YTPlayer }) => void
     onStateChange?: (e: { data: number }) => void
@@ -68,20 +71,20 @@ export function __resetForTests(): void {
 }
 
 export interface UseYouTubePlayerResult {
-  ref: RefObject<HTMLDivElement | null>
+  ref: (node: HTMLDivElement | null) => void
   currentTimeMs: number
   playing: boolean
   seekTo: (seconds: number) => void
 }
 
 export function useYouTubePlayer(videoId: string | null): UseYouTubePlayerResult {
-  const ref = useRef<HTMLDivElement | null>(null)
+  const [node, setNode] = useState<HTMLDivElement | null>(null)
   const playerRef = useRef<YTPlayer | null>(null)
   const [currentTimeMs, setCurrentTimeMs] = useState(0)
   const [playing, setPlaying] = useState(false)
 
   useEffect(() => {
-    if (!videoId) {
+    if (!videoId || !node) {
       setCurrentTimeMs(0)
       setPlaying(false)
       return
@@ -95,10 +98,11 @@ export function useYouTubePlayer(videoId: string | null): UseYouTubePlayerResult
     const run = async () => {
       const yt = await ensureScript(win)
       if (cancelled) return
-      const node = ref.current
-      if (!node) return
       const player = new yt.Player(node, {
         videoId,
+        width: "100%",
+        height: "100%",
+        playerVars: { origin: win.location.origin },
         events: {
           onStateChange: (e) => {
             if (e.data === yt.PlayerState.PLAYING) setPlaying(true)
@@ -125,7 +129,7 @@ export function useYouTubePlayer(videoId: string | null): UseYouTubePlayerResult
       setCurrentTimeMs(0)
       setPlaying(false)
     }
-  }, [videoId])
+  }, [videoId, node])
 
   const seekTo = useCallback((seconds: number) => {
     const player = playerRef.current
@@ -133,5 +137,5 @@ export function useYouTubePlayer(videoId: string | null): UseYouTubePlayerResult
     player.seekTo(seconds, true)
   }, [])
 
-  return { ref, currentTimeMs, playing, seekTo }
+  return { ref: setNode, currentTimeMs, playing, seekTo }
 }

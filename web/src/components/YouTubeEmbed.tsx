@@ -1,7 +1,5 @@
-import type { RefObject } from "react"
-
 interface YouTubeEmbedProps {
-  playerRef: RefObject<HTMLDivElement | null>
+  playerRef: (node: HTMLDivElement | null) => void
 }
 
 export function YouTubeEmbed({ playerRef }: YouTubeEmbedProps) {
