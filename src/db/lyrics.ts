@@ -1,4 +1,11 @@
 import { config } from "@/config"
+import { recordFulfillment } from "@/db/fulfillments"
+import {
+	AUTO_HIDE_PREDICATE,
+	AUTO_HIDE_PREDICATE_JOINED,
+	RANKING_EXPR,
+	RANKING_EXPR_JOINED,
+} from "@/db/predicates"
 import { Logger } from "@/infra/logger"
 import type { Env, LyricsRow, LyricsSearchResult, LyricsSubmission } from "@/types"
 import { compress, decompress, isCompressed } from "@/utils/compression"
@@ -7,46 +14,6 @@ import { normalize, normalizeArtist, normalizeSong } from "@/utils/normalize"
 
 const log = new Logger("db")
 const cacheLog = new Logger("cache")
-
-// Composite ranking: community confidence + recency boost + sync quality
-// - effective_score × ln(vote_count + base): amplifies scores backed by more votes
-// - recencyWeight / (1 + age_days): surfaces new entries, decays within days
-// - sync_type multiplier: richsync > linesync > plain
-const { syncTypeBoost } = config.ranking
-const buildRankingExpr = (prefix: string) => {
-	const syncTypeBoostExpr = `CASE ${prefix}sync_type
-		WHEN 'richsync' THEN ${syncTypeBoost.richsync}
-		WHEN 'linesync' THEN ${syncTypeBoost.linesync}
-		ELSE ${syncTypeBoost.plain}
-	END`
-	return `(
-		(${prefix}effective_score * LN(${prefix}vote_count + ${config.ranking.confidenceBase})
-		+ ${config.ranking.recencyWeight} / (1.0 + (EXTRACT(EPOCH FROM NOW())::INTEGER - ${prefix}created_at) / 86400.0))
-		* ${syncTypeBoostExpr}
-	)`
-}
-
-export const RANKING_EXPR = buildRankingExpr("")
-const RANKING_EXPR_JOINED = buildRankingExpr("l.")
-
-const { autoHide } = config.moderation
-
-const buildAutoHidePredicate = (prefix: string) => `(
-	(
-		${prefix}vote_count >= ${autoHide.minVotes}
-		AND ${prefix}downvotes >= ${autoHide.downvoteRatio} * ${prefix}vote_count
-		AND ${prefix}effective_score < ${autoHide.maxEffectiveScore}
-	)
-	OR
-	(
-		${prefix}vote_count >= ${autoHide.decisiveMinVotes}
-		AND ${prefix}downvotes = ${prefix}vote_count
-		AND EXTRACT(EPOCH FROM NOW())::INTEGER - ${prefix}created_at >= ${autoHide.decisiveMinAgeDays * 86400}
-	)
-)`
-
-export const AUTO_HIDE_PREDICATE = buildAutoHidePredicate("")
-export const AUTO_HIDE_PREDICATE_JOINED = buildAutoHidePredicate("l.")
 
 const LYRICS_WITH_SUBMITTER = `
 	SELECT l.*, u.key_id AS submitter_key_id, u.reputation AS submitter_reputation,
@@ -228,7 +195,21 @@ export async function submitLyrics(
 		sync_type: submission.syncType,
 	})
 
-	// Invalidate cache so the new variant competes in ranking
+	if (submission.syncType === "linesync" || submission.syncType === "richsync") {
+		const submitter = await env.DB.prepare("SELECT key_id FROM users WHERE id = ?")
+			.bind(submitterId)
+			.first<{ key_id: string }>()
+
+		if (submitter) {
+			await recordFulfillment(env, {
+				videoId: submission.videoId,
+				lyricsId: result!.id,
+				submitterId,
+				submitterKeyId: submitter.key_id,
+			})
+		}
+	}
+
 	await invalidateCache(env, submission.videoId)
 
 	return { id: result!.id, created: true }

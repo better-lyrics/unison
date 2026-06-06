@@ -1,5 +1,5 @@
 import { config } from "@/config"
-import { AUTO_HIDE_PREDICATE, RANKING_EXPR } from "@/db/lyrics"
+import { AUTO_HIDE_PREDICATE, AUTO_HIDE_PREDICATE_JOINED, RANKING_EXPR } from "@/db/predicates"
 import { windowCutoff } from "@/db/requests"
 import type { Env } from "@/types"
 
@@ -205,6 +205,8 @@ export interface CuratorLeaderboardRow {
 	score: number
 	submissionCount: number
 	totalUpvotes: number
+	fulfilledCount: number
+	fulfilledDemand: number
 	rank: number
 }
 
@@ -214,6 +216,8 @@ interface CuratorRow {
 	score: number
 	submission_count: number
 	total_upvotes: number
+	fulfilled_count: number
+	fulfilled_demand: number
 }
 
 export async function getCuratorLeaderboard(
@@ -222,7 +226,9 @@ export async function getCuratorLeaderboard(
 ): Promise<CuratorLeaderboardRow[]> {
 	const res = await env.DB.prepare(
 		`SELECT u.key_id, u.reputation,
-		        agg.score, agg.submission_count, agg.total_upvotes
+		        agg.score, agg.submission_count, agg.total_upvotes,
+		        COALESCE(ff.fulfilled_count, 0) AS fulfilled_count,
+		        COALESCE(ff.fulfilled_demand, 0) AS fulfilled_demand
 		 FROM (
 		   SELECT submitter_id,
 		          SUM(effective_score) AS score,
@@ -235,6 +241,15 @@ export async function getCuratorLeaderboard(
 		   GROUP BY submitter_id
 		 ) agg
 		 JOIN users u ON u.id = agg.submitter_id
+		 LEFT JOIN (
+		   SELECT f.submitter_id,
+		          COUNT(*) AS fulfilled_count,
+		          SUM(f.demand_snapshot) AS fulfilled_demand
+		   FROM request_fulfillments f
+		   JOIN lyrics l ON l.id = f.lyrics_id
+		   WHERE l.deleted_at IS NULL AND NOT ${AUTO_HIDE_PREDICATE_JOINED}
+		   GROUP BY f.submitter_id
+		 ) ff ON ff.submitter_id = u.id
 		 ORDER BY agg.score DESC, u.key_id ASC
 		 LIMIT ?`
 	)
@@ -247,6 +262,8 @@ export async function getCuratorLeaderboard(
 		score: Number(r.score),
 		submissionCount: Number(r.submission_count),
 		totalUpvotes: Number(r.total_upvotes),
+		fulfilledCount: Number(r.fulfilled_count ?? 0),
+		fulfilledDemand: Number(r.fulfilled_demand ?? 0),
 		rank: i + 1,
 	}))
 }

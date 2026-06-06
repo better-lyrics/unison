@@ -1,4 +1,9 @@
-import type { Confidence, LyricsResponse, LyricsSearchResult } from "@/types"
+import type {
+	Confidence,
+	LyricsFulfillmentBadge,
+	LyricsResponse,
+	LyricsSearchResult,
+} from "@/types"
 
 export interface LyricsRowForResponse {
 	id: number
@@ -20,7 +25,10 @@ export interface LyricsRowForResponse {
 	hidden?: boolean
 }
 
-export function toResponse(row: LyricsRowForResponse): LyricsResponse {
+export function toResponse(
+	row: LyricsRowForResponse,
+	fulfilled?: LyricsFulfillmentBadge | null
+): LyricsResponse {
 	const submitter =
 		row.submitter_key_id != null && row.submitter_reputation != null
 			? { keyId: row.submitter_key_id, reputation: row.submitter_reputation }
@@ -43,6 +51,7 @@ export function toResponse(row: LyricsRowForResponse): LyricsResponse {
 		confidence: row.confidence,
 		hidden: row.hidden ?? false,
 		submitter,
+		fulfilled: fulfilled ?? undefined,
 	}
 }
 

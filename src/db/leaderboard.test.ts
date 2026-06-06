@@ -256,3 +256,55 @@ describe("getCuratorLeaderboard", () => {
 		expect(result[1].rank).toBe(2)
 	})
 })
+
+describe("getCuratorLeaderboard fulfillment fields", () => {
+	it("returns fulfilledCount and fulfilledDemand on each row", async () => {
+		const db = makeMockDB([
+			[
+				{
+					key_id: "k1",
+					reputation: 1.5,
+					score: 30,
+					submission_count: 8,
+					total_upvotes: 50,
+					fulfilled_count: 4,
+					fulfilled_demand: 12.5,
+				},
+				{
+					key_id: "k2",
+					reputation: 1.0,
+					score: 5,
+					submission_count: 2,
+					total_upvotes: 7,
+					fulfilled_count: 0,
+					fulfilled_demand: 0,
+				},
+			],
+		])
+		const env = makeEnv(db)
+
+		const result = await getCuratorLeaderboard(env, 200)
+
+		expect(result[0]).toMatchObject({
+			keyId: "k1",
+			fulfilledCount: 4,
+			fulfilledDemand: 12.5,
+		})
+		expect(result[1]).toMatchObject({
+			keyId: "k2",
+			fulfilledCount: 0,
+			fulfilledDemand: 0,
+		})
+	})
+
+	it("joins against live fulfillments (filters deleted/auto-hidden)", async () => {
+		const db = makeMockDB([[]])
+		const env = makeEnv(db)
+
+		await getCuratorLeaderboard(env, 200)
+
+		const sql = db.calls[0].sql
+		expect(sql).toMatch(/request_fulfillments/i)
+		expect(sql).toMatch(/l\.deleted_at\s+IS\s+NULL/i)
+	})
+})

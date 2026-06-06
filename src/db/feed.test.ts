@@ -1,7 +1,7 @@
 import type { Env } from "@/types"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { getGlobalFeed, getMySubmissions, getPersonalizedFeed } from "./feed"
-import { AUTO_HIDE_PREDICATE } from "./lyrics"
+import { AUTO_HIDE_PREDICATE } from "./predicates"
 
 // -- Mocks -----------------------------------------------------------------
 

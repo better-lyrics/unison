@@ -1,6 +1,7 @@
 import { config } from "@/config"
 import { getMySubmissions } from "@/db/feed"
 import { parseFeedFilters } from "@/db/feed-filters"
+import { getFulfillmentByLyricsId } from "@/db/fulfillments"
 import {
 	findBySongArtist,
 	findByVideoId,
@@ -92,8 +93,11 @@ export const lyricsRoutes = (env: Env) =>
 					if (!result) {
 						return status(404, buildError(ErrorCode.NOT_FOUND))
 					}
-					const userVote = lyricsUserId ? await getUserVote(env, result.id, lyricsUserId) : null
-					return { success: true, data: { ...toResponse(result), userVote } }
+					const [userVote, fulfilled] = await Promise.all([
+						lyricsUserId ? getUserVote(env, result.id, lyricsUserId) : Promise.resolve(null),
+						getFulfillmentByLyricsId(env, result.id),
+					])
+					return { success: true, data: { ...toResponse(result, fulfilled), userVote } }
 				}
 
 				if (query.song && query.artist) {
@@ -108,8 +112,11 @@ export const lyricsRoutes = (env: Env) =>
 					if (!result) {
 						return status(404, buildError(ErrorCode.NOT_FOUND))
 					}
-					const userVote = lyricsUserId ? await getUserVote(env, result.id, lyricsUserId) : null
-					return { success: true, data: { ...toResponse(result), userVote } }
+					const [userVote, fulfilled] = await Promise.all([
+						lyricsUserId ? getUserVote(env, result.id, lyricsUserId) : Promise.resolve(null),
+						getFulfillmentByLyricsId(env, result.id),
+					])
+					return { success: true, data: { ...toResponse(result, fulfilled), userVote } }
 				}
 
 				return status(400, buildError(ErrorCode.MISSING_QUERY))
@@ -153,7 +160,7 @@ export const lyricsRoutes = (env: Env) =>
 						query.album,
 						limit
 					)
-					return { success: true, data: results.map(toResponse) }
+					return { success: true, data: results.map((row) => toResponse(row)) }
 				}
 
 				return status(
@@ -270,8 +277,11 @@ export const lyricsRoutes = (env: Env) =>
 					return status(404, buildError(ErrorCode.NOT_FOUND))
 				}
 
-				const userVote = lyricsUserId ? await getUserVote(env, result.id, lyricsUserId) : null
-				return { success: true, data: { ...toResponse(result), userVote } }
+				const [userVote, fulfilled] = await Promise.all([
+					lyricsUserId ? getUserVote(env, result.id, lyricsUserId) : Promise.resolve(null),
+					getFulfillmentByLyricsId(env, result.id),
+				])
+				return { success: true, data: { ...toResponse(result, fulfilled), userVote } }
 			},
 			{
 				params: t.Object({ id: t.String() }),

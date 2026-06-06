@@ -8,6 +8,7 @@ import { Logger, flushLogs } from "@/infra/logger"
 import { backfillFormatDetection } from "@/jobs/backfill-format-detection"
 import { backfillSyncType } from "@/jobs/backfill-synctype"
 import { backfillTextSearch } from "@/jobs/backfill-text-search"
+import { cleanupFulfilledRequests } from "@/jobs/cleanup-fulfilled-requests"
 import { runDumpJob } from "@/jobs/dump"
 import { updateScores } from "@/jobs/score-updater"
 import { authRoutes } from "@/routes/auth"
@@ -227,6 +228,14 @@ backfillFormatDetection(env)
 		if (changed > 0) log.info("format backfill complete", { scanned, changed })
 	})
 	.catch((err) => log.error("format backfill failed", { error: (err as Error).message }))
+
+cleanupFulfilledRequests(env)
+	.then(({ deleted }) => {
+		if (deleted > 0) log.info("cleanup fulfilled requests complete", { deleted })
+	})
+	.catch((err) =>
+		log.error("cleanup fulfilled requests failed", { error: (err as Error).message }),
+	)
 
 process.on("unhandledRejection", (reason) => {
 	const err = reason instanceof Error ? reason : new Error(String(reason))
