@@ -4,6 +4,7 @@ import { useLocation, useNavigate, useParams, useSearchParams } from "react-rout
 import { EmptyState } from "@/components/EmptyState"
 import { LoadingPlaceholder } from "@/components/LoadingPlaceholder"
 import { LyricsRenderer } from "@/components/LyricsRenderer"
+import { RawLyricsView } from "@/components/RawLyricsView"
 import { VariantList } from "@/components/VariantList"
 import { VariantMetadata } from "@/components/VariantMetadata"
 import { VoteControls } from "@/components/VoteControls"
@@ -216,9 +217,7 @@ export function LyricsPage() {
                   onLineClick={handleLineClick}
                 />
               ) : (
-                <pre className="whitespace-pre-wrap break-words font-mono text-xs text-unison-text">
-                  {variant.lyrics}
-                </pre>
+                <RawLyricsView body={variant.lyrics} format={variant.format} />
               )}
             </div>
           </div>
