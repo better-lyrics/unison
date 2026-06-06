@@ -179,4 +179,37 @@ describe("useYouTubePlayer", () => {
     unmount()
     expect(player.destroyed).toBe(true)
   })
+
+  it("removes the script and allows re-injection when the script load fails", async () => {
+    const first = render(createElement(Harness, { videoId: "abc" }))
+    const injected = document.querySelectorAll("script[data-unison-yt-loader]")
+    expect(injected.length).toBe(1)
+    const tag = injected[0] as HTMLScriptElement
+
+    act(() => {
+      tag.dispatchEvent(new Event("error"))
+    })
+    await act(async () => {
+      await Promise.resolve()
+    })
+
+    expect(document.querySelectorAll("script[data-unison-yt-loader]").length).toBe(0)
+    first.unmount()
+
+    const second = render(createElement(Harness, { videoId: "def" }))
+    expect(document.querySelectorAll("script[data-unison-yt-loader]").length).toBe(1)
+    second.unmount()
+  })
+
+  it("does not throw when the script load fails", async () => {
+    const { unmount } = render(createElement(Harness, { videoId: "abc" }))
+    const tag = document.querySelector("script[data-unison-yt-loader]") as HTMLScriptElement
+    act(() => {
+      tag.dispatchEvent(new Event("error"))
+    })
+    await act(async () => {
+      await Promise.resolve()
+    })
+    expect(() => unmount()).not.toThrow()
+  })
 })

@@ -27,7 +27,11 @@ type WindowWithYT = Window & {
 
 const SCRIPT_URL = "https://www.youtube.com/iframe_api"
 const SCRIPT_ATTR = "data-unison-yt-loader"
-const readyWaiters: Array<(yt: YTNamespace) => void> = []
+interface ReadyWaiter {
+  resolve: (yt: YTNamespace) => void
+  reject: (err: Error) => void
+}
+const readyWaiters: ReadyWaiter[] = []
 let scriptInjected = false
 
 function getWindow(): WindowWithYT | null {
@@ -36,7 +40,7 @@ function getWindow(): WindowWithYT | null {
 }
 
 function ensureScript(win: WindowWithYT): Promise<YTNamespace> {
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
     if (win.YT?.Player) {
       resolve(win.YT)
       return
@@ -49,6 +53,12 @@ function ensureScript(win: WindowWithYT): Promise<YTNamespace> {
         tag.src = SCRIPT_URL
         tag.async = true
         tag.setAttribute(SCRIPT_ATTR, "1")
+        tag.onerror = () => {
+          tag.remove()
+          scriptInjected = false
+          const err = new Error("yt-iframe-api-failed")
+          for (const w of readyWaiters.splice(0)) w.reject(err)
+        }
         document.head.appendChild(tag)
       }
       const prior = win.onYouTubeIframeAPIReady
@@ -56,10 +66,10 @@ function ensureScript(win: WindowWithYT): Promise<YTNamespace> {
         prior?.()
         const yt = win.YT
         if (!yt) return
-        for (const w of readyWaiters.splice(0)) w(yt)
+        for (const w of readyWaiters.splice(0)) w.resolve(yt)
       }
     }
-    readyWaiters.push(resolve)
+    readyWaiters.push({ resolve, reject })
   })
 }
 
@@ -87,8 +97,8 @@ export function useYouTubePlayer(videoId: string | null): UseYouTubePlayerResult
     let cancelled = false
 
     const run = async () => {
-      const yt = await ensureScript(win)
-      if (cancelled) return
+      const yt = await ensureScript(win).catch(() => null)
+      if (cancelled || !yt) return
       const player = new yt.Player(node, {
         videoId,
         width: "100%",
