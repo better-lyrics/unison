@@ -21,7 +21,7 @@ export function RawLyricsView({ body, format }: RawLyricsViewProps) {
         {({ style, tokens, getLineProps, getTokenProps }) => (
           <pre
             className="m-0 min-h-full whitespace-pre-wrap break-words p-4 font-mono text-xs"
-            style={style}
+            style={{ ...style, background: "transparent", backgroundColor: "transparent" }}
           >
             {tokens.map((line, i) => (
               // biome-ignore lint/suspicious/noArrayIndexKey: stable line indices
