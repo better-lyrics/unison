@@ -41,7 +41,7 @@ export function LyricsPage() {
 	}, [location.key, navigate])
 
 	const safeVideoId = videoId ?? ""
-	const { ref, currentTimeMs, playing, seekTo } = useYouTubePlayer(safeVideoId.length > 0 ? safeVideoId : null)
+	const { ref, getCurrentTimeMs, getPlaying, seekTo } = useYouTubePlayer(safeVideoId.length > 0 ? safeVideoId : null)
 
 	const variantsQuery = useQuery({
 		queryKey: ["lyrics", "variants", safeVideoId],
@@ -212,8 +212,8 @@ export function LyricsPage() {
 							) : mode === "synced" ? (
 								<LyricsRenderer
 									variant={variant}
-									currentTimeMs={currentTimeMs}
-									playing={playing}
+									getCurrentTimeMs={getCurrentTimeMs}
+									getPlaying={getPlaying}
 									onLineClick={handleLineClick}
 								/>
 							) : (

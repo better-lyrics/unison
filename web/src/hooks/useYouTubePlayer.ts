@@ -2,24 +2,22 @@ import { useCallback, useEffect, useRef, useState } from "react"
 
 interface YTPlayer {
   getCurrentTime(): number
+  getPlayerState(): number
   seekTo(seconds: number, allowSeekAhead: boolean): void
   destroy(): void
 }
+
+const YT_STATE_PLAYING = 1
 
 interface YTPlayerCtorOptions {
   videoId: string
   width?: string | number
   height?: string | number
   playerVars?: { origin?: string }
-  events?: {
-    onReady?: (e: { target: YTPlayer }) => void
-    onStateChange?: (e: { data: number }) => void
-  }
 }
 
 interface YTNamespace {
   Player: new (el: HTMLElement | string, opts: YTPlayerCtorOptions) => YTPlayer
-  PlayerState: { PLAYING: number; PAUSED: number; ENDED: number }
 }
 
 type WindowWithYT = Window & {
@@ -72,28 +70,21 @@ export function __resetForTests(): void {
 
 export interface UseYouTubePlayerResult {
   ref: (node: HTMLDivElement | null) => void
-  currentTimeMs: number
-  playing: boolean
+  getCurrentTimeMs: () => number
+  getPlaying: () => boolean
   seekTo: (seconds: number) => void
 }
 
 export function useYouTubePlayer(videoId: string | null): UseYouTubePlayerResult {
   const [node, setNode] = useState<HTMLDivElement | null>(null)
   const playerRef = useRef<YTPlayer | null>(null)
-  const [currentTimeMs, setCurrentTimeMs] = useState(0)
-  const [playing, setPlaying] = useState(false)
 
   useEffect(() => {
-    if (!videoId || !node) {
-      setCurrentTimeMs(0)
-      setPlaying(false)
-      return
-    }
+    if (!videoId || !node) return
     const win = getWindow()
     if (!win) return
 
     let cancelled = false
-    let intervalId: ReturnType<typeof setInterval> | null = null
 
     const run = async () => {
       const yt = await ensureScript(win)
@@ -103,31 +94,16 @@ export function useYouTubePlayer(videoId: string | null): UseYouTubePlayerResult
         width: "100%",
         height: "100%",
         playerVars: { origin: win.location.origin },
-        events: {
-          onStateChange: (e) => {
-            if (e.data === yt.PlayerState.PLAYING) setPlaying(true)
-            else if (e.data === yt.PlayerState.PAUSED || e.data === yt.PlayerState.ENDED) setPlaying(false)
-          },
-        },
       })
       playerRef.current = player
-      intervalId = setInterval(() => {
-        const current = playerRef.current
-        if (!current) return
-        const seconds = current.getCurrentTime()
-        setCurrentTimeMs(Math.round(seconds * 1000))
-      }, 100)
     }
     run()
 
     return () => {
       cancelled = true
-      if (intervalId !== null) clearInterval(intervalId)
       const player = playerRef.current
       if (player) player.destroy()
       playerRef.current = null
-      setCurrentTimeMs(0)
-      setPlaying(false)
     }
   }, [videoId, node])
 
@@ -137,5 +113,17 @@ export function useYouTubePlayer(videoId: string | null): UseYouTubePlayerResult
     player.seekTo(seconds, true)
   }, [])
 
-  return { ref: setNode, currentTimeMs, playing, seekTo }
+  const getCurrentTimeMs = useCallback(() => {
+    const player = playerRef.current
+    if (!player) return 0
+    return player.getCurrentTime() * 1000
+  }, [])
+
+  const getPlaying = useCallback(() => {
+    const player = playerRef.current
+    if (!player) return false
+    return player.getPlayerState() === YT_STATE_PLAYING
+  }, [])
+
+  return { ref: setNode, getCurrentTimeMs, getPlaying, seekTo }
 }

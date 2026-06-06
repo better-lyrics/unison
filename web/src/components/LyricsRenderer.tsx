@@ -5,8 +5,8 @@ import type { LyricsFormat, VariantFull } from "@/lib/types"
 
 interface LyricsRendererProps {
   variant: VariantFull
-  currentTimeMs: number
-  playing: boolean
+  getCurrentTimeMs: () => number
+  getPlaying: () => boolean
   onLineClick?: (timeSeconds: number) => void
 }
 
@@ -16,7 +16,7 @@ const MIME_BY_FORMAT: Record<LyricsFormat, string> = {
   plain: "text/plain",
 }
 
-export function LyricsRenderer({ variant, currentTimeMs, playing, onLineClick }: LyricsRendererProps) {
+export function LyricsRenderer({ variant, getCurrentTimeMs, getPlaying, onLineClick }: LyricsRendererProps) {
   const elementRef = useRef<BraccatoElement>(null)
   const [blobUrl, setBlobUrl] = useState<string | null>(null)
 
@@ -28,11 +28,18 @@ export function LyricsRenderer({ variant, currentTimeMs, playing, onLineClick }:
   }, [variant.lyrics, variant.format])
 
   useEffect(() => {
-    const el = elementRef.current
-    if (!el) return
-    el.currentTime = currentTimeMs
-    el.playing = playing
-  }, [currentTimeMs, playing])
+    let frameId: number
+    const tick = () => {
+      const el = elementRef.current
+      if (el) {
+        el.currentTime = getCurrentTimeMs()
+        el.playing = getPlaying()
+      }
+      frameId = requestAnimationFrame(tick)
+    }
+    frameId = requestAnimationFrame(tick)
+    return () => cancelAnimationFrame(frameId)
+  }, [getCurrentTimeMs, getPlaying])
 
   const onLineClickRef = useRef(onLineClick)
   useEffect(() => {
@@ -59,8 +66,8 @@ export function LyricsRenderer({ variant, currentTimeMs, playing, onLineClick }:
       style={
         {
           "--braccato-font-family": "'Satoshi', sans-serif",
-          "--braccato-font-size": "1.5rem",
-          "--braccato-inactive-opacity": "0.25",
+          "--braccato-font-size": "2rem",
+          "--braccato-inactive-opacity": "0.2",
         } as React.CSSProperties
       }
     />

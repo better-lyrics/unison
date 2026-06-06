@@ -5,26 +5,23 @@ import { __resetForTests, useYouTubePlayer } from "./useYouTubePlayer"
 
 interface FakePlayerOptions {
   videoId: string
-  events?: {
-    onReady?: (e: { target: FakePlayer }) => void
-    onStateChange?: (e: { data: number }) => void
-  }
 }
 
 class FakePlayer {
   destroyed = false
   currentTime = 0
+  state = 2
   seeks: Array<{ seconds: number; allowSeekAhead: boolean }> = []
-  onStateChange: ((e: { data: number }) => void) | undefined
   static instances: FakePlayer[] = []
 
-  constructor(_elem: HTMLElement | string, opts: FakePlayerOptions) {
-    this.onStateChange = opts.events?.onStateChange
+  constructor(_elem: HTMLElement | string, _opts: FakePlayerOptions) {
     FakePlayer.instances.push(this)
-    queueMicrotask(() => opts.events?.onReady?.({ target: this }))
   }
   getCurrentTime() {
     return this.currentTime
+  }
+  getPlayerState() {
+    return this.state
   }
   seekTo(seconds: number, allowSeekAhead: boolean) {
     this.seeks.push({ seconds, allowSeekAhead })
@@ -56,32 +53,21 @@ afterEach(() => {
 })
 
 function installYT() {
-  ;(globalThis as unknown as { YT: { Player: typeof FakePlayer; PlayerState: typeof PlayerState } }).YT = {
-    Player: FakePlayer,
-    PlayerState,
-  }
+  ;(globalThis as unknown as { YT: { Player: typeof FakePlayer } }).YT = { Player: FakePlayer }
 }
 
 function Harness({ videoId }: { videoId: string | null }) {
-  const { ref, currentTimeMs, playing } = useYouTubePlayer(videoId)
-  return createElement(
-    "div",
-    null,
-    createElement("div", { ref, id: "yt-mount" }),
-    createElement("span", {
-      "data-testid": "stats",
-      "data-current-ms": String(currentTimeMs),
-      "data-playing": String(playing),
-    }),
-  )
+  const { ref } = useYouTubePlayer(videoId)
+  return createElement("div", null, createElement("div", { ref, id: "yt-mount" }))
 }
 
 describe("useYouTubePlayer", () => {
-  it("returns idle state and injects no script when videoId is null", () => {
+  it("returns ref-and-getter shape and injects no script when videoId is null", () => {
     const { result } = renderHook(() => useYouTubePlayer(null))
-    expect(result.current.currentTimeMs).toBe(0)
-    expect(result.current.playing).toBe(false)
+    expect(typeof result.current.ref).toBe("function")
     expect(typeof result.current.seekTo).toBe("function")
+    expect(result.current.getCurrentTimeMs()).toBe(0)
+    expect(result.current.getPlaying()).toBe(false)
     expect(document.querySelectorAll("script[data-unison-yt-loader]").length).toBe(0)
   })
 
@@ -132,40 +118,37 @@ describe("useYouTubePlayer", () => {
     })
   })
 
-  it("polls getCurrentTime and tracks play state via onStateChange", async () => {
+  it("getters read currentTime in ms and playing-state directly from the player", async () => {
     installYT()
-    const { getByTestId, unmount } = render(createElement(Harness, { videoId: "abc" }))
+    let getCurrentTimeMs: (() => number) | null = null
+    let getPlaying: (() => boolean) | null = null
+    function CaptureHarness() {
+      const player = useYouTubePlayer("abc")
+      getCurrentTimeMs = player.getCurrentTimeMs
+      getPlaying = player.getPlaying
+      return createElement("div", { ref: player.ref })
+    }
+    const { unmount } = render(createElement(CaptureHarness))
     await act(async () => {
       await Promise.resolve()
     })
     const player = FakePlayer.instances[0]
     expect(player).toBeDefined()
+    if (getCurrentTimeMs === null || getPlaying === null) throw new Error("getters never captured")
+    const readTime: () => number = getCurrentTimeMs
+    const readPlaying: () => boolean = getPlaying
 
     player.currentTime = 2.5
-    act(() => {
-      vi.advanceTimersByTime(100)
-    })
-    expect(getByTestId("stats").getAttribute("data-current-ms")).toBe("2500")
+    expect(readTime()).toBe(2500)
 
-    act(() => {
-      player.onStateChange?.({ data: PlayerState.PLAYING })
-    })
-    expect(getByTestId("stats").getAttribute("data-playing")).toBe("true")
+    player.state = PlayerState.PLAYING
+    expect(readPlaying()).toBe(true)
 
-    act(() => {
-      player.onStateChange?.({ data: PlayerState.PAUSED })
-    })
-    expect(getByTestId("stats").getAttribute("data-playing")).toBe("false")
+    player.state = PlayerState.PAUSED
+    expect(readPlaying()).toBe(false)
 
-    act(() => {
-      player.onStateChange?.({ data: PlayerState.PLAYING })
-    })
-    expect(getByTestId("stats").getAttribute("data-playing")).toBe("true")
-
-    act(() => {
-      player.onStateChange?.({ data: PlayerState.ENDED })
-    })
-    expect(getByTestId("stats").getAttribute("data-playing")).toBe("false")
+    player.state = PlayerState.ENDED
+    expect(readPlaying()).toBe(false)
 
     unmount()
   })
@@ -186,7 +169,7 @@ describe("useYouTubePlayer", () => {
     unmount()
   })
 
-  it("destroys the player and stops polling on unmount", async () => {
+  it("destroys the player on unmount", async () => {
     installYT()
     const { unmount } = render(createElement(Harness, { videoId: "abc" }))
     await act(async () => {
@@ -195,8 +178,5 @@ describe("useYouTubePlayer", () => {
     const player = FakePlayer.instances[0]
     unmount()
     expect(player.destroyed).toBe(true)
-    expect(() => {
-      vi.advanceTimersByTime(500)
-    }).not.toThrow()
   })
 })

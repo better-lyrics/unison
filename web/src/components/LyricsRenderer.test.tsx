@@ -44,11 +44,20 @@ async function importRenderer() {
   return mod.LyricsRenderer
 }
 
+const zero = () => 0
+const stopped = () => false
+
+async function nextFrame(): Promise<void> {
+  await new Promise<void>((r) => requestAnimationFrame(() => r()))
+}
+
 describe("LyricsRenderer", () => {
   it("creates a blob URL from the variant lyrics and assigns it to src", async () => {
     const Renderer = await importRenderer()
     const variant = makeVariant()
-    const { container } = render(<Renderer variant={variant} currentTimeMs={0} playing={false} />)
+    const { container } = render(
+      <Renderer variant={variant} getCurrentTimeMs={zero} getPlaying={stopped} />,
+    )
     const el = container.querySelector("braccato-lyrics") as HTMLElement
     expect(el).toBeTruthy()
     expect(createObjectURL).toHaveBeenCalledTimes(1)
@@ -57,7 +66,9 @@ describe("LyricsRenderer", () => {
 
   it("uses application/ttml+xml for the ttml format", async () => {
     const Renderer = await importRenderer()
-    render(<Renderer variant={makeVariant({ format: "ttml" })} currentTimeMs={0} playing={false} />)
+    render(
+      <Renderer variant={makeVariant({ format: "ttml" })} getCurrentTimeMs={zero} getPlaying={stopped} />,
+    )
     const blob = createObjectURL.mock.calls[0][0] as Blob
     expect(blob.type).toBe("application/ttml+xml")
   })
@@ -65,7 +76,11 @@ describe("LyricsRenderer", () => {
   it("uses text/lrc for the lrc format", async () => {
     const Renderer = await importRenderer()
     render(
-      <Renderer variant={makeVariant({ format: "lrc", lyrics: "[00:10.00]hi" })} currentTimeMs={0} playing={false} />,
+      <Renderer
+        variant={makeVariant({ format: "lrc", lyrics: "[00:10.00]hi" })}
+        getCurrentTimeMs={zero}
+        getPlaying={stopped}
+      />,
     )
     const blob = createObjectURL.mock.calls[0][0] as Blob
     expect(blob.type).toBe("text/lrc")
@@ -73,30 +88,48 @@ describe("LyricsRenderer", () => {
 
   it("uses text/plain for the plain format", async () => {
     const Renderer = await importRenderer()
-    render(<Renderer variant={makeVariant({ format: "plain", lyrics: "hi" })} currentTimeMs={0} playing={false} />)
+    render(
+      <Renderer
+        variant={makeVariant({ format: "plain", lyrics: "hi" })}
+        getCurrentTimeMs={zero}
+        getPlaying={stopped}
+      />,
+    )
     const blob = createObjectURL.mock.calls[0][0] as Blob
     expect(blob.type).toBe("text/plain")
   })
 
-  it("forwards currentTimeMs and playing onto the element as properties", async () => {
+  it("drives currentTime and playing on the element from the getters every frame", async () => {
     const Renderer = await importRenderer()
-    const variant = makeVariant()
-    const { container, rerender } = render(<Renderer variant={variant} currentTimeMs={1234} playing={true} />)
+    let nowMs = 1234
+    let isPlaying = true
+    const { container } = render(
+      <Renderer
+        variant={makeVariant()}
+        getCurrentTimeMs={() => nowMs}
+        getPlaying={() => isPlaying}
+      />,
+    )
     const el = container.querySelector("braccato-lyrics") as HTMLElement & {
       currentTime?: number
       playing?: boolean
     }
+    await nextFrame()
     expect(el.currentTime).toBe(1234)
     expect(el.playing).toBe(true)
 
-    rerender(<Renderer variant={variant} currentTimeMs={5000} playing={false} />)
+    nowMs = 5000
+    isPlaying = false
+    await nextFrame()
     expect(el.currentTime).toBe(5000)
     expect(el.playing).toBe(false)
   })
 
   it("revokes the blob URL on unmount", async () => {
     const Renderer = await importRenderer()
-    const { unmount } = render(<Renderer variant={makeVariant()} currentTimeMs={0} playing={false} />)
+    const { unmount } = render(
+      <Renderer variant={makeVariant()} getCurrentTimeMs={zero} getPlaying={stopped} />,
+    )
     unmount()
     expect(revokeObjectURL).toHaveBeenCalled()
     const arg = revokeObjectURL.mock.calls[0][0]
@@ -107,7 +140,12 @@ describe("LyricsRenderer", () => {
     const Renderer = await importRenderer()
     const onLineClick = vi.fn()
     const { container } = render(
-      <Renderer variant={makeVariant()} currentTimeMs={0} playing={false} onLineClick={onLineClick} />,
+      <Renderer
+        variant={makeVariant()}
+        getCurrentTimeMs={zero}
+        getPlaying={stopped}
+        onLineClick={onLineClick}
+      />,
     )
     const el = container.querySelector("braccato-lyrics") as HTMLElement
     el.dispatchEvent(new CustomEvent("braccato:line-click", { detail: { time: 4500, lineIndex: 2 } }))
@@ -118,7 +156,12 @@ describe("LyricsRenderer", () => {
     const Renderer = await importRenderer()
     const onLineClick = vi.fn()
     const { container } = render(
-      <Renderer variant={makeVariant()} currentTimeMs={0} playing={false} onLineClick={onLineClick} />,
+      <Renderer
+        variant={makeVariant()}
+        getCurrentTimeMs={zero}
+        getPlaying={stopped}
+        onLineClick={onLineClick}
+      />,
     )
     const el = container.querySelector("braccato-lyrics") as HTMLElement
     expect(() => el.dispatchEvent(new CustomEvent("braccato:line-click", { detail: {} }))).not.toThrow()
@@ -134,24 +177,24 @@ describe("LyricsRenderer", () => {
       const { container, rerender } = render(
         <Renderer
           variant={variant}
-          currentTimeMs={0}
-          playing={false}
+          getCurrentTimeMs={zero}
+          getPlaying={stopped}
           onLineClick={(s) => calls.push(`first:${s}`)}
         />,
       )
       rerender(
         <Renderer
           variant={variant}
-          currentTimeMs={0}
-          playing={false}
+          getCurrentTimeMs={zero}
+          getPlaying={stopped}
           onLineClick={(s) => calls.push(`second:${s}`)}
         />,
       )
       rerender(
         <Renderer
           variant={variant}
-          currentTimeMs={0}
-          playing={false}
+          getCurrentTimeMs={zero}
+          getPlaying={stopped}
           onLineClick={(s) => calls.push(`third:${s}`)}
         />,
       )
@@ -167,9 +210,17 @@ describe("LyricsRenderer", () => {
 
   it("creates a new blob URL when the variant changes", async () => {
     const Renderer = await importRenderer()
-    const { rerender } = render(<Renderer variant={makeVariant()} currentTimeMs={0} playing={false} />)
+    const { rerender } = render(
+      <Renderer variant={makeVariant()} getCurrentTimeMs={zero} getPlaying={stopped} />,
+    )
     expect(createObjectURL).toHaveBeenCalledTimes(1)
-    rerender(<Renderer variant={makeVariant({ id: 2, lyrics: "different" })} currentTimeMs={0} playing={false} />)
+    rerender(
+      <Renderer
+        variant={makeVariant({ id: 2, lyrics: "different" })}
+        getCurrentTimeMs={zero}
+        getPlaying={stopped}
+      />,
+    )
     expect(createObjectURL).toHaveBeenCalledTimes(2)
     expect(revokeObjectURL).toHaveBeenCalledTimes(1)
   })
