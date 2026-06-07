@@ -10,8 +10,8 @@ function renderAt(path: string) {
   return render(
     <MemoryRouter initialEntries={[path]}>
       <Routes>
-        <Route path="/users/:keyId" element={<UserPage />} />
-        <Route path="/users" element={<UserPage />} />
+        <Route path="/curator/:keyId" element={<UserPage />} />
+        <Route path="/curator" element={<UserPage />} />
       </Routes>
     </MemoryRouter>,
   )
@@ -63,7 +63,7 @@ describe("UserPage", () => {
       }),
     )
 
-    renderAt(`/users/${keyId}`)
+    renderAt(`/curator/${keyId}`)
     await waitFor(() => expect(screen.getByText("RouteUser")).toBeTruthy())
     expect(screen.getByText(/#4/)).toBeTruthy()
   })
@@ -97,7 +97,7 @@ describe("UserPage", () => {
       }),
     )
 
-    renderAt(`/users/${keyId}`)
+    renderAt(`/curator/${keyId}`)
     await waitFor(() => expect(screen.getByText("UnrankedUser")).toBeTruthy())
     expect(screen.getByText(/no leaderboard activity yet/i)).toBeTruthy()
     expect(screen.getByText(/hasn't voted yet/i)).toBeTruthy()

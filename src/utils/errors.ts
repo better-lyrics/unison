@@ -26,6 +26,7 @@ export const ErrorCode = {
 	INVALID_VOTE: "INVALID_VOTE",
 	INVALID_REPORT_REASON: "INVALID_REPORT_REASON",
 	REPORT_DETAILS_TOO_LONG: "REPORT_DETAILS_TOO_LONG",
+	INVALID_CURSOR: "INVALID_CURSOR",
 } as const
 
 export type ErrorCode = (typeof ErrorCode)[keyof typeof ErrorCode]
@@ -125,6 +126,10 @@ const TEMPLATES: Record<ErrorCode, Template> = {
 		error: "Report details too long",
 		hint: "The extra details on this report are too long. Try a shorter explanation (under 1000 characters).",
 	},
+	INVALID_CURSOR: {
+		error: "Invalid cursor",
+		hint: "The page cursor looks malformed. Reload the list and try again.",
+	},
 }
 
 export type SubmissionErrorBody = {
@@ -136,7 +141,7 @@ export type SubmissionErrorBody = {
 
 export function buildError(
 	code: ErrorCode,
-	overrides?: { error?: string; hint?: string },
+	overrides?: { error?: string; hint?: string }
 ): SubmissionErrorBody {
 	const template = TEMPLATES[code]
 	return {

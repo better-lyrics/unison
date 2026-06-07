@@ -1,3 +1,4 @@
+import { Link } from "react-router-dom"
 import { useSession } from "@/auth/useSession"
 import { EmptyState } from "@/components/EmptyState"
 import { LeaderboardSection } from "@/components/LeaderboardSection"
@@ -5,6 +6,16 @@ import { LoadingPlaceholder } from "@/components/LoadingPlaceholder"
 import { SongRow } from "@/components/SongRow"
 import { useAsyncData } from "@/hooks/useAsyncData"
 import { fetchSongLeaderboard } from "@/lib/api"
+
+const mostWantedAction = (
+  <Link
+    to="/queue"
+    className="text-sm text-unison-text-muted transition-colors hover:text-unison-text"
+    aria-label="See all most wanted songs"
+  >
+    See all →
+  </Link>
+)
 
 export function SongsPage() {
   const session = useSession()
@@ -33,6 +44,7 @@ export function SongsPage() {
       <LeaderboardSection
         title="Most Wanted"
         subtitle="Songs missing synced lyrics, ranked by reputation-weighted demand"
+        action={mostWantedAction}
       >
         {data.mostWanted.length === 0 ? (
           signedIn ? (

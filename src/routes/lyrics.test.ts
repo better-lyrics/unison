@@ -498,6 +498,181 @@ describe("GET /lyrics/mine", () => {
 	})
 })
 
+interface VariantRowOverrides {
+	id?: number
+	video_id?: string
+	score?: number
+	vote_count?: number
+	confidence?: "low" | "medium" | "high"
+	hidden?: boolean
+}
+
+function makeVariantRow(o: VariantRowOverrides = {}): Record<string, unknown> {
+	return {
+		id: o.id ?? 1,
+		video_id: o.video_id ?? "vid-A",
+		song: "Song",
+		artist: "Artist",
+		album: null,
+		isrc: null,
+		duration: 200,
+		song_norm: "song",
+		artist_norm: "artist",
+		album_norm: null,
+		lyrics: "plain body",
+		format: "plain",
+		language: null,
+		sync_type: "plain",
+		score: o.score ?? 0,
+		upvotes: 0,
+		downvotes: 0,
+		effective_score: 0,
+		vote_count: o.vote_count ?? 0,
+		diversity_bonus: 1,
+		confidence: o.confidence ?? "low",
+		lyrics_text_search: null,
+		created_at: 1700000000,
+		deleted_at: null,
+		submitter_id: null,
+		submitter_key_id: null,
+		submitter_reputation: null,
+		hidden: o.hidden,
+	}
+}
+
+describe("GET /lyrics/variants/:videoId", () => {
+	it("returns 404 when no variants exist for the videoId", async () => {
+		const db = makeMockDB([[]])
+		const app = lyricsRoutes(makeEnv(db))
+		const res = await app.handle(new Request("http://localhost/lyrics/variants/missing"))
+		expect(res.status).toBe(404)
+	})
+
+	it("returns variants with userVote null when no auth header is sent", async () => {
+		const rows = [makeVariantRow({ id: 1 }), makeVariantRow({ id: 2 })]
+		const db = makeMockDB([rows])
+		const app = lyricsRoutes(makeEnv(db))
+		const res = await app.handle(new Request("http://localhost/lyrics/variants/vid-A"))
+		const body = (await res.json()) as { data: Array<{ id: number; userVote: 1 | -1 | null }> }
+		expect(res.status).toBe(200)
+		expect(body.data).toHaveLength(2)
+		expect(body.data[0].userVote).toBeNull()
+		expect(body.data[1].userVote).toBeNull()
+	})
+
+	it("returns userVote null when only an x-key-id header is sent (variants requires Bearer)", async () => {
+		const rows = [makeVariantRow({ id: 10 }), makeVariantRow({ id: 11 }), makeVariantRow({ id: 12 })]
+		const userRow = { id: 99 }
+		const db = makeMockDB([userRow, rows])
+		const app = lyricsRoutes(makeEnv(db))
+		const res = await app.handle(
+			new Request("http://localhost/lyrics/variants/vid-A", {
+				headers: { "x-key-id": "user-key" },
+			})
+		)
+		const body = (await res.json()) as { data: Array<{ id: number; userVote: 1 | -1 | null }> }
+		expect(res.status).toBe(200)
+		expect(body.data.find((v) => v.id === 10)?.userVote).toBeNull()
+		expect(body.data.find((v) => v.id === 11)?.userVote).toBeNull()
+		expect(body.data.find((v) => v.id === 12)?.userVote).toBeNull()
+	})
+
+	it("hydrates userVote per row when a Bearer session token is sent", async () => {
+		const rows = [makeVariantRow({ id: 21 }), makeVariantRow({ id: 22 })]
+		const userRow = { id: 77 }
+		const votesRows = [{ lyrics_id: 22, vote: 1 }]
+		const sessionRecord = {
+			value: JSON.stringify({
+				keyId: "session-key",
+				issuedAt: Math.floor(Date.now() / 1000),
+				expiresAt: Math.floor(Date.now() / 1000) + 3600,
+			}),
+		}
+		const cache = {
+			async get(key: string) {
+				if (key === "session:good-token") return sessionRecord.value
+				return null
+			},
+			async put() {},
+			async delete() {},
+			async keys() {
+				return []
+			},
+			async setNX() {
+				return true
+			},
+		}
+		const limiter = {
+			async limit() {
+				return { success: true }
+			},
+		}
+		const env: Env = {
+			DB: makeMockDB([userRow, rows, votesRows]) as unknown as Env["DB"],
+			CACHE: cache as unknown as Env["CACHE"],
+			RATE_LIMITER: limiter as unknown as Env["RATE_LIMITER"],
+			READ_RATE_LIMITER: limiter as unknown as Env["READ_RATE_LIMITER"],
+			CACHE_TTL_SECONDS: "300",
+			DUMPS_ENABLED: false,
+			DUMP_PUBLIC_BASE_URL: "",
+			DUMP_DATABASE_URL: null,
+			B2: null,
+		}
+		const app = lyricsRoutes(env)
+		const res = await app.handle(
+			new Request("http://localhost/lyrics/variants/vid-A", {
+				headers: { authorization: "Bearer good-token" },
+			})
+		)
+		const body = (await res.json()) as { data: Array<{ id: number; userVote: 1 | -1 | null }> }
+		expect(res.status).toBe(200)
+		expect(body.data.find((v) => v.id === 21)?.userVote).toBeNull()
+		expect(body.data.find((v) => v.id === 22)?.userVote).toBe(1)
+	})
+
+	it("falls back to userVote null when the Bearer token is invalid", async () => {
+		const rows = [makeVariantRow({ id: 31 })]
+		const cache = {
+			async get() {
+				return null
+			},
+			async put() {},
+			async delete() {},
+			async keys() {
+				return []
+			},
+			async setNX() {
+				return true
+			},
+		}
+		const limiter = {
+			async limit() {
+				return { success: true }
+			},
+		}
+		const env: Env = {
+			DB: makeMockDB([rows]) as unknown as Env["DB"],
+			CACHE: cache as unknown as Env["CACHE"],
+			RATE_LIMITER: limiter as unknown as Env["RATE_LIMITER"],
+			READ_RATE_LIMITER: limiter as unknown as Env["READ_RATE_LIMITER"],
+			CACHE_TTL_SECONDS: "300",
+			DUMPS_ENABLED: false,
+			DUMP_PUBLIC_BASE_URL: "",
+			DUMP_DATABASE_URL: null,
+			B2: null,
+		}
+		const app = lyricsRoutes(env)
+		const res = await app.handle(
+			new Request("http://localhost/lyrics/variants/vid-A", {
+				headers: { authorization: "Bearer expired-token" },
+			})
+		)
+		const body = (await res.json()) as { data: Array<{ id: number; userVote: 1 | -1 | null }> }
+		expect(res.status).toBe(200)
+		expect(body.data[0].userVote).toBeNull()
+	})
+})
+
 const FORMAT_PARAM_INDEX = 10
 const SYNC_TYPE_PARAM_INDEX = 12
 

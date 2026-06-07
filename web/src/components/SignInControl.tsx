@@ -98,12 +98,12 @@ export function SignInControl() {
                   type="button"
                   onClick={copyKey}
                   aria-label={copied ? "Copied" : "Copy key id"}
-                  className="cursor-pointer shrink-0 rounded-md p-1 text-unison-text-muted transition-colors hover:bg-unison-bg-hover hover:text-unison-text"
+                  className="group cursor-pointer shrink-0 rounded-md p-1 text-unison-text transition-colors hover:bg-unison-bg-hover"
                 >
                   {copied ? (
-                    <IconCheck className="size-4" stroke={1.5} />
+                    <IconCheck className="size-4 opacity-50 transition-opacity group-hover:opacity-100" stroke={1.5} />
                   ) : (
-                    <IconCopy className="size-4" stroke={1.5} />
+                    <IconCopy className="size-4 opacity-50 transition-opacity group-hover:opacity-100" stroke={1.5} />
                   )}
                 </button>
               </div>

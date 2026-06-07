@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
-import { formatCompact, formatExact, formatRank, formatRelativeTime } from "./format"
+import { formatCompact, formatDuration, formatExact, formatRank, formatRelativeTime } from "./format"
 
 describe("formatRank", () => {
   it("renders rank as #N", () => {
@@ -51,6 +51,30 @@ describe("formatExact", () => {
 
   it("renders millions with two comma separators", () => {
     expect(formatExact(1_234_567)).toBe("1,234,567")
+  })
+})
+
+describe("formatDuration", () => {
+  it("renders seconds as M:SS with zero padding", () => {
+    expect(formatDuration(7)).toBe("0:07")
+    expect(formatDuration(65)).toBe("1:05")
+    expect(formatDuration(222)).toBe("3:42")
+  })
+
+  it("renders durations of 10+ minutes", () => {
+    expect(formatDuration(600)).toBe("10:00")
+    expect(formatDuration(3725)).toBe("62:05")
+  })
+
+  it("floors fractional seconds", () => {
+    expect(formatDuration(65.9)).toBe("1:05")
+  })
+
+  it("returns an empty string for zero, negative, or non-finite input", () => {
+    expect(formatDuration(0)).toBe("")
+    expect(formatDuration(-1)).toBe("")
+    expect(formatDuration(Number.NaN)).toBe("")
+    expect(formatDuration(Number.POSITIVE_INFINITY)).toBe("")
   })
 })
 

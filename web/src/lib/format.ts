@@ -17,6 +17,14 @@ export function formatExact(n: number): string {
   return exactFormatter.format(n)
 }
 
+export function formatDuration(seconds: number): string {
+  if (!Number.isFinite(seconds) || seconds <= 0) return ""
+  const total = Math.floor(seconds)
+  const mins = Math.floor(total / 60)
+  const secs = total % 60
+  return `${mins}:${secs.toString().padStart(2, "0")}`
+}
+
 export function formatRelativeTime(epochSec: number): string {
   const rtf = new Intl.RelativeTimeFormat("en", { numeric: "auto" })
   const diffSec = epochSec - Math.floor(Date.now() / 1000)

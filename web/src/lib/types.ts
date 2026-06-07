@@ -1,3 +1,7 @@
+export type LyricsFormat = "ttml" | "lrc" | "plain"
+export type SyncType = "richsync" | "linesync" | "plain"
+export type Confidence = "low" | "medium" | "high"
+
 export interface SongLeaderboardEntry {
   videoId: string
   song: string
@@ -71,6 +75,62 @@ export interface UserSubmission {
 export interface UserSubmissionsResponse {
   submissions: UserSubmission[]
   nextCursor?: string
+}
+
+export interface LyricsSearchHit {
+  id: number
+  videoId: string
+  song: string
+  artist: string
+  album?: string
+  isrc?: string
+  duration: number
+  format: LyricsFormat
+  language?: string
+  syncType: SyncType
+  score: number
+  effectiveScore: number
+  voteCount: number
+  confidence: Confidence
+  matchScore?: number
+}
+
+export interface VariantSubmitter {
+  keyId: string
+  reputation: number
+}
+
+export interface VariantSummary {
+  id: number
+  videoId: string
+  song: string
+  artist: string
+  album?: string
+  isrc?: string
+  format: LyricsFormat
+  language?: string
+  syncType: SyncType
+  score: number
+  effectiveScore: number
+  voteCount: number
+  confidence: Confidence
+  hidden: boolean
+  submitter?: VariantSubmitter
+  userVote?: 1 | -1 | null
+}
+
+export interface VariantFull extends VariantSummary {
+  lyrics: string
+}
+
+export interface QueueEntry {
+  rank: number
+  videoId: string
+  song: string
+  artist: string
+  thumbnailUrl: string | null
+  demand: number
+  requestCount: number
 }
 
 export interface DumpManifest {

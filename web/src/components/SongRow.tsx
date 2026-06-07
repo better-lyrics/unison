@@ -16,6 +16,7 @@ export function SongRow({ entry }: SongRowProps) {
         href={`https://music.youtube.com/watch?v=${entry.videoId}`}
         target="_blank"
         rel="noopener noreferrer"
+        aria-label={`Open ${entry.song} by ${entry.artist} in YouTube Music`}
         className="flex items-center gap-4 rounded-lg border border-unison-border bg-unison-bg-elevated px-4 py-3 transition-colors hover:border-unison-border-strong hover:bg-unison-bg-hover"
       >
         <span className="shrink-0 font-mono text-xs tabular-nums text-unison-text-muted">{formatRank(entry.rank)}</span>

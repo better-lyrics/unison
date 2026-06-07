@@ -162,6 +162,10 @@ const app = new Elysia({ adapter: node() })
 		return { success: false, error: "Internal Server Error" }
 	})
 	.get("/health", () => ({ status: "ok", timestamp: Date.now() }))
+	.get(
+		"/favicon.ico",
+		() => new Response(null, { status: 301, headers: { location: "/logo.svg" } })
+	)
 	.use(compatRoutes(env))
 	.use(lyricsRoutes(env))
 	.use(feedRoutes(env))
