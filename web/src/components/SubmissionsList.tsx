@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useMemo, useState } from "react"
 import { EmptyState } from "@/components/EmptyState"
 import { useAsyncData } from "@/hooks/useAsyncData"
 import { fetchUserSubmissions } from "@/lib/api"
 import { formatCompact, formatExact, formatRelativeTime } from "@/lib/format"
 import type { UserSubmission } from "@/lib/types"
+import { useCallback, useEffect, useMemo, useState } from "react"
+import { Link } from "react-router-dom"
 
 interface SubmissionsListProps {
   keyId: string
@@ -115,9 +116,7 @@ export function SubmissionsList({ keyId }: SubmissionsListProps) {
       )
     } catch (err) {
       const message = err instanceof Error ? err.message : "Could not load more"
-      setPage((prev) =>
-        prev.keyId === keyId ? { ...prev, loadingMore: false, loadMoreError: message } : prev,
-      )
+      setPage((prev) => (prev.keyId === keyId ? { ...prev, loadingMore: false, loadMoreError: message } : prev))
     }
   }
 
@@ -167,10 +166,8 @@ export function SubmissionsList({ keyId }: SubmissionsListProps) {
         <ul className="space-y-2">
           {visible.map((s) => (
             <li key={s.id}>
-              <a
-                href={`https://music.youtube.com/watch?v=${s.videoId}`}
-                target="_blank"
-                rel="noopener noreferrer"
+              <Link
+                to={`/song/${s.videoId}`}
                 className="flex items-center gap-3 rounded-lg border border-unison-border bg-unison-bg-elevated px-4 py-3 transition-colors hover:border-unison-border-strong hover:bg-unison-bg-hover"
               >
                 <div className="min-w-0 flex-1">
@@ -192,7 +189,7 @@ export function SubmissionsList({ keyId }: SubmissionsListProps) {
                 >
                   {formatCompact(s.voteCount)} votes
                 </p>
-              </a>
+              </Link>
             </li>
           ))}
         </ul>
