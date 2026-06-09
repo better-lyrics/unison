@@ -1,3 +1,4 @@
+import { IconBrandYoutube } from "@tabler/icons-react"
 import { useQuery } from "@tanstack/react-query"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom"
@@ -153,6 +154,15 @@ export function LyricsPage() {
 			<div className="grid gap-6 sm:grid-cols-[minmax(0,384px)_minmax(0,1fr)]">
 				<div className="space-y-4">
 					<YouTubeEmbed playerRef={ref} />
+					<a
+						href={`https://music.youtube.com/watch?v=${safeVideoId}`}
+						target="_blank"
+						rel="noopener noreferrer"
+						className="flex items-center justify-center gap-2 rounded-md border border-unison-border bg-unison-bg-elevated px-3 py-2 text-xs text-unison-text-secondary transition-colors hover:border-unison-border-strong hover:bg-unison-bg-hover hover:text-unison-text"
+					>
+						<IconBrandYoutube className="size-4" stroke={1.75} />
+						Open on YouTube Music
+					</a>
 					{variant ? <VariantMetadata variant={variant} /> : null}
 				</div>
 				<div className="space-y-4">
