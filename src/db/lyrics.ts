@@ -3,6 +3,7 @@ import { recordFulfillment } from "@/db/fulfillments"
 import {
 	AUTO_HIDE_PREDICATE,
 	AUTO_HIDE_PREDICATE_JOINED,
+	PROVEN_EXPR_JOINED,
 	RANKING_EXPR,
 	RANKING_EXPR_JOINED,
 } from "@/db/predicates"
@@ -40,7 +41,7 @@ export async function findByVideoId(env: Env, videoId: string): Promise<LyricsRo
 
 	cacheLog.debug("miss", { key: `v:${videoId}` })
 	const result = await env.DB.prepare(
-		`${LYRICS_WITH_SUBMITTER} WHERE l.video_id = ? AND l.deleted_at IS NULL AND NOT ${AUTO_HIDE_PREDICATE_JOINED} ORDER BY ${RANKING_EXPR_JOINED} DESC LIMIT 1`
+		`${LYRICS_WITH_SUBMITTER} WHERE l.video_id = ? AND l.deleted_at IS NULL AND NOT ${AUTO_HIDE_PREDICATE_JOINED} ORDER BY (CASE WHEN ${PROVEN_EXPR_JOINED} THEN 1 ELSE 0 END) DESC, ${RANKING_EXPR_JOINED} DESC LIMIT 1`
 	)
 		.bind(videoId)
 		.first<LyricsRow>()
