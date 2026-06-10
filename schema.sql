@@ -152,6 +152,10 @@ CREATE INDEX IF NOT EXISTS idx_lyrics_submitter_created
     ON lyrics(submitter_id, created_at DESC)
     WHERE deleted_at IS NULL;
 
+-- Reputation penalty idempotency: tracks whether the auto-hide / dirty-delete
+-- penalty has already been applied for this row.
+ALTER TABLE lyrics ADD COLUMN IF NOT EXISTS reputation_penalized BOOLEAN DEFAULT FALSE;
+
 -- Lyrics requests: demand signal for songs missing synced lyrics
 CREATE TABLE IF NOT EXISTS requested_songs (
     video_id TEXT PRIMARY KEY,
