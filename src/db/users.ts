@@ -59,6 +59,15 @@ export async function setNickname(
 	}
 }
 
+export async function clearNickname(env: Env, keyId: string): Promise<void> {
+	const now = Math.floor(Date.now() / 1000)
+	await env.DB.prepare(
+		"UPDATE users SET nickname = NULL, nickname_updated_at = ? WHERE key_id = ?"
+	)
+		.bind(now, keyId)
+		.run()
+}
+
 export async function updateUserAvgVote(env: Env, userId: number): Promise<void> {
 	await env.DB.prepare(
 		`

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest"
 import type { Env } from "@/types"
 import { generatePetName } from "@/utils/petname"
-import { resolveDisplayName, setNickname } from "./users"
+import { clearNickname, resolveDisplayName, setNickname } from "./users"
 
 interface DBCall {
 	sql: string
@@ -142,6 +142,31 @@ describe("setNickname", () => {
 		await setNickname(env, "k1", "Alex")
 		const after = Math.floor(Date.now() / 1000)
 		const stamped = db.calls[0].params[1] as number
+		expect(stamped).toBeGreaterThanOrEqual(before)
+		expect(stamped).toBeLessThanOrEqual(after + 1)
+	})
+})
+
+describe("clearNickname", () => {
+	it("issues the right UPDATE and resolves", async () => {
+		const db = makeMockDB([null])
+		const env = makeEnv(db)
+		await clearNickname(env, "k1")
+		expect(db.calls[0].sql).toBe(
+			"UPDATE users SET nickname = NULL, nickname_updated_at = ? WHERE key_id = ?"
+		)
+		expect(db.calls[0].params).toHaveLength(2)
+		expect(typeof db.calls[0].params[0]).toBe("number")
+		expect(db.calls[0].params[1]).toBe("k1")
+	})
+
+	it("stamps nickname_updated_at to the current second", async () => {
+		const db = makeMockDB([null])
+		const env = makeEnv(db)
+		const before = Math.floor(Date.now() / 1000)
+		await clearNickname(env, "k1")
+		const after = Math.floor(Date.now() / 1000)
+		const stamped = db.calls[0].params[0] as number
 		expect(stamped).toBeGreaterThanOrEqual(before)
 		expect(stamped).toBeLessThanOrEqual(after + 1)
 	})
