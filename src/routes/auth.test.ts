@@ -88,7 +88,13 @@ function makeMockDB(queue: unknown[] = []) {
 						},
 						async run(): Promise<void> {
 							calls.push({ sql, params: args })
-							queue.shift()
+							const next = queue.shift()
+							if (
+								next instanceof Error ||
+								(next && typeof next === "object" && "code" in next)
+							) {
+								throw next
+							}
 						},
 					}
 				},
@@ -633,6 +639,185 @@ describe("GET /auth/nickname/availability", () => {
 		expect(r2.status).toBe(200)
 		expect(r3.status).toBe(429)
 		const json = (await r3.json()) as { success: boolean; error: string }
+		expect(json.success).toBe(false)
+		expect(json.error).toBe("RATE_LIMITED")
+	})
+})
+
+describe("PUT /auth/nickname", () => {
+	async function buildBody(opts: { nickname: unknown; timestamp?: number }) {
+		const { pair, publicKey, keyId } = await makeIdentity()
+		const nonce = "nick-".padEnd(24, "x")
+		const payload = {
+			nonce,
+			keyId,
+			nickname: opts.nickname,
+			timestamp: opts.timestamp ?? Date.now(),
+		}
+		const signature = await signPayload(pair.privateKey, payload)
+		return { keyId, publicKey, body: { payload, signature, publicKey } }
+	}
+
+	function registrationQueue(keyId: string, publicKey: JsonWebKey): unknown[] {
+		return [
+			null,
+			null,
+			{ key_id: keyId, public_key: JSON.stringify(publicKey), created_at: 0 },
+			null,
+			{ id: 1, key_id: keyId, reputation: 1.0, vote_count: 0, avg_vote: 0, created_at: 0 },
+		]
+	}
+
+	it("rejects unsigned requests with 400 INVALID_SIGNED_BODY", async () => {
+		const cache = makeMockCache()
+		const db = makeMockDB([])
+		const env = makeEnvFull(db, cache)
+		const app = authRoutes(env)
+		const res = await app.handle(
+			new Request("http://localhost/auth/nickname", {
+				method: "PUT",
+				headers: { "content-type": "application/json" },
+				body: JSON.stringify({ nickname: "Alex" }),
+			})
+		)
+		expect(res.status).toBe(400)
+		const json = (await res.json()) as { code: string }
+		expect(json.code).toBe("INVALID_SIGNED_BODY")
+	})
+
+	it("400 INVALID_FORMAT when nickname violates the regex", async () => {
+		const cache = makeMockCache()
+		const { keyId, publicKey, body } = await buildBody({ nickname: "a b" })
+		const db = makeMockDB(registrationQueue(keyId, publicKey))
+		const env = makeEnvFull(db, cache)
+		const app = authRoutes(env)
+		const res = await app.handle(
+			new Request("http://localhost/auth/nickname", {
+				method: "PUT",
+				headers: { "content-type": "application/json" },
+				body: JSON.stringify(body),
+			})
+		)
+		expect(res.status).toBe(400)
+		const json = (await res.json()) as { success: boolean; error: string }
+		expect(json.success).toBe(false)
+		expect(json.error).toBe("INVALID_FORMAT")
+	})
+
+	it("200 round-trip: PUT returns the new displayName", async () => {
+		const cache = makeMockCache()
+		const { keyId, publicKey, body } = await buildBody({ nickname: "Alex" })
+		const db = makeMockDB([
+			...registrationQueue(keyId, publicKey),
+			{ id: 1, key_id: keyId, reputation: 1.0, vote_count: 0, avg_vote: 0, created_at: 0 },
+			null,
+			{ nickname: "Alex" },
+		])
+		const env = makeEnvFull(db, cache)
+		const app = authRoutes(env)
+		const res = await app.handle(
+			new Request("http://localhost/auth/nickname", {
+				method: "PUT",
+				headers: { "content-type": "application/json" },
+				body: JSON.stringify(body),
+			})
+		)
+		expect(res.status).toBe(200)
+		const json = (await res.json()) as {
+			success: boolean
+			data: { keyId: string; displayName: string }
+		}
+		expect(json.success).toBe(true)
+		expect(json.data.keyId).toBe(keyId)
+		expect(json.data.displayName).toBe("Alex")
+	})
+
+	it("409 NICKNAME_TAKEN when another user holds it (case-insensitive)", async () => {
+		const cache = makeMockCache()
+		const { keyId, publicKey, body } = await buildBody({ nickname: "alex" })
+		const db = makeMockDB([
+			...registrationQueue(keyId, publicKey),
+			{ id: 1, key_id: keyId, reputation: 1.0, vote_count: 0, avg_vote: 0, created_at: 0 },
+			{ code: "23505" },
+		])
+		const env = makeEnvFull(db, cache)
+		const app = authRoutes(env)
+		const res = await app.handle(
+			new Request("http://localhost/auth/nickname", {
+				method: "PUT",
+				headers: { "content-type": "application/json" },
+				body: JSON.stringify(body),
+			})
+		)
+		expect(res.status).toBe(409)
+		const json = (await res.json()) as { success: boolean; error: string }
+		expect(json.success).toBe(false)
+		expect(json.error).toBe("NICKNAME_TAKEN")
+	})
+
+	it("200 when the same user re-submits their own nickname", async () => {
+		const cache = makeMockCache()
+		const { keyId, publicKey, body } = await buildBody({ nickname: "Alex" })
+		const db = makeMockDB([
+			...registrationQueue(keyId, publicKey),
+			{ id: 1, key_id: keyId, reputation: 1.0, vote_count: 0, avg_vote: 0, created_at: 0 },
+			null,
+			{ nickname: "Alex" },
+		])
+		const env = makeEnvFull(db, cache)
+		const app = authRoutes(env)
+		const res = await app.handle(
+			new Request("http://localhost/auth/nickname", {
+				method: "PUT",
+				headers: { "content-type": "application/json" },
+				body: JSON.stringify(body),
+			})
+		)
+		expect(res.status).toBe(200)
+		const json = (await res.json()) as {
+			success: boolean
+			data: { keyId: string; displayName: string }
+		}
+		expect(json.success).toBe(true)
+		expect(json.data.displayName).toBe("Alex")
+	})
+
+	it("429 RATE_LIMITED when the write bucket is exhausted", async () => {
+		const cache = makeMockCache()
+		const { keyId, publicKey, body } = await buildBody({ nickname: "Alex" })
+		const db = makeMockDB(registrationQueue(keyId, publicKey))
+		const limiter = {
+			async limit(opts: { key: string }) {
+				if (opts.key.startsWith("nickname_write:")) return { success: false }
+				return { success: true }
+			},
+		}
+		const env: Env & { cache: ReturnType<typeof makeMockCache> } = {
+			DB: db as unknown as Env["DB"],
+			CACHE: cache as unknown as Env["CACHE"],
+			RATE_LIMITER: limiter as unknown as Env["RATE_LIMITER"],
+			READ_RATE_LIMITER: {
+				async limit() {
+					return { success: true }
+				},
+			} as unknown as Env["READ_RATE_LIMITER"],
+			CACHE_TTL_SECONDS: "300",
+			DUMPS_ENABLED: false,
+			DUMP_PUBLIC_BASE_URL: "",
+			DUMP_DATABASE_URL: null,
+			B2: null,
+			cache,
+		}
+		const app = authRoutes(env)
+		const res = await app.handle(
+			new Request("http://localhost/auth/nickname", {
+				method: "PUT",
+				headers: { "content-type": "application/json" },
+				body: JSON.stringify(body),
+			})
+		)
+		expect(res.status).toBe(429)
+		const json = (await res.json()) as { success: boolean; error: string }
 		expect(json.success).toBe(false)
 		expect(json.error).toBe("RATE_LIMITED")
 	})

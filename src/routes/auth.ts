@@ -1,5 +1,6 @@
 import { Elysia, t } from "elysia"
 import { config } from "@/config"
+import { getOrCreateUser, resolveDisplayName, setNickname } from "@/db/users"
 import type { Env } from "@/types"
 import { signedRequest } from "@/utils/auth"
 import { generatePetName } from "@/utils/petname"
@@ -131,5 +132,35 @@ export const authRoutes = (env: Env) =>
 					keyId,
 					displayName: generatePetName(keyId),
 				},
+			}
+		})
+		.put("/nickname", async ({ env, keyId, signedPayload, set }) => {
+			const { success } = await env.RATE_LIMITER.limit({
+				key: `nickname_write:${keyId}`,
+				maxRequests: config.auth.nickname.write.maxRequests,
+				windowSeconds: config.auth.nickname.write.windowSeconds,
+			})
+			if (!success) {
+				set.status = 429
+				return { success: false, error: "RATE_LIMITED" }
+			}
+
+			const nickname =
+				typeof signedPayload.nickname === "string" ? signedPayload.nickname : ""
+			if (!new RegExp(config.auth.nickname.pattern).test(nickname)) {
+				set.status = 400
+				return { success: false, error: "INVALID_FORMAT" }
+			}
+
+			await getOrCreateUser(env, keyId)
+			const result = await setNickname(env, keyId, nickname)
+			if (!result.ok) {
+				set.status = 409
+				return { success: false, error: "NICKNAME_TAKEN" }
+			}
+
+			return {
+				success: true,
+				data: { keyId, displayName: await resolveDisplayName(env, keyId) },
 			}
 		})
