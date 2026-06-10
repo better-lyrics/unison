@@ -22,7 +22,11 @@ export interface Env {
 }
 
 export interface RateLimiter {
-	limit(options: { key: string }): Promise<{ success: boolean }>
+	limit(options: {
+		key: string
+		maxRequests?: number
+		windowSeconds?: number
+	}): Promise<{ success: boolean }>
 }
 
 export type LyricsFormat = "ttml" | "lrc" | "plain"

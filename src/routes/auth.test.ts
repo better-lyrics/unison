@@ -435,3 +435,205 @@ describe("GET /auth/me", () => {
 		expect(res.status).toBe(401)
 	})
 })
+
+describe("GET /auth/nickname/availability", () => {
+	function seedSession(cache: ReturnType<typeof makeMockCache>, token: string, keyId: string) {
+		const ttl = 30 * 24 * 60 * 60
+		const issuedAt = Math.floor(Date.now() / 1000)
+		cache.store.set(`session:${token}`, {
+			value: JSON.stringify({ keyId, issuedAt, expiresAt: issuedAt + ttl }),
+			ttl,
+		})
+	}
+
+	it("401 MISSING_TOKEN without Authorization header", async () => {
+		const cache = makeMockCache()
+		const db = makeMockDB([])
+		const env = makeEnvFull(db, cache)
+		const app = authRoutes(env)
+		const res = await app.handle(
+			new Request("http://localhost/auth/nickname/availability?name=alex")
+		)
+		expect(res.status).toBe(401)
+		const json = (await res.json()) as { success: boolean; error: string }
+		expect(json.success).toBe(false)
+		expect(json.error).toBe("MISSING_TOKEN")
+	})
+
+	it("401 INVALID_TOKEN with an unknown bearer", async () => {
+		const cache = makeMockCache()
+		const db = makeMockDB([])
+		const env = makeEnvFull(db, cache)
+		const app = authRoutes(env)
+		const res = await app.handle(
+			new Request("http://localhost/auth/nickname/availability?name=alex", {
+				headers: { authorization: "Bearer nope" },
+			})
+		)
+		expect(res.status).toBe(401)
+		const json = (await res.json()) as { success: boolean; error: string }
+		expect(json.success).toBe(false)
+		expect(json.error).toBe("INVALID_TOKEN")
+	})
+
+	it("returns INVALID_FORMAT for too short", async () => {
+		const cache = makeMockCache()
+		seedSession(cache, "tok", "a".repeat(64))
+		const db = makeMockDB([])
+		const env = makeEnvFull(db, cache)
+		const app = authRoutes(env)
+		const res = await app.handle(
+			new Request("http://localhost/auth/nickname/availability?name=ab", {
+				headers: { authorization: "Bearer tok" },
+			})
+		)
+		expect(res.status).toBe(200)
+		const json = (await res.json()) as { available: boolean; reason?: string }
+		expect(json.available).toBe(false)
+		expect(json.reason).toBe("INVALID_FORMAT")
+		expect(db.calls).toEqual([])
+	})
+
+	it("returns INVALID_FORMAT for too long", async () => {
+		const cache = makeMockCache()
+		seedSession(cache, "tok", "a".repeat(64))
+		const db = makeMockDB([])
+		const env = makeEnvFull(db, cache)
+		const app = authRoutes(env)
+		const name = "a".repeat(21)
+		const res = await app.handle(
+			new Request(`http://localhost/auth/nickname/availability?name=${name}`, {
+				headers: { authorization: "Bearer tok" },
+			})
+		)
+		expect(res.status).toBe(200)
+		const json = (await res.json()) as { available: boolean; reason?: string }
+		expect(json.available).toBe(false)
+		expect(json.reason).toBe("INVALID_FORMAT")
+		expect(db.calls).toEqual([])
+	})
+
+	it("returns INVALID_FORMAT for a name with spaces", async () => {
+		const cache = makeMockCache()
+		seedSession(cache, "tok", "a".repeat(64))
+		const db = makeMockDB([])
+		const env = makeEnvFull(db, cache)
+		const app = authRoutes(env)
+		const res = await app.handle(
+			new Request("http://localhost/auth/nickname/availability?name=a%20b", {
+				headers: { authorization: "Bearer tok" },
+			})
+		)
+		expect(res.status).toBe(200)
+		const json = (await res.json()) as { available: boolean; reason?: string }
+		expect(json.available).toBe(false)
+		expect(json.reason).toBe("INVALID_FORMAT")
+		expect(db.calls).toEqual([])
+	})
+
+	it("returns available:true for an unused valid name", async () => {
+		const cache = makeMockCache()
+		seedSession(cache, "tok", "a".repeat(64))
+		const db = makeMockDB([null])
+		const env = makeEnvFull(db, cache)
+		const app = authRoutes(env)
+		const res = await app.handle(
+			new Request("http://localhost/auth/nickname/availability?name=alex", {
+				headers: { authorization: "Bearer tok" },
+			})
+		)
+		expect(res.status).toBe(200)
+		const json = (await res.json()) as { available: boolean; reason?: string }
+		expect(json.available).toBe(true)
+		expect(json.reason).toBeUndefined()
+		expect(db.calls).toHaveLength(1)
+		expect(db.calls[0].sql).toContain("nickname_lower")
+		expect(db.calls[0].params).toEqual(["alex"])
+	})
+
+	it("returns TAKEN when another user holds the name (case-insensitive)", async () => {
+		const cache = makeMockCache()
+		const callerKeyId = "a".repeat(64)
+		const ownerKeyId = "b".repeat(64)
+		seedSession(cache, "tok", callerKeyId)
+		const db = makeMockDB([{ key_id: ownerKeyId }])
+		const env = makeEnvFull(db, cache)
+		const app = authRoutes(env)
+		const res = await app.handle(
+			new Request("http://localhost/auth/nickname/availability?name=alex", {
+				headers: { authorization: "Bearer tok" },
+			})
+		)
+		expect(res.status).toBe(200)
+		const json = (await res.json()) as { available: boolean; reason?: string }
+		expect(json.available).toBe(false)
+		expect(json.reason).toBe("TAKEN")
+		expect(db.calls[0].params).toEqual(["alex"])
+	})
+
+	it("returns SELF when the caller's own current nickname matches", async () => {
+		const cache = makeMockCache()
+		const callerKeyId = "c".repeat(64)
+		seedSession(cache, "tok", callerKeyId)
+		const db = makeMockDB([{ key_id: callerKeyId }])
+		const env = makeEnvFull(db, cache)
+		const app = authRoutes(env)
+		const res = await app.handle(
+			new Request("http://localhost/auth/nickname/availability?name=Alex", {
+				headers: { authorization: "Bearer tok" },
+			})
+		)
+		expect(res.status).toBe(200)
+		const json = (await res.json()) as { available: boolean; reason?: string }
+		expect(json.available).toBe(true)
+		expect(json.reason).toBe("SELF")
+		expect(db.calls[0].params).toEqual(["alex"])
+	})
+
+	it("returns 429 when the rate-limit budget is exhausted", async () => {
+		const cache = makeMockCache()
+		seedSession(cache, "tok", "a".repeat(64))
+		const db = makeMockDB([null, null, null])
+		const allowed = 2
+		let calls = 0
+		const limiter = {
+			async limit() {
+				calls++
+				return { success: calls <= allowed }
+			},
+		}
+		const env: Env & { cache: ReturnType<typeof makeMockCache> } = {
+			DB: db as unknown as Env["DB"],
+			CACHE: cache as unknown as Env["CACHE"],
+			RATE_LIMITER: limiter as unknown as Env["RATE_LIMITER"],
+			READ_RATE_LIMITER: {
+				async limit() {
+					return { success: true }
+				},
+			} as unknown as Env["READ_RATE_LIMITER"],
+			CACHE_TTL_SECONDS: "300",
+			DUMPS_ENABLED: false,
+			DUMP_PUBLIC_BASE_URL: "",
+			DUMP_DATABASE_URL: null,
+			B2: null,
+			cache,
+		}
+		const app = authRoutes(env)
+		const headers = { authorization: "Bearer tok" }
+		const r1 = await app.handle(
+			new Request("http://localhost/auth/nickname/availability?name=alex", { headers })
+		)
+		const r2 = await app.handle(
+			new Request("http://localhost/auth/nickname/availability?name=alex", { headers })
+		)
+		const r3 = await app.handle(
+			new Request("http://localhost/auth/nickname/availability?name=alex", { headers })
+		)
+		expect(r1.status).toBe(200)
+		expect(r2.status).toBe(200)
+		expect(r3.status).toBe(429)
+		const json = (await r3.json()) as { success: boolean; error: string }
+		expect(json.success).toBe(false)
+		expect(json.error).toBe("RATE_LIMITED")
+	})
+})

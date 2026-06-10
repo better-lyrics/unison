@@ -1,4 +1,4 @@
-import { Elysia } from "elysia"
+import { Elysia, t } from "elysia"
 import { config } from "@/config"
 import type { Env } from "@/types"
 import { signedRequest } from "@/utils/auth"
@@ -58,6 +58,54 @@ export const authRoutes = (env: Env) =>
 				},
 			}
 		})
+		.get(
+			"/nickname/availability",
+			async ({ env, headers, query, set }) => {
+				const auth = headers.authorization
+				const token = auth?.startsWith("Bearer ") ? auth.slice(7).trim() : null
+				if (!token) {
+					set.status = 401
+					return { success: false, error: "MISSING_TOKEN" }
+				}
+				const record = await getSession(env, token)
+				if (!record) {
+					set.status = 401
+					return { success: false, error: "INVALID_TOKEN" }
+				}
+
+				const { success } = await env.RATE_LIMITER.limit({
+					key: `nickname_check:${record.keyId}`,
+					maxRequests: config.auth.nickname.check.maxRequests,
+					windowSeconds: config.auth.nickname.check.windowSeconds,
+				})
+				if (!success) {
+					set.status = 429
+					return { success: false, error: "RATE_LIMITED" }
+				}
+
+				const name = query.name ?? ""
+				if (!new RegExp(config.auth.nickname.pattern).test(name)) {
+					return { available: false, reason: "INVALID_FORMAT" }
+				}
+
+				const row = await env.DB.prepare(
+					"SELECT key_id FROM users WHERE nickname_lower = ?"
+				)
+					.bind(name.toLowerCase())
+					.first<{ key_id: string }>()
+
+				if (!row) {
+					return { available: true }
+				}
+				if (row.key_id === record.keyId) {
+					return { available: true, reason: "SELF" }
+				}
+				return { available: false, reason: "TAKEN" }
+			},
+			{
+				query: t.Object({ name: t.String() }),
+			}
+		)
 		.use(signedRequest)
 		.post("/session", async ({ env, keyId, signedPayload, headers, set }) => {
 			const signedOrigin = signedPayload.origin
