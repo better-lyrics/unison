@@ -224,6 +224,7 @@ export function NicknameEditor() {
 
   return (
     <div
+      data-testid="nickname-editor"
       data-state={state.kind}
       className="space-y-3 rounded-lg border border-unison-border bg-unison-bg-elevated p-4"
     >

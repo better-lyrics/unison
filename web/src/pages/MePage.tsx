@@ -2,6 +2,7 @@ import { useSession } from "@/auth/useSession"
 import { EmptyState } from "@/components/EmptyState"
 import { LeaderboardSection } from "@/components/LeaderboardSection"
 import { LoadingPlaceholder } from "@/components/LoadingPlaceholder"
+import { NicknameEditor } from "@/components/NicknameEditor"
 import { UserProfileView } from "@/components/UserProfileView"
 
 export function MePage() {
@@ -19,5 +20,12 @@ export function MePage() {
     return <EmptyState title="Not signed in" hint="Sign in with Better Lyrics from the header to see your stats." />
   }
 
-  return <UserProfileView keyId={session.identity.keyId} title="Me" />
+  return (
+    <div className="space-y-6">
+      <UserProfileView keyId={session.identity.keyId} title="Me" />
+      <LeaderboardSection title="Nickname" subtitle="How you appear across Unison.">
+        <NicknameEditor />
+      </LeaderboardSection>
+    </div>
+  )
 }
