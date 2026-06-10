@@ -11,7 +11,7 @@ import {
 	softDeleteLyrics,
 	submitLyrics,
 } from "./lyrics"
-import { AUTO_HIDE_PREDICATE, RANKING_EXPR } from "./predicates"
+import { AUTO_HIDE_PREDICATE, RANKING_EXPR, RANKING_EXPR_JOINED } from "./predicates"
 
 // -- Mocks -----------------------------------------------------------------
 
@@ -314,8 +314,13 @@ describe("findByVideoId", () => {
 		const lookupCall = db.calls.find((c) => c.sql.includes("FROM lyrics"))
 		expect(lookupCall).toBeDefined()
 		expect(lookupCall?.sql).toContain("CASE WHEN")
-		expect(lookupCall?.sql).toMatch(/u\.reputation > 1/)
+		expect(lookupCall?.sql).toMatch(/COALESCE\(u\.reputation, 0\) > 1/)
 		expect(lookupCall?.sql).toMatch(/vote_count >= 3/)
+		expect(lookupCall!.sql).toMatch(/ORDER BY \(CASE WHEN[\s\S]+?\) DESC,/)
+		const caseIdx = lookupCall!.sql.indexOf("CASE WHEN")
+		const rankingIdx = lookupCall!.sql.indexOf(RANKING_EXPR_JOINED)
+		expect(caseIdx).toBeGreaterThan(-1)
+		expect(rankingIdx).toBeGreaterThan(caseIdx)
 	})
 })
 
@@ -412,7 +417,11 @@ describe("findBySongArtist", () => {
 		const lookupCall = db.calls.find((c) => c.sql.includes("FROM lyrics"))
 		expect(lookupCall).toBeDefined()
 		expect(lookupCall?.sql).toContain("CASE WHEN")
-		expect(lookupCall?.sql).toMatch(/u\.reputation > 1/)
+		expect(lookupCall?.sql).toMatch(/COALESCE\(u\.reputation, 0\) > 1/)
+		const caseIdx = lookupCall!.sql.indexOf("CASE WHEN")
+		const rankingIdx = lookupCall!.sql.indexOf(RANKING_EXPR_JOINED)
+		expect(caseIdx).toBeGreaterThan(-1)
+		expect(rankingIdx).toBeGreaterThan(caseIdx)
 	})
 })
 

@@ -38,13 +38,12 @@ export const AUTO_HIDE_PREDICATE_JOINED = buildAutoHidePredicate("l.")
 
 const { primarySlot } = config.ranking
 
-const buildProvenExpr = (prefix: string, repColumn = `${prefix}submitter_reputation`) => `(
-	${repColumn} > ${primarySlot.repFloor}
+const provenExpr = (repExpr: string, prefix: string) => `(
+	COALESCE(${repExpr}, 0) > ${primarySlot.repFloor}
 	OR (
 		${prefix}vote_count >= ${primarySlot.minVotes}
 		AND ${prefix}effective_score > 0
 	)
 )`
 
-export const PROVEN_EXPR = buildProvenExpr("")
-export const PROVEN_EXPR_JOINED = buildProvenExpr("l.", "u.reputation")
+export const PROVEN_EXPR_JOINED = provenExpr("u.reputation", "l.")
