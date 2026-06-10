@@ -1,6 +1,7 @@
 // Default display name when a user has not set a custom nickname.
-// Source of truth for the wordlists lives here; clients consume the resolved
-// displayName from API responses rather than deriving locally.
+// Wordlists must stay in sync with the Better Lyrics extension's
+// IDENTITY_ADJECTIVES / IDENTITY_NOUNS / IDENTITY_ACTIONS, since the extension
+// derives the same fallback locally for first-paint before any server response.
 
 const IDENTITY_ADJECTIVES = [
 	"Melodic",
