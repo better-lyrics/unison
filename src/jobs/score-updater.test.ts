@@ -134,12 +134,13 @@ describe("calculateScore", () => {
 	it("handles mixed high and low reputation users", () => {
 		const votes = [
 			{ vote: 1, reputation: 2.0, avg_vote: 0.5, is_self_vote: 0 },
-			{ vote: -1, reputation: 0.0, avg_vote: -0.5, is_self_vote: 0 },
+			{ vote: -1, reputation: 0.6, avg_vote: 0.3, is_self_vote: 0 },
 		]
 
 		const result = calculateScore(1, votes)
 
-		expect(result.effective_score).toBe(1)
+		// (1 * 2.0 + -1 * 0.6) / (2.0 + 0.6) = 1.4 / 2.6 = 0.5385
+		expect(result.effective_score).toBeCloseTo(0.538, 2)
 	})
 
 	it("excludes votes below the weight floor from effective_score", () => {
@@ -171,6 +172,18 @@ describe("calculateScore", () => {
 		const result = calculateScore(1, votes)
 
 		expect(result.effective_score).toBeCloseTo(1.0, 2)
+	})
+
+	it("filters sub-floor self-votes by raw reputation, not by post-discount weight", () => {
+		const votes = [
+			{ vote: 1, reputation: 1.0, avg_vote: 0.5, is_self_vote: 0 },
+			{ vote: -1, reputation: 0.4, avg_vote: 0.0, is_self_vote: 1 },
+		]
+
+		const result = calculateScore(1, votes)
+
+		expect(result.effective_score).toBeCloseTo(1.0, 2)
+		expect(result.vote_count).toBe(2)
 	})
 })
 
