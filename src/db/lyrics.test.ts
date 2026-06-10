@@ -1021,3 +1021,22 @@ describe("submitLyrics fulfillment integration", () => {
 		expect(sqls).not.toMatch(/INSERT INTO request_fulfillments/i)
 	})
 })
+
+describe("submitLyrics variant cap", () => {
+	it("counts penalized-and-deleted rows against the variant cap", async () => {
+		const db = createMockDB([{ count: 3 }])
+		const cache = createMockCache()
+		const env = createEnv(db, cache)
+
+		const result = await submitLyrics(env, buildSubmission(), 42)
+
+		expect(result.created).toBe(false)
+
+		const countCall = db.calls.find(
+			(c) => c.sql.includes("SELECT COUNT(*)") && c.sql.includes("lyrics")
+		)
+		expect(countCall).toBeDefined()
+		expect(countCall!.sql).toMatch(/reputation_penalized\s*=\s*TRUE/i)
+		expect(countCall!.sql).toMatch(/deleted_at\s+IS\s+NULL/i)
+	})
+})

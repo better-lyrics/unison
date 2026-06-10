@@ -145,7 +145,9 @@ export async function submitLyrics(
 
 	// Check per-user-per-video variant cap
 	const variantCount = await env.DB.prepare(
-		"SELECT COUNT(*)::INTEGER AS count FROM lyrics WHERE video_id = ? AND submitter_id = ? AND deleted_at IS NULL"
+		`SELECT COUNT(*)::INTEGER AS count FROM lyrics
+			WHERE video_id = ? AND submitter_id = ?
+				AND (deleted_at IS NULL OR reputation_penalized = TRUE)`
 	)
 		.bind(submission.videoId, submitterId)
 		.first<{ count: number }>()
