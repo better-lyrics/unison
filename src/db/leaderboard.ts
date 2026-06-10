@@ -208,6 +208,7 @@ export interface CuratorLeaderboardRow {
 	fulfilledCount: number
 	fulfilledDemand: number
 	rank: number
+	nickname: string | null
 }
 
 interface CuratorRow {
@@ -218,6 +219,7 @@ interface CuratorRow {
 	total_upvotes: number
 	fulfilled_count: number
 	fulfilled_demand: number
+	nickname: string | null
 }
 
 export async function getCuratorLeaderboard(
@@ -225,7 +227,7 @@ export async function getCuratorLeaderboard(
 	limit: number
 ): Promise<CuratorLeaderboardRow[]> {
 	const res = await env.DB.prepare(
-		`SELECT u.key_id, u.reputation,
+		`SELECT u.key_id, u.reputation, u.nickname,
 		        agg.score, agg.submission_count, agg.total_upvotes,
 		        COALESCE(ff.fulfilled_count, 0) AS fulfilled_count,
 		        COALESCE(ff.fulfilled_demand, 0) AS fulfilled_demand
@@ -265,6 +267,7 @@ export async function getCuratorLeaderboard(
 		fulfilledCount: Number(r.fulfilled_count ?? 0),
 		fulfilledDemand: Number(r.fulfilled_demand ?? 0),
 		rank: i + 1,
+		nickname: r.nickname ?? null,
 	}))
 }
 
