@@ -328,6 +328,108 @@ describe("soft-delete handling", () => {
 	})
 })
 
+describe("auto-hide reputation penalty", () => {
+	function createMockDB(queue: unknown[]): {
+		db: Env["DB"]
+		calls: { sql: string; params: unknown[] }[]
+	} {
+		const calls: { sql: string; params: unknown[] }[] = []
+		const db = {
+			prepare(sql: string) {
+				let params: unknown[] = []
+				return {
+					bind(...args: unknown[]) {
+						params = args
+						return this
+					},
+					async first<T>(): Promise<T | null> {
+						calls.push({ sql, params })
+						return (queue.shift() as T) ?? null
+					},
+					async all<T>(): Promise<{ results: T[] }> {
+						calls.push({ sql, params })
+						return { results: (queue.shift() as T[]) ?? [] }
+					},
+					async run(): Promise<void> {
+						calls.push({ sql, params })
+					},
+				}
+			},
+		}
+		return { db: db as unknown as Env["DB"], calls }
+	}
+
+	it("applies penalty to submitters of newly auto-hidden rows", async () => {
+		const { db, calls } = createMockDB([[], [{ id: 10, submitter_id: 42 }]])
+		const env = { DB: db } as unknown as Env
+
+		await updateScores(env)
+
+		const userUpdate = calls.find(
+			(c) =>
+				c.sql.includes("UPDATE users") &&
+				c.sql.includes("reputation - ?") &&
+				c.sql.includes("WHERE id = ?")
+		)
+		expect(userUpdate).toBeDefined()
+		expect(userUpdate?.params).toEqual([
+			config.reputation.min,
+			config.moderation.autoHide.reputationPenalty,
+			42,
+		])
+
+		const markUpdate = calls.find(
+			(c) => c.sql.includes("UPDATE lyrics") && c.sql.includes("reputation_penalized")
+		)
+		expect(markUpdate).toBeDefined()
+		expect(markUpdate?.params).toEqual([10])
+	})
+
+	it("is idempotent: skips rows already marked as penalized via WHERE filter", async () => {
+		const { db, calls } = createMockDB([[], []])
+		const env = { DB: db } as unknown as Env
+
+		await updateScores(env)
+
+		const selectCall = calls.find(
+			(c) =>
+				c.sql.includes("SELECT") &&
+				c.sql.includes("submitter_id") &&
+				c.sql.includes("reputation_penalized")
+		)
+		expect(selectCall).toBeDefined()
+		expect(selectCall?.sql).toMatch(/reputation_penalized\s*=\s*FALSE/i)
+	})
+
+	it("sums penalty when a submitter has multiple newly-hidden rows", async () => {
+		const { db, calls } = createMockDB([
+			[],
+			[
+				{ id: 10, submitter_id: 42 },
+				{ id: 11, submitter_id: 42 },
+			],
+		])
+		const env = { DB: db } as unknown as Env
+
+		await updateScores(env)
+
+		const userUpdates = calls.filter(
+			(c) =>
+				c.sql.includes("UPDATE users") &&
+				c.sql.includes("reputation - ?") &&
+				c.sql.includes("WHERE id = ?")
+		)
+		expect(userUpdates).toHaveLength(1)
+		const totalPenalty = config.moderation.autoHide.reputationPenalty * 2
+		expect(userUpdates[0].params).toEqual([config.reputation.min, totalPenalty, 42])
+
+		const markUpdate = calls.find(
+			(c) => c.sql.includes("UPDATE lyrics") && c.sql.includes("reputation_penalized")
+		)
+		expect(markUpdate?.params).toEqual([10, 11])
+	})
+})
+
 describe("reputation bounds", () => {
 	it("config has correct reputation bounds", () => {
 		expect(config.reputation.min).toBe(0.0)
