@@ -126,6 +126,12 @@ export const authRoutes = (env: Env) =>
 						data: { keyId, displayName: await resolveDisplayName(env, keyId) },
 					}
 				})
+				.post("/nickname/me", async ({ env, keyId }) => {
+					return {
+						success: true,
+						data: { keyId, displayName: await resolveDisplayName(env, keyId) },
+					}
+				})
 		)
 		.use(
 			new Elysia()
