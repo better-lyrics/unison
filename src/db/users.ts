@@ -1,4 +1,5 @@
 import type { Env, User } from "@/types"
+import { generatePetName } from "@/utils/petname"
 
 export async function getOrCreateUser(env: Env, keyId: string): Promise<User> {
 	const existing = await env.DB.prepare("SELECT * FROM users WHERE key_id = ?")
@@ -26,6 +27,13 @@ export async function updateUserReputation(env: Env, userId: number, delta: numb
 	)
 		.bind(delta, userId)
 		.run()
+}
+
+export async function resolveDisplayName(env: Env, keyId: string): Promise<string> {
+	const row = await env.DB.prepare("SELECT nickname FROM users WHERE key_id = ?")
+		.bind(keyId)
+		.first<{ nickname: string | null }>()
+	return row?.nickname ?? generatePetName(keyId)
 }
 
 export async function updateUserAvgVote(env: Env, userId: number): Promise<void> {
