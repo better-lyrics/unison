@@ -14,7 +14,12 @@ import { type ReactNode, createContext, useCallback, useContext, useEffect, useS
 type SessionState =
   | { status: "loading" }
   | { status: "signed-out"; signIn: () => Promise<void> }
-  | { status: "signed-in"; identity: Identity; signOut: () => void }
+  | {
+      status: "signed-in"
+      identity: Identity
+      signOut: () => void
+      updateDisplayName: (displayName: string) => void
+    }
   | { status: "error"; error: Error; signIn: () => Promise<void> }
 
 const Ctx = createContext<SessionState | null>(null)
@@ -88,9 +93,19 @@ export function AuthProvider({ children }: AuthProviderProps) {
     setPhase({ kind: "signed-out" })
   }, [])
 
+  const updateDisplayName = useCallback((displayName: string) => {
+    setPhase((prev) => {
+      if (prev.kind !== "signed-in") return prev
+      const stored = loadStoredSession()
+      if (stored) saveStoredSession({ ...stored, displayName })
+      return { kind: "signed-in", identity: { ...prev.identity, displayName } }
+    })
+  }, [])
+
   let state: SessionState
   if (phase.kind === "loading") state = { status: "loading" }
-  else if (phase.kind === "signed-in") state = { status: "signed-in", identity: phase.identity, signOut }
+  else if (phase.kind === "signed-in")
+    state = { status: "signed-in", identity: phase.identity, signOut, updateDisplayName }
   else if (phase.kind === "error") state = { status: "error", error: phase.error, signIn }
   else state = { status: "signed-out", signIn }
 
