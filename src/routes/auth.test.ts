@@ -763,7 +763,6 @@ describe("PUT /auth/nickname", () => {
 		const { keyId, publicKey, body } = await buildBody({ nickname: "Alex" })
 		const db = makeMockDB([
 			...registrationQueue(keyId, publicKey),
-			{ id: 1, key_id: keyId, reputation: 1.0, vote_count: 0, avg_vote: 0, created_at: 0 },
 			null,
 			{ nickname: "Alex" },
 		])
@@ -791,7 +790,6 @@ describe("PUT /auth/nickname", () => {
 		const { keyId, publicKey, body } = await buildBody({ nickname: "alex" })
 		const db = makeMockDB([
 			...registrationQueue(keyId, publicKey),
-			{ id: 1, key_id: keyId, reputation: 1.0, vote_count: 0, avg_vote: 0, created_at: 0 },
 			{ code: "23505" },
 		])
 		const env = makeEnvFull(db, cache)
@@ -814,7 +812,6 @@ describe("PUT /auth/nickname", () => {
 		const { keyId, publicKey, body } = await buildBody({ nickname: "Alex" })
 		const db = makeMockDB([
 			...registrationQueue(keyId, publicKey),
-			{ id: 1, key_id: keyId, reputation: 1.0, vote_count: 0, avg_vote: 0, created_at: 0 },
 			null,
 			{ nickname: "Alex" },
 		])
@@ -905,7 +902,6 @@ describe("DELETE /auth/nickname", () => {
 		const { keyId, publicKey, body } = await buildBody()
 		const db = makeMockDB([
 			...registrationQueue(keyId, publicKey),
-			{ id: 1, key_id: keyId, reputation: 1.0, vote_count: 0, avg_vote: 0, created_at: 0 },
 			null,
 			{ nickname: null },
 		])
@@ -943,5 +939,160 @@ describe("DELETE /auth/nickname", () => {
 		expect(res.status).toBe(400)
 		const json = (await res.json()) as { code: string }
 		expect(json.code).toBe("INVALID_SIGNED_BODY")
+	})
+})
+
+describe("PUT /auth/nickname bearer path", () => {
+	function seedSession(cache: ReturnType<typeof makeMockCache>, token: string, keyId: string) {
+		const ttl = 30 * 24 * 60 * 60
+		const issuedAt = Math.floor(Date.now() / 1000)
+		cache.store.set(`session:${token}`, {
+			value: JSON.stringify({ keyId, issuedAt, expiresAt: issuedAt + ttl }),
+			ttl,
+		})
+	}
+
+	it("PUT bearer path: casts a nickname update via bearer token", async () => {
+		const keyId = "a".repeat(64)
+		const cache = makeMockCache()
+		seedSession(cache, "tok", keyId)
+		const db = makeMockDB([
+			{ id: 1, key_id: keyId, reputation: 1.0, vote_count: 0, avg_vote: 0, created_at: 0 },
+			null,
+			{ nickname: "Alex" },
+		])
+		const env = makeEnvFull(db, cache)
+		const app = authRoutes(env)
+		const res = await app.handle(
+			new Request("http://localhost/auth/nickname", {
+				method: "PUT",
+				headers: { authorization: "Bearer tok", "content-type": "application/json" },
+				body: JSON.stringify({ nickname: "Alex" }),
+			})
+		)
+		expect(res.status).toBe(200)
+		const json = (await res.json()) as {
+			success: boolean
+			data: { keyId: string; displayName: string }
+		}
+		expect(json.success).toBe(true)
+		expect(json.data.keyId).toBe(keyId)
+		expect(json.data.displayName).toBe("Alex")
+	})
+
+	it("PUT bearer path: 400 INVALID_FORMAT on bad regex via bearer", async () => {
+		const keyId = "a".repeat(64)
+		const cache = makeMockCache()
+		seedSession(cache, "tok", keyId)
+		const db = makeMockDB([
+			{ id: 1, key_id: keyId, reputation: 1.0, vote_count: 0, avg_vote: 0, created_at: 0 },
+		])
+		const env = makeEnvFull(db, cache)
+		const app = authRoutes(env)
+		const res = await app.handle(
+			new Request("http://localhost/auth/nickname", {
+				method: "PUT",
+				headers: { authorization: "Bearer tok", "content-type": "application/json" },
+				body: JSON.stringify({ nickname: "a b" }),
+			})
+		)
+		expect(res.status).toBe(400)
+		const json = (await res.json()) as { success: boolean; error: string }
+		expect(json.success).toBe(false)
+		expect(json.error).toBe("INVALID_FORMAT")
+	})
+
+	it("PUT bearer path: 401 AUTH_REQUIRED when bearer token is unknown", async () => {
+		const cache = makeMockCache()
+		const db = makeMockDB([])
+		const env = makeEnvFull(db, cache)
+		const app = authRoutes(env)
+		const res = await app.handle(
+			new Request("http://localhost/auth/nickname", {
+				method: "PUT",
+				headers: { authorization: "Bearer nope", "content-type": "application/json" },
+				body: JSON.stringify({ nickname: "Alex" }),
+			})
+		)
+		expect(res.status).toBe(401)
+		const json = (await res.json()) as { code: string }
+		expect(json.code).toBe("AUTH_REQUIRED")
+	})
+
+	it("PUT bearer path: 409 NICKNAME_TAKEN on collision via bearer", async () => {
+		const keyId = "a".repeat(64)
+		const cache = makeMockCache()
+		seedSession(cache, "tok", keyId)
+		const db = makeMockDB([
+			{ id: 1, key_id: keyId, reputation: 1.0, vote_count: 0, avg_vote: 0, created_at: 0 },
+			{ code: "23505" },
+		])
+		const env = makeEnvFull(db, cache)
+		const app = authRoutes(env)
+		const res = await app.handle(
+			new Request("http://localhost/auth/nickname", {
+				method: "PUT",
+				headers: { authorization: "Bearer tok", "content-type": "application/json" },
+				body: JSON.stringify({ nickname: "alex" }),
+			})
+		)
+		expect(res.status).toBe(409)
+		const json = (await res.json()) as { success: boolean; error: string }
+		expect(json.success).toBe(false)
+		expect(json.error).toBe("NICKNAME_TAKEN")
+	})
+})
+
+describe("DELETE /auth/nickname bearer path", () => {
+	function seedSession(cache: ReturnType<typeof makeMockCache>, token: string, keyId: string) {
+		const ttl = 30 * 24 * 60 * 60
+		const issuedAt = Math.floor(Date.now() / 1000)
+		cache.store.set(`session:${token}`, {
+			value: JSON.stringify({ keyId, issuedAt, expiresAt: issuedAt + ttl }),
+			ttl,
+		})
+	}
+
+	it("DELETE bearer path: clears nickname via bearer token", async () => {
+		const keyId = "a".repeat(64)
+		const cache = makeMockCache()
+		seedSession(cache, "tok", keyId)
+		const db = makeMockDB([
+			{ id: 1, key_id: keyId, reputation: 1.0, vote_count: 0, avg_vote: 0, created_at: 0 },
+			null,
+			{ nickname: null },
+		])
+		const env = makeEnvFull(db, cache)
+		const app = authRoutes(env)
+		const res = await app.handle(
+			new Request("http://localhost/auth/nickname", {
+				method: "DELETE",
+				headers: { authorization: "Bearer tok" },
+			})
+		)
+		expect(res.status).toBe(200)
+		const json = (await res.json()) as {
+			success: boolean
+			data: { keyId: string; displayName: string }
+		}
+		expect(json.success).toBe(true)
+		expect(json.data.keyId).toBe(keyId)
+		expect(json.data.displayName).toBe(generatePetName(keyId))
+	})
+
+	it("DELETE bearer path: 401 AUTH_REQUIRED when bearer token is unknown", async () => {
+		const cache = makeMockCache()
+		const db = makeMockDB([])
+		const env = makeEnvFull(db, cache)
+		const app = authRoutes(env)
+		const res = await app.handle(
+			new Request("http://localhost/auth/nickname", {
+				method: "DELETE",
+				headers: { authorization: "Bearer nope" },
+			})
+		)
+		expect(res.status).toBe(401)
+		const json = (await res.json()) as { code: string }
+		expect(json.code).toBe("AUTH_REQUIRED")
 	})
 })

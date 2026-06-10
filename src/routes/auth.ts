@@ -1,8 +1,9 @@
 import { Elysia, t } from "elysia"
 import { config } from "@/config"
-import { clearNickname, getOrCreateUser, resolveDisplayName, setNickname } from "@/db/users"
+import { clearNickname, resolveDisplayName, setNickname } from "@/db/users"
 import type { Env } from "@/types"
 import { signedRequest } from "@/utils/auth"
+import { eitherAuth } from "@/utils/either-auth"
 import { readRateLimit } from "@/utils/read-rate-limit"
 import { createSession, deleteSession, getSession } from "@/utils/session"
 
@@ -106,68 +107,79 @@ export const authRoutes = (env: Env) =>
 				query: t.Object({ name: t.String() }),
 			}
 		)
-		.use(signedRequest)
-		.post("/session", async ({ env, keyId, signedPayload, headers, set }) => {
-			const signedOrigin = signedPayload.origin
-			const requestOrigin = headers.origin
-			if (typeof signedOrigin !== "string" || !requestOrigin || requestOrigin !== signedOrigin) {
-				set.status = 403
-				return { success: false, error: "ORIGIN_MISMATCH" }
-			}
+		.use(
+			new Elysia()
+				.decorate("env", env)
+				.use(eitherAuth)
+				.put("/nickname", async ({ env, keyId, body, set }) => {
+					const { success } = await env.RATE_LIMITER.limit({
+						key: `nickname_write:${keyId}`,
+						maxRequests: config.auth.nickname.write.maxRequests,
+						windowSeconds: config.auth.nickname.write.windowSeconds,
+					})
+					if (!success) {
+						set.status = 429
+						return { success: false, error: "RATE_LIMITED" }
+					}
 
-			const challengeKey = `${CHALLENGE_PREFIX}${signedPayload.nonce}`
-			const claimed = await env.CACHE.getDel(challengeKey)
-			if (!claimed) {
-				set.status = 401
-				return { success: false, error: "CHALLENGE_INVALID" }
-			}
+					const raw = (body as { nickname?: unknown }).nickname
+					const nickname = typeof raw === "string" ? raw : ""
+					if (!new RegExp(config.auth.nickname.pattern).test(nickname)) {
+						set.status = 400
+						return { success: false, error: "INVALID_FORMAT" }
+					}
 
-			const session = await createSession(env, keyId)
-			return {
-				success: true,
-				data: {
-					sessionToken: session.token,
-					expiresAt: session.expiresAt,
-					keyId,
-					displayName: await resolveDisplayName(env, keyId),
-				},
-			}
-		})
-		.put("/nickname", async ({ env, keyId, signedPayload, set }) => {
-			const { success } = await env.RATE_LIMITER.limit({
-				key: `nickname_write:${keyId}`,
-				maxRequests: config.auth.nickname.write.maxRequests,
-				windowSeconds: config.auth.nickname.write.windowSeconds,
-			})
-			if (!success) {
-				set.status = 429
-				return { success: false, error: "RATE_LIMITED" }
-			}
+					const result = await setNickname(env, keyId, nickname)
+					if (!result.ok) {
+						set.status = 409
+						return { success: false, error: "NICKNAME_TAKEN" }
+					}
 
-			const nickname =
-				typeof signedPayload.nickname === "string" ? signedPayload.nickname : ""
-			if (!new RegExp(config.auth.nickname.pattern).test(nickname)) {
-				set.status = 400
-				return { success: false, error: "INVALID_FORMAT" }
-			}
+					return {
+						success: true,
+						data: { keyId, displayName: await resolveDisplayName(env, keyId) },
+					}
+				})
+				.delete("/nickname", async ({ env, keyId }) => {
+					await clearNickname(env, keyId)
+					return {
+						success: true,
+						data: { keyId, displayName: await resolveDisplayName(env, keyId) },
+					}
+				})
+		)
+		.use(
+			new Elysia()
+				.decorate("env", env)
+				.use(signedRequest)
+				.post("/session", async ({ env, keyId, signedPayload, headers, set }) => {
+					const signedOrigin = signedPayload.origin
+					const requestOrigin = headers.origin
+					if (
+						typeof signedOrigin !== "string" ||
+						!requestOrigin ||
+						requestOrigin !== signedOrigin
+					) {
+						set.status = 403
+						return { success: false, error: "ORIGIN_MISMATCH" }
+					}
 
-			await getOrCreateUser(env, keyId)
-			const result = await setNickname(env, keyId, nickname)
-			if (!result.ok) {
-				set.status = 409
-				return { success: false, error: "NICKNAME_TAKEN" }
-			}
+					const challengeKey = `${CHALLENGE_PREFIX}${signedPayload.nonce}`
+					const claimed = await env.CACHE.getDel(challengeKey)
+					if (!claimed) {
+						set.status = 401
+						return { success: false, error: "CHALLENGE_INVALID" }
+					}
 
-			return {
-				success: true,
-				data: { keyId, displayName: await resolveDisplayName(env, keyId) },
-			}
-		})
-		.delete("/nickname", async ({ env, keyId }) => {
-			await getOrCreateUser(env, keyId)
-			await clearNickname(env, keyId)
-			return {
-				success: true,
-				data: { keyId, displayName: await resolveDisplayName(env, keyId) },
-			}
-		})
+					const session = await createSession(env, keyId)
+					return {
+						success: true,
+						data: {
+							sessionToken: session.token,
+							expiresAt: session.expiresAt,
+							keyId,
+							displayName: await resolveDisplayName(env, keyId),
+						},
+					}
+				})
+		)
