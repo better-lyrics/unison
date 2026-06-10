@@ -548,9 +548,9 @@ describe("GET /auth/nickname/availability", () => {
 			})
 		)
 		expect(res.status).toBe(200)
-		const json = (await res.json()) as { available: boolean; reason?: string }
-		expect(json.available).toBe(false)
-		expect(json.reason).toBe("INVALID_FORMAT")
+		const json = (await res.json()) as { success: true; data: { available: boolean; reason?: string } }
+		expect(json.data.available).toBe(false)
+		expect(json.data.reason).toBe("INVALID_FORMAT")
 		expect(db.calls).toEqual([])
 	})
 
@@ -567,9 +567,9 @@ describe("GET /auth/nickname/availability", () => {
 			})
 		)
 		expect(res.status).toBe(200)
-		const json = (await res.json()) as { available: boolean; reason?: string }
-		expect(json.available).toBe(false)
-		expect(json.reason).toBe("INVALID_FORMAT")
+		const json = (await res.json()) as { success: true; data: { available: boolean; reason?: string } }
+		expect(json.data.available).toBe(false)
+		expect(json.data.reason).toBe("INVALID_FORMAT")
 		expect(db.calls).toEqual([])
 	})
 
@@ -585,9 +585,9 @@ describe("GET /auth/nickname/availability", () => {
 			})
 		)
 		expect(res.status).toBe(200)
-		const json = (await res.json()) as { available: boolean; reason?: string }
-		expect(json.available).toBe(false)
-		expect(json.reason).toBe("INVALID_FORMAT")
+		const json = (await res.json()) as { success: true; data: { available: boolean; reason?: string } }
+		expect(json.data.available).toBe(false)
+		expect(json.data.reason).toBe("INVALID_FORMAT")
 		expect(db.calls).toEqual([])
 	})
 
@@ -603,9 +603,9 @@ describe("GET /auth/nickname/availability", () => {
 			})
 		)
 		expect(res.status).toBe(200)
-		const json = (await res.json()) as { available: boolean; reason?: string }
-		expect(json.available).toBe(true)
-		expect(json.reason).toBeUndefined()
+		const json = (await res.json()) as { success: true; data: { available: boolean; reason?: string } }
+		expect(json.data.available).toBe(true)
+		expect(json.data.reason).toBeUndefined()
 		expect(db.calls).toHaveLength(1)
 		expect(db.calls[0].sql).toContain("nickname_lower")
 		expect(db.calls[0].params).toEqual(["alex"])
@@ -625,9 +625,9 @@ describe("GET /auth/nickname/availability", () => {
 			})
 		)
 		expect(res.status).toBe(200)
-		const json = (await res.json()) as { available: boolean; reason?: string }
-		expect(json.available).toBe(false)
-		expect(json.reason).toBe("TAKEN")
+		const json = (await res.json()) as { success: true; data: { available: boolean; reason?: string } }
+		expect(json.data.available).toBe(false)
+		expect(json.data.reason).toBe("TAKEN")
 		expect(db.calls[0].params).toEqual(["alex"])
 	})
 
@@ -644,9 +644,9 @@ describe("GET /auth/nickname/availability", () => {
 			})
 		)
 		expect(res.status).toBe(200)
-		const json = (await res.json()) as { available: boolean; reason?: string }
-		expect(json.available).toBe(true)
-		expect(json.reason).toBe("SELF")
+		const json = (await res.json()) as { success: true; data: { available: boolean; reason?: string } }
+		expect(json.data.available).toBe(true)
+		expect(json.data.reason).toBe("SELF")
 		expect(db.calls[0].params).toEqual(["alex"])
 	})
 

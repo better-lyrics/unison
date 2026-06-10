@@ -86,7 +86,7 @@ export const authRoutes = (env: Env) =>
 
 				const name = query.name ?? ""
 				if (!new RegExp(config.auth.nickname.pattern).test(name)) {
-					return { available: false, reason: "INVALID_FORMAT" }
+					return { success: true, data: { available: false, reason: "INVALID_FORMAT" } }
 				}
 
 				const row = await env.DB.prepare(
@@ -96,12 +96,12 @@ export const authRoutes = (env: Env) =>
 					.first<{ key_id: string }>()
 
 				if (!row) {
-					return { available: true }
+					return { success: true, data: { available: true } }
 				}
 				if (row.key_id === record.keyId) {
-					return { available: true, reason: "SELF" }
+					return { success: true, data: { available: true, reason: "SELF" } }
 				}
-				return { available: false, reason: "TAKEN" }
+				return { success: true, data: { available: false, reason: "TAKEN" } }
 			},
 			{
 				query: t.Object({ name: t.String() }),
