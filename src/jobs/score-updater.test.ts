@@ -141,6 +141,37 @@ describe("calculateScore", () => {
 
 		expect(result.effective_score).toBe(1)
 	})
+
+	it("excludes votes below the weight floor from effective_score", () => {
+		const votes = [
+			{ vote: 1, reputation: 1.0, avg_vote: 0.5, is_self_vote: 0 },
+			{ vote: -1, reputation: 0.4, avg_vote: -0.2, is_self_vote: 0 },
+			{ vote: -1, reputation: 0.3, avg_vote: -0.1, is_self_vote: 0 },
+		]
+
+		const result = calculateScore(1, votes)
+
+		expect(result.effective_score).toBeCloseTo(1.0, 2)
+	})
+
+	it("keeps vote_count honest when votes are below the weight floor", () => {
+		const votes = [
+			{ vote: 1, reputation: 1.0, avg_vote: 0.5, is_self_vote: 0 },
+			{ vote: -1, reputation: 0.4, avg_vote: -0.2, is_self_vote: 0 },
+		]
+
+		const result = calculateScore(1, votes)
+
+		expect(result.vote_count).toBe(2)
+	})
+
+	it("includes votes exactly at the weight floor", () => {
+		const votes = [{ vote: 1, reputation: 0.5, avg_vote: 0.0, is_self_vote: 0 }]
+
+		const result = calculateScore(1, votes)
+
+		expect(result.effective_score).toBeCloseTo(1.0, 2)
+	})
 })
 
 describe("updateReputations", () => {

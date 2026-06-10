@@ -102,6 +102,7 @@ export function calculateScore(lyricsId: number, votes: VoteWithUser[]): LyricsS
 	let generousUpvotes = 0
 
 	for (const v of votes) {
+		if (v.reputation < config.reputation.voteWeightFloor) continue
 		// Self-votes count less
 		const weight = v.is_self_vote ? v.reputation * config.reputation.selfVoteWeight : v.reputation
 
