@@ -1,4 +1,5 @@
 import type { LyricsSearchResult } from "@/types"
+import { generatePetName } from "@/utils/petname"
 import { describe, expect, it } from "vitest"
 import { type LyricsRowForResponse, toResponse, toSearchResponse } from "./lyrics.transformers"
 
@@ -42,15 +43,34 @@ describe("toResponse", () => {
 	})
 
 	it("includes submitter when both keyId and reputation are present", () => {
+		const keyId = "deadbeef".repeat(8)
 		const result = toResponse({
 			...baseRow,
-			submitter_key_id: "deadbeef".repeat(8),
+			submitter_key_id: keyId,
 			submitter_reputation: 1.42,
+			submitter_nickname: "Curator Cat",
 		})
 
 		expect(result.submitter).toEqual({
-			keyId: "deadbeef".repeat(8),
+			keyId,
 			reputation: 1.42,
+			displayName: "Curator Cat",
+		})
+	})
+
+	it("falls back to generatePetName when submitter_nickname is null", () => {
+		const keyId = "abcdef12".repeat(8)
+		const result = toResponse({
+			...baseRow,
+			submitter_key_id: keyId,
+			submitter_reputation: 1.0,
+			submitter_nickname: null,
+		})
+
+		expect(result.submitter).toEqual({
+			keyId,
+			reputation: 1.0,
+			displayName: generatePetName(keyId),
 		})
 	})
 
@@ -78,15 +98,17 @@ describe("toResponse", () => {
 	})
 
 	it("preserves reputation of 0 (does not treat as missing)", () => {
+		const keyId = "abcdef".repeat(8)
 		const result = toResponse({
 			...baseRow,
-			submitter_key_id: "abcdef".repeat(8),
+			submitter_key_id: keyId,
 			submitter_reputation: 0,
 		})
 
 		expect(result.submitter).toEqual({
-			keyId: "abcdef".repeat(8),
+			keyId,
 			reputation: 0,
+			displayName: generatePetName(keyId),
 		})
 	})
 

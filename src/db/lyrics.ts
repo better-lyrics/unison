@@ -17,6 +17,7 @@ const cacheLog = new Logger("cache")
 
 const LYRICS_WITH_SUBMITTER = `
 	SELECT l.*, u.key_id AS submitter_key_id, u.reputation AS submitter_reputation,
+		u.nickname AS submitter_nickname,
 		${AUTO_HIDE_PREDICATE_JOINED} AS hidden
 	FROM lyrics l
 	LEFT JOIN users u ON l.submitter_id = u.id
