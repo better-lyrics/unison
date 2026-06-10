@@ -111,6 +111,11 @@ export const config = {
 		challenge: {
 			ttlSeconds: 5 * 60,
 		},
+		nickname: {
+			pattern: "^[A-Za-z0-9_]{3,20}$",
+			check: { maxRequests: 30, windowSeconds: 60 },
+			write: { maxRequests: 5, windowSeconds: 3600 },
+		},
 	},
 
 	dump: {
