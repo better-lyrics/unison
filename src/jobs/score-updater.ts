@@ -120,7 +120,7 @@ async function applyAutoHidePenalty(env: Env): Promise<void> {
 	await env.DB.transaction(async (tx) => {
 		for (const [sid, totalPenalty] of submitterPenalty) {
 			await tx
-				.prepare(`UPDATE users SET reputation = GREATEST(?, reputation - ?) WHERE id = ?`)
+				.prepare("UPDATE users SET reputation = GREATEST(?, reputation - ?) WHERE id = ?")
 				.bind(minRep, totalPenalty, sid)
 				.run()
 		}

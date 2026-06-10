@@ -346,13 +346,13 @@ export async function softDeleteLyrics(
 			const penalty = config.moderation.autoHide.reputationPenalty
 			await tx
 				.prepare(
-					`UPDATE users SET reputation = GREATEST(?, reputation - ?) WHERE id = ?`
+					"UPDATE users SET reputation = GREATEST(?, reputation - ?) WHERE id = ?"
 				)
 				.bind(config.reputation.min, penalty, row.submitter_id)
 				.run()
 
 			await tx
-				.prepare(`UPDATE lyrics SET reputation_penalized = TRUE WHERE id = ?`)
+				.prepare("UPDATE lyrics SET reputation_penalized = TRUE WHERE id = ?")
 				.bind(lyricsId)
 				.run()
 		}
