@@ -136,6 +136,7 @@ async function applyAutoHidePenalty(env: Env): Promise<void> {
 	log.info("applied auto-hide reputation penalty", {
 		affected_submitters: submitterPenalty.size,
 		affected_rows: ids.length,
+		lyrics_ids: ids.slice(0, 10),
 	})
 }
 
