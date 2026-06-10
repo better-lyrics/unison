@@ -83,7 +83,7 @@ describe("NicknameEditor", () => {
     const router = fetchRouter([
       { match: (u) => u === "/auth/me", respond: meResponse },
       {
-        match: (u) => u.startsWith("/auth/nickname/availability"),
+        match: (u) => u === "/auth/nickname/check",
         respond: () => jsonResponse({ success: true, data: { available: true } }),
       },
     ])
@@ -92,16 +92,19 @@ describe("NicknameEditor", () => {
     await act(async () => {
       fireEvent.change(screen.getByLabelText(/nickname/i), { target: { value: "Alex" } })
     })
-    expect(router.calls.some((c) => c.url.startsWith("/auth/nickname/availability"))).toBe(false)
+    expect(router.calls.some((c) => c.url === "/auth/nickname/check")).toBe(false)
     await act(async () => {
       vi.advanceTimersByTime(349)
     })
-    expect(router.calls.some((c) => c.url.startsWith("/auth/nickname/availability"))).toBe(false)
+    expect(router.calls.some((c) => c.url === "/auth/nickname/check")).toBe(false)
     await act(async () => {
       vi.advanceTimersByTime(1)
     })
     await flush()
-    expect(router.calls.some((c) => c.url === "/auth/nickname/availability?name=Alex")).toBe(true)
+    const checkCall = router.calls.find((c) => c.url === "/auth/nickname/check")
+    expect(checkCall).toBeTruthy()
+    expect(checkCall?.init?.method).toBe("POST")
+    expect(JSON.parse(checkCall?.init?.body as string)).toEqual({ nickname: "Alex" })
   })
 
   it("shows the checking status while the availability fetch is in flight", async () => {
@@ -111,7 +114,7 @@ describe("NicknameEditor", () => {
     })
     const fn = vi.fn().mockImplementation(async (url: string) => {
       if (url === "/auth/me") return meResponse()
-      if (url.startsWith("/auth/nickname/availability")) return checkPromise
+      if (url === "/auth/nickname/check") return checkPromise
       throw new Error(`unrouted: ${url}`)
     })
     vi.stubGlobal("fetch", fn)
@@ -132,7 +135,7 @@ describe("NicknameEditor", () => {
     const router = fetchRouter([
       { match: (u) => u === "/auth/me", respond: meResponse },
       {
-        match: (u) => u.startsWith("/auth/nickname/availability"),
+        match: (u) => u === "/auth/nickname/check",
         respond: () => jsonResponse({ success: true, data: { available: false, reason: "INVALID_FORMAT" } }),
       },
     ])
@@ -152,7 +155,7 @@ describe("NicknameEditor", () => {
     const router = fetchRouter([
       { match: (u) => u === "/auth/me", respond: meResponse },
       {
-        match: (u) => u.startsWith("/auth/nickname/availability"),
+        match: (u) => u === "/auth/nickname/check",
         respond: () => jsonResponse({ success: true, data: { available: false, reason: "TAKEN" } }),
       },
     ])
@@ -172,7 +175,7 @@ describe("NicknameEditor", () => {
     const router = fetchRouter([
       { match: (u) => u === "/auth/me", respond: meResponse },
       {
-        match: (u) => u.startsWith("/auth/nickname/availability"),
+        match: (u) => u === "/auth/nickname/check",
         respond: () => jsonResponse({ success: true, data: { available: true, reason: "SELF" } }),
       },
     ])
@@ -192,7 +195,7 @@ describe("NicknameEditor", () => {
     const router = fetchRouter([
       { match: (u) => u === "/auth/me", respond: meResponse },
       {
-        match: (u) => u.startsWith("/auth/nickname/availability"),
+        match: (u) => u === "/auth/nickname/check",
         respond: () => jsonResponse({ success: true, data: { available: true } }),
       },
     ])
@@ -211,7 +214,7 @@ describe("NicknameEditor", () => {
     const router = fetchRouter([
       { match: (u) => u === "/auth/me", respond: meResponse },
       {
-        match: (u) => u.startsWith("/auth/nickname/availability"),
+        match: (u) => u === "/auth/nickname/check",
         respond: () => jsonResponse({ success: true, data: { available: true } }),
       },
       {
@@ -244,7 +247,7 @@ describe("NicknameEditor", () => {
     const router = fetchRouter([
       { match: (u) => u === "/auth/me", respond: meResponse },
       {
-        match: (u) => u.startsWith("/auth/nickname/availability"),
+        match: (u) => u === "/auth/nickname/check",
         respond: () => jsonResponse({ success: true, data: { available: true } }),
       },
       {
@@ -294,7 +297,7 @@ describe("NicknameEditor", () => {
     const router = fetchRouter([
       { match: (u) => u === "/auth/me", respond: meResponse },
       {
-        match: (u) => u.startsWith("/auth/nickname/availability"),
+        match: (u) => u === "/auth/nickname/check",
         respond: () => jsonResponse({ success: false, error: "RATE_LIMITED" }, 429),
       },
     ])

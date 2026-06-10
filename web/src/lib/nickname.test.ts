@@ -36,14 +36,17 @@ afterEach(() => {
 })
 
 describe("checkNicknameAvailability", () => {
-  it("GETs /auth/nickname/availability with the name url-encoded and bearer token", async () => {
+  it("POSTs /auth/nickname/check with the nickname in the JSON body and bearer token", async () => {
     const fetchFn = vi.fn().mockResolvedValue(jsonResponse({ success: true, data: { available: true } }))
     vi.stubGlobal("fetch", fetchFn)
     await checkNicknameAvailability("Alex 1")
     const [url, init] = fetchFn.mock.calls[0] as [string, RequestInit]
-    expect(url).toBe("/auth/nickname/availability?name=Alex%201")
+    expect(url).toBe("/auth/nickname/check")
+    expect(init.method).toBe("POST")
     const headers = init.headers as Record<string, string>
+    expect(headers["content-type"]).toBe("application/json")
     expect(headers.authorization).toBe(`Bearer ${session.sessionToken}`)
+    expect(init.body).toBe(JSON.stringify({ nickname: "Alex 1" }))
   })
 
   it("returns { available: true } when the server reports unused", async () => {

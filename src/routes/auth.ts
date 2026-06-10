@@ -1,4 +1,4 @@
-import { Elysia, t } from "elysia"
+import { Elysia } from "elysia"
 import { config } from "@/config"
 import { clearNickname, resolveDisplayName, setNickname } from "@/db/users"
 import type { Env } from "@/types"
@@ -59,58 +59,37 @@ export const authRoutes = (env: Env) =>
 				},
 			}
 		})
-		.get(
-			"/nickname/availability",
-			async ({ env, headers, query, set }) => {
-				const auth = headers.authorization
-				const token = auth?.startsWith("Bearer ") ? auth.slice(7).trim() : null
-				if (!token) {
-					set.status = 401
-					return { success: false, error: "MISSING_TOKEN" }
-				}
-				const record = await getSession(env, token)
-				if (!record) {
-					set.status = 401
-					return { success: false, error: "INVALID_TOKEN" }
-				}
-
-				const { success } = await env.RATE_LIMITER.limit({
-					key: `nickname_check:${record.keyId}`,
-					maxRequests: config.auth.nickname.check.maxRequests,
-					windowSeconds: config.auth.nickname.check.windowSeconds,
-				})
-				if (!success) {
-					set.status = 429
-					return { success: false, error: "RATE_LIMITED" }
-				}
-
-				const name = query.name ?? ""
-				if (!new RegExp(config.auth.nickname.pattern).test(name)) {
-					return { success: true, data: { available: false, reason: "INVALID_FORMAT" } }
-				}
-
-				const row = await env.DB.prepare(
-					"SELECT key_id FROM users WHERE nickname_lower = ?"
-				)
-					.bind(name.toLowerCase())
-					.first<{ key_id: string }>()
-
-				if (!row) {
-					return { success: true, data: { available: true } }
-				}
-				if (row.key_id === record.keyId) {
-					return { success: true, data: { available: true, reason: "SELF" } }
-				}
-				return { success: true, data: { available: false, reason: "TAKEN" } }
-			},
-			{
-				query: t.Object({ name: t.String() }),
-			}
-		)
 		.use(
 			new Elysia()
 				.decorate("env", env)
 				.use(eitherAuth)
+				.post("/nickname/check", async ({ env, keyId, body, set }) => {
+					const { success } = await env.RATE_LIMITER.limit({
+						key: `nickname_check:${keyId}`,
+						maxRequests: config.auth.nickname.check.maxRequests,
+						windowSeconds: config.auth.nickname.check.windowSeconds,
+					})
+					if (!success) {
+						set.status = 429
+						return { success: false, error: "RATE_LIMITED" }
+					}
+
+					const raw = (body as { nickname?: unknown }).nickname
+					const name = typeof raw === "string" ? raw : ""
+					if (!new RegExp(config.auth.nickname.pattern).test(name)) {
+						return { success: true, data: { available: false, reason: "INVALID_FORMAT" } }
+					}
+
+					const row = await env.DB.prepare("SELECT key_id FROM users WHERE nickname_lower = ?")
+						.bind(name.toLowerCase())
+						.first<{ key_id: string }>()
+
+					if (!row) return { success: true, data: { available: true } }
+					if (row.key_id === keyId) {
+						return { success: true, data: { available: true, reason: "SELF" } }
+					}
+					return { success: true, data: { available: false, reason: "TAKEN" } }
+				})
 				.put("/nickname", async ({ env, keyId, body, set }) => {
 					const { success } = await env.RATE_LIMITER.limit({
 						key: `nickname_write:${keyId}`,

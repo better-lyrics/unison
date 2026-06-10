@@ -10,10 +10,12 @@ export interface NicknameMutationResponse {
   displayName: string
 }
 
-export async function checkNicknameAvailability(name: string): Promise<AvailabilityResponse> {
-  return authedFetch<AvailabilityResponse>(
-    `/auth/nickname/availability?name=${encodeURIComponent(name)}`,
-  )
+export async function checkNicknameAvailability(nickname: string): Promise<AvailabilityResponse> {
+  return authedFetch<AvailabilityResponse>("/auth/nickname/check", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ nickname }),
+  })
 }
 
 export async function putNickname(nickname: string): Promise<NicknameMutationResponse> {
