@@ -313,15 +313,43 @@ export async function softDeleteLyrics(
 	reason: string | null = null
 ): Promise<SoftDeleteResult> {
 	const row = await env.DB.prepare(
-		"SELECT id, video_id, submitter_id, deleted_at FROM lyrics WHERE id = ?"
+		`SELECT id, video_id, submitter_id, deleted_at,
+			vote_count, effective_score, reputation_penalized
+		FROM lyrics WHERE id = ?`
 	)
 		.bind(lyricsId)
-		.first<{ id: number; video_id: string; submitter_id: number; deleted_at: number | null }>()
+		.first<{
+			id: number
+			video_id: string
+			submitter_id: number
+			deleted_at: number | null
+			vote_count: number
+			effective_score: number
+			reputation_penalized: boolean
+		}>()
 
 	if (!row) return { deleted: false, reason: "not_found" }
 	if (row.deleted_at !== null) return { deleted: false, reason: "already_deleted" }
 	if (role === "submitter" && row.submitter_id !== actingUserId) {
 		return { deleted: false, reason: "forbidden" }
+	}
+
+	const shouldPenalise =
+		!row.reputation_penalized &&
+		(role === "admin" ||
+			(role === "submitter" && row.vote_count >= 2 && row.effective_score < 0))
+
+	if (shouldPenalise && row.submitter_id) {
+		const penalty = config.moderation.autoHide.reputationPenalty
+		await env.DB.prepare(
+			`UPDATE users SET reputation = GREATEST(?, reputation - ?) WHERE id = ?`
+		)
+			.bind(config.reputation.min, penalty, row.submitter_id)
+			.run()
+
+		await env.DB.prepare(`UPDATE lyrics SET reputation_penalized = TRUE WHERE id = ?`)
+			.bind(lyricsId)
+			.run()
 	}
 
 	await env.DB.prepare(
