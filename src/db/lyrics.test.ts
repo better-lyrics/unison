@@ -395,6 +395,25 @@ describe("findBySongArtist", () => {
 		expect(result?.submitter_key_id).toBe("alice")
 		expect(result?.submitter_reputation).toBe(2.0)
 	})
+
+	it("orders proven rows above unproven rows for same song+artist", async () => {
+		const row = {
+			...baseRow,
+			submitter_reputation: 1.5,
+			vote_count: 5,
+			effective_score: 0.6,
+		}
+		const db = createMockDB([row])
+		const cache = createMockCache()
+		const env = createEnv(db, cache)
+
+		await findBySongArtist(env, "Song", "Artist")
+
+		const lookupCall = db.calls.find((c) => c.sql.includes("FROM lyrics"))
+		expect(lookupCall).toBeDefined()
+		expect(lookupCall?.sql).toContain("CASE WHEN")
+		expect(lookupCall?.sql).toMatch(/u\.reputation > 1/)
+	})
 })
 
 describe("findVariantsByVideoId", () => {

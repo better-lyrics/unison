@@ -115,7 +115,7 @@ export async function findBySongArtist(
 	const query = `
 		${LYRICS_WITH_SUBMITTER}
 		WHERE ${conditions.join(" AND ")}
-		ORDER BY ${RANKING_EXPR_JOINED} DESC
+		ORDER BY (CASE WHEN ${PROVEN_EXPR_JOINED} THEN 1 ELSE 0 END) DESC, ${RANKING_EXPR_JOINED} DESC
 		LIMIT 1
 	`
 
