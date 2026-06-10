@@ -12,6 +12,50 @@ vi.mock("@/db/lyrics", () => ({
 	invalidateCache: vi.fn(() => Promise.resolve()),
 }))
 
+interface MockDBResult {
+	db: Env["DB"]
+	calls: { sql: string; params: unknown[] }[]
+	transactionCount: number
+}
+
+function createMockDB(queue: unknown[]): MockDBResult {
+	const calls: { sql: string; params: unknown[] }[] = []
+	const state = { transactionCount: 0 }
+	const db = {
+		prepare(sql: string) {
+			let params: unknown[] = []
+			return {
+				bind(...args: unknown[]) {
+					params = args
+					return this
+				},
+				async first<T>(): Promise<T | null> {
+					calls.push({ sql, params })
+					return (queue.shift() as T) ?? null
+				},
+				async all<T>(): Promise<{ results: T[] }> {
+					calls.push({ sql, params })
+					return { results: (queue.shift() as T[]) ?? [] }
+				},
+				async run(): Promise<void> {
+					calls.push({ sql, params })
+				},
+			}
+		},
+		async transaction<T>(fn: (tx: unknown) => Promise<T>): Promise<T> {
+			state.transactionCount++
+			return fn(db)
+		},
+	}
+	return {
+		db: db as unknown as Env["DB"],
+		calls,
+		get transactionCount() {
+			return state.transactionCount
+		},
+	}
+}
+
 describe("calculateScore", () => {
 	it("returns correct weighted score for equal reputation votes", () => {
 		const votes = [
@@ -255,36 +299,6 @@ describe("updateReputations", () => {
 })
 
 describe("soft-delete handling", () => {
-	function createMockDB(queue: unknown[]): {
-		db: Env["DB"]
-		calls: { sql: string; params: unknown[] }[]
-	} {
-		const calls: { sql: string; params: unknown[] }[] = []
-		const db = {
-			prepare(sql: string) {
-				let params: unknown[] = []
-				return {
-					bind(...args: unknown[]) {
-						params = args
-						return this
-					},
-					async first<T>(): Promise<T | null> {
-						calls.push({ sql, params })
-						return (queue.shift() as T) ?? null
-					},
-					async all<T>(): Promise<{ results: T[] }> {
-						calls.push({ sql, params })
-						return { results: (queue.shift() as T[]) ?? [] }
-					},
-					async run(): Promise<void> {
-						calls.push({ sql, params })
-					},
-				}
-			},
-		}
-		return { db: db as unknown as Env["DB"], calls }
-	}
-
 	it("recalculateScore early-returns when the row is deleted (no UPDATE)", async () => {
 		const { db, calls } = createMockDB([{ video_id: "v1", deleted_at: 1700000000 }])
 		const env = { DB: db } as unknown as Env
@@ -329,36 +343,6 @@ describe("soft-delete handling", () => {
 })
 
 describe("auto-hide reputation penalty", () => {
-	function createMockDB(queue: unknown[]): {
-		db: Env["DB"]
-		calls: { sql: string; params: unknown[] }[]
-	} {
-		const calls: { sql: string; params: unknown[] }[] = []
-		const db = {
-			prepare(sql: string) {
-				let params: unknown[] = []
-				return {
-					bind(...args: unknown[]) {
-						params = args
-						return this
-					},
-					async first<T>(): Promise<T | null> {
-						calls.push({ sql, params })
-						return (queue.shift() as T) ?? null
-					},
-					async all<T>(): Promise<{ results: T[] }> {
-						calls.push({ sql, params })
-						return { results: (queue.shift() as T[]) ?? [] }
-					},
-					async run(): Promise<void> {
-						calls.push({ sql, params })
-					},
-				}
-			},
-		}
-		return { db: db as unknown as Env["DB"], calls }
-	}
-
 	it("applies penalty to submitters of newly auto-hidden rows", async () => {
 		const { db, calls } = createMockDB([[], [{ id: 10, submitter_id: 42 }]])
 		const env = { DB: db } as unknown as Env
@@ -427,6 +411,73 @@ describe("auto-hide reputation penalty", () => {
 			(c) => c.sql.includes("UPDATE lyrics") && c.sql.includes("reputation_penalized")
 		)
 		expect(markUpdate?.params).toEqual([10, 11])
+	})
+
+	it("wraps the user-penalty and bulk-mark updates in a single transaction", async () => {
+		const result = createMockDB([[], [{ id: 10, submitter_id: 42 }]])
+		const env = { DB: result.db } as unknown as Env
+
+		await updateScores(env)
+
+		expect(result.transactionCount).toBe(1)
+	})
+
+	it("does not open a transaction when there are no newly-hidden rows", async () => {
+		const result = createMockDB([[], []])
+		const env = { DB: result.db } as unknown as Env
+
+		await updateScores(env)
+
+		expect(result.transactionCount).toBe(0)
+	})
+
+	it("rolls back the bulk-mark when the user-penalty update throws", async () => {
+		const calls: { sql: string; params: unknown[] }[] = []
+		const state = { transactionCount: 0, committed: true }
+		const queue: unknown[] = [[], [{ id: 10, submitter_id: 42 }]]
+		const db = {
+			prepare(sql: string) {
+				let params: unknown[] = []
+				return {
+					bind(...args: unknown[]) {
+						params = args
+						return this
+					},
+					async first<T>(): Promise<T | null> {
+						calls.push({ sql, params })
+						return (queue.shift() as T) ?? null
+					},
+					async all<T>(): Promise<{ results: T[] }> {
+						calls.push({ sql, params })
+						return { results: (queue.shift() as T[]) ?? [] }
+					},
+					async run(): Promise<void> {
+						calls.push({ sql, params })
+						if (sql.includes("UPDATE users") && sql.includes("reputation - ?")) {
+							throw new Error("simulated failure")
+						}
+					},
+				}
+			},
+			async transaction<T>(fn: (tx: unknown) => Promise<T>): Promise<T> {
+				state.transactionCount++
+				try {
+					return await fn(db)
+				} catch (err) {
+					state.committed = false
+					throw err
+				}
+			},
+		}
+		const env = { DB: db } as unknown as Env
+
+		await expect(updateScores(env)).rejects.toThrow("simulated failure")
+		expect(state.transactionCount).toBe(1)
+		expect(state.committed).toBe(false)
+		const markUpdate = calls.find(
+			(c) => c.sql.includes("UPDATE lyrics") && c.sql.includes("reputation_penalized = TRUE")
+		)
+		expect(markUpdate).toBeUndefined()
 	})
 })
 

@@ -21,6 +21,7 @@ type Recorded = { sql: string; params: unknown[] }
 interface MockDB {
 	calls: Recorded[]
 	queue: unknown[]
+	transactionCount: number
 	prepare(sql: string): {
 		bind(...args: unknown[]): {
 			first<T>(): Promise<T | null>
@@ -36,6 +37,7 @@ function createMockDB(queue: unknown[] = []): MockDB {
 	const db: MockDB = {
 		calls,
 		queue,
+		transactionCount: 0,
 		prepare(sql: string) {
 			return {
 				bind(...args: unknown[]) {
@@ -59,6 +61,7 @@ function createMockDB(queue: unknown[] = []): MockDB {
 			}
 		},
 		async transaction<T>(fn: (tx: MockDB) => Promise<T>): Promise<T> {
+			db.transactionCount++
 			return fn(db)
 		},
 	}
@@ -868,6 +871,177 @@ describe("softDeleteLyrics", () => {
 				!c.sql.includes("deleted_at")
 		)
 		expect(mark).toBeUndefined()
+	})
+
+	it("wraps penalty, mark, and soft-delete in a single transaction (penalty branch)", async () => {
+		const db = createMockDB([
+			{
+				id: 1,
+				video_id: "v1",
+				submitter_id: 42,
+				deleted_at: null,
+				vote_count: 3,
+				effective_score: -0.6,
+				reputation_penalized: false,
+			},
+			null,
+			null,
+			null,
+		])
+		const cache = createMockCache()
+		const env = createEnv(db, cache)
+
+		await softDeleteLyrics(env, 1, 42, "submitter", "regret")
+
+		expect(db.transactionCount).toBe(1)
+	})
+
+	it("wraps the soft-delete in a transaction even when the penalty branch is skipped", async () => {
+		const db = createMockDB([
+			{
+				id: 1,
+				video_id: "v1",
+				submitter_id: 42,
+				deleted_at: null,
+				vote_count: 1,
+				effective_score: -0.6,
+				reputation_penalized: false,
+			},
+			null,
+		])
+		const cache = createMockCache()
+		const env = createEnv(db, cache)
+
+		await softDeleteLyrics(env, 1, 42, "submitter", null)
+
+		expect(db.transactionCount).toBe(1)
+		const penalty = db.calls.find(
+			(c) => c.sql.includes("UPDATE users") && c.sql.includes("reputation - ?")
+		)
+		expect(penalty).toBeUndefined()
+	})
+
+	it("does not open a transaction when the row is not found", async () => {
+		const db = createMockDB([null])
+		const cache = createMockCache()
+		const env = createEnv(db, cache)
+
+		await softDeleteLyrics(env, 999, 1, "submitter")
+
+		expect(db.transactionCount).toBe(0)
+	})
+
+	it("does not open a transaction when the row is already deleted", async () => {
+		const db = createMockDB([
+			{
+				id: 1,
+				video_id: "v1",
+				submitter_id: 1,
+				deleted_at: 1234567890,
+				vote_count: 0,
+				effective_score: 0,
+				reputation_penalized: false,
+			},
+		])
+		const cache = createMockCache()
+		const env = createEnv(db, cache)
+
+		await softDeleteLyrics(env, 1, 1, "submitter")
+
+		expect(db.transactionCount).toBe(0)
+	})
+
+	it("does not open a transaction when the caller is forbidden", async () => {
+		const db = createMockDB([
+			{
+				id: 1,
+				video_id: "v1",
+				submitter_id: 99,
+				deleted_at: null,
+				vote_count: 0,
+				effective_score: 0,
+				reputation_penalized: false,
+			},
+		])
+		const cache = createMockCache()
+		const env = createEnv(db, cache)
+
+		await softDeleteLyrics(env, 1, 1, "submitter")
+
+		expect(db.transactionCount).toBe(0)
+	})
+
+	it("rolls back the soft-delete when the penalty update throws", async () => {
+		const calls: Recorded[] = []
+		const state = { transactionCount: 0, committed: true }
+		const queue: unknown[] = [
+			{
+				id: 1,
+				video_id: "v1",
+				submitter_id: 42,
+				deleted_at: null,
+				vote_count: 3,
+				effective_score: -0.6,
+				reputation_penalized: false,
+			},
+		]
+		const db = {
+			calls,
+			prepare(sql: string) {
+				return {
+					bind(...args: unknown[]) {
+						return {
+							async first<T>(): Promise<T | null> {
+								calls.push({ sql, params: args })
+								return (queue.shift() as T) ?? null
+							},
+							async all<T>(): Promise<{ results: T[] }> {
+								calls.push({ sql, params: args })
+								return { results: (queue.shift() as T[]) ?? [] }
+							},
+							async run(): Promise<void> {
+								calls.push({ sql, params: args })
+								if (sql.includes("UPDATE users") && sql.includes("reputation - ?")) {
+									throw new Error("simulated failure")
+								}
+							},
+						}
+					},
+				}
+			},
+			async transaction<T>(fn: (tx: unknown) => Promise<T>): Promise<T> {
+				state.transactionCount++
+				try {
+					return await fn(db)
+				} catch (err) {
+					state.committed = false
+					throw err
+				}
+			},
+		}
+		const cache = createMockCache()
+		const env = {
+			DB: db as unknown as Env["DB"],
+			CACHE: cache as unknown as Env["CACHE"],
+			RATE_LIMITER: {} as Env["RATE_LIMITER"],
+			READ_RATE_LIMITER: {} as Env["READ_RATE_LIMITER"],
+			CACHE_TTL_SECONDS: "300",
+			DUMPS_ENABLED: false,
+			DUMP_PUBLIC_BASE_URL: "",
+			DUMP_DATABASE_URL: null,
+			B2: null,
+		} as Env
+
+		await expect(softDeleteLyrics(env, 1, 42, "submitter", "regret")).rejects.toThrow(
+			"simulated failure"
+		)
+		expect(state.transactionCount).toBe(1)
+		expect(state.committed).toBe(false)
+		const softDelete = calls.find(
+			(c) => c.sql.includes("UPDATE lyrics") && c.sql.includes("deleted_at =")
+		)
+		expect(softDelete).toBeUndefined()
+		expect(cache.deleteCalls).toHaveLength(0)
 	})
 })
 

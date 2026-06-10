@@ -114,21 +114,24 @@ async function applyAutoHidePenalty(env: Env): Promise<void> {
 		submitterPenalty.set(r.submitter_id, (submitterPenalty.get(r.submitter_id) ?? 0) + penalty)
 	}
 
-	for (const [sid, totalPenalty] of submitterPenalty) {
-		await env.DB.prepare(
-			`UPDATE users SET reputation = GREATEST(?, reputation - ?) WHERE id = ?`
-		)
-			.bind(minRep, totalPenalty, sid)
-			.run()
-	}
-
 	const ids = rows.map((r) => r.id)
 	const placeholders = ids.map(() => "?").join(",")
-	await env.DB.prepare(
-		`UPDATE lyrics SET reputation_penalized = TRUE WHERE id IN (${placeholders})`
-	)
-		.bind(...ids)
-		.run()
+
+	await env.DB.transaction(async (tx) => {
+		for (const [sid, totalPenalty] of submitterPenalty) {
+			await tx
+				.prepare(`UPDATE users SET reputation = GREATEST(?, reputation - ?) WHERE id = ?`)
+				.bind(minRep, totalPenalty, sid)
+				.run()
+		}
+
+		await tx
+			.prepare(
+				`UPDATE lyrics SET reputation_penalized = TRUE WHERE id IN (${placeholders})`
+			)
+			.bind(...ids)
+			.run()
+	})
 
 	log.info("applied auto-hide reputation penalty", {
 		affected_submitters: submitterPenalty.size,

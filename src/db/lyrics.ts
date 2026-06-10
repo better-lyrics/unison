@@ -341,29 +341,34 @@ export async function softDeleteLyrics(
 		(role === "admin" ||
 			(role === "submitter" && row.vote_count >= 2 && row.effective_score < 0))
 
-	if (shouldPenalise && row.submitter_id) {
-		const penalty = config.moderation.autoHide.reputationPenalty
-		await env.DB.prepare(
-			`UPDATE users SET reputation = GREATEST(?, reputation - ?) WHERE id = ?`
-		)
-			.bind(config.reputation.min, penalty, row.submitter_id)
-			.run()
+	await env.DB.transaction(async (tx) => {
+		if (shouldPenalise && row.submitter_id) {
+			const penalty = config.moderation.autoHide.reputationPenalty
+			await tx
+				.prepare(
+					`UPDATE users SET reputation = GREATEST(?, reputation - ?) WHERE id = ?`
+				)
+				.bind(config.reputation.min, penalty, row.submitter_id)
+				.run()
 
-		await env.DB.prepare(`UPDATE lyrics SET reputation_penalized = TRUE WHERE id = ?`)
-			.bind(lyricsId)
-			.run()
-	}
+			await tx
+				.prepare(`UPDATE lyrics SET reputation_penalized = TRUE WHERE id = ?`)
+				.bind(lyricsId)
+				.run()
+		}
 
-	await env.DB.prepare(
-		`UPDATE lyrics SET
-			deleted_at = EXTRACT(EPOCH FROM NOW())::INTEGER,
-			deleted_by_user_id = ?,
-			deleted_by_role = ?,
-			deletion_reason = ?
-		WHERE id = ? AND deleted_at IS NULL`
-	)
-		.bind(actingUserId, role, reason, lyricsId)
-		.run()
+		await tx
+			.prepare(
+				`UPDATE lyrics SET
+					deleted_at = EXTRACT(EPOCH FROM NOW())::INTEGER,
+					deleted_by_user_id = ?,
+					deleted_by_role = ?,
+					deletion_reason = ?
+				WHERE id = ? AND deleted_at IS NULL`
+			)
+			.bind(actingUserId, role, reason, lyricsId)
+			.run()
+	})
 
 	await invalidateCacheAfterDelete(env, row.video_id)
 	log.info("lyrics deleted", { lyricsId, role, actingUserId, videoId: row.video_id })
