@@ -3,7 +3,6 @@ import { config } from "@/config"
 import { clearNickname, getOrCreateUser, resolveDisplayName, setNickname } from "@/db/users"
 import type { Env } from "@/types"
 import { signedRequest } from "@/utils/auth"
-import { generatePetName } from "@/utils/petname"
 import { readRateLimit } from "@/utils/read-rate-limit"
 import { createSession, deleteSession, getSession } from "@/utils/session"
 
@@ -54,7 +53,7 @@ export const authRoutes = (env: Env) =>
 				success: true,
 				data: {
 					keyId: record.keyId,
-					displayName: generatePetName(record.keyId),
+					displayName: await resolveDisplayName(env, record.keyId),
 					expiresAt: record.expiresAt,
 				},
 			}
@@ -130,7 +129,7 @@ export const authRoutes = (env: Env) =>
 					sessionToken: session.token,
 					expiresAt: session.expiresAt,
 					keyId,
-					displayName: generatePetName(keyId),
+					displayName: await resolveDisplayName(env, keyId),
 				},
 			}
 		})

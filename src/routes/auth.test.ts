@@ -252,6 +252,7 @@ describe("POST /auth/session", () => {
 		const second = await buildBody({ nonce: validNonce, origin: "https://example.com" })
 		const db = makeMockDB([
 			...registrationQueue(first.keyId, first.publicKey),
+			{ nickname: null },
 			...registrationQueue(second.keyId, second.publicKey),
 		])
 		const env = makeEnvFull(db, cache)
@@ -341,6 +342,32 @@ describe("POST /auth/session", () => {
 		const json = (await res.json()) as { error: string }
 		expect(json.error).toBe("ORIGIN_MISMATCH")
 	})
+
+	it("/session reflects a custom nickname when users.nickname is set", async () => {
+		const cache = makeMockCache({ [`challenge:${validNonce}`]: "1" })
+		const { keyId, publicKey, body } = await buildBody({
+			nonce: validNonce,
+			origin: "https://example.com",
+		})
+		const db = makeMockDB([...registrationQueue(keyId, publicKey), { nickname: "Brook" }])
+		const env = makeEnvFull(db, cache)
+		const app = authRoutes(env)
+		const res = await app.handle(
+			new Request("http://localhost/auth/session", {
+				method: "POST",
+				headers: { "content-type": "application/json", origin: "https://example.com" },
+				body: JSON.stringify(body),
+			})
+		)
+		expect(res.status).toBe(200)
+		const json = (await res.json()) as {
+			success: boolean
+			data: { sessionToken: string; keyId: string; displayName: string; expiresAt: number }
+		}
+		expect(json.success).toBe(true)
+		expect(json.data.keyId).toBe(keyId)
+		expect(json.data.displayName).toBe("Brook")
+	})
 })
 
 describe("POST /auth/logout", () => {
@@ -408,7 +435,8 @@ describe("GET /auth/me", () => {
 			value: JSON.stringify({ keyId, issuedAt, expiresAt: issuedAt + ttl }),
 			ttl,
 		})
-		const env = makeEnv(cache)
+		const db = makeMockDB([{ nickname: null }])
+		const env = makeEnvFull(db, cache)
 		const app = authRoutes(env)
 		const res = await app.handle(
 			new Request("http://localhost/auth/me", {
@@ -440,6 +468,31 @@ describe("GET /auth/me", () => {
 			})
 		)
 		expect(res.status).toBe(401)
+	})
+
+	it("/me reflects a custom nickname when users.nickname is set", async () => {
+		const cache = makeMockCache()
+		const keyId = "e".repeat(64)
+		const ttl = 30 * 24 * 60 * 60
+		const issuedAt = Math.floor(Date.now() / 1000)
+		cache.store.set("session:tok-nick", {
+			value: JSON.stringify({ keyId, issuedAt, expiresAt: issuedAt + ttl }),
+			ttl,
+		})
+		const db = makeMockDB([{ nickname: "Alex" }])
+		const env = makeEnvFull(db, cache)
+		const app = authRoutes(env)
+		const res = await app.handle(
+			new Request("http://localhost/auth/me", {
+				headers: { authorization: "Bearer tok-nick" },
+			})
+		)
+		expect(res.status).toBe(200)
+		const json = (await res.json()) as {
+			data: { keyId: string; displayName: string; expiresAt: number }
+		}
+		expect(json.data.keyId).toBe(keyId)
+		expect(json.data.displayName).toBe("Alex")
 	})
 })
 
