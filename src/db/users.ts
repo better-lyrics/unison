@@ -36,6 +36,29 @@ export async function resolveDisplayName(env: Env, keyId: string): Promise<strin
 	return row?.nickname ?? generatePetName(keyId)
 }
 
+export type SetNicknameResult = { ok: true } | { ok: false; reason: "TAKEN" }
+
+export async function setNickname(
+	env: Env,
+	keyId: string,
+	nickname: string
+): Promise<SetNicknameResult> {
+	const now = Math.floor(Date.now() / 1000)
+	try {
+		await env.DB.prepare(
+			"UPDATE users SET nickname = ?, nickname_updated_at = ? WHERE key_id = ?"
+		)
+			.bind(nickname, now, keyId)
+			.run()
+		return { ok: true }
+	} catch (err) {
+		if ((err as { code?: string }).code === "23505") {
+			return { ok: false, reason: "TAKEN" }
+		}
+		throw err
+	}
+}
+
 export async function updateUserAvgVote(env: Env, userId: number): Promise<void> {
 	await env.DB.prepare(
 		`

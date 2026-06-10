@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest"
 import type { Env } from "@/types"
 import { generatePetName } from "@/utils/petname"
-import { resolveDisplayName } from "./users"
+import { resolveDisplayName, setNickname } from "./users"
 
 interface DBCall {
 	sql: string
@@ -26,7 +26,13 @@ function makeMockDB(queue: unknown[] = []) {
 						},
 						async run(): Promise<void> {
 							calls.push({ sql, params: args })
-							queue.shift()
+							const next = queue.shift()
+							if (
+								next instanceof Error ||
+								(next && typeof next === "object" && "code" in next)
+							) {
+								throw next
+							}
 						},
 					}
 				},
@@ -97,5 +103,46 @@ describe("resolveDisplayName", () => {
 		const result = await resolveDisplayName(env, keyId)
 		expect(result).toBe(generatePetName(keyId))
 		expect(db.calls[0].params).toEqual([keyId])
+	})
+})
+
+describe("setNickname", () => {
+	it("returns ok:true when the UPDATE succeeds", async () => {
+		const db = makeMockDB([null])
+		const env = makeEnv(db)
+		const result = await setNickname(env, "k1", "Alex")
+		expect(result).toEqual({ ok: true })
+		expect(db.calls[0].sql).toBe(
+			"UPDATE users SET nickname = ?, nickname_updated_at = ? WHERE key_id = ?"
+		)
+		expect(db.calls[0].params).toHaveLength(3)
+		expect(db.calls[0].params[0]).toBe("Alex")
+		expect(typeof db.calls[0].params[1]).toBe("number")
+		expect(db.calls[0].params[2]).toBe("k1")
+	})
+
+	it("returns ok:false TAKEN when Postgres throws 23505", async () => {
+		const db = makeMockDB([{ code: "23505" }])
+		const env = makeEnv(db)
+		const result = await setNickname(env, "k1", "Alex")
+		expect(result).toEqual({ ok: false, reason: "TAKEN" })
+	})
+
+	it("rethrows non-23505 errors", async () => {
+		const err = Object.assign(new Error("connection lost"), { code: "57P01" })
+		const db = makeMockDB([err])
+		const env = makeEnv(db)
+		await expect(setNickname(env, "k1", "Alex")).rejects.toBe(err)
+	})
+
+	it("stamps nickname_updated_at to the current second", async () => {
+		const db = makeMockDB([null])
+		const env = makeEnv(db)
+		const before = Math.floor(Date.now() / 1000)
+		await setNickname(env, "k1", "Alex")
+		const after = Math.floor(Date.now() / 1000)
+		const stamped = db.calls[0].params[1] as number
+		expect(stamped).toBeGreaterThanOrEqual(before)
+		expect(stamped).toBeLessThanOrEqual(after + 1)
 	})
 })
