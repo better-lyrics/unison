@@ -1,6 +1,6 @@
 import { Elysia, t } from "elysia"
 import { config } from "@/config"
-import { getOrCreateUser, resolveDisplayName, setNickname } from "@/db/users"
+import { clearNickname, getOrCreateUser, resolveDisplayName, setNickname } from "@/db/users"
 import type { Env } from "@/types"
 import { signedRequest } from "@/utils/auth"
 import { generatePetName } from "@/utils/petname"
@@ -159,6 +159,14 @@ export const authRoutes = (env: Env) =>
 				return { success: false, error: "NICKNAME_TAKEN" }
 			}
 
+			return {
+				success: true,
+				data: { keyId, displayName: await resolveDisplayName(env, keyId) },
+			}
+		})
+		.delete("/nickname", async ({ env, keyId }) => {
+			await getOrCreateUser(env, keyId)
+			await clearNickname(env, keyId)
 			return {
 				success: true,
 				data: { keyId, displayName: await resolveDisplayName(env, keyId) },

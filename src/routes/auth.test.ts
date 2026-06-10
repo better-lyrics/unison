@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest"
 import type { Env } from "@/types"
 import { canonicalJson, hashPublicKey } from "@/utils/crypto"
+import { generatePetName } from "@/utils/petname"
 import { authRoutes } from "./auth"
 
 function makeMockCache(seed: Record<string, string> = {}) {
@@ -820,5 +821,74 @@ describe("PUT /auth/nickname", () => {
 		const json = (await res.json()) as { success: boolean; error: string }
 		expect(json.success).toBe(false)
 		expect(json.error).toBe("RATE_LIMITED")
+	})
+})
+
+describe("DELETE /auth/nickname", () => {
+	async function buildBody(opts: { timestamp?: number } = {}) {
+		const { pair, publicKey, keyId } = await makeIdentity()
+		const nonce = "del-".padEnd(24, "x")
+		const payload = {
+			nonce,
+			keyId,
+			timestamp: opts.timestamp ?? Date.now(),
+		}
+		const signature = await signPayload(pair.privateKey, payload)
+		return { keyId, publicKey, body: { payload, signature, publicKey } }
+	}
+
+	function registrationQueue(keyId: string, publicKey: JsonWebKey): unknown[] {
+		return [
+			null,
+			null,
+			{ key_id: keyId, public_key: JSON.stringify(publicKey), created_at: 0 },
+			null,
+			{ id: 1, key_id: keyId, reputation: 1.0, vote_count: 0, avg_vote: 0, created_at: 0 },
+		]
+	}
+
+	it("clears the nickname and returns the generated fallback", async () => {
+		const cache = makeMockCache()
+		const { keyId, publicKey, body } = await buildBody()
+		const db = makeMockDB([
+			...registrationQueue(keyId, publicKey),
+			{ id: 1, key_id: keyId, reputation: 1.0, vote_count: 0, avg_vote: 0, created_at: 0 },
+			null,
+			{ nickname: null },
+		])
+		const env = makeEnvFull(db, cache)
+		const app = authRoutes(env)
+		const res = await app.handle(
+			new Request("http://localhost/auth/nickname", {
+				method: "DELETE",
+				headers: { "content-type": "application/json" },
+				body: JSON.stringify(body),
+			})
+		)
+		expect(res.status).toBe(200)
+		const json = (await res.json()) as {
+			success: boolean
+			data: { keyId: string; displayName: string }
+		}
+		expect(json.success).toBe(true)
+		expect(json.data.keyId).toBe(keyId)
+		expect(json.data.displayName).toBe(generatePetName(keyId))
+	})
+
+	it("rejects unsigned requests with 400 INVALID_SIGNED_BODY", async () => {
+		const cache = makeMockCache()
+		const db = makeMockDB([])
+		const env = makeEnvFull(db, cache)
+		const app = authRoutes(env)
+		const res = await app.handle(
+			new Request("http://localhost/auth/nickname", {
+				method: "DELETE",
+				headers: { "content-type": "application/json" },
+				body: JSON.stringify({}),
+			})
+		)
+		expect(res.status).toBe(400)
+		const json = (await res.json()) as { code: string }
+		expect(json.code).toBe("INVALID_SIGNED_BODY")
 	})
 })
