@@ -84,7 +84,7 @@ describe("NicknameEditor", () => {
       { match: (u) => u === "/auth/me", respond: meResponse },
       {
         match: (u) => u.startsWith("/auth/nickname/availability"),
-        respond: () => jsonResponse({ available: true }),
+        respond: () => jsonResponse({ success: true, data: { available: true } }),
       },
     ])
     vi.stubGlobal("fetch", router.fn)
@@ -123,7 +123,7 @@ describe("NicknameEditor", () => {
     await flush()
     expect(screen.getByTestId("nickname-status").textContent ?? "").toMatch(/checking/i)
     await act(async () => {
-      resolveCheck(jsonResponse({ available: true }))
+      resolveCheck(jsonResponse({ success: true, data: { available: true } }))
     })
     await flush()
   })
@@ -133,7 +133,7 @@ describe("NicknameEditor", () => {
       { match: (u) => u === "/auth/me", respond: meResponse },
       {
         match: (u) => u.startsWith("/auth/nickname/availability"),
-        respond: () => jsonResponse({ available: false, reason: "INVALID_FORMAT" }),
+        respond: () => jsonResponse({ success: true, data: { available: false, reason: "INVALID_FORMAT" } }),
       },
     ])
     vi.stubGlobal("fetch", router.fn)
@@ -153,7 +153,7 @@ describe("NicknameEditor", () => {
       { match: (u) => u === "/auth/me", respond: meResponse },
       {
         match: (u) => u.startsWith("/auth/nickname/availability"),
-        respond: () => jsonResponse({ available: false, reason: "TAKEN" }),
+        respond: () => jsonResponse({ success: true, data: { available: false, reason: "TAKEN" } }),
       },
     ])
     vi.stubGlobal("fetch", router.fn)
@@ -173,7 +173,7 @@ describe("NicknameEditor", () => {
       { match: (u) => u === "/auth/me", respond: meResponse },
       {
         match: (u) => u.startsWith("/auth/nickname/availability"),
-        respond: () => jsonResponse({ available: true, reason: "SELF" }),
+        respond: () => jsonResponse({ success: true, data: { available: true, reason: "SELF" } }),
       },
     ])
     vi.stubGlobal("fetch", router.fn)
@@ -193,7 +193,7 @@ describe("NicknameEditor", () => {
       { match: (u) => u === "/auth/me", respond: meResponse },
       {
         match: (u) => u.startsWith("/auth/nickname/availability"),
-        respond: () => jsonResponse({ available: true }),
+        respond: () => jsonResponse({ success: true, data: { available: true } }),
       },
     ])
     vi.stubGlobal("fetch", router.fn)
@@ -212,7 +212,7 @@ describe("NicknameEditor", () => {
       { match: (u) => u === "/auth/me", respond: meResponse },
       {
         match: (u) => u.startsWith("/auth/nickname/availability"),
-        respond: () => jsonResponse({ available: true }),
+        respond: () => jsonResponse({ success: true, data: { available: true } }),
       },
       {
         match: (u, init) => u === "/auth/nickname" && init?.method === "PUT",
@@ -245,7 +245,7 @@ describe("NicknameEditor", () => {
       { match: (u) => u === "/auth/me", respond: meResponse },
       {
         match: (u) => u.startsWith("/auth/nickname/availability"),
-        respond: () => jsonResponse({ available: true }),
+        respond: () => jsonResponse({ success: true, data: { available: true } }),
       },
       {
         match: (u, init) => u === "/auth/nickname" && init?.method === "PUT",

@@ -37,7 +37,7 @@ afterEach(() => {
 
 describe("checkNicknameAvailability", () => {
   it("GETs /auth/nickname/availability with the name url-encoded and bearer token", async () => {
-    const fetchFn = vi.fn().mockResolvedValue(jsonResponse({ available: true }))
+    const fetchFn = vi.fn().mockResolvedValue(jsonResponse({ success: true, data: { available: true } }))
     vi.stubGlobal("fetch", fetchFn)
     await checkNicknameAvailability("Alex 1")
     const [url, init] = fetchFn.mock.calls[0] as [string, RequestInit]
@@ -47,22 +47,22 @@ describe("checkNicknameAvailability", () => {
   })
 
   it("returns { available: true } when the server reports unused", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse({ available: true })))
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse({ success: true, data: { available: true } })))
     await expect(checkNicknameAvailability("alex")).resolves.toEqual({ available: true })
   })
 
   it("returns SELF when the server reports the caller's own nickname", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse({ available: true, reason: "SELF" })))
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse({ success: true, data: { available: true, reason: "SELF" } })))
     await expect(checkNicknameAvailability("alex")).resolves.toEqual({ available: true, reason: "SELF" })
   })
 
   it("returns TAKEN when the server reports a collision", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse({ available: false, reason: "TAKEN" })))
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse({ success: true, data: { available: false, reason: "TAKEN" } })))
     await expect(checkNicknameAvailability("alex")).resolves.toEqual({ available: false, reason: "TAKEN" })
   })
 
   it("returns INVALID_FORMAT for a bad name", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse({ available: false, reason: "INVALID_FORMAT" })))
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse({ success: true, data: { available: false, reason: "INVALID_FORMAT" } })))
     await expect(checkNicknameAvailability("a b")).resolves.toEqual({
       available: false,
       reason: "INVALID_FORMAT",
