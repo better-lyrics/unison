@@ -47,6 +47,30 @@ function stubChromePort(makeResponse: (req: { type: string }) => unknown) {
   })
 }
 
+function stubChromePortDeferred(): { resolveAll: (response: unknown) => void } {
+  const listeners: ((m: unknown) => void)[] = []
+  vi.stubGlobal("chrome", {
+    runtime: {
+      connect: (_id: string, info: { name: string }) => ({
+        name: info.name,
+        onMessage: {
+          addListener: (l: (m: unknown) => void) => {
+            listeners.push(l)
+          },
+        },
+        onDisconnect: { addListener: (_l: () => void) => {} },
+        postMessage: (_msg: unknown) => {},
+        disconnect: () => {},
+      }),
+    },
+  })
+  return {
+    resolveAll: (response: unknown) => {
+      for (const l of listeners) l(response)
+    },
+  }
+}
+
 function stubSessionFetch() {
   vi.stubGlobal(
     "fetch",
@@ -229,5 +253,31 @@ describe("SignInControl", () => {
     vi.stubGlobal("fetch", vi.fn().mockReturnValue(new Promise(() => {})))
     const { container } = renderControl()
     expect(container.querySelector('[data-state="loading"]')).toBeTruthy()
+  })
+
+  it("disables the sign-in button while a sign-in is in flight", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ success: true, data: { nonce: "n1", expiresAt: 1 } }), { status: 200 }),
+      )
+    vi.stubGlobal("fetch", fetchMock)
+    const deferred = stubChromePortDeferred()
+    renderControl()
+    const button = await screen.findByRole("button", { name: /sign in/i })
+    expect((button as HTMLButtonElement).disabled).toBe(false)
+    await act(async () => {
+      button.click()
+    })
+    await waitFor(() => expect((button as HTMLButtonElement).disabled).toBe(true))
+    await act(async () => {
+      button.click()
+    })
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    await act(async () => {
+      deferred.resolveAll({ ok: false, reason: "USER_CANCELLED" })
+    })
+    const retry = await screen.findByRole("button", { name: /sign in/i })
+    await waitFor(() => expect((retry as HTMLButtonElement).disabled).toBe(false))
   })
 })

@@ -1,13 +1,11 @@
 import { useSession } from "@/auth/useSession";
 import { dicebearThumbsDataUri } from "@/lib/avatar";
-import { detectBetterLyrics } from "@/lib/extension";
 import { IconCheck, IconCopy, IconLogout, IconUser } from "@tabler/icons-react";
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 
 export function SignInControl() {
   const session = useSession();
-  const [extensionReady] = useState<boolean>(() => detectBetterLyrics() === "available");
   const [open, setOpen] = useState(false);
   const [copied, setCopied] = useState(false);
   const wrapperRef = useRef<HTMLDivElement | null>(null);
@@ -124,7 +122,7 @@ export function SignInControl() {
     );
   }
 
-  if (!extensionReady) {
+  if (!session.extensionAvailable) {
     return (
       <a
         href="https://betterlyrics.org"
@@ -142,7 +140,8 @@ export function SignInControl() {
     <button
       type="button"
       onClick={session.signIn}
-      className="cursor-pointer rounded-md bg-unison-bg-elevated px-3 py-1.5 text-sm font-medium text-unison-text transition-colors hover:bg-unison-bg-hover"
+      disabled={session.signingIn}
+      className="cursor-pointer rounded-md bg-unison-bg-elevated px-3 py-1.5 text-sm font-medium text-unison-text transition-colors hover:bg-unison-bg-hover disabled:cursor-not-allowed disabled:opacity-50"
       data-state="signed-out"
     >
       Sign in with Better Lyrics

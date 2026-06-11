@@ -16,6 +16,10 @@ function Probe() {
   return (
     <>
       <span data-testid="status">{session.status}</span>
+      <span data-testid="ext">{String(session.extensionAvailable)}</span>
+      {session.status === "signed-out" || session.status === "error" ? (
+        <span data-testid="signing-in">{String(session.signingIn)}</span>
+      ) : null}
       {session.status === "signed-in" ? <span data-testid="name">{session.identity.displayName}</span> : null}
       {session.status === "error" ? <span data-testid="error">{session.error.message}</span> : null}
       {session.status === "signed-out" || session.status === "error" ? (
@@ -127,6 +131,51 @@ function stubChromePort(makeResponse: (req: { type: string }) => unknown) {
       },
     },
   })
+}
+
+interface DeferredPort {
+  name: string
+  onMessage: { addListener: (l: (m: unknown) => void) => void }
+  onDisconnect: { addListener: (l: () => void) => void }
+  postMessage: (msg: unknown) => void
+  disconnect: () => void
+}
+
+function stubChromePortDeferred(): {
+  authConnectCount: () => number
+  resolveAll: (response: unknown) => void
+  ports: () => DeferredPort[]
+} {
+  const ports: DeferredPort[] = []
+  const listeners: ((m: unknown) => void)[] = []
+  let authCount = 0
+  vi.stubGlobal("chrome", {
+    runtime: {
+      connect: (_id: string, info: { name: string }) => {
+        if (info.name === "bl-auth-site") authCount++
+        const port: DeferredPort = {
+          name: info.name,
+          onMessage: {
+            addListener: (l: (m: unknown) => void) => {
+              if (info.name === "bl-auth-site") listeners.push(l)
+            },
+          },
+          onDisconnect: { addListener: (_l: () => void) => {} },
+          postMessage: (_msg: unknown) => {},
+          disconnect: () => {},
+        }
+        ports.push(port)
+        return port
+      },
+    },
+  })
+  return {
+    authConnectCount: () => authCount,
+    resolveAll: (response: unknown) => {
+      for (const l of listeners) l(response)
+    },
+    ports: () => ports,
+  }
 }
 
 describe("AuthProvider signIn flow", () => {
@@ -301,5 +350,102 @@ describe("AuthProvider signOut", () => {
     })
     await waitFor(() => expect(screen.getByTestId("status").textContent).toBe("signed-out"))
     expect(localStorage.getItem(STORAGE_KEY)).toBeNull()
+  })
+})
+
+describe("AuthProvider extension detection", () => {
+  it("exposes extensionAvailable=true when the chrome runtime looks installed", async () => {
+    stubChromePort(() => ({ ok: true }))
+    render(
+      <AuthProvider>
+        <Probe />
+      </AuthProvider>,
+    )
+    await waitFor(() => expect(screen.getByTestId("status").textContent).toBe("signed-out"))
+    expect(screen.getByTestId("ext").textContent).toBe("true")
+  })
+
+  it("exposes extensionAvailable=false when there is no chrome global", async () => {
+    render(
+      <AuthProvider>
+        <Probe />
+      </AuthProvider>,
+    )
+    await waitFor(() => expect(screen.getByTestId("status").textContent).toBe("signed-out"))
+    expect(screen.getByTestId("ext").textContent).toBe("false")
+  })
+})
+
+describe("AuthProvider signingIn flag", () => {
+  it("flips signingIn to true while the extension call is in flight", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ success: true, data: { nonce: "n1", expiresAt: 1 } }), { status: 200 }),
+      )
+    vi.stubGlobal("fetch", fetchMock)
+    const deferred = stubChromePortDeferred()
+    render(
+      <AuthProvider>
+        <Probe />
+      </AuthProvider>,
+    )
+    await waitFor(() => expect(screen.getByText("sign-in")).toBeTruthy())
+    expect(screen.getByTestId("signing-in").textContent).toBe("false")
+    await act(async () => {
+      screen.getByText("sign-in").click()
+    })
+    await waitFor(() => expect(screen.getByTestId("signing-in").textContent).toBe("true"))
+    expect(screen.getByTestId("status").textContent).toBe("signed-out")
+    expect(deferred.authConnectCount()).toBe(1)
+  })
+
+  it("flips signingIn back to false after USER_CANCELLED so the error state can retry", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ success: true, data: { nonce: "n1", expiresAt: 1 } }), { status: 200 }),
+      )
+    vi.stubGlobal("fetch", fetchMock)
+    stubChromePort(() => ({ ok: false, reason: "USER_CANCELLED" }))
+    render(
+      <AuthProvider>
+        <Probe />
+      </AuthProvider>,
+    )
+    await waitFor(() => expect(screen.getByText("sign-in")).toBeTruthy())
+    await act(async () => {
+      screen.getByText("sign-in").click()
+    })
+    await waitFor(() => expect(screen.getByTestId("status").textContent).toBe("error"))
+    expect(screen.getByTestId("signing-in").textContent).toBe("false")
+  })
+
+  it("dedupes two rapid sign-in clicks into a single port connect", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ success: true, data: { nonce: "n1", expiresAt: 1 } }), { status: 200 }),
+      )
+      .mockResolvedValueOnce(new Response(JSON.stringify({ success: true, data: valid }), { status: 200 }))
+    vi.stubGlobal("fetch", fetchMock)
+    const deferred = stubChromePortDeferred()
+    render(
+      <AuthProvider>
+        <Probe />
+      </AuthProvider>,
+    )
+    await waitFor(() => expect(screen.getByText("sign-in")).toBeTruthy())
+    await act(async () => {
+      screen.getByText("sign-in").click()
+      screen.getByText("sign-in").click()
+    })
+    await waitFor(() => expect(screen.getByTestId("signing-in").textContent).toBe("true"))
+    expect(deferred.authConnectCount()).toBe(1)
+    await act(async () => {
+      deferred.resolveAll({ ok: true, signedBody: { payload: {}, signature: "", publicKey: {} } })
+    })
+    await waitFor(() => expect(screen.getByTestId("status").textContent).toBe("signed-in"))
+    expect(deferred.authConnectCount()).toBe(1)
   })
 })
