@@ -79,6 +79,9 @@ export const authRoutes = (env: Env) =>
 					if (!new RegExp(config.auth.nickname.pattern).test(name)) {
 						return { success: true, data: { available: false, reason: "INVALID_FORMAT" } }
 					}
+					if (config.auth.nickname.reserved.has(name.toLowerCase())) {
+						return { success: true, data: { available: false, reason: "RESERVED" } }
+					}
 
 					const row = await env.DB.prepare("SELECT key_id FROM users WHERE nickname_lower = ?")
 						.bind(name.toLowerCase())
@@ -106,6 +109,10 @@ export const authRoutes = (env: Env) =>
 					if (!new RegExp(config.auth.nickname.pattern).test(nickname)) {
 						set.status = 400
 						return { success: false, error: "INVALID_FORMAT" }
+					}
+					if (config.auth.nickname.reserved.has(nickname.toLowerCase())) {
+						set.status = 409
+						return { success: false, error: "NICKNAME_RESERVED" }
 					}
 
 					const result = await setNickname(env, keyId, nickname)

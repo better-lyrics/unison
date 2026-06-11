@@ -761,6 +761,75 @@ describe("POST /auth/nickname/check", () => {
 		const lookupCall = db.calls.find((c) => c.sql.includes("nickname_lower"))
 		expect(lookupCall?.params).toEqual(["alex"])
 	})
+
+	it("signed path: returns RESERVED for a reserved nickname without hitting the DB lookup", async () => {
+		const cache = makeMockCache()
+		const { keyId, publicKey, body } = await buildSignedBody({ nickname: "admin" })
+		const db = makeMockDB(registrationQueue(keyId, publicKey))
+		const env = makeEnvFull(db, cache)
+		const app = authRoutes(env)
+		const res = await app.handle(
+			new Request("http://localhost/auth/nickname/check", {
+				method: "POST",
+				headers: { "content-type": "application/json" },
+				body: JSON.stringify(body),
+			})
+		)
+		expect(res.status).toBe(200)
+		const json = (await res.json()) as {
+			success: true
+			data: { available: boolean; reason?: string }
+		}
+		expect(json.data.available).toBe(false)
+		expect(json.data.reason).toBe("RESERVED")
+		expect(db.calls.find((c) => c.sql.includes("nickname_lower"))).toBeUndefined()
+	})
+
+	it("signed path: reserved check is case-insensitive", async () => {
+		const cache = makeMockCache()
+		const { keyId, publicKey, body } = await buildSignedBody({ nickname: "ADMIN" })
+		const db = makeMockDB(registrationQueue(keyId, publicKey))
+		const env = makeEnvFull(db, cache)
+		const app = authRoutes(env)
+		const res = await app.handle(
+			new Request("http://localhost/auth/nickname/check", {
+				method: "POST",
+				headers: { "content-type": "application/json" },
+				body: JSON.stringify(body),
+			})
+		)
+		const json = (await res.json()) as {
+			success: true
+			data: { available: boolean; reason?: string }
+		}
+		expect(json.data.available).toBe(false)
+		expect(json.data.reason).toBe("RESERVED")
+	})
+
+	it("bearer path: returns RESERVED for a reserved nickname", async () => {
+		const keyId = "a".repeat(64)
+		const cache = makeMockCache()
+		seedSession(cache, "tok", keyId)
+		const db = makeMockDB([
+			{ id: 1, key_id: keyId, reputation: 1.0, vote_count: 0, avg_vote: 0, created_at: 0 },
+		])
+		const env = makeEnvFull(db, cache)
+		const app = authRoutes(env)
+		const res = await app.handle(
+			new Request("http://localhost/auth/nickname/check", {
+				method: "POST",
+				headers: { authorization: "Bearer tok", "content-type": "application/json" },
+				body: JSON.stringify({ nickname: "admin" }),
+			})
+		)
+		const json = (await res.json()) as {
+			success: true
+			data: { available: boolean; reason?: string }
+		}
+		expect(json.data.available).toBe(false)
+		expect(json.data.reason).toBe("RESERVED")
+		expect(db.calls.find((c) => c.sql.includes("nickname_lower"))).toBeUndefined()
+	})
 })
 
 describe("PUT /auth/nickname", () => {
@@ -938,6 +1007,44 @@ describe("PUT /auth/nickname", () => {
 		const json = (await res.json()) as { success: boolean; error: string }
 		expect(json.success).toBe(false)
 		expect(json.error).toBe("RATE_LIMITED")
+	})
+
+	it("409 NICKNAME_RESERVED when the nickname is reserved", async () => {
+		const cache = makeMockCache()
+		const { keyId, publicKey, body } = await buildBody({ nickname: "admin" })
+		const db = makeMockDB(registrationQueue(keyId, publicKey))
+		const env = makeEnvFull(db, cache)
+		const app = authRoutes(env)
+		const res = await app.handle(
+			new Request("http://localhost/auth/nickname", {
+				method: "PUT",
+				headers: { "content-type": "application/json" },
+				body: JSON.stringify(body),
+			})
+		)
+		expect(res.status).toBe(409)
+		const json = (await res.json()) as { success: boolean; error: string }
+		expect(json.success).toBe(false)
+		expect(json.error).toBe("NICKNAME_RESERVED")
+		expect(db.calls.find((c) => c.sql.startsWith("UPDATE users"))).toBeUndefined()
+	})
+
+	it("409 NICKNAME_RESERVED is case-insensitive", async () => {
+		const cache = makeMockCache()
+		const { keyId, publicKey, body } = await buildBody({ nickname: "Admin" })
+		const db = makeMockDB(registrationQueue(keyId, publicKey))
+		const env = makeEnvFull(db, cache)
+		const app = authRoutes(env)
+		const res = await app.handle(
+			new Request("http://localhost/auth/nickname", {
+				method: "PUT",
+				headers: { "content-type": "application/json" },
+				body: JSON.stringify(body),
+			})
+		)
+		expect(res.status).toBe(409)
+		const json = (await res.json()) as { success: boolean; error: string }
+		expect(json.error).toBe("NICKNAME_RESERVED")
 	})
 })
 
@@ -1195,6 +1302,28 @@ describe("PUT /auth/nickname bearer path", () => {
 		const json = (await res.json()) as { success: boolean; error: string }
 		expect(json.success).toBe(false)
 		expect(json.error).toBe("INVALID_FORMAT")
+	})
+
+	it("PUT bearer path: 409 NICKNAME_RESERVED for reserved names", async () => {
+		const keyId = "a".repeat(64)
+		const cache = makeMockCache()
+		seedSession(cache, "tok", keyId)
+		const db = makeMockDB([
+			{ id: 1, key_id: keyId, reputation: 1.0, vote_count: 0, avg_vote: 0, created_at: 0 },
+		])
+		const env = makeEnvFull(db, cache)
+		const app = authRoutes(env)
+		const res = await app.handle(
+			new Request("http://localhost/auth/nickname", {
+				method: "PUT",
+				headers: { authorization: "Bearer tok", "content-type": "application/json" },
+				body: JSON.stringify({ nickname: "admin" }),
+			})
+		)
+		expect(res.status).toBe(409)
+		const json = (await res.json()) as { success: boolean; error: string }
+		expect(json.error).toBe("NICKNAME_RESERVED")
+		expect(db.calls.find((c) => c.sql.startsWith("UPDATE users"))).toBeUndefined()
 	})
 
 	it("PUT bearer path: 401 AUTH_REQUIRED when bearer token is unknown", async () => {
