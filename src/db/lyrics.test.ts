@@ -715,7 +715,55 @@ describe("softDeleteLyrics", () => {
 				effective_score: -0.6,
 				reputation_penalized: false,
 			},
+			{ id: 1 },
 			null,
+			null,
+		])
+		const cache = createMockCache()
+		const env = createEnv(db, cache)
+
+		const result = await softDeleteLyrics(env, 1, 42, "submitter", "regret")
+
+		expect(result.deleted).toBe(true)
+
+		const markUpdate = db.calls.find(
+			(c) =>
+				c.sql.includes("UPDATE lyrics") &&
+				c.sql.includes("reputation_penalized = TRUE") &&
+				!c.sql.includes("deleted_at")
+		)
+		expect(markUpdate).toBeDefined()
+		expect(markUpdate?.sql).toMatch(/AND\s+reputation_penalized\s*=\s*FALSE/i)
+		expect(markUpdate?.sql).toMatch(/RETURNING\s+id/i)
+		expect(markUpdate?.params).toEqual([1])
+
+		const penaltyUpdate = db.calls.find(
+			(c) => c.sql.includes("UPDATE users") && c.sql.includes("reputation - ?")
+		)
+		expect(penaltyUpdate).toBeDefined()
+		expect(penaltyUpdate?.params).toEqual([
+			config.reputation.min,
+			config.moderation.autoHide.reputationPenalty,
+			42,
+		])
+
+		const softDelete = db.calls.find(
+			(c) => c.sql.includes("UPDATE lyrics") && c.sql.includes("deleted_at =")
+		)
+		expect(softDelete?.params).toEqual([42, "submitter", "regret", 1])
+	})
+
+	it("skips user decrement when a concurrent caller flipped the flag first", async () => {
+		const db = createMockDB([
+			{
+				id: 1,
+				video_id: "v1",
+				submitter_id: 42,
+				deleted_at: null,
+				vote_count: 3,
+				effective_score: -0.6,
+				reputation_penalized: false,
+			},
 			null,
 			null,
 		])
@@ -729,26 +777,12 @@ describe("softDeleteLyrics", () => {
 		const penaltyUpdate = db.calls.find(
 			(c) => c.sql.includes("UPDATE users") && c.sql.includes("reputation - ?")
 		)
-		expect(penaltyUpdate).toBeDefined()
-		expect(penaltyUpdate?.params).toEqual([
-			config.reputation.min,
-			config.moderation.autoHide.reputationPenalty,
-			42,
-		])
-
-		const markUpdate = db.calls.find(
-			(c) =>
-				c.sql.includes("UPDATE lyrics") &&
-				c.sql.includes("reputation_penalized = TRUE") &&
-				!c.sql.includes("deleted_at")
-		)
-		expect(markUpdate).toBeDefined()
-		expect(markUpdate?.params).toEqual([1])
+		expect(penaltyUpdate).toBeUndefined()
 
 		const softDelete = db.calls.find(
 			(c) => c.sql.includes("UPDATE lyrics") && c.sql.includes("deleted_at =")
 		)
-		expect(softDelete?.params).toEqual([42, "submitter", "regret", 1])
+		expect(softDelete).toBeDefined()
 	})
 
 	it("does NOT penalise a clean self-delete with vote_count < 2", async () => {
@@ -812,7 +846,7 @@ describe("softDeleteLyrics", () => {
 				effective_score: 0,
 				reputation_penalized: false,
 			},
-			null,
+			{ id: 1 },
 			null,
 			null,
 		])
@@ -884,7 +918,7 @@ describe("softDeleteLyrics", () => {
 				effective_score: -0.6,
 				reputation_penalized: false,
 			},
-			null,
+			{ id: 1 },
 			null,
 			null,
 		])
@@ -984,6 +1018,7 @@ describe("softDeleteLyrics", () => {
 				effective_score: -0.6,
 				reputation_penalized: false,
 			},
+			{ id: 1 },
 		]
 		const db = {
 			calls,

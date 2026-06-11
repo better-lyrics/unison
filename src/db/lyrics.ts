@@ -343,18 +343,24 @@ export async function softDeleteLyrics(
 
 	await env.DB.transaction(async (tx) => {
 		if (shouldPenalise && row.submitter_id) {
-			const penalty = config.moderation.autoHide.reputationPenalty
-			await tx
+			const flipped = await tx
 				.prepare(
-					"UPDATE users SET reputation = GREATEST(?, reputation - ?) WHERE id = ?"
+					`UPDATE lyrics SET reputation_penalized = TRUE
+					WHERE id = ? AND reputation_penalized = FALSE
+					RETURNING id`
 				)
-				.bind(config.reputation.min, penalty, row.submitter_id)
-				.run()
-
-			await tx
-				.prepare("UPDATE lyrics SET reputation_penalized = TRUE WHERE id = ?")
 				.bind(lyricsId)
-				.run()
+				.first<{ id: number }>()
+
+			if (flipped) {
+				const penalty = config.moderation.autoHide.reputationPenalty
+				await tx
+					.prepare(
+						"UPDATE users SET reputation = GREATEST(?, reputation - ?) WHERE id = ?"
+					)
+					.bind(config.reputation.min, penalty, row.submitter_id)
+					.run()
+			}
 		}
 
 		await tx
