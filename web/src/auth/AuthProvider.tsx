@@ -8,19 +8,26 @@ import {
   revokeSession,
   saveStoredSession,
 } from "@/lib/auth"
-import { requestSignedAssertion } from "@/lib/extension"
-import { type ReactNode, createContext, useCallback, useContext, useEffect, useState } from "react"
+import { detectBetterLyrics, signInWithBetterLyrics } from "@/lib/extension"
+import { type ReactNode, createContext, useCallback, useContext, useEffect, useRef, useState } from "react"
 
 type SessionState =
-  | { status: "loading" }
-  | { status: "signed-out"; signIn: () => Promise<void> }
+  | { status: "loading"; extensionAvailable: boolean }
+  | { status: "signed-out"; extensionAvailable: boolean; signingIn: boolean; signIn: () => Promise<void> }
   | {
       status: "signed-in"
+      extensionAvailable: boolean
       identity: Identity
       signOut: () => void
       updateDisplayName: (displayName: string) => void
     }
-  | { status: "error"; error: Error; signIn: () => Promise<void> }
+  | {
+      status: "error"
+      extensionAvailable: boolean
+      signingIn: boolean
+      error: Error
+      signIn: () => Promise<void>
+    }
 
 const Ctx = createContext<SessionState | null>(null)
 
@@ -42,6 +49,20 @@ interface AuthProviderProps {
 
 export function AuthProvider({ children }: AuthProviderProps) {
   const [phase, setPhase] = useState<Phase>({ kind: "loading" })
+  const [signingIn, setSigningIn] = useState(false)
+  const [extensionAvailable, setExtensionAvailable] = useState<boolean | null>(null)
+  const signInLock = useRef(false)
+
+  useEffect(() => {
+    let cancelled = false
+    detectBetterLyrics().then((v) => {
+      if (cancelled) return
+      setExtensionAvailable(v === "available")
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   useEffect(() => {
     let cancelled = false
@@ -68,9 +89,12 @@ export function AuthProvider({ children }: AuthProviderProps) {
   }, [])
 
   const signIn = useCallback(async () => {
+    if (signInLock.current) return
+    signInLock.current = true
+    setSigningIn(true)
     try {
       const { nonce } = await fetchChallenge()
-      const signedBody = await requestSignedAssertion(nonce, window.location.origin)
+      const signedBody = await signInWithBetterLyrics(nonce)
       const session = await postSession(signedBody)
       saveStoredSession(session)
       setPhase({
@@ -83,6 +107,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
       })
     } catch (err) {
       setPhase({ kind: "error", error: err instanceof Error ? err : new Error(String(err)) })
+    } finally {
+      signInLock.current = false
+      setSigningIn(false)
     }
   }, [])
 
@@ -103,11 +130,19 @@ export function AuthProvider({ children }: AuthProviderProps) {
   }, [])
 
   let state: SessionState
-  if (phase.kind === "loading") state = { status: "loading" }
-  else if (phase.kind === "signed-in")
-    state = { status: "signed-in", identity: phase.identity, signOut, updateDisplayName }
-  else if (phase.kind === "error") state = { status: "error", error: phase.error, signIn }
-  else state = { status: "signed-out", signIn }
+  if (phase.kind === "loading" || extensionAvailable === null) {
+    state = { status: "loading", extensionAvailable: extensionAvailable ?? false }
+  } else if (phase.kind === "signed-in")
+    state = {
+      status: "signed-in",
+      extensionAvailable,
+      identity: phase.identity,
+      signOut,
+      updateDisplayName,
+    }
+  else if (phase.kind === "error")
+    state = { status: "error", extensionAvailable, signingIn, error: phase.error, signIn }
+  else state = { status: "signed-out", extensionAvailable, signingIn, signIn }
 
   return <Ctx.Provider value={state}>{children}</Ctx.Provider>
 }

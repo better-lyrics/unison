@@ -23,6 +23,62 @@ function renderControl() {
   )
 }
 
+function stubChromePort(makeResponse: (req: { type: string }) => unknown) {
+  vi.stubGlobal("chrome", {
+    runtime: {
+      connect: (_id: string, info: { name: string }) => {
+        let onMessageListener: ((m: unknown) => void) | null = null
+        const port = {
+          name: info.name,
+          onMessage: {
+            addListener: (l: (m: unknown) => void) => {
+              onMessageListener = l
+            },
+          },
+          onDisconnect: {
+            addListener: (l: () => void) => {
+              if (info.name === "bl-probe") queueMicrotask(l)
+            },
+          },
+          postMessage: (req: { type: string }) => {
+            queueMicrotask(() => onMessageListener?.(makeResponse(req)))
+          },
+          disconnect: () => {},
+        }
+        return port
+      },
+    },
+  })
+}
+
+function stubChromePortDeferred(): { resolveAll: (response: unknown) => void } {
+  const listeners: ((m: unknown) => void)[] = []
+  vi.stubGlobal("chrome", {
+    runtime: {
+      connect: (_id: string, info: { name: string }) => ({
+        name: info.name,
+        onMessage: {
+          addListener: (l: (m: unknown) => void) => {
+            if (info.name === "bl-auth-site") listeners.push(l)
+          },
+        },
+        onDisconnect: {
+          addListener: (l: () => void) => {
+            if (info.name === "bl-probe") queueMicrotask(l)
+          },
+        },
+        postMessage: (_msg: unknown) => {},
+        disconnect: () => {},
+      }),
+    },
+  })
+  return {
+    resolveAll: (response: unknown) => {
+      for (const l of listeners) l(response)
+    },
+  }
+}
+
 function stubSessionFetch() {
   vi.stubGlobal(
     "fetch",
@@ -68,13 +124,7 @@ describe("SignInControl", () => {
   })
 
   it("shows the sign-in button when the extension is available", async () => {
-    vi.stubGlobal("chrome", {
-      runtime: {
-        async sendMessage() {
-          return { ok: true }
-        },
-      },
-    })
+    stubChromePort(() => ({ ok: true }))
     renderControl()
     await waitFor(() => expect(screen.getByRole("button", { name: /sign in/i })).toBeTruthy())
   })
@@ -96,13 +146,7 @@ describe("SignInControl", () => {
         new Response(JSON.stringify({ success: false, error: "INVALID_TOKEN" }), { status: 401 }),
       ),
     )
-    vi.stubGlobal("chrome", {
-      runtime: {
-        async sendMessage() {
-          return { ok: true }
-        },
-      },
-    })
+    stubChromePort(() => ({ ok: true }))
     renderControl()
     await waitFor(() => expect(screen.getByRole("button", { name: /sign in/i })).toBeTruthy())
   })
@@ -115,15 +159,11 @@ describe("SignInControl", () => {
       )
       .mockResolvedValueOnce(new Response(JSON.stringify({ success: true, data: valid }), { status: 200 }))
     vi.stubGlobal("fetch", fetchMock)
-    vi.stubGlobal("chrome", {
-      runtime: {
-        async sendMessage(_id: string, msg: { type: string }) {
-          if (msg.type === "bl-auth-request") {
-            return { ok: true, signedBody: { payload: {}, signature: "", publicKey: {} } }
-          }
-          return { ok: true }
-        },
-      },
+    stubChromePort((msg) => {
+      if (msg.type === "bl-auth-request") {
+        return { ok: true, signedBody: { payload: {}, signature: "", publicKey: {} } }
+      }
+      return { ok: true }
     })
     renderControl()
     const button = await screen.findByRole("button", { name: /sign in/i })
@@ -221,5 +261,31 @@ describe("SignInControl", () => {
     vi.stubGlobal("fetch", vi.fn().mockReturnValue(new Promise(() => {})))
     const { container } = renderControl()
     expect(container.querySelector('[data-state="loading"]')).toBeTruthy()
+  })
+
+  it("disables the sign-in button while a sign-in is in flight", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ success: true, data: { nonce: "n1", expiresAt: 1 } }), { status: 200 }),
+      )
+    vi.stubGlobal("fetch", fetchMock)
+    const deferred = stubChromePortDeferred()
+    renderControl()
+    const button = await screen.findByRole("button", { name: /sign in/i })
+    expect((button as HTMLButtonElement).disabled).toBe(false)
+    await act(async () => {
+      button.click()
+    })
+    await waitFor(() => expect((button as HTMLButtonElement).disabled).toBe(true))
+    await act(async () => {
+      button.click()
+    })
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    await act(async () => {
+      deferred.resolveAll({ ok: false, reason: "USER_CANCELLED" })
+    })
+    const retry = await screen.findByRole("button", { name: /sign in/i })
+    await waitFor(() => expect((retry as HTMLButtonElement).disabled).toBe(false))
   })
 })

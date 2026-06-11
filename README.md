@@ -25,6 +25,90 @@ All write operations require signed requests using ECDSA P-256:
 - `signature`: ECDSA signature over the canonical JSON payload
 - `publicKey`: Required on first request to register the key
 
+## Sign in with Better Lyrics
+
+The Better Lyrics extension owns the user's ECDSA keypair. To prove identity to a web client, open a long-lived port to the extension and exchange one signed challenge for one signed response.
+
+### Wire protocol
+
+Open a port named `bl-auth-site` against the extension's Chrome Web Store id. Send one request, await one response.
+
+Request:
+
+```ts
+{ type: "bl-auth-request", nonce: string, origin: string }
+```
+
+`nonce` is issued by your backend per challenge. `origin` must equal `window.location.origin`.
+
+Success:
+
+```ts
+{
+  ok: true,
+  signedBody: {
+    payload: { origin: string, timestamp: number, nonce: string, keyId: string },
+    signature: string,    // base64
+    publicKey: JsonWebKey,
+  }
+}
+```
+
+Failure: `{ ok: false, reason }`, with `reason` one of `ORIGIN_MISMATCH`, `INVALID_REQUEST`, `USER_CANCELLED`, `USER_DISMISSED`, `SIGN_FAILED`.
+
+### Client
+
+```ts
+const BL_EXTENSION_ID = "effdbpeggelllpfkjppbokhmmiinhlmg"
+
+async function signInWithBetterLyrics(): Promise<SignedBody> {
+  const { nonce } = await fetch("/auth/challenge").then(r => r.json())
+
+  return new Promise((resolve, reject) => {
+    let port: chrome.runtime.Port
+    try {
+      port = chrome.runtime.connect(BL_EXTENSION_ID, { name: "bl-auth-site" })
+    } catch {
+      reject(new Error("Extension not installed or origin not allowed"))
+      return
+    }
+
+    let settled = false
+    port.onMessage.addListener(msg => {
+      if (settled) return
+      settled = true
+      if (msg.ok) resolve(msg.signedBody)
+      else reject(new Error(msg.reason))
+      try { port.disconnect() } catch {}
+    })
+    port.onDisconnect.addListener(() => {
+      if (settled) return
+      settled = true
+      reject(new Error(chrome.runtime.lastError?.message ?? "Port closed"))
+    })
+
+    port.postMessage({ type: "bl-auth-request", nonce, origin: window.location.origin })
+  })
+}
+```
+
+Listeners must attach before `postMessage`, and the calling button should disable itself until the promise settles so a second click doesn't open a second popup.
+
+### Server
+
+Verify `signedBody` with the same scheme as a per-request signature (see [Authentication](#authentication)): nonce is unused, `origin` matches, `timestamp` within ±5 minutes, ECDSA P-256 over canonical-JSON `payload` against `publicKey`, `keyId === sha256(normalized publicKey)`. If all five pass, treat `keyId` as the stable user id.
+
+### Adding a new origin
+
+To talk to the extension from a new origin, open a PR against [better-lyrics/better-lyrics](https://github.com/better-lyrics/better-lyrics):
+
+1. Add the HTTPS origin to `externally_connectable.matches` in `manifest.json`.
+2. Add an `AUTH_PARTNER_METADATA` entry in `src/core/constants.ts` with an `id` and optional `iconUrl`.
+
+### Browser support
+
+Chrome and Chromium-based browsers only. Firefox does not implement `externally_connectable` for web pages ([Bugzilla 1319168](https://bugzilla.mozilla.org/show_bug.cgi?id=1319168)).
+
 ## API
 
 ### Get lyrics
