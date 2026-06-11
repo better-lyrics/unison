@@ -293,6 +293,18 @@ export async function invalidateCache(env: Env, videoId: string): Promise<void> 
 	await env.CACHE.delete(`v:${videoId}`)
 }
 
+export async function invalidateCacheForSubmitter(env: Env, keyId: string): Promise<void> {
+	const rows = await env.DB.prepare(
+		`SELECT DISTINCT l.video_id
+		FROM lyrics l
+		JOIN users u ON l.submitter_id = u.id
+		WHERE u.key_id = ? AND l.deleted_at IS NULL`
+	)
+		.bind(keyId)
+		.all<{ video_id: string }>()
+	await Promise.all(rows.results.map((r) => env.CACHE.delete(`v:${r.video_id}`)))
+}
+
 export async function invalidateCacheAfterDelete(env: Env, videoId: string): Promise<void> {
 	await env.CACHE.delete(`v:${videoId}`)
 	const feedKeys = await env.CACHE.keys("feed:global:*")

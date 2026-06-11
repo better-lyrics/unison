@@ -58,7 +58,21 @@ function makeMockCache() {
 	}
 }
 
-function makeEnv(db: ReturnType<typeof makeMockDB>): Env {
+function makeRecordingCache() {
+	const deleteCalls: string[] = []
+	const cache = {
+		...makeMockCache(),
+		async delete(key: string) {
+			deleteCalls.push(key)
+		},
+	}
+	return { cache, deleteCalls }
+}
+
+function makeEnv(
+	db: ReturnType<typeof makeMockDB>,
+	cache: object = makeMockCache()
+): Env {
 	const limiter = {
 		async limit() {
 			return { success: true }
@@ -66,7 +80,7 @@ function makeEnv(db: ReturnType<typeof makeMockDB>): Env {
 	}
 	return {
 		DB: db as unknown as Env["DB"],
-		CACHE: makeMockCache() as unknown as Env["CACHE"],
+		CACHE: cache as unknown as Env["CACHE"],
 		RATE_LIMITER: limiter as unknown as Env["RATE_LIMITER"],
 		READ_RATE_LIMITER: limiter as unknown as Env["READ_RATE_LIMITER"],
 		CACHE_TTL_SECONDS: "300",
@@ -169,5 +183,88 @@ describe("clearNickname", () => {
 		const stamped = db.calls[0].params[0] as number
 		expect(stamped).toBeGreaterThanOrEqual(before)
 		expect(stamped).toBeLessThanOrEqual(after + 1)
+	})
+})
+
+describe("nickname mutations invalidate the per-video lyrics cache", () => {
+	it("setNickname success path deletes v:<videoId> for each of the user's submissions", async () => {
+		const db = makeMockDB([null, [{ video_id: "vA" }, { video_id: "vB" }]])
+		const { cache, deleteCalls } = makeRecordingCache()
+		const env = makeEnv(db, cache)
+
+		const result = await setNickname(env, "k1", "Alex")
+
+		expect(result).toEqual({ ok: true })
+		expect(deleteCalls).toEqual(["v:vA", "v:vB"])
+		expect(db.calls[0].sql).toMatch(/^UPDATE users SET nickname/)
+		expect(db.calls[1].sql).toMatch(/SELECT\s+DISTINCT\s+l\.video_id/i)
+		expect(db.calls[1].params).toEqual(["k1"])
+	})
+
+	it("setNickname TAKEN path does not run the SELECT or invalidate any key", async () => {
+		const db = makeMockDB([{ code: "23505" }])
+		const { cache, deleteCalls } = makeRecordingCache()
+		const env = makeEnv(db, cache)
+
+		const result = await setNickname(env, "k1", "Alex")
+
+		expect(result).toEqual({ ok: false, reason: "TAKEN" })
+		expect(deleteCalls).toEqual([])
+		expect(db.calls).toHaveLength(1)
+	})
+
+	it("setNickname success with no submissions still runs the SELECT and deletes nothing", async () => {
+		const db = makeMockDB([null, []])
+		const { cache, deleteCalls } = makeRecordingCache()
+		const env = makeEnv(db, cache)
+
+		await setNickname(env, "k1", "Alex")
+
+		expect(deleteCalls).toEqual([])
+		expect(db.calls).toHaveLength(2)
+	})
+
+	it("setNickname runs the UPDATE before the SELECT", async () => {
+		const db = makeMockDB([null, [{ video_id: "vA" }]])
+		const { cache } = makeRecordingCache()
+		const env = makeEnv(db, cache)
+
+		await setNickname(env, "k1", "Alex")
+
+		expect(db.calls[0].sql).toMatch(/^UPDATE users/)
+		expect(db.calls[1].sql).toMatch(/^SELECT DISTINCT/)
+	})
+
+	it("clearNickname deletes v:<videoId> for each of the user's submissions", async () => {
+		const db = makeMockDB([null, [{ video_id: "vX" }]])
+		const { cache, deleteCalls } = makeRecordingCache()
+		const env = makeEnv(db, cache)
+
+		await clearNickname(env, "k1")
+
+		expect(deleteCalls).toEqual(["v:vX"])
+		expect(db.calls[0].sql).toMatch(/^UPDATE users SET nickname = NULL/)
+		expect(db.calls[1].sql).toMatch(/SELECT\s+DISTINCT\s+l\.video_id/i)
+	})
+
+	it("clearNickname with no submissions runs the SELECT and deletes nothing", async () => {
+		const db = makeMockDB([null, []])
+		const { cache, deleteCalls } = makeRecordingCache()
+		const env = makeEnv(db, cache)
+
+		await clearNickname(env, "k1")
+
+		expect(deleteCalls).toEqual([])
+		expect(db.calls).toHaveLength(2)
+	})
+
+	it("regression: stale submitter_nickname is evicted from v:<videoId> when nickname mutates", async () => {
+		const db = makeMockDB([null, [{ video_id: "stale-video-1" }]])
+		const { cache, deleteCalls } = makeRecordingCache()
+		const env = makeEnv(db, cache)
+
+		await setNickname(env, "k1", "NewName")
+
+		expect(deleteCalls).toEqual(["v:stale-video-1"])
 	})
 })

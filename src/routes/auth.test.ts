@@ -829,6 +829,7 @@ describe("PUT /auth/nickname", () => {
 		const db = makeMockDB([
 			...registrationQueue(keyId, publicKey),
 			null,
+			[],
 			{ nickname: "Alex" },
 		])
 		const env = makeEnvFull(db, cache)
@@ -878,6 +879,7 @@ describe("PUT /auth/nickname", () => {
 		const db = makeMockDB([
 			...registrationQueue(keyId, publicKey),
 			null,
+			[],
 			{ nickname: "Alex" },
 		])
 		const env = makeEnvFull(db, cache)
@@ -968,6 +970,7 @@ describe("DELETE /auth/nickname", () => {
 		const db = makeMockDB([
 			...registrationQueue(keyId, publicKey),
 			null,
+			[],
 			{ nickname: null },
 		])
 		const env = makeEnvFull(db, cache)
@@ -1150,6 +1153,7 @@ describe("PUT /auth/nickname bearer path", () => {
 		const db = makeMockDB([
 			{ id: 1, key_id: keyId, reputation: 1.0, vote_count: 0, avg_vote: 0, created_at: 0 },
 			null,
+			[],
 			{ nickname: "Alex" },
 		])
 		const env = makeEnvFull(db, cache)
@@ -1251,6 +1255,7 @@ describe("DELETE /auth/nickname bearer path", () => {
 		const db = makeMockDB([
 			{ id: 1, key_id: keyId, reputation: 1.0, vote_count: 0, avg_vote: 0, created_at: 0 },
 			null,
+			[],
 			{ nickname: null },
 		])
 		const env = makeEnvFull(db, cache)

@@ -6,6 +6,7 @@ import {
 	findVariantsByVideoId,
 	getLyricsById,
 	invalidateCacheAfterDelete,
+	invalidateCacheForSubmitter,
 	searchByQuery,
 	searchBySongArtist,
 	softDeleteLyrics,
@@ -536,6 +537,82 @@ describe("invalidateCacheAfterDelete", () => {
 		expect(cache.deleteCalls).toContain("feed:global:20")
 		expect(cache.deleteCalls).toContain("feed:global:50")
 		expect(cache.deleteCalls).not.toContain("unrelated:key")
+	})
+})
+
+describe("invalidateCacheForSubmitter", () => {
+	it("deletes v:<videoId> for every row returned by the join", async () => {
+		const db = createMockDB([
+			[{ video_id: "vA" }, { video_id: "vB" }, { video_id: "vC" }],
+		])
+		const cache = createMockCache()
+		const env = createEnv(db, cache)
+
+		await invalidateCacheForSubmitter(env, "k1")
+
+		expect(cache.deleteCalls).toEqual(["v:vA", "v:vB", "v:vC"])
+	})
+
+	it("issues a JOIN on users.key_id and filters deleted rows", async () => {
+		const db = createMockDB([[]])
+		const cache = createMockCache()
+		const env = createEnv(db, cache)
+
+		await invalidateCacheForSubmitter(env, "k1")
+
+		expect(db.calls).toHaveLength(1)
+		const sql = db.calls[0].sql
+		expect(sql).toMatch(/JOIN\s+users\s+u\s+ON\s+l\.submitter_id\s*=\s*u\.id/i)
+		expect(sql).toMatch(/WHERE\s+u\.key_id\s*=\s*\?/i)
+		expect(sql).toMatch(/AND\s+l\.deleted_at\s+IS\s+NULL/i)
+		expect(db.calls[0].params).toEqual(["k1"])
+	})
+
+	it("uses SELECT DISTINCT so a user's multiple variants per video collapse to one delete", async () => {
+		const db = createMockDB([[]])
+		const cache = createMockCache()
+		const env = createEnv(db, cache)
+
+		await invalidateCacheForSubmitter(env, "k1")
+
+		expect(db.calls[0].sql).toMatch(/SELECT\s+DISTINCT\s+l\.video_id/i)
+	})
+
+	it("is a noop when the user has no submissions", async () => {
+		const db = createMockDB([[]])
+		const cache = createMockCache()
+		const env = createEnv(db, cache)
+
+		await invalidateCacheForSubmitter(env, "k1")
+
+		expect(cache.deleteCalls).toEqual([])
+		expect(db.calls).toHaveLength(1)
+	})
+
+	it("does not touch unrelated cache keys", async () => {
+		const db = createMockDB([[{ video_id: "vA" }]])
+		const cache = createMockCache({
+			"v:vA": "row",
+			"v:other": "stay",
+			"feed:global:home": "stay",
+		})
+		const env = createEnv(db, cache)
+
+		await invalidateCacheForSubmitter(env, "k1")
+
+		expect(cache.deleteCalls).toEqual(["v:vA"])
+		expect(cache.store.has("v:other")).toBe(true)
+		expect(cache.store.has("feed:global:home")).toBe(true)
+	})
+
+	it("invariant: cache.put is never called", async () => {
+		const db = createMockDB([[{ video_id: "vA" }, { video_id: "vB" }]])
+		const cache = createMockCache()
+		const env = createEnv(db, cache)
+
+		await invalidateCacheForSubmitter(env, "k1")
+
+		expect(cache.putCalls).toEqual([])
 	})
 })
 

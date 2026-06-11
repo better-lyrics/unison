@@ -1,3 +1,4 @@
+import { invalidateCacheForSubmitter } from "@/db/lyrics"
 import type { Env, User } from "@/types"
 import { generatePetName } from "@/utils/petname"
 
@@ -50,13 +51,14 @@ export async function setNickname(
 		)
 			.bind(nickname, now, keyId)
 			.run()
-		return { ok: true }
 	} catch (err) {
 		if ((err as { code?: string }).code === "23505") {
 			return { ok: false, reason: "TAKEN" }
 		}
 		throw err
 	}
+	await invalidateCacheForSubmitter(env, keyId)
+	return { ok: true }
 }
 
 export async function clearNickname(env: Env, keyId: string): Promise<void> {
@@ -66,6 +68,7 @@ export async function clearNickname(env: Env, keyId: string): Promise<void> {
 	)
 		.bind(now, keyId)
 		.run()
+	await invalidateCacheForSubmitter(env, keyId)
 }
 
 export async function updateUserAvgVote(env: Env, userId: number): Promise<void> {
