@@ -1,4 +1,5 @@
 import { config } from "@/config"
+import { Logger } from "@/infra/logger"
 import type { Env, LyricsRow, LyricsSearchResult, LyricsSubmission } from "@/types"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import {
@@ -594,9 +595,7 @@ describe("invalidateCacheAfterDelete", () => {
 
 describe("invalidateCacheForSubmitter", () => {
 	it("deletes v:<videoId> for every row returned by the join", async () => {
-		const db = createMockDB([
-			[{ video_id: "vA" }, { video_id: "vB" }, { video_id: "vC" }],
-		])
+		const db = createMockDB([[{ video_id: "vA" }, { video_id: "vB" }, { video_id: "vC" }]])
 		const cache = createMockCache()
 		const env = createEnv(db, cache)
 
@@ -1291,13 +1290,7 @@ describe("submitLyrics fulfillment integration", () => {
 	})
 
 	it("skips fulfillment when a prior synced variant exists", async () => {
-		const db = createMockDB([
-			{ count: 0 },
-			{ id: 557 },
-			{ key_id: "k1" },
-			null,
-			{ "1": 1 },
-		])
+		const db = createMockDB([{ count: 0 }, { id: 557 }, { key_id: "k1" }, null, { "1": 1 }])
 		const cache = createMockCache()
 		const env = createEnv(db, cache)
 
@@ -1357,9 +1350,11 @@ describe("submitLyrics language detection", () => {
 		expect(insertCall!.sql).toContain("language")
 		expect(insertCall!.sql).toContain("language_detection_attempted_at")
 		expect(insertCall!.params).toContain("en")
+		expect(insertCall!.params).toHaveLength(15)
 	})
 
 	it("preserves submitter language even when detection disagrees", async () => {
+		const warnSpy = vi.spyOn(Logger.prototype, "warn")
 		const db = createMockDB([{ count: 0 }, { id: 43 }])
 		const cache = createMockCache()
 		const env = createEnv(db, cache)
@@ -1380,6 +1375,11 @@ describe("submitLyrics language detection", () => {
 		const insertCall = db.calls.find((c) => c.sql.includes("INSERT INTO lyrics"))
 		expect(insertCall!.params).toContain("es")
 		expect(insertCall!.params).not.toContain("en")
+		expect(warnSpy).toHaveBeenCalledWith(
+			"language mismatch",
+			expect.objectContaining({ submitted: "es", detected: "en" })
+		)
+		warnSpy.mockRestore()
 	})
 
 	it("stores null language when detection cannot confidently identify a language", async () => {

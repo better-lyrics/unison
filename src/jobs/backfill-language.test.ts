@@ -89,11 +89,7 @@ const ENGLISH_LYRICS_SAMPLE = [
 
 describe("backfillLanguage", () => {
 	it("selects only rows where language and language_detection_attempted_at are NULL and the row is not deleted", async () => {
-		const db = makeMockDB([
-			[{ id: 1, lyrics: ENGLISH_LYRICS_SAMPLE, format: "plain" }],
-			null,
-			[],
-		])
+		const db = makeMockDB([[{ id: 1, lyrics: ENGLISH_LYRICS_SAMPLE, format: "plain" }], null, []])
 		const env = makeEnv(db, makeMockCache())
 
 		await backfillLanguage(env)
@@ -105,11 +101,7 @@ describe("backfillLanguage", () => {
 	})
 
 	it("stamps language and language_detection_attempted_at on successful detection", async () => {
-		const db = makeMockDB([
-			[{ id: 7, lyrics: ENGLISH_LYRICS_SAMPLE, format: "plain" }],
-			null,
-			[],
-		])
+		const db = makeMockDB([[{ id: 7, lyrics: ENGLISH_LYRICS_SAMPLE, format: "plain" }], null, []])
 		const env = makeEnv(db, makeMockCache())
 
 		await backfillLanguage(env)
@@ -150,5 +142,33 @@ describe("backfillLanguage", () => {
 
 		const updateCall = db.calls.find((c) => c.sql.includes("UPDATE lyrics"))
 		expect(updateCall!.params).toContain("en")
+	})
+
+	it("continues processing and stamps attempted_at when a row throws on decompress", async () => {
+		const valid = await compress(ENGLISH_LYRICS_SAMPLE)
+		const corruptedButLooksCompressed = "H4sIAAAAAA_NOTVALIDBASE64DATA"
+		const db = makeMockDB([
+			[
+				{ id: 100, lyrics: corruptedButLooksCompressed, format: "plain" },
+				{ id: 101, lyrics: valid, format: "plain" },
+			],
+			null,
+			null,
+			[],
+		])
+		const env = makeEnv(db, makeMockCache())
+
+		await backfillLanguage(env)
+
+		const updates = db.calls.filter((c) => c.sql.includes("UPDATE lyrics"))
+		expect(updates.length).toBeGreaterThanOrEqual(2)
+
+		const errStamp = updates.find((c) => c.params.includes(100))
+		expect(errStamp).toBeDefined()
+		expect(errStamp!.sql).toContain("language_detection_attempted_at = NOW()")
+
+		const successUpdate = updates.find((c) => c.params.includes(101))
+		expect(successUpdate).toBeDefined()
+		expect(successUpdate!.params).toContain("en")
 	})
 })
