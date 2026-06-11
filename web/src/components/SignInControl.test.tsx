@@ -35,7 +35,11 @@ function stubChromePort(makeResponse: (req: { type: string }) => unknown) {
               onMessageListener = l
             },
           },
-          onDisconnect: { addListener: (_l: () => void) => {} },
+          onDisconnect: {
+            addListener: (l: () => void) => {
+              if (info.name === "bl-probe") queueMicrotask(l)
+            },
+          },
           postMessage: (req: { type: string }) => {
             queueMicrotask(() => onMessageListener?.(makeResponse(req)))
           },
@@ -55,10 +59,14 @@ function stubChromePortDeferred(): { resolveAll: (response: unknown) => void } {
         name: info.name,
         onMessage: {
           addListener: (l: (m: unknown) => void) => {
-            listeners.push(l)
+            if (info.name === "bl-auth-site") listeners.push(l)
           },
         },
-        onDisconnect: { addListener: (_l: () => void) => {} },
+        onDisconnect: {
+          addListener: (l: () => void) => {
+            if (info.name === "bl-probe") queueMicrotask(l)
+          },
+        },
         postMessage: (_msg: unknown) => {},
         disconnect: () => {},
       }),

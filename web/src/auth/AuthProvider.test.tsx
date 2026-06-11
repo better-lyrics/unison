@@ -120,7 +120,9 @@ function stubChromePort(makeResponse: (req: { type: string }) => unknown) {
             },
           },
           onDisconnect: {
-            addListener: (_l: () => void) => {},
+            addListener: (l: () => void) => {
+              if (info.name === "bl-probe") queueMicrotask(l)
+            },
           },
           postMessage: (req: { type: string }) => {
             queueMicrotask(() => onMessageListener?.(makeResponse(req)))
@@ -129,6 +131,25 @@ function stubChromePort(makeResponse: (req: { type: string }) => unknown) {
         }
         return port
       },
+    },
+  })
+}
+
+function stubChromePortMissing() {
+  vi.stubGlobal("chrome", {
+    runtime: {
+      connect: (_id: string, info: { name: string }) => ({
+        name: info.name,
+        onMessage: { addListener: (_l: (m: unknown) => void) => {} },
+        onDisconnect: {
+          addListener: (l: () => void) => {
+            queueMicrotask(l)
+          },
+        },
+        postMessage: (_msg: unknown) => {},
+        disconnect: () => {},
+      }),
+      lastError: { message: "Could not establish connection. Receiving end does not exist." },
     },
   })
 }
@@ -144,9 +165,7 @@ interface DeferredPort {
 function stubChromePortDeferred(): {
   authConnectCount: () => number
   resolveAll: (response: unknown) => void
-  ports: () => DeferredPort[]
 } {
-  const ports: DeferredPort[] = []
   const listeners: ((m: unknown) => void)[] = []
   let authCount = 0
   vi.stubGlobal("chrome", {
@@ -160,11 +179,14 @@ function stubChromePortDeferred(): {
               if (info.name === "bl-auth-site") listeners.push(l)
             },
           },
-          onDisconnect: { addListener: (_l: () => void) => {} },
+          onDisconnect: {
+            addListener: (l: () => void) => {
+              if (info.name === "bl-probe") queueMicrotask(l)
+            },
+          },
           postMessage: (_msg: unknown) => {},
           disconnect: () => {},
         }
-        ports.push(port)
         return port
       },
     },
@@ -174,7 +196,6 @@ function stubChromePortDeferred(): {
     resolveAll: (response: unknown) => {
       for (const l of listeners) l(response)
     },
-    ports: () => ports,
   }
 }
 
@@ -366,6 +387,17 @@ describe("AuthProvider extension detection", () => {
   })
 
   it("exposes extensionAvailable=false when there is no chrome global", async () => {
+    render(
+      <AuthProvider>
+        <Probe />
+      </AuthProvider>,
+    )
+    await waitFor(() => expect(screen.getByTestId("status").textContent).toBe("signed-out"))
+    expect(screen.getByTestId("ext").textContent).toBe("false")
+  })
+
+  it("exposes extensionAvailable=false when the probe port disconnects with lastError", async () => {
+    stubChromePortMissing()
     render(
       <AuthProvider>
         <Probe />

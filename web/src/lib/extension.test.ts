@@ -305,37 +305,91 @@ describe("signInWithBetterLyrics", () => {
 })
 
 describe("detectBetterLyrics", () => {
-  it("returns 'unavailable' when chrome is undefined", () => {
-    expect(detectBetterLyrics()).toBe("unavailable")
-  })
-
-  it("returns 'unavailable' when chrome.runtime.connect is missing", () => {
-    vi.stubGlobal("chrome", { runtime: {} })
-    expect(detectBetterLyrics()).toBe("unavailable")
-  })
-
-  it("returns 'unavailable' when chrome.runtime.connect throws", () => {
-    vi.stubGlobal("chrome", {
-      runtime: {
-        connect: () => {
-          throw new Error("no extension")
-        },
-      },
+  describe("unavailable paths", () => {
+    it("resolves to 'unavailable' when chrome is undefined", async () => {
+      await expect(detectBetterLyrics()).resolves.toBe("unavailable")
     })
-    expect(detectBetterLyrics()).toBe("unavailable")
+
+    it("resolves to 'unavailable' when chrome.runtime.connect is missing", async () => {
+      vi.stubGlobal("chrome", { runtime: {} })
+      await expect(detectBetterLyrics()).resolves.toBe("unavailable")
+    })
+
+    it("resolves to 'unavailable' when chrome.runtime.connect throws synchronously", async () => {
+      vi.stubGlobal("chrome", {
+        runtime: {
+          connect: () => {
+            throw new Error("no extension")
+          },
+        },
+      })
+      await expect(detectBetterLyrics()).resolves.toBe("unavailable")
+    })
+
+    it("resolves to 'unavailable' when the port disconnects with lastError set", async () => {
+      let harness!: PortHarness
+      installChrome(
+        (_id, info) => {
+          harness = makePort(info.name)
+          return harness.port
+        },
+        { message: "Could not establish connection. Receiving end does not exist." },
+      )
+      const promise = detectBetterLyrics()
+      harness.fireDisconnect()
+      await expect(promise).resolves.toBe("unavailable")
+    })
   })
 
-  it("returns 'available' when connect returns a port", () => {
-    const harness = makePort("bl-probe")
-    installChrome(() => harness.port)
-    expect(detectBetterLyrics()).toBe("available")
-    expect(harness.isDisconnected()).toBe(true)
+  describe("available paths", () => {
+    it("resolves to 'available' when the port disconnects with no lastError", async () => {
+      let harness!: PortHarness
+      installChrome((_id, info) => {
+        harness = makePort(info.name)
+        return harness.port
+      })
+      const promise = detectBetterLyrics()
+      harness.fireDisconnect()
+      await expect(promise).resolves.toBe("available")
+    })
+
+    it("resolves to 'available' when no events fire before the timeout", async () => {
+      const harness = makePort("bl-probe")
+      installChrome(() => harness.port)
+      await expect(detectBetterLyrics(5)).resolves.toBe("available")
+    })
   })
 
-  it("uses the bl-probe port name (not bl-auth-site)", () => {
-    const harness = makePort("bl-probe")
-    const { connectCalls } = installChrome(() => harness.port)
-    detectBetterLyrics()
-    expect(connectCalls[0].info.name).toBe("bl-probe")
+  describe("invariants", () => {
+    it("uses the bl-probe port name (not bl-auth-site)", async () => {
+      let harness!: PortHarness
+      const { connectCalls } = installChrome((_id, info) => {
+        harness = makePort(info.name)
+        return harness.port
+      })
+      const promise = detectBetterLyrics()
+      harness.fireDisconnect()
+      await promise
+      expect(connectCalls[0].info.name).toBe("bl-probe")
+    })
+
+    it("disconnects the probe port after settling", async () => {
+      let harness!: PortHarness
+      installChrome((_id, info) => {
+        harness = makePort(info.name)
+        return harness.port
+      })
+      const promise = detectBetterLyrics()
+      harness.fireDisconnect()
+      await promise
+      expect(harness.isDisconnected()).toBe(true)
+    })
+
+    it("disconnects the probe port after the timeout fallback fires", async () => {
+      const harness = makePort("bl-probe")
+      installChrome(() => harness.port)
+      await detectBetterLyrics(5)
+      expect(harness.isDisconnected()).toBe(true)
+    })
   })
 })

@@ -50,8 +50,19 @@ interface AuthProviderProps {
 export function AuthProvider({ children }: AuthProviderProps) {
   const [phase, setPhase] = useState<Phase>({ kind: "loading" })
   const [signingIn, setSigningIn] = useState(false)
-  const [extensionAvailable] = useState(() => detectBetterLyrics() === "available")
+  const [extensionAvailable, setExtensionAvailable] = useState<boolean | null>(null)
   const signInLock = useRef(false)
+
+  useEffect(() => {
+    let cancelled = false
+    detectBetterLyrics().then((v) => {
+      if (cancelled) return
+      setExtensionAvailable(v === "available")
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   useEffect(() => {
     let cancelled = false
@@ -119,8 +130,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
   }, [])
 
   let state: SessionState
-  if (phase.kind === "loading") state = { status: "loading", extensionAvailable }
-  else if (phase.kind === "signed-in")
+  if (phase.kind === "loading" || extensionAvailable === null) {
+    state = { status: "loading", extensionAvailable: extensionAvailable ?? false }
+  } else if (phase.kind === "signed-in")
     state = {
       status: "signed-in",
       extensionAvailable,

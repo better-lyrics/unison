@@ -68,14 +68,37 @@ export function signInWithBetterLyrics(nonce: string): Promise<SignedBody> {
   })
 }
 
-export function detectBetterLyrics(): "available" | "unavailable" {
-  const runtime = getRuntime()
-  if (!runtime) return "unavailable"
-  try {
-    const port = runtime.connect(BL_EXTENSION_ID, { name: "bl-probe" })
-    port.disconnect()
-    return "available"
-  } catch {
-    return "unavailable"
-  }
+export function detectBetterLyrics(timeoutMs = 200): Promise<"available" | "unavailable"> {
+  return new Promise((resolve) => {
+    const runtime = getRuntime()
+    if (!runtime) {
+      resolve("unavailable")
+      return
+    }
+
+    let port: Port
+    try {
+      port = runtime.connect(BL_EXTENSION_ID, { name: "bl-probe" })
+    } catch {
+      resolve("unavailable")
+      return
+    }
+
+    let settled = false
+    const settle = (result: "available" | "unavailable") => {
+      if (settled) return
+      settled = true
+      try {
+        port.disconnect()
+      } catch {}
+      resolve(result)
+    }
+
+    const timer = setTimeout(() => settle("available"), timeoutMs)
+
+    port.onDisconnect.addListener(() => {
+      clearTimeout(timer)
+      settle(runtime.lastError ? "unavailable" : "available")
+    })
+  })
 }
