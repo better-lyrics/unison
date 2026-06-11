@@ -1,5 +1,7 @@
+import { francAll } from "franc"
 import { iso6393To1 } from "iso-639-3"
-import { ttmlParser } from "@/utils/extract-text"
+import type { LyricsFormat } from "@/types"
+import { extractPlainText, ttmlParser } from "@/utils/extract-text"
 
 const FRANC_INDIVIDUAL_TO_639_1: Record<string, string> = {
 	cmn: "zh",
@@ -42,4 +44,30 @@ export function extractTtmlLang(ttml: string): string | null {
 	}
 
 	return null
+}
+
+const MIN_LENGTH = 30
+const MIN_CONFIDENCE = 0.5
+
+export function detectLanguage(
+	lyrics: string,
+	format: LyricsFormat,
+	plainText?: string,
+): string | null {
+	if (format === "ttml") {
+		const meta = extractTtmlLang(lyrics)
+		if (meta) return meta
+	}
+
+	const text = plainText ?? extractPlainText(lyrics, format)
+	if (text.length < MIN_LENGTH) return null
+
+	const distinctChars = new Set(text.replace(/\s+/g, "")).size
+	if (distinctChars < 8) return null
+
+	const ranked = francAll(text, { minLength: MIN_LENGTH })
+	const [topCode, topScore] = ranked[0] ?? ["und", 0]
+	if (topCode === "und" || topScore < MIN_CONFIDENCE) return null
+
+	return mapTo639_1(topCode)
 }
