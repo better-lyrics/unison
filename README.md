@@ -25,6 +25,123 @@ All write operations require signed requests using ECDSA P-256:
 - `signature`: ECDSA signature over the canonical JSON payload
 - `publicKey`: Required on first request to register the key
 
+## Sign in with Better Lyrics
+
+The Better Lyrics browser extension owns the user's ECDSA P-256 keypair (the one whose `keyId` appears in API requests). To get that identity into a web client, the extension exposes a consent flow over a long-lived `chrome.runtime.Port`. The user clicks Approve in a popup the extension owns; the extension signs the challenge with the private key and posts the signed body back to the page.
+
+Once you have the signed body, treat `keyId` as the user identifier. For subsequent API write requests, the same keypair signs each request body.
+
+### Wire protocol
+
+Open a port named `bl-auth-site` to the extension. Send one message, wait for one response.
+
+Request:
+
+```ts
+{
+  type: "bl-auth-request",
+  nonce: string,  // 16+ chars; your backend issues and remembers it
+  origin: string, // must equal window.location.origin
+}
+```
+
+Success response:
+
+```ts
+{
+  ok: true,
+  signedBody: {
+    payload: {
+      origin: string,     // echoes your origin
+      timestamp: number,
+      nonce: string,      // echoes your nonce
+      keyId: string,
+    },
+    signature: string,    // base64
+    publicKey: JsonWebKey,
+  }
+}
+```
+
+Error responses share `{ ok: false, reason }` with `reason` being one of `ORIGIN_MISMATCH`, `INVALID_REQUEST`, `USER_CANCELLED`, `USER_DISMISSED`, `SIGN_FAILED`.
+
+The signature covers the canonical JSON of `payload` (sorted keys, no whitespace). Same canonicalization as the API request signing scheme above.
+
+### Client integration
+
+```ts
+const BL_EXTENSION_ID = "<chrome web store id>";
+
+async function signInWithBetterLyrics(): Promise<SignedBody> {
+  if (typeof chrome === "undefined" || !chrome.runtime?.connect) {
+    throw new Error("Better Lyrics extension not detected");
+  }
+
+  const { nonce } = await fetch("/auth/challenge").then(r => r.json());
+
+  return new Promise((resolve, reject) => {
+    let port: chrome.runtime.Port;
+    try {
+      port = chrome.runtime.connect(BL_EXTENSION_ID, { name: "bl-auth-site" });
+    } catch {
+      reject(new Error("Extension not installed or origin not allowed"));
+      return;
+    }
+
+    let settled = false;
+
+    port.onMessage.addListener(msg => {
+      if (settled) return;
+      settled = true;
+      if (msg.ok) resolve(msg.signedBody);
+      else reject(new Error(`Sign-in failed: ${msg.reason}`));
+      try { port.disconnect(); } catch {}
+    });
+
+    port.onDisconnect.addListener(() => {
+      if (settled) return;
+      settled = true;
+      reject(new Error(chrome.runtime.lastError?.message ?? "Port closed"));
+    });
+
+    port.postMessage({
+      type: "bl-auth-request",
+      nonce,
+      origin: window.location.origin,
+    });
+  });
+}
+```
+
+Listeners must attach before `postMessage`. The button that triggers this should disable itself until the promise resolves, since the consent UI takes a few seconds and a second click opens a second popup.
+
+### Server verification
+
+Verify the `signedBody` the same way per-request signatures are verified (see [Authentication](#authentication)):
+
+- `payload.nonce` matches one your backend issued and hasn't been used yet.
+- `payload.origin` matches the request origin.
+- `payload.timestamp` is within ±5 minutes of now.
+- ECDSA P-256 signature verifies against `publicKey` over the canonical JSON of `payload`.
+- SHA-256 of the normalized public key (only `crv`, `kty`, `x`, `y` fields, canonical JSON) matches `payload.keyId`.
+
+If all five pass, use `keyId` as the stable user identifier. Issue your session token or whatever your auth model expects.
+
+### Adding a new origin
+
+To talk to the extension from a new origin, open a PR against [better-lyrics/better-lyrics](https://github.com/better-lyrics/better-lyrics) that adds two entries:
+
+1. The origin (HTTPS only) to `manifest.json`'s `externally_connectable.matches`.
+2. An `AUTH_PARTNER_METADATA` entry in `src/core/constants.ts` with an `id` and an optional `iconUrl` for the consent popup's partner favicon.
+
+`unison.boidu.dev` and `blrcunison.vercel.app` are already on the allowlist.
+
+### Graceful degradation
+
+The synchronous `chrome.runtime.connect` call throws if the extension isn't installed or the origin isn't allowlisted. Catch it and show an "Install Better Lyrics" affordance pointing at the Chrome Web Store listing.
+
+Firefox does not support `externally_connectable` web-page messaging ([Bugzilla 1319168](https://bugzilla.mozilla.org/show_bug.cgi?id=1319168)). The flow is Chrome-only until that ships. Detect Firefox and offer a fallback or hide the sign-in button accordingly.
+
 ## API
 
 ### Get lyrics
