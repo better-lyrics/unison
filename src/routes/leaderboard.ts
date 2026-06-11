@@ -1,6 +1,7 @@
 import { Elysia, t } from "elysia"
 import { config } from "@/config"
 import {
+	CURATOR_LEADERBOARD_CACHE_KEY,
 	getCuratorLeaderboard,
 	getCuratorRank,
 	getMostWantedPage,
@@ -17,7 +18,7 @@ import { readRateLimit } from "@/utils/read-rate-limit"
 
 const SONGS_CACHE_KEY = "leaderboard:songs"
 const QUEUE_FIRST_PAGE_CACHE_KEY_PREFIX = "leaderboard:songs:queue:first"
-const USERS_CACHE_KEY = "leaderboard:users"
+const USERS_CACHE_KEY = CURATOR_LEADERBOARD_CACHE_KEY
 const QUEUE_DEFAULT_LIMIT = 20
 const QUEUE_MAX_LIMIT = 50
 const QUEUE_MIN_LIMIT = 1

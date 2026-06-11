@@ -1,3 +1,4 @@
+import { invalidateCuratorLeaderboardCache } from "@/db/leaderboard"
 import { invalidateCacheForSubmitter } from "@/db/lyrics"
 import type { Env, User } from "@/types"
 import { generatePetName } from "@/utils/petname"
@@ -58,6 +59,7 @@ export async function setNickname(
 		throw err
 	}
 	await invalidateCacheForSubmitter(env, keyId)
+	await invalidateCuratorLeaderboardCache(env)
 	return { ok: true }
 }
 
@@ -69,6 +71,7 @@ export async function clearNickname(env: Env, keyId: string): Promise<void> {
 		.bind(now, keyId)
 		.run()
 	await invalidateCacheForSubmitter(env, keyId)
+	await invalidateCuratorLeaderboardCache(env)
 }
 
 export async function updateUserAvgVote(env: Env, userId: number): Promise<void> {

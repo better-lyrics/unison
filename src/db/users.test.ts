@@ -195,7 +195,8 @@ describe("nickname mutations invalidate the per-video lyrics cache", () => {
 		const result = await setNickname(env, "k1", "Alex")
 
 		expect(result).toEqual({ ok: true })
-		expect(deleteCalls).toEqual(["v:vA", "v:vB"])
+		expect(deleteCalls).toContain("v:vA")
+		expect(deleteCalls).toContain("v:vB")
 		expect(db.calls[0].sql).toMatch(/^UPDATE users SET nickname/)
 		expect(db.calls[1].sql).toMatch(/SELECT\s+DISTINCT\s+l\.video_id/i)
 		expect(db.calls[1].params).toEqual(["k1"])
@@ -213,14 +214,14 @@ describe("nickname mutations invalidate the per-video lyrics cache", () => {
 		expect(db.calls).toHaveLength(1)
 	})
 
-	it("setNickname success with no submissions still runs the SELECT and deletes nothing", async () => {
+	it("setNickname success with no submissions still runs the SELECT", async () => {
 		const db = makeMockDB([null, []])
 		const { cache, deleteCalls } = makeRecordingCache()
 		const env = makeEnv(db, cache)
 
 		await setNickname(env, "k1", "Alex")
 
-		expect(deleteCalls).toEqual([])
+		expect(deleteCalls.filter((k) => k.startsWith("v:"))).toEqual([])
 		expect(db.calls).toHaveLength(2)
 	})
 
@@ -242,19 +243,19 @@ describe("nickname mutations invalidate the per-video lyrics cache", () => {
 
 		await clearNickname(env, "k1")
 
-		expect(deleteCalls).toEqual(["v:vX"])
+		expect(deleteCalls).toContain("v:vX")
 		expect(db.calls[0].sql).toMatch(/^UPDATE users SET nickname = NULL/)
 		expect(db.calls[1].sql).toMatch(/SELECT\s+DISTINCT\s+l\.video_id/i)
 	})
 
-	it("clearNickname with no submissions runs the SELECT and deletes nothing", async () => {
+	it("clearNickname with no submissions runs the SELECT", async () => {
 		const db = makeMockDB([null, []])
 		const { cache, deleteCalls } = makeRecordingCache()
 		const env = makeEnv(db, cache)
 
 		await clearNickname(env, "k1")
 
-		expect(deleteCalls).toEqual([])
+		expect(deleteCalls.filter((k) => k.startsWith("v:"))).toEqual([])
 		expect(db.calls).toHaveLength(2)
 	})
 
@@ -265,6 +266,36 @@ describe("nickname mutations invalidate the per-video lyrics cache", () => {
 
 		await setNickname(env, "k1", "NewName")
 
-		expect(deleteCalls).toEqual(["v:stale-video-1"])
+		expect(deleteCalls).toContain("v:stale-video-1")
+	})
+
+	it("setNickname success path evicts the curator leaderboard cache", async () => {
+		const db = makeMockDB([null, []])
+		const { cache, deleteCalls } = makeRecordingCache()
+		const env = makeEnv(db, cache)
+
+		await setNickname(env, "k1", "Alex")
+
+		expect(deleteCalls).toContain("leaderboard:users")
+	})
+
+	it("setNickname TAKEN path does not evict the curator leaderboard cache", async () => {
+		const db = makeMockDB([{ code: "23505" }])
+		const { cache, deleteCalls } = makeRecordingCache()
+		const env = makeEnv(db, cache)
+
+		await setNickname(env, "k1", "Alex")
+
+		expect(deleteCalls).not.toContain("leaderboard:users")
+	})
+
+	it("clearNickname evicts the curator leaderboard cache", async () => {
+		const db = makeMockDB([null, []])
+		const { cache, deleteCalls } = makeRecordingCache()
+		const env = makeEnv(db, cache)
+
+		await clearNickname(env, "k1")
+
+		expect(deleteCalls).toContain("leaderboard:users")
 	})
 })

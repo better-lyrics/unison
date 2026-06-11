@@ -3,6 +3,12 @@ import { AUTO_HIDE_PREDICATE, AUTO_HIDE_PREDICATE_JOINED, RANKING_EXPR } from "@
 import { windowCutoff } from "@/db/requests"
 import type { Env } from "@/types"
 
+export const CURATOR_LEADERBOARD_CACHE_KEY = "leaderboard:users"
+
+export async function invalidateCuratorLeaderboardCache(env: Env): Promise<void> {
+	await env.CACHE.delete(CURATOR_LEADERBOARD_CACHE_KEY)
+}
+
 export interface SongLeaderboardRow {
 	videoId: string
 	song: string
