@@ -1326,3 +1326,81 @@ describe("submitLyrics variant cap", () => {
 		expect(countCall!.sql).toMatch(/deleted_at\s+IS\s+NULL/i)
 	})
 })
+
+describe("submitLyrics language detection", () => {
+	const ENGLISH_LYRICS_SAMPLE = [
+		"In your arms I find the answer to every question",
+		"You whisper softly and the world begins to spin",
+		"Holding on tight to the moments we have together",
+		"Every heartbeat is a song that only we can hear",
+	].join("\n")
+
+	it("auto-detects language when submitter omits it", async () => {
+		const db = createMockDB([{ count: 0 }, { id: 42 }])
+		const cache = createMockCache()
+		const env = createEnv(db, cache)
+
+		const submission: LyricsSubmission = {
+			videoId: "vid42",
+			song: "Test",
+			artist: "Tester",
+			duration: 200,
+			lyrics: ENGLISH_LYRICS_SAMPLE,
+			format: "plain",
+			syncType: "plain",
+		}
+
+		await submitLyrics(env, submission, 1)
+
+		const insertCall = db.calls.find((c) => c.sql.includes("INSERT INTO lyrics"))
+		expect(insertCall).toBeDefined()
+		expect(insertCall!.sql).toContain("language")
+		expect(insertCall!.sql).toContain("language_detection_attempted_at")
+		expect(insertCall!.params).toContain("en")
+	})
+
+	it("preserves submitter language even when detection disagrees", async () => {
+		const db = createMockDB([{ count: 0 }, { id: 43 }])
+		const cache = createMockCache()
+		const env = createEnv(db, cache)
+
+		const submission: LyricsSubmission = {
+			videoId: "vid43",
+			song: "Test",
+			artist: "Tester",
+			duration: 200,
+			lyrics: ENGLISH_LYRICS_SAMPLE,
+			format: "plain",
+			syncType: "plain",
+			language: "es",
+		}
+
+		await submitLyrics(env, submission, 1)
+
+		const insertCall = db.calls.find((c) => c.sql.includes("INSERT INTO lyrics"))
+		expect(insertCall!.params).toContain("es")
+		expect(insertCall!.params).not.toContain("en")
+	})
+
+	it("stores null language when detection cannot confidently identify a language", async () => {
+		const db = createMockDB([{ count: 0 }, { id: 44 }])
+		const cache = createMockCache()
+		const env = createEnv(db, cache)
+
+		const submission: LyricsSubmission = {
+			videoId: "vid44",
+			song: "Instrumental",
+			artist: "Tester",
+			duration: 200,
+			lyrics: "oh oh oh",
+			format: "plain",
+			syncType: "plain",
+		}
+
+		await submitLyrics(env, submission, 1)
+
+		const insertCall = db.calls.find((c) => c.sql.includes("INSERT INTO lyrics"))
+		expect(insertCall!.sql).toContain("language_detection_attempted_at")
+		expect(insertCall!.params).toContain(null)
+	})
+})
