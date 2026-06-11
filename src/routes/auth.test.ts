@@ -830,6 +830,78 @@ describe("POST /auth/nickname/check", () => {
 		expect(json.data.reason).toBe("RESERVED")
 		expect(db.calls.find((c) => c.sql.includes("nickname_lower"))).toBeUndefined()
 	})
+
+	it("signed path: returns PROFANE for a profane nickname without hitting the DB lookup", async () => {
+		const cache = makeMockCache()
+		const { keyId, publicKey, body } = await buildSignedBody({ nickname: "FuckYou" })
+		const db = makeMockDB(registrationQueue(keyId, publicKey))
+		const env = makeEnvFull(db, cache)
+		const app = authRoutes(env)
+		const res = await app.handle(
+			new Request("http://localhost/auth/nickname/check", {
+				method: "POST",
+				headers: { "content-type": "application/json" },
+				body: JSON.stringify(body),
+			})
+		)
+		expect(res.status).toBe(200)
+		const json = (await res.json()) as {
+			success: true
+			data: { available: boolean; reason?: string }
+		}
+		expect(json.data.available).toBe(false)
+		expect(json.data.reason).toBe("PROFANE")
+		expect(db.calls.find((c) => c.sql.includes("nickname_lower"))).toBeUndefined()
+	})
+
+	it("bearer path: returns PROFANE for a leetspeak profanity variant", async () => {
+		const keyId = "a".repeat(64)
+		const cache = makeMockCache()
+		seedSession(cache, "tok", keyId)
+		const db = makeMockDB([
+			{ id: 1, key_id: keyId, reputation: 1.0, vote_count: 0, avg_vote: 0, created_at: 0 },
+		])
+		const env = makeEnvFull(db, cache)
+		const app = authRoutes(env)
+		const res = await app.handle(
+			new Request("http://localhost/auth/nickname/check", {
+				method: "POST",
+				headers: { authorization: "Bearer tok", "content-type": "application/json" },
+				body: JSON.stringify({ nickname: "sh1t" }),
+			})
+		)
+		const json = (await res.json()) as {
+			success: true
+			data: { available: boolean; reason?: string }
+		}
+		expect(json.data.available).toBe(false)
+		expect(json.data.reason).toBe("PROFANE")
+	})
+
+	it("does not false-positive on substring matches like Hassan", async () => {
+		const keyId = "a".repeat(64)
+		const cache = makeMockCache()
+		seedSession(cache, "tok", keyId)
+		const db = makeMockDB([
+			{ id: 1, key_id: keyId, reputation: 1.0, vote_count: 0, avg_vote: 0, created_at: 0 },
+			null,
+		])
+		const env = makeEnvFull(db, cache)
+		const app = authRoutes(env)
+		const res = await app.handle(
+			new Request("http://localhost/auth/nickname/check", {
+				method: "POST",
+				headers: { authorization: "Bearer tok", "content-type": "application/json" },
+				body: JSON.stringify({ nickname: "Hassan" }),
+			})
+		)
+		const json = (await res.json()) as {
+			success: true
+			data: { available: boolean; reason?: string }
+		}
+		expect(json.data.available).toBe(true)
+		expect(json.data.reason).toBeUndefined()
+	})
 })
 
 describe("PUT /auth/nickname", () => {
@@ -1045,6 +1117,25 @@ describe("PUT /auth/nickname", () => {
 		expect(res.status).toBe(409)
 		const json = (await res.json()) as { success: boolean; error: string }
 		expect(json.error).toBe("NICKNAME_RESERVED")
+	})
+
+	it("409 NICKNAME_PROFANE when the nickname is profane", async () => {
+		const cache = makeMockCache()
+		const { keyId, publicKey, body } = await buildBody({ nickname: "FuckYou" })
+		const db = makeMockDB(registrationQueue(keyId, publicKey))
+		const env = makeEnvFull(db, cache)
+		const app = authRoutes(env)
+		const res = await app.handle(
+			new Request("http://localhost/auth/nickname", {
+				method: "PUT",
+				headers: { "content-type": "application/json" },
+				body: JSON.stringify(body),
+			})
+		)
+		expect(res.status).toBe(409)
+		const json = (await res.json()) as { success: boolean; error: string }
+		expect(json.error).toBe("NICKNAME_PROFANE")
+		expect(db.calls.find((c) => c.sql.startsWith("UPDATE users"))).toBeUndefined()
 	})
 })
 

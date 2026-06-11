@@ -4,6 +4,7 @@ import { clearNickname, resolveDisplayName, setNickname } from "@/db/users"
 import type { Env } from "@/types"
 import { signedRequest } from "@/utils/auth"
 import { eitherAuth } from "@/utils/either-auth"
+import { isProfane } from "@/utils/profanity"
 import { readRateLimit } from "@/utils/read-rate-limit"
 import { createSession, deleteSession, getSession } from "@/utils/session"
 
@@ -82,6 +83,9 @@ export const authRoutes = (env: Env) =>
 					if (config.auth.nickname.reserved.has(name.toLowerCase())) {
 						return { success: true, data: { available: false, reason: "RESERVED" } }
 					}
+					if (isProfane(name)) {
+						return { success: true, data: { available: false, reason: "PROFANE" } }
+					}
 
 					const row = await env.DB.prepare("SELECT key_id FROM users WHERE nickname_lower = ?")
 						.bind(name.toLowerCase())
@@ -113,6 +117,10 @@ export const authRoutes = (env: Env) =>
 					if (config.auth.nickname.reserved.has(nickname.toLowerCase())) {
 						set.status = 409
 						return { success: false, error: "NICKNAME_RESERVED" }
+					}
+					if (isProfane(nickname)) {
+						set.status = 409
+						return { success: false, error: "NICKNAME_PROFANE" }
 					}
 
 					const result = await setNickname(env, keyId, nickname)
