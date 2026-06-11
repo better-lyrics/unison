@@ -24,9 +24,14 @@ function Probe() {
         </button>
       ) : null}
       {session.status === "signed-in" ? (
-        <button type="button" onClick={() => session.signOut()}>
-          sign-out
-        </button>
+        <>
+          <button type="button" onClick={() => session.signOut()}>
+            sign-out
+          </button>
+          <button type="button" onClick={() => session.updateDisplayName("Renamed")}>
+            rename
+          </button>
+        </>
       ) : null}
     </>
   )
@@ -230,6 +235,32 @@ describe("AuthProvider signOut", () => {
         headers: expect.objectContaining({ authorization: `Bearer ${valid.sessionToken}` }),
       }),
     )
+  })
+
+  it("updateDisplayName rewrites the rendered name and persists to storage", async () => {
+    saveStoredSession(valid)
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          success: true,
+          data: { keyId: valid.keyId, displayName: valid.displayName, expiresAt: valid.expiresAt },
+        }),
+        { status: 200 },
+      ),
+    )
+    vi.stubGlobal("fetch", fetchMock)
+    render(
+      <AuthProvider>
+        <Probe />
+      </AuthProvider>,
+    )
+    await waitFor(() => expect(screen.getByTestId("name").textContent).toBe(valid.displayName))
+    await act(async () => {
+      screen.getByText("rename").click()
+    })
+    await waitFor(() => expect(screen.getByTestId("name").textContent).toBe("Renamed"))
+    const stored = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? "{}") as { displayName: string }
+    expect(stored.displayName).toBe("Renamed")
   })
 
   it("still signs the user out locally when the revoke fetch fails", async () => {

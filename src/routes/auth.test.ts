@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest"
 import type { Env } from "@/types"
 import { canonicalJson, hashPublicKey } from "@/utils/crypto"
+import { generatePetName } from "@/utils/petname"
 import { authRoutes } from "./auth"
 
 function makeMockCache(seed: Record<string, string> = {}) {
@@ -88,7 +89,13 @@ function makeMockDB(queue: unknown[] = []) {
 						},
 						async run(): Promise<void> {
 							calls.push({ sql, params: args })
-							queue.shift()
+							const next = queue.shift()
+							if (
+								next instanceof Error ||
+								(next && typeof next === "object" && "code" in next)
+							) {
+								throw next
+							}
 						},
 					}
 				},
@@ -245,6 +252,7 @@ describe("POST /auth/session", () => {
 		const second = await buildBody({ nonce: validNonce, origin: "https://example.com" })
 		const db = makeMockDB([
 			...registrationQueue(first.keyId, first.publicKey),
+			{ nickname: null },
 			...registrationQueue(second.keyId, second.publicKey),
 		])
 		const env = makeEnvFull(db, cache)
@@ -334,6 +342,32 @@ describe("POST /auth/session", () => {
 		const json = (await res.json()) as { error: string }
 		expect(json.error).toBe("ORIGIN_MISMATCH")
 	})
+
+	it("/session reflects a custom nickname when users.nickname is set", async () => {
+		const cache = makeMockCache({ [`challenge:${validNonce}`]: "1" })
+		const { keyId, publicKey, body } = await buildBody({
+			nonce: validNonce,
+			origin: "https://example.com",
+		})
+		const db = makeMockDB([...registrationQueue(keyId, publicKey), { nickname: "Brook" }])
+		const env = makeEnvFull(db, cache)
+		const app = authRoutes(env)
+		const res = await app.handle(
+			new Request("http://localhost/auth/session", {
+				method: "POST",
+				headers: { "content-type": "application/json", origin: "https://example.com" },
+				body: JSON.stringify(body),
+			})
+		)
+		expect(res.status).toBe(200)
+		const json = (await res.json()) as {
+			success: boolean
+			data: { sessionToken: string; keyId: string; displayName: string; expiresAt: number }
+		}
+		expect(json.success).toBe(true)
+		expect(json.data.keyId).toBe(keyId)
+		expect(json.data.displayName).toBe("Brook")
+	})
 })
 
 describe("POST /auth/logout", () => {
@@ -401,7 +435,8 @@ describe("GET /auth/me", () => {
 			value: JSON.stringify({ keyId, issuedAt, expiresAt: issuedAt + ttl }),
 			ttl,
 		})
-		const env = makeEnv(cache)
+		const db = makeMockDB([{ nickname: null }])
+		const env = makeEnvFull(db, cache)
 		const app = authRoutes(env)
 		const res = await app.handle(
 			new Request("http://localhost/auth/me", {
@@ -433,5 +468,1047 @@ describe("GET /auth/me", () => {
 			})
 		)
 		expect(res.status).toBe(401)
+	})
+
+	it("/me reflects a custom nickname when users.nickname is set", async () => {
+		const cache = makeMockCache()
+		const keyId = "e".repeat(64)
+		const ttl = 30 * 24 * 60 * 60
+		const issuedAt = Math.floor(Date.now() / 1000)
+		cache.store.set("session:tok-nick", {
+			value: JSON.stringify({ keyId, issuedAt, expiresAt: issuedAt + ttl }),
+			ttl,
+		})
+		const db = makeMockDB([{ nickname: "Alex" }])
+		const env = makeEnvFull(db, cache)
+		const app = authRoutes(env)
+		const res = await app.handle(
+			new Request("http://localhost/auth/me", {
+				headers: { authorization: "Bearer tok-nick" },
+			})
+		)
+		expect(res.status).toBe(200)
+		const json = (await res.json()) as {
+			data: { keyId: string; displayName: string; expiresAt: number }
+		}
+		expect(json.data.keyId).toBe(keyId)
+		expect(json.data.displayName).toBe("Alex")
+	})
+})
+
+describe("POST /auth/nickname/check", () => {
+	function seedSession(cache: ReturnType<typeof makeMockCache>, token: string, keyId: string) {
+		const ttl = 30 * 24 * 60 * 60
+		const issuedAt = Math.floor(Date.now() / 1000)
+		cache.store.set(`session:${token}`, {
+			value: JSON.stringify({ keyId, issuedAt, expiresAt: issuedAt + ttl }),
+			ttl,
+		})
+	}
+
+	async function buildSignedBody(opts: { nickname: unknown; timestamp?: number }) {
+		const { pair, publicKey, keyId } = await makeIdentity()
+		const nonce = "chk-".padEnd(24, "x")
+		const payload = {
+			nonce,
+			keyId,
+			nickname: opts.nickname,
+			timestamp: opts.timestamp ?? Date.now(),
+		}
+		const signature = await signPayload(pair.privateKey, payload)
+		return { keyId, publicKey, body: { payload, signature, publicKey } }
+	}
+
+	function registrationQueue(keyId: string, publicKey: JsonWebKey): unknown[] {
+		return [
+			null,
+			null,
+			{ key_id: keyId, public_key: JSON.stringify(publicKey), created_at: 0 },
+			null,
+			{ id: 1, key_id: keyId, reputation: 1.0, vote_count: 0, avg_vote: 0, created_at: 0 },
+		]
+	}
+
+	it("bearer path: 401 AUTH_REQUIRED when bearer is unknown", async () => {
+		const cache = makeMockCache()
+		const db = makeMockDB([])
+		const env = makeEnvFull(db, cache)
+		const app = authRoutes(env)
+		const res = await app.handle(
+			new Request("http://localhost/auth/nickname/check", {
+				method: "POST",
+				headers: { authorization: "Bearer nope", "content-type": "application/json" },
+				body: JSON.stringify({ nickname: "alex" }),
+			})
+		)
+		expect(res.status).toBe(401)
+		const json = (await res.json()) as { code: string }
+		expect(json.code).toBe("AUTH_REQUIRED")
+	})
+
+	it("bearer path: 200 INVALID_FORMAT for too short", async () => {
+		const cache = makeMockCache()
+		seedSession(cache, "tok", "a".repeat(64))
+		const db = makeMockDB([
+			{ id: 1, key_id: "a".repeat(64), reputation: 1.0, vote_count: 0, avg_vote: 0, created_at: 0 },
+		])
+		const env = makeEnvFull(db, cache)
+		const app = authRoutes(env)
+		const res = await app.handle(
+			new Request("http://localhost/auth/nickname/check", {
+				method: "POST",
+				headers: { authorization: "Bearer tok", "content-type": "application/json" },
+				body: JSON.stringify({ nickname: "ab" }),
+			})
+		)
+		expect(res.status).toBe(200)
+		const json = (await res.json()) as {
+			success: true
+			data: { available: boolean; reason?: string }
+		}
+		expect(json.data.available).toBe(false)
+		expect(json.data.reason).toBe("INVALID_FORMAT")
+	})
+
+	it("bearer path: 200 INVALID_FORMAT for spaces", async () => {
+		const cache = makeMockCache()
+		seedSession(cache, "tok", "a".repeat(64))
+		const db = makeMockDB([
+			{ id: 1, key_id: "a".repeat(64), reputation: 1.0, vote_count: 0, avg_vote: 0, created_at: 0 },
+		])
+		const env = makeEnvFull(db, cache)
+		const app = authRoutes(env)
+		const res = await app.handle(
+			new Request("http://localhost/auth/nickname/check", {
+				method: "POST",
+				headers: { authorization: "Bearer tok", "content-type": "application/json" },
+				body: JSON.stringify({ nickname: "a b" }),
+			})
+		)
+		expect(res.status).toBe(200)
+		const json = (await res.json()) as {
+			success: true
+			data: { available: boolean; reason?: string }
+		}
+		expect(json.data.available).toBe(false)
+		expect(json.data.reason).toBe("INVALID_FORMAT")
+	})
+
+	it("bearer path: 200 available:true for unused name", async () => {
+		const keyId = "a".repeat(64)
+		const cache = makeMockCache()
+		seedSession(cache, "tok", keyId)
+		const db = makeMockDB([
+			{ id: 1, key_id: keyId, reputation: 1.0, vote_count: 0, avg_vote: 0, created_at: 0 },
+			null,
+		])
+		const env = makeEnvFull(db, cache)
+		const app = authRoutes(env)
+		const res = await app.handle(
+			new Request("http://localhost/auth/nickname/check", {
+				method: "POST",
+				headers: { authorization: "Bearer tok", "content-type": "application/json" },
+				body: JSON.stringify({ nickname: "alex" }),
+			})
+		)
+		expect(res.status).toBe(200)
+		const json = (await res.json()) as {
+			success: true
+			data: { available: boolean; reason?: string }
+		}
+		expect(json.data.available).toBe(true)
+		expect(json.data.reason).toBeUndefined()
+		const lookupCall = db.calls.find((c) => c.sql.includes("nickname_lower"))
+		expect(lookupCall?.params).toEqual(["alex"])
+	})
+
+	it("bearer path: 200 TAKEN when another user holds it case-insensitively", async () => {
+		const callerKeyId = "a".repeat(64)
+		const ownerKeyId = "b".repeat(64)
+		const cache = makeMockCache()
+		seedSession(cache, "tok", callerKeyId)
+		const db = makeMockDB([
+			{ id: 1, key_id: callerKeyId, reputation: 1.0, vote_count: 0, avg_vote: 0, created_at: 0 },
+			{ key_id: ownerKeyId },
+		])
+		const env = makeEnvFull(db, cache)
+		const app = authRoutes(env)
+		const res = await app.handle(
+			new Request("http://localhost/auth/nickname/check", {
+				method: "POST",
+				headers: { authorization: "Bearer tok", "content-type": "application/json" },
+				body: JSON.stringify({ nickname: "Alex" }),
+			})
+		)
+		expect(res.status).toBe(200)
+		const json = (await res.json()) as {
+			success: true
+			data: { available: boolean; reason?: string }
+		}
+		expect(json.data.available).toBe(false)
+		expect(json.data.reason).toBe("TAKEN")
+		const lookupCall = db.calls.find((c) => c.sql.includes("nickname_lower"))
+		expect(lookupCall?.params).toEqual(["alex"])
+	})
+
+	it("bearer path: 200 SELF when caller holds it", async () => {
+		const callerKeyId = "c".repeat(64)
+		const cache = makeMockCache()
+		seedSession(cache, "tok", callerKeyId)
+		const db = makeMockDB([
+			{ id: 1, key_id: callerKeyId, reputation: 1.0, vote_count: 0, avg_vote: 0, created_at: 0 },
+			{ key_id: callerKeyId },
+		])
+		const env = makeEnvFull(db, cache)
+		const app = authRoutes(env)
+		const res = await app.handle(
+			new Request("http://localhost/auth/nickname/check", {
+				method: "POST",
+				headers: { authorization: "Bearer tok", "content-type": "application/json" },
+				body: JSON.stringify({ nickname: "Alex" }),
+			})
+		)
+		expect(res.status).toBe(200)
+		const json = (await res.json()) as {
+			success: true
+			data: { available: boolean; reason?: string }
+		}
+		expect(json.data.available).toBe(true)
+		expect(json.data.reason).toBe("SELF")
+	})
+
+	it("bearer path: 429 when budget exhausted", async () => {
+		const keyId = "a".repeat(64)
+		const cache = makeMockCache()
+		seedSession(cache, "tok", keyId)
+		const db = makeMockDB([
+			{ id: 1, key_id: keyId, reputation: 1.0, vote_count: 0, avg_vote: 0, created_at: 0 },
+		])
+		const limiter = {
+			async limit(opts: { key: string }) {
+				if (opts.key.startsWith("nickname_check:")) return { success: false }
+				return { success: true }
+			},
+		}
+		const env: Env & { cache: ReturnType<typeof makeMockCache> } = {
+			DB: db as unknown as Env["DB"],
+			CACHE: cache as unknown as Env["CACHE"],
+			RATE_LIMITER: limiter as unknown as Env["RATE_LIMITER"],
+			READ_RATE_LIMITER: {
+				async limit() {
+					return { success: true }
+				},
+			} as unknown as Env["READ_RATE_LIMITER"],
+			CACHE_TTL_SECONDS: "300",
+			DUMPS_ENABLED: false,
+			DUMP_PUBLIC_BASE_URL: "",
+			DUMP_DATABASE_URL: null,
+			B2: null,
+			cache,
+		}
+		const app = authRoutes(env)
+		const res = await app.handle(
+			new Request("http://localhost/auth/nickname/check", {
+				method: "POST",
+				headers: { authorization: "Bearer tok", "content-type": "application/json" },
+				body: JSON.stringify({ nickname: "alex" }),
+			})
+		)
+		expect(res.status).toBe(429)
+		const json = (await res.json()) as { success: boolean; error: string }
+		expect(json.success).toBe(false)
+		expect(json.error).toBe("RATE_LIMITED")
+	})
+
+	it("signed path: rejects unsigned bodies with 400 INVALID_SIGNED_BODY", async () => {
+		const cache = makeMockCache()
+		const db = makeMockDB([])
+		const env = makeEnvFull(db, cache)
+		const app = authRoutes(env)
+		const res = await app.handle(
+			new Request("http://localhost/auth/nickname/check", {
+				method: "POST",
+				headers: { "content-type": "application/json" },
+				body: JSON.stringify({ nickname: "alex" }),
+			})
+		)
+		expect(res.status).toBe(400)
+		const json = (await res.json()) as { code: string }
+		expect(json.code).toBe("INVALID_SIGNED_BODY")
+	})
+
+	it("signed path: 200 available:true for unused name via signed envelope", async () => {
+		const cache = makeMockCache()
+		const { keyId, publicKey, body } = await buildSignedBody({ nickname: "Alex" })
+		const db = makeMockDB([...registrationQueue(keyId, publicKey), null])
+		const env = makeEnvFull(db, cache)
+		const app = authRoutes(env)
+		const res = await app.handle(
+			new Request("http://localhost/auth/nickname/check", {
+				method: "POST",
+				headers: { "content-type": "application/json" },
+				body: JSON.stringify(body),
+			})
+		)
+		expect(res.status).toBe(200)
+		const json = (await res.json()) as {
+			success: true
+			data: { available: boolean; reason?: string }
+		}
+		expect(json.success).toBe(true)
+		expect(json.data.available).toBe(true)
+		expect(json.data.reason).toBeUndefined()
+		const lookupCall = db.calls.find((c) => c.sql.includes("nickname_lower"))
+		expect(lookupCall?.params).toEqual(["alex"])
+	})
+
+	it("signed path: returns RESERVED for a reserved nickname without hitting the DB lookup", async () => {
+		const cache = makeMockCache()
+		const { keyId, publicKey, body } = await buildSignedBody({ nickname: "admin" })
+		const db = makeMockDB(registrationQueue(keyId, publicKey))
+		const env = makeEnvFull(db, cache)
+		const app = authRoutes(env)
+		const res = await app.handle(
+			new Request("http://localhost/auth/nickname/check", {
+				method: "POST",
+				headers: { "content-type": "application/json" },
+				body: JSON.stringify(body),
+			})
+		)
+		expect(res.status).toBe(200)
+		const json = (await res.json()) as {
+			success: true
+			data: { available: boolean; reason?: string }
+		}
+		expect(json.data.available).toBe(false)
+		expect(json.data.reason).toBe("RESERVED")
+		expect(db.calls.find((c) => c.sql.includes("nickname_lower"))).toBeUndefined()
+	})
+
+	it("signed path: reserved check is case-insensitive", async () => {
+		const cache = makeMockCache()
+		const { keyId, publicKey, body } = await buildSignedBody({ nickname: "ADMIN" })
+		const db = makeMockDB(registrationQueue(keyId, publicKey))
+		const env = makeEnvFull(db, cache)
+		const app = authRoutes(env)
+		const res = await app.handle(
+			new Request("http://localhost/auth/nickname/check", {
+				method: "POST",
+				headers: { "content-type": "application/json" },
+				body: JSON.stringify(body),
+			})
+		)
+		const json = (await res.json()) as {
+			success: true
+			data: { available: boolean; reason?: string }
+		}
+		expect(json.data.available).toBe(false)
+		expect(json.data.reason).toBe("RESERVED")
+	})
+
+	it("bearer path: returns RESERVED for a reserved nickname", async () => {
+		const keyId = "a".repeat(64)
+		const cache = makeMockCache()
+		seedSession(cache, "tok", keyId)
+		const db = makeMockDB([
+			{ id: 1, key_id: keyId, reputation: 1.0, vote_count: 0, avg_vote: 0, created_at: 0 },
+		])
+		const env = makeEnvFull(db, cache)
+		const app = authRoutes(env)
+		const res = await app.handle(
+			new Request("http://localhost/auth/nickname/check", {
+				method: "POST",
+				headers: { authorization: "Bearer tok", "content-type": "application/json" },
+				body: JSON.stringify({ nickname: "admin" }),
+			})
+		)
+		const json = (await res.json()) as {
+			success: true
+			data: { available: boolean; reason?: string }
+		}
+		expect(json.data.available).toBe(false)
+		expect(json.data.reason).toBe("RESERVED")
+		expect(db.calls.find((c) => c.sql.includes("nickname_lower"))).toBeUndefined()
+	})
+
+	it("signed path: returns PROFANE for a profane nickname without hitting the DB lookup", async () => {
+		const cache = makeMockCache()
+		const { keyId, publicKey, body } = await buildSignedBody({ nickname: "FuckYou" })
+		const db = makeMockDB(registrationQueue(keyId, publicKey))
+		const env = makeEnvFull(db, cache)
+		const app = authRoutes(env)
+		const res = await app.handle(
+			new Request("http://localhost/auth/nickname/check", {
+				method: "POST",
+				headers: { "content-type": "application/json" },
+				body: JSON.stringify(body),
+			})
+		)
+		expect(res.status).toBe(200)
+		const json = (await res.json()) as {
+			success: true
+			data: { available: boolean; reason?: string }
+		}
+		expect(json.data.available).toBe(false)
+		expect(json.data.reason).toBe("PROFANE")
+		expect(db.calls.find((c) => c.sql.includes("nickname_lower"))).toBeUndefined()
+	})
+
+	it("bearer path: returns PROFANE for a leetspeak profanity variant", async () => {
+		const keyId = "a".repeat(64)
+		const cache = makeMockCache()
+		seedSession(cache, "tok", keyId)
+		const db = makeMockDB([
+			{ id: 1, key_id: keyId, reputation: 1.0, vote_count: 0, avg_vote: 0, created_at: 0 },
+		])
+		const env = makeEnvFull(db, cache)
+		const app = authRoutes(env)
+		const res = await app.handle(
+			new Request("http://localhost/auth/nickname/check", {
+				method: "POST",
+				headers: { authorization: "Bearer tok", "content-type": "application/json" },
+				body: JSON.stringify({ nickname: "sh1t" }),
+			})
+		)
+		const json = (await res.json()) as {
+			success: true
+			data: { available: boolean; reason?: string }
+		}
+		expect(json.data.available).toBe(false)
+		expect(json.data.reason).toBe("PROFANE")
+	})
+
+	it("does not false-positive on substring matches like Hassan", async () => {
+		const keyId = "a".repeat(64)
+		const cache = makeMockCache()
+		seedSession(cache, "tok", keyId)
+		const db = makeMockDB([
+			{ id: 1, key_id: keyId, reputation: 1.0, vote_count: 0, avg_vote: 0, created_at: 0 },
+			null,
+		])
+		const env = makeEnvFull(db, cache)
+		const app = authRoutes(env)
+		const res = await app.handle(
+			new Request("http://localhost/auth/nickname/check", {
+				method: "POST",
+				headers: { authorization: "Bearer tok", "content-type": "application/json" },
+				body: JSON.stringify({ nickname: "Hassan" }),
+			})
+		)
+		const json = (await res.json()) as {
+			success: true
+			data: { available: boolean; reason?: string }
+		}
+		expect(json.data.available).toBe(true)
+		expect(json.data.reason).toBeUndefined()
+	})
+})
+
+describe("PUT /auth/nickname", () => {
+	async function buildBody(opts: { nickname: unknown; timestamp?: number }) {
+		const { pair, publicKey, keyId } = await makeIdentity()
+		const nonce = "nick-".padEnd(24, "x")
+		const payload = {
+			nonce,
+			keyId,
+			nickname: opts.nickname,
+			timestamp: opts.timestamp ?? Date.now(),
+		}
+		const signature = await signPayload(pair.privateKey, payload)
+		return { keyId, publicKey, body: { payload, signature, publicKey } }
+	}
+
+	function registrationQueue(keyId: string, publicKey: JsonWebKey): unknown[] {
+		return [
+			null,
+			null,
+			{ key_id: keyId, public_key: JSON.stringify(publicKey), created_at: 0 },
+			null,
+			{ id: 1, key_id: keyId, reputation: 1.0, vote_count: 0, avg_vote: 0, created_at: 0 },
+		]
+	}
+
+	it("rejects unsigned requests with 400 INVALID_SIGNED_BODY", async () => {
+		const cache = makeMockCache()
+		const db = makeMockDB([])
+		const env = makeEnvFull(db, cache)
+		const app = authRoutes(env)
+		const res = await app.handle(
+			new Request("http://localhost/auth/nickname", {
+				method: "PUT",
+				headers: { "content-type": "application/json" },
+				body: JSON.stringify({ nickname: "Alex" }),
+			})
+		)
+		expect(res.status).toBe(400)
+		const json = (await res.json()) as { code: string }
+		expect(json.code).toBe("INVALID_SIGNED_BODY")
+	})
+
+	it("400 INVALID_FORMAT when nickname violates the regex", async () => {
+		const cache = makeMockCache()
+		const { keyId, publicKey, body } = await buildBody({ nickname: "a b" })
+		const db = makeMockDB(registrationQueue(keyId, publicKey))
+		const env = makeEnvFull(db, cache)
+		const app = authRoutes(env)
+		const res = await app.handle(
+			new Request("http://localhost/auth/nickname", {
+				method: "PUT",
+				headers: { "content-type": "application/json" },
+				body: JSON.stringify(body),
+			})
+		)
+		expect(res.status).toBe(400)
+		const json = (await res.json()) as { success: boolean; error: string }
+		expect(json.success).toBe(false)
+		expect(json.error).toBe("INVALID_FORMAT")
+	})
+
+	it("200 round-trip: PUT returns the new displayName", async () => {
+		const cache = makeMockCache()
+		const { keyId, publicKey, body } = await buildBody({ nickname: "Alex" })
+		const db = makeMockDB([
+			...registrationQueue(keyId, publicKey),
+			null,
+			[],
+			{ nickname: "Alex" },
+		])
+		const env = makeEnvFull(db, cache)
+		const app = authRoutes(env)
+		const res = await app.handle(
+			new Request("http://localhost/auth/nickname", {
+				method: "PUT",
+				headers: { "content-type": "application/json" },
+				body: JSON.stringify(body),
+			})
+		)
+		expect(res.status).toBe(200)
+		const json = (await res.json()) as {
+			success: boolean
+			data: { keyId: string; displayName: string }
+		}
+		expect(json.success).toBe(true)
+		expect(json.data.keyId).toBe(keyId)
+		expect(json.data.displayName).toBe("Alex")
+	})
+
+	it("409 NICKNAME_TAKEN when another user holds it (case-insensitive)", async () => {
+		const cache = makeMockCache()
+		const { keyId, publicKey, body } = await buildBody({ nickname: "alex" })
+		const db = makeMockDB([
+			...registrationQueue(keyId, publicKey),
+			{ code: "23505" },
+		])
+		const env = makeEnvFull(db, cache)
+		const app = authRoutes(env)
+		const res = await app.handle(
+			new Request("http://localhost/auth/nickname", {
+				method: "PUT",
+				headers: { "content-type": "application/json" },
+				body: JSON.stringify(body),
+			})
+		)
+		expect(res.status).toBe(409)
+		const json = (await res.json()) as { success: boolean; error: string }
+		expect(json.success).toBe(false)
+		expect(json.error).toBe("NICKNAME_TAKEN")
+	})
+
+	it("200 when the same user re-submits their own nickname", async () => {
+		const cache = makeMockCache()
+		const { keyId, publicKey, body } = await buildBody({ nickname: "Alex" })
+		const db = makeMockDB([
+			...registrationQueue(keyId, publicKey),
+			null,
+			[],
+			{ nickname: "Alex" },
+		])
+		const env = makeEnvFull(db, cache)
+		const app = authRoutes(env)
+		const res = await app.handle(
+			new Request("http://localhost/auth/nickname", {
+				method: "PUT",
+				headers: { "content-type": "application/json" },
+				body: JSON.stringify(body),
+			})
+		)
+		expect(res.status).toBe(200)
+		const json = (await res.json()) as {
+			success: boolean
+			data: { keyId: string; displayName: string }
+		}
+		expect(json.success).toBe(true)
+		expect(json.data.displayName).toBe("Alex")
+	})
+
+	it("429 RATE_LIMITED when the write bucket is exhausted", async () => {
+		const cache = makeMockCache()
+		const { keyId, publicKey, body } = await buildBody({ nickname: "Alex" })
+		const db = makeMockDB(registrationQueue(keyId, publicKey))
+		const limiter = {
+			async limit(opts: { key: string }) {
+				if (opts.key.startsWith("nickname_write:")) return { success: false }
+				return { success: true }
+			},
+		}
+		const env: Env & { cache: ReturnType<typeof makeMockCache> } = {
+			DB: db as unknown as Env["DB"],
+			CACHE: cache as unknown as Env["CACHE"],
+			RATE_LIMITER: limiter as unknown as Env["RATE_LIMITER"],
+			READ_RATE_LIMITER: {
+				async limit() {
+					return { success: true }
+				},
+			} as unknown as Env["READ_RATE_LIMITER"],
+			CACHE_TTL_SECONDS: "300",
+			DUMPS_ENABLED: false,
+			DUMP_PUBLIC_BASE_URL: "",
+			DUMP_DATABASE_URL: null,
+			B2: null,
+			cache,
+		}
+		const app = authRoutes(env)
+		const res = await app.handle(
+			new Request("http://localhost/auth/nickname", {
+				method: "PUT",
+				headers: { "content-type": "application/json" },
+				body: JSON.stringify(body),
+			})
+		)
+		expect(res.status).toBe(429)
+		const json = (await res.json()) as { success: boolean; error: string }
+		expect(json.success).toBe(false)
+		expect(json.error).toBe("RATE_LIMITED")
+	})
+
+	it("409 NICKNAME_RESERVED when the nickname is reserved", async () => {
+		const cache = makeMockCache()
+		const { keyId, publicKey, body } = await buildBody({ nickname: "admin" })
+		const db = makeMockDB(registrationQueue(keyId, publicKey))
+		const env = makeEnvFull(db, cache)
+		const app = authRoutes(env)
+		const res = await app.handle(
+			new Request("http://localhost/auth/nickname", {
+				method: "PUT",
+				headers: { "content-type": "application/json" },
+				body: JSON.stringify(body),
+			})
+		)
+		expect(res.status).toBe(409)
+		const json = (await res.json()) as { success: boolean; error: string }
+		expect(json.success).toBe(false)
+		expect(json.error).toBe("NICKNAME_RESERVED")
+		expect(db.calls.find((c) => c.sql.startsWith("UPDATE users"))).toBeUndefined()
+	})
+
+	it("409 NICKNAME_RESERVED is case-insensitive", async () => {
+		const cache = makeMockCache()
+		const { keyId, publicKey, body } = await buildBody({ nickname: "Admin" })
+		const db = makeMockDB(registrationQueue(keyId, publicKey))
+		const env = makeEnvFull(db, cache)
+		const app = authRoutes(env)
+		const res = await app.handle(
+			new Request("http://localhost/auth/nickname", {
+				method: "PUT",
+				headers: { "content-type": "application/json" },
+				body: JSON.stringify(body),
+			})
+		)
+		expect(res.status).toBe(409)
+		const json = (await res.json()) as { success: boolean; error: string }
+		expect(json.error).toBe("NICKNAME_RESERVED")
+	})
+
+	it("409 NICKNAME_PROFANE when the nickname is profane", async () => {
+		const cache = makeMockCache()
+		const { keyId, publicKey, body } = await buildBody({ nickname: "FuckYou" })
+		const db = makeMockDB(registrationQueue(keyId, publicKey))
+		const env = makeEnvFull(db, cache)
+		const app = authRoutes(env)
+		const res = await app.handle(
+			new Request("http://localhost/auth/nickname", {
+				method: "PUT",
+				headers: { "content-type": "application/json" },
+				body: JSON.stringify(body),
+			})
+		)
+		expect(res.status).toBe(409)
+		const json = (await res.json()) as { success: boolean; error: string }
+		expect(json.error).toBe("NICKNAME_PROFANE")
+		expect(db.calls.find((c) => c.sql.startsWith("UPDATE users"))).toBeUndefined()
+	})
+})
+
+describe("DELETE /auth/nickname", () => {
+	async function buildBody(opts: { timestamp?: number } = {}) {
+		const { pair, publicKey, keyId } = await makeIdentity()
+		const nonce = "del-".padEnd(24, "x")
+		const payload = {
+			nonce,
+			keyId,
+			timestamp: opts.timestamp ?? Date.now(),
+		}
+		const signature = await signPayload(pair.privateKey, payload)
+		return { keyId, publicKey, body: { payload, signature, publicKey } }
+	}
+
+	function registrationQueue(keyId: string, publicKey: JsonWebKey): unknown[] {
+		return [
+			null,
+			null,
+			{ key_id: keyId, public_key: JSON.stringify(publicKey), created_at: 0 },
+			null,
+			{ id: 1, key_id: keyId, reputation: 1.0, vote_count: 0, avg_vote: 0, created_at: 0 },
+		]
+	}
+
+	it("clears the nickname and returns the generated fallback", async () => {
+		const cache = makeMockCache()
+		const { keyId, publicKey, body } = await buildBody()
+		const db = makeMockDB([
+			...registrationQueue(keyId, publicKey),
+			null,
+			[],
+			{ nickname: null },
+		])
+		const env = makeEnvFull(db, cache)
+		const app = authRoutes(env)
+		const res = await app.handle(
+			new Request("http://localhost/auth/nickname", {
+				method: "DELETE",
+				headers: { "content-type": "application/json" },
+				body: JSON.stringify(body),
+			})
+		)
+		expect(res.status).toBe(200)
+		const json = (await res.json()) as {
+			success: boolean
+			data: { keyId: string; displayName: string }
+		}
+		expect(json.success).toBe(true)
+		expect(json.data.keyId).toBe(keyId)
+		expect(json.data.displayName).toBe(generatePetName(keyId))
+	})
+
+	it("rejects unsigned requests with 400 INVALID_SIGNED_BODY", async () => {
+		const cache = makeMockCache()
+		const db = makeMockDB([])
+		const env = makeEnvFull(db, cache)
+		const app = authRoutes(env)
+		const res = await app.handle(
+			new Request("http://localhost/auth/nickname", {
+				method: "DELETE",
+				headers: { "content-type": "application/json" },
+				body: JSON.stringify({}),
+			})
+		)
+		expect(res.status).toBe(400)
+		const json = (await res.json()) as { code: string }
+		expect(json.code).toBe("INVALID_SIGNED_BODY")
+	})
+
+	it("429 RATE_LIMITED when the write bucket is exhausted", async () => {
+		const cache = makeMockCache()
+		const { keyId, publicKey, body } = await buildBody()
+		const db = makeMockDB(registrationQueue(keyId, publicKey))
+		const limiter = {
+			async limit(opts: { key: string }) {
+				if (opts.key.startsWith("nickname_write:")) return { success: false }
+				return { success: true }
+			},
+		}
+		const env: Env & { cache: ReturnType<typeof makeMockCache> } = {
+			DB: db as unknown as Env["DB"],
+			CACHE: cache as unknown as Env["CACHE"],
+			RATE_LIMITER: limiter as unknown as Env["RATE_LIMITER"],
+			READ_RATE_LIMITER: {
+				async limit() {
+					return { success: true }
+				},
+			} as unknown as Env["READ_RATE_LIMITER"],
+			CACHE_TTL_SECONDS: "300",
+			DUMPS_ENABLED: false,
+			DUMP_PUBLIC_BASE_URL: "",
+			DUMP_DATABASE_URL: null,
+			B2: null,
+			cache,
+		}
+		const app = authRoutes(env)
+		const res = await app.handle(
+			new Request("http://localhost/auth/nickname", {
+				method: "DELETE",
+				headers: { "content-type": "application/json" },
+				body: JSON.stringify(body),
+			})
+		)
+		expect(res.status).toBe(429)
+		const json = (await res.json()) as { success: boolean; error: string }
+		expect(json.success).toBe(false)
+		expect(json.error).toBe("RATE_LIMITED")
+	})
+})
+
+describe("POST /auth/nickname/me", () => {
+	async function buildBody(opts: { timestamp?: number } = {}) {
+		const { pair, publicKey, keyId } = await makeIdentity()
+		const nonce = "me--".padEnd(24, "x")
+		const payload = {
+			nonce,
+			keyId,
+			timestamp: opts.timestamp ?? Date.now(),
+		}
+		const signature = await signPayload(pair.privateKey, payload)
+		return { keyId, publicKey, body: { payload, signature, publicKey } }
+	}
+
+	function registrationQueue(keyId: string, publicKey: JsonWebKey): unknown[] {
+		return [
+			null,
+			null,
+			{ key_id: keyId, public_key: JSON.stringify(publicKey), created_at: 0 },
+			null,
+			{ id: 1, key_id: keyId, reputation: 1.0, vote_count: 0, avg_vote: 0, created_at: 0 },
+		]
+	}
+
+	it("returns the generated fallback when no nickname is set", async () => {
+		const cache = makeMockCache()
+		const { keyId, publicKey, body } = await buildBody()
+		const db = makeMockDB([...registrationQueue(keyId, publicKey), { nickname: null }])
+		const env = makeEnvFull(db, cache)
+		const app = authRoutes(env)
+		const res = await app.handle(
+			new Request("http://localhost/auth/nickname/me", {
+				method: "POST",
+				headers: { "content-type": "application/json" },
+				body: JSON.stringify(body),
+			})
+		)
+		expect(res.status).toBe(200)
+		const json = (await res.json()) as {
+			success: boolean
+			data: { keyId: string; displayName: string }
+		}
+		expect(json.success).toBe(true)
+		expect(json.data.keyId).toBe(keyId)
+		expect(json.data.displayName).toBe(generatePetName(keyId))
+	})
+
+	it("returns the custom nickname when set", async () => {
+		const cache = makeMockCache()
+		const { keyId, publicKey, body } = await buildBody()
+		const db = makeMockDB([...registrationQueue(keyId, publicKey), { nickname: "Alex" }])
+		const env = makeEnvFull(db, cache)
+		const app = authRoutes(env)
+		const res = await app.handle(
+			new Request("http://localhost/auth/nickname/me", {
+				method: "POST",
+				headers: { "content-type": "application/json" },
+				body: JSON.stringify(body),
+			})
+		)
+		expect(res.status).toBe(200)
+		const json = (await res.json()) as {
+			success: boolean
+			data: { keyId: string; displayName: string }
+		}
+		expect(json.success).toBe(true)
+		expect(json.data.displayName).toBe("Alex")
+	})
+
+	it("rejects unsigned requests with 400 INVALID_SIGNED_BODY", async () => {
+		const cache = makeMockCache()
+		const db = makeMockDB([])
+		const env = makeEnvFull(db, cache)
+		const app = authRoutes(env)
+		const res = await app.handle(
+			new Request("http://localhost/auth/nickname/me", {
+				method: "POST",
+				headers: { "content-type": "application/json" },
+				body: JSON.stringify({}),
+			})
+		)
+		expect(res.status).toBe(400)
+		const json = (await res.json()) as { code: string }
+		expect(json.code).toBe("INVALID_SIGNED_BODY")
+	})
+})
+
+describe("PUT /auth/nickname bearer path", () => {
+	function seedSession(cache: ReturnType<typeof makeMockCache>, token: string, keyId: string) {
+		const ttl = 30 * 24 * 60 * 60
+		const issuedAt = Math.floor(Date.now() / 1000)
+		cache.store.set(`session:${token}`, {
+			value: JSON.stringify({ keyId, issuedAt, expiresAt: issuedAt + ttl }),
+			ttl,
+		})
+	}
+
+	it("PUT bearer path: casts a nickname update via bearer token", async () => {
+		const keyId = "a".repeat(64)
+		const cache = makeMockCache()
+		seedSession(cache, "tok", keyId)
+		const db = makeMockDB([
+			{ id: 1, key_id: keyId, reputation: 1.0, vote_count: 0, avg_vote: 0, created_at: 0 },
+			null,
+			[],
+			{ nickname: "Alex" },
+		])
+		const env = makeEnvFull(db, cache)
+		const app = authRoutes(env)
+		const res = await app.handle(
+			new Request("http://localhost/auth/nickname", {
+				method: "PUT",
+				headers: { authorization: "Bearer tok", "content-type": "application/json" },
+				body: JSON.stringify({ nickname: "Alex" }),
+			})
+		)
+		expect(res.status).toBe(200)
+		const json = (await res.json()) as {
+			success: boolean
+			data: { keyId: string; displayName: string }
+		}
+		expect(json.success).toBe(true)
+		expect(json.data.keyId).toBe(keyId)
+		expect(json.data.displayName).toBe("Alex")
+	})
+
+	it("PUT bearer path: 400 INVALID_FORMAT on bad regex via bearer", async () => {
+		const keyId = "a".repeat(64)
+		const cache = makeMockCache()
+		seedSession(cache, "tok", keyId)
+		const db = makeMockDB([
+			{ id: 1, key_id: keyId, reputation: 1.0, vote_count: 0, avg_vote: 0, created_at: 0 },
+		])
+		const env = makeEnvFull(db, cache)
+		const app = authRoutes(env)
+		const res = await app.handle(
+			new Request("http://localhost/auth/nickname", {
+				method: "PUT",
+				headers: { authorization: "Bearer tok", "content-type": "application/json" },
+				body: JSON.stringify({ nickname: "a b" }),
+			})
+		)
+		expect(res.status).toBe(400)
+		const json = (await res.json()) as { success: boolean; error: string }
+		expect(json.success).toBe(false)
+		expect(json.error).toBe("INVALID_FORMAT")
+	})
+
+	it("PUT bearer path: 409 NICKNAME_RESERVED for reserved names", async () => {
+		const keyId = "a".repeat(64)
+		const cache = makeMockCache()
+		seedSession(cache, "tok", keyId)
+		const db = makeMockDB([
+			{ id: 1, key_id: keyId, reputation: 1.0, vote_count: 0, avg_vote: 0, created_at: 0 },
+		])
+		const env = makeEnvFull(db, cache)
+		const app = authRoutes(env)
+		const res = await app.handle(
+			new Request("http://localhost/auth/nickname", {
+				method: "PUT",
+				headers: { authorization: "Bearer tok", "content-type": "application/json" },
+				body: JSON.stringify({ nickname: "admin" }),
+			})
+		)
+		expect(res.status).toBe(409)
+		const json = (await res.json()) as { success: boolean; error: string }
+		expect(json.error).toBe("NICKNAME_RESERVED")
+		expect(db.calls.find((c) => c.sql.startsWith("UPDATE users"))).toBeUndefined()
+	})
+
+	it("PUT bearer path: 401 AUTH_REQUIRED when bearer token is unknown", async () => {
+		const cache = makeMockCache()
+		const db = makeMockDB([])
+		const env = makeEnvFull(db, cache)
+		const app = authRoutes(env)
+		const res = await app.handle(
+			new Request("http://localhost/auth/nickname", {
+				method: "PUT",
+				headers: { authorization: "Bearer nope", "content-type": "application/json" },
+				body: JSON.stringify({ nickname: "Alex" }),
+			})
+		)
+		expect(res.status).toBe(401)
+		const json = (await res.json()) as { code: string }
+		expect(json.code).toBe("AUTH_REQUIRED")
+	})
+
+	it("PUT bearer path: 409 NICKNAME_TAKEN on collision via bearer", async () => {
+		const keyId = "a".repeat(64)
+		const cache = makeMockCache()
+		seedSession(cache, "tok", keyId)
+		const db = makeMockDB([
+			{ id: 1, key_id: keyId, reputation: 1.0, vote_count: 0, avg_vote: 0, created_at: 0 },
+			{ code: "23505" },
+		])
+		const env = makeEnvFull(db, cache)
+		const app = authRoutes(env)
+		const res = await app.handle(
+			new Request("http://localhost/auth/nickname", {
+				method: "PUT",
+				headers: { authorization: "Bearer tok", "content-type": "application/json" },
+				body: JSON.stringify({ nickname: "alex" }),
+			})
+		)
+		expect(res.status).toBe(409)
+		const json = (await res.json()) as { success: boolean; error: string }
+		expect(json.success).toBe(false)
+		expect(json.error).toBe("NICKNAME_TAKEN")
+	})
+})
+
+describe("DELETE /auth/nickname bearer path", () => {
+	function seedSession(cache: ReturnType<typeof makeMockCache>, token: string, keyId: string) {
+		const ttl = 30 * 24 * 60 * 60
+		const issuedAt = Math.floor(Date.now() / 1000)
+		cache.store.set(`session:${token}`, {
+			value: JSON.stringify({ keyId, issuedAt, expiresAt: issuedAt + ttl }),
+			ttl,
+		})
+	}
+
+	it("DELETE bearer path: clears nickname via bearer token", async () => {
+		const keyId = "a".repeat(64)
+		const cache = makeMockCache()
+		seedSession(cache, "tok", keyId)
+		const db = makeMockDB([
+			{ id: 1, key_id: keyId, reputation: 1.0, vote_count: 0, avg_vote: 0, created_at: 0 },
+			null,
+			[],
+			{ nickname: null },
+		])
+		const env = makeEnvFull(db, cache)
+		const app = authRoutes(env)
+		const res = await app.handle(
+			new Request("http://localhost/auth/nickname", {
+				method: "DELETE",
+				headers: { authorization: "Bearer tok" },
+			})
+		)
+		expect(res.status).toBe(200)
+		const json = (await res.json()) as {
+			success: boolean
+			data: { keyId: string; displayName: string }
+		}
+		expect(json.success).toBe(true)
+		expect(json.data.keyId).toBe(keyId)
+		expect(json.data.displayName).toBe(generatePetName(keyId))
+	})
+
+	it("DELETE bearer path: 401 AUTH_REQUIRED when bearer token is unknown", async () => {
+		const cache = makeMockCache()
+		const db = makeMockDB([])
+		const env = makeEnvFull(db, cache)
+		const app = authRoutes(env)
+		const res = await app.handle(
+			new Request("http://localhost/auth/nickname", {
+				method: "DELETE",
+				headers: { authorization: "Bearer nope" },
+			})
+		)
+		expect(res.status).toBe(401)
+		const json = (await res.json()) as { code: string }
+		expect(json.code).toBe("AUTH_REQUIRED")
 	})
 })

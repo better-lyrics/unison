@@ -14,14 +14,20 @@ export class RedisRateLimiter {
 		this.windowSeconds = windowSeconds
 	}
 
-	async limit(opts: { key: string }): Promise<{ success: boolean }> {
+	async limit(opts: {
+		key: string
+		maxRequests?: number
+		windowSeconds?: number
+	}): Promise<{ success: boolean }> {
+		const max = opts.maxRequests ?? this.maxRequests
+		const window = opts.windowSeconds ?? this.windowSeconds
 		const redisKey = `rl:${opts.key}`
 		try {
 			const count = await this.redis.incr(redisKey)
 			if (count === 1) {
-				await this.redis.expire(redisKey, this.windowSeconds)
+				await this.redis.expire(redisKey, window)
 			}
-			return { success: count <= this.maxRequests }
+			return { success: count <= max }
 		} catch (err) {
 			log.warn("rate-limit check failed, allowing request", {
 				key: opts.key,

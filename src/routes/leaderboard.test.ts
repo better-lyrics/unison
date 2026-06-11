@@ -239,6 +239,29 @@ describe("GET /leaderboard/users", () => {
 		expect(json.data.curators[0].rank).toBe(1)
 		expect(json.data.curators[0].keyId).toBe("a".repeat(64))
 	})
+
+	it("/leaderboard reflects a custom nickname when users.nickname is set", async () => {
+		const db = makeMockDB([
+			[
+				{
+					key_id: "a".repeat(64),
+					reputation: 1.5,
+					score: 10,
+					submission_count: 4,
+					total_upvotes: 20,
+					nickname: "Alex",
+				},
+			],
+		])
+		const env = makeEnv(db)
+		const app = leaderboardRoutes(env)
+		const res = await app.handle(new Request("http://localhost/leaderboard/users"))
+		expect(res.status).toBe(200)
+		const json = (await res.json()) as {
+			data: { curators: Array<{ displayName: string }> }
+		}
+		expect(json.data.curators[0].displayName).toBe("Alex")
+	})
 })
 
 describe("GET /leaderboard/songs cache hit", () => {
@@ -278,6 +301,7 @@ describe("GET /leaderboard/users/:keyId", () => {
 		const db = makeMockDB([
 			[{ key_id: keyId, reputation: 1.2, score: 5, submission_count: 2, total_upvotes: 8 }],
 			{ last_vote_at: 1700000123 },
+			{ nickname: null },
 		])
 		const env = makeEnv(db)
 		const app = leaderboardRoutes(env)
@@ -301,7 +325,7 @@ describe("GET /leaderboard/users/:keyId", () => {
 
 	it("returns ranked: false with displayName and null lastVoteAt for an unknown user", async () => {
 		const keyId = "b".repeat(64)
-		const db = makeMockDB([[], { last_vote_at: null }])
+		const db = makeMockDB([[], { last_vote_at: null }, { nickname: null }])
 		const env = makeEnv(db)
 		const app = leaderboardRoutes(env)
 		const res = await app.handle(new Request(`http://localhost/leaderboard/users/${keyId}`))
@@ -326,6 +350,21 @@ describe("GET /leaderboard/users/:keyId", () => {
 		const app = leaderboardRoutes(env)
 		const res = await app.handle(new Request("http://localhost/leaderboard/users/ab"))
 		expect(res.status).toBeGreaterThanOrEqual(400)
+	})
+
+	it("/leaderboard/:keyId reflects a custom nickname when set", async () => {
+		const keyId = "c".repeat(64)
+		const db = makeMockDB([
+			[{ key_id: keyId, reputation: 1.0, score: 3, submission_count: 1, total_upvotes: 4 }],
+			{ last_vote_at: 1700000456 },
+			{ nickname: "Brook" },
+		])
+		const env = makeEnv(db)
+		const app = leaderboardRoutes(env)
+		const res = await app.handle(new Request(`http://localhost/leaderboard/users/${keyId}`))
+		expect(res.status).toBe(200)
+		const json = (await res.json()) as { data: { displayName?: string } }
+		expect(json.data.displayName).toBe("Brook")
 	})
 })
 

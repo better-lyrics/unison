@@ -3,6 +3,12 @@ import { AUTO_HIDE_PREDICATE, AUTO_HIDE_PREDICATE_JOINED, RANKING_EXPR } from "@
 import { windowCutoff } from "@/db/requests"
 import type { Env } from "@/types"
 
+export const CURATOR_LEADERBOARD_CACHE_KEY = "leaderboard:users"
+
+export async function invalidateCuratorLeaderboardCache(env: Env): Promise<void> {
+	await env.CACHE.delete(CURATOR_LEADERBOARD_CACHE_KEY)
+}
+
 export interface SongLeaderboardRow {
 	videoId: string
 	song: string
@@ -208,6 +214,7 @@ export interface CuratorLeaderboardRow {
 	fulfilledCount: number
 	fulfilledDemand: number
 	rank: number
+	nickname: string | null
 }
 
 interface CuratorRow {
@@ -218,6 +225,7 @@ interface CuratorRow {
 	total_upvotes: number
 	fulfilled_count: number
 	fulfilled_demand: number
+	nickname: string | null
 }
 
 export async function getCuratorLeaderboard(
@@ -225,7 +233,7 @@ export async function getCuratorLeaderboard(
 	limit: number
 ): Promise<CuratorLeaderboardRow[]> {
 	const res = await env.DB.prepare(
-		`SELECT u.key_id, u.reputation,
+		`SELECT u.key_id, u.reputation, u.nickname,
 		        agg.score, agg.submission_count, agg.total_upvotes,
 		        COALESCE(ff.fulfilled_count, 0) AS fulfilled_count,
 		        COALESCE(ff.fulfilled_demand, 0) AS fulfilled_demand
@@ -265,6 +273,7 @@ export async function getCuratorLeaderboard(
 		fulfilledCount: Number(r.fulfilled_count ?? 0),
 		fulfilledDemand: Number(r.fulfilled_demand ?? 0),
 		rank: i + 1,
+		nickname: r.nickname ?? null,
 	}))
 }
 

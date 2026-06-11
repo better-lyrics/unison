@@ -4,6 +4,7 @@ import type {
 	LyricsResponse,
 	LyricsSearchResult,
 } from "@/types"
+import { generatePetName } from "@/utils/petname"
 
 export interface LyricsRowForResponse {
 	id: number
@@ -22,6 +23,7 @@ export interface LyricsRowForResponse {
 	confidence: Confidence
 	submitter_key_id?: string | null
 	submitter_reputation?: number | null
+	submitter_nickname?: string | null
 	hidden?: boolean
 }
 
@@ -31,7 +33,11 @@ export function toResponse(
 ): LyricsResponse {
 	const submitter =
 		row.submitter_key_id != null && row.submitter_reputation != null
-			? { keyId: row.submitter_key_id, reputation: row.submitter_reputation }
+			? {
+					keyId: row.submitter_key_id,
+					reputation: row.submitter_reputation,
+					displayName: row.submitter_nickname ?? generatePetName(row.submitter_key_id),
+				}
 			: undefined
 
 	return {

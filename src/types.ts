@@ -22,7 +22,11 @@ export interface Env {
 }
 
 export interface RateLimiter {
-	limit(options: { key: string }): Promise<{ success: boolean }>
+	limit(options: {
+		key: string
+		maxRequests?: number
+		windowSeconds?: number
+	}): Promise<{ success: boolean }>
 }
 
 export type LyricsFormat = "ttml" | "lrc" | "plain"
@@ -72,6 +76,7 @@ export interface LyricsRow {
 	submitter_id: number | null
 	submitter_key_id?: string | null
 	submitter_reputation?: number | null
+	submitter_nickname?: string | null
 	deleted_at: number | null
 	deleted_by_user_id: number | null
 	deleted_by_role: "submitter" | "admin" | null
@@ -82,6 +87,7 @@ export interface LyricsRow {
 export interface SubmitterInfo {
 	keyId: string
 	reputation: number
+	displayName: string
 }
 
 export interface LyricsSubmission {

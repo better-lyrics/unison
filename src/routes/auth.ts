@@ -1,8 +1,10 @@
 import { Elysia } from "elysia"
 import { config } from "@/config"
+import { clearNickname, resolveDisplayName, setNickname } from "@/db/users"
 import type { Env } from "@/types"
 import { signedRequest } from "@/utils/auth"
-import { generatePetName } from "@/utils/petname"
+import { eitherAuth } from "@/utils/either-auth"
+import { isProfane } from "@/utils/profanity"
 import { readRateLimit } from "@/utils/read-rate-limit"
 import { createSession, deleteSession, getSession } from "@/utils/session"
 
@@ -53,35 +55,140 @@ export const authRoutes = (env: Env) =>
 				success: true,
 				data: {
 					keyId: record.keyId,
-					displayName: generatePetName(record.keyId),
+					displayName: await resolveDisplayName(env, record.keyId),
 					expiresAt: record.expiresAt,
 				},
 			}
 		})
-		.use(signedRequest)
-		.post("/session", async ({ env, keyId, signedPayload, headers, set }) => {
-			const signedOrigin = signedPayload.origin
-			const requestOrigin = headers.origin
-			if (typeof signedOrigin !== "string" || !requestOrigin || requestOrigin !== signedOrigin) {
-				set.status = 403
-				return { success: false, error: "ORIGIN_MISMATCH" }
-			}
+		.use(
+			new Elysia()
+				.decorate("env", env)
+				.use(eitherAuth)
+				.post("/nickname/check", async ({ env, keyId, body, set }) => {
+					const { success } = await env.RATE_LIMITER.limit({
+						key: `nickname_check:${keyId}`,
+						maxRequests: config.auth.nickname.check.maxRequests,
+						windowSeconds: config.auth.nickname.check.windowSeconds,
+					})
+					if (!success) {
+						set.status = 429
+						return { success: false, error: "RATE_LIMITED" }
+					}
 
-			const challengeKey = `${CHALLENGE_PREFIX}${signedPayload.nonce}`
-			const claimed = await env.CACHE.getDel(challengeKey)
-			if (!claimed) {
-				set.status = 401
-				return { success: false, error: "CHALLENGE_INVALID" }
-			}
+					const raw = (body as { nickname?: unknown }).nickname
+					const name = typeof raw === "string" ? raw : ""
+					if (!new RegExp(config.auth.nickname.pattern).test(name)) {
+						return { success: true, data: { available: false, reason: "INVALID_FORMAT" } }
+					}
+					if (config.auth.nickname.reserved.has(name.toLowerCase())) {
+						return { success: true, data: { available: false, reason: "RESERVED" } }
+					}
+					if (isProfane(name)) {
+						return { success: true, data: { available: false, reason: "PROFANE" } }
+					}
 
-			const session = await createSession(env, keyId)
-			return {
-				success: true,
-				data: {
-					sessionToken: session.token,
-					expiresAt: session.expiresAt,
-					keyId,
-					displayName: generatePetName(keyId),
-				},
-			}
-		})
+					const row = await env.DB.prepare("SELECT key_id FROM users WHERE nickname_lower = ?")
+						.bind(name.toLowerCase())
+						.first<{ key_id: string }>()
+
+					if (!row) return { success: true, data: { available: true } }
+					if (row.key_id === keyId) {
+						return { success: true, data: { available: true, reason: "SELF" } }
+					}
+					return { success: true, data: { available: false, reason: "TAKEN" } }
+				})
+				.put("/nickname", async ({ env, keyId, body, set }) => {
+					const { success } = await env.RATE_LIMITER.limit({
+						key: `nickname_write:${keyId}`,
+						maxRequests: config.auth.nickname.write.maxRequests,
+						windowSeconds: config.auth.nickname.write.windowSeconds,
+					})
+					if (!success) {
+						set.status = 429
+						return { success: false, error: "RATE_LIMITED" }
+					}
+
+					const raw = (body as { nickname?: unknown }).nickname
+					const nickname = typeof raw === "string" ? raw : ""
+					if (!new RegExp(config.auth.nickname.pattern).test(nickname)) {
+						set.status = 400
+						return { success: false, error: "INVALID_FORMAT" }
+					}
+					if (config.auth.nickname.reserved.has(nickname.toLowerCase())) {
+						set.status = 409
+						return { success: false, error: "NICKNAME_RESERVED" }
+					}
+					if (isProfane(nickname)) {
+						set.status = 409
+						return { success: false, error: "NICKNAME_PROFANE" }
+					}
+
+					const result = await setNickname(env, keyId, nickname)
+					if (!result.ok) {
+						set.status = 409
+						return { success: false, error: "NICKNAME_TAKEN" }
+					}
+
+					return {
+						success: true,
+						data: { keyId, displayName: await resolveDisplayName(env, keyId) },
+					}
+				})
+				.delete("/nickname", async ({ env, keyId, set }) => {
+					const { success } = await env.RATE_LIMITER.limit({
+						key: `nickname_write:${keyId}`,
+						maxRequests: config.auth.nickname.write.maxRequests,
+						windowSeconds: config.auth.nickname.write.windowSeconds,
+					})
+					if (!success) {
+						set.status = 429
+						return { success: false, error: "RATE_LIMITED" }
+					}
+					await clearNickname(env, keyId)
+					return {
+						success: true,
+						data: { keyId, displayName: await resolveDisplayName(env, keyId) },
+					}
+				})
+				.post("/nickname/me", async ({ env, keyId }) => {
+					return {
+						success: true,
+						data: { keyId, displayName: await resolveDisplayName(env, keyId) },
+					}
+				})
+		)
+		.use(
+			new Elysia()
+				.decorate("env", env)
+				.use(signedRequest)
+				.post("/session", async ({ env, keyId, signedPayload, headers, set }) => {
+					const signedOrigin = signedPayload.origin
+					const requestOrigin = headers.origin
+					if (
+						typeof signedOrigin !== "string" ||
+						!requestOrigin ||
+						requestOrigin !== signedOrigin
+					) {
+						set.status = 403
+						return { success: false, error: "ORIGIN_MISMATCH" }
+					}
+
+					const challengeKey = `${CHALLENGE_PREFIX}${signedPayload.nonce}`
+					const claimed = await env.CACHE.getDel(challengeKey)
+					if (!claimed) {
+						set.status = 401
+						return { success: false, error: "CHALLENGE_INVALID" }
+					}
+
+					const session = await createSession(env, keyId)
+					return {
+						success: true,
+						data: {
+							sessionToken: session.token,
+							expiresAt: session.expiresAt,
+							keyId,
+							displayName: await resolveDisplayName(env, keyId),
+						},
+					}
+				})
+		)

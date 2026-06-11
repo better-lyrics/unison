@@ -20,6 +20,14 @@ CREATE TABLE IF NOT EXISTS users (
 
 CREATE INDEX IF NOT EXISTS idx_users_key_id ON users(key_id);
 
+-- User-set nickname (overrides generated petname)
+ALTER TABLE users ADD COLUMN IF NOT EXISTS nickname TEXT;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS nickname_lower TEXT
+    GENERATED ALWAYS AS (LOWER(nickname)) STORED;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS nickname_updated_at INTEGER;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_users_nickname_lower
+    ON users(nickname_lower) WHERE nickname_lower IS NOT NULL;
+
 -- Main lyrics table
 CREATE TABLE IF NOT EXISTS lyrics (
     id SERIAL PRIMARY KEY,

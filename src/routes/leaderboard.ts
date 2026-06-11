@@ -1,6 +1,7 @@
 import { Elysia, t } from "elysia"
 import { config } from "@/config"
 import {
+	CURATOR_LEADERBOARD_CACHE_KEY,
 	getCuratorLeaderboard,
 	getCuratorRank,
 	getMostWantedPage,
@@ -9,6 +10,7 @@ import {
 	type MostWantedCursor,
 } from "@/db/leaderboard"
 import { getLastVoteAt } from "@/db/profile"
+import { resolveDisplayName } from "@/db/users"
 import type { Env } from "@/types"
 import { buildError, ErrorCode } from "@/utils/errors"
 import { generatePetName } from "@/utils/petname"
@@ -16,7 +18,7 @@ import { readRateLimit } from "@/utils/read-rate-limit"
 
 const SONGS_CACHE_KEY = "leaderboard:songs"
 const QUEUE_FIRST_PAGE_CACHE_KEY_PREFIX = "leaderboard:songs:queue:first"
-const USERS_CACHE_KEY = "leaderboard:users"
+const USERS_CACHE_KEY = CURATOR_LEADERBOARD_CACHE_KEY
 const QUEUE_DEFAULT_LIMIT = 20
 const QUEUE_MAX_LIMIT = 50
 const QUEUE_MIN_LIMIT = 1
@@ -118,7 +120,10 @@ export const leaderboardRoutes = (env: Env) =>
 				}
 			}
 			const rows = await getCuratorLeaderboard(env, config.requests.leaderboard.topN)
-			const curators = rows.map((r) => ({ ...r, displayName: generatePetName(r.keyId) }))
+			const curators = rows.map((r) => {
+				const { nickname, ...rest } = r
+				return { ...rest, displayName: nickname ?? generatePetName(r.keyId) }
+			})
 			const data = { curators }
 			await env.CACHE.put(USERS_CACHE_KEY, JSON.stringify(data), {
 				expirationTtl: config.requests.leaderboard.cacheTtl,
@@ -142,26 +147,28 @@ export const leaderboardRoutes = (env: Env) =>
 					getCuratorRank(env, params.keyId),
 					getLastVoteAt(env, params.keyId),
 				])
-				const displayName = generatePetName(params.keyId)
-				return row
-					? {
-							success: true,
-							data: {
-								ranked: true,
-								...row,
-								displayName,
-								lastVoteAt,
-							},
-						}
-					: {
-							success: true,
-							data: {
-								ranked: false,
-								keyId: params.keyId,
-								displayName,
-								lastVoteAt,
-							},
-						}
+				const displayName = await resolveDisplayName(env, params.keyId)
+				if (row) {
+					const { nickname: _nickname, ...rest } = row
+					return {
+						success: true,
+						data: {
+							ranked: true,
+							...rest,
+							displayName,
+							lastVoteAt,
+						},
+					}
+				}
+				return {
+					success: true,
+					data: {
+						ranked: false,
+						keyId: params.keyId,
+						displayName,
+						lastVoteAt,
+					},
+				}
 			},
 			{ params: t.Object({ keyId: t.String({ pattern: "^[0-9a-fA-F]{64}$" }) }) }
 		)

@@ -1,6 +1,7 @@
-// Do not modify, its the same as the BetterLyrics extension and mismatch will
-// lead to wrong display names. Kept verbatim and in order with the extension's
-// IDENTITY_ADJECTIVES / IDENTITY_NOUNS / IDENTITY_ACTIONS constants.
+// Default display name when a user has not set a custom nickname.
+// Wordlists must stay in sync with the Better Lyrics extension's
+// IDENTITY_ADJECTIVES / IDENTITY_NOUNS / IDENTITY_ACTIONS, since the extension
+// derives the same fallback locally for first-paint before any server response.
 
 const IDENTITY_ADJECTIVES = [
 	"Melodic",
