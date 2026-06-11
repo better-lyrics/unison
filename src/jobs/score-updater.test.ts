@@ -363,26 +363,26 @@ describe("auto-hide reputation penalty", () => {
 		])
 
 		const markUpdate = calls.find(
-			(c) => c.sql.includes("UPDATE lyrics") && c.sql.includes("reputation_penalized")
+			(c) => c.sql.includes("UPDATE lyrics") && c.sql.includes("reputation_penalized = TRUE")
 		)
 		expect(markUpdate).toBeDefined()
-		expect(markUpdate?.params).toEqual([10])
+		expect(markUpdate?.sql).toMatch(/AND\s+reputation_penalized\s*=\s*FALSE/i)
+		expect(markUpdate?.sql).toMatch(/RETURNING\s+id,\s*submitter_id/i)
 	})
 
-	it("is idempotent: skips rows already marked as penalized via WHERE filter", async () => {
+	it("guards the in-transaction mark UPDATE with reputation_penalized = FALSE", async () => {
 		const { db, calls } = createMockDB([[], []])
 		const env = { DB: db } as unknown as Env
 
 		await updateScores(env)
 
-		const selectCall = calls.find(
-			(c) =>
-				c.sql.includes("SELECT") &&
-				c.sql.includes("submitter_id") &&
-				c.sql.includes("reputation_penalized")
+		const markUpdate = calls.find(
+			(c) => c.sql.includes("UPDATE lyrics") && c.sql.includes("reputation_penalized = TRUE")
 		)
-		expect(selectCall).toBeDefined()
-		expect(selectCall?.sql).toMatch(/reputation_penalized\s*=\s*FALSE/i)
+		expect(markUpdate).toBeDefined()
+		expect(markUpdate?.sql).toMatch(/AND\s+reputation_penalized\s*=\s*FALSE/i)
+		expect(markUpdate?.sql).toMatch(/AND\s+deleted_at\s+IS\s+NULL/i)
+		expect(markUpdate?.sql).toMatch(/AND\s+submitter_id\s+IS\s+NOT\s+NULL/i)
 	})
 
 	it("sums penalty when a submitter has multiple newly-hidden rows", async () => {
@@ -406,14 +406,9 @@ describe("auto-hide reputation penalty", () => {
 		expect(userUpdates).toHaveLength(1)
 		const totalPenalty = config.moderation.autoHide.reputationPenalty * 2
 		expect(userUpdates[0].params).toEqual([config.reputation.min, totalPenalty, 42])
-
-		const markUpdate = calls.find(
-			(c) => c.sql.includes("UPDATE lyrics") && c.sql.includes("reputation_penalized")
-		)
-		expect(markUpdate?.params).toEqual([10, 11])
 	})
 
-	it("wraps the user-penalty and bulk-mark updates in a single transaction", async () => {
+	it("wraps the mark UPDATE and user-penalty updates in a single transaction", async () => {
 		const result = createMockDB([[], [{ id: 10, submitter_id: 42 }]])
 		const env = { DB: result.db } as unknown as Env
 
@@ -422,16 +417,22 @@ describe("auto-hide reputation penalty", () => {
 		expect(result.transactionCount).toBe(1)
 	})
 
-	it("does not open a transaction when there are no newly-hidden rows", async () => {
-		const result = createMockDB([[], []])
-		const env = { DB: result.db } as unknown as Env
+	it("does not fire UPDATE users when nothing was flipped", async () => {
+		const { db, calls } = createMockDB([[], []])
+		const env = { DB: db } as unknown as Env
 
 		await updateScores(env)
 
-		expect(result.transactionCount).toBe(0)
+		const userPenalty = calls.find(
+			(c) =>
+				c.sql.includes("UPDATE users") &&
+				c.sql.includes("reputation - ?") &&
+				c.sql.includes("WHERE id = ?")
+		)
+		expect(userPenalty).toBeUndefined()
 	})
 
-	it("rolls back the bulk-mark when the user-penalty update throws", async () => {
+	it("rolls back the mark UPDATE when the user-penalty update throws", async () => {
 		const calls: { sql: string; params: unknown[] }[] = []
 		const state = { transactionCount: 0, committed: true }
 		const queue: unknown[] = [[], [{ id: 10, submitter_id: 42 }]]
@@ -474,10 +475,33 @@ describe("auto-hide reputation penalty", () => {
 		await expect(updateScores(env)).rejects.toThrow("simulated failure")
 		expect(state.transactionCount).toBe(1)
 		expect(state.committed).toBe(false)
-		const markUpdate = calls.find(
+	})
+})
+
+describe("updateScores pipeline order", () => {
+	it("runs avg_vote, then updateReputations, then safety-net, then applyAutoHidePenalty", async () => {
+		const { db, calls } = createMockDB([[], []])
+		const env = { DB: db } as unknown as Env
+
+		await updateScores(env)
+
+		const avgVoteIdx = calls.findIndex(
+			(c) => c.sql.includes("UPDATE users") && c.sql.includes("avg_vote =")
+		)
+		const reputationIdx = calls.findIndex(
+			(c) => c.sql.includes("consensus_lyrics") || c.sql.includes("WITH consensus_lyrics")
+		)
+		const safetyNetIdx = calls.findIndex(
+			(c) => c.sql.includes("SELECT") && c.sql.includes("id AS lyrics_id")
+		)
+		const penaltyIdx = calls.findIndex(
 			(c) => c.sql.includes("UPDATE lyrics") && c.sql.includes("reputation_penalized = TRUE")
 		)
-		expect(markUpdate).toBeUndefined()
+
+		expect(avgVoteIdx).toBeGreaterThanOrEqual(0)
+		expect(reputationIdx).toBeGreaterThan(avgVoteIdx)
+		expect(safetyNetIdx).toBeGreaterThan(reputationIdx)
+		expect(penaltyIdx).toBeGreaterThan(safetyNetIdx)
 	})
 })
 

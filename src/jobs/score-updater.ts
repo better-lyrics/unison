@@ -69,6 +69,8 @@ export async function updateScores(env: Env): Promise<{ updated: number }> {
 			vote_count = (SELECT COUNT(*) FROM votes WHERE votes.user_id = users.id)
 	`).run()
 
+	await updateReputations(env)
+
 	const staleLyrics = await env.DB.prepare(`
 		SELECT id AS lyrics_id FROM lyrics
 		WHERE score_updated_at IS NULL AND vote_count > 0 AND deleted_at IS NULL
@@ -89,8 +91,6 @@ export async function updateScores(env: Env): Promise<{ updated: number }> {
 
 	await applyAutoHidePenalty(env)
 
-	await updateReputations(env)
-
 	return { updated }
 }
 
@@ -98,45 +98,46 @@ async function applyAutoHidePenalty(env: Env): Promise<void> {
 	const penalty = config.moderation.autoHide.reputationPenalty
 	const minRep = config.reputation.min
 
-	const newlyHidden = await env.DB.prepare(`
-		SELECT id, submitter_id FROM lyrics
-		WHERE ${AUTO_HIDE_PREDICATE}
-			AND deleted_at IS NULL
-			AND reputation_penalized = FALSE
-			AND submitter_id IS NOT NULL
-	`).all<{ id: number; submitter_id: number }>()
-
-	const rows = newlyHidden.results || []
-	if (rows.length === 0) return
-
 	const submitterPenalty = new Map<number, number>()
-	for (const r of rows) {
-		submitterPenalty.set(r.submitter_id, (submitterPenalty.get(r.submitter_id) ?? 0) + penalty)
-	}
-
-	const ids = rows.map((r) => r.id)
-	const placeholders = ids.map(() => "?").join(",")
+	const flippedIds: number[] = []
 
 	await env.DB.transaction(async (tx) => {
+		const flipped = await tx
+			.prepare(
+				`UPDATE lyrics SET reputation_penalized = TRUE
+				WHERE ${AUTO_HIDE_PREDICATE}
+					AND deleted_at IS NULL
+					AND reputation_penalized = FALSE
+					AND submitter_id IS NOT NULL
+				RETURNING id, submitter_id`
+			)
+			.all<{ id: number; submitter_id: number }>()
+
+		const rows = flipped.results || []
+		if (rows.length === 0) return
+
+		for (const r of rows) {
+			submitterPenalty.set(
+				r.submitter_id,
+				(submitterPenalty.get(r.submitter_id) ?? 0) + penalty
+			)
+			flippedIds.push(r.id)
+		}
+
 		for (const [sid, totalPenalty] of submitterPenalty) {
 			await tx
 				.prepare("UPDATE users SET reputation = GREATEST(?, reputation - ?) WHERE id = ?")
 				.bind(minRep, totalPenalty, sid)
 				.run()
 		}
-
-		await tx
-			.prepare(
-				`UPDATE lyrics SET reputation_penalized = TRUE WHERE id IN (${placeholders})`
-			)
-			.bind(...ids)
-			.run()
 	})
+
+	if (flippedIds.length === 0) return
 
 	log.info("applied auto-hide reputation penalty", {
 		affected_submitters: submitterPenalty.size,
-		affected_rows: ids.length,
-		lyrics_ids: ids.slice(0, 10),
+		affected_rows: flippedIds.length,
+		lyrics_ids: flippedIds.slice(0, 10),
 	})
 }
 
