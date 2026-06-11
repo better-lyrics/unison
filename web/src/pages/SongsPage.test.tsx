@@ -127,6 +127,40 @@ describe("SongsPage", () => {
     expect(seeAll.getAttribute("href")).toBe("/queue")
   })
 
+  it("caps the Most Wanted preview at 10 rows; the rest sit behind 'See all'", async () => {
+    const mostWanted = Array.from({ length: 25 }, (_, i) => ({
+      videoId: `vid${i + 1}`,
+      song: `Song ${i + 1}`,
+      artist: `Artist ${i + 1}`,
+      thumbnailUrl: null,
+      demand: 100 - i,
+      requestCount: 25 - i,
+      section: "most_wanted" as const,
+      rank: i + 1,
+    }))
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockImplementation((url: string) => {
+        if (url === "/leaderboard/songs") {
+          return Promise.resolve(
+            jsonResponse({
+              success: true,
+              data: { mostWanted, needsFixing: [] },
+            }),
+          )
+        }
+        return Promise.reject(new Error(`unexpected url ${url}`))
+      }),
+    )
+    renderPage()
+    await waitFor(() => expect(screen.getByText("Song 1")).toBeTruthy())
+    expect(screen.getByText("Song 10")).toBeTruthy()
+    expect(screen.queryByText("Song 11")).toBeNull()
+    expect(screen.queryByText("Song 25")).toBeNull()
+    const seeAll = screen.getByRole("link", { name: /See all most wanted/i })
+    expect(seeAll.getAttribute("href")).toBe("/queue")
+  })
+
   it("does not render a 'See all' link in the Needs Fixing header", async () => {
     vi.stubGlobal(
       "fetch",

@@ -7,6 +7,8 @@ import { SongRow } from "@/components/SongRow"
 import { useAsyncData } from "@/hooks/useAsyncData"
 import { fetchSongLeaderboard } from "@/lib/api"
 
+const MOST_WANTED_PREVIEW = 10
+
 const mostWantedAction = (
   <Link
     to="/queue"
@@ -57,7 +59,7 @@ export function SongsPage() {
           )
         ) : (
           <ul className="space-y-2">
-            {data.mostWanted.map((entry) => (
+            {data.mostWanted.slice(0, MOST_WANTED_PREVIEW).map((entry) => (
               <SongRow key={entry.videoId} entry={entry} />
             ))}
           </ul>
