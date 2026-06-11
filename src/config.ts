@@ -11,6 +11,7 @@ export const config = {
 			maxEffectiveScore: -0.5,
 			decisiveMinVotes: 3,
 			decisiveMinAgeDays: 3,
+			reputationPenalty: 0.2,
 		},
 	},
 
@@ -32,6 +33,7 @@ export const config = {
 		consensusDelta: 0.1,
 		selfVoteWeight: 0.5,
 		minVotesForConfidence: 5,
+		voteWeightFloor: 0.5,
 	},
 
 	ranking: {
@@ -41,6 +43,10 @@ export const config = {
 			richsync: 1.3,
 			linesync: 1.0,
 			plain: 0.7,
+		},
+		primarySlot: {
+			repFloor: 1.0,
+			minVotes: 3,
 		},
 	},
 

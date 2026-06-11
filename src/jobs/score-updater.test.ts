@@ -12,6 +12,50 @@ vi.mock("@/db/lyrics", () => ({
 	invalidateCache: vi.fn(() => Promise.resolve()),
 }))
 
+interface MockDBResult {
+	db: Env["DB"]
+	calls: { sql: string; params: unknown[] }[]
+	transactionCount: number
+}
+
+function createMockDB(queue: unknown[]): MockDBResult {
+	const calls: { sql: string; params: unknown[] }[] = []
+	const state = { transactionCount: 0 }
+	const db = {
+		prepare(sql: string) {
+			let params: unknown[] = []
+			return {
+				bind(...args: unknown[]) {
+					params = args
+					return this
+				},
+				async first<T>(): Promise<T | null> {
+					calls.push({ sql, params })
+					return (queue.shift() as T) ?? null
+				},
+				async all<T>(): Promise<{ results: T[] }> {
+					calls.push({ sql, params })
+					return { results: (queue.shift() as T[]) ?? [] }
+				},
+				async run(): Promise<void> {
+					calls.push({ sql, params })
+				},
+			}
+		},
+		async transaction<T>(fn: (tx: unknown) => Promise<T>): Promise<T> {
+			state.transactionCount++
+			return fn(db)
+		},
+	}
+	return {
+		db: db as unknown as Env["DB"],
+		calls,
+		get transactionCount() {
+			return state.transactionCount
+		},
+	}
+}
+
 describe("calculateScore", () => {
 	it("returns correct weighted score for equal reputation votes", () => {
 		const votes = [
@@ -134,12 +178,56 @@ describe("calculateScore", () => {
 	it("handles mixed high and low reputation users", () => {
 		const votes = [
 			{ vote: 1, reputation: 2.0, avg_vote: 0.5, is_self_vote: 0 },
-			{ vote: -1, reputation: 0.0, avg_vote: -0.5, is_self_vote: 0 },
+			{ vote: -1, reputation: 0.6, avg_vote: 0.3, is_self_vote: 0 },
 		]
 
 		const result = calculateScore(1, votes)
 
-		expect(result.effective_score).toBe(1)
+		// (1 * 2.0 + -1 * 0.6) / (2.0 + 0.6) = 1.4 / 2.6 = 0.5385
+		expect(result.effective_score).toBeCloseTo(0.538, 2)
+	})
+
+	it("excludes votes below the weight floor from effective_score", () => {
+		const votes = [
+			{ vote: 1, reputation: 1.0, avg_vote: 0.5, is_self_vote: 0 },
+			{ vote: -1, reputation: 0.4, avg_vote: -0.2, is_self_vote: 0 },
+			{ vote: -1, reputation: 0.3, avg_vote: -0.1, is_self_vote: 0 },
+		]
+
+		const result = calculateScore(1, votes)
+
+		expect(result.effective_score).toBeCloseTo(1.0, 2)
+	})
+
+	it("keeps vote_count honest when votes are below the weight floor", () => {
+		const votes = [
+			{ vote: 1, reputation: 1.0, avg_vote: 0.5, is_self_vote: 0 },
+			{ vote: -1, reputation: 0.4, avg_vote: -0.2, is_self_vote: 0 },
+		]
+
+		const result = calculateScore(1, votes)
+
+		expect(result.vote_count).toBe(2)
+	})
+
+	it("includes votes exactly at the weight floor", () => {
+		const votes = [{ vote: 1, reputation: 0.5, avg_vote: 0.0, is_self_vote: 0 }]
+
+		const result = calculateScore(1, votes)
+
+		expect(result.effective_score).toBeCloseTo(1.0, 2)
+	})
+
+	it("filters sub-floor self-votes by raw reputation, not by post-discount weight", () => {
+		const votes = [
+			{ vote: 1, reputation: 1.0, avg_vote: 0.5, is_self_vote: 0 },
+			{ vote: -1, reputation: 0.4, avg_vote: 0.0, is_self_vote: 1 },
+		]
+
+		const result = calculateScore(1, votes)
+
+		expect(result.effective_score).toBeCloseTo(1.0, 2)
+		expect(result.vote_count).toBe(2)
 	})
 })
 
@@ -211,36 +299,6 @@ describe("updateReputations", () => {
 })
 
 describe("soft-delete handling", () => {
-	function createMockDB(queue: unknown[]): {
-		db: Env["DB"]
-		calls: { sql: string; params: unknown[] }[]
-	} {
-		const calls: { sql: string; params: unknown[] }[] = []
-		const db = {
-			prepare(sql: string) {
-				let params: unknown[] = []
-				return {
-					bind(...args: unknown[]) {
-						params = args
-						return this
-					},
-					async first<T>(): Promise<T | null> {
-						calls.push({ sql, params })
-						return (queue.shift() as T) ?? null
-					},
-					async all<T>(): Promise<{ results: T[] }> {
-						calls.push({ sql, params })
-						return { results: (queue.shift() as T[]) ?? [] }
-					},
-					async run(): Promise<void> {
-						calls.push({ sql, params })
-					},
-				}
-			},
-		}
-		return { db: db as unknown as Env["DB"], calls }
-	}
-
 	it("recalculateScore early-returns when the row is deleted (no UPDATE)", async () => {
 		const { db, calls } = createMockDB([{ video_id: "v1", deleted_at: 1700000000 }])
 		const env = { DB: db } as unknown as Env
@@ -281,6 +339,169 @@ describe("soft-delete handling", () => {
 		await updateReputations(env)
 
 		expect(calls[0].sql).not.toMatch(/deleted_at/i)
+	})
+})
+
+describe("auto-hide reputation penalty", () => {
+	it("applies penalty to submitters of newly auto-hidden rows", async () => {
+		const { db, calls } = createMockDB([[], [{ id: 10, submitter_id: 42 }]])
+		const env = { DB: db } as unknown as Env
+
+		await updateScores(env)
+
+		const userUpdate = calls.find(
+			(c) =>
+				c.sql.includes("UPDATE users") &&
+				c.sql.includes("reputation - ?") &&
+				c.sql.includes("WHERE id = ?")
+		)
+		expect(userUpdate).toBeDefined()
+		expect(userUpdate?.params).toEqual([
+			config.reputation.min,
+			config.moderation.autoHide.reputationPenalty,
+			42,
+		])
+
+		const markUpdate = calls.find(
+			(c) => c.sql.includes("UPDATE lyrics") && c.sql.includes("reputation_penalized = TRUE")
+		)
+		expect(markUpdate).toBeDefined()
+		expect(markUpdate?.sql).toMatch(/AND\s+reputation_penalized\s*=\s*FALSE/i)
+		expect(markUpdate?.sql).toMatch(/RETURNING\s+id,\s*submitter_id/i)
+	})
+
+	it("guards the in-transaction mark UPDATE with reputation_penalized = FALSE", async () => {
+		const { db, calls } = createMockDB([[], []])
+		const env = { DB: db } as unknown as Env
+
+		await updateScores(env)
+
+		const markUpdate = calls.find(
+			(c) => c.sql.includes("UPDATE lyrics") && c.sql.includes("reputation_penalized = TRUE")
+		)
+		expect(markUpdate).toBeDefined()
+		expect(markUpdate?.sql).toMatch(/AND\s+reputation_penalized\s*=\s*FALSE/i)
+		expect(markUpdate?.sql).toMatch(/AND\s+deleted_at\s+IS\s+NULL/i)
+		expect(markUpdate?.sql).toMatch(/AND\s+submitter_id\s+IS\s+NOT\s+NULL/i)
+	})
+
+	it("sums penalty when a submitter has multiple newly-hidden rows", async () => {
+		const { db, calls } = createMockDB([
+			[],
+			[
+				{ id: 10, submitter_id: 42 },
+				{ id: 11, submitter_id: 42 },
+			],
+		])
+		const env = { DB: db } as unknown as Env
+
+		await updateScores(env)
+
+		const userUpdates = calls.filter(
+			(c) =>
+				c.sql.includes("UPDATE users") &&
+				c.sql.includes("reputation - ?") &&
+				c.sql.includes("WHERE id = ?")
+		)
+		expect(userUpdates).toHaveLength(1)
+		const totalPenalty = config.moderation.autoHide.reputationPenalty * 2
+		expect(userUpdates[0].params).toEqual([config.reputation.min, totalPenalty, 42])
+	})
+
+	it("wraps the mark UPDATE and user-penalty updates in a single transaction", async () => {
+		const result = createMockDB([[], [{ id: 10, submitter_id: 42 }]])
+		const env = { DB: result.db } as unknown as Env
+
+		await updateScores(env)
+
+		expect(result.transactionCount).toBe(1)
+	})
+
+	it("does not fire UPDATE users when nothing was flipped", async () => {
+		const { db, calls } = createMockDB([[], []])
+		const env = { DB: db } as unknown as Env
+
+		await updateScores(env)
+
+		const userPenalty = calls.find(
+			(c) =>
+				c.sql.includes("UPDATE users") &&
+				c.sql.includes("reputation - ?") &&
+				c.sql.includes("WHERE id = ?")
+		)
+		expect(userPenalty).toBeUndefined()
+	})
+
+	it("rolls back the mark UPDATE when the user-penalty update throws", async () => {
+		const calls: { sql: string; params: unknown[] }[] = []
+		const state = { transactionCount: 0, committed: true }
+		const queue: unknown[] = [[], [{ id: 10, submitter_id: 42 }]]
+		const db = {
+			prepare(sql: string) {
+				let params: unknown[] = []
+				return {
+					bind(...args: unknown[]) {
+						params = args
+						return this
+					},
+					async first<T>(): Promise<T | null> {
+						calls.push({ sql, params })
+						return (queue.shift() as T) ?? null
+					},
+					async all<T>(): Promise<{ results: T[] }> {
+						calls.push({ sql, params })
+						return { results: (queue.shift() as T[]) ?? [] }
+					},
+					async run(): Promise<void> {
+						calls.push({ sql, params })
+						if (sql.includes("UPDATE users") && sql.includes("reputation - ?")) {
+							throw new Error("simulated failure")
+						}
+					},
+				}
+			},
+			async transaction<T>(fn: (tx: unknown) => Promise<T>): Promise<T> {
+				state.transactionCount++
+				try {
+					return await fn(db)
+				} catch (err) {
+					state.committed = false
+					throw err
+				}
+			},
+		}
+		const env = { DB: db } as unknown as Env
+
+		await expect(updateScores(env)).rejects.toThrow("simulated failure")
+		expect(state.transactionCount).toBe(1)
+		expect(state.committed).toBe(false)
+	})
+})
+
+describe("updateScores pipeline order", () => {
+	it("runs avg_vote, then updateReputations, then safety-net, then applyAutoHidePenalty", async () => {
+		const { db, calls } = createMockDB([[], []])
+		const env = { DB: db } as unknown as Env
+
+		await updateScores(env)
+
+		const avgVoteIdx = calls.findIndex(
+			(c) => c.sql.includes("UPDATE users") && c.sql.includes("avg_vote =")
+		)
+		const reputationIdx = calls.findIndex(
+			(c) => c.sql.includes("consensus_lyrics") || c.sql.includes("WITH consensus_lyrics")
+		)
+		const safetyNetIdx = calls.findIndex(
+			(c) => c.sql.includes("SELECT") && c.sql.includes("id AS lyrics_id")
+		)
+		const penaltyIdx = calls.findIndex(
+			(c) => c.sql.includes("UPDATE lyrics") && c.sql.includes("reputation_penalized = TRUE")
+		)
+
+		expect(avgVoteIdx).toBeGreaterThanOrEqual(0)
+		expect(reputationIdx).toBeGreaterThan(avgVoteIdx)
+		expect(safetyNetIdx).toBeGreaterThan(reputationIdx)
+		expect(penaltyIdx).toBeGreaterThan(safetyNetIdx)
 	})
 })
 

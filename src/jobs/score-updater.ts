@@ -1,5 +1,6 @@
 import { config } from "@/config"
 import { invalidateCache } from "@/db/lyrics"
+import { AUTO_HIDE_PREDICATE } from "@/db/predicates"
 import { Logger } from "@/infra/logger"
 import type { Confidence, Env } from "@/types"
 
@@ -62,18 +63,14 @@ export async function recalculateScore(env: Env, lyricsId: number): Promise<void
 }
 
 export async function updateScores(env: Env): Promise<{ updated: number }> {
-	// 1. Update user avg_vote for clustering
 	await env.DB.prepare(`
 		UPDATE users SET
 			avg_vote = COALESCE((SELECT AVG(vote) FROM votes WHERE votes.user_id = users.id), 0),
 			vote_count = (SELECT COUNT(*) FROM votes WHERE votes.user_id = users.id)
 	`).run()
 
-	// 2. Update user reputations based on consensus
 	await updateReputations(env)
 
-	// 3. Safety net: recalculate entries that were never scored or voted on recently
-	//    (catches fire-and-forget recalculateScore failures from votes/reports)
 	const staleLyrics = await env.DB.prepare(`
 		SELECT id AS lyrics_id FROM lyrics
 		WHERE score_updated_at IS NULL AND vote_count > 0 AND deleted_at IS NULL
@@ -92,7 +89,56 @@ export async function updateScores(env: Env): Promise<{ updated: number }> {
 
 	log.debug("safety-net recalculated stale scores", { count: updated })
 
+	await applyAutoHidePenalty(env)
+
 	return { updated }
+}
+
+async function applyAutoHidePenalty(env: Env): Promise<void> {
+	const penalty = config.moderation.autoHide.reputationPenalty
+	const minRep = config.reputation.min
+
+	const submitterPenalty = new Map<number, number>()
+	const flippedIds: number[] = []
+
+	await env.DB.transaction(async (tx) => {
+		const flipped = await tx
+			.prepare(
+				`UPDATE lyrics SET reputation_penalized = TRUE
+				WHERE ${AUTO_HIDE_PREDICATE}
+					AND deleted_at IS NULL
+					AND reputation_penalized = FALSE
+					AND submitter_id IS NOT NULL
+				RETURNING id, submitter_id`
+			)
+			.all<{ id: number; submitter_id: number }>()
+
+		const rows = flipped.results || []
+		if (rows.length === 0) return
+
+		for (const r of rows) {
+			submitterPenalty.set(
+				r.submitter_id,
+				(submitterPenalty.get(r.submitter_id) ?? 0) + penalty
+			)
+			flippedIds.push(r.id)
+		}
+
+		for (const [sid, totalPenalty] of submitterPenalty) {
+			await tx
+				.prepare("UPDATE users SET reputation = GREATEST(?, reputation - ?) WHERE id = ?")
+				.bind(minRep, totalPenalty, sid)
+				.run()
+		}
+	})
+
+	if (flippedIds.length === 0) return
+
+	log.info("applied auto-hide reputation penalty", {
+		affected_submitters: submitterPenalty.size,
+		affected_rows: flippedIds.length,
+		lyrics_ids: flippedIds.slice(0, 10),
+	})
 }
 
 export function calculateScore(lyricsId: number, votes: VoteWithUser[]): LyricsScoreUpdate {
@@ -102,6 +148,7 @@ export function calculateScore(lyricsId: number, votes: VoteWithUser[]): LyricsS
 	let generousUpvotes = 0
 
 	for (const v of votes) {
+		if (v.reputation < config.reputation.voteWeightFloor) continue
 		// Self-votes count less
 		const weight = v.is_self_vote ? v.reputation * config.reputation.selfVoteWeight : v.reputation
 

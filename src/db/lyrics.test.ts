@@ -1,3 +1,4 @@
+import { config } from "@/config"
 import type { Env, LyricsRow, LyricsSearchResult, LyricsSubmission } from "@/types"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import {
@@ -11,7 +12,7 @@ import {
 	softDeleteLyrics,
 	submitLyrics,
 } from "./lyrics"
-import { AUTO_HIDE_PREDICATE, RANKING_EXPR } from "./predicates"
+import { AUTO_HIDE_PREDICATE, RANKING_EXPR, RANKING_EXPR_JOINED } from "./predicates"
 
 // -- Mocks -----------------------------------------------------------------
 
@@ -20,6 +21,7 @@ type Recorded = { sql: string; params: unknown[] }
 interface MockDB {
 	calls: Recorded[]
 	queue: unknown[]
+	transactionCount: number
 	prepare(sql: string): {
 		bind(...args: unknown[]): {
 			first<T>(): Promise<T | null>
@@ -35,6 +37,7 @@ function createMockDB(queue: unknown[] = []): MockDB {
 	const db: MockDB = {
 		calls,
 		queue,
+		transactionCount: 0,
 		prepare(sql: string) {
 			return {
 				bind(...args: unknown[]) {
@@ -58,6 +61,7 @@ function createMockDB(queue: unknown[] = []): MockDB {
 			}
 		},
 		async transaction<T>(fn: (tx: MockDB) => Promise<T>): Promise<T> {
+			db.transactionCount++
 			return fn(db)
 		},
 	}
@@ -297,6 +301,31 @@ describe("findByVideoId", () => {
 		expect(result?.submitter_key_id).toBeNull()
 		expect(result?.submitter_reputation).toBeNull()
 	})
+
+	it("orders proven rows above unproven rows for same videoId", async () => {
+		const provenRow = {
+			...baseRow,
+			submitter_reputation: 1.5,
+			vote_count: 5,
+			effective_score: 0.6,
+		}
+		const db = createMockDB([provenRow])
+		const cache = createMockCache()
+		const env = createEnv(db, cache)
+
+		await findByVideoId(env, "v1")
+
+		const lookupCall = db.calls.find((c) => c.sql.includes("FROM lyrics"))
+		expect(lookupCall).toBeDefined()
+		expect(lookupCall?.sql).toContain("CASE WHEN")
+		expect(lookupCall?.sql).toMatch(/COALESCE\(u\.reputation, 0\) > 1/)
+		expect(lookupCall?.sql).toMatch(/vote_count >= 3/)
+		expect(lookupCall!.sql).toMatch(/ORDER BY \(CASE WHEN[\s\S]+?\) DESC,/)
+		const caseIdx = lookupCall!.sql.indexOf("CASE WHEN")
+		const rankingIdx = lookupCall!.sql.indexOf(RANKING_EXPR_JOINED)
+		expect(caseIdx).toBeGreaterThan(-1)
+		expect(rankingIdx).toBeGreaterThan(caseIdx)
+	})
 })
 
 describe("findBySongArtist", () => {
@@ -374,6 +403,29 @@ describe("findBySongArtist", () => {
 
 		expect(result?.submitter_key_id).toBe("alice")
 		expect(result?.submitter_reputation).toBe(2.0)
+	})
+
+	it("orders proven rows above unproven rows for same song+artist", async () => {
+		const row = {
+			...baseRow,
+			submitter_reputation: 1.5,
+			vote_count: 5,
+			effective_score: 0.6,
+		}
+		const db = createMockDB([row])
+		const cache = createMockCache()
+		const env = createEnv(db, cache)
+
+		await findBySongArtist(env, "Song", "Artist")
+
+		const lookupCall = db.calls.find((c) => c.sql.includes("FROM lyrics"))
+		expect(lookupCall).toBeDefined()
+		expect(lookupCall?.sql).toContain("CASE WHEN")
+		expect(lookupCall?.sql).toMatch(/COALESCE\(u\.reputation, 0\) > 1/)
+		const caseIdx = lookupCall!.sql.indexOf("CASE WHEN")
+		const rankingIdx = lookupCall!.sql.indexOf(RANKING_EXPR_JOINED)
+		expect(caseIdx).toBeGreaterThan(-1)
+		expect(rankingIdx).toBeGreaterThan(caseIdx)
 	})
 })
 
@@ -551,7 +603,17 @@ describe("softDeleteLyrics", () => {
 	})
 
 	it("returns already_deleted when the row is already deleted", async () => {
-		const db = createMockDB([{ id: 1, video_id: "v1", submitter_id: 1, deleted_at: 1234567890 }])
+		const db = createMockDB([
+			{
+				id: 1,
+				video_id: "v1",
+				submitter_id: 1,
+				deleted_at: 1234567890,
+				vote_count: 0,
+				effective_score: 0,
+				reputation_penalized: false,
+			},
+		])
 		const cache = createMockCache()
 		const env = createEnv(db, cache)
 
@@ -561,24 +623,51 @@ describe("softDeleteLyrics", () => {
 	})
 
 	it("returns forbidden when submitter does not own the row", async () => {
-		const db = createMockDB([{ id: 1, video_id: "v1", submitter_id: 99, deleted_at: null }])
+		const db = createMockDB([
+			{
+				id: 1,
+				video_id: "v1",
+				submitter_id: 99,
+				deleted_at: null,
+				vote_count: 0,
+				effective_score: 0,
+				reputation_penalized: false,
+			},
+		])
 		const cache = createMockCache()
 		const env = createEnv(db, cache)
 
 		const result = await softDeleteLyrics(env, 1, 1, "submitter")
 
 		expect(result).toEqual({ deleted: false, reason: "forbidden" })
+		const penalty = db.calls.find(
+			(c) => c.sql.includes("UPDATE users") && c.sql.includes("reputation - ?")
+		)
+		expect(penalty).toBeUndefined()
 	})
 
 	it("performs UPDATE with the four audit fields and invalidates cache", async () => {
-		const db = createMockDB([{ id: 1, video_id: "v1", submitter_id: 1, deleted_at: null }, null])
+		const db = createMockDB([
+			{
+				id: 1,
+				video_id: "v1",
+				submitter_id: 1,
+				deleted_at: null,
+				vote_count: 0,
+				effective_score: 0,
+				reputation_penalized: false,
+			},
+			null,
+		])
 		const cache = createMockCache({ "v:v1": "row", "feed:global:20": "feed" })
 		const env = createEnv(db, cache)
 
 		const result = await softDeleteLyrics(env, 1, 1, "submitter", "typo")
 
 		expect(result.deleted).toBe(true)
-		const update = db.calls.find((c) => c.sql.includes("UPDATE lyrics"))
+		const update = db.calls.find(
+			(c) => c.sql.includes("UPDATE lyrics") && c.sql.includes("deleted_at =")
+		)
 		expect(update).toBeDefined()
 		expect(update?.sql).toMatch(/deleted_at\s*=/)
 		expect(update?.sql).toMatch(/deleted_by_user_id\s*=/)
@@ -591,15 +680,403 @@ describe("softDeleteLyrics", () => {
 	})
 
 	it("admin role bypasses ownership check", async () => {
-		const db = createMockDB([{ id: 1, video_id: "v1", submitter_id: 99, deleted_at: null }, null])
+		const db = createMockDB([
+			{
+				id: 1,
+				video_id: "v1",
+				submitter_id: 99,
+				deleted_at: null,
+				vote_count: 0,
+				effective_score: 0,
+				reputation_penalized: true,
+			},
+			null,
+		])
 		const cache = createMockCache()
 		const env = createEnv(db, cache)
 
 		const result = await softDeleteLyrics(env, 1, 1, "admin", "DMCA")
 
 		expect(result.deleted).toBe(true)
-		const update = db.calls.find((c) => c.sql.includes("UPDATE lyrics"))
+		const update = db.calls.find(
+			(c) => c.sql.includes("UPDATE lyrics") && c.sql.includes("deleted_at =")
+		)
 		expect(update?.params).toEqual([1, "admin", "DMCA", 1])
+	})
+
+	it("applies the reputation penalty when a net-negative row is self-deleted", async () => {
+		const db = createMockDB([
+			{
+				id: 1,
+				video_id: "v1",
+				submitter_id: 42,
+				deleted_at: null,
+				vote_count: 3,
+				effective_score: -0.6,
+				reputation_penalized: false,
+			},
+			{ id: 1 },
+			null,
+			null,
+		])
+		const cache = createMockCache()
+		const env = createEnv(db, cache)
+
+		const result = await softDeleteLyrics(env, 1, 42, "submitter", "regret")
+
+		expect(result.deleted).toBe(true)
+
+		const markUpdate = db.calls.find(
+			(c) =>
+				c.sql.includes("UPDATE lyrics") &&
+				c.sql.includes("reputation_penalized = TRUE") &&
+				!c.sql.includes("deleted_at")
+		)
+		expect(markUpdate).toBeDefined()
+		expect(markUpdate?.sql).toMatch(/AND\s+reputation_penalized\s*=\s*FALSE/i)
+		expect(markUpdate?.sql).toMatch(/RETURNING\s+id/i)
+		expect(markUpdate?.params).toEqual([1])
+
+		const penaltyUpdate = db.calls.find(
+			(c) => c.sql.includes("UPDATE users") && c.sql.includes("reputation - ?")
+		)
+		expect(penaltyUpdate).toBeDefined()
+		expect(penaltyUpdate?.params).toEqual([
+			config.reputation.min,
+			config.moderation.autoHide.reputationPenalty,
+			42,
+		])
+
+		const softDelete = db.calls.find(
+			(c) => c.sql.includes("UPDATE lyrics") && c.sql.includes("deleted_at =")
+		)
+		expect(softDelete?.params).toEqual([42, "submitter", "regret", 1])
+	})
+
+	it("skips user decrement when a concurrent caller flipped the flag first", async () => {
+		const db = createMockDB([
+			{
+				id: 1,
+				video_id: "v1",
+				submitter_id: 42,
+				deleted_at: null,
+				vote_count: 3,
+				effective_score: -0.6,
+				reputation_penalized: false,
+			},
+			null,
+			null,
+		])
+		const cache = createMockCache()
+		const env = createEnv(db, cache)
+
+		const result = await softDeleteLyrics(env, 1, 42, "submitter", "regret")
+
+		expect(result.deleted).toBe(true)
+
+		const penaltyUpdate = db.calls.find(
+			(c) => c.sql.includes("UPDATE users") && c.sql.includes("reputation - ?")
+		)
+		expect(penaltyUpdate).toBeUndefined()
+
+		const softDelete = db.calls.find(
+			(c) => c.sql.includes("UPDATE lyrics") && c.sql.includes("deleted_at =")
+		)
+		expect(softDelete).toBeDefined()
+	})
+
+	it("does NOT penalise a clean self-delete with vote_count < 2", async () => {
+		const db = createMockDB([
+			{
+				id: 1,
+				video_id: "v1",
+				submitter_id: 42,
+				deleted_at: null,
+				vote_count: 1,
+				effective_score: -0.6,
+				reputation_penalized: false,
+			},
+			null,
+		])
+		const cache = createMockCache()
+		const env = createEnv(db, cache)
+
+		const result = await softDeleteLyrics(env, 1, 42, "submitter", null)
+
+		expect(result.deleted).toBe(true)
+		const penalty = db.calls.find(
+			(c) => c.sql.includes("UPDATE users") && c.sql.includes("reputation - ?")
+		)
+		expect(penalty).toBeUndefined()
+	})
+
+	it("does NOT penalise a clean self-delete with non-negative effective_score", async () => {
+		const db = createMockDB([
+			{
+				id: 1,
+				video_id: "v1",
+				submitter_id: 42,
+				deleted_at: null,
+				vote_count: 5,
+				effective_score: 0.1,
+				reputation_penalized: false,
+			},
+			null,
+		])
+		const cache = createMockCache()
+		const env = createEnv(db, cache)
+
+		const result = await softDeleteLyrics(env, 1, 42, "submitter", null)
+
+		expect(result.deleted).toBe(true)
+		const penalty = db.calls.find(
+			(c) => c.sql.includes("UPDATE users") && c.sql.includes("reputation - ?")
+		)
+		expect(penalty).toBeUndefined()
+	})
+
+	it("always penalises an admin delete regardless of score", async () => {
+		const db = createMockDB([
+			{
+				id: 1,
+				video_id: "v1",
+				submitter_id: 42,
+				deleted_at: null,
+				vote_count: 0,
+				effective_score: 0,
+				reputation_penalized: false,
+			},
+			{ id: 1 },
+			null,
+			null,
+		])
+		const cache = createMockCache()
+		const env = createEnv(db, cache)
+
+		const result = await softDeleteLyrics(env, 1, 1, "admin", "DMCA")
+
+		expect(result.deleted).toBe(true)
+		const penalty = db.calls.find(
+			(c) => c.sql.includes("UPDATE users") && c.sql.includes("reputation - ?")
+		)
+		expect(penalty).toBeDefined()
+		expect(penalty?.params).toEqual([
+			config.reputation.min,
+			config.moderation.autoHide.reputationPenalty,
+			42,
+		])
+
+		const markUpdate = db.calls.find(
+			(c) =>
+				c.sql.includes("UPDATE lyrics") &&
+				c.sql.includes("reputation_penalized = TRUE") &&
+				!c.sql.includes("deleted_at")
+		)
+		expect(markUpdate?.params).toEqual([1])
+	})
+
+	it("does NOT double-penalise when reputation_penalized is already TRUE", async () => {
+		const db = createMockDB([
+			{
+				id: 1,
+				video_id: "v1",
+				submitter_id: 42,
+				deleted_at: null,
+				vote_count: 3,
+				effective_score: -0.6,
+				reputation_penalized: true,
+			},
+			null,
+		])
+		const cache = createMockCache()
+		const env = createEnv(db, cache)
+
+		const result = await softDeleteLyrics(env, 1, 42, "submitter", null)
+
+		expect(result.deleted).toBe(true)
+		const penalty = db.calls.find(
+			(c) => c.sql.includes("UPDATE users") && c.sql.includes("reputation - ?")
+		)
+		expect(penalty).toBeUndefined()
+		const mark = db.calls.find(
+			(c) =>
+				c.sql.includes("UPDATE lyrics") &&
+				c.sql.includes("reputation_penalized = TRUE") &&
+				!c.sql.includes("deleted_at")
+		)
+		expect(mark).toBeUndefined()
+	})
+
+	it("wraps penalty, mark, and soft-delete in a single transaction (penalty branch)", async () => {
+		const db = createMockDB([
+			{
+				id: 1,
+				video_id: "v1",
+				submitter_id: 42,
+				deleted_at: null,
+				vote_count: 3,
+				effective_score: -0.6,
+				reputation_penalized: false,
+			},
+			{ id: 1 },
+			null,
+			null,
+		])
+		const cache = createMockCache()
+		const env = createEnv(db, cache)
+
+		await softDeleteLyrics(env, 1, 42, "submitter", "regret")
+
+		expect(db.transactionCount).toBe(1)
+	})
+
+	it("wraps the soft-delete in a transaction even when the penalty branch is skipped", async () => {
+		const db = createMockDB([
+			{
+				id: 1,
+				video_id: "v1",
+				submitter_id: 42,
+				deleted_at: null,
+				vote_count: 1,
+				effective_score: -0.6,
+				reputation_penalized: false,
+			},
+			null,
+		])
+		const cache = createMockCache()
+		const env = createEnv(db, cache)
+
+		await softDeleteLyrics(env, 1, 42, "submitter", null)
+
+		expect(db.transactionCount).toBe(1)
+		const penalty = db.calls.find(
+			(c) => c.sql.includes("UPDATE users") && c.sql.includes("reputation - ?")
+		)
+		expect(penalty).toBeUndefined()
+	})
+
+	it("does not open a transaction when the row is not found", async () => {
+		const db = createMockDB([null])
+		const cache = createMockCache()
+		const env = createEnv(db, cache)
+
+		await softDeleteLyrics(env, 999, 1, "submitter")
+
+		expect(db.transactionCount).toBe(0)
+	})
+
+	it("does not open a transaction when the row is already deleted", async () => {
+		const db = createMockDB([
+			{
+				id: 1,
+				video_id: "v1",
+				submitter_id: 1,
+				deleted_at: 1234567890,
+				vote_count: 0,
+				effective_score: 0,
+				reputation_penalized: false,
+			},
+		])
+		const cache = createMockCache()
+		const env = createEnv(db, cache)
+
+		await softDeleteLyrics(env, 1, 1, "submitter")
+
+		expect(db.transactionCount).toBe(0)
+	})
+
+	it("does not open a transaction when the caller is forbidden", async () => {
+		const db = createMockDB([
+			{
+				id: 1,
+				video_id: "v1",
+				submitter_id: 99,
+				deleted_at: null,
+				vote_count: 0,
+				effective_score: 0,
+				reputation_penalized: false,
+			},
+		])
+		const cache = createMockCache()
+		const env = createEnv(db, cache)
+
+		await softDeleteLyrics(env, 1, 1, "submitter")
+
+		expect(db.transactionCount).toBe(0)
+	})
+
+	it("rolls back the soft-delete when the penalty update throws", async () => {
+		const calls: Recorded[] = []
+		const state = { transactionCount: 0, committed: true }
+		const queue: unknown[] = [
+			{
+				id: 1,
+				video_id: "v1",
+				submitter_id: 42,
+				deleted_at: null,
+				vote_count: 3,
+				effective_score: -0.6,
+				reputation_penalized: false,
+			},
+			{ id: 1 },
+		]
+		const db = {
+			calls,
+			prepare(sql: string) {
+				return {
+					bind(...args: unknown[]) {
+						return {
+							async first<T>(): Promise<T | null> {
+								calls.push({ sql, params: args })
+								return (queue.shift() as T) ?? null
+							},
+							async all<T>(): Promise<{ results: T[] }> {
+								calls.push({ sql, params: args })
+								return { results: (queue.shift() as T[]) ?? [] }
+							},
+							async run(): Promise<void> {
+								calls.push({ sql, params: args })
+								if (sql.includes("UPDATE users") && sql.includes("reputation - ?")) {
+									throw new Error("simulated failure")
+								}
+							},
+						}
+					},
+				}
+			},
+			async transaction<T>(fn: (tx: unknown) => Promise<T>): Promise<T> {
+				state.transactionCount++
+				try {
+					return await fn(db)
+				} catch (err) {
+					state.committed = false
+					throw err
+				}
+			},
+		}
+		const cache = createMockCache()
+		const env = {
+			DB: db as unknown as Env["DB"],
+			CACHE: cache as unknown as Env["CACHE"],
+			RATE_LIMITER: {} as Env["RATE_LIMITER"],
+			READ_RATE_LIMITER: {} as Env["READ_RATE_LIMITER"],
+			CACHE_TTL_SECONDS: "300",
+			DUMPS_ENABLED: false,
+			DUMP_PUBLIC_BASE_URL: "",
+			DUMP_DATABASE_URL: null,
+			B2: null,
+		} as Env
+
+		await expect(softDeleteLyrics(env, 1, 42, "submitter", "regret")).rejects.toThrow(
+			"simulated failure"
+		)
+		expect(state.transactionCount).toBe(1)
+		expect(state.committed).toBe(false)
+		const softDelete = calls.find(
+			(c) => c.sql.includes("UPDATE lyrics") && c.sql.includes("deleted_at =")
+		)
+		expect(softDelete).toBeUndefined()
+		expect(cache.deleteCalls).toHaveLength(0)
 	})
 })
 
@@ -751,5 +1228,24 @@ describe("submitLyrics fulfillment integration", () => {
 
 		const sqls = db.calls.map((c) => c.sql).join("\n")
 		expect(sqls).not.toMatch(/INSERT INTO request_fulfillments/i)
+	})
+})
+
+describe("submitLyrics variant cap", () => {
+	it("counts penalized-and-deleted rows against the variant cap", async () => {
+		const db = createMockDB([{ count: 3 }])
+		const cache = createMockCache()
+		const env = createEnv(db, cache)
+
+		const result = await submitLyrics(env, buildSubmission(), 42)
+
+		expect(result.created).toBe(false)
+
+		const countCall = db.calls.find(
+			(c) => c.sql.includes("SELECT COUNT(*)") && c.sql.includes("lyrics")
+		)
+		expect(countCall).toBeDefined()
+		expect(countCall!.sql).toMatch(/reputation_penalized\s*=\s*TRUE/i)
+		expect(countCall!.sql).toMatch(/deleted_at\s+IS\s+NULL/i)
 	})
 })

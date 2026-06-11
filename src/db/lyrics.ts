@@ -3,6 +3,7 @@ import { recordFulfillment } from "@/db/fulfillments"
 import {
 	AUTO_HIDE_PREDICATE,
 	AUTO_HIDE_PREDICATE_JOINED,
+	PROVEN_EXPR_JOINED,
 	RANKING_EXPR,
 	RANKING_EXPR_JOINED,
 } from "@/db/predicates"
@@ -40,7 +41,7 @@ export async function findByVideoId(env: Env, videoId: string): Promise<LyricsRo
 
 	cacheLog.debug("miss", { key: `v:${videoId}` })
 	const result = await env.DB.prepare(
-		`${LYRICS_WITH_SUBMITTER} WHERE l.video_id = ? AND l.deleted_at IS NULL AND NOT ${AUTO_HIDE_PREDICATE_JOINED} ORDER BY ${RANKING_EXPR_JOINED} DESC LIMIT 1`
+		`${LYRICS_WITH_SUBMITTER} WHERE l.video_id = ? AND l.deleted_at IS NULL AND NOT ${AUTO_HIDE_PREDICATE_JOINED} ORDER BY (CASE WHEN ${PROVEN_EXPR_JOINED} THEN 1 ELSE 0 END) DESC, ${RANKING_EXPR_JOINED} DESC LIMIT 1`
 	)
 		.bind(videoId)
 		.first<LyricsRow>()
@@ -114,7 +115,7 @@ export async function findBySongArtist(
 	const query = `
 		${LYRICS_WITH_SUBMITTER}
 		WHERE ${conditions.join(" AND ")}
-		ORDER BY ${RANKING_EXPR_JOINED} DESC
+		ORDER BY (CASE WHEN ${PROVEN_EXPR_JOINED} THEN 1 ELSE 0 END) DESC, ${RANKING_EXPR_JOINED} DESC
 		LIMIT 1
 	`
 
@@ -144,7 +145,9 @@ export async function submitLyrics(
 
 	// Check per-user-per-video variant cap
 	const variantCount = await env.DB.prepare(
-		"SELECT COUNT(*)::INTEGER AS count FROM lyrics WHERE video_id = ? AND submitter_id = ? AND deleted_at IS NULL"
+		`SELECT COUNT(*)::INTEGER AS count FROM lyrics
+			WHERE video_id = ? AND submitter_id = ?
+				AND (deleted_at IS NULL OR reputation_penalized = TRUE)`
 	)
 		.bind(submission.videoId, submitterId)
 		.first<{ count: number }>()
@@ -312,10 +315,20 @@ export async function softDeleteLyrics(
 	reason: string | null = null
 ): Promise<SoftDeleteResult> {
 	const row = await env.DB.prepare(
-		"SELECT id, video_id, submitter_id, deleted_at FROM lyrics WHERE id = ?"
+		`SELECT id, video_id, submitter_id, deleted_at,
+			vote_count, effective_score, reputation_penalized
+		FROM lyrics WHERE id = ?`
 	)
 		.bind(lyricsId)
-		.first<{ id: number; video_id: string; submitter_id: number; deleted_at: number | null }>()
+		.first<{
+			id: number
+			video_id: string
+			submitter_id: number
+			deleted_at: number | null
+			vote_count: number
+			effective_score: number
+			reputation_penalized: boolean
+		}>()
 
 	if (!row) return { deleted: false, reason: "not_found" }
 	if (row.deleted_at !== null) return { deleted: false, reason: "already_deleted" }
@@ -323,16 +336,45 @@ export async function softDeleteLyrics(
 		return { deleted: false, reason: "forbidden" }
 	}
 
-	await env.DB.prepare(
-		`UPDATE lyrics SET
-			deleted_at = EXTRACT(EPOCH FROM NOW())::INTEGER,
-			deleted_by_user_id = ?,
-			deleted_by_role = ?,
-			deletion_reason = ?
-		WHERE id = ? AND deleted_at IS NULL`
-	)
-		.bind(actingUserId, role, reason, lyricsId)
-		.run()
+	const shouldPenalise =
+		!row.reputation_penalized &&
+		(role === "admin" ||
+			(role === "submitter" && row.vote_count >= 2 && row.effective_score < 0))
+
+	await env.DB.transaction(async (tx) => {
+		if (shouldPenalise && row.submitter_id) {
+			const flipped = await tx
+				.prepare(
+					`UPDATE lyrics SET reputation_penalized = TRUE
+					WHERE id = ? AND reputation_penalized = FALSE
+					RETURNING id`
+				)
+				.bind(lyricsId)
+				.first<{ id: number }>()
+
+			if (flipped) {
+				const penalty = config.moderation.autoHide.reputationPenalty
+				await tx
+					.prepare(
+						"UPDATE users SET reputation = GREATEST(?, reputation - ?) WHERE id = ?"
+					)
+					.bind(config.reputation.min, penalty, row.submitter_id)
+					.run()
+			}
+		}
+
+		await tx
+			.prepare(
+				`UPDATE lyrics SET
+					deleted_at = EXTRACT(EPOCH FROM NOW())::INTEGER,
+					deleted_by_user_id = ?,
+					deleted_by_role = ?,
+					deletion_reason = ?
+				WHERE id = ? AND deleted_at IS NULL`
+			)
+			.bind(actingUserId, role, reason, lyricsId)
+			.run()
+	})
 
 	await invalidateCacheAfterDelete(env, row.video_id)
 	log.info("lyrics deleted", { lyricsId, role, actingUserId, videoId: row.video_id })
