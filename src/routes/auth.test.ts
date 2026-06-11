@@ -1005,6 +1005,46 @@ describe("DELETE /auth/nickname", () => {
 		const json = (await res.json()) as { code: string }
 		expect(json.code).toBe("INVALID_SIGNED_BODY")
 	})
+
+	it("429 RATE_LIMITED when the write bucket is exhausted", async () => {
+		const cache = makeMockCache()
+		const { keyId, publicKey, body } = await buildBody()
+		const db = makeMockDB(registrationQueue(keyId, publicKey))
+		const limiter = {
+			async limit(opts: { key: string }) {
+				if (opts.key.startsWith("nickname_write:")) return { success: false }
+				return { success: true }
+			},
+		}
+		const env: Env & { cache: ReturnType<typeof makeMockCache> } = {
+			DB: db as unknown as Env["DB"],
+			CACHE: cache as unknown as Env["CACHE"],
+			RATE_LIMITER: limiter as unknown as Env["RATE_LIMITER"],
+			READ_RATE_LIMITER: {
+				async limit() {
+					return { success: true }
+				},
+			} as unknown as Env["READ_RATE_LIMITER"],
+			CACHE_TTL_SECONDS: "300",
+			DUMPS_ENABLED: false,
+			DUMP_PUBLIC_BASE_URL: "",
+			DUMP_DATABASE_URL: null,
+			B2: null,
+			cache,
+		}
+		const app = authRoutes(env)
+		const res = await app.handle(
+			new Request("http://localhost/auth/nickname", {
+				method: "DELETE",
+				headers: { "content-type": "application/json" },
+				body: JSON.stringify(body),
+			})
+		)
+		expect(res.status).toBe(429)
+		const json = (await res.json()) as { success: boolean; error: string }
+		expect(json.success).toBe(false)
+		expect(json.error).toBe("RATE_LIMITED")
+	})
 })
 
 describe("POST /auth/nickname/me", () => {

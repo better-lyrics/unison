@@ -119,7 +119,16 @@ export const authRoutes = (env: Env) =>
 						data: { keyId, displayName: await resolveDisplayName(env, keyId) },
 					}
 				})
-				.delete("/nickname", async ({ env, keyId }) => {
+				.delete("/nickname", async ({ env, keyId, set }) => {
+					const { success } = await env.RATE_LIMITER.limit({
+						key: `nickname_write:${keyId}`,
+						maxRequests: config.auth.nickname.write.maxRequests,
+						windowSeconds: config.auth.nickname.write.windowSeconds,
+					})
+					if (!success) {
+						set.status = 429
+						return { success: false, error: "RATE_LIMITED" }
+					}
 					await clearNickname(env, keyId)
 					return {
 						success: true,
