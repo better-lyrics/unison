@@ -17,7 +17,7 @@ export async function backfillLanguage(env: Env): Promise<{ scanned: number; upd
 			   AND language_detection_attempted_at IS NULL
 			   AND deleted_at IS NULL
 			 ORDER BY id ASC
-			 LIMIT ?`,
+			 LIMIT ?`
 		)
 			.bind(BATCH_SIZE)
 			.all<{ id: number; lyrics: string; format: LyricsFormat }>()
@@ -34,13 +34,25 @@ export async function backfillLanguage(env: Env): Promise<{ scanned: number; upd
 					`UPDATE lyrics
 					 SET language = COALESCE(?, language),
 					     language_detection_attempted_at = NOW()
-					 WHERE id = ?`,
+					 WHERE id = ?`
 				)
 					.bind(detected, row.id)
 					.run()
 				if (detected) updated++
 			} catch (err) {
 				log.warn("failed to backfill row", { id: row.id, error: (err as Error).message })
+				try {
+					await env.DB.prepare(
+						"UPDATE lyrics SET language_detection_attempted_at = NOW() WHERE id = ?"
+					)
+						.bind(row.id)
+						.run()
+				} catch (stampErr) {
+					log.warn("failed to stamp attempted_at on errored row", {
+						id: row.id,
+						error: (stampErr as Error).message,
+					})
+				}
 			}
 		}
 

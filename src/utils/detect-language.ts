@@ -1,7 +1,7 @@
-import { francAll } from "franc"
-import { iso6393To1 } from "iso-639-3"
 import type { LyricsFormat } from "@/types"
 import { extractPlainText, ttmlParser } from "@/utils/extract-text"
+import { francAll } from "franc"
+import { iso6393To1 } from "iso-639-3"
 
 const FRANC_INDIVIDUAL_TO_639_1: Record<string, string> = {
 	cmn: "zh",
@@ -52,7 +52,7 @@ const MIN_CONFIDENCE = 0.5
 export function detectLanguage(
 	lyrics: string,
 	format: LyricsFormat,
-	plainText?: string,
+	plainText?: string
 ): string | null {
 	if (format === "ttml") {
 		const meta = extractTtmlLang(lyrics)
