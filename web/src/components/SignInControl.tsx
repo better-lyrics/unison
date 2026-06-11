@@ -1,26 +1,16 @@
+import { useSession } from "@/auth/useSession";
+import { dicebearThumbsDataUri } from "@/lib/avatar";
+import { detectBetterLyrics } from "@/lib/extension";
 import { IconCheck, IconCopy, IconLogout, IconUser } from "@tabler/icons-react";
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { useSession } from "@/auth/useSession";
-import { dicebearThumbsDataUri } from "@/lib/avatar";
-import { isExtensionAvailable } from "@/lib/extension";
 
 export function SignInControl() {
   const session = useSession();
-  const [extensionReady, setExtensionReady] = useState<boolean | null>(null);
+  const [extensionReady] = useState<boolean>(() => detectBetterLyrics() === "available");
   const [open, setOpen] = useState(false);
   const [copied, setCopied] = useState(false);
   const wrapperRef = useRef<HTMLDivElement | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    isExtensionAvailable().then((ok) => {
-      if (!cancelled) setExtensionReady(ok);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
 
   useEffect(() => {
     if (!open) return;
@@ -134,11 +124,7 @@ export function SignInControl() {
     );
   }
 
-  if (extensionReady === null) {
-    return <div data-state="loading" className="h-8 w-44" />;
-  }
-
-  if (extensionReady === false) {
+  if (!extensionReady) {
     return (
       <a
         href="https://betterlyrics.org"

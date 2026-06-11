@@ -23,6 +23,30 @@ function renderControl() {
   )
 }
 
+function stubChromePort(makeResponse: (req: { type: string }) => unknown) {
+  vi.stubGlobal("chrome", {
+    runtime: {
+      connect: (_id: string, info: { name: string }) => {
+        let onMessageListener: ((m: unknown) => void) | null = null
+        const port = {
+          name: info.name,
+          onMessage: {
+            addListener: (l: (m: unknown) => void) => {
+              onMessageListener = l
+            },
+          },
+          onDisconnect: { addListener: (_l: () => void) => {} },
+          postMessage: (req: { type: string }) => {
+            queueMicrotask(() => onMessageListener?.(makeResponse(req)))
+          },
+          disconnect: () => {},
+        }
+        return port
+      },
+    },
+  })
+}
+
 function stubSessionFetch() {
   vi.stubGlobal(
     "fetch",
@@ -68,13 +92,7 @@ describe("SignInControl", () => {
   })
 
   it("shows the sign-in button when the extension is available", async () => {
-    vi.stubGlobal("chrome", {
-      runtime: {
-        async sendMessage() {
-          return { ok: true }
-        },
-      },
-    })
+    stubChromePort(() => ({ ok: true }))
     renderControl()
     await waitFor(() => expect(screen.getByRole("button", { name: /sign in/i })).toBeTruthy())
   })
@@ -96,13 +114,7 @@ describe("SignInControl", () => {
         new Response(JSON.stringify({ success: false, error: "INVALID_TOKEN" }), { status: 401 }),
       ),
     )
-    vi.stubGlobal("chrome", {
-      runtime: {
-        async sendMessage() {
-          return { ok: true }
-        },
-      },
-    })
+    stubChromePort(() => ({ ok: true }))
     renderControl()
     await waitFor(() => expect(screen.getByRole("button", { name: /sign in/i })).toBeTruthy())
   })
@@ -115,15 +127,11 @@ describe("SignInControl", () => {
       )
       .mockResolvedValueOnce(new Response(JSON.stringify({ success: true, data: valid }), { status: 200 }))
     vi.stubGlobal("fetch", fetchMock)
-    vi.stubGlobal("chrome", {
-      runtime: {
-        async sendMessage(_id: string, msg: { type: string }) {
-          if (msg.type === "bl-auth-request") {
-            return { ok: true, signedBody: { payload: {}, signature: "", publicKey: {} } }
-          }
-          return { ok: true }
-        },
-      },
+    stubChromePort((msg) => {
+      if (msg.type === "bl-auth-request") {
+        return { ok: true, signedBody: { payload: {}, signature: "", publicKey: {} } }
+      }
+      return { ok: true }
     })
     renderControl()
     const button = await screen.findByRole("button", { name: /sign in/i })

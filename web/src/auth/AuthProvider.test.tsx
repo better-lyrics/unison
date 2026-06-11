@@ -103,6 +103,32 @@ describe("AuthProvider initial state", () => {
   })
 })
 
+function stubChromePort(makeResponse: (req: { type: string }) => unknown) {
+  vi.stubGlobal("chrome", {
+    runtime: {
+      connect: (_id: string, info: { name: string }) => {
+        let onMessageListener: ((m: unknown) => void) | null = null
+        const port = {
+          name: info.name,
+          onMessage: {
+            addListener: (l: (m: unknown) => void) => {
+              onMessageListener = l
+            },
+          },
+          onDisconnect: {
+            addListener: (_l: () => void) => {},
+          },
+          postMessage: (req: { type: string }) => {
+            queueMicrotask(() => onMessageListener?.(makeResponse(req)))
+          },
+          disconnect: () => {},
+        }
+        return port
+      },
+    },
+  })
+}
+
 describe("AuthProvider signIn flow", () => {
   it("runs challenge then extension then session and lands in signed-in", async () => {
     const fetchMock = vi
@@ -112,15 +138,11 @@ describe("AuthProvider signIn flow", () => {
       )
       .mockResolvedValueOnce(new Response(JSON.stringify({ success: true, data: valid }), { status: 200 }))
     vi.stubGlobal("fetch", fetchMock)
-    vi.stubGlobal("chrome", {
-      runtime: {
-        async sendMessage(_id: string, msg: { type: string }) {
-          if (msg.type === "bl-auth-request") {
-            return { ok: true, signedBody: { payload: {}, signature: "", publicKey: {} } }
-          }
-          return { ok: true }
-        },
-      },
+    stubChromePort((msg) => {
+      if (msg.type === "bl-auth-request") {
+        return { ok: true, signedBody: { payload: {}, signature: "", publicKey: {} } }
+      }
+      return { ok: true }
     })
     render(
       <AuthProvider>
@@ -142,13 +164,7 @@ describe("AuthProvider signIn flow", () => {
         new Response(JSON.stringify({ success: true, data: { nonce: "n1", expiresAt: 1 } }), { status: 200 }),
       )
     vi.stubGlobal("fetch", fetchMock)
-    vi.stubGlobal("chrome", {
-      runtime: {
-        async sendMessage() {
-          return { ok: false, reason: "USER_CANCELLED" }
-        },
-      },
-    })
+    stubChromePort(() => ({ ok: false, reason: "USER_CANCELLED" }))
     render(
       <AuthProvider>
         <Probe />
@@ -174,17 +190,13 @@ describe("AuthProvider signIn flow", () => {
       .mockResolvedValueOnce(new Response(JSON.stringify({ success: true, data: valid }), { status: 200 }))
     vi.stubGlobal("fetch", fetchMock)
     let cancelled = true
-    vi.stubGlobal("chrome", {
-      runtime: {
-        async sendMessage(_id: string, msg: { type: string }) {
-          if (msg.type !== "bl-auth-request") return { ok: true }
-          if (cancelled) {
-            cancelled = false
-            return { ok: false, reason: "USER_CANCELLED" }
-          }
-          return { ok: true, signedBody: { payload: {}, signature: "", publicKey: {} } }
-        },
-      },
+    stubChromePort((msg) => {
+      if (msg.type !== "bl-auth-request") return { ok: true }
+      if (cancelled) {
+        cancelled = false
+        return { ok: false, reason: "USER_CANCELLED" }
+      }
+      return { ok: true, signedBody: { payload: {}, signature: "", publicKey: {} } }
     })
     render(
       <AuthProvider>

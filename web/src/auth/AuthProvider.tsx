@@ -8,7 +8,7 @@ import {
   revokeSession,
   saveStoredSession,
 } from "@/lib/auth"
-import { requestSignedAssertion } from "@/lib/extension"
+import { signInWithBetterLyrics } from "@/lib/extension"
 import { type ReactNode, createContext, useCallback, useContext, useEffect, useState } from "react"
 
 type SessionState =
@@ -70,7 +70,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const signIn = useCallback(async () => {
     try {
       const { nonce } = await fetchChallenge()
-      const signedBody = await requestSignedAssertion(nonce, window.location.origin)
+      const signedBody = await signInWithBetterLyrics(nonce)
       const session = await postSession(signedBody)
       saveStoredSession(session)
       setPhase({
