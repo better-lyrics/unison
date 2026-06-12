@@ -40,16 +40,19 @@ export function loadEld(): Promise<EldDetector | null> {
 				setTimeout(() => {
 					if (!eldInstance) {
 						log.error("eld load timed out", { ms: Date.now() - t0 })
-						eldLoadPromise = null
 						resolve(null)
 					}
 				}, ELD_LOAD_TIMEOUT_MS)
 			),
-		]).catch((err) => {
-			log.error("eld load failed", { error: (err as Error).message, ms: Date.now() - t0 })
-			eldLoadPromise = null
-			return null
-		})
+		])
+			.catch((err) => {
+				log.error("eld load failed", { error: (err as Error).message, ms: Date.now() - t0 })
+				return null
+			})
+			.then((result) => {
+				if (!result) eldLoadPromise = null
+				return result
+			})
 	}
 	return eldLoadPromise
 }
