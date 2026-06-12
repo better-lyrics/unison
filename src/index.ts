@@ -14,13 +14,13 @@ import { runDumpJob } from "@/jobs/dump"
 import { updateScores } from "@/jobs/score-updater"
 import { authRoutes } from "@/routes/auth"
 import { compatRoutes } from "@/routes/compat"
-import { loadEld } from "@/utils/detect-language"
 import { feedRoutes } from "@/routes/feed"
 import { leaderboardRoutes } from "@/routes/leaderboard"
 import { lyricsRoutes } from "@/routes/lyrics"
 import { requestRoutes } from "@/routes/requests"
 import { userRoutes } from "@/routes/users"
 import { voteRoutes } from "@/routes/votes"
+import { loadEld } from "@/utils/detect-language"
 import { cors } from "@elysiajs/cors"
 import { cron } from "@elysiajs/cron"
 import { node } from "@elysiajs/node"
@@ -242,9 +242,7 @@ cleanupFulfilledRequests(env)
 	.then(({ deleted }) => {
 		if (deleted > 0) log.info("cleanup fulfilled requests complete", { deleted })
 	})
-	.catch((err) =>
-		log.error("cleanup fulfilled requests failed", { error: (err as Error).message }),
-	)
+	.catch((err) => log.error("cleanup fulfilled requests failed", { error: (err as Error).message }))
 
 process.on("unhandledRejection", (reason) => {
 	const err = reason instanceof Error ? reason : new Error(String(reason))
