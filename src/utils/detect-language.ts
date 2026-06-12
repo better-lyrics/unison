@@ -1,33 +1,42 @@
+import { Logger } from "@/infra/logger"
 import type { LyricsFormat } from "@/types"
 import { extractDetectionText, ttmlParser } from "@/utils/extract-text"
 import { francAll } from "franc"
 import { iso6393To1 } from "iso-639-3"
+
+const log = new Logger("detect-language")
 
 export const DETECTOR_VERSION = 3
 
 type EldDetector = {
 	detect(text: string): { language: string; isReliable(): boolean }
 	enableTextCleanup(enabled: boolean): void
-	load(name: string): Promise<boolean>
 }
 let eldInstance: EldDetector | null = null
 let eldLoadPromise: Promise<EldDetector> | null = null
 
-// Indirect to keep the import path opaque to Vite's static analysis. eld ships
-// a 4.4 MB ngrams file that breaks the test runner's dependency optimizer when
-// referenced directly.
-const ELD_MODULE = "eld"
+// Indirect path defeats Vite's static-analysis pre-bundler in the test runner.
+// "eld/large" is the static entry: all ngrams are imported at module-load time
+// so there is no runtime `import('../ngrams/...')` inside eld.load() that
+// could hang under tsx + Node ESM resolution on a Railway container.
+const ELD_MODULE = "eld/large"
 
 export function loadEld(): Promise<EldDetector> {
 	if (eldInstance) return Promise.resolve(eldInstance)
 	if (!eldLoadPromise) {
 		eldLoadPromise = (async () => {
+			const t0 = Date.now()
+			log.info("eld loading")
 			const mod = (await import(ELD_MODULE)) as { eld: EldDetector }
-			await mod.eld.load("large")
 			mod.eld.enableTextCleanup(true)
 			eldInstance = mod.eld
+			log.info("eld loaded", { ms: Date.now() - t0 })
 			return eldInstance
 		})()
+		eldLoadPromise.catch((err) => {
+			log.error("eld load failed", { error: (err as Error).message })
+			eldLoadPromise = null
+		})
 	}
 	return eldLoadPromise
 }
