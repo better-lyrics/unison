@@ -33,7 +33,7 @@ export function extractTtmlLang(ttml: string): string | null {
 		if (!("tt" in rootEl)) continue
 
 		const attrs = rootEl[":@"]
-		const raw = attrs?.["@_lang"] ?? attrs?.["@_xml:lang"]
+		const raw = attrs?.["@_lang"]
 		if (typeof raw !== "string") return null
 
 		const trimmed = raw.trim().toLowerCase()
