@@ -1350,7 +1350,10 @@ describe("submitLyrics language detection", () => {
 		expect(insertCall!.sql).toContain("language")
 		expect(insertCall!.sql).toContain("language_detection_attempted_at")
 		expect(insertCall!.params).toContain("en")
-		expect(insertCall!.params).toHaveLength(15)
+		expect(insertCall!.sql).toContain("language_detector_version")
+		expect(insertCall!.sql).toContain("language_source")
+		expect(insertCall!.params).toContain("detector")
+		expect(insertCall!.params).toHaveLength(17)
 	})
 
 	it("preserves submitter language even when detection disagrees", async () => {
@@ -1375,6 +1378,7 @@ describe("submitLyrics language detection", () => {
 		const insertCall = db.calls.find((c) => c.sql.includes("INSERT INTO lyrics"))
 		expect(insertCall!.params).toContain("es")
 		expect(insertCall!.params).not.toContain("en")
+		expect(insertCall!.params).toContain("submitter")
 		expect(warnSpy).toHaveBeenCalledWith(
 			"language mismatch",
 			expect.objectContaining({ submitted: "es", detected: "en" })
