@@ -6,9 +6,12 @@ use axum::{
     Json, Router,
 };
 use lingua::{Language, LanguageDetector};
+use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::sync::Arc;
+
+const MAX_BATCH_SIZE: usize = 200;
 
 #[derive(Clone)]
 pub struct AppState {
@@ -26,11 +29,22 @@ pub struct DetectResponse {
     pub confidence: f64,
 }
 
+#[derive(Deserialize)]
+pub struct BatchRequest {
+    pub texts: Vec<String>,
+}
+
+#[derive(Serialize)]
+pub struct BatchResponse {
+    pub results: Vec<DetectResponse>,
+}
+
 pub fn build_app(detector: Arc<LanguageDetector>) -> Router {
     let state = AppState { detector };
     Router::new()
         .route("/health", get(health))
         .route("/detect", post(detect))
+        .route("/detect/batch", post(detect_batch))
         .with_state(state)
 }
 
@@ -61,6 +75,52 @@ async fn detect(
     }
     let result = detect_one(&state.detector, &req.text);
     (StatusCode::OK, Json(result)).into_response()
+}
+
+async fn detect_batch(
+    State(state): State<AppState>,
+    payload: Result<Json<BatchRequest>, JsonRejection>,
+) -> Response {
+    let req = match payload {
+        Ok(Json(r)) => r,
+        Err(_) => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(json!({ "error": "invalid request body" })),
+            )
+                .into_response();
+        }
+    };
+    if req.texts.is_empty() {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({ "error": "texts must not be empty" })),
+        )
+            .into_response();
+    }
+    if req.texts.len() > MAX_BATCH_SIZE {
+        return (
+            StatusCode::PAYLOAD_TOO_LARGE,
+            Json(json!({ "error": "batch too large" })),
+        )
+            .into_response();
+    }
+    let detector = state.detector.clone();
+    let results: Vec<DetectResponse> = req
+        .texts
+        .par_iter()
+        .map(|t| {
+            if t.trim().is_empty() {
+                DetectResponse {
+                    iso6391: None,
+                    confidence: 0.0,
+                }
+            } else {
+                detect_one(&detector, t)
+            }
+        })
+        .collect();
+    (StatusCode::OK, Json(BatchResponse { results })).into_response()
 }
 
 fn detect_one(detector: &LanguageDetector, text: &str) -> DetectResponse {
