@@ -13,7 +13,7 @@ type EldDetector = {
 	enableTextCleanup(enabled: boolean): void
 }
 let eldInstance: EldDetector | null = null
-let eldLoadPromise: Promise<EldDetector> | null = null
+let eldLoadPromise: Promise<EldDetector | null> | null = null
 
 // Indirect path defeats Vite's static-analysis pre-bundler in the test runner.
 // "eld/large" is the static entry: all ngrams are imported at module-load time
@@ -21,21 +21,34 @@ let eldLoadPromise: Promise<EldDetector> | null = null
 // could hang under tsx + Node ESM resolution on a Railway container.
 const ELD_MODULE = "eld/large"
 
-export function loadEld(): Promise<EldDetector> {
+const ELD_LOAD_TIMEOUT_MS = 60_000
+
+export function loadEld(): Promise<EldDetector | null> {
 	if (eldInstance) return Promise.resolve(eldInstance)
 	if (!eldLoadPromise) {
-		eldLoadPromise = (async () => {
-			const t0 = Date.now()
-			log.info("eld loading")
-			const mod = (await import(ELD_MODULE)) as { eld: EldDetector }
-			mod.eld.enableTextCleanup(true)
-			eldInstance = mod.eld
-			log.info("eld loaded", { ms: Date.now() - t0 })
-			return eldInstance
-		})()
-		eldLoadPromise.catch((err) => {
-			log.error("eld load failed", { error: (err as Error).message })
+		const t0 = Date.now()
+		log.info("eld loading")
+		eldLoadPromise = Promise.race([
+			(async () => {
+				const mod = (await import(ELD_MODULE)) as { eld: EldDetector }
+				mod.eld.enableTextCleanup(true)
+				eldInstance = mod.eld
+				log.info("eld loaded", { ms: Date.now() - t0 })
+				return eldInstance
+			})(),
+			new Promise<null>((resolve) =>
+				setTimeout(() => {
+					if (!eldInstance) {
+						log.error("eld load timed out", { ms: Date.now() - t0 })
+						eldLoadPromise = null
+						resolve(null)
+					}
+				}, ELD_LOAD_TIMEOUT_MS)
+			),
+		]).catch((err) => {
+			log.error("eld load failed", { error: (err as Error).message, ms: Date.now() - t0 })
 			eldLoadPromise = null
+			return null
 		})
 	}
 	return eldLoadPromise

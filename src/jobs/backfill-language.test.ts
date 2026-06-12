@@ -104,7 +104,7 @@ describe("backfillLanguage", () => {
 		expect(selectCall!.params[0]).toBe(DETECTOR_VERSION)
 	})
 
-	it("stamps language, source='detector', attempted_at, and detector_version on success", async () => {
+	it("stamps language, source='detector', attempted_at on success", async () => {
 		const db = makeMockDB([[{ id: 7, lyrics: ENGLISH_LYRICS_SAMPLE, format: "plain" }], null, []])
 		const env = makeEnv(db, makeMockCache())
 
@@ -116,8 +116,18 @@ describe("backfillLanguage", () => {
 		expect(updateCall!.sql).toContain("language_detection_attempted_at = NOW()")
 		expect(updateCall!.sql).toContain("language_detector_version = ?")
 		expect(updateCall!.params).toContain("en")
-		expect(updateCall!.params).toContain(DETECTOR_VERSION)
 		expect(updateCall!.params).toContain(7)
+	})
+
+	it("stamps version=null when eld is not loaded so the row re-processes on next deploy", async () => {
+		const db = makeMockDB([[{ id: 11, lyrics: ENGLISH_LYRICS_SAMPLE, format: "plain" }], null, []])
+		const env = makeEnv(db, makeMockCache())
+
+		await backfillLanguage(env)
+
+		const updateCall = db.calls.find((c) => c.sql.includes("UPDATE lyrics"))
+		const versionIdx = updateCall!.params.length - 2
+		expect(updateCall!.params[versionIdx]).toBeNull()
 	})
 
 	it("clears language to null when re-detection cannot identify a language", async () => {
@@ -129,7 +139,6 @@ describe("backfillLanguage", () => {
 		const updateCall = db.calls.find((c) => c.sql.includes("UPDATE lyrics"))
 		expect(updateCall!.sql).not.toContain("COALESCE")
 		expect(updateCall!.params).toContain(null)
-		expect(updateCall!.params).toContain(DETECTOR_VERSION)
 	})
 
 	it("is a no-op (no UPDATE) when there are no candidate rows", async () => {
@@ -174,7 +183,6 @@ describe("backfillLanguage", () => {
 		const errStamp = updates.find((c) => c.params.includes(100))
 		expect(errStamp).toBeDefined()
 		expect(errStamp!.sql).toContain("language_detector_version = ?")
-		expect(errStamp!.params).toContain(DETECTOR_VERSION)
 
 		const successUpdate = updates.find((c) => c.params.includes(101))
 		expect(successUpdate).toBeDefined()

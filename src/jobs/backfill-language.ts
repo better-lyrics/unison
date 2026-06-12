@@ -1,7 +1,7 @@
 import { Logger } from "@/infra/logger"
 import type { Env, LyricsFormat } from "@/types"
 import { decompress, isCompressed } from "@/utils/compression"
-import { DETECTOR_VERSION, detectLanguage } from "@/utils/detect-language"
+import { DETECTOR_VERSION, detectLanguage, isEldReady } from "@/utils/detect-language"
 
 const log = new Logger("backfill")
 const BATCH_SIZE = 100
@@ -27,6 +27,7 @@ export async function backfillLanguage(env: Env): Promise<{ scanned: number; upd
 
 		for (const row of rows) {
 			scanned++
+			const stampVersion = isEldReady() ? DETECTOR_VERSION : null
 			try {
 				const content = isCompressed(row.lyrics) ? await decompress(row.lyrics) : row.lyrics
 				const detected = detectLanguage(content, row.format)
@@ -38,7 +39,7 @@ export async function backfillLanguage(env: Env): Promise<{ scanned: number; upd
 					     language_detector_version = ?
 					 WHERE id = ?`
 				)
-					.bind(detected, DETECTOR_VERSION, row.id)
+					.bind(detected, stampVersion, row.id)
 					.run()
 				if (detected) updated++
 			} catch (err) {
@@ -50,7 +51,7 @@ export async function backfillLanguage(env: Env): Promise<{ scanned: number; upd
 						     language_detector_version = ?
 						 WHERE id = ?`
 					)
-						.bind(DETECTOR_VERSION, row.id)
+						.bind(stampVersion, row.id)
 						.run()
 				} catch (stampErr) {
 					log.warn("failed to stamp attempted_at on errored row", {
@@ -61,7 +62,12 @@ export async function backfillLanguage(env: Env): Promise<{ scanned: number; upd
 			}
 		}
 
-		log.info("language backfill batch complete", { batch: rows.length, scanned, updated })
+		log.info("language backfill batch complete", {
+			batch: rows.length,
+			scanned,
+			updated,
+			eldReady: isEldReady(),
+		})
 	}
 
 	return { scanned, updated }
