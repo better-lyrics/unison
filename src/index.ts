@@ -20,6 +20,7 @@ import { lyricsRoutes } from "@/routes/lyrics"
 import { requestRoutes } from "@/routes/requests"
 import { userRoutes } from "@/routes/users"
 import { voteRoutes } from "@/routes/votes"
+import { loadEld } from "@/utils/detect-language"
 import { cors } from "@elysiajs/cors"
 import { cron } from "@elysiajs/cron"
 import { node } from "@elysiajs/node"
@@ -230,7 +231,8 @@ backfillFormatDetection(env)
 	})
 	.catch((err) => log.error("format backfill failed", { error: (err as Error).message }))
 
-backfillLanguage(env)
+loadEld()
+	.then(() => backfillLanguage(env))
 	.then(({ scanned, updated }) => {
 		if (updated > 0) log.info("language backfill complete", { scanned, updated })
 	})
@@ -240,9 +242,7 @@ cleanupFulfilledRequests(env)
 	.then(({ deleted }) => {
 		if (deleted > 0) log.info("cleanup fulfilled requests complete", { deleted })
 	})
-	.catch((err) =>
-		log.error("cleanup fulfilled requests failed", { error: (err as Error).message }),
-	)
+	.catch((err) => log.error("cleanup fulfilled requests failed", { error: (err as Error).message }))
 
 process.on("unhandledRejection", (reason) => {
 	const err = reason instanceof Error ? reason : new Error(String(reason))

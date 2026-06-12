@@ -10,7 +10,7 @@ import {
 import { Logger } from "@/infra/logger"
 import type { Env, LyricsRow, LyricsSearchResult, LyricsSubmission } from "@/types"
 import { compress, decompress, isCompressed } from "@/utils/compression"
-import { detectLanguage } from "@/utils/detect-language"
+import { DETECTOR_VERSION, detectLanguage, isEldReady } from "@/utils/detect-language"
 import { extractPlainText } from "@/utils/extract-text"
 import { normalize, normalizeArtist, normalizeSong } from "@/utils/normalize"
 
@@ -141,11 +141,13 @@ export async function submitLyrics(
 ): Promise<{ id: number; created: boolean }> {
 	const compressedLyrics = await compress(submission.lyrics)
 	const plainText = extractPlainText(submission.lyrics, submission.format)
-	const detected = detectLanguage(submission.lyrics, submission.format, plainText)
+	const detected = detectLanguage(submission.lyrics, submission.format)
 	const submitted = submission.language?.trim() || null
 	let finalLanguage: string | null
+	let languageSource: string
 	if (submitted) {
 		finalLanguage = submitted
+		languageSource = "submitter"
 		if (detected && detected !== submitted) {
 			log.warn("language mismatch", {
 				videoId: submission.videoId,
@@ -156,6 +158,7 @@ export async function submitLyrics(
 		}
 	} else {
 		finalLanguage = detected
+		languageSource = "detector"
 	}
 	const songNorm = normalizeSong(submission.song)
 	const artistNorm = normalizeArtist(submission.artist)
@@ -185,8 +188,9 @@ export async function submitLyrics(
 			video_id, song, artist, album, isrc,
 			duration, song_norm, artist_norm, album_norm,
 			lyrics, format, language, sync_type, submitter_id,
-			lyrics_text_search, language_detection_attempted_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, to_tsvector('simple', ?), NOW())
+			lyrics_text_search, language_detection_attempted_at,
+			language_detector_version, language_source
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, to_tsvector('simple', ?), NOW(), ?, ?)
 		RETURNING id
 		`
 	)
@@ -205,7 +209,9 @@ export async function submitLyrics(
 			finalLanguage,
 			submission.syncType,
 			submitterId,
-			plainText
+			plainText,
+			isEldReady() ? DETECTOR_VERSION : null,
+			languageSource
 		)
 		.first<{ id: number }>()
 
