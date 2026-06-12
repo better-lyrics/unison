@@ -5,12 +5,17 @@ import { DETECTOR_VERSION, detectLanguage, isEldReady } from "@/utils/detect-lan
 
 const log = new Logger("backfill")
 const BATCH_SIZE = 100
+// Sanity ceiling: stop the loop if the same row keeps failing to stamp
+// (decompress error AND fallback stamp UPDATE error in the same iteration).
+// One million rows is well past anything realistic for this corpus and
+// guarantees we exit even in pathological failure modes.
+const MAX_SCANNED = 1_000_000
 
 export async function backfillLanguage(env: Env): Promise<{ scanned: number; updated: number }> {
 	let scanned = 0
 	let updated = 0
 
-	while (true) {
+	while (scanned < MAX_SCANNED) {
 		const batch = await env.DB.prepare(
 			`SELECT id, lyrics, format FROM lyrics
 			 WHERE COALESCE(language_source, 'detector') <> 'submitter'
@@ -68,6 +73,10 @@ export async function backfillLanguage(env: Env): Promise<{ scanned: number; upd
 			updated,
 			eldReady: isEldReady(),
 		})
+	}
+
+	if (scanned >= MAX_SCANNED) {
+		log.warn("language backfill hit scan ceiling", { scanned, updated })
 	}
 
 	return { scanned, updated }
