@@ -6,6 +6,7 @@ import { closePool } from "@/infra/database"
 import { createEnv } from "@/infra/env"
 import { Logger, flushLogs } from "@/infra/logger"
 import { backfillFormatDetection } from "@/jobs/backfill-format-detection"
+import { backfillLanguage } from "@/jobs/backfill-language"
 import { backfillSyncType } from "@/jobs/backfill-synctype"
 import { backfillTextSearch } from "@/jobs/backfill-text-search"
 import { cleanupFulfilledRequests } from "@/jobs/cleanup-fulfilled-requests"
@@ -19,6 +20,7 @@ import { lyricsRoutes } from "@/routes/lyrics"
 import { requestRoutes } from "@/routes/requests"
 import { userRoutes } from "@/routes/users"
 import { voteRoutes } from "@/routes/votes"
+import { loadEld } from "@/utils/detect-language"
 import { cors } from "@elysiajs/cors"
 import { cron } from "@elysiajs/cron"
 import { node } from "@elysiajs/node"
@@ -229,13 +231,18 @@ backfillFormatDetection(env)
 	})
 	.catch((err) => log.error("format backfill failed", { error: (err as Error).message }))
 
+loadEld()
+	.then(() => backfillLanguage(env))
+	.then(({ scanned, updated }) => {
+		log.info("language backfill complete", { scanned, updated })
+	})
+	.catch((err) => log.error("language backfill failed", { error: (err as Error).message }))
+
 cleanupFulfilledRequests(env)
 	.then(({ deleted }) => {
 		if (deleted > 0) log.info("cleanup fulfilled requests complete", { deleted })
 	})
-	.catch((err) =>
-		log.error("cleanup fulfilled requests failed", { error: (err as Error).message }),
-	)
+	.catch((err) => log.error("cleanup fulfilled requests failed", { error: (err as Error).message }))
 
 process.on("unhandledRejection", (reason) => {
 	const err = reason instanceof Error ? reason : new Error(String(reason))

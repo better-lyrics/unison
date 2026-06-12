@@ -1,4 +1,5 @@
 import { config } from "@/config"
+import { Logger } from "@/infra/logger"
 import type { Env, LyricsRow, LyricsSearchResult, LyricsSubmission } from "@/types"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import {
@@ -594,9 +595,7 @@ describe("invalidateCacheAfterDelete", () => {
 
 describe("invalidateCacheForSubmitter", () => {
 	it("deletes v:<videoId> for every row returned by the join", async () => {
-		const db = createMockDB([
-			[{ video_id: "vA" }, { video_id: "vB" }, { video_id: "vC" }],
-		])
+		const db = createMockDB([[{ video_id: "vA" }, { video_id: "vB" }, { video_id: "vC" }]])
 		const cache = createMockCache()
 		const env = createEnv(db, cache)
 
@@ -1291,13 +1290,7 @@ describe("submitLyrics fulfillment integration", () => {
 	})
 
 	it("skips fulfillment when a prior synced variant exists", async () => {
-		const db = createMockDB([
-			{ count: 0 },
-			{ id: 557 },
-			{ key_id: "k1" },
-			null,
-			{ "1": 1 },
-		])
+		const db = createMockDB([{ count: 0 }, { id: 557 }, { key_id: "k1" }, null, { "1": 1 }])
 		const cache = createMockCache()
 		const env = createEnv(db, cache)
 
@@ -1324,5 +1317,116 @@ describe("submitLyrics variant cap", () => {
 		expect(countCall).toBeDefined()
 		expect(countCall!.sql).toMatch(/reputation_penalized\s*=\s*TRUE/i)
 		expect(countCall!.sql).toMatch(/deleted_at\s+IS\s+NULL/i)
+	})
+})
+
+describe("submitLyrics language detection", () => {
+	const ENGLISH_LYRICS_SAMPLE = [
+		"In your arms I find the answer to every question",
+		"You whisper softly and the world begins to spin",
+		"Holding on tight to the moments we have together",
+		"Every heartbeat is a song that only we can hear",
+	].join("\n")
+
+	it("auto-detects language when submitter omits it", async () => {
+		const db = createMockDB([{ count: 0 }, { id: 42 }])
+		const cache = createMockCache()
+		const env = createEnv(db, cache)
+
+		const submission: LyricsSubmission = {
+			videoId: "vid42",
+			song: "Test",
+			artist: "Tester",
+			duration: 200,
+			lyrics: ENGLISH_LYRICS_SAMPLE,
+			format: "plain",
+			syncType: "plain",
+		}
+
+		await submitLyrics(env, submission, 1)
+
+		const insertCall = db.calls.find((c) => c.sql.includes("INSERT INTO lyrics"))
+		expect(insertCall).toBeDefined()
+		expect(insertCall!.sql).toContain("language")
+		expect(insertCall!.sql).toContain("language_detection_attempted_at")
+		expect(insertCall!.params).toContain("en")
+		expect(insertCall!.sql).toContain("language_detector_version")
+		expect(insertCall!.sql).toContain("language_source")
+		expect(insertCall!.params).toContain("detector")
+		expect(insertCall!.params).toHaveLength(17)
+	})
+
+	it("stamps null detector version when eld is not loaded yet (cold-start window)", async () => {
+		const db = createMockDB([{ count: 0 }, { id: 45 }])
+		const cache = createMockCache()
+		const env = createEnv(db, cache)
+
+		const submission: LyricsSubmission = {
+			videoId: "vid45",
+			song: "Test",
+			artist: "Tester",
+			duration: 200,
+			lyrics: ENGLISH_LYRICS_SAMPLE,
+			format: "plain",
+			syncType: "plain",
+		}
+
+		await submitLyrics(env, submission, 1)
+
+		const insertCall = db.calls.find((c) => c.sql.includes("INSERT INTO lyrics"))
+		const versionIdx = insertCall!.params.length - 2
+		expect(insertCall!.params[versionIdx]).toBeNull()
+	})
+
+	it("preserves submitter language even when detection disagrees", async () => {
+		const warnSpy = vi.spyOn(Logger.prototype, "warn")
+		const db = createMockDB([{ count: 0 }, { id: 43 }])
+		const cache = createMockCache()
+		const env = createEnv(db, cache)
+
+		const submission: LyricsSubmission = {
+			videoId: "vid43",
+			song: "Test",
+			artist: "Tester",
+			duration: 200,
+			lyrics: ENGLISH_LYRICS_SAMPLE,
+			format: "plain",
+			syncType: "plain",
+			language: "es",
+		}
+
+		await submitLyrics(env, submission, 1)
+
+		const insertCall = db.calls.find((c) => c.sql.includes("INSERT INTO lyrics"))
+		expect(insertCall!.params).toContain("es")
+		expect(insertCall!.params).not.toContain("en")
+		expect(insertCall!.params).toContain("submitter")
+		expect(warnSpy).toHaveBeenCalledWith(
+			"language mismatch",
+			expect.objectContaining({ submitted: "es", detected: "en" })
+		)
+		warnSpy.mockRestore()
+	})
+
+	it("stores null language when detection cannot confidently identify a language", async () => {
+		const db = createMockDB([{ count: 0 }, { id: 44 }])
+		const cache = createMockCache()
+		const env = createEnv(db, cache)
+
+		const submission: LyricsSubmission = {
+			videoId: "vid44",
+			song: "Instrumental",
+			artist: "Tester",
+			duration: 200,
+			lyrics: "oh oh oh",
+			format: "plain",
+			syncType: "plain",
+		}
+
+		await submitLyrics(env, submission, 1)
+
+		const insertCall = db.calls.find((c) => c.sql.includes("INSERT INTO lyrics"))
+		expect(insertCall!.sql).toContain("language_detection_attempted_at")
+		expect(insertCall!.params).toContain(null)
 	})
 })
