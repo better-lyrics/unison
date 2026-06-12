@@ -1356,6 +1356,28 @@ describe("submitLyrics language detection", () => {
 		expect(insertCall!.params).toHaveLength(17)
 	})
 
+	it("stamps null detector version when eld is not loaded yet (cold-start window)", async () => {
+		const db = createMockDB([{ count: 0 }, { id: 45 }])
+		const cache = createMockCache()
+		const env = createEnv(db, cache)
+
+		const submission: LyricsSubmission = {
+			videoId: "vid45",
+			song: "Test",
+			artist: "Tester",
+			duration: 200,
+			lyrics: ENGLISH_LYRICS_SAMPLE,
+			format: "plain",
+			syncType: "plain",
+		}
+
+		await submitLyrics(env, submission, 1)
+
+		const insertCall = db.calls.find((c) => c.sql.includes("INSERT INTO lyrics"))
+		const versionIdx = insertCall!.params.length - 2
+		expect(insertCall!.params[versionIdx]).toBeNull()
+	})
+
 	it("preserves submitter language even when detection disagrees", async () => {
 		const warnSpy = vi.spyOn(Logger.prototype, "warn")
 		const db = createMockDB([{ count: 0 }, { id: 43 }])

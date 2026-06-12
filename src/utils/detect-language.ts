@@ -1,7 +1,7 @@
-import { francAll } from "franc"
-import { iso6393To1 } from "iso-639-3"
 import type { LyricsFormat } from "@/types"
 import { extractDetectionText, ttmlParser } from "@/utils/extract-text"
+import { francAll } from "franc"
+import { iso6393To1 } from "iso-639-3"
 
 export const DETECTOR_VERSION = 3
 
@@ -30,6 +30,10 @@ export function loadEld(): Promise<EldDetector> {
 		})()
 	}
 	return eldLoadPromise
+}
+
+export function isEldReady(): boolean {
+	return eldInstance !== null
 }
 
 const FRANC_INDIVIDUAL_TO_639_1: Record<string, string> = {

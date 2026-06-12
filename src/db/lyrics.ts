@@ -10,7 +10,7 @@ import {
 import { Logger } from "@/infra/logger"
 import type { Env, LyricsRow, LyricsSearchResult, LyricsSubmission } from "@/types"
 import { compress, decompress, isCompressed } from "@/utils/compression"
-import { DETECTOR_VERSION, detectLanguage } from "@/utils/detect-language"
+import { DETECTOR_VERSION, detectLanguage, isEldReady } from "@/utils/detect-language"
 import { extractPlainText } from "@/utils/extract-text"
 import { normalize, normalizeArtist, normalizeSong } from "@/utils/normalize"
 
@@ -210,7 +210,7 @@ export async function submitLyrics(
 			submission.syncType,
 			submitterId,
 			plainText,
-			DETECTOR_VERSION,
+			isEldReady() ? DETECTOR_VERSION : null,
 			languageSource
 		)
 		.first<{ id: number }>()
