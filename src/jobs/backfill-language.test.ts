@@ -1,5 +1,6 @@
 import type { Env } from "@/types"
 import { compress } from "@/utils/compression"
+import { DETECTOR_VERSION } from "@/utils/detect-language"
 import { describe, expect, it } from "vitest"
 import { backfillLanguage } from "./backfill-language"
 
@@ -88,40 +89,47 @@ const ENGLISH_LYRICS_SAMPLE = [
 ].join("\n")
 
 describe("backfillLanguage", () => {
-	it("selects only rows where language and language_detection_attempted_at are NULL and the row is not deleted", async () => {
+	it("selects rows below the current detector version, excludes deleted and submitter-set rows", async () => {
 		const db = makeMockDB([[{ id: 1, lyrics: ENGLISH_LYRICS_SAMPLE, format: "plain" }], null, []])
 		const env = makeEnv(db, makeMockCache())
 
 		await backfillLanguage(env)
 
 		const selectCall = db.calls.find((c) => c.sql.includes("SELECT"))
-		expect(selectCall!.sql).toContain("language IS NULL")
-		expect(selectCall!.sql).toContain("language_detection_attempted_at IS NULL")
+		expect(selectCall!.sql).toContain("language_detector_version IS NULL")
+		expect(selectCall!.sql).toContain("language_detector_version <")
 		expect(selectCall!.sql).toContain("deleted_at IS NULL")
+		expect(selectCall!.sql).toContain("language_source")
+		expect(selectCall!.sql).toContain("'submitter'")
+		expect(selectCall!.params[0]).toBe(DETECTOR_VERSION)
 	})
 
-	it("stamps language and language_detection_attempted_at on successful detection", async () => {
+	it("stamps language, source='detector', attempted_at, and detector_version on success", async () => {
 		const db = makeMockDB([[{ id: 7, lyrics: ENGLISH_LYRICS_SAMPLE, format: "plain" }], null, []])
 		const env = makeEnv(db, makeMockCache())
 
 		await backfillLanguage(env)
 
 		const updateCall = db.calls.find((c) => c.sql.includes("UPDATE lyrics"))
-		expect(updateCall!.sql).toContain("language = ")
+		expect(updateCall!.sql).toContain("language = ?")
+		expect(updateCall!.sql).toContain("language_source = 'detector'")
 		expect(updateCall!.sql).toContain("language_detection_attempted_at = NOW()")
+		expect(updateCall!.sql).toContain("language_detector_version = ?")
 		expect(updateCall!.params).toContain("en")
+		expect(updateCall!.params).toContain(DETECTOR_VERSION)
 		expect(updateCall!.params).toContain(7)
 	})
 
-	it("stamps language_detection_attempted_at even when detection returns null", async () => {
+	it("clears language to null when re-detection cannot identify a language", async () => {
 		const db = makeMockDB([[{ id: 8, lyrics: "oh oh", format: "plain" }], null, []])
 		const env = makeEnv(db, makeMockCache())
 
 		await backfillLanguage(env)
 
 		const updateCall = db.calls.find((c) => c.sql.includes("UPDATE lyrics"))
-		expect(updateCall!.sql).toContain("language_detection_attempted_at = NOW()")
+		expect(updateCall!.sql).not.toContain("COALESCE")
 		expect(updateCall!.params).toContain(null)
+		expect(updateCall!.params).toContain(DETECTOR_VERSION)
 	})
 
 	it("is a no-op (no UPDATE) when there are no candidate rows", async () => {
@@ -144,7 +152,7 @@ describe("backfillLanguage", () => {
 		expect(updateCall!.params).toContain("en")
 	})
 
-	it("continues processing and stamps attempted_at when a row throws on decompress", async () => {
+	it("continues processing and stamps version when a row throws on decompress", async () => {
 		const valid = await compress(ENGLISH_LYRICS_SAMPLE)
 		const corruptedButLooksCompressed = "H4sIAAAAAA_NOTVALIDBASE64DATA"
 		const db = makeMockDB([
@@ -165,7 +173,8 @@ describe("backfillLanguage", () => {
 
 		const errStamp = updates.find((c) => c.params.includes(100))
 		expect(errStamp).toBeDefined()
-		expect(errStamp!.sql).toContain("language_detection_attempted_at = NOW()")
+		expect(errStamp!.sql).toContain("language_detector_version = ?")
+		expect(errStamp!.params).toContain(DETECTOR_VERSION)
 
 		const successUpdate = updates.find((c) => c.params.includes(101))
 		expect(successUpdate).toBeDefined()
