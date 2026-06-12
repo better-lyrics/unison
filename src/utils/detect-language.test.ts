@@ -7,6 +7,12 @@ import {
 	mapTo639_1,
 } from "./detect-language"
 
+// Note: these unit tests cover the franc-only fallback path (the script direct
+// mappings, blocklist, and 639-1 whitelist). eld is loaded lazily at runtime
+// and its end-to-end behaviour is exercised by scripts/test-eld.ts and the
+// audit script against prod data. Pulling eld's 4.4 MB ngrams file through
+// vitest's dependency optimizer hangs the runner.
+
 describe("mapTo639_1", () => {
 	describe("happy paths", () => {
 		it("maps eng to en", () => {
@@ -323,6 +329,16 @@ describe("detectLanguage", () => {
 
 		it("returns es for Spanish lyrics inside TTML that carries Western songwriter names", () => {
 			expect(detectLanguage(SPANISH_TTML_WITH_SONGWRITERS, "ttml")).toBe("es")
+		})
+
+		it("returns en for English rap with AAVE slang that franc misclassifies as sco", () => {
+			const text = [
+				"Chase Mitchell pop a hundred fuckin bottles for a hundred fuckin thots",
+				"I roll with a hundred fuckin niggas and a hundred fuckin shots",
+				"What did you do to me look what did you do to me",
+				"Tryna get through to you tryna get through to you",
+			].join("\n")
+			expect(detectLanguage(text, "plain")).toBe("en")
 		})
 	})
 

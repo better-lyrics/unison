@@ -3,7 +3,34 @@ import { iso6393To1 } from "iso-639-3"
 import type { LyricsFormat } from "@/types"
 import { extractDetectionText, ttmlParser } from "@/utils/extract-text"
 
-export const DETECTOR_VERSION = 2
+export const DETECTOR_VERSION = 3
+
+type EldDetector = {
+	detect(text: string): { language: string; isReliable(): boolean }
+	enableTextCleanup(enabled: boolean): void
+	load(name: string): Promise<boolean>
+}
+let eldInstance: EldDetector | null = null
+let eldLoadPromise: Promise<EldDetector> | null = null
+
+// Indirect to keep the import path opaque to Vite's static analysis. eld ships
+// a 4.4 MB ngrams file that breaks the test runner's dependency optimizer when
+// referenced directly.
+const ELD_MODULE = "eld"
+
+export function loadEld(): Promise<EldDetector> {
+	if (eldInstance) return Promise.resolve(eldInstance)
+	if (!eldLoadPromise) {
+		eldLoadPromise = (async () => {
+			const mod = (await import(ELD_MODULE)) as { eld: EldDetector }
+			await mod.eld.load("large")
+			mod.eld.enableTextCleanup(true)
+			eldInstance = mod.eld
+			return eldInstance
+		})()
+	}
+	return eldLoadPromise
+}
 
 const FRANC_INDIVIDUAL_TO_639_1: Record<string, string> = {
 	cmn: "zh",
@@ -154,6 +181,11 @@ export function detectLanguage(lyrics: string, format: LyricsFormat): string | n
 
 	const hint = detectByScript(text)
 	if (hint.directLanguage) return hint.directLanguage
+
+	if (eldInstance) {
+		const eldResult = eldInstance.detect(text)
+		if (eldResult.isReliable() && eldResult.language) return eldResult.language
+	}
 
 	const opts: { minLength: number; only?: string[] } = { minLength: MIN_LENGTH }
 	if (hint.restrictTo) opts.only = hint.restrictTo

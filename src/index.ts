@@ -14,6 +14,7 @@ import { runDumpJob } from "@/jobs/dump"
 import { updateScores } from "@/jobs/score-updater"
 import { authRoutes } from "@/routes/auth"
 import { compatRoutes } from "@/routes/compat"
+import { loadEld } from "@/utils/detect-language"
 import { feedRoutes } from "@/routes/feed"
 import { leaderboardRoutes } from "@/routes/leaderboard"
 import { lyricsRoutes } from "@/routes/lyrics"
@@ -230,7 +231,8 @@ backfillFormatDetection(env)
 	})
 	.catch((err) => log.error("format backfill failed", { error: (err as Error).message }))
 
-backfillLanguage(env)
+loadEld()
+	.then(() => backfillLanguage(env))
 	.then(({ scanned, updated }) => {
 		if (updated > 0) log.info("language backfill complete", { scanned, updated })
 	})
