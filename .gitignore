@@ -148,3 +148,6 @@ wrangler.toml
 
 # CLI utils
 cli/
+
+# Local audit scripts (uncommitted, run against prod)
+scripts/audit-language.ts

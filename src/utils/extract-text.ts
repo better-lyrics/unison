@@ -2,7 +2,7 @@ import { XMLParser } from "fast-xml-parser"
 import type { LyricsFormat } from "@/types"
 import { parseLrc } from "@/utils/lrc"
 
-const parser = new XMLParser({
+export const ttmlParser = new XMLParser({
 	ignoreAttributes: false,
 	attributeNamePrefix: "@_",
 	textNodeName: "#text",
@@ -17,7 +17,7 @@ const parser = new XMLParser({
 type ParsedNode = Record<string, unknown>
 
 function extractTtmlText(ttml: string): string {
-	const parsed = parser.parse(ttml) as unknown[]
+	const parsed = ttmlParser.parse(ttml) as unknown[]
 	const lines: string[] = []
 
 	// Concatenate all text within a node tree, preserving whitespace between spans
