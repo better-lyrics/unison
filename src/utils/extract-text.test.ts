@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { extractDetectionText, extractPlainText, extractTtmlBody } from "./extract-text"
+import { extractPlainText } from "./extract-text"
 
 describe("extractPlainText", () => {
 	describe("plain format", () => {
@@ -257,67 +257,5 @@ describe("extractPlainText", () => {
 			const result = extractPlainText(ttml, "ttml")
 			expect(result).toBe("")
 		})
-	})
-})
-
-describe("extractTtmlBody", () => {
-	it("excludes songwriter metadata", () => {
-		const ttml = `<?xml version="1.0" encoding="UTF-8"?>
-<tt xmlns="http://www.w3.org/ns/ttml" xmlns:ttm="http://www.w3.org/ns/ttml#metadata" lang="en">
-  <head>
-    <metadata>
-      <songwriters>
-        <songwriter>Elton John</songwriter>
-        <songwriter>Bernie Taupin</songwriter>
-      </songwriters>
-    </metadata>
-  </head>
-  <body>
-    <div>
-      <p begin="00:15.000" end="00:20.000">Some lyrics here</p>
-    </div>
-  </body>
-</tt>`
-
-		const result = extractTtmlBody(ttml)
-		expect(result).toContain("Some lyrics here")
-		expect(result).not.toContain("Elton John")
-		expect(result).not.toContain("Bernie Taupin")
-	})
-
-	it("extracts only body paragraphs from nested word-synced spans", () => {
-		const ttml = `<tt xmlns="http://www.w3.org/ns/ttml" lang="en"><head><metadata><songwriters><songwriter>Ghost Writer</songwriter></songwriters></metadata></head><body><div><p><span>네 품 </span><span>안에서</span></p></div></body></tt>`
-
-		const result = extractTtmlBody(ttml)
-		expect(result).toContain("네 품 안에서")
-		expect(result).not.toContain("Ghost Writer")
-	})
-
-	it("returns empty string when body is empty", () => {
-		const ttml = `<tt xmlns="http://www.w3.org/ns/ttml"><body></body></tt>`
-		expect(extractTtmlBody(ttml)).toBe("")
-	})
-
-	it("returns empty string for non-tt root", () => {
-		expect(extractTtmlBody("<root><p>hi</p></root>")).toBe("")
-	})
-})
-
-describe("extractDetectionText", () => {
-	it("routes plain through as-is", () => {
-		expect(extractDetectionText("hello world", "plain")).toBe("hello world")
-	})
-
-	it("strips LRC timestamps", () => {
-		const lrc = "[00:15.00]Line one\n[00:20.00]Line two"
-		expect(extractDetectionText(lrc, "lrc")).toBe("Line one\nLine two")
-	})
-
-	it("routes TTML through body-only extraction (excludes songwriters)", () => {
-		const ttml =
-			"<tt><head><metadata><songwriters><songwriter>Some Writer</songwriter></songwriters></metadata></head><body><div><p>네 품 안에서</p></div></body></tt>"
-		const result = extractDetectionText(ttml, "ttml")
-		expect(result).toContain("네 품 안에서")
-		expect(result).not.toContain("Some Writer")
 	})
 })

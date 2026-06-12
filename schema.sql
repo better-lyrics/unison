@@ -123,20 +123,6 @@ CREATE INDEX IF NOT EXISTS idx_lyrics_album_norm_trgm ON lyrics USING GIN (album
 ALTER TABLE lyrics ADD COLUMN IF NOT EXISTS lyrics_text_search tsvector;
 CREATE INDEX IF NOT EXISTS idx_lyrics_text_search ON lyrics USING GIN (lyrics_text_search);
 
--- Language auto-detection: tracks whether we have attempted detection
--- on this row, so the backfill job stays idempotent and the column
--- `language` keeps its semantic meaning (NULL = unknown).
-ALTER TABLE lyrics ADD COLUMN IF NOT EXISTS language_detection_attempted_at TIMESTAMPTZ;
--- Detector revision the row was last evaluated against. NULL means
--- pre-versioning or never evaluated. Backfill picks up rows where
--- this is NULL or below the current DETECTOR_VERSION.
-ALTER TABLE lyrics ADD COLUMN IF NOT EXISTS language_detector_version SMALLINT;
--- 'submitter' if the row's language came from the submitter, 'detector'
--- if it was auto-detected. NULL on pre-source-tracking rows (treated
--- as detector-sourced for backfill purposes). The backfill never
--- overwrites a row whose source is 'submitter'.
-ALTER TABLE lyrics ADD COLUMN IF NOT EXISTS language_source TEXT;
-
 -- Multi-variant lyrics: allow multiple entries per video_id
 -- Drop the unique constraint so multiple submissions can coexist
 ALTER TABLE lyrics DROP CONSTRAINT IF EXISTS lyrics_video_id_key;
