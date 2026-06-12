@@ -234,7 +234,7 @@ backfillFormatDetection(env)
 loadEld()
 	.then(() => backfillLanguage(env))
 	.then(({ scanned, updated }) => {
-		if (updated > 0) log.info("language backfill complete", { scanned, updated })
+		log.info("language backfill complete", { scanned, updated })
 	})
 	.catch((err) => log.error("language backfill failed", { error: (err as Error).message }))
 
