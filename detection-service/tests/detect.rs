@@ -29,11 +29,7 @@ async fn post_detect(text: &str) -> (StatusCode, serde_json::Value) {
         .unwrap();
     let status = res.status();
     let bytes = res.into_body().collect().await.unwrap().to_bytes();
-    let json = if bytes.is_empty() {
-        serde_json::Value::Null
-    } else {
-        serde_json::from_slice(&bytes).unwrap()
-    };
+    let json: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
     (status, json)
 }
 
@@ -82,8 +78,9 @@ async fn detects_english() {
 
 #[tokio::test]
 async fn empty_text_returns_400() {
-    let (status, _) = post_detect("").await;
+    let (status, json) = post_detect("").await;
     assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(json["error"], "text must not be empty");
 }
 
 #[tokio::test]
@@ -101,4 +98,7 @@ async fn missing_text_field_returns_400() {
         .await
         .unwrap();
     assert_eq!(res.status(), StatusCode::BAD_REQUEST);
+    let bytes = res.into_body().collect().await.unwrap().to_bytes();
+    let json: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+    assert_eq!(json["error"], "invalid request body");
 }

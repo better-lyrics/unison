@@ -44,13 +44,23 @@ async fn detect(
 ) -> Response {
     let Json(req) = match payload {
         Ok(json) => json,
-        Err(_) => return StatusCode::BAD_REQUEST.into_response(),
+        Err(_) => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(json!({ "error": "invalid request body" })),
+            )
+                .into_response();
+        }
     };
     if req.text.trim().is_empty() {
-        return StatusCode::BAD_REQUEST.into_response();
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({ "error": "text must not be empty" })),
+        )
+            .into_response();
     }
     let result = detect_one(&state.detector, &req.text);
-    Json(result).into_response()
+    (StatusCode::OK, Json(result)).into_response()
 }
 
 fn detect_one(detector: &LanguageDetector, text: &str) -> DetectResponse {
