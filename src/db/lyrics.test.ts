@@ -1,6 +1,7 @@
 import { config } from "@/config"
 import type { Env, LyricsRow, LyricsSearchResult, LyricsSubmission } from "@/types"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import { DETECTOR_VERSION } from "@/utils/detect-language"
 import {
 	findBySongArtist,
 	findByVideoId,
@@ -1257,6 +1258,15 @@ function buildSubmission(over: Partial<LyricsSubmission> = {}): LyricsSubmission
 }
 
 describe("submitLyrics fulfillment integration", () => {
+	beforeEach(() => {
+		vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(null, { status: 503 })))
+	})
+
+	afterEach(() => {
+		vi.unstubAllEnvs()
+		vi.restoreAllMocks()
+	})
+
 	it("records a fulfillment for synced submissions with live demand", async () => {
 		const db = createMockDB([
 			{ count: 0 },
@@ -1305,6 +1315,103 @@ describe("submitLyrics fulfillment integration", () => {
 
 		const sqls = db.calls.map((c) => c.sql).join("\n")
 		expect(sqls).not.toMatch(/INSERT INTO request_fulfillments/i)
+	})
+})
+
+describe("submitLyrics language detection", () => {
+	afterEach(() => {
+		vi.unstubAllEnvs()
+		vi.restoreAllMocks()
+	})
+
+	it("uses submitter-provided language and marks the source as 'submitter'", async () => {
+		const db = createMockDB([{ count: 0 }, { id: 1001 }])
+		const cache = createMockCache()
+		const env = createEnv(db, cache)
+		const fetchSpy = vi.fn()
+		vi.stubGlobal("fetch", fetchSpy)
+
+		await submitLyrics(env, buildSubmission({ language: "ja", syncType: "plain" }), 7)
+
+		expect(fetchSpy).not.toHaveBeenCalled()
+		const insert = db.calls.find((c) => /INSERT INTO lyrics/i.test(c.sql))
+		expect(insert).toBeDefined()
+		expect(insert!.sql).toMatch(/language_source/i)
+		expect(insert!.params).toContain("ja")
+		expect(insert!.params).toContain("submitter")
+	})
+
+	it("calls the detection service when submitter did not provide a language and stamps the detected language", async () => {
+		vi.stubEnv("DETECTION_URL", "http://detect.test")
+		const db = createMockDB([{ count: 0 }, { id: 1002 }])
+		const cache = createMockCache()
+		const env = createEnv(db, cache)
+		vi.stubGlobal(
+			"fetch",
+			vi.fn().mockResolvedValue(
+				new Response(JSON.stringify({ iso6391: "ko", confidence: 0.92 }), {
+					status: 200,
+					headers: { "content-type": "application/json" },
+				})
+			)
+		)
+
+		await submitLyrics(
+			env,
+			buildSubmission({
+				language: undefined,
+				syncType: "plain",
+				lyrics: "[00:00.00] 안녕하세요 반갑습니다",
+			}),
+			7
+		)
+
+		const insert = db.calls.find((c) => /INSERT INTO lyrics/i.test(c.sql))
+		expect(insert).toBeDefined()
+		expect(insert!.params).toContain("ko")
+		expect(insert!.params).toContain("detector")
+		expect(insert!.params).toContain(DETECTOR_VERSION)
+	})
+
+	it("stamps null language with the current detector version when confidence is low", async () => {
+		vi.stubEnv("DETECTION_URL", "http://detect.test")
+		const db = createMockDB([{ count: 0 }, { id: 1003 }])
+		const cache = createMockCache()
+		const env = createEnv(db, cache)
+		vi.stubGlobal(
+			"fetch",
+			vi.fn().mockResolvedValue(
+				new Response(JSON.stringify({ iso6391: "en", confidence: 0.2 }), {
+					status: 200,
+					headers: { "content-type": "application/json" },
+				})
+			)
+		)
+
+		await submitLyrics(env, buildSubmission({ language: undefined, syncType: "plain" }), 7)
+
+		const insert = db.calls.find((c) => /INSERT INTO lyrics/i.test(c.sql))
+		expect(insert).toBeDefined()
+		expect(insert!.params).toContain("detector")
+		expect(insert!.params).toContain(DETECTOR_VERSION)
+		expect(insert!.params).not.toContain("en")
+	})
+
+	it("stamps null language and null version when the detection service is unreachable", async () => {
+		vi.stubEnv("DETECTION_URL", "http://detect.test")
+		const db = createMockDB([{ count: 0 }, { id: 1004 }])
+		const cache = createMockCache()
+		const env = createEnv(db, cache)
+		vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new TypeError("fetch failed")))
+
+		await submitLyrics(env, buildSubmission({ language: undefined, syncType: "plain" }), 7)
+
+		const insert = db.calls.find((c) => /INSERT INTO lyrics/i.test(c.sql))
+		expect(insert).toBeDefined()
+		expect(insert!.params).toContain("detector")
+		expect(insert!.params).toContain(null)
+		const versionIdx = insert!.sql.toLowerCase().indexOf("language_detector_version")
+		expect(versionIdx).toBeGreaterThanOrEqual(0)
 	})
 })
 

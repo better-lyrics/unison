@@ -10,6 +10,7 @@ import {
 import { Logger } from "@/infra/logger"
 import type { Env, LyricsRow, LyricsSearchResult, LyricsSubmission } from "@/types"
 import { compress, decompress, isCompressed } from "@/utils/compression"
+import { DETECTOR_VERSION, detectLanguage } from "@/utils/detect-language"
 import { extractPlainText } from "@/utils/extract-text"
 import { normalize, normalizeArtist, normalizeSong } from "@/utils/normalize"
 
@@ -162,14 +163,35 @@ export async function submitLyrics(
 		return { id: -1, created: false }
 	}
 
+	let language: string | null
+	let languageSource: "submitter" | "detector"
+	let languageDetectorVersion: number | null
+	let languageDetectionAttemptedAt: "NOW" | null
+
+	if (submission.language) {
+		language = submission.language
+		languageSource = "submitter"
+		languageDetectorVersion = null
+		languageDetectionAttemptedAt = null
+	} else {
+		const detected = await detectLanguage(plainText)
+		language = detected.language
+		languageSource = "detector"
+		languageDetectorVersion = detected.ready ? DETECTOR_VERSION : null
+		languageDetectionAttemptedAt = "NOW"
+	}
+
 	const result = await env.DB.prepare(
 		`
 		INSERT INTO lyrics (
 			video_id, song, artist, album, isrc,
 			duration, song_norm, artist_norm, album_norm,
 			lyrics, format, language, sync_type, submitter_id,
-			lyrics_text_search
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, to_tsvector('simple', ?))
+			lyrics_text_search,
+			language_source, language_detector_version, language_detection_attempted_at
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, to_tsvector('simple', ?), ?, ?, ${
+			languageDetectionAttemptedAt === "NOW" ? "NOW()" : "NULL"
+		})
 		RETURNING id
 		`
 	)
@@ -185,10 +207,12 @@ export async function submitLyrics(
 			albumNorm,
 			compressedLyrics,
 			submission.format,
-			submission.language || null,
+			language,
 			submission.syncType,
 			submitterId,
-			plainText
+			plainText,
+			languageSource,
+			languageDetectorVersion
 		)
 		.first<{ id: number }>()
 
