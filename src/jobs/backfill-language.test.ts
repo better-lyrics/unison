@@ -178,4 +178,40 @@ describe("backfillLanguage", () => {
 		const selects = db.calls.filter((c) => /SELECT/i.test(c.sql))
 		expect(selects).toHaveLength(2)
 	})
+
+	it("processes multiple non-empty pages before stopping", async () => {
+		const db = createPagedDB([
+			[{ id: 1, lyrics: await compressed("hello world hello world"), format: "plain" }],
+			[{ id: 2, lyrics: await compressed("bonjour le monde bonjour"), format: "plain" }],
+			[],
+		])
+		const env = buildEnv(db)
+		vi.stubGlobal(
+			"fetch",
+			vi
+				.fn()
+				.mockResolvedValueOnce(
+					new Response(
+						JSON.stringify({ results: [{ iso6391: "en", confidence: 0.99 }] }),
+						{ status: 200, headers: { "content-type": "application/json" } }
+					)
+				)
+				.mockResolvedValueOnce(
+					new Response(
+						JSON.stringify({ results: [{ iso6391: "fr", confidence: 0.92 }] }),
+						{ status: 200, headers: { "content-type": "application/json" } }
+					)
+				)
+		)
+
+		const result = await backfillLanguage(env)
+
+		expect(result).toEqual({ scanned: 2, updated: 2 })
+		const selects = db.calls.filter((c) => /SELECT/i.test(c.sql))
+		expect(selects).toHaveLength(3)
+		const updates = db.calls.filter((c) => /UPDATE lyrics/i.test(c.sql))
+		expect(updates).toHaveLength(2)
+		expect(updates[0].params).toContain("en")
+		expect(updates[1].params).toContain("fr")
+	})
 })

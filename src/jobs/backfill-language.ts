@@ -6,7 +6,6 @@ import { extractPlainText } from "@/utils/extract-text"
 
 const log = new Logger("backfill-language")
 const BATCH_SIZE = 50
-const MAX_SCANNED = 1_000_000
 
 interface Row {
 	id: number
@@ -23,7 +22,7 @@ export async function backfillLanguage(env: Env): Promise<{ scanned: number; upd
 	let scanned = 0
 	let updated = 0
 
-	while (scanned < MAX_SCANNED) {
+	while (true) {
 		const batch = await env.DB.prepare(
 			`SELECT id, lyrics, format FROM lyrics
 			 WHERE COALESCE(language_source, 'detector') <> 'submitter'
@@ -76,10 +75,6 @@ export async function backfillLanguage(env: Env): Promise<{ scanned: number; upd
 		log.info("backfill batch complete", { batch: rows.length, scanned, updated })
 
 		await new Promise((resolve) => setImmediate(resolve))
-	}
-
-	if (scanned >= MAX_SCANNED) {
-		log.warn("backfill hit scan ceiling", { scanned, updated })
 	}
 
 	return { scanned, updated }
