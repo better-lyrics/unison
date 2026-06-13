@@ -164,6 +164,28 @@ CREATE INDEX IF NOT EXISTS idx_lyrics_submitter_created
 -- penalty has already been applied for this row.
 ALTER TABLE lyrics ADD COLUMN IF NOT EXISTS reputation_penalized BOOLEAN DEFAULT FALSE;
 
+-- Language detection metadata.
+-- `language` keeps its semantic meaning (NULL = unknown).
+-- `language_source` records whether the language came from the submitter or
+-- from the detection service ('submitter' or 'detector'). NULL means we never
+-- looked at it (legacy rows).
+-- `language_detector_version` records the version of the detection pipeline.
+-- NULL means the detector was unreachable when the row was last touched, so
+-- the backfill should retry. Non-NULL with the current version means the row
+-- is up to date.
+-- `language_detection_attempted_at` records the last attempt timestamp for
+-- observability.
+ALTER TABLE lyrics ADD COLUMN IF NOT EXISTS language_source TEXT
+    CHECK (language_source IS NULL OR language_source IN ('submitter', 'detector'));
+ALTER TABLE lyrics ADD COLUMN IF NOT EXISTS language_detector_version SMALLINT;
+ALTER TABLE lyrics ADD COLUMN IF NOT EXISTS language_detection_attempted_at TIMESTAMPTZ;
+
+-- Index for backfill sweep: pick up rows where detector wasn't authoritative.
+CREATE INDEX IF NOT EXISTS idx_lyrics_language_backfill
+    ON lyrics(id)
+    WHERE COALESCE(language_source, 'detector') <> 'submitter'
+      AND deleted_at IS NULL;
+
 -- Lyrics requests: demand signal for songs missing synced lyrics
 CREATE TABLE IF NOT EXISTS requested_songs (
     video_id TEXT PRIMARY KEY,
