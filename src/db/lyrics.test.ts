@@ -1336,9 +1336,10 @@ describe("submitLyrics language detection", () => {
 		expect(fetchSpy).not.toHaveBeenCalled()
 		const insert = db.calls.find((c) => /INSERT INTO lyrics/i.test(c.sql))
 		expect(insert).toBeDefined()
-		expect(insert!.sql).toMatch(/language_source/i)
-		expect(insert!.params).toContain("ja")
-		expect(insert!.params).toContain("submitter")
+		const params = insert!.params
+		expect(params[11]).toBe("ja")
+		expect(params[15]).toBe("submitter")
+		expect(params[16]).toBeNull()
 	})
 
 	it("calls the detection service when submitter did not provide a language and stamps the detected language", async () => {
@@ -1368,9 +1369,10 @@ describe("submitLyrics language detection", () => {
 
 		const insert = db.calls.find((c) => /INSERT INTO lyrics/i.test(c.sql))
 		expect(insert).toBeDefined()
-		expect(insert!.params).toContain("ko")
-		expect(insert!.params).toContain("detector")
-		expect(insert!.params).toContain(DETECTOR_VERSION)
+		const params = insert!.params
+		expect(params[11]).toBe("ko")
+		expect(params[15]).toBe("detector")
+		expect(params[16]).toBe(DETECTOR_VERSION)
 	})
 
 	it("stamps null language with the current detector version when confidence is low", async () => {
@@ -1392,9 +1394,10 @@ describe("submitLyrics language detection", () => {
 
 		const insert = db.calls.find((c) => /INSERT INTO lyrics/i.test(c.sql))
 		expect(insert).toBeDefined()
-		expect(insert!.params).toContain("detector")
-		expect(insert!.params).toContain(DETECTOR_VERSION)
-		expect(insert!.params).not.toContain("en")
+		const params = insert!.params
+		expect(params[11]).toBeNull()
+		expect(params[15]).toBe("detector")
+		expect(params[16]).toBe(DETECTOR_VERSION)
 	})
 
 	it("stamps null language and null version when the detection service is unreachable", async () => {
@@ -1408,10 +1411,10 @@ describe("submitLyrics language detection", () => {
 
 		const insert = db.calls.find((c) => /INSERT INTO lyrics/i.test(c.sql))
 		expect(insert).toBeDefined()
-		expect(insert!.params).toContain("detector")
-		expect(insert!.params).toContain(null)
-		const versionIdx = insert!.sql.toLowerCase().indexOf("language_detector_version")
-		expect(versionIdx).toBeGreaterThanOrEqual(0)
+		const params = insert!.params
+		expect(params[11]).toBeNull()
+		expect(params[15]).toBe("detector")
+		expect(params[16]).toBeNull()
 	})
 })
 
