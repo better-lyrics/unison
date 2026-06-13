@@ -38,15 +38,29 @@ async fn batch_detects_mixed_languages() {
     let (status, json) = post_batch(vec![
         "안녕하세요 반갑습니다",
         "Hello world this is English",
+        "안녕하세요 좋은 아침입니다",
         "Xin chào tôi tên là Nam",
+        "This is another English sentence",
+        "こんにちは今日はいい天気ですね",
+        "Bonjour je m'appelle Pierre",
+        "Hola me llamo Carlos",
+        "Hello again from English",
+        "Xin chào lần nữa",
     ])
     .await;
     assert_eq!(status, StatusCode::OK);
     let results = json["results"].as_array().unwrap();
-    assert_eq!(results.len(), 3);
+    assert_eq!(results.len(), 10);
     assert_eq!(results[0]["iso6391"], "ko");
     assert_eq!(results[1]["iso6391"], "en");
-    assert_eq!(results[2]["iso6391"], "vi");
+    assert_eq!(results[2]["iso6391"], "ko");
+    assert_eq!(results[3]["iso6391"], "vi");
+    assert_eq!(results[4]["iso6391"], "en");
+    assert_eq!(results[5]["iso6391"], "ja");
+    assert_eq!(results[6]["iso6391"], "fr");
+    assert_eq!(results[7]["iso6391"], "es");
+    assert_eq!(results[8]["iso6391"], "en");
+    assert_eq!(results[9]["iso6391"], "vi");
 }
 
 #[tokio::test]
@@ -66,9 +80,30 @@ async fn oversized_batch_returns_413() {
 
 #[tokio::test]
 async fn batch_handles_empty_text_in_batch() {
-    let (status, json) = post_batch(vec!["Hello world", ""]).await;
+    let (status, json) = post_batch(vec![
+        "Hello world",
+        "",
+        "안녕하세요 반갑습니다",
+        "   ",
+        "Hola me llamo Carlos",
+        "\n\t",
+        "Xin chào tôi tên là Nam",
+        "",
+        "こんにちは今日はいい天気ですね",
+        "  \n  ",
+    ])
+    .await;
     assert_eq!(status, StatusCode::OK);
     let results = json["results"].as_array().unwrap();
+    assert_eq!(results.len(), 10);
     assert_eq!(results[0]["iso6391"], "en");
     assert!(results[1]["iso6391"].is_null());
+    assert_eq!(results[2]["iso6391"], "ko");
+    assert!(results[3]["iso6391"].is_null());
+    assert_eq!(results[4]["iso6391"], "es");
+    assert!(results[5]["iso6391"].is_null());
+    assert_eq!(results[6]["iso6391"], "vi");
+    assert!(results[7]["iso6391"].is_null());
+    assert_eq!(results[8]["iso6391"], "ja");
+    assert!(results[9]["iso6391"].is_null());
 }

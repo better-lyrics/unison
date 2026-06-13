@@ -106,20 +106,24 @@ async fn detect_batch(
             .into_response();
     }
     let detector = state.detector.clone();
-    let results: Vec<DetectResponse> = req
-        .texts
-        .par_iter()
-        .map(|t| {
-            if t.trim().is_empty() {
-                DetectResponse {
-                    iso6391: None,
-                    confidence: 0.0,
+    let texts = req.texts;
+    let results = tokio::task::spawn_blocking(move || {
+        texts
+            .par_iter()
+            .map(|t| {
+                if t.trim().is_empty() {
+                    DetectResponse {
+                        iso6391: None,
+                        confidence: 0.0,
+                    }
+                } else {
+                    detect_one(&detector, t)
                 }
-            } else {
-                detect_one(&detector, t)
-            }
-        })
-        .collect();
+            })
+            .collect::<Vec<DetectResponse>>()
+    })
+    .await
+    .expect("rayon task panicked");
     (StatusCode::OK, Json(BatchResponse { results })).into_response()
 }
 
