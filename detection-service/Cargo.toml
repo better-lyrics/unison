@@ -2,6 +2,7 @@
 name = "detection-service"
 version = "0.1.0"
 edition = "2021"
+publish = false
 
 [lib]
 name = "detection_service"

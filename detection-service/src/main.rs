@@ -26,7 +26,16 @@ async fn main() {
 
     let app = detection_service::build_app(detector);
     let addr = SocketAddr::from(([0, 0, 0, 0], port));
-    let listener = TcpListener::bind(addr).await.expect("bind");
-    info!(port = port, "listening");
-    axum::serve(listener, app).await.expect("serve");
+    let listener = match TcpListener::bind(addr).await {
+        Ok(l) => l,
+        Err(e) => {
+            tracing::error!(error = %e, %addr, "bind failed");
+            std::process::exit(1);
+        }
+    };
+    info!(%addr, "listening");
+    if let Err(e) = axum::serve(listener, app).await {
+        tracing::error!(error = %e, "serve failed");
+        std::process::exit(1);
+    }
 }

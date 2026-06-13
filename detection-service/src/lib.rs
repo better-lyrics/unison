@@ -143,5 +143,5 @@ fn detect_one(detector: &LanguageDetector, text: &str) -> DetectResponse {
 }
 
 fn iso6391(lang: &Language) -> String {
-    lang.iso_code_639_1().to_string().to_lowercase()
+    lang.iso_code_639_1().to_string().to_ascii_lowercase()
 }
