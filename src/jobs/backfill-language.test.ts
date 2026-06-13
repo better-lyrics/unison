@@ -179,6 +179,26 @@ describe("backfillLanguage", () => {
 		expect(selects).toHaveLength(2)
 	})
 
+	it("bails when every row in a page returns ready: false (service unavailable)", async () => {
+		const db = createPagedDB([
+			[
+				{ id: 1, lyrics: await compressed("hello world hello world"), format: "plain" },
+				{ id: 2, lyrics: await compressed("bonjour le monde"), format: "plain" },
+			],
+			[{ id: 3, lyrics: await compressed("would never be reached"), format: "plain" }],
+		])
+		const env = buildEnv(db)
+		vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new TypeError("fetch failed")))
+
+		const result = await backfillLanguage(env)
+
+		expect(result).toEqual({ scanned: 2, updated: 0 })
+		const selects = db.calls.filter((c) => /SELECT/i.test(c.sql))
+		expect(selects).toHaveLength(1)
+		const updates = db.calls.filter((c) => /UPDATE lyrics/i.test(c.sql))
+		expect(updates).toHaveLength(2)
+	})
+
 	it("processes multiple non-empty pages before stopping", async () => {
 		const db = createPagedDB([
 			[{ id: 1, lyrics: await compressed("hello world hello world"), format: "plain" }],

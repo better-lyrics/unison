@@ -74,6 +74,12 @@ export async function backfillLanguage(env: Env): Promise<{ scanned: number; upd
 
 		log.info("backfill batch complete", { batch: rows.length, scanned, updated })
 
+		const allFailed = results.every((r) => !r.ready)
+		if (allFailed) {
+			log.warn("detection unavailable, bailing out", { scanned, updated })
+			break
+		}
+
 		await new Promise((resolve) => setImmediate(resolve))
 	}
 
