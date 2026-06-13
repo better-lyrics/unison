@@ -1,7 +1,7 @@
 import { config } from "@/config"
 import type { Env, LyricsRow, LyricsSearchResult, LyricsSubmission } from "@/types"
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { DETECTOR_VERSION } from "@/utils/detect-language"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import {
 	findBySongArtist,
 	findByVideoId,
