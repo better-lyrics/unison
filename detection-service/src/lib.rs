@@ -10,6 +10,8 @@ use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::sync::Arc;
+use tower_http::trace::{DefaultMakeSpan, DefaultOnResponse, TraceLayer};
+use tracing::Level;
 
 const MAX_BATCH_SIZE: usize = 200;
 
@@ -45,6 +47,11 @@ pub fn build_app(detector: Arc<LanguageDetector>) -> Router {
         .route("/health", get(health))
         .route("/detect", post(detect))
         .route("/detect/batch", post(detect_batch))
+        .layer(
+            TraceLayer::new_for_http()
+                .make_span_with(DefaultMakeSpan::new().level(Level::INFO))
+                .on_response(DefaultOnResponse::new().level(Level::INFO)),
+        )
         .with_state(state)
 }
 
@@ -73,7 +80,11 @@ async fn detect(
         )
             .into_response();
     }
-    let result = detect_one(&state.detector, &req.text);
+    let detector = state.detector.clone();
+    let text = req.text;
+    let result = tokio::task::spawn_blocking(move || detect_one(&detector, &text))
+        .await
+        .expect("detection task panicked");
     (StatusCode::OK, Json(result)).into_response()
 }
 

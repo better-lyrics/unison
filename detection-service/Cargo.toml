@@ -21,6 +21,7 @@ lingua = "1.8"
 rayon = "1"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+tower-http = { version = "0.6", features = ["trace"] }
 
 [dev-dependencies]
 tower = { version = "0.5", features = ["util"] }
