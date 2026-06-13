@@ -33,6 +33,9 @@ async fn post_batch(texts: Vec<&str>) -> (StatusCode, serde_json::Value) {
     (status, json)
 }
 
+// Inputs are kept long enough that lingua exceeds its confidence floor.
+// Very short multi-word text (under ~5 words) can be under-determined
+// and is handled in the main API via a confidence threshold, not here.
 #[tokio::test]
 async fn batch_detects_mixed_languages() {
     let (status, json) = post_batch(vec![
@@ -45,7 +48,7 @@ async fn batch_detects_mixed_languages() {
         "Bonjour je m'appelle Pierre",
         "Hola me llamo Carlos",
         "Hello again from English",
-        "Xin chào lần nữa",
+        "Xin chào lần nữa rất vui được gặp lại các bạn",
     ])
     .await;
     assert_eq!(status, StatusCode::OK);
