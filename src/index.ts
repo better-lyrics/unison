@@ -6,6 +6,7 @@ import { closePool } from "@/infra/database"
 import { createEnv } from "@/infra/env"
 import { Logger, flushLogs } from "@/infra/logger"
 import { backfillFormatDetection } from "@/jobs/backfill-format-detection"
+import { backfillLanguage } from "@/jobs/backfill-language"
 import { backfillSyncType } from "@/jobs/backfill-synctype"
 import { backfillTextSearch } from "@/jobs/backfill-text-search"
 import { cleanupFulfilledRequests } from "@/jobs/cleanup-fulfilled-requests"
@@ -228,6 +229,12 @@ backfillFormatDetection(env)
 		if (changed > 0) log.info("format backfill complete", { scanned, changed })
 	})
 	.catch((err) => log.error("format backfill failed", { error: (err as Error).message }))
+
+backfillLanguage(env)
+	.then(({ scanned, updated }) => {
+		if (scanned > 0) log.info("language backfill complete", { scanned, updated })
+	})
+	.catch((err) => log.error("language backfill failed", { error: (err as Error).message }))
 
 cleanupFulfilledRequests(env)
 	.then(({ deleted }) => {
