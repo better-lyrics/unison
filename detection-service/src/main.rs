@@ -1,4 +1,4 @@
-use std::net::SocketAddr;
+use std::net::{Ipv6Addr, SocketAddr};
 use std::sync::Arc;
 use std::time::Instant;
 
@@ -25,7 +25,7 @@ async fn main() {
     info!(ms = t0.elapsed().as_millis() as u64, "detector ready");
 
     let app = detection_service::build_app(detector);
-    let addr = SocketAddr::from(([0, 0, 0, 0], port));
+    let addr = SocketAddr::new(Ipv6Addr::UNSPECIFIED.into(), port);
     let listener = match TcpListener::bind(addr).await {
         Ok(l) => l,
         Err(e) => {
