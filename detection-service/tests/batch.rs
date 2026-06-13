@@ -75,7 +75,7 @@ async fn empty_batch_returns_400() {
 
 #[tokio::test]
 async fn oversized_batch_returns_413() {
-    let texts: Vec<&str> = std::iter::repeat("hello world").take(201).collect();
+    let texts: Vec<&str> = std::iter::repeat_n("hello world", 201).collect();
     let (status, json) = post_batch(texts).await;
     assert_eq!(status, StatusCode::PAYLOAD_TOO_LARGE);
     assert_eq!(json["error"], "batch too large");
