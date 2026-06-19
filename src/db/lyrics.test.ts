@@ -1,10 +1,13 @@
 import { config } from "@/config"
 import type { Env, LyricsRow, LyricsSearchResult, LyricsSubmission } from "@/types"
+import { compress } from "@/utils/compression"
 import { DETECTOR_VERSION } from "@/utils/detect-language"
+import { allowedSyncTiers, epsilonForTier, hashBucket } from "@/utils/exploration"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import {
 	findBySongArtist,
 	findByVideoId,
+	findEligibleChallengers,
 	findVariantsByVideoId,
 	getLyricsById,
 	invalidateCacheAfterDelete,
@@ -327,6 +330,217 @@ describe("findByVideoId", () => {
 		const rankingIdx = lookupCall!.sql.indexOf(RANKING_EXPR_JOINED)
 		expect(caseIdx).toBeGreaterThan(-1)
 		expect(rankingIdx).toBeGreaterThan(caseIdx)
+	})
+})
+
+describe("findEligibleChallengers", () => {
+	const primary: LyricsRow = { ...baseRow, id: 1, video_id: "vidC", sync_type: "plain" }
+
+	it("emits every eligibility predicate in the generated SQL", async () => {
+		const db = createMockDB([[]])
+		const env = createEnv(db, createMockCache())
+
+		await findEligibleChallengers(env, "vidC", primary)
+
+		const sql = db.calls[0].sql
+		expect(sql).toContain("l.id <> ?")
+		expect(sql).toContain("NOT (")
+		expect(sql).toMatch(/downvotes >= 0\.8 \* l\.vote_count/)
+		expect(sql).toContain("l.reputation_penalized = FALSE")
+		expect(sql).toContain("COALESCE(u.reputation, 0) >= ?")
+		expect(sql).toContain("l.sync_type IN (")
+		expect(sql).toContain("l.vote_count < ?")
+		expect(sql).toContain("FROM reports r WHERE r.lyrics_id = l.id")
+		expect(sql).toMatch(/ORDER BY l\.vote_count ASC, l\.created_at ASC, l\.id ASC/)
+	})
+
+	it("regression: admits default-reputation 1.0 submitters by comparing reputation with >= not > (deadlock fix)", async () => {
+		const db = createMockDB([[]])
+		const env = createEnv(db, createMockCache())
+
+		await findEligibleChallengers(env, "vidC", primary)
+
+		const sql = db.calls[0].sql
+		expect(sql).toContain("COALESCE(u.reputation, 0) >= ?")
+		expect(sql).not.toMatch(/COALESCE\(u\.reputation, 0\) > \?/)
+		expect(config.exploration.minSubmitterReputation).toBeLessThanOrEqual(1.0)
+		expect(db.calls[0].params).toContain(config.exploration.minSubmitterReputation)
+	})
+
+	it("binds all three sync tiers for a plain incumbent", async () => {
+		const db = createMockDB([[]])
+		const env = createEnv(db, createMockCache())
+
+		await findEligibleChallengers(env, "vidC", { ...primary, sync_type: "plain" })
+
+		const expected = [...allowedSyncTiers("plain")]
+		const params = db.calls[0].params
+		for (const tier of expected) {
+			expect(params).toContain(tier)
+		}
+		expect(expected).toHaveLength(3)
+	})
+
+	it("binds only richsync for a richsync incumbent (never downgrades)", async () => {
+		const db = createMockDB([[]])
+		const env = createEnv(db, createMockCache())
+
+		await findEligibleChallengers(env, "vidC", { ...primary, sync_type: "richsync" })
+
+		const expected = [...allowedSyncTiers("richsync")]
+		const params = db.calls[0].params
+		expect(expected).toEqual(["richsync"])
+		expect(params).toContain("richsync")
+		expect(params).not.toContain("linesync")
+		expect(params).not.toContain("plain")
+	})
+
+	it("binds floor, cold cap, reports threshold and overflow limit in order", async () => {
+		const db = createMockDB([[]])
+		const env = createEnv(db, createMockCache())
+
+		await findEligibleChallengers(env, "vidC", { ...primary, sync_type: "richsync" })
+
+		const params = db.calls[0].params
+		expect(params).toEqual([
+			"vidC",
+			primary.id,
+			config.exploration.minSubmitterReputation,
+			"richsync",
+			config.exploration.coldMaxVotes,
+			config.moderation.reportsThreshold,
+			config.exploration.maxChallengers + 1,
+		])
+	})
+
+	it("caps the pool to maxChallengers when the probe overflows", async () => {
+		const overflow = Array.from({ length: config.exploration.maxChallengers + 1 }, (_, i) => ({
+			...baseRow,
+			id: i + 10,
+		}))
+		const db = createMockDB([overflow])
+		const env = createEnv(db, createMockCache())
+
+		const results = await findEligibleChallengers(env, "vidC", primary)
+
+		expect(results).toHaveLength(config.exploration.maxChallengers)
+	})
+
+	it("decompresses challenger lyrics through the real codec", async () => {
+		const compressed = await compress("real lyric body")
+		const db = createMockDB([[{ ...baseRow, id: 2, lyrics: compressed }]])
+		const env = createEnv(db, createMockCache())
+
+		const results = await findEligibleChallengers(env, "vidC", primary)
+
+		expect(results).toHaveLength(1)
+		expect(results[0].lyrics).toBe("real lyric body")
+	})
+})
+
+describe("findByVideoId exploration", () => {
+	const explorePrimary: LyricsRow = {
+		...baseRow,
+		id: 1,
+		video_id: "vidExplore",
+		confidence: "low",
+		sync_type: "plain",
+	}
+	const challenger: LyricsRow = {
+		...baseRow,
+		id: 99,
+		video_id: "vidExplore",
+		sync_type: "plain",
+	}
+	const eps = epsilonForTier("low")
+
+	function cacheWithPrimary() {
+		return createMockCache({ "v:vidExplore": JSON.stringify(explorePrimary) })
+	}
+
+	it("anonymous lookup (no keyId) returns the primary and never queries challengers", async () => {
+		const db = createMockDB([])
+		const env = createEnv(db, cacheWithPrimary())
+
+		const result = await findByVideoId(env, "vidExplore")
+
+		expect(result?.id).toBe(explorePrimary.id)
+		const challengerCall = db.calls.find((c) => c.sql.includes("FROM reports r"))
+		expect(challengerCall).toBeUndefined()
+	})
+
+	it("returns the primary without exploring when the bucket lands above epsilon", async () => {
+		const keyId = "key-0"
+		expect(hashBucket(keyId, "vidExplore")).toBeGreaterThanOrEqual(eps)
+
+		const db = createMockDB([])
+		const env = createEnv(db, cacheWithPrimary())
+
+		const result = await findByVideoId(env, "vidExplore", keyId)
+
+		expect(result?.id).toBe(explorePrimary.id)
+		const challengerCall = db.calls.find((c) => c.sql.includes("FROM reports r"))
+		expect(challengerCall).toBeUndefined()
+	})
+
+	it("serves an eligible challenger when the bucket lands below epsilon", async () => {
+		const keyId = "key-18"
+		expect(hashBucket(keyId, "vidExplore")).toBeLessThan(eps)
+
+		const db = createMockDB([[challenger]])
+		const cache = cacheWithPrimary()
+		const env = createEnv(db, cache)
+
+		const result = await findByVideoId(env, "vidExplore", keyId)
+
+		expect(result?.id).toBe(challenger.id)
+		const cached = JSON.parse(cache.store.get("v:vidExplore") as string) as LyricsRow
+		expect(cached.id).toBe(explorePrimary.id)
+	})
+
+	it("falls back to the primary when no eligible challengers exist", async () => {
+		const keyId = "key-18"
+		expect(hashBucket(keyId, "vidExplore")).toBeLessThan(eps)
+
+		const db = createMockDB([[]])
+		const env = createEnv(db, cacheWithPrimary())
+
+		const result = await findByVideoId(env, "vidExplore", keyId)
+
+		expect(result?.id).toBe(explorePrimary.id)
+	})
+
+	it("kill-switch: returns the primary even for a would-explore bucket when disabled", async () => {
+		const keyId = "key-18"
+		expect(hashBucket(keyId, "vidExplore")).toBeLessThan(eps)
+
+		const db = createMockDB([[challenger]])
+		const env = createEnv(db, cacheWithPrimary())
+		;(config.exploration as { enabled: boolean }).enabled = false
+		try {
+			const result = await findByVideoId(env, "vidExplore", keyId)
+			expect(result?.id).toBe(explorePrimary.id)
+			const challengerCall = db.calls.find((c) => c.sql.includes("FROM reports r"))
+			expect(challengerCall).toBeUndefined()
+		} finally {
+			;(config.exploration as { enabled: boolean }).enabled = true
+		}
+	})
+
+	it("invariant: same (keyId, videoId) and pool selects the same arm on repeat", async () => {
+		const keyId = "key-18"
+		const pool = [
+			{ ...challenger, id: 99, upvotes: 1, downvotes: 0 },
+			{ ...challenger, id: 100, upvotes: 0, downvotes: 1 },
+		]
+
+		const dbA = createMockDB([pool])
+		const first = await findByVideoId(createEnv(dbA, cacheWithPrimary()), "vidExplore", keyId)
+
+		const dbB = createMockDB([pool])
+		const second = await findByVideoId(createEnv(dbB, cacheWithPrimary()), "vidExplore", keyId)
+
+		expect(first?.id).toBe(second?.id)
 	})
 })
 
