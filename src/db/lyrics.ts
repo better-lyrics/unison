@@ -11,11 +11,19 @@ import { Logger } from "@/infra/logger"
 import type { Env, LyricsRow, LyricsSearchResult, LyricsSubmission } from "@/types"
 import { compress, decompress, isCompressed } from "@/utils/compression"
 import { DETECTOR_VERSION, detectLanguage } from "@/utils/detect-language"
+import {
+	allowedSyncTiers,
+	epsilonForTier,
+	hashBucket,
+	hashSeed,
+	selectArm,
+} from "@/utils/exploration"
 import { extractPlainText } from "@/utils/extract-text"
 import { normalize, normalizeArtist, normalizeSong } from "@/utils/normalize"
 
 const log = new Logger("db")
 const cacheLog = new Logger("cache")
+const exploreLog = new Logger("explore")
 
 const LYRICS_WITH_SUBMITTER = `
 	SELECT l.*, u.key_id AS submitter_key_id, u.reputation AS submitter_reputation,
@@ -25,7 +33,7 @@ const LYRICS_WITH_SUBMITTER = `
 	LEFT JOIN users u ON l.submitter_id = u.id
 `
 
-export async function findByVideoId(env: Env, videoId: string): Promise<LyricsRow | null> {
+async function getPrimary(env: Env, videoId: string): Promise<LyricsRow | null> {
 	const cached = await env.CACHE.get(`v:${videoId}`)
 	if (cached) {
 		try {
@@ -59,6 +67,89 @@ export async function findByVideoId(env: Env, videoId: string): Promise<LyricsRo
 	}
 
 	return result
+}
+
+export async function findEligibleChallengers(
+	env: Env,
+	videoId: string,
+	primary: LyricsRow
+): Promise<LyricsRow[]> {
+	const tiers = [...allowedSyncTiers(primary.sync_type)]
+	const tierPlaceholders = tiers.map(() => "?").join(", ")
+
+	const results = await env.DB.prepare(
+		`
+		${LYRICS_WITH_SUBMITTER}
+		WHERE l.video_id = ?
+			AND l.deleted_at IS NULL
+			AND l.id <> ?
+			AND NOT ${AUTO_HIDE_PREDICATE_JOINED}
+			AND l.reputation_penalized = FALSE
+			AND COALESCE(u.reputation, 0) >= ?
+			AND l.sync_type IN (${tierPlaceholders})
+			AND l.vote_count < ?
+			AND (SELECT COUNT(*) FROM reports r WHERE r.lyrics_id = l.id) < ?
+		ORDER BY l.vote_count ASC, l.created_at ASC, l.id ASC
+		LIMIT ?
+		`
+	)
+		.bind(
+			videoId,
+			primary.id,
+			config.exploration.minSubmitterReputation,
+			...tiers,
+			config.exploration.coldMaxVotes,
+			config.moderation.reportsThreshold,
+			config.exploration.maxChallengers + 1
+		)
+		.all<LyricsRow>()
+
+	let rows = results.results
+	if (rows.length > config.exploration.maxChallengers) {
+		exploreLog.info("explore.pool_capped", {
+			videoId,
+			cap: config.exploration.maxChallengers,
+		})
+		rows = rows.slice(0, config.exploration.maxChallengers)
+	}
+
+	for (const row of rows) {
+		if (isCompressed(row.lyrics)) {
+			row.lyrics = await decompress(row.lyrics)
+		}
+	}
+
+	return rows
+}
+
+export async function findByVideoId(
+	env: Env,
+	videoId: string,
+	keyId: string | null = null
+): Promise<LyricsRow | null> {
+	const primary = await getPrimary(env, videoId)
+	if (!primary) return null
+	if (!keyId || !config.exploration.enabled) return primary
+
+	const bucket = hashBucket(keyId, videoId)
+	const eps = epsilonForTier(primary.confidence)
+	if (bucket >= eps) return primary
+
+	const challengers = await findEligibleChallengers(env, videoId, primary)
+	if (challengers.length === 0) return primary
+
+	const arm = selectArm(challengers, hashSeed(keyId, videoId))
+	exploreLog.info("explore.serve", {
+		videoId,
+		incumbentId: primary.id,
+		incumbentConfidence: primary.confidence,
+		eps,
+		bucket,
+		armId: arm.id,
+		armVoteCount: arm.vote_count,
+		poolSize: challengers.length,
+	})
+	return arm
 }
 
 export async function findVariantsByVideoId(

@@ -74,7 +74,11 @@ export const lyricsRoutes = (env: Env) =>
 				}
 			}
 			if (!keyId) {
-				return { lyricsUserId: null as number | null, lyricsBearerUserId: null as number | null }
+				return {
+					lyricsUserId: null as number | null,
+					lyricsBearerUserId: null as number | null,
+					lyricsKeyId: null as string | null,
+				}
 			}
 			const user = await env.DB.prepare("SELECT id FROM users WHERE key_id = ?")
 				.bind(keyId)
@@ -83,13 +87,14 @@ export const lyricsRoutes = (env: Env) =>
 			return {
 				lyricsUserId: userId,
 				lyricsBearerUserId: bearerVerified ? userId : null,
+				lyricsKeyId: keyId,
 			}
 		})
 		.get(
 			"/",
-			async ({ query, env, lyricsUserId, status }) => {
+			async ({ query, env, lyricsUserId, lyricsKeyId, status }) => {
 				if (query.v) {
-					const result = await findByVideoId(env, query.v)
+					const result = await findByVideoId(env, query.v, lyricsKeyId)
 					if (!result) {
 						return status(404, buildError(ErrorCode.NOT_FOUND))
 					}
