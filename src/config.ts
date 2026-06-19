@@ -53,7 +53,7 @@ export const config = {
 	exploration: {
 		enabled: true,
 		epsilon: { low: 0.3, medium: 0.1, high: 0.03 },
-		coldMaxVotes: 10,
+		coldMaxVotes: 5,
 		minSubmitterReputation: 0.5,
 		maxChallengers: 10,
 	},
