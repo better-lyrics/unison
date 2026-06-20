@@ -58,6 +58,19 @@ export const config = {
 		maxChallengers: 10,
 	},
 
+	thresholdAudit: {
+		enabled: true,
+		schedule: "0 9 * * *",
+		driftTolerance: 0.1,
+		targets: {
+			minVotesForConfidence: { targetFraction: 0.25, floor: 2, ceil: 10 },
+			primarySlotMinVotes: { targetFraction: 0.2, floor: 2, ceil: 10 },
+			autoHideMinVotes: { targetFraction: 0.5, floor: 2, ceil: 10 },
+			autoHideDecisiveMinVotes: { targetFraction: 0.5, floor: 2, ceil: 10 },
+			reportsThreshold: { targetFraction: 0.1, floor: 2, ceil: 10 },
+		},
+	},
+
 	search: {
 		defaultLimit: 20,
 		maxLimit: 50,
