@@ -229,6 +229,62 @@ describe("calculateScore", () => {
 	})
 })
 
+describe("confidence score floor", () => {
+	it("returns low confidence when score is below the floor despite enough votes", () => {
+		const votes = [
+			{ vote: 1, reputation: 1.0, avg_vote: 0.5, is_self_vote: 0 },
+			{ vote: 1, reputation: 1.0, avg_vote: 0.3, is_self_vote: 0 },
+			{ vote: -1, reputation: 1.0, avg_vote: -0.2, is_self_vote: 0 },
+		]
+
+		const result = calculateScore(1, votes)
+
+		expect(result.effective_score).toBeCloseTo(0.333, 2)
+		expect(result.effective_score).toBeLessThan(config.reputation.minScoreForConfidence)
+		expect(result.confidence).toBe("low")
+	})
+
+	it("does not award high confidence when diverse raters agree but score is below the floor", () => {
+		const votes = [
+			{ vote: 1, reputation: 1.0, avg_vote: -0.5, is_self_vote: 0 },
+			{ vote: 1, reputation: 1.0, avg_vote: 0.5, is_self_vote: 0 },
+			{ vote: -1, reputation: 2.0, avg_vote: 0.0, is_self_vote: 0 },
+		]
+
+		const result = calculateScore(1, votes)
+
+		expect(result.diversity_bonus).toBe(1)
+		expect(result.effective_score).toBeLessThan(config.reputation.minScoreForConfidence)
+		expect(result.confidence).toBe("low")
+	})
+
+	it("awards medium confidence at exactly the score floor", () => {
+		const votes = [
+			{ vote: 1, reputation: 2.0, avg_vote: 0.5, is_self_vote: 0 },
+			{ vote: 1, reputation: 1.0, avg_vote: 0.3, is_self_vote: 0 },
+			{ vote: -1, reputation: 1.0, avg_vote: -0.2, is_self_vote: 0 },
+		]
+
+		const result = calculateScore(1, votes)
+
+		expect(result.effective_score).toBeCloseTo(config.reputation.minScoreForConfidence, 5)
+		expect(result.confidence).toBe("medium")
+	})
+
+	it("still awards high confidence for a strong, diverse, well-voted row", () => {
+		const votes = [
+			{ vote: 1, reputation: 1.0, avg_vote: -0.5, is_self_vote: 0 },
+			{ vote: 1, reputation: 1.0, avg_vote: 0.5, is_self_vote: 0 },
+			{ vote: 1, reputation: 1.0, avg_vote: 0.3, is_self_vote: 0 },
+		]
+
+		const result = calculateScore(1, votes)
+
+		expect(result.effective_score).toBeGreaterThanOrEqual(config.reputation.minScoreForConfidence)
+		expect(result.confidence).toBe("high")
+	})
+})
+
 describe("updateReputations", () => {
 	interface DBCall {
 		sql: string
