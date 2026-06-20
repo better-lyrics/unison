@@ -126,9 +126,13 @@ const app = new Elysia({ adapter: node() })
 			timezone: "UTC",
 			async run() {
 				if (!config.thresholdAudit.enabled) return
-				cronLog.info("starting threshold check")
-				const result = await auditThresholds(env)
-				cronLog.info("threshold check complete", result)
+				try {
+					cronLog.info("starting threshold check")
+					const result = await auditThresholds(env)
+					cronLog.info("threshold check complete", result)
+				} catch (err) {
+					cronLog.error("threshold check failed", { error: (err as Error).message })
+				}
 			},
 		})
 	)
