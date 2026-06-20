@@ -121,4 +121,12 @@ describe("backfillConfidence", () => {
 		expect(selectSql).toContain("diversity_bonus = 1")
 		expect(selectSql).toContain("deleted_at IS NULL")
 	})
+
+	it("gates medium/high tiers behind the configured score floor", async () => {
+		const db = makeMockDB([[]])
+		const env = makeEnv(db, makeMockCache())
+		await backfillConfidence(env)
+		const selectSql = db.calls[0].sql
+		expect(selectSql).toContain(`effective_score >= ${config.reputation.minScoreForConfidence}`)
+	})
 })

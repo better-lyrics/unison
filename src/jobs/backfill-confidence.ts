@@ -7,11 +7,12 @@ const log = new Logger("backfill")
 
 export async function backfillConfidence(env: Env): Promise<{ updated: number }> {
 	const threshold = config.reputation.minVotesForConfidence
+	const scoreFloor = config.reputation.minScoreForConfidence
 	// Reproduces the confidence rule in calculateScore (score-updater.ts) in SQL.
 	// If that rule changes, update this expression to match.
 	const tierExpr = `CASE
-			WHEN vote_count >= ${threshold} AND diversity_bonus = 1 THEN 'high'
-			WHEN vote_count >= ${threshold} THEN 'medium'
+			WHEN vote_count >= ${threshold} AND effective_score >= ${scoreFloor} AND diversity_bonus = 1 THEN 'high'
+			WHEN vote_count >= ${threshold} AND effective_score >= ${scoreFloor} THEN 'medium'
 			ELSE 'low'
 		END`
 
