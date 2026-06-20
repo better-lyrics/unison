@@ -460,7 +460,7 @@ describe("getMySubmissions", () => {
 		})
 
 		const sql = db.calls[0].sql
-		expect(sql).toMatch(/ORDER BY\s+effective_score ASC,\s+id ASC/)
+		expect(sql).toMatch(/ORDER BY\s+effective_score ASC,\s+vote_count ASC,\s+id ASC/)
 	})
 
 	it("applies filters without adding a quality gate", async () => {
