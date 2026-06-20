@@ -54,11 +54,12 @@ afterEach(() => {
 })
 
 // Five populations in registry order: confidence, proven, autoHideMinVotes,
-// autoHideDecisive, reports. Confidence has the issue-#41 drifting shape
-// (current 5 -> recommended 3); the rest are empty (no drift).
+// autoHideDecisive, reports. Confidence has a drifting shape
+// (current 3 -> recommended 4); the rest are empty (no drift).
+// cov@3 = 240/600 = 0.40 > target 0.25, and 0.40 - 0.25 = 0.15 > 0.10 tolerance.
 function scriptDriftingConfidenceOnly(): unknown[] {
 	return [
-		histRow(571, { 2: 200, 3: 57, 4: 40, 5: 34, 6: 29, 7: 22, 8: 20, 9: 18, 10: 17 }),
+		histRow(600, { 2: 300, 3: 240, 4: 120, 5: 90, 6: 70, 7: 55, 8: 44, 9: 35, 10: 28 }),
 		histRow(0, {}),
 		histRow(0, {}),
 		histRow(0, {}),
@@ -80,14 +81,14 @@ describe("auditThresholds", () => {
 		expect(result.drifted).toContain("minVotesForConfidence")
 		expect(result.notified).toBe(true)
 		expect(fetchSpy).toHaveBeenCalledTimes(1)
-		expect(cache.get("audit:lastNotified:minVotesForConfidence")).toBe("3")
+		expect(cache.get("audit:lastNotified:minVotesForConfidence")).toBe("4")
 	})
 
 	it("dedups: a second identical run does not notify again", async () => {
 		process.env.NTFY_TOPIC_URL = "https://ntfy.sh/x"
 		const fetchSpy = vi.fn().mockResolvedValue(new Response("ok", { status: 200 }))
 		vi.stubGlobal("fetch", fetchSpy)
-		const cache = new Map<string, string>([["audit:lastNotified:minVotesForConfidence", "3"]])
+		const cache = new Map<string, string>([["audit:lastNotified:minVotesForConfidence", "4"]])
 		const env = makeEnv(scriptDriftingConfidenceOnly(), cache)
 
 		const result = await auditThresholds(env)

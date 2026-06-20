@@ -27,8 +27,8 @@ describe("config.thresholdAudit", () => {
 		const t = config.thresholdAudit.targets
 		expect(t.minVotesForConfidence).toEqual({ targetFraction: 0.25, floor: 2, ceil: 10 })
 		expect(t.primarySlotMinVotes).toEqual({ targetFraction: 0.2, floor: 2, ceil: 10 })
-		expect(t.autoHideMinVotes).toEqual({ targetFraction: 0.5, floor: 2, ceil: 10 })
+		expect(t.autoHideMinVotes).toEqual({ targetFraction: 0.15, floor: 2, ceil: 10 })
 		expect(t.autoHideDecisiveMinVotes).toEqual({ targetFraction: 0.5, floor: 2, ceil: 10 })
-		expect(t.reportsThreshold).toEqual({ targetFraction: 0.1, floor: 2, ceil: 10 })
+		expect(t.reportsThreshold).toEqual({ targetFraction: 0.15, floor: 2, ceil: 10 })
 	})
 })
