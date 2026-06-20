@@ -14,6 +14,7 @@ interface YTPlayerCtorOptions {
   width?: string | number
   height?: string | number
   playerVars?: { origin?: string }
+  events?: { onReady?: () => void }
 }
 
 interface YTNamespace {
@@ -88,6 +89,10 @@ export interface UseYouTubePlayerResult {
 export function useYouTubePlayer(videoId: string | null): UseYouTubePlayerResult {
   const [node, setNode] = useState<HTMLDivElement | null>(null)
   const playerRef = useRef<YTPlayer | null>(null)
+  // YT.Player methods aren't attached until onReady fires; calling one earlier
+  // throws. The rAF sync loop polls every frame, so the getters must stay inert
+  // until the player is ready or one throw kills the loop permanently.
+  const readyRef = useRef(false)
 
   useEffect(() => {
     if (!videoId || !node) return
@@ -95,6 +100,7 @@ export function useYouTubePlayer(videoId: string | null): UseYouTubePlayerResult
     if (!win) return
 
     let cancelled = false
+    readyRef.current = false
 
     const run = async () => {
       const yt = await ensureScript(win).catch(() => null)
@@ -104,6 +110,11 @@ export function useYouTubePlayer(videoId: string | null): UseYouTubePlayerResult
         width: "100%",
         height: "100%",
         playerVars: { origin: win.location.origin },
+        events: {
+          onReady: () => {
+            if (!cancelled) readyRef.current = true
+          },
+        },
       })
       playerRef.current = player
     }
@@ -111,6 +122,7 @@ export function useYouTubePlayer(videoId: string | null): UseYouTubePlayerResult
 
     return () => {
       cancelled = true
+      readyRef.current = false
       const player = playerRef.current
       if (player) player.destroy()
       playerRef.current = null
@@ -119,19 +131,19 @@ export function useYouTubePlayer(videoId: string | null): UseYouTubePlayerResult
 
   const seekTo = useCallback((seconds: number) => {
     const player = playerRef.current
-    if (!player) return
+    if (!player || !readyRef.current) return
     player.seekTo(seconds, true)
   }, [])
 
   const getCurrentTimeMs = useCallback(() => {
     const player = playerRef.current
-    if (!player) return 0
+    if (!player || !readyRef.current) return 0
     return player.getCurrentTime() * 1000
   }, [])
 
   const getPlaying = useCallback(() => {
     const player = playerRef.current
-    if (!player) return false
+    if (!player || !readyRef.current) return false
     return player.getPlayerState() === YT_STATE_PLAYING
   }, [])
 
