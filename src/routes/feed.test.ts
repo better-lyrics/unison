@@ -210,7 +210,8 @@ describe("GET /feed", () => {
 		const feedSql = db.calls[2].sql
 		expect(feedSql).toContain("is_personalized")
 		expect(feedSql).toContain("sync_type = ?")
-		expect(feedSql).toMatch(/ORDER BY\s+is_personalized DESC,\s+created_at DESC,\s+id DESC/)
+		expect(feedSql).toMatch(/\)\s*AS\s+unique_videos\s+ORDER BY\s+created_at DESC,\s+id DESC/)
+		expect(feedSql).not.toMatch(/ORDER BY\s+is_personalized DESC/)
 		expect(db.calls[2].params).toContain("richsync")
 	})
 
