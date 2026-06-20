@@ -5,6 +5,7 @@ import { closeRedis } from "@/infra/cache"
 import { closePool } from "@/infra/database"
 import { createEnv } from "@/infra/env"
 import { Logger, flushLogs } from "@/infra/logger"
+import { backfillConfidence } from "@/jobs/backfill-confidence"
 import { backfillFormatDetection } from "@/jobs/backfill-format-detection"
 import { backfillLanguage } from "@/jobs/backfill-language"
 import { backfillSyncType } from "@/jobs/backfill-synctype"
@@ -12,6 +13,7 @@ import { backfillTextSearch } from "@/jobs/backfill-text-search"
 import { cleanupFulfilledRequests } from "@/jobs/cleanup-fulfilled-requests"
 import { runDumpJob } from "@/jobs/dump"
 import { updateScores } from "@/jobs/score-updater"
+import { auditThresholds } from "@/jobs/threshold-audit"
 import { authRoutes } from "@/routes/auth"
 import { compatRoutes } from "@/routes/compat"
 import { feedRoutes } from "@/routes/feed"
@@ -114,6 +116,23 @@ const app = new Elysia({ adapter: node() })
 					cronLog.warn("daily dump skipped", result)
 				} else {
 					cronLog.info("daily dump complete", result)
+				}
+			},
+		})
+	)
+	.use(
+		cron({
+			name: "threshold-audit",
+			pattern: config.thresholdAudit.schedule,
+			timezone: "UTC",
+			async run() {
+				if (!config.thresholdAudit.enabled) return
+				try {
+					cronLog.info("starting threshold check")
+					const result = await auditThresholds(env)
+					cronLog.info("threshold check complete", result)
+				} catch (err) {
+					cronLog.error("threshold check failed", { error: (err as Error).message })
 				}
 			},
 		})
@@ -236,13 +255,17 @@ backfillLanguage(env)
 	})
 	.catch((err) => log.error("language backfill failed", { error: (err as Error).message }))
 
+backfillConfidence(env)
+	.then(({ updated }) => {
+		if (updated > 0) log.info("confidence backfill complete", { updated })
+	})
+	.catch((err) => log.error("confidence backfill failed", { error: (err as Error).message }))
+
 cleanupFulfilledRequests(env)
 	.then(({ deleted }) => {
 		if (deleted > 0) log.info("cleanup fulfilled requests complete", { deleted })
 	})
-	.catch((err) =>
-		log.error("cleanup fulfilled requests failed", { error: (err as Error).message }),
-	)
+	.catch((err) => log.error("cleanup fulfilled requests failed", { error: (err as Error).message }))
 
 process.on("unhandledRejection", (reason) => {
 	const err = reason instanceof Error ? reason : new Error(String(reason))

@@ -117,7 +117,7 @@ describe("calculateScore", () => {
 		expect(result.diversity_bonus).toBe(0)
 	})
 
-	it("returns low confidence for fewer than 5 votes", () => {
+	it("returns low confidence for fewer than 3 votes", () => {
 		const votes = [
 			{ vote: 1, reputation: 1.0, avg_vote: 0.5, is_self_vote: 0 },
 			{ vote: 1, reputation: 1.0, avg_vote: -0.5, is_self_vote: 0 },
@@ -128,8 +128,8 @@ describe("calculateScore", () => {
 		expect(result.confidence).toBe("low")
 	})
 
-	it("returns medium confidence for 5+ votes without diversity", () => {
-		const votes = Array.from({ length: 5 }, () => ({
+	it("returns medium confidence for 3+ votes without diversity", () => {
+		const votes = Array.from({ length: 3 }, () => ({
 			vote: 1,
 			reputation: 1.0,
 			avg_vote: 0.5,
@@ -141,13 +141,11 @@ describe("calculateScore", () => {
 		expect(result.confidence).toBe("medium")
 	})
 
-	it("returns high confidence for 5+ votes with diversity", () => {
+	it("returns high confidence for 3+ votes with diversity", () => {
 		const votes = [
 			{ vote: 1, reputation: 1.0, avg_vote: -0.5, is_self_vote: 0 },
 			{ vote: 1, reputation: 1.0, avg_vote: 0.5, is_self_vote: 0 },
 			{ vote: 1, reputation: 1.0, avg_vote: 0.3, is_self_vote: 0 },
-			{ vote: 1, reputation: 1.0, avg_vote: 0.2, is_self_vote: 0 },
-			{ vote: 1, reputation: 1.0, avg_vote: -0.1, is_self_vote: 0 },
 		]
 
 		const result = calculateScore(1, votes)
@@ -517,7 +515,7 @@ describe("reputation bounds", () => {
 	})
 
 	it("config has correct minimum votes for confidence", () => {
-		expect(config.reputation.minVotesForConfidence).toBe(5)
+		expect(config.reputation.minVotesForConfidence).toBe(3)
 	})
 
 	it("config has correct consensus delta", () => {

@@ -4,12 +4,12 @@ export const config = {
 	},
 
 	moderation: {
-		reportsThreshold: 5,
+		reportsThreshold: 2,
 		autoHide: {
-			minVotes: 5,
+			minVotes: 3,
 			downvoteRatio: 0.8,
 			maxEffectiveScore: -0.5,
-			decisiveMinVotes: 3,
+			decisiveMinVotes: 2,
 			decisiveMinAgeDays: 3,
 			reputationPenalty: 0.2,
 		},
@@ -32,7 +32,7 @@ export const config = {
 		max: 2.0,
 		consensusDelta: 0.1,
 		selfVoteWeight: 0.5,
-		minVotesForConfidence: 5,
+		minVotesForConfidence: 3,
 		voteWeightFloor: 0.5,
 	},
 
@@ -56,6 +56,19 @@ export const config = {
 		coldMaxVotes: 5,
 		minSubmitterReputation: 0.5,
 		maxChallengers: 10,
+	},
+
+	thresholdAudit: {
+		enabled: true,
+		schedule: "0 9 * * *",
+		driftTolerance: 0.1,
+		targets: {
+			minVotesForConfidence: { targetFraction: 0.25, floor: 2, ceil: 10 },
+			primarySlotMinVotes: { targetFraction: 0.2, floor: 2, ceil: 10 },
+			autoHideMinVotes: { targetFraction: 0.15, floor: 2, ceil: 10 },
+			autoHideDecisiveMinVotes: { targetFraction: 0.5, floor: 2, ceil: 10 },
+			reportsThreshold: { targetFraction: 0.15, floor: 2, ceil: 10 },
+		},
 	},
 
 	search: {

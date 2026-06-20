@@ -1394,14 +1394,14 @@ describe("read paths filter deleted rows", () => {
 })
 
 describe("AUTO_HIDE_PREDICATE", () => {
-	it("encodes the standard path: 5 votes, 80% downvotes, effective_score < -0.5", () => {
-		expect(AUTO_HIDE_PREDICATE).toContain("vote_count >= 5")
+	it("encodes the standard path: 3 votes, 80% downvotes, effective_score < -0.5", () => {
+		expect(AUTO_HIDE_PREDICATE).toContain("vote_count >= 3")
 		expect(AUTO_HIDE_PREDICATE).toContain("downvotes >= 0.8 * vote_count")
 		expect(AUTO_HIDE_PREDICATE).toContain("effective_score < -0.5")
 	})
 
-	it("encodes the decisive path: 3 unanimous downvotes aged 3 days", () => {
-		expect(AUTO_HIDE_PREDICATE).toContain("vote_count >= 3")
+	it("encodes the decisive path: 2 unanimous downvotes aged 3 days", () => {
+		expect(AUTO_HIDE_PREDICATE).toContain("vote_count >= 2")
 		expect(AUTO_HIDE_PREDICATE).toContain("downvotes = vote_count")
 		expect(AUTO_HIDE_PREDICATE).toContain("- created_at >= 259200")
 	})
