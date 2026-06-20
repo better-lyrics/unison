@@ -1,29 +1,43 @@
 import { act, render, renderHook } from "@testing-library/react"
 import { createElement } from "react"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
-import { __resetForTests, useYouTubePlayer } from "./useYouTubePlayer"
+import { type UseYouTubePlayerResult, __resetForTests, useYouTubePlayer } from "./useYouTubePlayer"
 
 interface FakePlayerOptions {
   videoId: string
+  events?: { onReady?: () => void }
 }
 
+// Models the real YT.Player: methods are NOT attached until the iframe posts
+// "initialDelivery" and onReady fires. Calling one before then throws, exactly
+// like `player.getCurrentTime is not a function` in production.
 class FakePlayer {
   destroyed = false
+  ready = false
   currentTime = 0
   state = 2
   seeks: Array<{ seconds: number; allowSeekAhead: boolean }> = []
+  onReady?: () => void
   static instances: FakePlayer[] = []
 
-  constructor(_elem: HTMLElement | string, _opts: FakePlayerOptions) {
+  constructor(_elem: HTMLElement | string, opts: FakePlayerOptions) {
+    this.onReady = opts.events?.onReady
     FakePlayer.instances.push(this)
   }
+  fireReady() {
+    this.ready = true
+    this.onReady?.()
+  }
   getCurrentTime() {
+    if (!this.ready) throw new TypeError("getCurrentTime is not a function")
     return this.currentTime
   }
   getPlayerState() {
+    if (!this.ready) throw new TypeError("getPlayerState is not a function")
     return this.state
   }
   seekTo(seconds: number, allowSeekAhead: boolean) {
+    if (!this.ready) throw new TypeError("seekTo is not a function")
     this.seeks.push({ seconds, allowSeekAhead })
     this.currentTime = seconds
   }
@@ -91,6 +105,9 @@ describe("useYouTubePlayer", () => {
     const player = FakePlayer.instances[0]
     expect(player).toBeDefined()
     act(() => {
+      player.fireReady()
+    })
+    act(() => {
       captured?.seekTo(7.25)
     })
     expect(player.seeks).toEqual([{ seconds: 7.25, allowSeekAhead: true }])
@@ -137,6 +154,10 @@ describe("useYouTubePlayer", () => {
     if (getCurrentTimeMs === null || getPlaying === null) throw new Error("getters never captured")
     const readTime: () => number = getCurrentTimeMs
     const readPlaying: () => boolean = getPlaying
+
+    act(() => {
+      player.fireReady()
+    })
 
     player.currentTime = 2.5
     expect(readTime()).toBe(2500)
@@ -211,5 +232,99 @@ describe("useYouTubePlayer", () => {
       await Promise.resolve()
     })
     expect(() => unmount()).not.toThrow()
+  })
+})
+
+describe("useYouTubePlayer readiness gating", () => {
+  let result: UseYouTubePlayerResult
+  let unmount: () => void
+
+  async function mountFor(videoId: string) {
+    installYT()
+    function CaptureHarness() {
+      result = useYouTubePlayer(videoId)
+      return createElement("div", { ref: result.ref })
+    }
+    const rendered = render(createElement(CaptureHarness))
+    unmount = rendered.unmount
+    await act(async () => {
+      await Promise.resolve()
+    })
+    return rendered
+  }
+
+  // The real YT.Player attaches getCurrentTime/getPlayerState/seekTo only after
+  // onReady fires; calling one before then throws. The rAF sync loop in
+  // LyricsRenderer calls these every frame, so an unguarded pre-ready call threw
+  // and killed the loop forever ("barely works most of the time"). These lock in
+  // that the hook never touches the player before onReady.
+  it("regression: getCurrentTimeMs returns 0 and does not throw before the player is ready", async () => {
+    await mountFor("abc")
+    expect(FakePlayer.instances[0].ready).toBe(false)
+    expect(() => result.getCurrentTimeMs()).not.toThrow()
+    expect(result.getCurrentTimeMs()).toBe(0)
+    unmount()
+  })
+
+  it("regression: getPlaying returns false and does not throw before the player is ready", async () => {
+    await mountFor("abc")
+    expect(() => result.getPlaying()).not.toThrow()
+    expect(result.getPlaying()).toBe(false)
+    unmount()
+  })
+
+  it("regression: seekTo is a no-op and does not throw before the player is ready", async () => {
+    await mountFor("abc")
+    expect(() => result.seekTo(9)).not.toThrow()
+    expect(FakePlayer.instances[0].seeks).toEqual([])
+    unmount()
+  })
+
+  it("starts reading real player values only once onReady fires", async () => {
+    await mountFor("abc")
+    const player = FakePlayer.instances[0]
+    player.currentTime = 3
+    player.state = 1
+    expect(result.getCurrentTimeMs()).toBe(0)
+    expect(result.getPlaying()).toBe(false)
+
+    act(() => {
+      player.fireReady()
+    })
+    expect(result.getCurrentTimeMs()).toBe(3000)
+    expect(result.getPlaying()).toBe(true)
+    unmount()
+  })
+
+  it("regression: changing videoId resets readiness so the new player is not queried before its onReady", async () => {
+    function Harness2({ videoId }: { videoId: string }) {
+      result = useYouTubePlayer(videoId)
+      return createElement("div", { ref: result.ref })
+    }
+    installYT()
+    const rendered = render(createElement(Harness2, { videoId: "abc" }))
+    await act(async () => {
+      await Promise.resolve()
+    })
+    act(() => {
+      FakePlayer.instances[0].fireReady()
+    })
+    expect(result.getCurrentTimeMs).toBeDefined()
+
+    rendered.rerender(createElement(Harness2, { videoId: "def" }))
+    await act(async () => {
+      await Promise.resolve()
+    })
+    const next = FakePlayer.instances[1]
+    expect(next.ready).toBe(false)
+    expect(() => result.getCurrentTimeMs()).not.toThrow()
+    expect(result.getCurrentTimeMs()).toBe(0)
+
+    next.currentTime = 5
+    act(() => {
+      next.fireReady()
+    })
+    expect(result.getCurrentTimeMs()).toBe(5000)
+    rendered.unmount()
   })
 })
