@@ -12,6 +12,7 @@ import { backfillTextSearch } from "@/jobs/backfill-text-search"
 import { cleanupFulfilledRequests } from "@/jobs/cleanup-fulfilled-requests"
 import { runDumpJob } from "@/jobs/dump"
 import { updateScores } from "@/jobs/score-updater"
+import { auditThresholds } from "@/jobs/threshold-audit"
 import { authRoutes } from "@/routes/auth"
 import { compatRoutes } from "@/routes/compat"
 import { feedRoutes } from "@/routes/feed"
@@ -115,6 +116,19 @@ const app = new Elysia({ adapter: node() })
 				} else {
 					cronLog.info("daily dump complete", result)
 				}
+			},
+		})
+	)
+	.use(
+		cron({
+			name: "threshold-audit",
+			pattern: config.thresholdAudit.schedule,
+			timezone: "UTC",
+			async run() {
+				if (!config.thresholdAudit.enabled) return
+				cronLog.info("starting threshold check")
+				const result = await auditThresholds(env)
+				cronLog.info("threshold check complete", result)
 			},
 		})
 	)
