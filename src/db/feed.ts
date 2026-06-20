@@ -164,6 +164,12 @@ export async function getPersonalizedFeed(
 
 	const outerOrderBy = buildOrderByClause(filters, `${RANKING_EXPR} DESC`)
 
+	// The preferred-artist boost is a feature of the default discovery feed only.
+	// When the user picks an explicit sort, that label is the contract: honor it
+	// globally instead of pinning preferred items above the true top result.
+	const isDefaultSort = !filters.sort || filters.sort === "default"
+	const personalizedBoost = isDefaultSort ? "is_personalized DESC, " : ""
+
 	// Single-stream query so OFFSET applies to one stable order; preferred-artist
 	// items boost to the top via is_personalized DESC without a second SELECT,
 	// which would otherwise let the same item reappear across page boundaries.
@@ -179,7 +185,7 @@ export async function getPersonalizedFeed(
 			WHERE ${innerWhere.join(" AND ")}
 			ORDER BY video_id, ${RANKING_EXPR} DESC
 		) AS unique_videos
-		ORDER BY is_personalized DESC, ${outerOrderBy}
+		ORDER BY ${personalizedBoost}${outerOrderBy}
 		LIMIT ?${hasOffset ? " OFFSET ?" : ""}
 	`
 

@@ -324,7 +324,8 @@ describe("getPersonalizedFeed", () => {
 
 		const feedSql = db.calls[1].sql
 		expect(feedSql).toContain("effective_score > 0")
-		expect(feedSql).toMatch(/ORDER BY\s+is_personalized DESC,\s+created_at DESC,\s+id DESC/)
+		expect(feedSql).toMatch(/\)\s*AS\s+unique_videos\s+ORDER BY\s+created_at DESC,\s+id DESC/)
+		expect(feedSql).not.toMatch(/ORDER BY\s+is_personalized DESC/)
 		expect(feedSql).toMatch(/ORDER BY video_id,.*LN\(/s)
 	})
 
@@ -358,7 +359,7 @@ describe("getPersonalizedFeed", () => {
 		expect(feedSql).not.toContain("is_personalized")
 	})
 
-	it("keeps is_personalized DESC as the primary outer sort key with sort=most-voted", async () => {
+	it("drops the is_personalized boost when an explicit sort is chosen (most-voted)", async () => {
 		const db = createMockDB([[{ artist_norm: "limbo" }], []])
 		await getPersonalizedFeed(createEnv(db), 42, 20, 0, {
 			sort: "most-voted",
@@ -366,7 +367,28 @@ describe("getPersonalizedFeed", () => {
 		})
 
 		const feedSql = db.calls[1].sql
-		expect(feedSql).toMatch(/ORDER BY\s+is_personalized DESC,\s+vote_count DESC,\s+id DESC/)
+		expect(feedSql).toMatch(/\)\s*AS\s+unique_videos\s+ORDER BY\s+vote_count DESC,\s+id DESC/)
+		expect(feedSql).not.toMatch(/ORDER BY\s+is_personalized DESC/)
+	})
+
+	it("regression: explicit sorts honor the label instead of pinning preferred artists on top", async () => {
+		// Bug: is_personalized DESC was always the primary outer sort key, so a
+		// logged-in user's preferred-artist items pinned above everything and the
+		// chosen sort only ordered within that tier. The true most-voted / newest
+		// item landed on page 2. Explicit sorts must match the global ordering.
+		for (const sort of ["newest", "top-rated", "most-voted"] as const) {
+			const db = createMockDB([[{ artist_norm: "limbo" }], []])
+			await getPersonalizedFeed(createEnv(db), 42, 20, 0, { sort, sortDir: "desc" })
+			expect(db.calls[1].sql).not.toMatch(/ORDER BY\s+is_personalized DESC/)
+		}
+	})
+
+	it("keeps the is_personalized boost on the default feed (no explicit sort)", async () => {
+		const db = createMockDB([[{ artist_norm: "limbo" }], []])
+		await getPersonalizedFeed(createEnv(db), 42, 20, 0, { sort: "default" })
+
+		const feedSql = db.calls[1].sql
+		expect(feedSql).toMatch(/\)\s*AS\s+unique_videos\s+ORDER BY\s+is_personalized DESC/)
 	})
 
 	it("keeps SQL shape unchanged when filters are absent (regression)", async () => {
@@ -438,7 +460,7 @@ describe("getMySubmissions", () => {
 		})
 
 		const sql = db.calls[0].sql
-		expect(sql).toMatch(/ORDER BY\s+effective_score ASC,\s+id ASC/)
+		expect(sql).toMatch(/ORDER BY\s+effective_score ASC,\s+vote_count ASC,\s+id ASC/)
 	})
 
 	it("applies filters without adding a quality gate", async () => {

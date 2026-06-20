@@ -101,5 +101,9 @@ export function buildOrderByClause(filters: FeedFilters, defaultExpr: string): s
 	if (!filters.sort || filters.sort === "default") return defaultExpr
 	const column = SORT_COLUMN[filters.sort]
 	const dir = filters.sortDir === "asc" ? "ASC" : "DESC"
-	return `${column} ${dir}, id ${dir}`
+	// effective_score is a reputation-weighted vote average that saturates at 1.0,
+	// so many entries tie at the top. Break those ties by vote_count so well-voted
+	// lyrics outrank brand-new single-vote uploads under "Top Rated".
+	const tiebreak = filters.sort === "top-rated" ? `vote_count ${dir}, ` : ""
+	return `${column} ${dir}, ${tiebreak}id ${dir}`
 }

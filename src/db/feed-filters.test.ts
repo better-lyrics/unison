@@ -312,16 +312,25 @@ describe("buildOrderByClause", () => {
 		)
 	})
 
-	it("maps top-rated desc to effective_score DESC, id DESC", () => {
+	it("maps top-rated desc to effective_score DESC, vote_count DESC, id DESC", () => {
 		expect(buildOrderByClause({ sort: "top-rated", sortDir: "desc" }, DEFAULT)).toBe(
-			"effective_score DESC, id DESC"
+			"effective_score DESC, vote_count DESC, id DESC"
 		)
 	})
 
-	it("maps top-rated asc to effective_score ASC, id ASC", () => {
+	it("maps top-rated asc to effective_score ASC, vote_count ASC, id ASC", () => {
 		expect(buildOrderByClause({ sort: "top-rated", sortDir: "asc" }, DEFAULT)).toBe(
-			"effective_score ASC, id ASC"
+			"effective_score ASC, vote_count ASC, id ASC"
 		)
+	})
+
+	it("regression: top-rated breaks effective_score ties by vote_count so saturated 1.0 scores rank by popularity", () => {
+		// effective_score is a reputation-weighted vote average bounded at 1.0, so a
+		// 1-vote and a 29-vote all-upvoted entry both score 1.0. Without the
+		// vote_count tiebreak, id DESC surfaced the newest single-vote uploads above
+		// genuinely well-voted lyrics under "Top Rated".
+		const clause = buildOrderByClause({ sort: "top-rated", sortDir: "desc" }, DEFAULT)
+		expect(clause).toBe("effective_score DESC, vote_count DESC, id DESC")
 	})
 
 	it("maps most-voted desc to vote_count DESC, id DESC", () => {
@@ -346,9 +355,9 @@ describe("buildOrderByClause", () => {
 		expect(parts[1]).toBe("id ASC")
 	})
 
-	it("uses id DESC as the tiebreaker for desc sorts", () => {
+	it("uses id DESC as the final tiebreaker for desc sorts", () => {
 		const clause = buildOrderByClause({ sort: "top-rated", sortDir: "desc" }, DEFAULT)
 		const parts = clause.split(",").map((s) => s.trim())
-		expect(parts[1]).toBe("id DESC")
+		expect(parts.at(-1)).toBe("id DESC")
 	})
 })
