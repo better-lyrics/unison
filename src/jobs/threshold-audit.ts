@@ -32,6 +32,7 @@ async function lyricsHistogram(env: Env, where: string): Promise<Histogram> {
 }
 
 async function reportsHistogram(env: Env): Promise<Histogram> {
+	// denominator is lyrics with at least one report, so coverage is over reported rows
 	const row = await env.DB.prepare(`
 		SELECT COUNT(*) AS total,
 			${atLeastSelect("c")}
@@ -49,7 +50,9 @@ interface Audited {
 
 function registry(): Audited[] {
 	const t = config.thresholdAudit.targets
+	const ah = config.moderation.autoHide
 	return [
+		// positive incumbents are the promotion candidates these bars gate, so derive over them
 		{
 			name: "minVotesForConfidence",
 			current: config.reputation.minVotesForConfidence,
@@ -69,7 +72,7 @@ function registry(): Audited[] {
 			histogram: (env) =>
 				lyricsHistogram(
 					env,
-					"vote_count > 0 AND downvotes >= 0.8 * vote_count AND effective_score < -0.5 AND deleted_at IS NULL"
+					`vote_count > 0 AND downvotes >= ${ah.downvoteRatio} * vote_count AND effective_score < ${ah.maxEffectiveScore} AND deleted_at IS NULL`
 				),
 		},
 		{
@@ -77,7 +80,10 @@ function registry(): Audited[] {
 			current: config.moderation.autoHide.decisiveMinVotes,
 			target: t.autoHideDecisiveMinVotes,
 			histogram: (env) =>
-				lyricsHistogram(env, "vote_count > 0 AND downvotes = vote_count AND deleted_at IS NULL"),
+				lyricsHistogram(
+					env,
+					`vote_count > 0 AND downvotes = vote_count AND EXTRACT(EPOCH FROM NOW())::INTEGER - created_at >= ${ah.decisiveMinAgeDays * 86400} AND deleted_at IS NULL`
+				),
 		},
 		{
 			name: "reportsThreshold",

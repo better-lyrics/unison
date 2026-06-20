@@ -1,3 +1,4 @@
+import { config } from "@/config"
 import { auditThresholds } from "@/jobs/threshold-audit"
 import type { Env } from "@/types"
 import { afterEach, describe, expect, it, vi } from "vitest"
@@ -8,10 +9,11 @@ function histRow(total: number, counts: Partial<Record<number, number>>) {
 	return row
 }
 
-function makeEnv(scriptedRows: unknown[], cache: Map<string, string>): Env {
+function makeEnv(scriptedRows: unknown[], cache: Map<string, string>, sqls: string[] = []): Env {
 	const queue = [...scriptedRows]
 	const db = {
-		prepare() {
+		prepare(sql: string) {
+			sqls.push(sql)
 			return {
 				bind() {
 					return this
@@ -103,5 +105,25 @@ describe("auditThresholds", () => {
 		const result = await auditThresholds(env)
 		expect(result.drifted).toEqual([])
 		expect(result.notified).toBe(false)
+	})
+
+	it("mirrors the live moderation filters in its population queries", async () => {
+		const sqls: string[] = []
+		const env = makeEnv(
+			[histRow(0, {}), histRow(0, {}), histRow(0, {}), histRow(0, {}), histRow(0, {})],
+			new Map(),
+			sqls
+		)
+
+		await auditThresholds(env)
+
+		const decisive = sqls.find((s) => s.includes("downvotes = vote_count"))
+		expect(decisive).toBeDefined()
+		expect(decisive).toContain(String(config.moderation.autoHide.decisiveMinAgeDays * 86400))
+
+		const ratio = sqls.find((s) => s.includes("downvotes >="))
+		expect(ratio).toBeDefined()
+		expect(ratio).toContain(String(config.moderation.autoHide.downvoteRatio))
+		expect(ratio).toContain(String(config.moderation.autoHide.maxEffectiveScore))
 	})
 })
