@@ -42,6 +42,9 @@ export function checkDrift(params: {
 	const { name, hist, current, targetFraction, floor, ceil, tolerance } = params
 	const recommended = deriveThreshold(hist, targetFraction, { floor, ceil })
 	const currentCoverage = coverageAtLeast(hist, current)
-	const drifted = recommended !== current && Math.abs(currentCoverage - targetFraction) > tolerance
+	const drifted =
+		hist.total > 0 &&
+		recommended !== current &&
+		Math.abs(currentCoverage - targetFraction) > tolerance
 	return { name, current, recommended, currentCoverage, targetFraction, drifted }
 }

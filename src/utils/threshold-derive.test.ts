@@ -95,4 +95,17 @@ describe("checkDrift", () => {
 		expect(r.recommended).toBe(3)
 		expect(r.drifted).toBe(false)
 	})
+
+	it("never flags drift on an empty population", () => {
+		const r = checkDrift({
+			name: "x",
+			hist: { total: 0, atLeast: {} },
+			current: 5,
+			targetFraction: 0.25,
+			floor: 2,
+			ceil: 10,
+			tolerance: 0.1,
+		})
+		expect(r.drifted).toBe(false)
+	})
 })
