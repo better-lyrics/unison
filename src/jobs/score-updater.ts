@@ -165,7 +165,8 @@ export function calculateScore(lyricsId: number, votes: VoteWithUser[]): LyricsS
 	const effectiveScore = totalWeight > 0 ? weightedSum / totalWeight : 0
 	const diversityBonus = harshUpvotes > 0 && generousUpvotes > 0
 
-	// Determine confidence level
+	// Determine confidence level. This rule is also reproduced in SQL by
+	// backfill-confidence.ts; keep the two in sync.
 	let confidence: Confidence = "low"
 	if (votes.length >= config.reputation.minVotesForConfidence) {
 		confidence = diversityBonus ? "high" : "medium"

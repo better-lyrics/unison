@@ -5,6 +5,7 @@ import { closeRedis } from "@/infra/cache"
 import { closePool } from "@/infra/database"
 import { createEnv } from "@/infra/env"
 import { Logger, flushLogs } from "@/infra/logger"
+import { backfillConfidence } from "@/jobs/backfill-confidence"
 import { backfillFormatDetection } from "@/jobs/backfill-format-detection"
 import { backfillLanguage } from "@/jobs/backfill-language"
 import { backfillSyncType } from "@/jobs/backfill-synctype"
@@ -254,13 +255,17 @@ backfillLanguage(env)
 	})
 	.catch((err) => log.error("language backfill failed", { error: (err as Error).message }))
 
+backfillConfidence(env)
+	.then(({ updated }) => {
+		if (updated > 0) log.info("confidence backfill complete", { updated })
+	})
+	.catch((err) => log.error("confidence backfill failed", { error: (err as Error).message }))
+
 cleanupFulfilledRequests(env)
 	.then(({ deleted }) => {
 		if (deleted > 0) log.info("cleanup fulfilled requests complete", { deleted })
 	})
-	.catch((err) =>
-		log.error("cleanup fulfilled requests failed", { error: (err as Error).message }),
-	)
+	.catch((err) => log.error("cleanup fulfilled requests failed", { error: (err as Error).message }))
 
 process.on("unhandledRejection", (reason) => {
 	const err = reason instanceof Error ? reason : new Error(String(reason))
