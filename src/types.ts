@@ -19,6 +19,7 @@ export interface Env {
 	DUMP_PUBLIC_BASE_URL: string
 	DUMP_DATABASE_URL: string | null
 	B2: B2Config | null
+	BUTLER_BOT_SECRET?: string | null
 }
 
 export interface RateLimiter {

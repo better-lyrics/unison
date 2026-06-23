@@ -59,5 +59,6 @@ export function createEnv(): Env {
 		DUMP_PUBLIC_BASE_URL: process.env.DUMP_PUBLIC_BASE_URL || "",
 		DUMP_DATABASE_URL: process.env.DUMP_DATABASE_URL || null,
 		B2: readB2Config(),
+		BUTLER_BOT_SECRET: process.env.BUTLER_BOT_SECRET || null,
 	}
 }
