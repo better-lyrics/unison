@@ -17,6 +17,8 @@ function makeMockDB(queue: unknown[] = []) {
 			return {
 				bind(...args: unknown[]) {
 					return {
+						getSql: () => sql,
+						getParams: () => args,
 						async first<T>(): Promise<T | null> {
 							calls.push({ sql, params: args })
 							return (queue.shift() as T) ?? null
@@ -31,6 +33,11 @@ function makeMockDB(queue: unknown[] = []) {
 						},
 					}
 				},
+			}
+		},
+		async batch(stmts: Array<{ getSql(): string; getParams(): unknown[] }>): Promise<void> {
+			for (const stmt of stmts) {
+				calls.push({ sql: stmt.getSql(), params: stmt.getParams() })
 			}
 		},
 	}

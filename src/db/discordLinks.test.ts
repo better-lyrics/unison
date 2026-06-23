@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest"
+import { describe, expect, it, vi } from "vitest"
 import type { Env } from "@/types"
 import { getByDiscordId, getByKeyId, linkDiscord, listLinks, unlinkByKeyId } from "./discordLinks"
 
@@ -15,6 +15,8 @@ function makeMockDB(queue: unknown[] = []) {
 			return {
 				bind(...args: unknown[]) {
 					return {
+						getSql: () => sql,
+						getParams: () => args,
 						async first<T>(): Promise<T | null> {
 							calls.push({ sql, params: args })
 							return (queue.shift() as T) ?? null
@@ -29,6 +31,11 @@ function makeMockDB(queue: unknown[] = []) {
 						},
 					}
 				},
+			}
+		},
+		async batch(stmts: Array<{ getSql(): string; getParams(): unknown[] }>): Promise<void> {
+			for (const stmt of stmts) {
+				calls.push({ sql: stmt.getSql(), params: stmt.getParams() })
 			}
 		},
 	}
@@ -64,6 +71,33 @@ describe("discordLinks", () => {
 			await linkDiscord(makeEnv(db), { discordId: "d2", keyId: KEY, discordUsername: null })
 			const insert = db.calls.find((c) => c.sql.includes("INSERT INTO discord_links"))
 			expect(insert?.params[2]).toBeNull()
+		})
+
+		it("regression: runs the delete and insert in one atomic batch", async () => {
+			const db = makeMockDB()
+			const spy = vi.spyOn(db, "batch")
+			await linkDiscord(makeEnv(db), {
+				discordId: "discord-1",
+				keyId: KEY,
+				discordUsername: "alice",
+			})
+
+			expect(spy).toHaveBeenCalledOnce()
+			expect(db.calls).toHaveLength(2)
+			expect(db.calls[0].sql).toContain("DELETE FROM discord_links")
+			expect(db.calls[1].sql).toContain("INSERT INTO discord_links")
+		})
+
+		it("regression: keeps the prior link when the insert fails mid-transaction", async () => {
+			const db = makeMockDB()
+			db.batch = async () => {
+				throw new Error("constraint violation")
+			}
+
+			await expect(
+				linkDiscord(makeEnv(db), { discordId: "discord-1", keyId: KEY, discordUsername: "alice" })
+			).rejects.toThrow()
+			expect(db.calls).toEqual([])
 		})
 	})
 

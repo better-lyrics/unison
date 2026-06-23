@@ -24,14 +24,15 @@ export async function linkDiscord(
 	params: { discordId: string; keyId: string; discordUsername: string | null }
 ): Promise<void> {
 	const now = Math.floor(Date.now() / 1000)
-	await env.DB.prepare("DELETE FROM discord_links WHERE key_id = ? OR discord_id = ?")
-		.bind(params.keyId, params.discordId)
-		.run()
-	await env.DB.prepare(
-		"INSERT INTO discord_links (discord_id, key_id, discord_username, linked_at) VALUES (?, ?, ?, ?)"
-	)
-		.bind(params.discordId, params.keyId, params.discordUsername, now)
-		.run()
+	await env.DB.batch([
+		env.DB.prepare("DELETE FROM discord_links WHERE key_id = ? OR discord_id = ?").bind(
+			params.keyId,
+			params.discordId
+		),
+		env.DB.prepare(
+			"INSERT INTO discord_links (discord_id, key_id, discord_username, linked_at) VALUES (?, ?, ?, ?)"
+		).bind(params.discordId, params.keyId, params.discordUsername, now),
+	])
 }
 
 export async function unlinkByKeyId(env: Env, keyId: string): Promise<void> {
