@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 import { COMMUNITY_KEY_ID } from "@/config"
-import { isLinkBlacklisted, listBlacklistedKeyIds } from "./blacklist"
+import { isLinkBlacklisted } from "./blacklist"
 
 describe("link blacklist", () => {
 	it("flags the community account", () => {
@@ -18,10 +18,6 @@ describe("link blacklist", () => {
 
 		it("returns false for empty input", () => {
 			expect(isLinkBlacklisted("")).toBe(false)
-		})
-
-		it("exposes the community key in the listed set", () => {
-			expect(listBlacklistedKeyIds()).toContain(COMMUNITY_KEY_ID)
 		})
 	})
 })

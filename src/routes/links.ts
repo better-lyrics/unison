@@ -5,7 +5,7 @@ import { Logger } from "@/infra/logger"
 import type { Env } from "@/types"
 import { eitherAuth } from "@/utils/either-auth"
 import { signedRequest } from "@/utils/auth"
-import { isLinkBlacklisted, listBlacklistedKeyIds } from "@/utils/blacklist"
+import { isLinkBlacklisted } from "@/utils/blacklist"
 import { isAuthorizedBot } from "@/utils/bot-auth"
 import { buildAuthorizeUrl, exchangeCodeForUser } from "@/utils/discord-oauth"
 import { ErrorCode, buildError } from "@/utils/errors"
@@ -95,7 +95,7 @@ export const linkRoutes = (env: Env, fetchImpl: typeof fetch = fetch) =>
 			if (!isAuthorizedBot(headers.authorization, env)) {
 				return status(401, buildError(ErrorCode.AUTH_REQUIRED))
 			}
-			return status(200, { success: true, data: { keyIds: listBlacklistedKeyIds() } })
+			return status(200, { success: true, data: { keyIds: [...config.linking.blacklistedKeyIds] } })
 		})
 		.use(eitherAuth)
 		.get("/me", async ({ env, keyId, status }) => {

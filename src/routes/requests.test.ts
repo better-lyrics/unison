@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { config } from "@/config"
+import { COMMUNITY_KEY_ID, config } from "@/config"
 import type { Env } from "@/types"
 import { canonicalJson, hashPublicKey } from "@/utils/crypto"
 import { requestRoutes } from "./requests"
@@ -259,7 +259,20 @@ describe("POST /requests/bot", () => {
 		})
 
 		const insert = lyricsRequestInsert(db)
-		expect(insert?.params).toEqual(["vid1", keyId, "discord", 1.4, expect.any(Number)])
+		expect(insert?.params).toEqual(["vid1", keyId, "extension", 1.4, expect.any(Number)])
+	})
+
+	it("rejects a request attributed to a blacklisted key", async () => {
+		const db = makeMockDB([])
+		const env = envWithBotSecret(db)
+		const app = requestRoutes(env)
+
+		const res = await app.handle(
+			botRequest({ videoId: "vid1", song: "Song", artist: "Artist", keyId: COMMUNITY_KEY_ID })
+		)
+
+		expect(res.status).toBe(403)
+		expect(lyricsRequestInsert(db)).toBeUndefined()
 	})
 
 	it("submits an unlinked request at the neutral weight keyed by requesterId", async () => {
@@ -331,7 +344,7 @@ describe("POST /requests/bot", () => {
 
 		expect(res.status).toBe(201)
 		const insert = lyricsRequestInsert(db)
-		expect(insert?.params).toEqual(["vid5", keyId, "discord", 1.7, expect.any(Number)])
+		expect(insert?.params).toEqual(["vid5", keyId, "extension", 1.7, expect.any(Number)])
 	})
 
 	it("submits at neutral weight keyed by discordId when that Discord user is unlinked", async () => {

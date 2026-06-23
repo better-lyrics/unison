@@ -5,6 +5,7 @@ import { createRequest } from "@/db/requests"
 import { getUserById, getUserByKeyId } from "@/db/users"
 import type { Env } from "@/types"
 import { signedRequest } from "@/utils/auth"
+import { isLinkBlacklisted } from "@/utils/blacklist"
 import { isAuthorizedBot } from "@/utils/bot-auth"
 import { ErrorCode, buildError } from "@/utils/errors"
 
@@ -77,6 +78,10 @@ export const requestRoutes = (env: Env) =>
 				attributedKeyId = link?.key_id ?? null
 			}
 
+			if (attributedKeyId && isLinkBlacklisted(attributedKeyId)) {
+				return status(403, buildError(ErrorCode.LINK_BLACKLISTED))
+			}
+
 			const requesterId = attributedKeyId ?? discordId ?? requesterIdInput
 			if (!requesterId) {
 				return status(
@@ -104,7 +109,7 @@ export const requestRoutes = (env: Env) =>
 				artist,
 				thumbnailUrl: readThumbnailUrl(b),
 				requesterId,
-				requesterType: "discord",
+				requesterType: attributedKeyId ? "extension" : "discord",
 				weight,
 			})
 

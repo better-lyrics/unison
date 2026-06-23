@@ -4,7 +4,3 @@ export function isLinkBlacklisted(keyId: string): boolean {
 	if (!keyId) return false
 	return config.linking.blacklistedKeyIds.has(keyId.toLowerCase())
 }
-
-export function listBlacklistedKeyIds(): string[] {
-	return [...config.linking.blacklistedKeyIds]
-}
