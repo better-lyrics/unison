@@ -1,4 +1,4 @@
-import { IconAlertTriangle, IconBrandDiscord, IconCircleCheck, IconLoader2, IconPuzzle } from "@tabler/icons-react"
+import { IconAlertTriangle, IconBrandDiscord, IconCircleCheck, IconLoader2 } from "@tabler/icons-react"
 import { useCallback, useEffect, useState } from "react"
 import { useSearchParams } from "react-router-dom"
 import { useSession } from "@/auth/useSession"
@@ -146,7 +146,6 @@ export function LinkPage() {
   if (!session.extensionAvailable) {
     return (
       <Shell>
-        <IconPuzzle className="size-12 text-unison-text-muted" stroke={1.5} />
         <Title>Install Better Lyrics first</Title>
         <Body>
           Linking happens through the Better Lyrics extension. Install it, then come back to this page to connect your
