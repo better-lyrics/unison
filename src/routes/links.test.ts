@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { COMMUNITY_KEY_ID } from "@/utils/blacklist"
+import { COMMUNITY_KEY_ID } from "@/config"
 import { canonicalJson, hashPublicKey } from "@/utils/crypto"
 import type { Env } from "@/types"
 import { linkRoutes, linkStartRoutes } from "./links"

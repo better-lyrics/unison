@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest"
-import { COMMUNITY_KEY_ID, isLinkBlacklisted, listBlacklistedKeyIds } from "./blacklist"
+import { COMMUNITY_KEY_ID } from "@/config"
+import { isLinkBlacklisted, listBlacklistedKeyIds } from "./blacklist"
 
 describe("link blacklist", () => {
 	it("flags the community account", () => {
