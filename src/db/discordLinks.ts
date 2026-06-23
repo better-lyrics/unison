@@ -24,8 +24,6 @@ export async function linkDiscord(
 	params: { discordId: string; keyId: string; discordUsername: string | null }
 ): Promise<void> {
 	const now = Math.floor(Date.now() / 1000)
-	// ponytail: clear-then-insert without a txn; linking is per-user and rare, so the
-	// race window is acceptable. Wrap in a transaction if linking ever gets contended.
 	await env.DB.prepare("DELETE FROM discord_links WHERE key_id = ? OR discord_id = ?")
 		.bind(params.keyId, params.discordId)
 		.run()

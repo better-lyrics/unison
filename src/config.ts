@@ -29,8 +29,6 @@ export const config = {
 	linking: {
 		stateTtlSeconds: 600, // OAuth round-trip window for the Discord link flow
 		discordScope: "identify",
-		// ponytail: config Set of accounts that can never be linked. Seeded with the
-		// shared community account. Move to a table if this list needs live edits.
 		blacklistedKeyIds: new Set<string>([
 			"cea10b57de8e060ed1a180a00c2bc717a2ab4f231d88fd33ffa6a50a04f23b6e",
 		]),
