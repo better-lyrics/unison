@@ -17,6 +17,7 @@ export default defineConfig({
       "/feed": "http://localhost:3000",
       "/requests": "http://localhost:3000",
       "/auth": "http://localhost:3000",
+      "/links": "http://localhost:3000",
       "/health": "http://localhost:3000",
     },
   },

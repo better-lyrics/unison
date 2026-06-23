@@ -95,6 +95,7 @@ export async function seedUserRank(keyId: string): Promise<UserRankResponse> {
       keyId,
       displayName: "Unknown Curator",
       lastVoteAt: null,
+      discordLinked: false,
     }
   }
   return {
@@ -107,6 +108,7 @@ export async function seedUserRank(keyId: string): Promise<UserRankResponse> {
     totalUpvotes: entry.totalUpvotes,
     rank: entry.rank,
     lastVoteAt: SEEDED_NOW - 3600,
+    discordLinked: true,
   }
 }
 

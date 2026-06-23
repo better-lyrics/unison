@@ -59,3 +59,53 @@ body {
     background-position: -200% 0;
   }
 }
+
+.link-pulse {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.link-pulse-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 9999px;
+  background: var(--color-unison-text-muted);
+  animation: link-pulse-fade 1.8s infinite ease-in-out;
+}
+
+.link-pulse-dot:nth-child(2) {
+  animation-delay: 0.2s;
+}
+
+.link-pulse-dot:nth-child(3) {
+  animation-delay: 0.4s;
+}
+
+@keyframes link-pulse-fade {
+  0%,
+  100% {
+    opacity: 0.2;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+.link-pulse--static .link-pulse-dot {
+  animation: none;
+  opacity: 0.4;
+}
+
+.discord-badge {
+  border: 1px solid #5865f2;
+  background: color-mix(in hsl, var(--color-unison-bg), #5865f2);
+  color: #fff;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .link-pulse-dot {
+    animation: none;
+    opacity: 0.55;
+  }
+}
