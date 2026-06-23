@@ -1,5 +1,6 @@
 import { IconCheck, IconCopy } from "@tabler/icons-react"
 import { type ReactNode, useCallback, useState } from "react"
+import { DiscordBadge } from "@/components/DiscordBadge"
 import { EmptyState } from "@/components/EmptyState"
 import { LeaderboardSection } from "@/components/LeaderboardSection"
 import { LoadingPlaceholder } from "@/components/LoadingPlaceholder"
@@ -64,7 +65,10 @@ export function UserProfileView({ keyId, title = "Profile" }: UserProfileViewPro
             className="size-16 shrink-0 rounded-full border border-unison-border bg-unison-bg-hover"
           />
           <div className="min-w-0 flex-1 space-y-1">
-            <p className="text-lg font-semibold text-unison-text">{data.displayName}</p>
+            <div className="flex flex-wrap items-center gap-2">
+              <p className="text-lg font-semibold text-unison-text">{data.displayName}</p>
+              {data.discordLinked ? <DiscordBadge /> : null}
+            </div>
             <div className="flex items-center gap-2">
               <code title={data.keyId} className="font-mono text-xs text-unison-text-muted">
                 {`${data.keyId.slice(0, 6)}…${data.keyId.slice(-6)}`}

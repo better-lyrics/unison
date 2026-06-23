@@ -13,6 +13,7 @@ const NOT_RANKED: UserRankResponse = {
   keyId: "",
   displayName: "",
   lastVoteAt: null,
+  discordLinked: false,
 }
 
 export function CuratorsPage() {

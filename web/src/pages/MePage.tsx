@@ -1,4 +1,5 @@
 import { useSession } from "@/auth/useSession"
+import { DiscordSection } from "@/components/DiscordSection"
 import { EmptyState } from "@/components/EmptyState"
 import { LeaderboardSection } from "@/components/LeaderboardSection"
 import { LoadingPlaceholder } from "@/components/LoadingPlaceholder"
@@ -25,6 +26,9 @@ export function MePage() {
       <UserProfileView keyId={session.identity.keyId} title="Me" />
       <LeaderboardSection title="Nickname" subtitle="How you appear across Unison.">
         <NicknameEditor />
+      </LeaderboardSection>
+      <LeaderboardSection title="Discord" subtitle="Link your account for leaderboard roles.">
+        <DiscordSection />
       </LeaderboardSection>
     </div>
   )

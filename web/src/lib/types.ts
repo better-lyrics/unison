@@ -38,6 +38,7 @@ export interface UserStats {
   keyId: string
   displayName: string
   lastVoteAt: number | null
+  discordLinked: boolean
 }
 
 export interface RankedUserStats extends UserStats {

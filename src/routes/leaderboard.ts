@@ -9,6 +9,7 @@ import {
 	getSongRank,
 	type MostWantedCursor,
 } from "@/db/leaderboard"
+import { getByKeyId } from "@/db/discordLinks"
 import { getLastVoteAt } from "@/db/profile"
 import { resolveDisplayName } from "@/db/users"
 import type { Env } from "@/types"
@@ -143,11 +144,13 @@ export const leaderboardRoutes = (env: Env) =>
 		.get(
 			"/users/:keyId",
 			async ({ params, env }) => {
-				const [row, lastVoteAt] = await Promise.all([
+				const [row, lastVoteAt, link] = await Promise.all([
 					getCuratorRank(env, params.keyId),
 					getLastVoteAt(env, params.keyId),
+					getByKeyId(env, params.keyId),
 				])
 				const displayName = await resolveDisplayName(env, params.keyId)
+				const discordLinked = link !== null
 				if (row) {
 					const { nickname: _nickname, ...rest } = row
 					return {
@@ -157,6 +160,7 @@ export const leaderboardRoutes = (env: Env) =>
 							...rest,
 							displayName,
 							lastVoteAt,
+							discordLinked,
 						},
 					}
 				}
@@ -167,6 +171,7 @@ export const leaderboardRoutes = (env: Env) =>
 						keyId: params.keyId,
 						displayName,
 						lastVoteAt,
+						discordLinked,
 					},
 				}
 			},

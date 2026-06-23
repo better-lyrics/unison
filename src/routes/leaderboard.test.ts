@@ -301,6 +301,7 @@ describe("GET /leaderboard/users/:keyId", () => {
 		const db = makeMockDB([
 			[{ key_id: keyId, reputation: 1.2, score: 5, submission_count: 2, total_upvotes: 8 }],
 			{ last_vote_at: 1700000123 },
+			null, // getByKeyId -> not linked
 			{ nickname: null },
 		])
 		const env = makeEnv(db)
@@ -314,6 +315,7 @@ describe("GET /leaderboard/users/:keyId", () => {
 				rank?: number
 				displayName?: string
 				lastVoteAt?: number | null
+				discordLinked?: boolean
 			}
 		}
 		expect(json.data.ranked).toBe(true)
@@ -321,11 +323,28 @@ describe("GET /leaderboard/users/:keyId", () => {
 		expect(json.data.rank).toBe(1)
 		expect(json.data.displayName?.length).toBeGreaterThan(0)
 		expect(json.data.lastVoteAt).toBe(1700000123)
+		expect(json.data.discordLinked).toBe(false)
+	})
+
+	it("reports discordLinked: true when the curator has a linked Discord account", async () => {
+		const keyId = "c".repeat(64)
+		const db = makeMockDB([
+			[{ key_id: keyId, reputation: 1.2, score: 5, submission_count: 2, total_upvotes: 8 }],
+			{ last_vote_at: 1700000123 },
+			{ discord_id: "d1", key_id: keyId, discord_username: "alice", linked_at: 1 },
+			{ nickname: null },
+		])
+		const env = makeEnv(db)
+		const app = leaderboardRoutes(env)
+		const res = await app.handle(new Request(`http://localhost/leaderboard/users/${keyId}`))
+		expect(res.status).toBe(200)
+		const json = (await res.json()) as { data: { discordLinked?: boolean } }
+		expect(json.data.discordLinked).toBe(true)
 	})
 
 	it("returns ranked: false with displayName and null lastVoteAt for an unknown user", async () => {
 		const keyId = "b".repeat(64)
-		const db = makeMockDB([[], { last_vote_at: null }, { nickname: null }])
+		const db = makeMockDB([[], { last_vote_at: null }, null, { nickname: null }])
 		const env = makeEnv(db)
 		const app = leaderboardRoutes(env)
 		const res = await app.handle(new Request(`http://localhost/leaderboard/users/${keyId}`))
@@ -336,12 +355,14 @@ describe("GET /leaderboard/users/:keyId", () => {
 				keyId?: string
 				displayName?: string
 				lastVoteAt?: number | null
+				discordLinked?: boolean
 			}
 		}
 		expect(json.data.ranked).toBe(false)
 		expect(json.data.keyId).toBe(keyId)
 		expect(json.data.displayName?.length).toBeGreaterThan(0)
 		expect(json.data.lastVoteAt).toBeNull()
+		expect(json.data.discordLinked).toBe(false)
 	})
 
 	it("rejects a keyId that is not 64 hex characters", async () => {
@@ -357,6 +378,7 @@ describe("GET /leaderboard/users/:keyId", () => {
 		const db = makeMockDB([
 			[{ key_id: keyId, reputation: 1.0, score: 3, submission_count: 1, total_upvotes: 4 }],
 			{ last_vote_at: 1700000456 },
+			null, // getByKeyId -> not linked
 			{ nickname: "Brook" },
 		])
 		const env = makeEnv(db)
