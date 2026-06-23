@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest"
+import { COMMUNITY_KEY_ID, config } from "@/config"
 import type { Env } from "@/types"
 import { canonicalJson, hashPublicKey } from "@/utils/crypto"
 import { requestRoutes } from "./requests"
@@ -203,5 +204,262 @@ describe("POST /requests", () => {
 		)
 
 		expect(res.status).toBe(400)
+	})
+})
+
+const BOT_SECRET = "butler-bot-secret-value"
+
+function envWithBotSecret(db: ReturnType<typeof makeMockDB>): Env {
+	const env = makeEnv(db)
+	env.BUTLER_BOT_SECRET = BOT_SECRET
+	return env
+}
+
+function botRequest(body: unknown, secret: string | null = BOT_SECRET): Request {
+	const headers: Record<string, string> = { "content-type": "application/json" }
+	if (secret !== null) headers.authorization = `Bearer ${secret}`
+	return new Request("http://localhost/requests/bot", {
+		method: "POST",
+		headers,
+		body: JSON.stringify(body),
+	})
+}
+
+function lyricsRequestInsert(db: ReturnType<typeof makeMockDB>): DBCall | undefined {
+	return db.calls.find((c) => c.sql.includes("INSERT INTO lyrics_requests"))
+}
+
+describe("POST /requests/bot", () => {
+	it("attributes a linked request to the keyId at the user's reputation weight", async () => {
+		const keyId = "a".repeat(64)
+		const db = makeMockDB([
+			{ id: 7, key_id: keyId, reputation: 1.4 }, // getUserByKeyId
+			null, // hasServableSyncedVariant -> none
+			null, // requested_songs upsert
+			{ id: 100 }, // lyrics_requests insert RETURNING
+			{ demand: 1.4, request_count: 1 }, // videoDemand
+		])
+		const env = envWithBotSecret(db)
+		const app = requestRoutes(env)
+
+		const res = await app.handle(
+			botRequest({
+				videoId: "vid1",
+				song: "Song",
+				artist: "Artist",
+				thumbnailUrl: "https://x/t.jpg",
+				keyId,
+			})
+		)
+
+		expect(res.status).toBe(201)
+		expect(await res.json()).toEqual({
+			success: true,
+			data: { status: "created", demand: 1.4, requestCount: 1 },
+		})
+
+		const insert = lyricsRequestInsert(db)
+		expect(insert?.params).toEqual(["vid1", keyId, "extension", 1.4, expect.any(Number)])
+	})
+
+	it("rejects a request attributed to a blacklisted key", async () => {
+		const db = makeMockDB([])
+		const env = envWithBotSecret(db)
+		const app = requestRoutes(env)
+
+		const res = await app.handle(
+			botRequest({ videoId: "vid1", song: "Song", artist: "Artist", keyId: COMMUNITY_KEY_ID })
+		)
+
+		expect(res.status).toBe(403)
+		expect(lyricsRequestInsert(db)).toBeUndefined()
+	})
+
+	it("submits an unlinked request at the neutral weight keyed by requesterId", async () => {
+		const db = makeMockDB([
+			null, // hasServableSyncedVariant -> none
+			null, // requested_songs upsert
+			{ id: 101 }, // lyrics_requests insert RETURNING
+			{ demand: 1, request_count: 1 }, // videoDemand
+		])
+		const env = envWithBotSecret(db)
+		const app = requestRoutes(env)
+
+		const res = await app.handle(
+			botRequest({
+				videoId: "vid2",
+				song: "Song",
+				artist: "Artist",
+				requesterId: "discord-user-123",
+			})
+		)
+
+		expect(res.status).toBe(201)
+		const insert = lyricsRequestInsert(db)
+		expect(insert?.params).toEqual([
+			"vid2",
+			"discord-user-123",
+			"discord",
+			config.requests.discordNeutralWeight,
+			expect.any(Number),
+		])
+	})
+
+	it("falls back to the neutral weight when the linked user has no row yet", async () => {
+		const keyId = "b".repeat(64)
+		const db = makeMockDB([
+			null, // getUserByKeyId -> not found
+			null, // hasServableSyncedVariant
+			null, // requested_songs upsert
+			{ id: 102 }, // insert
+			{ demand: 1, request_count: 1 }, // demand
+		])
+		const env = envWithBotSecret(db)
+		const app = requestRoutes(env)
+
+		const res = await app.handle(
+			botRequest({ videoId: "vid3", song: "Song", artist: "Artist", keyId })
+		)
+
+		expect(res.status).toBe(201)
+		expect(lyricsRequestInsert(db)?.params[3]).toBe(config.requests.discordNeutralWeight)
+	})
+
+	it("resolves a discordId to its linked key and attributes at that reputation", async () => {
+		const keyId = "d".repeat(64)
+		const db = makeMockDB([
+			{ discord_id: "disc-1", key_id: keyId }, // getByDiscordId
+			{ id: 9, key_id: keyId, reputation: 1.7 }, // getUserByKeyId
+			null, // hasServableSyncedVariant
+			null, // requested_songs upsert
+			{ id: 200 }, // lyrics_requests insert
+			{ demand: 1.7, request_count: 1 }, // videoDemand
+		])
+		const env = envWithBotSecret(db)
+		const app = requestRoutes(env)
+
+		const res = await app.handle(
+			botRequest({ videoId: "vid5", song: "Song", artist: "Artist", discordId: "disc-1" })
+		)
+
+		expect(res.status).toBe(201)
+		const insert = lyricsRequestInsert(db)
+		expect(insert?.params).toEqual(["vid5", keyId, "extension", 1.7, expect.any(Number)])
+	})
+
+	it("submits at neutral weight keyed by discordId when that Discord user is unlinked", async () => {
+		const db = makeMockDB([
+			null, // getByDiscordId -> not linked
+			null, // hasServableSyncedVariant
+			null, // requested_songs upsert
+			{ id: 201 }, // lyrics_requests insert
+			{ demand: 1, request_count: 1 }, // videoDemand
+		])
+		const env = envWithBotSecret(db)
+		const app = requestRoutes(env)
+
+		const res = await app.handle(
+			botRequest({ videoId: "vid6", song: "Song", artist: "Artist", discordId: "disc-2" })
+		)
+
+		expect(res.status).toBe(201)
+		const insert = lyricsRequestInsert(db)
+		expect(insert?.params).toEqual([
+			"vid6",
+			"disc-2",
+			"discord",
+			config.requests.discordNeutralWeight,
+			expect.any(Number),
+		])
+	})
+
+	it("passes through already_available without creating a request", async () => {
+		const db = makeMockDB([
+			null, // getUserByKeyId
+			{ ok: 1 }, // hasServableSyncedVariant -> synced exists
+		])
+		const env = envWithBotSecret(db)
+		const app = requestRoutes(env)
+
+		const res = await app.handle(
+			botRequest({ videoId: "vid4", song: "Song", artist: "Artist", keyId: "c".repeat(64) })
+		)
+
+		expect(res.status).toBe(200)
+		expect(await res.json()).toEqual({ success: true, data: { status: "already_available" } })
+		expect(lyricsRequestInsert(db)).toBeUndefined()
+	})
+
+	describe("auth", () => {
+		it("rejects a missing bot secret with 401", async () => {
+			const db = makeMockDB([])
+			const env = envWithBotSecret(db)
+			const app = requestRoutes(env)
+
+			const res = await app.handle(
+				botRequest({ videoId: "v", song: "S", artist: "A", requesterId: "d" }, null)
+			)
+			expect(res.status).toBe(401)
+		})
+
+		it("rejects a wrong bot secret with 401", async () => {
+			const db = makeMockDB([])
+			const env = envWithBotSecret(db)
+			const app = requestRoutes(env)
+
+			const res = await app.handle(
+				botRequest({ videoId: "v", song: "S", artist: "A", requesterId: "d" }, "wrong-secret")
+			)
+			expect(res.status).toBe(401)
+		})
+
+		it("rejects when no bot secret is configured on the server with 401", async () => {
+			const db = makeMockDB([])
+			const env = makeEnv(db) // no BUTLER_BOT_SECRET
+			const app = requestRoutes(env)
+
+			const res = await app.handle(
+				botRequest({ videoId: "v", song: "S", artist: "A", requesterId: "d" }, "anything")
+			)
+			expect(res.status).toBe(401)
+		})
+	})
+
+	describe("validation", () => {
+		it("rejects a request missing the videoId with 400", async () => {
+			const db = makeMockDB([])
+			const env = envWithBotSecret(db)
+			const app = requestRoutes(env)
+
+			const res = await app.handle(
+				botRequest({ videoId: "", song: "S", artist: "A", requesterId: "d" })
+			)
+			expect(res.status).toBe(400)
+		})
+
+		it("rejects a request with neither keyId nor requesterId with 400", async () => {
+			const db = makeMockDB([])
+			const env = envWithBotSecret(db)
+			const app = requestRoutes(env)
+
+			const res = await app.handle(botRequest({ videoId: "v", song: "S", artist: "A" }))
+			expect(res.status).toBe(400)
+		})
+
+		it("rejects an over-long song name with 400", async () => {
+			const db = makeMockDB([])
+			const env = envWithBotSecret(db)
+			const app = requestRoutes(env)
+
+			const res = await app.handle(
+				botRequest({
+					videoId: "v",
+					song: "x".repeat(config.validation.song.maxLength + 1),
+					artist: "A",
+					requesterId: "d",
+				})
+			)
+			expect(res.status).toBe(400)
+		})
 	})
 })

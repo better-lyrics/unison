@@ -31,6 +31,16 @@ function readB2Config(): B2Config | null {
 	return { keyId, applicationKey, bucket, endpoint }
 }
 
+function readDiscordOAuthConfig(): Env["DISCORD_OAUTH"] {
+	const clientId = process.env.DISCORD_CLIENT_ID
+	const clientSecret = process.env.DISCORD_CLIENT_SECRET
+	const redirectUri = process.env.DISCORD_OAUTH_REDIRECT_URI
+
+	if (!clientId || !clientSecret || !redirectUri) return null
+
+	return { clientId, clientSecret, redirectUri }
+}
+
 export function createEnv(): Env {
 	const databaseUrl = process.env.DATABASE_URL
 	if (!databaseUrl) throw new Error("DATABASE_URL is required")
@@ -59,5 +69,7 @@ export function createEnv(): Env {
 		DUMP_PUBLIC_BASE_URL: process.env.DUMP_PUBLIC_BASE_URL || "",
 		DUMP_DATABASE_URL: process.env.DUMP_DATABASE_URL || null,
 		B2: readB2Config(),
+		BUTLER_BOT_SECRET: process.env.BUTLER_BOT_SECRET || null,
+		DISCORD_OAUTH: readDiscordOAuthConfig(),
 	}
 }

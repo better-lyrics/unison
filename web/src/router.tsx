@@ -3,6 +3,7 @@ import { AppLayout } from "./components/AppLayout"
 import { AboutPage } from "./pages/AboutPage"
 import { CuratorsPage } from "./pages/CuratorsPage"
 import { DownloadsPage } from "./pages/DownloadsPage"
+import { LinkPage } from "./pages/LinkPage"
 import { LyricsPage } from "./pages/LyricsPage"
 import { MePage } from "./pages/MePage"
 import { QueuePage } from "./pages/QueuePage"
@@ -24,6 +25,7 @@ const router = createBrowserRouter([
       { path: "curator/:keyId", element: <UserPage /> },
       { path: "about", element: <AboutPage /> },
       { path: "downloads", element: <DownloadsPage /> },
+      { path: "link", element: <LinkPage /> },
     ],
   },
 ])

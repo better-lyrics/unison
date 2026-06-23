@@ -1,3 +1,5 @@
+export const COMMUNITY_KEY_ID = "cea10b57de8e060ed1a180a00c2bc717a2ab4f231d88fd33ffa6a50a04f23b6e"
+
 export const config = {
 	submission: {
 		maxVariantsPerUserPerVideo: 3,
@@ -17,13 +19,19 @@ export const config = {
 
 	requests: {
 		windowDays: 30,
-		discordNeutralWeight: 1.0, // reserved for deferred Discord-origin requests
+		discordNeutralWeight: 1.0,
 		needsFixingReportThreshold: 5,
 		leaderboard: {
 			cacheTtl: 300,
 			topN: 200,
 			rankScanLimit: 5000,
 		},
+	},
+
+	linking: {
+		stateTtlSeconds: 600, // OAuth round-trip window for the Discord link flow
+		discordScope: "identify",
+		blacklistedKeyIds: new Set<string>([COMMUNITY_KEY_ID]),
 	},
 
 	reputation: {

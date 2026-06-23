@@ -27,6 +27,8 @@ export const ErrorCode = {
 	INVALID_REPORT_REASON: "INVALID_REPORT_REASON",
 	REPORT_DETAILS_TOO_LONG: "REPORT_DETAILS_TOO_LONG",
 	INVALID_CURSOR: "INVALID_CURSOR",
+	LINK_BLACKLISTED: "LINK_BLACKLISTED",
+	LINKING_DISABLED: "LINKING_DISABLED",
 } as const
 
 export type ErrorCode = (typeof ErrorCode)[keyof typeof ErrorCode]
@@ -129,6 +131,14 @@ const TEMPLATES: Record<ErrorCode, Template> = {
 	INVALID_CURSOR: {
 		error: "Invalid cursor",
 		hint: "The page cursor looks malformed. Reload the list and try again.",
+	},
+	LINK_BLACKLISTED: {
+		error: "Account cannot be linked",
+		hint: "This is a shared community account, so it can't be linked to a personal Discord.",
+	},
+	LINKING_DISABLED: {
+		error: "Linking unavailable",
+		hint: "Account linking is temporarily unavailable. Please try again later.",
 	},
 }
 

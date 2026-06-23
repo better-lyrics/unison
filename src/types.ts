@@ -19,6 +19,8 @@ export interface Env {
 	DUMP_PUBLIC_BASE_URL: string
 	DUMP_DATABASE_URL: string | null
 	B2: B2Config | null
+	BUTLER_BOT_SECRET?: string | null
+	DISCORD_OAUTH?: { clientId: string; clientSecret: string; redirectUri: string } | null
 }
 
 export interface RateLimiter {

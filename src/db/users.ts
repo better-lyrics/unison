@@ -23,6 +23,10 @@ export async function getUserById(env: Env, userId: number): Promise<User | null
 	return env.DB.prepare("SELECT * FROM users WHERE id = ?").bind(userId).first<User>()
 }
 
+export async function getUserByKeyId(env: Env, keyId: string): Promise<User | null> {
+	return env.DB.prepare("SELECT * FROM users WHERE key_id = ?").bind(keyId).first<User>()
+}
+
 export async function updateUserReputation(env: Env, userId: number, delta: number): Promise<void> {
 	await env.DB.prepare(
 		"UPDATE users SET reputation = MAX(0.0, MIN(2.0, reputation + ?)) WHERE id = ?"
