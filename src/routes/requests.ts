@@ -1,10 +1,11 @@
-import { timingSafeEqual } from "node:crypto"
 import { Elysia } from "elysia"
 import { config } from "@/config"
+import { getByDiscordId } from "@/db/discordLinks"
 import { createRequest } from "@/db/requests"
 import { getUserById, getUserByKeyId } from "@/db/users"
 import type { Env } from "@/types"
 import { signedRequest } from "@/utils/auth"
+import { isAuthorizedBot } from "@/utils/bot-auth"
 import { ErrorCode, buildError } from "@/utils/errors"
 
 type FieldErrorCode =
@@ -46,26 +47,16 @@ function readThumbnailUrl(p: Record<string, unknown>): string | null {
 	return typeof p.thumbnailUrl === "string" && p.thumbnailUrl ? p.thumbnailUrl : null
 }
 
-function extractBearer(header: unknown): string | null {
-	if (typeof header !== "string") return null
-	const match = /^Bearer (.+)$/.exec(header)
-	return match ? match[1] : null
-}
-
-function secretsMatch(provided: string, expected: string): boolean {
-	const a = Buffer.from(provided)
-	const b = Buffer.from(expected)
-	if (a.length !== b.length) return false
-	return timingSafeEqual(a, b)
+function readString(p: Record<string, unknown>, key: string): string | null {
+	const value = p[key]
+	return typeof value === "string" && value ? value : null
 }
 
 export const requestRoutes = (env: Env) =>
 	new Elysia({ prefix: "/requests" })
 		.decorate("env", env)
 		.post("/bot", async ({ env, headers, body, status }) => {
-			const secret = env.BUTLER_BOT_SECRET
-			const provided = extractBearer(headers.authorization)
-			if (!secret || !provided || !secretsMatch(provided, secret)) {
+			if (!isAuthorizedBot(headers.authorization, env)) {
 				return status(401, buildError(ErrorCode.AUTH_REQUIRED))
 			}
 
@@ -76,25 +67,34 @@ export const requestRoutes = (env: Env) =>
 			}
 			const { videoId, song, artist } = validation.fields
 
-			const keyId = typeof b.keyId === "string" && b.keyId ? b.keyId : null
-			const requesterIdInput =
-				typeof b.requesterId === "string" && b.requesterId ? b.requesterId : null
-			if (!keyId && !requesterIdInput) {
+			const explicitKeyId = readString(b, "keyId")
+			const discordId = readString(b, "discordId")
+			const requesterIdInput = readString(b, "requesterId")
+
+			let attributedKeyId = explicitKeyId
+			if (!attributedKeyId && discordId) {
+				const link = await getByDiscordId(env, discordId)
+				attributedKeyId = link?.key_id ?? null
+			}
+
+			const requesterId = attributedKeyId ?? discordId ?? requesterIdInput
+			if (!requesterId) {
 				return status(
 					400,
-					buildError(ErrorCode.INVALID_PAYLOAD, { error: "keyId or requesterId required" })
+					buildError(ErrorCode.INVALID_PAYLOAD, {
+						error: "keyId, discordId, or requesterId required",
+					})
 				)
 			}
 
-			const requesterId = keyId ?? (requesterIdInput as string)
 			const { success } = await env.RATE_LIMITER.limit({ key: requesterId })
 			if (!success) {
 				return status(429, buildError(ErrorCode.RATE_LIMITED))
 			}
 
 			let weight: number = config.requests.discordNeutralWeight
-			if (keyId) {
-				const user = await getUserByKeyId(env, keyId)
+			if (attributedKeyId) {
+				const user = await getUserByKeyId(env, attributedKeyId)
 				weight = user?.reputation ?? config.requests.discordNeutralWeight
 			}
 

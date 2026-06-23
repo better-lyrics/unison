@@ -312,6 +312,54 @@ describe("POST /requests/bot", () => {
 		expect(lyricsRequestInsert(db)?.params[3]).toBe(config.requests.discordNeutralWeight)
 	})
 
+	it("resolves a discordId to its linked key and attributes at that reputation", async () => {
+		const keyId = "d".repeat(64)
+		const db = makeMockDB([
+			{ discord_id: "disc-1", key_id: keyId }, // getByDiscordId
+			{ id: 9, key_id: keyId, reputation: 1.7 }, // getUserByKeyId
+			null, // hasServableSyncedVariant
+			null, // requested_songs upsert
+			{ id: 200 }, // lyrics_requests insert
+			{ demand: 1.7, request_count: 1 }, // videoDemand
+		])
+		const env = envWithBotSecret(db)
+		const app = requestRoutes(env)
+
+		const res = await app.handle(
+			botRequest({ videoId: "vid5", song: "Song", artist: "Artist", discordId: "disc-1" })
+		)
+
+		expect(res.status).toBe(201)
+		const insert = lyricsRequestInsert(db)
+		expect(insert?.params).toEqual(["vid5", keyId, "discord", 1.7, expect.any(Number)])
+	})
+
+	it("submits at neutral weight keyed by discordId when that Discord user is unlinked", async () => {
+		const db = makeMockDB([
+			null, // getByDiscordId -> not linked
+			null, // hasServableSyncedVariant
+			null, // requested_songs upsert
+			{ id: 201 }, // lyrics_requests insert
+			{ demand: 1, request_count: 1 }, // videoDemand
+		])
+		const env = envWithBotSecret(db)
+		const app = requestRoutes(env)
+
+		const res = await app.handle(
+			botRequest({ videoId: "vid6", song: "Song", artist: "Artist", discordId: "disc-2" })
+		)
+
+		expect(res.status).toBe(201)
+		const insert = lyricsRequestInsert(db)
+		expect(insert?.params).toEqual([
+			"vid6",
+			"disc-2",
+			"discord",
+			config.requests.discordNeutralWeight,
+			expect.any(Number),
+		])
+	})
+
 	it("passes through already_available without creating a request", async () => {
 		const db = makeMockDB([
 			null, // getUserByKeyId

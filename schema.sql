@@ -28,6 +28,16 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS nickname_updated_at INTEGER;
 CREATE UNIQUE INDEX IF NOT EXISTS idx_users_nickname_lower
     ON users(nickname_lower) WHERE nickname_lower IS NOT NULL;
 
+-- Discord account links (Discord user <-> Better Lyrics key)
+CREATE TABLE IF NOT EXISTS discord_links (
+    discord_id TEXT PRIMARY KEY,
+    key_id TEXT UNIQUE NOT NULL,
+    discord_username TEXT,
+    linked_at INTEGER NOT NULL DEFAULT (EXTRACT(EPOCH FROM NOW())::INTEGER)
+);
+
+CREATE INDEX IF NOT EXISTS idx_discord_links_key_id ON discord_links(key_id);
+
 -- Main lyrics table
 CREATE TABLE IF NOT EXISTS lyrics (
     id SERIAL PRIMARY KEY,
