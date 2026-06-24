@@ -331,7 +331,7 @@ describe("NicknameEditor", () => {
     expect(findDelete(router.calls)).toBeUndefined()
   })
 
-  it("does not reset when the hold is released before it completes", async () => {
+  it("does not reset when hold starts without first arming", async () => {
     const router = fetchRouter([
       { match: (u) => u === "/auth/me", respond: meResponse },
       {
