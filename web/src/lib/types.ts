@@ -21,6 +21,7 @@ export interface CuratorLeaderboardEntry {
   submissionCount: number
   totalUpvotes: number
   rank: number
+  discordLinked: boolean
 }
 
 export interface SongsLeaderboardResponse {

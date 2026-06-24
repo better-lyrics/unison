@@ -215,6 +215,7 @@ export interface CuratorLeaderboardRow {
 	fulfilledDemand: number
 	rank: number
 	nickname: string | null
+	discordLinked: boolean
 }
 
 interface CuratorRow {
@@ -226,6 +227,7 @@ interface CuratorRow {
 	fulfilled_count: number
 	fulfilled_demand: number
 	nickname: string | null
+	discord_linked: boolean
 }
 
 export async function getCuratorLeaderboard(
@@ -236,7 +238,8 @@ export async function getCuratorLeaderboard(
 		`SELECT u.key_id, u.reputation, u.nickname,
 		        agg.score, agg.submission_count, agg.total_upvotes,
 		        COALESCE(ff.fulfilled_count, 0) AS fulfilled_count,
-		        COALESCE(ff.fulfilled_demand, 0) AS fulfilled_demand
+		        COALESCE(ff.fulfilled_demand, 0) AS fulfilled_demand,
+		        (dl.key_id IS NOT NULL) AS discord_linked
 		 FROM (
 		   SELECT submitter_id,
 		          SUM(effective_score) AS score,
@@ -258,6 +261,7 @@ export async function getCuratorLeaderboard(
 		   WHERE l.deleted_at IS NULL AND NOT ${AUTO_HIDE_PREDICATE_JOINED}
 		   GROUP BY f.submitter_id
 		 ) ff ON ff.submitter_id = u.id
+		 LEFT JOIN discord_links dl ON dl.key_id = u.key_id
 		 ORDER BY agg.score DESC, u.key_id ASC
 		 LIMIT ?`
 	)
@@ -274,6 +278,7 @@ export async function getCuratorLeaderboard(
 		fulfilledDemand: Number(r.fulfilled_demand ?? 0),
 		rank: i + 1,
 		nickname: r.nickname ?? null,
+		discordLinked: Boolean(r.discord_linked),
 	}))
 }
 

@@ -262,6 +262,38 @@ describe("GET /leaderboard/users", () => {
 		}
 		expect(json.data.curators[0].displayName).toBe("Alex")
 	})
+
+	it("exposes discordLinked per curator", async () => {
+		const db = makeMockDB([
+			[
+				{
+					key_id: "a".repeat(64),
+					reputation: 1.5,
+					score: 10,
+					submission_count: 4,
+					total_upvotes: 20,
+					discord_linked: true,
+				},
+				{
+					key_id: "b".repeat(64),
+					reputation: 1.2,
+					score: 5,
+					submission_count: 2,
+					total_upvotes: 8,
+					discord_linked: false,
+				},
+			],
+		])
+		const env = makeEnv(db)
+		const app = leaderboardRoutes(env)
+		const res = await app.handle(new Request("http://localhost/leaderboard/users"))
+		expect(res.status).toBe(200)
+		const json = (await res.json()) as {
+			data: { curators: Array<{ keyId: string; discordLinked: boolean }> }
+		}
+		expect(json.data.curators[0].discordLinked).toBe(true)
+		expect(json.data.curators[1].discordLinked).toBe(false)
+	})
 })
 
 describe("GET /leaderboard/songs cache hit", () => {
