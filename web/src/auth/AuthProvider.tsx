@@ -31,6 +31,9 @@ type SessionState =
 
 const Ctx = createContext<SessionState | null>(null)
 
+// Exposed so dev preview pages can mount a fixture session around real pages.
+export { Ctx as SessionContext }
+
 export function useSessionState(): SessionState {
   const state = useContext(Ctx)
   if (!state) throw new Error("useSession must be used within <AuthProvider>")
