@@ -1,3 +1,4 @@
+import { IconBrandDiscordFilled } from "@tabler/icons-react"
 import { Link } from "react-router-dom"
 import { MedalRank } from "@/components/MedalRank"
 import { dicebearThumbsDataUri } from "@/lib/avatar"
@@ -33,6 +34,9 @@ export function CuratorRow({ entry, isSelf = false, appended = false }: CuratorR
         <div className="min-w-0 flex-1">
           <p className="flex items-center gap-2 truncate text-sm font-medium text-unison-text">
             <span className="truncate">{entry.displayName}</span>
+            {entry.discordLinked ? (
+              <IconBrandDiscordFilled className="size-4 shrink-0 text-unison-discord" title="Discord connected" />
+            ) : null}
             {isSelf ? (
               <span className="shrink-0 rounded bg-unison-text px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-unison-bg">
                 You

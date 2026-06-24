@@ -3,12 +3,13 @@ import type {
   CuratorsLeaderboardResponse,
   SongsLeaderboardResponse,
   UserRankResponse,
+  UserSubmission,
   UserSubmissionsResponse,
 } from "./types"
 
 const SEEDED_NOW = Math.floor(Date.now() / 1000)
 
-const SEED_CURATORS: CuratorLeaderboardEntry[] = [
+export const SEED_CURATORS: CuratorLeaderboardEntry[] = [
   {
     keyId: "a".repeat(64),
     displayName: "Aurora Wynter",
@@ -17,6 +18,7 @@ const SEED_CURATORS: CuratorLeaderboardEntry[] = [
     submissionCount: 87,
     totalUpvotes: 540,
     rank: 1,
+    discordLinked: true,
   },
   {
     keyId: "b".repeat(64),
@@ -26,6 +28,7 @@ const SEED_CURATORS: CuratorLeaderboardEntry[] = [
     submissionCount: 65,
     totalUpvotes: 410,
     rank: 2,
+    discordLinked: false,
   },
   {
     keyId: "c".repeat(64),
@@ -35,6 +38,7 @@ const SEED_CURATORS: CuratorLeaderboardEntry[] = [
     submissionCount: 52,
     totalUpvotes: 312,
     rank: 3,
+    discordLinked: true,
   },
   {
     keyId: "d".repeat(64),
@@ -44,6 +48,7 @@ const SEED_CURATORS: CuratorLeaderboardEntry[] = [
     submissionCount: 41,
     totalUpvotes: 220,
     rank: 4,
+    discordLinked: false,
   },
   {
     keyId: "e".repeat(64),
@@ -53,6 +58,7 @@ const SEED_CURATORS: CuratorLeaderboardEntry[] = [
     submissionCount: 33,
     totalUpvotes: 180,
     rank: 5,
+    discordLinked: false,
   },
   {
     keyId: "f".repeat(64),
@@ -62,6 +68,7 @@ const SEED_CURATORS: CuratorLeaderboardEntry[] = [
     submissionCount: 21,
     totalUpvotes: 95,
     rank: 12,
+    discordLinked: true,
   },
   {
     keyId: "g".repeat(64),
@@ -71,6 +78,7 @@ const SEED_CURATORS: CuratorLeaderboardEntry[] = [
     submissionCount: 9,
     totalUpvotes: 32,
     rank: 137,
+    discordLinked: false,
   },
 ]
 
@@ -112,7 +120,102 @@ export async function seedUserRank(keyId: string): Promise<UserRankResponse> {
   }
 }
 
+const SEED_SUBMISSIONS: UserSubmission[] = [
+  {
+    id: 1,
+    videoId: "dQw4w9WgXcQ",
+    song: "Never Gonna Give You Up",
+    artist: "Rick Astley",
+    album: "Whenever You Need Somebody",
+    duration: 213,
+    format: "ttml",
+    syncType: "richsync",
+    language: "en",
+    effectiveScore: 48.2,
+    voteCount: 51,
+    confidence: "high",
+    createdAt: SEEDED_NOW - 3600,
+    hidden: false,
+  },
+  {
+    id: 2,
+    videoId: "60ItHLz5WEA",
+    song: "Faded",
+    artist: "Alan Walker",
+    duration: 212,
+    format: "lrc",
+    syncType: "linesync",
+    language: "en",
+    effectiveScore: 31.0,
+    voteCount: 34,
+    confidence: "high",
+    createdAt: SEEDED_NOW - 2 * 86400,
+    hidden: false,
+  },
+  {
+    id: 3,
+    videoId: "kJQP7kiw5Fk",
+    song: "Despacito",
+    artist: "Luis Fonsi",
+    duration: 281,
+    format: "lrc",
+    syncType: "linesync",
+    language: "es",
+    effectiveScore: 22.5,
+    voteCount: 28,
+    confidence: "medium",
+    createdAt: SEEDED_NOW - 5 * 86400,
+    hidden: false,
+  },
+  {
+    id: 4,
+    videoId: "JGwWNGJdvx8",
+    song: "Shape of You",
+    artist: "Ed Sheeran",
+    duration: 234,
+    format: "plain",
+    syncType: "plain",
+    language: "en",
+    effectiveScore: 9.1,
+    voteCount: 12,
+    confidence: "low",
+    createdAt: SEEDED_NOW - 12 * 86400,
+    hidden: false,
+  },
+  {
+    id: 5,
+    videoId: "RgKAFK5djSk",
+    song: "See You Again",
+    artist: "Wiz Khalifa",
+    duration: 229,
+    format: "ttml",
+    syncType: "richsync",
+    language: "en",
+    effectiveScore: 14.7,
+    voteCount: 19,
+    confidence: "medium",
+    createdAt: SEEDED_NOW - 20 * 86400,
+    hidden: true,
+  },
+  {
+    id: 6,
+    videoId: "fJ9rUzIMcZQ",
+    song: "Bohemian Rhapsody",
+    artist: "Queen",
+    album: "A Night at the Opera",
+    duration: 354,
+    format: "lrc",
+    syncType: "linesync",
+    language: "en",
+    effectiveScore: 40.3,
+    voteCount: 44,
+    confidence: "high",
+    createdAt: SEEDED_NOW - 30 * 86400,
+    hidden: false,
+  },
+]
+
 export async function seedUserSubmissions(_keyId: string): Promise<UserSubmissionsResponse> {
   await delay()
-  return { submissions: [] }
+  return { submissions: SEED_SUBMISSIONS }
 }

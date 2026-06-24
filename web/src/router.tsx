@@ -1,4 +1,4 @@
-import { Suspense, lazy } from "react"
+import { type ComponentType, Suspense, lazy } from "react"
 import { type RouteObject, RouterProvider, createBrowserRouter } from "react-router-dom"
 import { AppLayout } from "./components/AppLayout"
 import { AboutPage } from "./pages/AboutPage"
@@ -17,15 +17,23 @@ import { UserPage } from "./pages/UserPage"
 // chunk it references) is dropped from the prod bundle.
 const devRoutes: RouteObject[] = []
 if (import.meta.env.DEV) {
-  const DevLinkPreview = lazy(() => import("./pages/DevLinkPreview"))
-  devRoutes.push({
-    path: "dev/link",
-    element: (
-      <Suspense fallback={null}>
-        <DevLinkPreview />
-      </Suspense>
-    ),
-  })
+  const devPages: { path: string; load: () => Promise<{ default: ComponentType }> }[] = [
+    { path: "dev", load: () => import("./pages/DevIndex") },
+    { path: "dev/link", load: () => import("./pages/DevLinkPreview") },
+    { path: "dev/curators", load: () => import("./pages/DevCuratorsPreview") },
+    { path: "dev/me", load: () => import("./pages/DevMePreview") },
+  ]
+  for (const { path, load } of devPages) {
+    const Page = lazy(load)
+    devRoutes.push({
+      path,
+      element: (
+        <Suspense fallback={null}>
+          <Page />
+        </Suspense>
+      ),
+    })
+  }
 }
 
 const router = createBrowserRouter([

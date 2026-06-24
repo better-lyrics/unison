@@ -6,20 +6,24 @@
   --color-unison-bg: #28292c;
   --color-unison-bg-elevated: #3e3e41;
   --color-unison-bg-hover: rgba(255, 255, 255, 0.06);
+  --color-unison-surface: rgba(255, 255, 255, 0.05);
   --color-unison-border: rgba(255, 255, 255, 0.1);
   --color-unison-border-strong: rgba(255, 255, 255, 0.18);
   --color-unison-text: #f5f5f7;
   --color-unison-text-secondary: rgba(245, 245, 247, 0.72);
   --color-unison-text-muted: rgba(245, 245, 247, 0.48);
   --color-unison-warn: #f5a623;
-  --color-unison-medal-gold: #FFC83D;
-  --color-unison-medal-silver: #C0C7D1;
-  --color-unison-medal-bronze: #CD7F32;
+  --color-unison-discord: hsl(235 86% 75%);
+  --color-unison-medal-gold: #ffc83d;
+  --color-unison-medal-silver: #c0c7d1;
+  --color-unison-medal-bronze: #cd7f32;
   --font-sans: "Satoshi", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --font-mono: "Geist Mono", ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
 }
 
-html, body, #root {
+html,
+body,
+#root {
   height: 100%;
 }
 
@@ -34,6 +38,24 @@ body {
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+/* Native select popups ignore the control's own background, so dark them here. */
+option,
+optgroup {
+  background-color: var(--color-unison-bg-elevated);
+  color: var(--color-unison-text);
+}
+
+/* Custom chevron so it sits off the right edge instead of glued to the border. */
+select {
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2024%2024'%20fill='none'%20stroke='%23f5f5f7'%20stroke-width='2'%20stroke-linecap='round'%20stroke-linejoin='round'%3E%3Cpath%20d='M6%209l6%206%206-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.625rem center;
+  background-size: 1rem;
+  padding-right: 2rem;
 }
 
 .unison-shimmer-text {
