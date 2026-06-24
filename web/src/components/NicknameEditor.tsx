@@ -1,14 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 import { useSession } from "@/auth/useSession"
-import {
-  checkNicknameAvailability,
-  deleteNickname,
-  putNickname,
-} from "@/lib/nickname"
+import { editableCardClass } from "@/components/ui"
+import { checkNicknameAvailability, deleteNickname, putNickname } from "@/lib/nickname"
 
 const DEBOUNCE_MS = 350
 const RATE_LIMIT_COOLDOWN_MS = 5000
 const SAVED_FLASH_MS = 1500
+const HOLD_MS = 900
+const ARM_TIMEOUT_MS = 3000
 
 type State =
   | { kind: "idle" }
@@ -63,10 +62,15 @@ function inputValue(state: State, fallback: string): string {
 export function NicknameEditor() {
   const session = useSession()
   const [state, setState] = useState<State>({ kind: "idle" })
+  const [armed, setArmed] = useState(false)
+  const [holding, setHolding] = useState(false)
   const requestTokenRef = useRef(0)
   const debounceRef = useRef<number | null>(null)
   const cooldownRef = useRef<number | null>(null)
   const savedTimerRef = useRef<number | null>(null)
+  const holdTimerRef = useRef<number | null>(null)
+  const armTimerRef = useRef<number | null>(null)
+  const heldRef = useRef(false)
 
   const clearDebounce = useCallback(() => {
     if (debounceRef.current !== null) {
@@ -89,13 +93,37 @@ export function NicknameEditor() {
     }
   }, [])
 
+  const clearHold = useCallback(() => {
+    if (holdTimerRef.current !== null) {
+      window.clearTimeout(holdTimerRef.current)
+      holdTimerRef.current = null
+    }
+  }, [])
+
+  const clearArmTimer = useCallback(() => {
+    if (armTimerRef.current !== null) {
+      window.clearTimeout(armTimerRef.current)
+      armTimerRef.current = null
+    }
+  }, [])
+
+  const scheduleDisarm = useCallback(() => {
+    clearArmTimer()
+    armTimerRef.current = window.setTimeout(() => {
+      armTimerRef.current = null
+      setArmed(false)
+    }, ARM_TIMEOUT_MS)
+  }, [clearArmTimer])
+
   useEffect(() => {
     return () => {
       clearDebounce()
       clearCooldown()
       clearSavedTimer()
+      clearHold()
+      clearArmTimer()
     }
-  }, [clearDebounce, clearCooldown, clearSavedTimer])
+  }, [clearDebounce, clearCooldown, clearSavedTimer, clearHold, clearArmTimer])
 
   const enterRateLimitedCooldown = useCallback(
     (value: string) => {
@@ -222,12 +250,58 @@ export function NicknameEditor() {
     }
   }
 
+  const armReset = () => {
+    if (resetDisabled || armed) return
+    setArmed(true)
+    scheduleDisarm()
+  }
+
+  const confirmReset = () => {
+    clearArmTimer()
+    clearHold()
+    setHolding(false)
+    setArmed(false)
+    void onReset()
+  }
+
+  const startHold = () => {
+    if (!armed || resetDisabled || holdTimerRef.current !== null) return
+    clearArmTimer()
+    setHolding(true)
+    holdTimerRef.current = window.setTimeout(() => {
+      holdTimerRef.current = null
+      setHolding(false)
+      setArmed(false)
+      void onReset()
+    }, HOLD_MS)
+  }
+
+  const cancelHold = () => {
+    if (holdTimerRef.current === null) return
+    clearHold()
+    setHolding(false)
+    if (armed) scheduleDisarm()
+  }
+
+  const onResetPointerDown = () => {
+    heldRef.current = armed
+    startHold()
+  }
+
+  const onResetClick = (e: { detail: number }) => {
+    if (heldRef.current) {
+      heldRef.current = false
+      return
+    }
+    if (!armed) {
+      armReset()
+      return
+    }
+    if (e.detail === 0) confirmReset()
+  }
+
   return (
-    <div
-      data-testid="nickname-editor"
-      data-state={state.kind}
-      className="space-y-3 rounded-lg border border-unison-border bg-unison-bg-elevated p-4"
-    >
+    <div data-testid="nickname-editor" data-state={state.kind} className={editableCardClass}>
       <div className="space-y-1">
         <label htmlFor="nickname-input" className="text-[10px] uppercase tracking-wider text-unison-text-muted">
           Nickname
@@ -262,11 +336,21 @@ export function NicknameEditor() {
         </button>
         <button
           type="button"
-          onClick={onReset}
           disabled={resetDisabled}
-          className="cursor-pointer rounded-md px-3 py-1.5 text-sm text-unison-text-secondary transition-colors hover:bg-unison-bg-hover disabled:cursor-not-allowed disabled:opacity-50"
+          onClick={onResetClick}
+          onPointerDown={onResetPointerDown}
+          onPointerUp={cancelHold}
+          onPointerLeave={cancelHold}
+          onPointerCancel={cancelHold}
+          aria-label={armed ? "Hold to confirm reset" : "Reset to default"}
+          className="relative cursor-pointer select-none overflow-hidden rounded-md bg-red-500/10 px-3 py-1.5 text-sm font-medium text-red-300 transition-colors hover:bg-red-500/20 disabled:cursor-not-allowed disabled:opacity-50"
         >
-          Reset to default
+          <span
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-y-0 left-0 bg-red-500/30"
+            style={{ width: holding ? "100%" : "0%", transition: `width ${holding ? HOLD_MS : 200}ms linear` }}
+          />
+          <span className="relative">{armed ? "Hold to confirm" : "Reset to default"}</span>
         </button>
       </div>
     </div>

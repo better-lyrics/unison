@@ -1,5 +1,6 @@
 import { IconBrandDiscordFilled, IconLoader2 } from "@tabler/icons-react"
 import { discordButtonClass, secondaryButtonClass } from "@/components/discord-ui"
+import { editableCardClass } from "@/components/ui"
 import { useDiscordLink } from "@/hooks/useDiscordLink"
 
 export interface DiscordSectionModel {
@@ -12,12 +13,10 @@ export interface DiscordSectionModel {
   onDisconnect: () => void
 }
 
-const cardClass = "space-y-3 rounded-lg border border-unison-border bg-unison-bg-elevated p-4"
-
 export function DiscordSectionView({ model }: { model: DiscordSectionModel }) {
   if (model.status === "loading") {
     return (
-      <div className={cardClass}>
+      <div className={editableCardClass}>
         <IconLoader2 className="size-5 animate-spin text-unison-text-muted" stroke={1.5} />
       </div>
     )
@@ -25,7 +24,7 @@ export function DiscordSectionView({ model }: { model: DiscordSectionModel }) {
 
   if (model.status === "linked") {
     return (
-      <div className={cardClass}>
+      <div className={editableCardClass}>
         <p className="text-sm text-unison-text">
           Connected{model.username ? ` as ${model.username}` : ""}. Your roles update on their own.
         </p>
@@ -38,7 +37,7 @@ export function DiscordSectionView({ model }: { model: DiscordSectionModel }) {
   }
 
   return (
-    <div className={cardClass}>
+    <div className={editableCardClass}>
       <p className="text-sm text-unison-text-secondary">
         Link your Discord to earn leaderboard roles and get credit for the songs you add.
       </p>

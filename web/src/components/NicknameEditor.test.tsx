@@ -235,9 +235,7 @@ describe("NicknameEditor", () => {
       save.click()
     })
     await flush()
-    const putCall = router.calls.find(
-      (c) => c.url === "/auth/nickname" && (c.init?.method ?? "") === "PUT",
-    )
+    const putCall = router.calls.find((c) => c.url === "/auth/nickname" && (c.init?.method ?? "") === "PUT")
     expect(putCall).toBeTruthy()
     expect(JSON.parse(putCall?.init?.body as string)).toEqual({ nickname: "Alex" })
     expect(screen.getByTestId("nickname-status").textContent ?? "").toMatch(/saved/i)
@@ -271,7 +269,69 @@ describe("NicknameEditor", () => {
     expect(save.disabled).toBe(true)
   })
 
-  it("DELETEs /auth/nickname when Reset is clicked and updates the session displayName", async () => {
+  function resetRouter() {
+    return fetchRouter([
+      { match: (u) => u === "/auth/me", respond: meResponse },
+      {
+        match: (u, init) => u === "/auth/nickname" && init?.method === "DELETE",
+        respond: () => jsonResponse({ success: true, data: { keyId: valid.keyId, displayName: "GeneratedOne" } }),
+      },
+    ])
+  }
+
+  function findDelete(calls: { url: string; init?: RequestInit }[]) {
+    return calls.find((c) => c.url === "/auth/nickname" && (c.init?.method ?? "") === "DELETE")
+  }
+
+  it("DELETEs /auth/nickname when Reset is armed and then held to confirm", async () => {
+    const router = resetRouter()
+    vi.stubGlobal("fetch", router.fn)
+    await mountEditor()
+    const reset = screen.getByRole("button", { name: /reset/i })
+    await act(async () => {
+      fireEvent.click(reset)
+    })
+    expect(reset.textContent).toMatch(/hold to confirm/i)
+    await act(async () => {
+      fireEvent.pointerDown(reset)
+      vi.advanceTimersByTime(900)
+    })
+    await flush()
+    expect(findDelete(router.calls)).toBeTruthy()
+    const input = screen.getByLabelText(/nickname/i) as HTMLInputElement
+    expect(input.value).toBe("GeneratedOne")
+  })
+
+  it("arms on a single click but does not reset without a hold", async () => {
+    const router = resetRouter()
+    vi.stubGlobal("fetch", router.fn)
+    await mountEditor()
+    const reset = screen.getByRole("button", { name: /reset/i })
+    await act(async () => {
+      fireEvent.click(reset)
+    })
+    await flush()
+    expect(findDelete(router.calls)).toBeUndefined()
+    expect(reset.textContent).toMatch(/hold to confirm/i)
+  })
+
+  it("does not reset when the hold is released before it completes", async () => {
+    const router = resetRouter()
+    vi.stubGlobal("fetch", router.fn)
+    await mountEditor()
+    const reset = screen.getByRole("button", { name: /reset/i })
+    await act(async () => {
+      fireEvent.click(reset)
+      fireEvent.pointerDown(reset)
+      vi.advanceTimersByTime(400)
+      fireEvent.pointerUp(reset)
+      vi.advanceTimersByTime(900)
+    })
+    await flush()
+    expect(findDelete(router.calls)).toBeUndefined()
+  })
+
+  it("does not reset when the hold is released before it completes", async () => {
     const router = fetchRouter([
       { match: (u) => u === "/auth/me", respond: meResponse },
       {
@@ -281,16 +341,16 @@ describe("NicknameEditor", () => {
     ])
     vi.stubGlobal("fetch", router.fn)
     await mountEditor()
+    const reset = screen.getByRole("button", { name: /reset/i })
     await act(async () => {
-      screen.getByRole("button", { name: /reset/i }).click()
+      fireEvent.pointerDown(reset)
+      vi.advanceTimersByTime(400)
+      fireEvent.pointerUp(reset)
+      vi.advanceTimersByTime(900)
     })
     await flush()
-    const deleteCall = router.calls.find(
-      (c) => c.url === "/auth/nickname" && (c.init?.method ?? "") === "DELETE",
-    )
-    expect(deleteCall).toBeTruthy()
-    const input = screen.getByLabelText(/nickname/i) as HTMLInputElement
-    expect(input.value).toBe("GeneratedOne")
+    const deleteCall = router.calls.find((c) => c.url === "/auth/nickname" && (c.init?.method ?? "") === "DELETE")
+    expect(deleteCall).toBeUndefined()
   })
 
   it("surfaces Try again in a moment when the availability check returns 429", async () => {
