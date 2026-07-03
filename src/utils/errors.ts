@@ -10,6 +10,7 @@ export const ErrorCode = {
 	INVALID_DURATION: "INVALID_DURATION",
 	TTML_MALFORMED: "TTML_MALFORMED",
 	TTML_FORMATTED: "TTML_FORMATTED",
+	TTML_ZERO_DURATION_WORDS: "TTML_ZERO_DURATION_WORDS",
 	RATE_LIMITED: "RATE_LIMITED",
 	VARIANT_CAP_REACHED: "VARIANT_CAP_REACHED",
 	AUTH_REQUIRED: "AUTH_REQUIRED",
@@ -63,6 +64,10 @@ const TEMPLATES: Record<ErrorCode, Template> = {
 	TTML_FORMATTED: {
 		error: "Formatted TTML",
 		hint: "The TTML file has extra formatting that breaks the word-by-word timing. Try re-exporting it without any auto-formatting or pretty-printing.",
+	},
+	TTML_ZERO_DURATION_WORDS: {
+		error: "Zero-duration word timing",
+		hint: "Most words in this file start and end at the same timestamp, so there's no word-by-word timing to play back. This gets submitted as rich-sync but behaves like line-sync. Give each word a real start and end time, or submit it as line-synced lyrics instead.",
 	},
 	RATE_LIMITED: {
 		error: "Rate limited. Try again later.",

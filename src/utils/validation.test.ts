@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest"
-import { detectFormat, detectPrettyPrintedTtml, detectSyncType, validateTtmlStructure } from "./validation"
+import {
+	detectFormat,
+	detectPrettyPrintedTtml,
+	detectSyncType,
+	hasDegenerateWordTiming,
+	validateTtmlStructure,
+} from "./validation"
 
 describe("validateTtmlStructure", () => {
 	it("validates basic TTML structure", () => {
@@ -97,6 +103,98 @@ describe("detectSyncType TTML", () => {
 	it("returns plain on malformed/unparseable TTML rather than throwing", () => {
 		const ttml = "<tt><body><div><p>unclosed"
 		expect(detectSyncType(ttml, "ttml")).toBe("plain")
+	})
+})
+
+describe("detectSyncType TTML zero-duration word abuse", () => {
+	// Real shape from submitter d51999d6…: line-level timing on <p>, but the
+	// individual word spans collapse to begin===end. Only a minority of words
+	// carry real duration, so this is degraded word-sync, not karaoke richsync.
+	it("downgrades to linesync when the majority of word spans are zero-duration", () => {
+		const ttml = `<tt><body><div><p begin="0:16.645" end="0:18.621" ttm:agent="v1" composer:groupId="g1"><span begin="0:16.645" end="0:16.645">How</span> <span begin="0:17.129" end="0:17.129">did</span> <span begin="0:17.129" end="0:17.371">I</span> <span begin="0:17.371" end="0:17.371">find</span> <span begin="0:17.653" end="0:17.653">a</span> <span begin="0:17.653" end="0:17.653">girl</span> <span begin="0:18.137" end="0:18.137">like</span> <span begin="0:18.137" end="0:18.621">you?</span></p></div></body></tt>`
+		expect(detectSyncType(ttml, "ttml")).toBe("linesync")
+	})
+
+	it("keeps richsync when every word span has positive duration", () => {
+		const ttml = `<tt><body><div><p begin="0:00.0" end="0:02.0"><span begin="0:00.0" end="0:00.5">Hello</span> <span begin="0:00.5" end="0:01.0">there</span> <span begin="0:01.0" end="0:02.0">world</span></p></div></body></tt>`
+		expect(detectSyncType(ttml, "ttml")).toBe("richsync")
+	})
+
+	it("keeps richsync when zero-duration words stay within tolerance (1 of 7 ~ 14%)", () => {
+		const ttml = `<tt><body><div><p begin="0:00.0" end="0:07.0"><span begin="0:00.0" end="0:00.5">a</span> <span begin="0:01.0" end="0:01.5">b</span> <span begin="0:02.0" end="0:02.5">c</span> <span begin="0:03.0" end="0:03.0">d</span> <span begin="0:04.0" end="0:04.5">e</span> <span begin="0:05.0" end="0:05.5">f</span> <span begin="0:06.0" end="0:06.5">g</span></p></div></body></tt>`
+		expect(detectSyncType(ttml, "ttml")).toBe("richsync")
+	})
+
+	it("downgrades to linesync when zero-duration words exceed tolerance (2 of 4 = 50%)", () => {
+		const ttml = `<tt><body><div><p begin="0:00.0" end="0:02.0"><span begin="0:00.0" end="0:00.5">a</span> <span begin="0:00.5" end="0:00.5">b</span> <span begin="0:01.0" end="0:01.5">c</span> <span begin="0:01.5" end="0:01.5">d</span></p></div></body></tt>`
+		expect(detectSyncType(ttml, "ttml")).toBe("linesync")
+	})
+
+	it("keeps richsync when a zero-duration span is only punctuation, not a word", () => {
+		const ttml = `<tt><body><div><p begin="0:00.0" end="0:02.0"><span begin="0:00.0" end="0:00.5">Hello</span><span begin="0:00.5" end="0:00.5">,</span> <span begin="0:00.5" end="0:01.0">world</span></p></div></body></tt>`
+		expect(detectSyncType(ttml, "ttml")).toBe("richsync")
+	})
+
+	it("downgrades to linesync when word spans are all zero-duration even without line timing", () => {
+		const ttml = `<tt><body><div><p><span begin="0:00.0" end="0:00.0">a</span> <span begin="0:00.5" end="0:00.5">b</span> <span begin="0:01.0" end="0:01.0">c</span></p></div></body></tt>`
+		expect(detectSyncType(ttml, "ttml")).toBe("linesync")
+	})
+
+	it("gives unparseable time formats the benefit of the doubt (stays richsync)", () => {
+		const ttml = `<tt><body><div><p begin="0:00.0" end="0:02.0"><span begin="10:00:00:05" end="10:00:00:05">a</span> <span begin="10:00:00:10" end="10:00:00:10">b</span></p></div></body></tt>`
+		expect(detectSyncType(ttml, "ttml")).toBe("richsync")
+	})
+
+	it("ignores zero-duration whitespace spacer spans when scoring word timing", () => {
+		const ttml = `<tt><body><div><p begin="0:00.0" end="0:02.0"><span begin="0:00.0" end="0:00.5">Hello</span><span begin="0:00.5" end="0:00.5"> </span><span begin="0:00.5" end="0:01.0">world</span></p></div></body></tt>`
+		expect(detectSyncType(ttml, "ttml")).toBe("richsync")
+	})
+})
+
+describe("hasDegenerateWordTiming", () => {
+	it("flags zero-dur-dominated word timing (the abuse signature)", () => {
+		const ttml = `<tt><body><div><p begin="0:16.645" end="0:18.621"><span begin="0:16.645" end="0:16.645">How</span> <span begin="0:17.129" end="0:17.129">did</span> <span begin="0:17.129" end="0:17.371">I</span> <span begin="0:17.371" end="0:17.371">find</span> <span begin="0:17.653" end="0:17.653">a</span> <span begin="0:17.653" end="0:17.653">girl</span> <span begin="0:18.137" end="0:18.137">like</span> <span begin="0:18.137" end="0:18.621">you?</span></p></div></body></tt>`
+		expect(hasDegenerateWordTiming(ttml, "ttml")).toBe(true)
+	})
+
+	it("does not flag genuine richsync with real word durations", () => {
+		const ttml = `<tt><body><div><p begin="0:00.0" end="0:02.0"><span begin="0:00.0" end="0:00.5">Hello</span> <span begin="0:00.5" end="0:01.0">there</span> <span begin="0:01.0" end="0:02.0">world</span></p></div></body></tt>`
+		expect(hasDegenerateWordTiming(ttml, "ttml")).toBe(false)
+	})
+
+	it("does not flag zero-duration words within tolerance (1 of 7 ~ 14%)", () => {
+		const ttml = `<tt><body><div><p begin="0:00.0" end="0:07.0"><span begin="0:00.0" end="0:00.5">a</span> <span begin="0:01.0" end="0:01.5">b</span> <span begin="0:02.0" end="0:02.5">c</span> <span begin="0:03.0" end="0:03.0">d</span> <span begin="0:04.0" end="0:04.5">e</span> <span begin="0:05.0" end="0:05.5">f</span> <span begin="0:06.0" end="0:06.5">g</span></p></div></body></tt>`
+		expect(hasDegenerateWordTiming(ttml, "ttml")).toBe(false)
+	})
+
+	it("flags when zero-duration words exceed tolerance (2 of 3 ~ 67%)", () => {
+		const ttml = `<tt><body><div><p begin="0:00.0" end="0:02.0"><span begin="0:00.0" end="0:00.5">Hello</span> <span begin="0:00.5" end="0:00.5">there</span> <span begin="0:01.0" end="0:01.0">world</span></p></div></body></tt>`
+		expect(hasDegenerateWordTiming(ttml, "ttml")).toBe(true)
+	})
+
+	it("does not flag a zero-duration punctuation/space span (true zero-dur non-words are fine)", () => {
+		const ttml = `<tt><body><div><p begin="0:00.0" end="0:02.0"><span begin="0:00.0" end="0:00.5">Hello</span><span begin="0:00.5" end="0:00.5"> </span><span begin="0:00.5" end="0:00.5">,</span> <span begin="0:00.5" end="0:01.0">world</span></p></div></body></tt>`
+		expect(hasDegenerateWordTiming(ttml, "ttml")).toBe(false)
+	})
+
+	it("does not flag genuine linesync (no word spans at all)", () => {
+		const ttml = `<tt><body><div><p begin="0:00.0" end="0:05.0">Hello world</p></div></body></tt>`
+		expect(hasDegenerateWordTiming(ttml, "ttml")).toBe(false)
+	})
+
+	it("does not flag plain content", () => {
+		const ttml = "<tt><body><div><p>Hello world</p></div></body></tt>"
+		expect(hasDegenerateWordTiming(ttml, "ttml")).toBe(false)
+	})
+
+	it("never flags LRC (zero-dur applies only to TTML word spans)", () => {
+		const lrc = "[00:15.00]Hello <00:15.50>world"
+		expect(hasDegenerateWordTiming(lrc, "lrc")).toBe(false)
+	})
+
+	it("does not flag unparseable time formats (benefit of the doubt)", () => {
+		const ttml = `<tt><body><div><p begin="0:00.0" end="0:02.0"><span begin="10:00:00:05" end="10:00:00:05">a</span> <span begin="10:00:00:10" end="10:00:00:10">b</span></p></div></body></tt>`
+		expect(hasDegenerateWordTiming(ttml, "ttml")).toBe(false)
 	})
 })
 

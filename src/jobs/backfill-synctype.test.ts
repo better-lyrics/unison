@@ -90,6 +90,16 @@ const LINESYNC_TTML =
 
 const PLAIN_TTML = "<tt><body><div><p>Hello world</p></div></body></tt>"
 
+// Word spans present but mostly begin===end: stored as richsync, actually
+// degraded word-sync. Backfill must reclassify it down to linesync.
+const ZERO_DUR_TTML =
+	'<tt><body><div><p begin="0:00.0" end="0:02.0">' +
+	'<span begin="0:00.0" end="0:00.0">How</span> ' +
+	'<span begin="0:00.5" end="0:00.5">did</span> ' +
+	'<span begin="0:01.0" end="0:01.0">I</span> ' +
+	'<span begin="0:01.5" end="0:02.0">know</span>' +
+	"</p></div></body></tt>"
+
 describe("backfillSyncType", () => {
 	it("only updates rows whose detected sync_type differs from current", async () => {
 		const db = makeMockDB([
@@ -113,6 +123,22 @@ describe("backfillSyncType", () => {
 		expect(updates).toHaveLength(2)
 		expect(updates[0].params).toEqual(["richsync", 1, "linesync"])
 		expect(updates[1].params).toEqual(["plain", 3, "linesync"])
+	})
+
+	it("regression: reclassifies zero-duration-dominated richsync down to linesync", async () => {
+		const db = makeMockDB([
+			[{ id: 42, video_id: "v42", format: "ttml", lyrics: ZERO_DUR_TTML, sync_type: "richsync" }],
+			null,
+			[],
+		])
+		const cache = makeMockCache()
+		const env = makeEnv(db, cache)
+
+		const result = await backfillSyncType(env)
+
+		expect(result.changed).toBe(1)
+		const update = db.calls.find((c) => /UPDATE\s+lyrics/i.test(c.sql))
+		expect(update?.params).toEqual(["linesync", 42, "richsync"])
 	})
 
 	it("includes the WHERE-guard predicate against concurrent updates", async () => {

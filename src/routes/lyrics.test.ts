@@ -195,6 +195,17 @@ const RICHSYNC_TTML =
 
 const PLAIN_LRC = "Just text\nNo timestamps"
 
+// Word spans present but 3 of 4 collapse to begin===end: the zero-duration
+// abuse signature. Should be rejected at submit, not stored as richsync.
+const DEGENERATE_TTML =
+	'<tt xmlns="http://www.w3.org/ns/ttml"><body><div>' +
+	'<p begin="0:00.0" end="0:02.0">' +
+	'<span begin="0:00.0" end="0:00.0">How</span> ' +
+	'<span begin="0:00.5" end="0:00.5">did</span> ' +
+	'<span begin="0:01.0" end="0:01.0">I</span> ' +
+	'<span begin="0:01.5" end="0:02.0">know</span>' +
+	"</p></div></body></tt>"
+
 async function buildSubmitRequest(
 	keyPair: GeneratedKeyPair,
 	keyId: string,
@@ -246,6 +257,39 @@ describe("POST /lyrics/submit syncType override", () => {
 		expect(insertCall).toBeDefined()
 		const syncTypeIndex = 12
 		expect(insertCall?.params[syncTypeIndex]).toBe("richsync")
+	})
+
+	it("rejects zero-duration-dominated TTML with an explanatory error", async () => {
+		const keyPair = await generateKeyPair()
+		const publicJwk = await exportPublicJwk(keyPair)
+		const keyId = await hashPublicKey(publicJwk)
+
+		const db = makeMockDB([
+			{ key_id: keyId, public_key: JSON.stringify(publicJwk), created_at: 0 },
+			{ id: 7, key_id: keyId },
+		])
+		const env = makeEnv(db)
+		const app = lyricsRoutes(env)
+
+		const req = await buildSubmitRequest(keyPair, keyId, {
+			videoId: "abc123",
+			song: "Song",
+			artist: "Artist",
+			duration: 200,
+			lyrics: DEGENERATE_TTML,
+			format: "ttml",
+			syncType: "richsync",
+		})
+
+		const res = await app.handle(req)
+		expect(res.status).toBe(400)
+
+		const body = (await res.json()) as { code: string; hint: string; error: string }
+		expect(body.code).toBe("TTML_ZERO_DURATION_WORDS")
+		expect(body.hint.toLowerCase()).toContain("word")
+		expect(body.hint.toLowerCase()).toContain("time")
+
+		expect(db.calls.find((c) => /INSERT INTO lyrics/i.test(c.sql))).toBeUndefined()
 	})
 
 	it("uses detected plain when client omits syncType for plain LRC content", async () => {

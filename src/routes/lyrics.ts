@@ -25,6 +25,7 @@ import {
 	detectFormat,
 	detectPrettyPrintedTtml,
 	detectSyncType,
+	hasDegenerateWordTiming,
 	validateTtmlStructure,
 } from "@/utils/validation"
 import { Elysia, t } from "elysia"
@@ -368,6 +369,14 @@ export const lyricsRoutes = (env: Env) =>
 							hint: prettyPrintHint(prettyCheck.reason),
 						})
 					)
+				}
+
+				if (hasDegenerateWordTiming(lyricsContent, format)) {
+					log.warn("rejecting zero-duration word timing", {
+						keyId,
+						videoId: p.videoId as string,
+					})
+					return status(400, buildError(ErrorCode.TTML_ZERO_DURATION_WORDS))
 				}
 			}
 
