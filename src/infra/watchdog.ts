@@ -4,6 +4,8 @@ import { Logger } from "./logger"
 const log = new Logger("watchdog")
 
 const DEFAULT_FREEZE_MS = 30_000
+const RESPAWN_GRACE_MS = 10_000
+const MAX_FAST_RESPAWNS = 3
 
 // A frozen event loop cannot run its own timers, so liveness has to be judged
 // from another thread. This is the decision the watchdog worker makes each tick.
@@ -13,6 +15,18 @@ export function shouldKill(msSinceHeartbeat: number, freezeMs: number): boolean 
 	if (!(freezeMs > 0)) return false
 	if (!Number.isFinite(msSinceHeartbeat)) return false
 	return msSinceHeartbeat > freezeMs
+}
+
+// Decide whether to respawn a worker that just exited. A worker that dies inside
+// the grace window counts as a fast failure; after too many in a row we stop so a
+// broken worker can't respawn forever. A worker that ran past the window resets
+// the streak.
+export function respawnDecision(
+	msAlive: number,
+	fastFailures: number
+): { respawn: boolean; fastFailures: number } {
+	const next = msAlive < RESPAWN_GRACE_MS ? fastFailures + 1 : 0
+	return { respawn: next < MAX_FAST_RESPAWNS, fastFailures: next }
 }
 
 // The worker runs on its own thread, unaffected by a blocked main loop. When the
@@ -41,12 +55,38 @@ export function startWatchdog(): void {
 		return
 	}
 
-	const worker = new Worker(WORKER_SOURCE, { eval: true, workerData: { freezeMs } })
-	worker.unref()
-	worker.on("error", (err) => log.error("watchdog worker error", { error: err.message }))
+	const beatMs = Math.max(1000, Math.floor(freezeMs / 10))
+	let fastFailures = 0
 
-	const beat = setInterval(() => worker.postMessage(0), Math.max(1000, Math.floor(freezeMs / 10)))
-	beat.unref()
+	const spawn = (): void => {
+		const spawnedAt = Date.now()
+		let worker: Worker
+		try {
+			worker = new Worker(WORKER_SOURCE, { eval: true, workerData: { freezeMs } })
+		} catch (err) {
+			// Never let a watchdog failure crash boot: run unprotected instead.
+			log.error("watchdog failed to start", { error: (err as Error).message })
+			return
+		}
+		worker.unref()
 
+		const beat = setInterval(() => worker.postMessage(0), beatMs)
+		beat.unref()
+
+		worker.on("error", (err) => log.error("watchdog worker error", { error: err.message }))
+		worker.on("exit", (code) => {
+			clearInterval(beat)
+			const decision = respawnDecision(Date.now() - spawnedAt, fastFailures)
+			fastFailures = decision.fastFailures
+			if (!decision.respawn) {
+				log.error("watchdog worker keeps dying, protection disabled", { code })
+				return
+			}
+			log.warn("watchdog worker exited, respawning", { code })
+			spawn()
+		})
+	}
+
+	spawn()
 	log.info("watchdog started", { freezeMs })
 }

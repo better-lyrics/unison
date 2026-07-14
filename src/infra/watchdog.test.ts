@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { shouldKill } from "./watchdog"
+import { respawnDecision, shouldKill } from "./watchdog"
 
 describe("shouldKill", () => {
 	it("does not kill while heartbeats are within the freeze window", () => {
@@ -28,5 +28,24 @@ describe("shouldKill", () => {
 		it("kills for an arbitrarily long freeze", () => {
 			expect(shouldKill(5 * 60 * 60 * 1000, 30_000)).toBe(true)
 		})
+	})
+})
+
+describe("respawnDecision", () => {
+	it("respawns and resets the streak when the worker ran past the grace window", () => {
+		expect(respawnDecision(60_000, 2)).toEqual({ respawn: true, fastFailures: 0 })
+	})
+
+	it("counts a fast exit as a failure and still respawns under the cap", () => {
+		expect(respawnDecision(500, 0)).toEqual({ respawn: true, fastFailures: 1 })
+		expect(respawnDecision(500, 1)).toEqual({ respawn: true, fastFailures: 2 })
+	})
+
+	it("gives up after too many fast failures in a row", () => {
+		expect(respawnDecision(500, 2)).toEqual({ respawn: false, fastFailures: 3 })
+	})
+
+	it("a healthy long run clears an earlier streak", () => {
+		expect(respawnDecision(30_000, 2)).toEqual({ respawn: true, fastFailures: 0 })
 	})
 })
