@@ -37,12 +37,17 @@ export async function recalculateScore(env: Env, lyricsId: number): Promise<void
 		.bind(lyricsId)
 		.all<VoteWithUser>()
 
-	const update = calculateScore(lyricsId, votes.results || [])
+	const voteRows = votes.results || []
+	const update = calculateScore(lyricsId, voteRows)
+	const upvotes = voteRows.filter((v) => v.vote === 1).length
+	const downvotes = voteRows.filter((v) => v.vote === -1).length
 
 	await env.DB.prepare(`
 		UPDATE lyrics SET
 			effective_score = ?,
 			vote_count = ?,
+			upvotes = ?,
+			downvotes = ?,
 			diversity_bonus = ?,
 			confidence = ?,
 			score_updated_at = EXTRACT(EPOCH FROM NOW())::INTEGER
@@ -51,6 +56,8 @@ export async function recalculateScore(env: Env, lyricsId: number): Promise<void
 		.bind(
 			update.effective_score,
 			update.vote_count,
+			upvotes,
+			downvotes,
 			update.diversity_bonus,
 			update.confidence,
 			update.id

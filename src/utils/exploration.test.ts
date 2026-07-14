@@ -205,3 +205,53 @@ describe("regressions", () => {
 		}
 	})
 })
+
+describe("regressions: divergent vote counts must not freeze the event loop", () => {
+	// score-updater resyncs vote_count from the votes table but leaves
+	// upvotes/downvotes untouched, so a challenger can be cold by vote_count
+	// while carrying a large (or corrupt) upvotes/downvotes. The pre-fix sampler
+	// summed `shape` exponentials, so such an arm spun the single event loop for
+	// minutes-to-forever. These lock the O(1) sampler: if the loop ever returns,
+	// they hang the suite.
+	it("returns instantly for an arm with billions of upvotes", () => {
+		const arms = [
+			{ id: "cold", upvotes: 1, downvotes: 0 },
+			{ id: "divergent", upvotes: 2_000_000_000, downvotes: 4 },
+		]
+		expect(arms).toContain(selectArm(arms, 42))
+	})
+
+	it("returns instantly for an arm with billions of downvotes", () => {
+		const arms = [{ id: "only", upvotes: 3, downvotes: 5_000_000_000 }]
+		expect(selectArm(arms, 1)).toBe(arms[0])
+	})
+
+	it("does not hang on a non-finite (Infinity) vote count", () => {
+		const arms = [
+			{ id: "sane", upvotes: 2, downvotes: 1 },
+			{ id: "corrupt", upvotes: Number.POSITIVE_INFINITY, downvotes: 0 },
+		]
+		expect(arms).toContain(selectArm(arms, 7))
+	})
+
+	it("handles NaN and negative vote counts without hanging", () => {
+		const arms = [
+			{ id: "nan", upvotes: Number.NaN, downvotes: 0 },
+			{ id: "neg", upvotes: -5, downvotes: -2 },
+			{ id: "ok", upvotes: 4, downvotes: 0 },
+		]
+		expect(arms).toContain(selectArm(arms, 9))
+	})
+
+	it("still favors a heavily-upvoted arm at large scale", () => {
+		const arms = [
+			{ id: "huge", upvotes: 10_000_000, downvotes: 0 },
+			{ id: "weak", upvotes: 0, downvotes: 5 },
+		]
+		let hugeCount = 0
+		for (let seed = 0; seed < 200; seed++) {
+			if (selectArm(arms, seed).id === "huge") hugeCount++
+		}
+		expect(hugeCount).toBeGreaterThan(195)
+	})
+})

@@ -45,14 +45,38 @@ function mulberry32(seed: number) {
 	}
 }
 
-function gammaInt(shape: number, rand: () => number): number {
-	let sum = 0
-	for (let i = 0; i < shape; i++) {
-		// map [0, 1) to (0, 1] so the log argument is never zero
-		const u = 1 - rand()
-		sum -= Math.log(u)
+// Standard normal via Box-Muller. u1 is mapped to (0, 1] so log never sees zero.
+function sampleNormal(rand: () => number): number {
+	const u1 = 1 - rand()
+	const u2 = rand()
+	return Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2)
+}
+
+// Draw from Gamma(shape, 1) in constant time (Marsaglia-Tsang). The previous
+// implementation summed `shape` exponentials, so an arm whose vote count grew
+// large (upvotes/downvotes drift from the separately resynced vote_count) spun
+// the event loop for minutes to forever. Non-finite or non-positive shapes come
+// only from corrupt counts; they are clamped so they can never spin.
+function sampleGamma(shape: number, rand: () => number): number {
+	if (!(shape > 0)) return 0
+	const k = Number.isFinite(shape) ? shape : Number.MAX_SAFE_INTEGER
+	if (k < 1) {
+		return sampleGamma(k + 1, rand) * (1 - rand()) ** (1 / k)
 	}
-	return sum
+	const d = k - 1 / 3
+	const c = 1 / Math.sqrt(9 * d)
+	for (;;) {
+		let x: number
+		let v: number
+		do {
+			x = sampleNormal(rand)
+			v = 1 + c * x
+		} while (v <= 0)
+		v = v * v * v
+		const u = rand()
+		if (u < 1 - 0.0331 * x * x * x * x) return d * v
+		if (Math.log(u) < 0.5 * x * x + d * (1 - v + Math.log(v))) return d * v
+	}
 }
 
 export function selectArm<T extends { upvotes: number; downvotes: number }>(
@@ -71,8 +95,8 @@ export function selectArm<T extends { upvotes: number; downvotes: number }>(
 	let bestTheta = -1
 
 	for (const arm of challengers) {
-		const ga = gammaInt(arm.upvotes + 1, rand)
-		const gb = gammaInt(arm.downvotes + 1, rand)
+		const ga = sampleGamma(arm.upvotes + 1, rand)
+		const gb = sampleGamma(arm.downvotes + 1, rand)
 		const total = ga + gb
 		const theta = total === 0 ? 0.5 : ga / total
 		if (theta > bestTheta) {

@@ -578,3 +578,39 @@ describe("reputation bounds", () => {
 		expect(config.reputation.consensusDelta).toBe(0.1)
 	})
 })
+
+describe("recalculateScore vote-count resync", () => {
+	it("recomputes upvotes and downvotes from the votes rows so they cannot drift", async () => {
+		const votes = [
+			{ vote: 1, reputation: 1.0, avg_vote: 0.2, is_self_vote: 0 },
+			{ vote: 1, reputation: 1.0, avg_vote: 0.3, is_self_vote: 0 },
+			{ vote: -1, reputation: 1.0, avg_vote: -0.1, is_self_vote: 0 },
+		]
+		const { db, calls } = createMockDB([{ video_id: "v1", deleted_at: null }, votes])
+		const env = { DB: db } as unknown as Env
+
+		await recalculateScore(env, 1)
+
+		const update = calls.find(
+			(c) => c.sql.includes("UPDATE lyrics") && /upvotes\s*=\s*\?/.test(c.sql)
+		)
+		expect(update).toBeDefined()
+		expect(update?.sql).toMatch(/downvotes\s*=\s*\?/)
+		// bind order: effective_score, vote_count, upvotes, downvotes, ...
+		expect(update?.params[2]).toBe(2)
+		expect(update?.params[3]).toBe(1)
+	})
+
+	it("zeroes upvotes and downvotes when a row has no votes", async () => {
+		const { db, calls } = createMockDB([{ video_id: "v1", deleted_at: null }, []])
+		const env = { DB: db } as unknown as Env
+
+		await recalculateScore(env, 1)
+
+		const update = calls.find(
+			(c) => c.sql.includes("UPDATE lyrics") && /upvotes\s*=\s*\?/.test(c.sql)
+		)
+		expect(update?.params[2]).toBe(0)
+		expect(update?.params[3]).toBe(0)
+	})
+})
