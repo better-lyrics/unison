@@ -5,11 +5,13 @@ import { closeRedis } from "@/infra/cache"
 import { closePool } from "@/infra/database"
 import { createEnv } from "@/infra/env"
 import { Logger, flushLogs } from "@/infra/logger"
+import { startWatchdog } from "@/infra/watchdog"
 import { backfillConfidence } from "@/jobs/backfill-confidence"
 import { backfillFormatDetection } from "@/jobs/backfill-format-detection"
 import { backfillLanguage } from "@/jobs/backfill-language"
 import { backfillSyncType } from "@/jobs/backfill-synctype"
 import { backfillTextSearch } from "@/jobs/backfill-text-search"
+import { backfillVoteCounts } from "@/jobs/backfill-vote-counts"
 import { cleanupFulfilledRequests } from "@/jobs/cleanup-fulfilled-requests"
 import { runDumpJob } from "@/jobs/dump"
 import { updateScores } from "@/jobs/score-updater"
@@ -227,6 +229,8 @@ const app = new Elysia({ adapter: node() })
 
 const port = process.env.PORT || "3000"
 log.info(`listening on port ${port}`)
+
+startWatchdog()
 log.info("spa serving", {
 	cwd: process.cwd(),
 	spaDist: SPA_DIST,
@@ -269,6 +273,12 @@ cleanupFulfilledRequests(env)
 		if (deleted > 0) log.info("cleanup fulfilled requests complete", { deleted })
 	})
 	.catch((err) => log.error("cleanup fulfilled requests failed", { error: (err as Error).message }))
+
+backfillVoteCounts(env)
+	.then(({ repaired }) => {
+		if (repaired > 0) log.info("vote count backfill complete", { repaired })
+	})
+	.catch((err) => log.error("vote count backfill failed", { error: (err as Error).message }))
 
 process.on("unhandledRejection", (reason) => {
 	const err = reason instanceof Error ? reason : new Error(String(reason))
