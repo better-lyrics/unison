@@ -62,6 +62,9 @@ export function AppHeader() {
 					<NavLink to="/downloads" className={tabClass}>
 						Downloads
 					</NavLink>
+					<NavLink to="/docs" className={tabClass}>
+						Docs
+					</NavLink>
 				</nav>
 				<div className="hidden sm:flex sm:justify-self-end sm:w-full sm:max-w-xs">
 					<SearchBar />
@@ -106,6 +109,9 @@ export function AppHeader() {
 						</NavLink>
 						<NavLink to="/downloads" role="menuitem" onClick={closeMenu} className={tabClass}>
 							Downloads
+						</NavLink>
+						<NavLink to="/docs" role="menuitem" onClick={closeMenu} className={tabClass}>
+							Docs
 						</NavLink>
 					</nav>
 					<div className="flex items-center justify-end border-t border-unison-border pt-2">
