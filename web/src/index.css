@@ -125,6 +125,29 @@ select {
   color: #fff;
 }
 
+.unison-code-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-unison-border-strong) transparent;
+}
+
+.unison-code-scroll::-webkit-scrollbar {
+  height: 8px;
+  width: 8px;
+}
+
+.unison-code-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.unison-code-scroll::-webkit-scrollbar-thumb {
+  background: var(--color-unison-border-strong);
+  border-radius: 9999px;
+}
+
+.unison-code-scroll::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.28);
+}
+
 @media (prefers-reduced-motion: reduce) {
   .link-pulse-dot {
     animation: none;

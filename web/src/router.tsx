@@ -3,6 +3,7 @@ import { type RouteObject, RouterProvider, createBrowserRouter } from "react-rou
 import { AppLayout } from "./components/AppLayout"
 import { AboutPage } from "./pages/AboutPage"
 import { CuratorsPage } from "./pages/CuratorsPage"
+import { DocsPage } from "./pages/DocsPage"
 import { DownloadsPage } from "./pages/DownloadsPage"
 import { LinkPage } from "./pages/LinkPage"
 import { LyricsPage } from "./pages/LyricsPage"
@@ -50,6 +51,7 @@ const router = createBrowserRouter([
       { path: "curator/:keyId", element: <UserPage /> },
       { path: "about", element: <AboutPage /> },
       { path: "downloads", element: <DownloadsPage /> },
+      { path: "docs", element: <DocsPage /> },
       { path: "link", element: <LinkPage /> },
       ...devRoutes,
     ],
