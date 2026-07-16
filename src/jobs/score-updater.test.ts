@@ -4,6 +4,7 @@ import { config } from "@/config"
 import {
 	calculateScore,
 	recalculateScore,
+	recomputeAllScores,
 	updateReputations,
 	updateScores,
 } from "@/jobs/score-updater"
@@ -82,16 +83,37 @@ describe("calculateScore", () => {
 		expect(result.effective_score).toBeCloseTo(0.6, 2)
 	})
 
-	it("reduces self-vote weight by half", () => {
+	it("gives self-votes zero weight in effective_score", () => {
 		const votes = [
-			{ vote: 1, reputation: 1.0, avg_vote: 0.5, is_self_vote: 1 },
 			{ vote: 1, reputation: 1.0, avg_vote: 0.3, is_self_vote: 0 },
+			{ vote: -1, reputation: 1.0, avg_vote: 0.5, is_self_vote: 1 },
 		]
 
 		const result = calculateScore(1, votes)
 
-		// (1 * 0.5 + 1 * 1.0) / (0.5 + 1.0) = 1.5 / 1.5 = 1.0
+		// self downvote is ignored: (1 * 1.0) / 1.0 = 1.0
 		expect(result.effective_score).toBe(1)
+		expect(result.vote_count).toBe(2)
+	})
+
+	it("regression: a lone self-vote yields zero effective_score, not a bootstrapped 1.0", () => {
+		const votes = [{ vote: 1, reputation: 1.0, avg_vote: 0.5, is_self_vote: 1 }]
+
+		const result = calculateScore(1, votes)
+
+		expect(result.effective_score).toBe(0)
+		expect(result.vote_count).toBe(1)
+	})
+
+	it("a self-vote does not contribute to the diversity bonus", () => {
+		const votes = [
+			{ vote: 1, reputation: 1.0, avg_vote: -0.5, is_self_vote: 1 },
+			{ vote: 1, reputation: 1.0, avg_vote: 0.5, is_self_vote: 0 },
+		]
+
+		const result = calculateScore(1, votes)
+
+		expect(result.diversity_bonus).toBe(0)
 	})
 
 	it("detects diversity bonus when both harsh and generous raters upvote", () => {
@@ -567,7 +589,7 @@ describe("reputation bounds", () => {
 	})
 
 	it("config has correct self-vote weight", () => {
-		expect(config.reputation.selfVoteWeight).toBe(0.5)
+		expect(config.reputation.selfVoteWeight).toBe(0)
 	})
 
 	it("config has correct minimum votes for confidence", () => {
@@ -612,5 +634,50 @@ describe("recalculateScore vote-count resync", () => {
 		)
 		expect(update?.params[2]).toBe(0)
 		expect(update?.params[3]).toBe(0)
+	})
+})
+
+describe("recomputeAllScores", () => {
+	it("recalculates every live lyric that has votes", async () => {
+		const { db, calls } = createMockDB([
+			[{ lyrics_id: 1 }, { lyrics_id: 2 }],
+			{ video_id: "v1", deleted_at: null },
+			[{ vote: 1, reputation: 1.0, avg_vote: 0.2, is_self_vote: 0 }],
+			{ video_id: "v2", deleted_at: null },
+			[{ vote: -1, reputation: 1.0, avg_vote: -0.1, is_self_vote: 0 }],
+		])
+		const env = { DB: db } as unknown as Env
+
+		const result = await recomputeAllScores(env)
+
+		expect(result.updated).toBe(2)
+		const updates = calls.filter(
+			(c) => c.sql.includes("UPDATE lyrics") && /effective_score\s*=\s*\?/.test(c.sql)
+		)
+		expect(updates).toHaveLength(2)
+	})
+
+	it("only scans live, voted rows", async () => {
+		const { db, calls } = createMockDB([[]])
+		const env = { DB: db } as unknown as Env
+
+		const result = await recomputeAllScores(env)
+
+		expect(result.updated).toBe(0)
+		expect(calls[0].sql).toMatch(/deleted_at\s+IS\s+NULL/i)
+		expect(calls[0].sql).toMatch(/vote_count\s*>\s*0/i)
+	})
+
+	it("skips the UPDATE for a row that was deleted after selection", async () => {
+		const { db, calls } = createMockDB([
+			[{ lyrics_id: 1 }],
+			{ video_id: "v1", deleted_at: 1700000000 },
+		])
+		const env = { DB: db } as unknown as Env
+
+		await recomputeAllScores(env)
+
+		const updates = calls.filter((c) => c.sql.includes("UPDATE lyrics"))
+		expect(updates).toHaveLength(0)
 	})
 })

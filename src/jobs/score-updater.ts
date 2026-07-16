@@ -101,6 +101,21 @@ export async function updateScores(env: Env): Promise<{ updated: number }> {
 	return { updated }
 }
 
+export async function recomputeAllScores(env: Env): Promise<{ updated: number }> {
+	const rows = await env.DB.prepare(
+		"SELECT id AS lyrics_id FROM lyrics WHERE deleted_at IS NULL AND vote_count > 0"
+	).all<{ lyrics_id: number }>()
+
+	let updated = 0
+	for (const { lyrics_id } of rows.results || []) {
+		await recalculateScore(env, lyrics_id)
+		updated++
+	}
+
+	log.info("full score recompute complete", { updated })
+	return { updated }
+}
+
 async function applyAutoHidePenalty(env: Env): Promise<void> {
 	const penalty = config.moderation.autoHide.reputationPenalty
 	const minRep = config.reputation.min
@@ -156,8 +171,9 @@ export function calculateScore(lyricsId: number, votes: VoteWithUser[]): LyricsS
 
 	for (const v of votes) {
 		if (v.reputation < config.reputation.voteWeightFloor) continue
-		// Self-votes count less
 		const weight = v.is_self_vote ? v.reputation * config.reputation.selfVoteWeight : v.reputation
+		// A zero-weight vote realises to nothing: skip it from score and diversity alike.
+		if (weight <= 0) continue
 
 		weightedSum += v.vote * weight
 		totalWeight += weight

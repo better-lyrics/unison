@@ -39,7 +39,7 @@ export const config = {
 		min: 0.0,
 		max: 2.0,
 		consensusDelta: 0.1,
-		selfVoteWeight: 0.5,
+		selfVoteWeight: 0,
 		minVotesForConfidence: 3,
 		minScoreForConfidence: 0.5,
 		voteWeightFloor: 0.5,
