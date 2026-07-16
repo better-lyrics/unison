@@ -10,6 +10,7 @@
     "build": "pnpm -C web install --frozen-lockfile && pnpm -C web build",
     "db:migrate": "tsx src/db/migrate.ts",
     "db:migrate:prod": "DATABASE_URL=$DATABASE_URL tsx src/db/migrate.ts",
+    "scores:recompute": "tsx src/jobs/recompute-scores.ts",
     "lint": "biome lint ./src",
     "lint:fix": "biome lint ./src --write && biome format ./src --write",
     "format": "biome format ./src --write",
