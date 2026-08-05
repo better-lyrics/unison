@@ -4,17 +4,17 @@ import { MemoryRouter, Route, Routes } from "react-router-dom"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import type { VariantFull, VariantSummary } from "@/lib/types"
 
-vi.mock("@braccato/core", () => ({}))
-
 const seekTo = vi.fn()
+const play = vi.fn()
 let lastLineClick: ((seconds: number) => void) | null = null
 
 vi.mock("@/hooks/useYouTubePlayer", () => ({
   useYouTubePlayer: () => ({
-    ref: { current: null },
-    currentTimeMs: 0,
-    playing: false,
+    ref: () => {},
+    getCurrentTime: () => 0,
+    getPlaying: () => false,
     seekTo,
+    play,
   }),
 }))
 
@@ -94,6 +94,7 @@ function renderAt(initialEntries: string[]) {
 
 beforeEach(() => {
   seekTo.mockReset()
+  play.mockReset()
   lastLineClick = null
   fetchVariants.mockReset()
   fetchVariant.mockReset()
@@ -256,12 +257,14 @@ describe("LyricsPage", () => {
     expect(controls.getAttribute("data-user-vote")).toBe("-1")
   })
 
-  it("invokes seekTo on the player when the renderer fires an onLineClick", async () => {
+  it("seeks and starts the player when the renderer fires an onLineClick", async () => {
     fetchVariants.mockResolvedValue({ variants: [makeSummary({ id: 1 })] })
     fetchVariant.mockResolvedValue({ variant: makeFull({ id: 1 }) })
     renderAt(["/song/v1"])
     await waitFor(() => expect(lastLineClick).not.toBeNull())
     lastLineClick?.(8.5)
     expect(seekTo).toHaveBeenCalledWith(8.5)
+    // Seeking a paused player leaves it paused, so the click has to say play as well.
+    expect(play).toHaveBeenCalledTimes(1)
   })
 })
