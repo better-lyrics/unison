@@ -24,5 +24,8 @@ export default defineConfig({
   test: {
     environment: "happy-dom",
     globals: false,
+    // Vitest stubs every .css import to "" unless it is opted in, and that swallows the braccato
+    // theme, which is a string handed to the element rather than a stylesheet the page loads.
+    css: { include: [/braccato-theme\.css/] },
   },
 })

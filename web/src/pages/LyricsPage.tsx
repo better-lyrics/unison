@@ -42,7 +42,9 @@ export function LyricsPage() {
 	}, [location.key, navigate])
 
 	const safeVideoId = videoId ?? ""
-	const { ref, getCurrentTimeMs, getPlaying, seekTo } = useYouTubePlayer(safeVideoId.length > 0 ? safeVideoId : null)
+	const { ref, getCurrentTime, getPlaying, seekTo, play } = useYouTubePlayer(
+		safeVideoId.length > 0 ? safeVideoId : null,
+	)
 
 	const variantsQuery = useQuery({
 		queryKey: ["lyrics", "variants", safeVideoId],
@@ -77,7 +79,15 @@ export function LyricsPage() {
 		[params, setParams],
 	)
 
-	const handleLineClick = useCallback((seconds: number) => seekTo(seconds), [seekTo])
+	// Seeking a paused player leaves it paused, so clicking a line would land on the line and sit
+	// there in silence.
+	const handleLineClick = useCallback(
+		(seconds: number) => {
+			seekTo(seconds)
+			play()
+		},
+		[seekTo, play],
+	)
 
 	const [copyState, setCopyState] = useState<CopyState>("idle")
 	const copyResetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -222,7 +232,7 @@ export function LyricsPage() {
 							) : mode === "synced" ? (
 								<LyricsRenderer
 									variant={variant}
-									getCurrentTimeMs={getCurrentTimeMs}
+									getCurrentTime={getCurrentTime}
 									getPlaying={getPlaying}
 									onLineClick={handleLineClick}
 								/>

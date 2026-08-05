@@ -17,6 +17,7 @@ class FakePlayer {
   currentTime = 0
   state = 2
   seeks: Array<{ seconds: number; allowSeekAhead: boolean }> = []
+  plays = 0
   onReady?: () => void
   static instances: FakePlayer[] = []
 
@@ -40,6 +41,11 @@ class FakePlayer {
     if (!this.ready) throw new TypeError("seekTo is not a function")
     this.seeks.push({ seconds, allowSeekAhead })
     this.currentTime = seconds
+  }
+  playVideo() {
+    if (!this.ready) throw new TypeError("playVideo is not a function")
+    this.plays++
+    this.state = PlayerState.PLAYING
   }
   destroy() {
     this.destroyed = true
@@ -80,7 +86,7 @@ describe("useYouTubePlayer", () => {
     const { result } = renderHook(() => useYouTubePlayer(null))
     expect(typeof result.current.ref).toBe("function")
     expect(typeof result.current.seekTo).toBe("function")
-    expect(result.current.getCurrentTimeMs()).toBe(0)
+    expect(result.current.getCurrentTime()).toBe(0)
     expect(result.current.getPlaying()).toBe(false)
     expect(document.querySelectorAll("script[data-unison-yt-loader]").length).toBe(0)
   })
@@ -135,13 +141,13 @@ describe("useYouTubePlayer", () => {
     })
   })
 
-  it("getters read currentTime in ms and playing-state directly from the player", async () => {
+  it("getters read currentTime in seconds and playing-state directly from the player", async () => {
     installYT()
-    let getCurrentTimeMs: (() => number) | null = null
+    let getCurrentTime: (() => number) | null = null
     let getPlaying: (() => boolean) | null = null
     function CaptureHarness() {
       const player = useYouTubePlayer("abc")
-      getCurrentTimeMs = player.getCurrentTimeMs
+      getCurrentTime = player.getCurrentTime
       getPlaying = player.getPlaying
       return createElement("div", { ref: player.ref })
     }
@@ -151,8 +157,8 @@ describe("useYouTubePlayer", () => {
     })
     const player = FakePlayer.instances[0]
     expect(player).toBeDefined()
-    if (getCurrentTimeMs === null || getPlaying === null) throw new Error("getters never captured")
-    const readTime: () => number = getCurrentTimeMs
+    if (getCurrentTime === null || getPlaying === null) throw new Error("getters never captured")
+    const readTime: () => number = getCurrentTime
     const readPlaying: () => boolean = getPlaying
 
     act(() => {
@@ -160,7 +166,7 @@ describe("useYouTubePlayer", () => {
     })
 
     player.currentTime = 2.5
-    expect(readTime()).toBe(2500)
+    expect(readTime()).toBe(2.5)
 
     player.state = PlayerState.PLAYING
     expect(readPlaying()).toBe(true)
@@ -258,11 +264,11 @@ describe("useYouTubePlayer readiness gating", () => {
   // LyricsRenderer calls these every frame, so an unguarded pre-ready call threw
   // and killed the loop forever ("barely works most of the time"). These lock in
   // that the hook never touches the player before onReady.
-  it("regression: getCurrentTimeMs returns 0 and does not throw before the player is ready", async () => {
+  it("regression: getCurrentTime returns 0 and does not throw before the player is ready", async () => {
     await mountFor("abc")
     expect(FakePlayer.instances[0].ready).toBe(false)
-    expect(() => result.getCurrentTimeMs()).not.toThrow()
-    expect(result.getCurrentTimeMs()).toBe(0)
+    expect(() => result.getCurrentTime()).not.toThrow()
+    expect(result.getCurrentTime()).toBe(0)
     unmount()
   })
 
@@ -280,18 +286,40 @@ describe("useYouTubePlayer readiness gating", () => {
     unmount()
   })
 
+  it("regression: play is a no-op and does not throw before the player is ready", async () => {
+    await mountFor("abc")
+    expect(() => result.play()).not.toThrow()
+    expect(FakePlayer.instances[0].plays).toBe(0)
+    unmount()
+  })
+
+  it("play starts the underlying player once it is ready", async () => {
+    await mountFor("abc")
+    const player = FakePlayer.instances[0]
+    act(() => {
+      player.fireReady()
+    })
+    expect(result.getPlaying()).toBe(false)
+    act(() => {
+      result.play()
+    })
+    expect(player.plays).toBe(1)
+    expect(result.getPlaying()).toBe(true)
+    unmount()
+  })
+
   it("starts reading real player values only once onReady fires", async () => {
     await mountFor("abc")
     const player = FakePlayer.instances[0]
     player.currentTime = 3
     player.state = 1
-    expect(result.getCurrentTimeMs()).toBe(0)
+    expect(result.getCurrentTime()).toBe(0)
     expect(result.getPlaying()).toBe(false)
 
     act(() => {
       player.fireReady()
     })
-    expect(result.getCurrentTimeMs()).toBe(3000)
+    expect(result.getCurrentTime()).toBe(3)
     expect(result.getPlaying()).toBe(true)
     unmount()
   })
@@ -309,7 +337,7 @@ describe("useYouTubePlayer readiness gating", () => {
     act(() => {
       FakePlayer.instances[0].fireReady()
     })
-    expect(result.getCurrentTimeMs).toBeDefined()
+    expect(result.getCurrentTime).toBeDefined()
 
     rendered.rerender(createElement(Harness2, { videoId: "def" }))
     await act(async () => {
@@ -317,14 +345,14 @@ describe("useYouTubePlayer readiness gating", () => {
     })
     const next = FakePlayer.instances[1]
     expect(next.ready).toBe(false)
-    expect(() => result.getCurrentTimeMs()).not.toThrow()
-    expect(result.getCurrentTimeMs()).toBe(0)
+    expect(() => result.getCurrentTime()).not.toThrow()
+    expect(result.getCurrentTime()).toBe(0)
 
     next.currentTime = 5
     act(() => {
       next.fireReady()
     })
-    expect(result.getCurrentTimeMs()).toBe(5000)
+    expect(result.getCurrentTime()).toBe(5)
     rendered.unmount()
   })
 })

@@ -4,6 +4,7 @@ interface YTPlayer {
   getCurrentTime(): number
   getPlayerState(): number
   seekTo(seconds: number, allowSeekAhead: boolean): void
+  playVideo(): void
   destroy(): void
 }
 
@@ -81,9 +82,10 @@ export function __resetForTests(): void {
 
 export interface UseYouTubePlayerResult {
   ref: (node: HTMLDivElement | null) => void
-  getCurrentTimeMs: () => number
+  getCurrentTime: () => number
   getPlaying: () => boolean
   seekTo: (seconds: number) => void
+  play: () => void
 }
 
 export function useYouTubePlayer(videoId: string | null): UseYouTubePlayerResult {
@@ -135,10 +137,16 @@ export function useYouTubePlayer(videoId: string | null): UseYouTubePlayerResult
     player.seekTo(seconds, true)
   }, [])
 
-  const getCurrentTimeMs = useCallback(() => {
+  const play = useCallback(() => {
+    const player = playerRef.current
+    if (!player || !readyRef.current) return
+    player.playVideo()
+  }, [])
+
+  const getCurrentTime = useCallback(() => {
     const player = playerRef.current
     if (!player || !readyRef.current) return 0
-    return player.getCurrentTime() * 1000
+    return player.getCurrentTime()
   }, [])
 
   const getPlaying = useCallback(() => {
@@ -147,5 +155,5 @@ export function useYouTubePlayer(videoId: string | null): UseYouTubePlayerResult
     return player.getPlayerState() === YT_STATE_PLAYING
   }, [])
 
-  return { ref: setNode, getCurrentTimeMs, getPlaying, seekTo }
+  return { ref: setNode, getCurrentTime, getPlaying, seekTo, play }
 }

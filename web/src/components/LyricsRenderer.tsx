@@ -1,45 +1,55 @@
-import "@braccato/core"
-import type { BraccatoElement } from "@braccato/core"
-import { useEffect, useRef, useState } from "react"
+import "@braccato/core/element"
+import type { BraccatoLyricsElement, LineClickDetail } from "@braccato/core/element"
+import { LRCParser, type LyricParser, PlainParser, TTMLParser } from "@braccato/parsers"
+import { useEffect, useMemo, useRef } from "react"
+import braccatoTheme from "@/components/braccato-theme.css?raw"
 import type { LyricsFormat, VariantFull } from "@/lib/types"
 
 interface LyricsRendererProps {
   variant: VariantFull
-  getCurrentTimeMs: () => number
+  getCurrentTime: () => number
   getPlaying: () => boolean
   onLineClick?: (timeSeconds: number) => void
 }
 
-const MIME_BY_FORMAT: Record<LyricsFormat, string> = {
-  ttml: "application/ttml+xml",
-  lrc: "text/lrc",
-  plain: "text/plain",
+const PARSER_BY_FORMAT: Record<LyricsFormat, LyricParser> = {
+  ttml: TTMLParser,
+  lrc: LRCParser,
+  plain: PlainParser,
 }
 
-export function LyricsRenderer({ variant, getCurrentTimeMs, getPlaying, onLineClick }: LyricsRendererProps) {
-  const elementRef = useRef<BraccatoElement>(null)
-  const [blobUrl, setBlobUrl] = useState<string | null>(null)
+export function LyricsRenderer({ variant, getCurrentTime, getPlaying, onLineClick }: LyricsRendererProps) {
+  const elementRef = useRef<BraccatoLyricsElement>(null)
+
+  // No duration to hand the parser: the player reports one only once the iframe is ready, and each
+  // parser keeps the lengths the document already states when it goes without.
+  const lyrics = useMemo(() => PARSER_BY_FORMAT[variant.format].parse(variant.lyrics), [variant.lyrics, variant.format])
+
+  // Ahead of the lyrics write: the theme carries the settings the lines are built against, and
+  // writing it rebuilds the view.
+  useEffect(() => {
+    const el = elementRef.current
+    if (el) el.theme = braccatoTheme
+  }, [])
 
   useEffect(() => {
-    const blob = new Blob([variant.lyrics], { type: MIME_BY_FORMAT[variant.format] })
-    const url = URL.createObjectURL(blob)
-    setBlobUrl(url)
-    return () => URL.revokeObjectURL(url)
-  }, [variant.lyrics, variant.format])
+    const el = elementRef.current
+    if (el) el.lyrics = lyrics
+  }, [lyrics])
 
   useEffect(() => {
     let frameId: number
     const tick = () => {
       const el = elementRef.current
       if (el) {
-        el.currentTime = getCurrentTimeMs()
+        el.currentTime = getCurrentTime()
         el.playing = getPlaying()
       }
       frameId = requestAnimationFrame(tick)
     }
     frameId = requestAnimationFrame(tick)
     return () => cancelAnimationFrame(frameId)
-  }, [getCurrentTimeMs, getPlaying])
+  }, [getCurrentTime, getPlaying])
 
   const onLineClickRef = useRef(onLineClick)
   useEffect(() => {
@@ -49,27 +59,21 @@ export function LyricsRenderer({ variant, getCurrentTimeMs, getPlaying, onLineCl
   useEffect(() => {
     const el = elementRef.current
     if (!el) return
-    const handler = (e: Event) => {
-      const detail = (e as CustomEvent<{ time?: number }>).detail
-      if (detail?.time == null) return
-      onLineClickRef.current?.(detail.time / 1000)
+    const seek = (e: Event) => {
+      const detail = (e as CustomEvent<LineClickDetail>).detail
+      if (detail?.timeS == null) return
+      onLineClickRef.current?.(detail.timeS)
     }
-    el.addEventListener("braccato:line-click", handler)
-    return () => el.removeEventListener("braccato:line-click", handler)
+    // The element stopped watching its own scroller, since the scroller may be one it does not own.
+    // Without this, scrolling away never pauses autoscroll and the next frame yanks the view back.
+    const noteUserScroll = () => el.renderer?.noteUserScroll()
+    el.addEventListener("braccato:line-click", seek)
+    el.addEventListener("scroll", noteUserScroll, { passive: true })
+    return () => {
+      el.removeEventListener("braccato:line-click", seek)
+      el.removeEventListener("scroll", noteUserScroll)
+    }
   }, [])
 
-  return (
-    <braccato-lyrics
-      ref={elementRef}
-      src={blobUrl ?? undefined}
-      className="mx-auto block h-[420px] w-full max-w-3xl"
-      style={
-        {
-          "--braccato-font-family": "'Satoshi', sans-serif",
-          "--braccato-font-size": "2rem",
-          "--braccato-inactive-opacity": "0.2",
-        } as React.CSSProperties
-      }
-    />
-  )
+  return <braccato-lyrics ref={elementRef} className="mx-auto h-[420px] w-full max-w-3xl" />
 }
