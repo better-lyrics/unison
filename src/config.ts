@@ -198,6 +198,8 @@ export const config = {
 		parserVersion: 1,
 		positiveTtlSeconds: 5 * 365 * 24 * 60 * 60, // ~5 years; translations are effectively permanent
 		negativeTtlSeconds: 7 * 24 * 60 * 60, // transient upstream miss shouldn't pin a bad answer
+		userAgent:
+			"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
 	},
 } as const
 
