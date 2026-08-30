@@ -413,11 +413,10 @@ describe("POST /translate", () => {
 	})
 
 	it("returns 400 when from is omitted and detection cannot resolve it", async () => {
-		vi.stubEnv("DETECTION_URL", "")
 		const db = makeMockDB()
 		const app = translateRoutes(makeEnv(db))
 
-		const res = await post(app, { lines: ["你好世界"], to: "en" })
+		const res = await post(app, { lines: ["12345 67890 000 111"], to: "en" })
 
 		expect(res.status).toBe(400)
 		const json = (await res.json()) as TranslateErr
