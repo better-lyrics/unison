@@ -183,7 +183,7 @@ describe("computeLyricsHash", () => {
 })
 
 describe("getTranslationCache", () => {
-	it("selects on the four key predicates and unexpired rows only", async () => {
+	it("selects on the key predicates, parser version, and unexpired rows only", async () => {
 		const db = makeMockDB([])
 		const env = makeEnv(db)
 		await getTranslationCache(env, { lyricsHash: "abc", from: "fr", to: "en" })
@@ -192,6 +192,7 @@ describe("getTranslationCache", () => {
 		expect(sql).toMatch(/from_lang\s*=\s*\?/)
 		expect(sql).toMatch(/to_lang\s*=\s*\?/)
 		expect(sql).toMatch(/provider\s*=\s*\?/)
+		expect(sql).toMatch(/parser_version\s*=\s*\?/)
 		expect(sql).toMatch(/expires_at\s*>\s*now\(\)/)
 	})
 
@@ -204,7 +205,20 @@ describe("getTranslationCache", () => {
 			to: "en",
 			provider: "custom-provider",
 		})
-		expect(db.calls[0].params).toEqual(["hash-1", "fr", "en", "custom-provider"])
+		expect(db.calls[0].params).toEqual([
+			"hash-1",
+			"fr",
+			"en",
+			"custom-provider",
+			config.translation.parserVersion,
+		])
+	})
+
+	it("scopes the lookup to the current parser version so a bump invalidates old rows", async () => {
+		const db = makeMockDB([])
+		const env = makeEnv(db)
+		await getTranslationCache(env, { lyricsHash: "hash-1", from: "fr", to: "en" })
+		expect(db.calls[0].params[4]).toBe(config.translation.parserVersion)
 	})
 
 	it("defaults provider to config.translation.provider when omitted", async () => {

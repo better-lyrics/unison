@@ -205,7 +205,14 @@ export async function fetchLyricsTranslateWithRetry(
 			return res
 		}
 
-		circuitBreaker.recordSuccess()
+		if (res.status >= 500) {
+			circuitBreaker.recordFailure()
+			return res
+		}
+
+		if (res.ok) {
+			circuitBreaker.recordSuccess()
+		}
 		return res
 	}
 }

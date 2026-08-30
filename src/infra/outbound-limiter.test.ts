@@ -322,6 +322,27 @@ describe("fetchLyricsTranslateWithRetry", () => {
 		expect(fetchSpy).toHaveBeenCalledTimes(1)
 	})
 
+	it("records a failure on a 5xx response", async () => {
+		const { fetchLyricsTranslateWithRetry, getLimiterStats } = await loadFresh()
+		const fetchSpy = vi.fn(async () => new Response("boom", { status: 500 }))
+		vi.stubGlobal("fetch", fetchSpy)
+
+		const res = await fetchLyricsTranslateWithRetry("https://example.test", {})
+		expect(res.status).toBe(500)
+		expect(getLimiterStats().circuit.consecutiveFailures).toBe(1)
+	})
+
+	it("does not reset an accrued failure when a later response is a non-server 4xx", async () => {
+		const { fetchLyricsTranslateWithRetry, getLimiterStats } = await loadFresh()
+		const statuses = [500, 403]
+		const fetchSpy = vi.fn(async () => new Response(null, { status: statuses.shift() ?? 200 }))
+		vi.stubGlobal("fetch", fetchSpy)
+
+		await fetchLyricsTranslateWithRetry("https://example.test", {})
+		await fetchLyricsTranslateWithRetry("https://example.test", {})
+		expect(getLimiterStats().circuit.consecutiveFailures).toBe(1)
+	})
+
 	describe("edge cases", () => {
 		it("maps a queue timeout to UpstreamRateLimitedError", async () => {
 			const { fetchLyricsTranslateWithRetry, UpstreamRateLimitedError } = await loadFresh({

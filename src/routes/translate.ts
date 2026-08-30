@@ -1,5 +1,6 @@
 import { config } from "@/config"
 import {
+	type TranslationCacheRow,
 	type TranslationLine,
 	computeLyricsHash,
 	getTranslationCache,
@@ -77,7 +78,12 @@ export const translateRoutes = (env: Env) => {
 			const to = body.to
 			const lyricsHash = computeLyricsHash(from, to, kept)
 
-			const cached = await getTranslationCache(env, { lyricsHash, from, to })
+			let cached: TranslationCacheRow | null = null
+			try {
+				cached = await getTranslationCache(env, { lyricsHash, from, to })
+			} catch (err) {
+				log.warn("translation cache read failed", { error: (err as Error).message })
+			}
 			if (cached && cached.lines.length === kept.length) {
 				return {
 					lines: buildResponseLines(body.lines, cached.lines),

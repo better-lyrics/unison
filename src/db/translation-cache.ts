@@ -95,9 +95,9 @@ export async function getTranslationCache(
 			google_version, google_id, google_token, http_status, raw_payload, parser_version
 		 FROM translation_cache
 		 WHERE lyrics_hash = ? AND from_lang = ? AND to_lang = ? AND provider = ?
-		   AND expires_at > now()`
+		   AND parser_version = ? AND expires_at > now()`
 	)
-		.bind(key.lyricsHash, key.from, key.to, provider)
+		.bind(key.lyricsHash, key.from, key.to, provider, config.translation.parserVersion)
 		.first<TranslationCacheDbRow>()
 
 	if (!row) {

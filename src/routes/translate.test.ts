@@ -370,6 +370,37 @@ describe("POST /translate", () => {
 		expect(json.lines[0].translation).toBe("Hello World")
 	})
 
+	it("still returns a fresh translation when the cache read fails", async () => {
+		const routes = await loadFreshRoutes()
+		const fetchSpy = vi.fn(
+			async () =>
+				new Response(fixture("zh-en-single-line"), {
+					status: 200,
+					headers: { version: "v-1" },
+				})
+		)
+		vi.stubGlobal("fetch", fetchSpy)
+		const db = makeMockDB([])
+		const originalPrepare = db.prepare
+		db.prepare = (sql: string) => {
+			const stmt = originalPrepare(sql)
+			if (/SELECT/i.test(sql) && /translation_cache/i.test(sql)) {
+				stmt.first = async () => {
+					throw new Error("db read down")
+				}
+			}
+			return stmt
+		}
+		const app = routes(makeEnv(db))
+
+		const res = await post(app, { lines: ["你好世界"], to: "en", from: "zh" })
+
+		expect(res.status).toBe(200)
+		const json = (await res.json()) as TranslateOk
+		expect(json.cached).toBe(false)
+		expect(fetchSpy).toHaveBeenCalledTimes(1)
+	})
+
 	it("returns 400 when no line is translatable", async () => {
 		const db = makeMockDB()
 		const app = translateRoutes(makeEnv(db))
