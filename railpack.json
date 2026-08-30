@@ -4,7 +4,7 @@
 	"steps": {
 		"pg-client": {
 			"assets": {
-				"pgdg-source": "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt bookworm-pgdg main\n"
+				"pgdg-source": "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt trixie-pgdg main\n"
 			},
 			"commands": [
 				"apt-get update && apt-get install -y --no-install-recommends curl ca-certificates gnupg",
