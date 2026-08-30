@@ -1,5 +1,5 @@
-import type { D1Compat } from "@/infra/database"
 import type { KVCompat } from "@/infra/cache"
+import type { D1Compat } from "@/infra/database"
 import type { RedisRateLimiter } from "@/infra/rate-limiter"
 
 export interface B2Config {
@@ -21,6 +21,7 @@ export interface Env {
 	B2: B2Config | null
 	BUTLER_BOT_SECRET?: string | null
 	DISCORD_OAUTH?: { clientId: string; clientSecret: string; redirectUri: string } | null
+	TRANSLATION_PROXY_ENABLED?: boolean
 }
 
 export interface RateLimiter {
