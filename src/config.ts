@@ -192,6 +192,13 @@ export const config = {
 		minBytes: 1 * 1024 * 1024,
 		retentionDays: 7,
 	},
+
+	translation: {
+		provider: "google-lyrics-translate",
+		parserVersion: 1,
+		positiveTtlSeconds: 5 * 365 * 24 * 60 * 60, // ~5 years; translations are effectively permanent
+		negativeTtlSeconds: 7 * 24 * 60 * 60, // transient upstream miss shouldn't pin a bad answer
+	},
 } as const
 
 export type Config = typeof config

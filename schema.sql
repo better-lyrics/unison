@@ -236,3 +236,35 @@ CREATE INDEX IF NOT EXISTS idx_request_fulfillments_video_fulfilled
     ON request_fulfillments(video_id, fulfilled_at DESC);
 CREATE INDEX IF NOT EXISTS idx_request_fulfillments_lyrics
     ON request_fulfillments(lyrics_id);
+
+-- Translation cache: durable per-song translation + romanization from the Google
+-- lyrics_translate proxy, keyed so Google is hit at most once per unique song+language
+CREATE TABLE IF NOT EXISTS translation_cache (
+    id                    BIGSERIAL PRIMARY KEY,
+    lyrics_hash           TEXT        NOT NULL,
+    from_lang             TEXT        NOT NULL,
+    to_lang               TEXT        NOT NULL,
+    provider              TEXT        NOT NULL DEFAULT 'google-lyrics-translate',
+    video_id              TEXT,
+    line_count            INT         NOT NULL,
+    detected_source_lang  TEXT,
+    has_romanization      BOOLEAN     NOT NULL DEFAULT FALSE,
+    is_negative           BOOLEAN     NOT NULL DEFAULT FALSE,
+    source_lines          JSONB       NOT NULL,
+    lines                 JSONB       NOT NULL,
+    google_version        TEXT,
+    google_id             TEXT,
+    google_token          TEXT,
+    http_status           INT,
+    raw_payload           TEXT,
+    parser_version        INT         NOT NULL,
+    created_at            TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at            TIMESTAMPTZ NOT NULL DEFAULT now(),
+    expires_at            TIMESTAMPTZ NOT NULL,
+
+    UNIQUE (lyrics_hash, from_lang, to_lang, provider)
+);
+
+CREATE INDEX IF NOT EXISTS translation_cache_expires_idx ON translation_cache (expires_at);
+CREATE INDEX IF NOT EXISTS translation_cache_video_idx   ON translation_cache (video_id);
+CREATE INDEX IF NOT EXISTS translation_cache_to_lang_idx ON translation_cache (to_lang);
