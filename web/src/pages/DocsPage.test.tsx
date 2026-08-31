@@ -70,6 +70,15 @@ describe("DocsPage", () => {
     expect(body).toContain("plain")
   })
 
+  it("documents the translate endpoint", () => {
+    renderPage()
+    expect(screen.getAllByText(/\/translate/).length).toBeGreaterThan(0)
+    const body = document.body.textContent ?? ""
+    expect(body).toContain("romanization")
+    expect(body).toContain("needsTranslation")
+    expect(body).toContain("detectedLang")
+  })
+
   it("copies the quickstart example to the clipboard", () => {
     renderPage()
     const writeText = vi.fn().mockResolvedValue(undefined)
