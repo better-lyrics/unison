@@ -21,7 +21,6 @@ export interface Env {
 	B2: B2Config | null
 	BUTLER_BOT_SECRET?: string | null
 	DISCORD_OAUTH?: { clientId: string; clientSecret: string; redirectUri: string } | null
-	TRANSLATION_PROXY_ENABLED?: boolean
 }
 
 export interface RateLimiter {

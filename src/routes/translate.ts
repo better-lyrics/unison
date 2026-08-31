@@ -6,6 +6,7 @@ import {
 	getTranslationCache,
 	upsertTranslationCache,
 } from "@/db/translation-cache"
+import { readTranslationProxyEnabled } from "@/infra/env"
 import { Logger } from "@/infra/logger"
 import { UpstreamRateLimitedError } from "@/infra/outbound-limiter"
 import type { Env } from "@/types"
@@ -54,7 +55,7 @@ function buildResponseLines(originalLines: string[], translated: ResponseLine[])
 
 export const translateRoutes = (env: Env) => {
 	const app = new Elysia({ prefix: "/translate" }).decorate("env", env)
-	if (!env.TRANSLATION_PROXY_ENABLED) return app
+	if (!readTranslationProxyEnabled()) return app
 
 	return app.use(readRateLimit).post(
 		"/",

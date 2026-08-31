@@ -82,7 +82,7 @@ function makeMockCache() {
 	}
 }
 
-function makeEnv(db: MockDB, translationProxyEnabled = true): Env {
+function makeEnv(db: MockDB): Env {
 	const limiter = {
 		async limit() {
 			return { success: true }
@@ -98,7 +98,6 @@ function makeEnv(db: MockDB, translationProxyEnabled = true): Env {
 		DUMP_PUBLIC_BASE_URL: "",
 		DUMP_DATABASE_URL: null,
 		B2: null,
-		TRANSLATION_PROXY_ENABLED: translationProxyEnabled,
 	}
 }
 
@@ -447,13 +446,23 @@ describe("POST /translate", () => {
 		expect(json.success).toBe(false)
 	})
 
-	it("returns 404 when the proxy flag is disabled", async () => {
+	it("returns 404 when the proxy is disabled by env", async () => {
+		vi.stubEnv("TRANSLATION_PROXY_DISABLED", "true")
 		const db = makeMockDB()
-		const app = translateRoutes(makeEnv(db, false))
+		const app = translateRoutes(makeEnv(db))
 
 		const res = await post(app, { lines: ["你好世界"], to: "en", from: "zh" })
 
 		expect(res.status).toBe(404)
+	})
+
+	it("mounts the route by default with no env set", async () => {
+		const db = makeMockDB([storedRow([HELLO_WORLD_LINE])])
+		const app = translateRoutes(makeEnv(db))
+
+		const res = await post(app, { lines: ["你好世界"], to: "en", from: "zh" })
+
+		expect(res.status).toBe(200)
 	})
 })
 

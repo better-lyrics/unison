@@ -143,7 +143,7 @@ GET /lyrics/:id
 
 ### Translate lyrics
 
-Translates and romanizes a block of lyric lines. Unison fetches and parses Google's `lyrics_translate` server-side and returns clean per-line results, so clients do not parse Google output and do not each hit the rate-limited endpoint. No signature required. This endpoint is gated by the `TRANSLATION_PROXY_ENABLED` env flag; when it is off the route is not mounted and any call returns the generic `404`.
+Translates and romanizes a block of lyric lines. Unison fetches and parses Google's `lyrics_translate` server-side and returns clean per-line results, so clients do not parse Google output and do not each hit the rate-limited endpoint. No signature required. This endpoint is on by default. Set `TRANSLATION_PROXY_DISABLED` to a truthy value (`true`, `1`, or `yes`) to turn it off, which unmounts the route so any call returns the generic `404`.
 
 ```
 POST /translate
