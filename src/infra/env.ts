@@ -1,23 +1,35 @@
 import { config } from "@/config"
 import type { B2Config, Env } from "@/types"
-import { Logger } from "./logger"
-import { D1Compat, getPool } from "./database"
 import { KVCompat, getRedis } from "./cache"
+import { D1Compat, getPool } from "./database"
+import { Logger } from "./logger"
 import { RedisRateLimiter } from "./rate-limiter"
 
 const log = new Logger("env")
-const DUMPS_ENABLED_TRUTHY = new Set(["true", "1", "yes"])
+const BOOL_ENV_TRUTHY = new Set(["true", "1", "yes"])
 
 function readDumpsEnabled(): boolean {
 	const raw = process.env.DUMPS_ENABLED?.trim().toLowerCase() ?? ""
 	if (raw === "") return false
-	const enabled = DUMPS_ENABLED_TRUTHY.has(raw)
+	const enabled = BOOL_ENV_TRUTHY.has(raw)
 	if (!enabled) {
 		log.warn("DUMPS_ENABLED is set but did not normalize to a truthy value", {
 			raw: process.env.DUMPS_ENABLED,
 		})
 	}
 	return enabled
+}
+
+export function readTranslationProxyEnabled(): boolean {
+	const raw = process.env.TRANSLATION_PROXY_DISABLED?.trim().toLowerCase() ?? ""
+	if (raw === "") return true
+	const disabled = BOOL_ENV_TRUTHY.has(raw)
+	if (!disabled) {
+		log.warn("TRANSLATION_PROXY_DISABLED is set but did not normalize to a truthy value", {
+			raw: process.env.TRANSLATION_PROXY_DISABLED,
+		})
+	}
+	return !disabled
 }
 
 function readB2Config(): B2Config | null {

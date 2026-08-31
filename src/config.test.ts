@@ -1,5 +1,5 @@
-import { describe, expect, it } from "vitest"
 import { config } from "@/config"
+import { describe, expect, it } from "vitest"
 
 describe("config additions for abuse mitigation", () => {
 	it("exposes autoHide.reputationPenalty", () => {
@@ -30,5 +30,12 @@ describe("config.thresholdAudit", () => {
 		expect(t.autoHideMinVotes).toEqual({ targetFraction: 0.15, floor: 2, ceil: 10 })
 		expect(t.autoHideDecisiveMinVotes).toEqual({ targetFraction: 0.5, floor: 2, ceil: 10 })
 		expect(t.reportsThreshold).toEqual({ targetFraction: 0.15, floor: 2, ceil: 10 })
+	})
+})
+
+describe("config.translation", () => {
+	it("carries a browser User-Agent for the lyrics_translate upstream", () => {
+		expect(config.translation.userAgent).toContain("Mozilla/5.0")
+		expect(config.translation.userAgent).toContain("Chrome/")
 	})
 })

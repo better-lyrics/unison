@@ -14,11 +14,6 @@ interface Row {
 }
 
 export async function backfillLanguage(env: Env): Promise<{ scanned: number; updated: number }> {
-	if (!process.env.DETECTION_URL) {
-		log.warn("DETECTION_URL unset, skipping backfill")
-		return { scanned: 0, updated: 0 }
-	}
-
 	let scanned = 0
 	let updated = 0
 
@@ -73,12 +68,6 @@ export async function backfillLanguage(env: Env): Promise<{ scanned: number; upd
 		}
 
 		log.info("backfill batch complete", { batch: rows.length, scanned, updated })
-
-		const allFailed = results.every((r) => !r.ready)
-		if (allFailed) {
-			log.warn("detection unavailable, bailing out", { scanned, updated })
-			break
-		}
 
 		await new Promise((resolve) => setImmediate(resolve))
 	}

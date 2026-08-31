@@ -141,6 +141,49 @@ The `q` parameter searches across video ID, ISRC, metadata (song/artist/album vi
 GET /lyrics/:id
 ```
 
+### Translate lyrics
+
+Translates and romanizes a block of lyric lines. Unison fetches and parses Google's `lyrics_translate` server-side and returns clean per-line results, so clients do not parse Google output and do not each hit the rate-limited endpoint. No signature required. This endpoint is on by default. Set `TRANSLATION_PROXY_DISABLED` to a truthy value (`true`, `1`, or `yes`) to turn it off, which unmounts the route so any call returns the generic `404`.
+
+```
+POST /translate
+{
+  "lines": ["안녕하세요", "", "반갑습니다"],
+  "to": "en",
+  "from": "ko",
+  "videoId": "dQw4w9WgXcQ"
+}
+```
+
+- `lines`: lyric lines in display order. Blank lines and lone `♪` markers are allowed and preserved by position in the response. Up to 200 lines, each up to 500 characters.
+- `to`: target language, ISO 639-1. Up to 35 characters.
+- `from`: source language, ISO 639-1. Optional; omit it to detect the source in-process. Do not send `"auto"`, omit the field instead. Up to 35 characters.
+- `videoId`: optional, stored on the cache row for provenance.
+
+The response is a bare object, not the `{ success, data }` envelope the read endpoints use:
+
+```json
+{
+  "lines": [
+    { "translation": "Hello", "romanization": "annyeonghaseyo", "needsTranslation": true },
+    { "translation": null, "romanization": null, "needsTranslation": false },
+    { "translation": "Nice to meet you", "romanization": "bangapseumnida", "needsTranslation": true }
+  ],
+  "detectedLang": "ko",
+  "provider": "google-lyrics-translate",
+  "cached": false
+}
+```
+
+- `lines` is positionally aligned with the request: same length, blanks preserved. Map `lines[i]` onto displayed line `i`.
+- `translation`: translated text, or `null` for blank and no-op lines.
+- `romanization`: romanized source, or `null` when the source is already Latin-script or Google returned none.
+- `needsTranslation`: `false` when the line was already in the target language or is blank, `true` when it was actually translated. Gate any overlay on this flag.
+- `detectedLang`: the source language used, whether it was given or detected.
+- `cached`: `true` when served from Unison's cache. Results are keyed on source and target language, the exact lines, provider, and parser version.
+
+When `from` (given or detected) equals `to` there is nothing to translate, so every line returns `{ "translation": null, "romanization": null, "needsTranslation": false }` with a `200`. Errors are `{ "success": false, "error": "..." }`: `400` when no line is translatable or the source language cannot be detected, `422` when the request exceeds the line or length limits above, `502` when the upstream fails, and `503` when the outbound throttle is rate limited. When the same lines fail to parse repeatedly (three times), the result is cached as a negative and further requests short-circuit to `502` for about a month instead of hammering the upstream.
+
 ### Submit lyrics
 
 Accepts TTML, LRC, or plain text via the `format` field.

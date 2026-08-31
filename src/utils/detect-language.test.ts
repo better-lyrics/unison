@@ -1,218 +1,107 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import { describe, expect, it } from "vitest"
 import { DETECTOR_VERSION, detectLanguage, detectLanguageBatch } from "./detect-language"
 
-const URL = "http://detect.test"
-
-function jsonResponse(body: unknown, status = 200): Response {
-	return new Response(JSON.stringify(body), {
-		status,
-		headers: { "content-type": "application/json" },
-	})
+const SAMPLES: Record<string, string> = {
+	en: "Hello darkness my old friend I've come to talk with you again",
+	ko: "안녕하세요 반갑습니다 좋은 하루 되세요 사랑합니다",
+	ja: "こんにちは 世界 私は 音楽 が 大好き です",
+	zh: "月亮代表我的心 你问我爱你有多深 我爱你有几分",
+	fr: "Non rien de rien non je ne regrette rien",
+	es: "Bailando tu cuerpo y el mío llenando el vacío",
+	hi: "तुम पास आए युं मुस्कुराए तुमने ना जाने क्या सपने दिखाए",
 }
 
 describe("detectLanguage", () => {
-	beforeEach(() => {
-		vi.stubEnv("DETECTION_URL", URL)
+	for (const [code, text] of Object.entries(SAMPLES)) {
+		it(`detects ${code} from real text and marks it ready`, async () => {
+			expect(await detectLanguage(text)).toEqual({ language: code, ready: true })
+		})
+	}
+
+	it("distinguishes CJK scripts from each other", async () => {
+		expect((await detectLanguage(SAMPLES.ja)).language).toBe("ja")
+		expect((await detectLanguage(SAMPLES.ko)).language).toBe("ko")
+		expect((await detectLanguage(SAMPLES.zh)).language).toBe("zh")
 	})
+})
 
-	afterEach(() => {
-		vi.unstubAllEnvs()
-		vi.restoreAllMocks()
-	})
-
-	it("returns the iso6391 code when confidence is at or above 0.5", async () => {
-		vi.stubGlobal(
-			"fetch",
-			vi.fn().mockResolvedValue(jsonResponse({ iso6391: "ko", confidence: 0.91 }))
-		)
-
-		const result = await detectLanguage("안녕하세요 반갑습니다")
-
-		expect(result).toEqual({ language: "ko", ready: true })
-	})
-
-	it("returns null language when confidence is below 0.5 but the service answered", async () => {
-		vi.stubGlobal(
-			"fetch",
-			vi.fn().mockResolvedValue(jsonResponse({ iso6391: "vi", confidence: 0.34 }))
-		)
-
-		const result = await detectLanguage("xin chao")
-
-		expect(result).toEqual({ language: null, ready: true })
-	})
-
-	it("returns null language when the service returns iso6391: null", async () => {
-		vi.stubGlobal(
-			"fetch",
-			vi.fn().mockResolvedValue(jsonResponse({ iso6391: null, confidence: 0.0 }))
-		)
-
-		const result = await detectLanguage("...")
-
-		expect(result).toEqual({ language: null, ready: true })
-	})
-
-	it("returns ready: false on non-2xx", async () => {
-		vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse({ error: "missing text" }, 400)))
-
-		const result = await detectLanguage("hi")
-
-		expect(result).toEqual({ language: null, ready: false })
-	})
-
-	it("returns ready: false on network error", async () => {
-		vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new TypeError("fetch failed")))
-
-		const result = await detectLanguage("hi")
-
-		expect(result).toEqual({ language: null, ready: false })
-	})
-
-	it("returns ready: false on abort/timeout", async () => {
-		vi.stubGlobal(
-			"fetch",
-			vi.fn().mockRejectedValue(Object.assign(new Error("aborted"), { name: "TimeoutError" }))
-		)
-
-		const result = await detectLanguage("hi")
-
-		expect(result).toEqual({ language: null, ready: false })
-	})
-
-	it("returns ready: false without a fetch call when DETECTION_URL is unset", async () => {
-		vi.unstubAllEnvs()
-		vi.stubEnv("DETECTION_URL", "")
-		const fetchSpy = vi.fn()
-		vi.stubGlobal("fetch", fetchSpy)
-
-		const result = await detectLanguage("hi")
-
-		expect(result).toEqual({ language: null, ready: false })
-		expect(fetchSpy).not.toHaveBeenCalled()
-	})
-
-	it("returns ready: true with null language for empty input without calling fetch", async () => {
-		const fetchSpy = vi.fn()
-		vi.stubGlobal("fetch", fetchSpy)
-
+describe("edge cases", () => {
+	it("returns null language for empty input, still ready", async () => {
 		expect(await detectLanguage("")).toEqual({ language: null, ready: true })
-		expect(await detectLanguage("   \n\t ")).toEqual({ language: null, ready: true })
-		expect(fetchSpy).not.toHaveBeenCalled()
 	})
 
-	it("POSTs text as JSON to /detect", async () => {
-		const fetchSpy = vi.fn().mockResolvedValue(jsonResponse({ iso6391: "en", confidence: 0.99 }))
-		vi.stubGlobal("fetch", fetchSpy)
+	it("returns null language for whitespace-only input, still ready", async () => {
+		expect(await detectLanguage("   \n\t ")).toEqual({ language: null, ready: true })
+	})
 
-		await detectLanguage("hello there")
+	it("returns null language for text too short to be reliable", async () => {
+		expect(await detectLanguage("hi")).toEqual({ language: null, ready: true })
+	})
 
-		expect(fetchSpy).toHaveBeenCalledTimes(1)
-		const [calledUrl, init] = fetchSpy.mock.calls[0]
-		expect(calledUrl).toBe(`${URL}/detect`)
-		expect(init.method).toBe("POST")
-		expect(init.headers["content-type"]).toBe("application/json")
-		expect(JSON.parse(init.body)).toEqual({ text: "hello there" })
-		expect(init.signal).toBeInstanceOf(AbortSignal)
+	it("returns null language for undetectable gibberish", async () => {
+		expect(await detectLanguage("asdf qwer zxcv hjkl")).toEqual({ language: null, ready: true })
+	})
+
+	it("returns null language for numbers and symbols only", async () => {
+		expect(await detectLanguage("12345 67890 000 111")).toEqual({ language: null, ready: true })
+		expect(await detectLanguage("!!! ??? ... ---")).toEqual({ language: null, ready: true })
+	})
+
+	it("returns null language for ambiguous romanized text", async () => {
+		expect((await detectLanguage("annyeong haseyo bangapseumnida")).language).toBeNull()
+	})
+})
+
+describe("invariants", () => {
+	const inputs = [...Object.values(SAMPLES), "", "hi", "12345", "asdf qwer zxcv hjkl"]
+
+	it("is always ready for any string input", async () => {
+		for (const text of inputs) {
+			expect((await detectLanguage(text)).ready).toBe(true)
+		}
+	})
+
+	it("returns either null or a two-letter lowercase ISO 639-1 code", async () => {
+		for (const text of inputs) {
+			const { language } = await detectLanguage(text)
+			if (language !== null) expect(language).toMatch(/^[a-z]{2}$/)
+		}
+	})
+
+	it("is deterministic across repeated calls", async () => {
+		const a = await detectLanguage(SAMPLES.fr)
+		const b = await detectLanguage(SAMPLES.fr)
+		expect(a).toEqual(b)
 	})
 })
 
 describe("detectLanguageBatch", () => {
-	beforeEach(() => {
-		vi.stubEnv("DETECTION_URL", URL)
-	})
-
-	afterEach(() => {
-		vi.unstubAllEnvs()
-		vi.restoreAllMocks()
-	})
-
-	it("returns per-item results in input order with threshold applied", async () => {
-		vi.stubGlobal(
-			"fetch",
-			vi.fn().mockResolvedValue(
-				jsonResponse({
-					results: [
-						{ iso6391: "ko", confidence: 0.9 },
-						{ iso6391: "en", confidence: 0.3 },
-						{ iso6391: null, confidence: 0.0 },
-					],
-				})
-			)
-		)
-
-		const results = await detectLanguageBatch(["안녕", "hi", ""])
-
+	it("returns per-item results in input order", async () => {
+		const results = await detectLanguageBatch([SAMPLES.ko, SAMPLES.en, ""])
 		expect(results).toEqual([
 			{ language: "ko", ready: true },
-			{ language: null, ready: true },
+			{ language: "en", ready: true },
 			{ language: null, ready: true },
 		])
 	})
 
-	it("returns an empty array for empty input without calling fetch", async () => {
-		const fetchSpy = vi.fn()
-		vi.stubGlobal("fetch", fetchSpy)
-
+	it("returns an empty array for empty input", async () => {
 		expect(await detectLanguageBatch([])).toEqual([])
-		expect(fetchSpy).not.toHaveBeenCalled()
 	})
 
-	it("returns ready: false for every item on non-2xx", async () => {
-		vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse({ error: "boom" }, 500)))
-
-		const results = await detectLanguageBatch(["a", "b", "c"])
-
-		expect(results).toEqual([
-			{ language: null, ready: false },
-			{ language: null, ready: false },
-			{ language: null, ready: false },
-		])
+	it("handles a single item", async () => {
+		expect(await detectLanguageBatch([SAMPLES.zh])).toEqual([{ language: "zh", ready: true }])
 	})
 
-	it("returns ready: false for every item on network error", async () => {
-		vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new TypeError("fetch failed")))
-
-		const results = await detectLanguageBatch(["a", "b"])
-
-		expect(results).toEqual([
-			{ language: null, ready: false },
-			{ language: null, ready: false },
-		])
-	})
-
-	it("returns ready: false for every item when DETECTION_URL is unset", async () => {
-		vi.unstubAllEnvs()
-		const fetchSpy = vi.fn()
-		vi.stubGlobal("fetch", fetchSpy)
-
-		const results = await detectLanguageBatch(["a", "b"])
-
-		expect(results).toEqual([
-			{ language: null, ready: false },
-			{ language: null, ready: false },
-		])
-		expect(fetchSpy).not.toHaveBeenCalled()
-	})
-
-	it("POSTs texts as JSON to /detect/batch with a 30s timeout signal", async () => {
-		const fetchSpy = vi
-			.fn()
-			.mockResolvedValue(jsonResponse({ results: [{ iso6391: "en", confidence: 0.99 }] }))
-		vi.stubGlobal("fetch", fetchSpy)
-
-		await detectLanguageBatch(["hello"])
-
-		const [calledUrl, init] = fetchSpy.mock.calls[0]
-		expect(calledUrl).toBe(`${URL}/detect/batch`)
-		expect(init.method).toBe("POST")
-		expect(JSON.parse(init.body)).toEqual({ texts: ["hello"] })
-		expect(init.signal).toBeInstanceOf(AbortSignal)
+	it("preserves length even when every item is undetectable", async () => {
+		const results = await detectLanguageBatch(["123", "!!!", ""])
+		expect(results).toHaveLength(3)
+		expect(results.every((r) => r.language === null && r.ready)).toBe(true)
 	})
 })
 
 describe("DETECTOR_VERSION", () => {
-	it("is the integer 3", () => {
-		expect(DETECTOR_VERSION).toBe(3)
+	it("is the integer 4", () => {
+		expect(DETECTOR_VERSION).toBe(4)
 	})
 })

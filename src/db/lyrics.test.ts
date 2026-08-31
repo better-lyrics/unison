@@ -809,9 +809,7 @@ describe("invalidateCacheAfterDelete", () => {
 
 describe("invalidateCacheForSubmitter", () => {
 	it("deletes v:<videoId> for every row returned by the join", async () => {
-		const db = createMockDB([
-			[{ video_id: "vA" }, { video_id: "vB" }, { video_id: "vC" }],
-		])
+		const db = createMockDB([[{ video_id: "vA" }, { video_id: "vB" }, { video_id: "vC" }]])
 		const cache = createMockCache()
 		const env = createEnv(db, cache)
 
@@ -1515,13 +1513,7 @@ describe("submitLyrics fulfillment integration", () => {
 	})
 
 	it("skips fulfillment when a prior synced variant exists", async () => {
-		const db = createMockDB([
-			{ count: 0 },
-			{ id: 557 },
-			{ key_id: "k1" },
-			null,
-			{ "1": 1 },
-		])
+		const db = createMockDB([{ count: 0 }, { id: 557 }, { key_id: "k1" }, null, { "1": 1 }])
 		const cache = createMockCache()
 		const env = createEnv(db, cache)
 
@@ -1556,27 +1548,18 @@ describe("submitLyrics language detection", () => {
 		expect(params[16]).toBeNull()
 	})
 
-	it("calls the detection service when submitter did not provide a language and stamps the detected language", async () => {
-		vi.stubEnv("DETECTION_URL", "http://detect.test")
+	it("detects the language in-process when the submitter omits it", async () => {
 		const db = createMockDB([{ count: 0 }, { id: 1002 }])
 		const cache = createMockCache()
 		const env = createEnv(db, cache)
-		vi.stubGlobal(
-			"fetch",
-			vi.fn().mockResolvedValue(
-				new Response(JSON.stringify({ iso6391: "ko", confidence: 0.92 }), {
-					status: 200,
-					headers: { "content-type": "application/json" },
-				})
-			)
-		)
 
 		await submitLyrics(
 			env,
 			buildSubmission({
 				language: undefined,
+				format: "plain",
 				syncType: "plain",
-				lyrics: "[00:00.00] 안녕하세요 반갑습니다",
+				lyrics: "안녕하세요 반갑습니다 좋은 하루 되세요 사랑합니다",
 			}),
 			7
 		)
@@ -1589,22 +1572,21 @@ describe("submitLyrics language detection", () => {
 		expect(params[16]).toBe(DETECTOR_VERSION)
 	})
 
-	it("stamps null language with the current detector version when confidence is low", async () => {
-		vi.stubEnv("DETECTION_URL", "http://detect.test")
+	it("stamps null language with the current version when the text is undetectable", async () => {
 		const db = createMockDB([{ count: 0 }, { id: 1003 }])
 		const cache = createMockCache()
 		const env = createEnv(db, cache)
-		vi.stubGlobal(
-			"fetch",
-			vi.fn().mockResolvedValue(
-				new Response(JSON.stringify({ iso6391: "en", confidence: 0.2 }), {
-					status: 200,
-					headers: { "content-type": "application/json" },
-				})
-			)
-		)
 
-		await submitLyrics(env, buildSubmission({ language: undefined, syncType: "plain" }), 7)
+		await submitLyrics(
+			env,
+			buildSubmission({
+				language: undefined,
+				format: "plain",
+				syncType: "plain",
+				lyrics: "12345 67890 000 111",
+			}),
+			7
+		)
 
 		const insert = db.calls.find((c) => /INSERT INTO lyrics/i.test(c.sql))
 		expect(insert).toBeDefined()
@@ -1612,23 +1594,6 @@ describe("submitLyrics language detection", () => {
 		expect(params[11]).toBeNull()
 		expect(params[15]).toBe("detector")
 		expect(params[16]).toBe(DETECTOR_VERSION)
-	})
-
-	it("stamps null language and null version when the detection service is unreachable", async () => {
-		vi.stubEnv("DETECTION_URL", "http://detect.test")
-		const db = createMockDB([{ count: 0 }, { id: 1004 }])
-		const cache = createMockCache()
-		const env = createEnv(db, cache)
-		vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new TypeError("fetch failed")))
-
-		await submitLyrics(env, buildSubmission({ language: undefined, syncType: "plain" }), 7)
-
-		const insert = db.calls.find((c) => /INSERT INTO lyrics/i.test(c.sql))
-		expect(insert).toBeDefined()
-		const params = insert!.params
-		expect(params[11]).toBeNull()
-		expect(params[15]).toBe("detector")
-		expect(params[16]).toBeNull()
 	})
 })
 

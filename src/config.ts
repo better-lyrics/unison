@@ -192,6 +192,19 @@ export const config = {
 		minBytes: 1 * 1024 * 1024,
 		retentionDays: 7,
 	},
+
+	translation: {
+		provider: "google-lyrics-translate",
+		parserVersion: 1,
+		positiveTtlSeconds: 5 * 365 * 24 * 60 * 60, // ~5 years; translations are effectively permanent
+		negativeTtlSeconds: 30 * 24 * 60 * 60, // confirmed deterministic failure: suppress ~a month
+		negativeThreshold: 3, // deterministic parse failures before a song is suppressed
+		maxLines: 200,
+		maxLineLength: 500,
+		maxLangLength: 35,
+		userAgent:
+			"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
+	},
 } as const
 
 export type Config = typeof config
