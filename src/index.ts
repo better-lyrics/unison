@@ -9,6 +9,7 @@ import { startWatchdog } from "@/infra/watchdog"
 import { backfillConfidence } from "@/jobs/backfill-confidence"
 import { backfillFormatDetection } from "@/jobs/backfill-format-detection"
 import { backfillLanguage } from "@/jobs/backfill-language"
+import { backfillNorms } from "@/jobs/backfill-norms"
 import { backfillSyncType } from "@/jobs/backfill-synctype"
 import { backfillTextSearch } from "@/jobs/backfill-text-search"
 import { backfillVoteCounts } from "@/jobs/backfill-vote-counts"
@@ -269,6 +270,12 @@ backfillConfidence(env)
 		if (updated > 0) log.info("confidence backfill complete", { updated })
 	})
 	.catch((err) => log.error("confidence backfill failed", { error: (err as Error).message }))
+
+backfillNorms(env)
+	.then(({ scanned, updated }) => {
+		if (updated > 0) log.info("norms backfill complete", { scanned, updated })
+	})
+	.catch((err) => log.error("norms backfill failed", { error: (err as Error).message }))
 
 cleanupFulfilledRequests(env)
 	.then(({ deleted }) => {

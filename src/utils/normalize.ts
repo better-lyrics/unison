@@ -9,7 +9,8 @@ export function normalize(input: string): string {
 			.normalize("NFD")
 			// biome-ignore lint/suspicious/noMisleadingCharacterClass: intentionally matching combining diacritical marks
 			.replace(/[\u0300-\u036f]/g, "")
-			.replace(/[^\w\s]/g, "") // Remove special characters
+			.normalize("NFC") // Recompose so kana voiced marks and hangul jamo survive the strip below
+			.replace(/[^\p{L}\p{N}\s]/gu, "") // Keep letters/numbers of all scripts, drop punctuation/symbols
 			.replace(/\s+/g, " ") // Collapse whitespace
 			.trim()
 	)
