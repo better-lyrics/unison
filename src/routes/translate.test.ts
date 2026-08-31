@@ -412,6 +412,30 @@ describe("POST /translate", () => {
 		expect(json.success).toBe(false)
 	})
 
+	it("short-circuits when from equals to without calling upstream", async () => {
+		const fetchSpy = vi.fn()
+		vi.stubGlobal("fetch", fetchSpy)
+		const db = makeMockDB()
+		const app = translateRoutes(makeEnv(db))
+
+		const res = await post(app, {
+			lines: ["Hello darkness", "", "my old friend"],
+			to: "en",
+			from: "en",
+		})
+
+		expect(res.status).toBe(200)
+		expect(fetchSpy).not.toHaveBeenCalled()
+		const json = (await res.json()) as TranslateOk
+		expect(json.detectedLang).toBe("en")
+		expect(json.cached).toBe(false)
+		expect(json.lines).toEqual([
+			{ translation: null, romanization: null, needsTranslation: false },
+			{ translation: null, romanization: null, needsTranslation: false },
+			{ translation: null, romanization: null, needsTranslation: false },
+		])
+	})
+
 	it("returns 400 when from is omitted and detection cannot resolve it", async () => {
 		const db = makeMockDB()
 		const app = translateRoutes(makeEnv(db))

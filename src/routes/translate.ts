@@ -76,6 +76,19 @@ export const translateRoutes = (env: Env) => {
 			}
 
 			const to = body.to
+			if (from === to) {
+				return {
+					lines: body.lines.map(() => ({
+						translation: null,
+						romanization: null,
+						needsTranslation: false,
+					})),
+					detectedLang: from,
+					provider: config.translation.provider,
+					cached: false,
+				}
+			}
+
 			const lyricsHash = computeLyricsHash(from, to, kept)
 
 			let cached: TranslationCacheRow | null = null
