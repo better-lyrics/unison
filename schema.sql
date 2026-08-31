@@ -258,12 +258,15 @@ CREATE TABLE IF NOT EXISTS translation_cache (
     http_status           INT,
     raw_payload           TEXT,
     parser_version        INT         NOT NULL,
+    failure_count         INT         NOT NULL DEFAULT 0,
     created_at            TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at            TIMESTAMPTZ NOT NULL DEFAULT now(),
     expires_at            TIMESTAMPTZ NOT NULL,
 
     UNIQUE (lyrics_hash, from_lang, to_lang, provider)
 );
+
+ALTER TABLE translation_cache ADD COLUMN IF NOT EXISTS failure_count INT NOT NULL DEFAULT 0;
 
 CREATE INDEX IF NOT EXISTS translation_cache_expires_idx ON translation_cache (expires_at);
 CREATE INDEX IF NOT EXISTS translation_cache_video_idx   ON translation_cache (video_id);

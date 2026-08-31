@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import {
 	type ParsedTranslationLine,
+	UnparseableResponseError,
 	buildLyricsTranslateUrl,
 	parseLyricsTranslateResponse,
 } from "./google-translate"
@@ -249,6 +250,51 @@ describe("parseLyricsTranslateResponse", () => {
 				expect(typeof line.needsTranslation).toBe("boolean")
 			}
 		})
+	})
+})
+
+describe("UnparseableResponseError", () => {
+	const emptyLineBody = `)]}'
+1;["id","tok"]c;[2,null,"0"]1;<div jsname="WbKHeb"><div jsname="U8S5sf"><span jsname="UVGAte"><span>hello</span></span><span jsname="YS01Ge"></span></div></div>c;[9,null,"0"]0;`
+
+	it("throws UnparseableResponseError when the WbKHeb marker is missing", () => {
+		expect(() =>
+			parseLyricsTranslateResponse("body without a marker", {
+				httpStatus: 200,
+				version: null,
+				expectedLineCount: 1,
+			})
+		).toThrow(UnparseableResponseError)
+	})
+
+	it("throws UnparseableResponseError on a line-count mismatch", () => {
+		expect(() => parse("zh-en-blank-line-split", 3)).toThrow(UnparseableResponseError)
+	})
+
+	it("throws UnparseableResponseError on an empty content line", () => {
+		expect(() =>
+			parseLyricsTranslateResponse(emptyLineBody, {
+				httpStatus: 200,
+				version: null,
+				expectedLineCount: 1,
+			})
+		).toThrow(UnparseableResponseError)
+	})
+
+	it("carries the http status and the raw payload for later reprocessing", () => {
+		try {
+			parseLyricsTranslateResponse("body without a marker", {
+				httpStatus: 200,
+				version: null,
+				expectedLineCount: 1,
+			})
+			throw new Error("expected a throw")
+		} catch (err) {
+			expect(err).toBeInstanceOf(UnparseableResponseError)
+			const e = err as UnparseableResponseError
+			expect(e.httpStatus).toBe(200)
+			expect(e.rawPayload).toBe("body without a marker")
+		}
 	})
 })
 

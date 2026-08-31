@@ -1,6 +1,17 @@
 import { config } from "@/config"
 import { fetchLyricsTranslateWithRetry } from "@/infra/outbound-limiter"
 
+export class UnparseableResponseError extends Error {
+	constructor(
+		message: string,
+		public readonly httpStatus: number,
+		public readonly rawPayload: string
+	) {
+		super(message)
+		this.name = "UnparseableResponseError"
+	}
+}
+
 export interface ParsedTranslationLine {
 	original: string
 	translation: string
@@ -48,7 +59,11 @@ export function parseLyricsTranslateResponse(
 	meta: { httpStatus: number; version: string | null; expectedLineCount: number }
 ): ParsedTranslation {
 	if (!body || !body.trim() || !body.includes(WBKHEB_MARKER)) {
-		throw new Error("malformed lyrics_translate response: missing WbKHeb payload")
+		throw new UnparseableResponseError(
+			"malformed lyrics_translate response: missing WbKHeb payload",
+			meta.httpStatus,
+			body
+		)
 	}
 
 	const stripped = body.replace(/^\)\]\}'/, "")
@@ -84,14 +99,20 @@ export function parseLyricsTranslateResponse(
 	}
 
 	if (lines.length !== meta.expectedLineCount) {
-		throw new Error(
-			`lyrics_translate line count mismatch: parsed ${lines.length}, expected ${meta.expectedLineCount}`
+		throw new UnparseableResponseError(
+			`lyrics_translate line count mismatch: parsed ${lines.length}, expected ${meta.expectedLineCount}`,
+			meta.httpStatus,
+			body
 		)
 	}
 
 	for (const line of lines) {
 		if (!line.original.trim() || !line.translation.trim()) {
-			throw new Error("lyrics_translate response has an empty original or translation line")
+			throw new UnparseableResponseError(
+				"lyrics_translate response has an empty original or translation line",
+				meta.httpStatus,
+				body
+			)
 		}
 		line.needsTranslation = line.translation.trim() !== line.original.trim()
 	}

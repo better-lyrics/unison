@@ -4,6 +4,7 @@ import {
 	type TranslationLine,
 	computeLyricsHash,
 	getTranslationCache,
+	recordTranslationFailure,
 	upsertTranslationCache,
 } from "@/db/translation-cache"
 import { readTranslationProxyEnabled } from "@/infra/env"
@@ -11,17 +12,23 @@ import { Logger } from "@/infra/logger"
 import { UpstreamRateLimitedError } from "@/infra/outbound-limiter"
 import type { Env } from "@/types"
 import { detectLanguage } from "@/utils/detect-language"
-import { type ParsedTranslation, fetchLyricsTranslation } from "@/utils/google-translate"
+import {
+	type ParsedTranslation,
+	UnparseableResponseError,
+	fetchLyricsTranslation,
+} from "@/utils/google-translate"
 import { readRateLimit } from "@/utils/read-rate-limit"
 import { Elysia, t } from "elysia"
 
 const log = new Logger("translate")
 
 const bodySchema = t.Object({
-	lines: t.Array(t.String()),
-	to: t.String(),
-	from: t.Optional(t.String()),
-	videoId: t.Optional(t.String()),
+	lines: t.Array(t.String({ maxLength: config.translation.maxLineLength }), {
+		maxItems: config.translation.maxLines,
+	}),
+	to: t.String({ maxLength: config.translation.maxLangLength }),
+	from: t.Optional(t.String({ maxLength: config.translation.maxLangLength })),
+	videoId: t.Optional(t.String({ maxLength: 32 })),
 })
 
 interface ResponseLine {
@@ -98,12 +105,17 @@ export const translateRoutes = (env: Env) => {
 			} catch (err) {
 				log.warn("translation cache read failed", { error: (err as Error).message })
 			}
-			if (cached && cached.lines.length === kept.length) {
-				return {
-					lines: buildResponseLines(body.lines, cached.lines),
-					detectedLang: from,
-					provider: config.translation.provider,
-					cached: true,
+			if (cached) {
+				if (cached.isNegative) {
+					return status(502, { success: false, error: "Translation upstream failed" })
+				}
+				if (cached.lines.length === kept.length) {
+					return {
+						lines: buildResponseLines(body.lines, cached.lines),
+						detectedLang: from,
+						provider: config.translation.provider,
+						cached: true,
+					}
 				}
 			}
 
@@ -113,6 +125,25 @@ export const translateRoutes = (env: Env) => {
 			} catch (err) {
 				if (err instanceof UpstreamRateLimitedError) {
 					return status(503, { success: false, error: "Translation upstream rate limited" })
+				}
+				if (err instanceof UnparseableResponseError) {
+					try {
+						await recordTranslationFailure(env, {
+							lyricsHash,
+							fromLang: from,
+							toLang: to,
+							provider: config.translation.provider,
+							videoId: body.videoId ?? null,
+							lineCount: kept.length,
+							detectedSourceLang: from,
+							httpStatus: err.httpStatus,
+							rawPayload: err.rawPayload,
+						})
+					} catch (recordErr) {
+						log.warn("translation failure record failed", {
+							error: (recordErr as Error).message,
+						})
+					}
 				}
 				return status(502, { success: false, error: "Translation upstream failed" })
 			}
@@ -144,6 +175,7 @@ export const translateRoutes = (env: Env) => {
 					httpStatus: parsed.httpStatus,
 					rawPayload: parsed.rawPayload,
 					parserVersion: config.translation.parserVersion,
+					failureCount: 0,
 				})
 			} catch (err) {
 				log.warn("translation cache upsert failed", { error: (err as Error).message })

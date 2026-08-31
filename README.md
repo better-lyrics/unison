@@ -155,9 +155,9 @@ POST /translate
 }
 ```
 
-- `lines`: lyric lines in display order. Blank lines and lone `♪` markers are allowed and preserved by position in the response.
-- `to`: target language, ISO 639-1.
-- `from`: source language, ISO 639-1. Optional; omit it to detect the source in-process. Do not send `"auto"`, omit the field instead.
+- `lines`: lyric lines in display order. Blank lines and lone `♪` markers are allowed and preserved by position in the response. Up to 200 lines, each up to 500 characters.
+- `to`: target language, ISO 639-1. Up to 35 characters.
+- `from`: source language, ISO 639-1. Optional; omit it to detect the source in-process. Do not send `"auto"`, omit the field instead. Up to 35 characters.
 - `videoId`: optional, stored on the cache row for provenance.
 
 The response is a bare object, not the `{ success, data }` envelope the read endpoints use:
@@ -182,7 +182,7 @@ The response is a bare object, not the `{ success, data }` envelope the read end
 - `detectedLang`: the source language used, whether it was given or detected.
 - `cached`: `true` when served from Unison's cache. Results are keyed on source and target language, the exact lines, provider, and parser version.
 
-When `from` (given or detected) equals `to` there is nothing to translate, so every line returns `{ "translation": null, "romanization": null, "needsTranslation": false }` with a `200`. Errors are `{ "success": false, "error": "..." }`: `400` when no line is translatable or the source language cannot be detected, `502` when the upstream fails, and `503` when the outbound throttle is rate limited.
+When `from` (given or detected) equals `to` there is nothing to translate, so every line returns `{ "translation": null, "romanization": null, "needsTranslation": false }` with a `200`. Errors are `{ "success": false, "error": "..." }`: `400` when no line is translatable or the source language cannot be detected, `422` when the request exceeds the line or length limits above, `502` when the upstream fails, and `503` when the outbound throttle is rate limited. When the same lines fail to parse repeatedly (three times), the result is cached as a negative and further requests short-circuit to `502` for about a month instead of hammering the upstream.
 
 ### Submit lyrics
 

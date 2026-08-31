@@ -295,8 +295,10 @@ export function DocsPage() {
             When <Code>from</Code> and <Code>to</Code> are the same language there's nothing to do, so every line comes
             back with a null <Code>translation</Code> and <Code>needsTranslation</Code> false instead of a copy of the
             original. A request with no real lyric lines, or one where the source language can't be worked out, returns{" "}
-            <Code>400</Code>; if Google is unreachable or rate limited you get <Code>502</Code> or <Code>503</Code> and
-            nothing is cached.
+            <Code>400</Code>; more than 200 lines or an overlong line or language code returns <Code>422</Code>; if
+            Google is unreachable or rate limited you get <Code>502</Code> or <Code>503</Code>. A transient failure
+            isn't cached, but the same lines failing to parse three times over is remembered as a negative and
+            short-circuits to <Code>502</Code> for about a month so the upstream isn't hammered.
           </p>
         </section>
 

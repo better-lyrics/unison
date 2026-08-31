@@ -31,6 +31,7 @@ export interface TranslationCacheRow {
 	httpStatus: number | null
 	rawPayload: string | null
 	parserVersion: number
+	failureCount: number
 }
 
 interface TranslationCacheDbRow {
@@ -51,6 +52,7 @@ interface TranslationCacheDbRow {
 	http_status: number | null
 	raw_payload: string | null
 	parser_version: number
+	failure_count: number
 }
 
 export function computeLyricsHash(from: string, to: string, lines: string[]): string {
@@ -81,6 +83,7 @@ function mapRow(row: TranslationCacheDbRow): TranslationCacheRow {
 		httpStatus: row.http_status,
 		rawPayload: row.raw_payload,
 		parserVersion: row.parser_version,
+		failureCount: row.failure_count,
 	}
 }
 
@@ -92,7 +95,8 @@ export async function getTranslationCache(
 	const row = await env.DB.prepare(
 		`SELECT lyrics_hash, from_lang, to_lang, provider, video_id, line_count,
 			detected_source_lang, has_romanization, is_negative, source_lines, lines,
-			google_version, google_id, google_token, http_status, raw_payload, parser_version
+			google_version, google_id, google_token, http_status, raw_payload, parser_version,
+			failure_count
 		 FROM translation_cache
 		 WHERE lyrics_hash = ? AND from_lang = ? AND to_lang = ? AND provider = ?
 		   AND parser_version = ? AND expires_at > now()`
@@ -119,8 +123,8 @@ export async function upsertTranslationCache(env: Env, row: TranslationCacheRow)
 			lyrics_hash, from_lang, to_lang, provider, video_id, line_count,
 			detected_source_lang, has_romanization, is_negative, source_lines, lines,
 			google_version, google_id, google_token, http_status, raw_payload, parser_version,
-			expires_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, now() + (? || ' seconds')::interval)
+			failure_count, expires_at
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, now() + (? || ' seconds')::interval)
 		ON CONFLICT (lyrics_hash, from_lang, to_lang, provider) DO UPDATE SET
 			video_id = EXCLUDED.video_id,
 			line_count = EXCLUDED.line_count,
@@ -135,6 +139,7 @@ export async function upsertTranslationCache(env: Env, row: TranslationCacheRow)
 			http_status = EXCLUDED.http_status,
 			raw_payload = EXCLUDED.raw_payload,
 			parser_version = EXCLUDED.parser_version,
+			failure_count = 0,
 			expires_at = EXCLUDED.expires_at,
 			updated_at = now()`
 	)
@@ -165,5 +170,60 @@ export async function upsertTranslationCache(env: Env, row: TranslationCacheRow)
 		from: row.fromLang,
 		to: row.toLang,
 		negative: row.isNegative,
+	})
+}
+
+export async function recordTranslationFailure(
+	env: Env,
+	failure: {
+		lyricsHash: string
+		fromLang: string
+		toLang: string
+		provider: string
+		videoId: string | null
+		lineCount: number
+		detectedSourceLang: string | null
+		httpStatus: number | null
+		rawPayload: string | null
+	}
+): Promise<void> {
+	await env.DB.prepare(
+		`INSERT INTO translation_cache (
+			lyrics_hash, from_lang, to_lang, provider, video_id, line_count,
+			detected_source_lang, has_romanization, is_negative, source_lines, lines,
+			http_status, raw_payload, parser_version, failure_count, expires_at
+		) VALUES (?, ?, ?, ?, ?, ?, ?, FALSE, FALSE, '[]'::jsonb, '[]'::jsonb,
+			?, ?, ?, 1, now() + (? || ' seconds')::interval)
+		ON CONFLICT (lyrics_hash, from_lang, to_lang, provider) DO UPDATE SET
+			failure_count = translation_cache.failure_count + 1,
+			is_negative = (translation_cache.failure_count + 1) >= ?,
+			video_id = EXCLUDED.video_id,
+			line_count = EXCLUDED.line_count,
+			detected_source_lang = EXCLUDED.detected_source_lang,
+			http_status = EXCLUDED.http_status,
+			raw_payload = EXCLUDED.raw_payload,
+			expires_at = EXCLUDED.expires_at,
+			updated_at = now()`
+	)
+		.bind(
+			failure.lyricsHash,
+			failure.fromLang,
+			failure.toLang,
+			failure.provider,
+			failure.videoId,
+			failure.lineCount,
+			failure.detectedSourceLang,
+			failure.httpStatus,
+			failure.rawPayload,
+			config.translation.parserVersion,
+			config.translation.negativeTtlSeconds,
+			config.translation.negativeThreshold
+		)
+		.run()
+
+	log.debug("translation failure recorded", {
+		lyricsHash: failure.lyricsHash,
+		from: failure.fromLang,
+		to: failure.toLang,
 	})
 }

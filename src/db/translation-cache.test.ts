@@ -7,6 +7,7 @@ import {
 	type TranslationLine,
 	computeLyricsHash,
 	getTranslationCache,
+	recordTranslationFailure,
 	upsertTranslationCache,
 } from "./translation-cache"
 
@@ -114,6 +115,7 @@ function makeRow(overrides: Partial<TranslationCacheRow> = {}): TranslationCache
 		httpStatus: 200,
 		rawPayload: '{"raw":true}',
 		parserVersion: config.translation.parserVersion,
+		failureCount: 0,
 		...overrides,
 	}
 }
@@ -137,6 +139,7 @@ function dbRowFromCacheRow(row: TranslationCacheRow, jsonbAsString = false) {
 		http_status: row.httpStatus,
 		raw_payload: row.rawPayload,
 		parser_version: row.parserVersion,
+		failure_count: row.failureCount,
 	}
 }
 
@@ -332,6 +335,71 @@ describe("upsertTranslationCache", () => {
 		const env = makeEnv(db)
 		await upsertTranslationCache(env, makeRow({ isNegative: true }))
 		expect(db.calls[0].params.at(-1)).toBe(config.translation.negativeTtlSeconds)
+	})
+
+	it("resets failure_count to 0 so a success clears prior failures", async () => {
+		const db = makeMockDB([undefined])
+		const env = makeEnv(db)
+		await upsertTranslationCache(env, makeRow())
+		const sql = db.calls[0].sql
+		const doUpdate = sql.slice(sql.indexOf("DO UPDATE SET"))
+		expect(doUpdate).toMatch(/failure_count\s*=\s*0/)
+	})
+})
+
+describe("recordTranslationFailure", () => {
+	const failure = {
+		lyricsHash: "hash-x",
+		fromLang: "zh",
+		toLang: "en",
+		provider: config.translation.provider,
+		videoId: null,
+		lineCount: 2,
+		detectedSourceLang: "zh",
+		httpStatus: 200,
+		rawPayload: "<div>unparseable</div>",
+	}
+
+	it("increments the counter and flips is_negative at the threshold on conflict", async () => {
+		const db = makeMockDB([undefined])
+		const env = makeEnv(db)
+		await recordTranslationFailure(env, failure)
+		const sql = db.calls[0].sql
+		expect(sql).toMatch(/INSERT INTO translation_cache/i)
+		const doUpdate = sql.slice(sql.indexOf("DO UPDATE SET"))
+		expect(doUpdate).toMatch(/failure_count = translation_cache\.failure_count \+ 1/)
+		expect(doUpdate).toMatch(/is_negative = \(translation_cache\.failure_count \+ 1\) >= \?/)
+	})
+
+	it("inserts the first failure with count 1, is_negative false, and empty jsonb", async () => {
+		const db = makeMockDB([undefined])
+		const env = makeEnv(db)
+		await recordTranslationFailure(env, failure)
+		const sql = db.calls[0].sql
+		const values = sql.slice(sql.indexOf("VALUES"), sql.indexOf("ON CONFLICT"))
+		expect(values).toContain("FALSE")
+		expect(values).toMatch(/'\[\]'::jsonb/)
+	})
+
+	it("binds the failure context, parser version, negative TTL, and threshold in order", async () => {
+		const db = makeMockDB([undefined])
+		const env = makeEnv(db)
+		await recordTranslationFailure(env, failure)
+		const params = db.calls[0].params
+		expect(params.slice(0, 7)).toEqual([
+			"hash-x",
+			"zh",
+			"en",
+			config.translation.provider,
+			null,
+			2,
+			"zh",
+		])
+		expect(params[7]).toBe(200)
+		expect(params[8]).toBe("<div>unparseable</div>")
+		expect(params[9]).toBe(config.translation.parserVersion)
+		expect(params[10]).toBe(config.translation.negativeTtlSeconds)
+		expect(params[11]).toBe(config.translation.negativeThreshold)
 	})
 })
 

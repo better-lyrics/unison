@@ -283,23 +283,33 @@ describe("fetchLyricsTranslateWithRetry", () => {
 		expect(circuit.trips).toBe(0)
 	})
 
-	it("retries a 429 with exponential backoff then returns it and records a failure", async () => {
-		const { fetchLyricsTranslateWithRetry, getLimiterStats } = await loadFresh()
+	it("retries a 429 with backoff, drains each body, then throws UpstreamRateLimitedError", async () => {
+		const { fetchLyricsTranslateWithRetry, getLimiterStats, UpstreamRateLimitedError } =
+			await loadFresh()
 		const callTimes: number[] = []
+		let cancelled = 0
 		const fetchSpy = vi.fn(async () => {
 			callTimes.push(Date.now())
-			return new Response(null, { status: 429 })
+			return new Response(
+				new ReadableStream({
+					cancel() {
+						cancelled++
+					},
+				}),
+				{ status: 429 }
+			)
 		})
 		vi.stubGlobal("fetch", fetchSpy)
 
 		const p = fetchLyricsTranslateWithRetry("https://example.test", {})
+		p.catch(() => {})
 		await vi.advanceTimersByTimeAsync(5000)
-		const res = await p
 
-		expect(res.status).toBe(429)
+		await expect(p).rejects.toBeInstanceOf(UpstreamRateLimitedError)
 		expect(fetchSpy).toHaveBeenCalledTimes(3)
 		expect(callTimes[1] - callTimes[0]).toBeGreaterThanOrEqual(500)
 		expect(callTimes[2] - callTimes[1]).toBeGreaterThanOrEqual(1000)
+		expect(cancelled).toBe(3)
 		expect(getLimiterStats().circuit.consecutiveFailures).toBe(1)
 	})
 
@@ -312,14 +322,28 @@ describe("fetchLyricsTranslateWithRetry", () => {
 		const fetchSpy = vi.fn(async () => new Response(null, { status: 429 }))
 		vi.stubGlobal("fetch", fetchSpy)
 
-		const first = await fetchLyricsTranslateWithRetry("https://example.test", {})
-		expect(first.status).toBe(429)
+		await expect(fetchLyricsTranslateWithRetry("https://example.test", {})).rejects.toBeInstanceOf(
+			UpstreamRateLimitedError
+		)
 		expect(getLimiterStats().circuit.openUntil).toBeGreaterThan(0)
 
 		await expect(fetchLyricsTranslateWithRetry("https://example.test", {})).rejects.toBeInstanceOf(
 			UpstreamRateLimitedError
 		)
 		expect(fetchSpy).toHaveBeenCalledTimes(1)
+	})
+
+	it("records a failure and propagates when the fetch itself rejects", async () => {
+		const { fetchLyricsTranslateWithRetry, getLimiterStats } = await loadFresh()
+		const fetchSpy = vi.fn(async () => {
+			throw new Error("network down")
+		})
+		vi.stubGlobal("fetch", fetchSpy)
+
+		await expect(fetchLyricsTranslateWithRetry("https://example.test", {})).rejects.toThrow(
+			/network down/
+		)
+		expect(getLimiterStats().circuit.consecutiveFailures).toBe(1)
 	})
 
 	it("records a failure on a 5xx response", async () => {
@@ -358,6 +382,25 @@ describe("fetchLyricsTranslateWithRetry", () => {
 			await vi.advanceTimersByTimeAsync(100)
 			await expect(p).rejects.toBeInstanceOf(UpstreamRateLimitedError)
 			expect(fetchSpy).not.toHaveBeenCalled()
+		})
+
+		it("aborts a hung fetch after the timeout and records a failure", async () => {
+			vi.useRealTimers()
+			const { fetchLyricsTranslateWithRetry, getLimiterStats } = await loadFresh({
+				GOOGLE_FETCH_TIMEOUT_MS: "30",
+			})
+			const fetchSpy = vi.fn(
+				(_url: string, init?: RequestInit) =>
+					new Promise<Response>((_resolve, reject) => {
+						init?.signal?.addEventListener("abort", () => {
+							reject((init.signal as AbortSignal).reason ?? new Error("aborted"))
+						})
+					})
+			)
+			vi.stubGlobal("fetch", fetchSpy)
+
+			await expect(fetchLyricsTranslateWithRetry("https://example.test", {})).rejects.toThrow()
+			expect(getLimiterStats().circuit.consecutiveFailures).toBe(1)
 		})
 	})
 

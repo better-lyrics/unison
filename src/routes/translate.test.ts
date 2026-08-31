@@ -128,6 +128,15 @@ function storedRow(lines: StoredLine[]) {
 		http_status: 200,
 		raw_payload: null,
 		parser_version: config.translation.parserVersion,
+		failure_count: 0,
+	}
+}
+
+function negativeRow() {
+	return {
+		...storedRow([]),
+		is_negative: true,
+		failure_count: config.translation.negativeThreshold,
 	}
 }
 
@@ -335,6 +344,35 @@ describe("POST /translate", () => {
 		expect(res.status).toBe(502)
 		const json = (await res.json()) as TranslateErr
 		expect(json.success).toBe(false)
+		expect(db.calls.some((c) => INSERT_RE.test(c.sql))).toBe(false)
+	})
+
+	it("records a failure and returns 502 when a 200 body cannot be parsed", async () => {
+		const routes = await loadFreshRoutes()
+		const fetchSpy = vi.fn(async () => new Response("200 but not parseable", { status: 200 }))
+		vi.stubGlobal("fetch", fetchSpy)
+		const db = makeMockDB([null])
+		const app = routes(makeEnv(db))
+
+		const res = await post(app, { lines: ["你好世界"], to: "en", from: "zh" })
+
+		expect(res.status).toBe(502)
+		const insert = db.calls.find((c) => INSERT_RE.test(c.sql))
+		expect(insert).toBeDefined()
+		expect(insert?.sql).toMatch(/failure_count = translation_cache\.failure_count \+ 1/)
+		expect(insert?.sql).toMatch(/is_negative = \(translation_cache\.failure_count \+ 1\) >=/)
+	})
+
+	it("serves a suppressed negative row as 502 without hitting the network", async () => {
+		const fetchSpy = vi.fn(async () => new Response("nope", { status: 200 }))
+		vi.stubGlobal("fetch", fetchSpy)
+		const db = makeMockDB([negativeRow()])
+		const app = translateRoutes(makeEnv(db))
+
+		const res = await post(app, { lines: ["你好世界"], to: "en", from: "zh" })
+
+		expect(res.status).toBe(502)
+		expect(fetchSpy).not.toHaveBeenCalled()
 		expect(db.calls.some((c) => INSERT_RE.test(c.sql))).toBe(false)
 	})
 
@@ -570,5 +608,37 @@ describe("invariants", () => {
 
 		const json = (await res.json()) as TranslateOk
 		expect(json.detectedLang).toBe("zh")
+	})
+})
+
+describe("input bounds", () => {
+	it("rejects a lines array over the maximum", async () => {
+		const db = makeMockDB()
+		const app = translateRoutes(makeEnv(db))
+		const lines = Array.from({ length: config.translation.maxLines + 1 }, () => "x")
+
+		const res = await post(app, { lines, to: "en", from: "zh" })
+
+		expect(res.status).toBe(422)
+	})
+
+	it("rejects a line longer than the maximum", async () => {
+		const db = makeMockDB()
+		const app = translateRoutes(makeEnv(db))
+		const line = "x".repeat(config.translation.maxLineLength + 1)
+
+		const res = await post(app, { lines: [line], to: "en", from: "zh" })
+
+		expect(res.status).toBe(422)
+	})
+
+	it("rejects a language code longer than the maximum", async () => {
+		const db = makeMockDB()
+		const app = translateRoutes(makeEnv(db))
+		const to = "e".repeat(config.translation.maxLangLength + 1)
+
+		const res = await post(app, { lines: ["你好世界"], to, from: "zh" })
+
+		expect(res.status).toBe(422)
 	})
 })

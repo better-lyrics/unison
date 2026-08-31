@@ -17,6 +17,7 @@ const CIRCUIT_MAX_OPEN_MS = Number.parseInt(
 	10
 )
 const CIRCUIT_MULTIPLIER = Number.parseFloat(process.env.GOOGLE_CIRCUIT_MULTIPLIER || "4")
+const FETCH_TIMEOUT_MS = Number.parseInt(process.env.GOOGLE_FETCH_TIMEOUT_MS || "10000", 10)
 
 export class UpstreamRateLimitedError extends Error {
 	constructor() {
@@ -188,9 +189,16 @@ export async function fetchLyricsTranslateWithRetry(
 			log.warn("throttle wait", { waitedMs: waited })
 		}
 
-		const res = await fetch(url, init)
+		let res: Response
+		try {
+			res = await fetch(url, { ...init, signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) })
+		} catch (err) {
+			circuitBreaker.recordFailure()
+			throw err
+		}
 
 		if (res.status === 429) {
+			await res.body?.cancel()
 			if (attempt < RETRY_ATTEMPTS - 1) {
 				const backoffMs = RETRY_BASE_MS * 2 ** attempt
 				log.warn("429 from upstream, backing off", {
@@ -202,7 +210,7 @@ export async function fetchLyricsTranslateWithRetry(
 				continue
 			}
 			circuitBreaker.recordFailure()
-			return res
+			throw new UpstreamRateLimitedError()
 		}
 
 		if (res.status >= 500) {
