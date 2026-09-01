@@ -47,7 +47,7 @@ async function count(env: Env, sql: string, params: unknown[]): Promise<number> 
 	return row?.n ?? 0
 }
 
-// Reads only: resolve the two identities and project what a commit would move.
+// Reads only: resolve the two identities and count the old identity's holdings (what the survivor keeps).
 export async function computeMigrationPlan(
 	env: Env,
 	oldKey: string,
@@ -64,26 +64,26 @@ export async function computeMigrationPlan(
 		.first<{ id: number; nickname: string | null }>()
 	const newUserId = newUser?.id ?? null
 
-	let submissions = 0
-	let votes = 0
-	let reports = 0
-	let fulfillments = 0
+	const submissions = await count(
+		env,
+		"SELECT COUNT(*)::int AS n FROM lyrics WHERE submitter_id = ?",
+		[oldUserId]
+	)
+	const votes = await count(env, "SELECT COUNT(*)::int AS n FROM votes WHERE user_id = ?", [
+		oldUserId,
+	])
+	const reports = await count(env, "SELECT COUNT(*)::int AS n FROM reports WHERE user_id = ?", [
+		oldUserId,
+	])
+	const fulfillments = await count(
+		env,
+		"SELECT COUNT(*)::int AS n FROM request_fulfillments WHERE submitter_id = ?",
+		[oldUserId]
+	)
+
 	let voteCollisions = 0
 	let reportCollisions = 0
-
 	if (newUserId !== null) {
-		submissions = await count(env, "SELECT COUNT(*)::int AS n FROM lyrics WHERE submitter_id = ?", [
-			newUserId,
-		])
-		votes = await count(env, "SELECT COUNT(*)::int AS n FROM votes WHERE user_id = ?", [newUserId])
-		reports = await count(env, "SELECT COUNT(*)::int AS n FROM reports WHERE user_id = ?", [
-			newUserId,
-		])
-		fulfillments = await count(
-			env,
-			"SELECT COUNT(*)::int AS n FROM request_fulfillments WHERE submitter_id = ?",
-			[newUserId]
-		)
 		voteCollisions = await count(
 			env,
 			"SELECT COUNT(*)::int AS n FROM votes WHERE user_id = ? AND lyrics_id IN (SELECT lyrics_id FROM votes WHERE user_id = ?)",

@@ -61,10 +61,14 @@ describe("computeMigrationPlan", () => {
 		expect(result).toEqual({ error: "OLD_KEY_NO_USER" })
 	})
 
-	it("relabel case: new key has no user, only request collisions can be non-zero", async () => {
+	it("relabel case: counts the old identity's holdings; new key has no user", async () => {
 		const db = makeMockDB([
 			{ id: 1, nickname: "oldnick" }, // old user
 			null, // new user (none)
+			{ n: 2 }, // OLD submissions
+			{ n: 2 }, // OLD votes
+			{ n: 0 }, // OLD reports
+			{ n: 0 }, // OLD fulfillments
 			{ n: 2 }, // request collisions
 		])
 		const result = await computeMigrationPlan(makeEnv(db), "oldkey", "newkey")
@@ -73,18 +77,18 @@ describe("computeMigrationPlan", () => {
 			newUserId: null,
 			oldNickname: "oldnick",
 			newNickname: null,
-			counts: { submissions: 0, votes: 0, reports: 0, fulfillments: 0, collisions: 2 },
+			counts: { submissions: 2, votes: 2, reports: 0, fulfillments: 0, collisions: 2 },
 		})
 	})
 
-	it("merge case: projects moved counts, collisions, and both nicknames", async () => {
+	it("merge case: counts the old identity's holdings, collisions, and both nicknames", async () => {
 		const db = makeMockDB([
 			{ id: 1, nickname: "oldnick" }, // old user
 			{ id: 2, nickname: "newnick" }, // new user
-			{ n: 5 }, // submissions on new user
-			{ n: 9 }, // votes on new user
-			{ n: 1 }, // reports on new user
-			{ n: 2 }, // fulfillments on new user
+			{ n: 5 }, // OLD submissions
+			{ n: 9 }, // OLD votes
+			{ n: 1 }, // OLD reports
+			{ n: 2 }, // OLD fulfillments
 			{ n: 3 }, // vote collisions
 			{ n: 1 }, // report collisions
 			{ n: 4 }, // request collisions
@@ -97,6 +101,31 @@ describe("computeMigrationPlan", () => {
 			newNickname: "newnick",
 			counts: { submissions: 5, votes: 9, reports: 1, fulfillments: 2, collisions: 3 + 1 + 4 },
 		})
+	})
+
+	it("regression: counts reflect the OLD identity's holdings, not the new key's", async () => {
+		const db = makeMockDB([
+			{ id: 52188, nickname: "gwuhbruh" }, // old user: 2 submissions, 2 votes
+			{ id: 53466, nickname: "runner_66" }, // new user: 0 submissions, 1 vote
+			{ n: 2 }, // OLD submissions
+			{ n: 2 }, // OLD votes
+			{ n: 0 }, // OLD reports
+			{ n: 0 }, // OLD fulfillments
+			{ n: 0 }, // vote collisions
+			{ n: 0 }, // report collisions
+			{ n: 0 }, // request collisions
+		])
+		const result = await computeMigrationPlan(makeEnv(db), "oldkey", "newkey")
+		if ("error" in result) throw new Error("unexpected error")
+		expect(result.counts).toEqual({
+			submissions: 2,
+			votes: 2,
+			reports: 0,
+			fulfillments: 0,
+			collisions: 0,
+		})
+		const subCall = db.calls.find((c) => c.sql.includes("FROM lyrics WHERE submitter_id"))
+		expect(subCall?.params).toEqual([52188])
 	})
 
 	it("scopes request collisions to extension requesters and the collision subquery", async () => {
