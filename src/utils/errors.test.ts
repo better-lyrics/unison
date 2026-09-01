@@ -53,4 +53,24 @@ describe("buildError", () => {
 		expect(result.code).toBe("REPORT_DETAILS_TOO_LONG")
 		expect(result.hint).toMatch(/1000 characters/i)
 	})
+
+	it("defines the account-migration error codes", () => {
+		const codes: ErrorCode[] = [
+			ErrorCode.NOT_LINKED,
+			ErrorCode.MIGRATION_ALREADY_ACTIVE,
+			ErrorCode.MIGRATION_SAME_KEY,
+			ErrorCode.MIGRATION_NOT_READY,
+			ErrorCode.MIGRATION_NOT_OWNER,
+			ErrorCode.MIGRATION_ALREADY_COMMITTED,
+			ErrorCode.MIGRATION_EXPIRED,
+			ErrorCode.MIGRATION_FAILED,
+		]
+		for (const code of codes) {
+			const result = buildError(code)
+			expect(result.success).toBe(false)
+			expect(result.code).toBe(code)
+			expect(result.error.length).toBeGreaterThan(0)
+			expect(result.hint.length).toBeGreaterThan(0)
+		}
+	})
 })

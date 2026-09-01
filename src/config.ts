@@ -34,6 +34,11 @@ export const config = {
 		blacklistedKeyIds: new Set<string>([COMMUNITY_KEY_ID]),
 	},
 
+	migration: {
+		sessionTtlSeconds: 900, // time to open the new extension and finish the OAuth prove
+		commitLockSeconds: 60,
+	},
+
 	reputation: {
 		default: 1.0,
 		min: 0.0,

@@ -1,5 +1,6 @@
 import { Elysia, t } from "elysia"
 import { config } from "@/config"
+import { computeMigrationPlan, createPreviewAudit } from "@/db/account-migration"
 import { getByKeyId, linkDiscord, listLinks, unlinkByKeyId } from "@/db/discordLinks"
 import { Logger } from "@/infra/logger"
 import type { Env } from "@/types"
@@ -7,22 +8,68 @@ import { eitherAuth } from "@/utils/either-auth"
 import { signedRequest } from "@/utils/auth"
 import { isLinkBlacklisted } from "@/utils/blacklist"
 import { isAuthorizedBot } from "@/utils/bot-auth"
+import type { DiscordIdentity } from "@/utils/discord-oauth"
 import { buildAuthorizeUrl, exchangeCodeForUser } from "@/utils/discord-oauth"
 import { ErrorCode, buildError } from "@/utils/errors"
+import { getActiveSessionForDiscord, type MigrationSession, saveSession } from "@/utils/migration-session"
 import { generateSessionToken } from "@/utils/session"
 
 const log = new Logger("links")
 
 const LINK_STATE_PREFIX = "link_state:"
 const LINK_PAGE = "/link"
+const MIGRATE_PAGE = "/migrate"
 
-function redirectToLinkPage(status: string, name?: string): Response {
+function redirectPage(page: string, status: string, name?: string): Response {
 	const params = new URLSearchParams({ status })
 	if (name) params.set("name", name)
 	return new Response(null, {
 		status: 302,
-		headers: { location: `${LINK_PAGE}?${params.toString()}` },
+		headers: { location: `${page}?${params.toString()}` },
 	})
+}
+
+const redirectToLinkPage = (status: string, name?: string) => redirectPage(LINK_PAGE, status, name)
+const redirectToMigratePage = (status: string, name?: string) =>
+	redirectPage(MIGRATE_PAGE, status, name)
+
+async function attachMigrationProof(
+	env: Env,
+	session: MigrationSession,
+	provenKeyId: string,
+	identity: DiscordIdentity
+): Promise<Response> {
+	if (session.status === "ready") return redirectToMigratePage("ready")
+
+	if (provenKeyId === session.oldKey) {
+		await saveSession(env, { ...session, status: "failed", failureReason: "same_key" })
+		return redirectToMigratePage("same_key")
+	}
+
+	const plan = await computeMigrationPlan(env, session.oldKey, provenKeyId)
+	if ("error" in plan) {
+		await saveSession(env, { ...session, status: "failed", failureReason: plan.error })
+		return redirectToMigratePage("error")
+	}
+
+	const migrationId = await createPreviewAudit(env, {
+		sessionId: session.sessionId,
+		discordId: session.discordId,
+		oldKey: session.oldKey,
+		newKey: provenKeyId,
+		counts: plan.counts,
+	})
+	await saveSession(env, {
+		...session,
+		newKey: provenKeyId,
+		counts: plan.counts,
+		oldNickname: plan.oldNickname,
+		newNickname: plan.newNickname,
+		status: "ready",
+		migrationId,
+	})
+	log.info("migration new key proven", { sessionId: session.sessionId, migrationId })
+	return redirectToMigratePage("ready", identity.displayName)
 }
 
 export const linkStartRoutes = (env: Env) =>
@@ -72,6 +119,11 @@ export const linkRoutes = (env: Env, fetchImpl: typeof fetch = fetch) =>
 				} catch (err) {
 					log.warn("discord oauth exchange failed", { error: (err as Error).message })
 					return redirectToLinkPage("error")
+				}
+
+				const migration = await getActiveSessionForDiscord(env, identity.id)
+				if (migration) {
+					return attachMigrationProof(env, migration, keyId, identity)
 				}
 
 				await linkDiscord(env, {

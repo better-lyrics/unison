@@ -148,3 +148,6 @@ wrangler.toml
 
 # CLI utils
 cli/
+
+# Local-only ops scripts
+scripts/local/

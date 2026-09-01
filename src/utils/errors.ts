@@ -30,6 +30,15 @@ export const ErrorCode = {
 	INVALID_CURSOR: "INVALID_CURSOR",
 	LINK_BLACKLISTED: "LINK_BLACKLISTED",
 	LINKING_DISABLED: "LINKING_DISABLED",
+	NOT_LINKED: "NOT_LINKED",
+	MIGRATION_ALREADY_ACTIVE: "MIGRATION_ALREADY_ACTIVE",
+	MIGRATION_SAME_KEY: "MIGRATION_SAME_KEY",
+	MIGRATION_NOT_READY: "MIGRATION_NOT_READY",
+	MIGRATION_NOT_OWNER: "MIGRATION_NOT_OWNER",
+	MIGRATION_ALREADY_COMMITTED: "MIGRATION_ALREADY_COMMITTED",
+	MIGRATION_IN_PROGRESS: "MIGRATION_IN_PROGRESS",
+	MIGRATION_EXPIRED: "MIGRATION_EXPIRED",
+	MIGRATION_FAILED: "MIGRATION_FAILED",
 } as const
 
 export type ErrorCode = (typeof ErrorCode)[keyof typeof ErrorCode]
@@ -144,6 +153,42 @@ const TEMPLATES: Record<ErrorCode, Template> = {
 	LINKING_DISABLED: {
 		error: "Linking unavailable",
 		hint: "Account linking is temporarily unavailable. Please try again later.",
+	},
+	NOT_LINKED: {
+		error: "No linked account",
+		hint: "This Discord isn't linked to a Better Lyrics key yet. Link it first, then start a migration.",
+	},
+	MIGRATION_ALREADY_ACTIVE: {
+		error: "Migration already in progress",
+		hint: "You already have a migration underway. Finish it, or wait for it to expire, before starting another.",
+	},
+	MIGRATION_SAME_KEY: {
+		error: "Same key",
+		hint: "The new install proved the same key as the old one, so there's nothing to migrate.",
+	},
+	MIGRATION_NOT_READY: {
+		error: "Migration not ready",
+		hint: "Prove control of the new key first by opening the sign-in link in the new extension.",
+	},
+	MIGRATION_NOT_OWNER: {
+		error: "Not your account",
+		hint: "This Discord no longer owns the account being migrated, so it can't be completed.",
+	},
+	MIGRATION_ALREADY_COMMITTED: {
+		error: "Already migrated",
+		hint: "This migration was already completed. There's nothing left to do.",
+	},
+	MIGRATION_IN_PROGRESS: {
+		error: "Migration in progress",
+		hint: "This migration is already being finalized. Give it a moment, then check the status.",
+	},
+	MIGRATION_EXPIRED: {
+		error: "Migration expired",
+		hint: "This migration session timed out. Start a new one to try again.",
+	},
+	MIGRATION_FAILED: {
+		error: "Migration failed",
+		hint: "Something went wrong applying the migration. Nothing was changed. Try again in a moment.",
 	},
 }
 

@@ -23,6 +23,7 @@ import { feedRoutes } from "@/routes/feed"
 import { leaderboardRoutes } from "@/routes/leaderboard"
 import { linkRoutes, linkStartRoutes } from "@/routes/links"
 import { lyricsRoutes } from "@/routes/lyrics"
+import { migrationRoutes } from "@/routes/migrations"
 import { requestRoutes } from "@/routes/requests"
 import { translateRoutes } from "@/routes/translate"
 import { userRoutes } from "@/routes/users"
@@ -202,6 +203,7 @@ const app = new Elysia({ adapter: node() })
 	.use(authRoutes(env))
 	.use(linkStartRoutes(env))
 	.use(linkRoutes(env))
+	.use(migrationRoutes(env))
 	.get("/*", ({ request }) => {
 		const { pathname } = new URL(request.url)
 

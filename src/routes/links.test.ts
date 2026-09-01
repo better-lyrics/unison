@@ -294,6 +294,96 @@ describe("GET /links/discord/callback", () => {
 	})
 })
 
+describe("GET /links/discord/callback - migration attach", () => {
+	const oldKey = "a".repeat(64)
+	const newKey = "b".repeat(64)
+
+	function seedActiveSession(cache: ReturnType<typeof makeMockCache>) {
+		const session = {
+			sessionId: "msess",
+			discordId: "d-1",
+			oldKey,
+			newKey: null,
+			status: "awaiting_new_key",
+			oldNickname: null,
+			newNickname: null,
+			counts: null,
+			migrationId: null,
+			createdAt: 1,
+		}
+		cache.store.set("migration:msess", JSON.stringify(session))
+		cache.store.set("migration:by-discord:d-1", "msess")
+	}
+
+	it("treats a link from a discord with an active migration session as the proof, and does NOT relink", async () => {
+		const cache = makeMockCache({ "link_state:st-m": newKey })
+		seedActiveSession(cache)
+		// computeMigrationPlan (relabel: old user with nickname, no new user, req collisions) + createPreviewAudit
+		const db = makeMockDB([{ id: 1, nickname: "Caplump" }, null, { n: 0 }, { id: 99 }])
+		const app = linkRoutes(
+			makeEnv(db, cache),
+			discordFetch({ id: "d-1", username: "alice", global_name: "Alice" })
+		)
+
+		const res = await app.handle(
+			new Request("http://localhost/links/discord/callback?code=c&state=st-m", { redirect: "manual" })
+		)
+		expect(res.status).toBe(302)
+		expect(res.headers.get("location")).toContain("/migrate?status=ready")
+		expect(db.calls.some((c) => c.sql.includes("INSERT INTO discord_links"))).toBe(false)
+		expect(db.calls.some((c) => c.sql.includes("INSERT INTO migration_requests"))).toBe(true)
+
+		const updated = JSON.parse(cache.store.get("migration:msess") ?? "{}")
+		expect(updated.status).toBe("ready")
+		expect(updated.newKey).toBe(newKey)
+		expect(updated.migrationId).toBe(99)
+		expect(updated.oldNickname).toBe("Caplump")
+		expect(updated.newNickname).toBeNull()
+		expect(updated.counts).toEqual({
+			submissions: 0,
+			votes: 0,
+			reports: 0,
+			fulfillments: 0,
+			collisions: 0,
+		})
+	})
+
+	it("fails the session with same_key when the proven key equals the old key", async () => {
+		const cache = makeMockCache({ "link_state:st-s": oldKey })
+		seedActiveSession(cache)
+		const db = makeMockDB([])
+		const app = linkRoutes(makeEnv(db, cache), discordFetch({ id: "d-1", username: "a" }))
+
+		const res = await app.handle(
+			new Request("http://localhost/links/discord/callback?code=c&state=st-s", { redirect: "manual" })
+		)
+		expect(res.status).toBe(302)
+		expect(res.headers.get("location")).toContain("/migrate?status=same_key")
+		const updated = JSON.parse(cache.store.get("migration:msess") ?? "{}")
+		expect(updated.status).toBe("failed")
+		expect(updated.failureReason).toBe("same_key")
+		expect(db.calls.some((c) => c.sql.includes("INSERT INTO discord_links"))).toBe(false)
+		expect(db.calls.some((c) => c.sql.includes("INSERT INTO migration_requests"))).toBe(false)
+	})
+
+	it("performs a normal relink when the discord has no active migration session", async () => {
+		const cache = makeMockCache({ "link_state:st-n": newKey })
+		const db = makeMockDB([null, null]) // linkDiscord: delete, insert
+		const app = linkRoutes(
+			makeEnv(db, cache),
+			discordFetch({ id: "d-2", username: "bob", global_name: "Bob" })
+		)
+
+		const res = await app.handle(
+			new Request("http://localhost/links/discord/callback?code=c&state=st-n", { redirect: "manual" })
+		)
+		expect(res.status).toBe(302)
+		expect(res.headers.get("location")).toContain("/link?status=linked")
+		expect(db.calls.some((c) => c.sql.includes("INSERT INTO discord_links"))).toBe(true)
+		expect(db.calls.some((c) => c.sql.includes("INSERT INTO migration_requests"))).toBe(false)
+	})
+})
+
 describe("bot read endpoints", () => {
 	it("returns all links to an authorized bot", async () => {
 		const rows = [{ discord_id: "d1", key_id: "k1" }]
