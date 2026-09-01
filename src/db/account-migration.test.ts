@@ -333,6 +333,60 @@ describe("runMigration nickname handling", () => {
 	})
 })
 
+describe("runMigration reputation merge", () => {
+	function seedWithReps(oldRep: number, newRep: number) {
+		const seed = mergeSeed()
+		seed[4] = [
+			{ id: 1, key_id: "oldkey", reputation: oldRep },
+			{ id: 2, key_id: "newkey", reputation: newRep },
+		]
+		return seed
+	}
+
+	function repParam(db: ReturnType<typeof makeMockDB>): number | undefined {
+		return db.calls.find((c) => c.sql.includes("UPDATE users SET reputation"))?.params[0] as
+			| number
+			| undefined
+	}
+
+	it("sums the earned deltas around the baseline so neither side is dropped", async () => {
+		const db = makeMockDB(seedWithReps(1.5, 1.4))
+		await runMigration(makeEnv(db), { oldKey: "oldkey", newKey: "newkey", migrationId: 7 })
+		expect(repParam(db)).toBeCloseTo(1.9) // 1.5 + 1.4 - 1.0
+	})
+
+	it("clamps the merged reputation to the max", async () => {
+		const db = makeMockDB(seedWithReps(1.8, 1.7))
+		await runMigration(makeEnv(db), { oldKey: "oldkey", newKey: "newkey", migrationId: 7 })
+		expect(repParam(db)).toBe(2.0)
+	})
+
+	it("carries a penalty from either side instead of laundering it", async () => {
+		const db = makeMockDB(seedWithReps(1.0, 0.4))
+		await runMigration(makeEnv(db), { oldKey: "oldkey", newKey: "newkey", migrationId: 7 })
+		expect(repParam(db)).toBeCloseTo(0.4) // 1.0 + 0.4 - 1.0
+	})
+
+	it("does not merge reputation in the relabel case (no new identity)", async () => {
+		const db = makeMockDB([
+			{ id: 1 }, // old user
+			null, // new user (none)
+			{ discord_id: "disc-old", key_id: "oldkey" }, // old link
+			null, // new link
+			[{ id: 1, key_id: "oldkey", reputation: 1.5 }], // users snapshot
+			[], // votes
+			[], // reports
+			[], // lyrics
+			[], // fulfillments
+			[{ discord_id: "disc-old", key_id: "oldkey" }], // discord snapshot
+			[], // requests
+			{ n: 0 }, // request collisions
+		])
+		await runMigration(makeEnv(db), { oldKey: "oldkey", newKey: "newkey", migrationId: 7 })
+		expect(repParam(db)).toBeUndefined()
+	})
+})
+
 describe("runMigration audit", () => {
 	it("writes the committed audit row inside the migration transaction", async () => {
 		const db = makeMockDB(mergeSeed())

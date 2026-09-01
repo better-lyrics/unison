@@ -1,3 +1,4 @@
+import { config } from "@/config"
 import type { D1Compat } from "@/infra/database"
 import type { Env } from "@/types"
 import type { MigrationCounts } from "@/utils/migration-session"
@@ -294,6 +295,17 @@ export async function runMigration(
 				.prepare("UPDATE users SET nickname = ?, nickname_updated_at = ? WHERE id = ?")
 				.bind(survivingNickname, now(), oldId)
 				.run()
+		}
+
+		if (newId !== null) {
+			const snapReps = snapshot.users as { key_id: string; reputation: number }[]
+			const oldRep = snapReps.find((u) => u.key_id === oldKey)?.reputation ?? config.reputation.default
+			const newRep = snapReps.find((u) => u.key_id === newKey)?.reputation ?? config.reputation.default
+			const mergedRep = Math.max(
+				config.reputation.min,
+				Math.min(config.reputation.max, oldRep + newRep - config.reputation.default)
+			)
+			await tx.prepare("UPDATE users SET reputation = ? WHERE id = ?").bind(mergedRep, oldId).run()
 		}
 
 		if (oldLink) {
