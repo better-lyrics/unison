@@ -1,5 +1,6 @@
 import { Elysia, t } from "elysia"
 import { config } from "@/config"
+import { computeMigrationPlan, createPreviewAudit } from "@/db/account-migration"
 import { getByKeyId, linkDiscord, listLinks, unlinkByKeyId } from "@/db/discordLinks"
 import { Logger } from "@/infra/logger"
 import type { Env } from "@/types"
@@ -7,29 +8,102 @@ import { eitherAuth } from "@/utils/either-auth"
 import { signedRequest } from "@/utils/auth"
 import { isLinkBlacklisted } from "@/utils/blacklist"
 import { isAuthorizedBot } from "@/utils/bot-auth"
+import type { DiscordIdentity } from "@/utils/discord-oauth"
 import { buildAuthorizeUrl, exchangeCodeForUser } from "@/utils/discord-oauth"
 import { ErrorCode, buildError } from "@/utils/errors"
+import { getSession, saveSession } from "@/utils/migration-session"
 import { generateSessionToken } from "@/utils/session"
 
 const log = new Logger("links")
 
 const LINK_STATE_PREFIX = "link_state:"
 const LINK_PAGE = "/link"
+const MIGRATE_PAGE = "/migrate"
 
-function redirectToLinkPage(status: string, name?: string): Response {
+function redirectPage(page: string, status: string, name?: string): Response {
 	const params = new URLSearchParams({ status })
 	if (name) params.set("name", name)
 	return new Response(null, {
 		status: 302,
-		headers: { location: `${LINK_PAGE}?${params.toString()}` },
+		headers: { location: `${page}?${params.toString()}` },
 	})
+}
+
+const redirectToLinkPage = (status: string, name?: string) => redirectPage(LINK_PAGE, status, name)
+const redirectToMigratePage = (status: string, name?: string) =>
+	redirectPage(MIGRATE_PAGE, status, name)
+
+interface LinkState {
+	keyId: string
+	migrationSessionId?: string
+}
+
+function parseLinkState(raw: string): LinkState {
+	try {
+		const parsed = JSON.parse(raw) as Record<string, unknown>
+		if (parsed && typeof parsed === "object" && typeof parsed.keyId === "string") {
+			return {
+				keyId: parsed.keyId,
+				migrationSessionId:
+					typeof parsed.migrationSessionId === "string" ? parsed.migrationSessionId : undefined,
+			}
+		}
+	} catch {
+		// legacy/plain state: the value is the bare keyId
+	}
+	return { keyId: raw }
+}
+
+// Proof-of-new-key branch of the Discord link flow: attach the proven new key to
+// an open migration session instead of relinking Discord (the old link must survive
+// for commit-time re-verification).
+async function attachMigrationProof(
+	env: Env,
+	migrationSessionId: string,
+	provenKeyId: string,
+	identity: DiscordIdentity
+): Promise<Response> {
+	const session = await getSession(env, migrationSessionId)
+	if (!session || session.status === "committed" || session.status === "failed") {
+		return redirectToMigratePage("expired")
+	}
+	if (session.status === "ready") return redirectToMigratePage("ready")
+	if (identity.id !== session.discordId) return redirectToMigratePage("wrong_account")
+
+	if (provenKeyId === session.oldKey) {
+		await saveSession(env, { ...session, status: "failed", failureReason: "same_key" })
+		return redirectToMigratePage("same_key")
+	}
+
+	const plan = await computeMigrationPlan(env, session.oldKey, provenKeyId)
+	if ("error" in plan) {
+		await saveSession(env, { ...session, status: "failed", failureReason: plan.error })
+		return redirectToMigratePage("error")
+	}
+
+	const migrationId = await createPreviewAudit(env, {
+		sessionId: session.sessionId,
+		discordId: session.discordId,
+		oldKey: session.oldKey,
+		newKey: provenKeyId,
+		counts: plan.counts,
+	})
+	await saveSession(env, {
+		...session,
+		newKey: provenKeyId,
+		counts: plan.counts,
+		status: "ready",
+		migrationId,
+	})
+	log.info("migration new key proven", { migrationSessionId, migrationId })
+	return redirectToMigratePage("ready", identity.displayName)
 }
 
 export const linkStartRoutes = (env: Env) =>
 	new Elysia({ prefix: "/links" })
 		.decorate("env", env)
 		.use(signedRequest)
-		.post("/discord/start", async ({ env, keyId, status }) => {
+		.post("/discord/start", async ({ env, keyId, signedPayload, status }) => {
 			const oauth = env.DISCORD_OAUTH
 			if (!oauth) {
 				return status(503, buildError(ErrorCode.LINKING_DISABLED))
@@ -39,8 +113,16 @@ export const linkStartRoutes = (env: Env) =>
 				return status(403, buildError(ErrorCode.LINK_BLACKLISTED))
 			}
 
+			const migrationSessionId =
+				typeof signedPayload.migrationSessionId === "string" && signedPayload.migrationSessionId
+					? signedPayload.migrationSessionId
+					: undefined
+			const stateValue = migrationSessionId
+				? JSON.stringify({ keyId, migrationSessionId })
+				: keyId
+
 			const state = generateSessionToken()
-			await env.CACHE.put(`${LINK_STATE_PREFIX}${state}`, keyId, {
+			await env.CACHE.put(`${LINK_STATE_PREFIX}${state}`, stateValue, {
 				expirationTtl: config.linking.stateTtlSeconds,
 			})
 			const authorizeUrl = buildAuthorizeUrl(oauth, state, config.linking.discordScope)
@@ -56,22 +138,28 @@ export const linkRoutes = (env: Env, fetchImpl: typeof fetch = fetch) =>
 				const { code, state } = query
 				if (!code || !state) return redirectToLinkPage("error")
 
-				const keyId = await env.CACHE.getDel(`${LINK_STATE_PREFIX}${state}`)
-				if (!keyId) return redirectToLinkPage("expired")
+				const raw = await env.CACHE.getDel(`${LINK_STATE_PREFIX}${state}`)
+				if (!raw) return redirectToLinkPage("expired")
+				const { keyId, migrationSessionId } = parseLinkState(raw)
+				const redirectError = migrationSessionId ? redirectToMigratePage : redirectToLinkPage
 				if (isLinkBlacklisted(keyId)) {
 					log.warn("blacklisted key reached link callback", { keyId })
-					return redirectToLinkPage("blocked")
+					return redirectError("blocked")
 				}
 
 				const oauth = env.DISCORD_OAUTH
-				if (!oauth) return redirectToLinkPage("error")
+				if (!oauth) return redirectError("error")
 
 				let identity: Awaited<ReturnType<typeof exchangeCodeForUser>>
 				try {
 					identity = await exchangeCodeForUser(oauth, code, fetchImpl)
 				} catch (err) {
 					log.warn("discord oauth exchange failed", { error: (err as Error).message })
-					return redirectToLinkPage("error")
+					return redirectError("error")
+				}
+
+				if (migrationSessionId) {
+					return attachMigrationProof(env, migrationSessionId, keyId, identity)
 				}
 
 				await linkDiscord(env, {

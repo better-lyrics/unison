@@ -192,6 +192,46 @@ describe("POST /links/discord/start", () => {
 		expect(res.status).toBe(403)
 	})
 
+	it("stores a migration-tagged state when the signed payload carries a migrationSessionId", async () => {
+		const kp = await generateKeyPair()
+		const publicJwk = (await crypto.subtle.exportKey("jwk", kp.publicKey)) as JsonWebKey
+		const keyId = await hashPublicKey(publicJwk)
+		const db = makeMockDB([
+			{ key_id: keyId, public_key: JSON.stringify(publicJwk), created_at: 0 },
+			{ id: 7, key_id: keyId },
+		])
+		const cache = makeMockCache()
+		const app = linkStartRoutes(makeEnv(db, cache))
+
+		const payload = {
+			timestamp: Date.now(),
+			nonce: "n".repeat(32),
+			keyId,
+			migrationSessionId: "sess-xyz",
+		}
+		const buf = new TextEncoder().encode(canonicalJson(payload))
+		const sig = await crypto.subtle.sign({ name: "ECDSA", hash: "SHA-256" }, kp.privateKey, buf)
+		const bytes = new Uint8Array(sig)
+		let bin = ""
+		for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i])
+		const body = { payload, signature: btoa(bin), publicKey: publicJwk }
+
+		const res = await app.handle(
+			new Request("http://localhost/links/discord/start", {
+				method: "POST",
+				headers: { "content-type": "application/json" },
+				body: JSON.stringify(body),
+			})
+		)
+		expect(res.status).toBe(200)
+		const json = (await res.json()) as { data: { authorizeUrl: string } }
+		const state = new URL(json.data.authorizeUrl).searchParams.get("state")
+		expect(JSON.parse(cache.store.get(`link_state:${state}`) ?? "{}")).toEqual({
+			keyId,
+			migrationSessionId: "sess-xyz",
+		})
+	})
+
 	it("reports 503 when Discord OAuth is not configured", async () => {
 		const kp = await generateKeyPair()
 		const publicJwk = (await crypto.subtle.exportKey("jwk", kp.publicKey)) as JsonWebKey
@@ -291,6 +331,97 @@ describe("GET /links/discord/callback", () => {
 		)
 		expect(res.status).toBe(302)
 		expect(res.headers.get("location")).toContain("status=error")
+	})
+})
+
+describe("GET /links/discord/callback - migration attach", () => {
+	const oldKey = "a".repeat(64)
+	const newKey = "b".repeat(64)
+
+	function awaitingSession(overrides: Record<string, unknown> = {}) {
+		return JSON.stringify({
+			sessionId: "msess",
+			discordId: "d-1",
+			oldKey,
+			newKey: null,
+			status: "awaiting_new_key",
+			nicknameKept: true,
+			counts: null,
+			migrationId: null,
+			createdAt: 1,
+			...overrides,
+		})
+	}
+
+	it("attaches the proven new key to the session and does NOT relink discord", async () => {
+		const cache = makeMockCache({
+			"link_state:st-m": JSON.stringify({ keyId: newKey, migrationSessionId: "msess" }),
+			"migration:msess": awaitingSession(),
+		})
+		// computeMigrationPlan (relabel: old user, no new user, req collisions) + createPreviewAudit
+		const db = makeMockDB([{ id: 1 }, null, { n: 0 }, { id: 99 }])
+		const app = linkRoutes(
+			makeEnv(db, cache),
+			discordFetch({ id: "d-1", username: "alice", global_name: "Alice" })
+		)
+
+		const res = await app.handle(
+			new Request("http://localhost/links/discord/callback?code=c&state=st-m", { redirect: "manual" })
+		)
+		expect(res.status).toBe(302)
+		expect(res.headers.get("location")).toContain("/migrate?status=ready")
+		expect(db.calls.some((c) => c.sql.includes("INSERT INTO discord_links"))).toBe(false)
+		expect(db.calls.some((c) => c.sql.includes("INSERT INTO migration_requests"))).toBe(true)
+
+		const updated = JSON.parse(cache.store.get("migration:msess") ?? "{}")
+		expect(updated.status).toBe("ready")
+		expect(updated.newKey).toBe(newKey)
+		expect(updated.migrationId).toBe(99)
+		expect(updated.counts).toEqual({
+			submissions: 0,
+			votes: 0,
+			reports: 0,
+			fulfillments: 0,
+			collisions: 0,
+		})
+	})
+
+	it("fails the session with same_key when the proven key equals the old key", async () => {
+		const cache = makeMockCache({
+			"link_state:st-s": JSON.stringify({ keyId: oldKey, migrationSessionId: "msess" }),
+			"migration:msess": awaitingSession(),
+		})
+		const db = makeMockDB([])
+		const app = linkRoutes(makeEnv(db, cache), discordFetch({ id: "d-1", username: "a" }))
+
+		const res = await app.handle(
+			new Request("http://localhost/links/discord/callback?code=c&state=st-s", { redirect: "manual" })
+		)
+		expect(res.status).toBe(302)
+		expect(res.headers.get("location")).toContain("/migrate?status=same_key")
+		const updated = JSON.parse(cache.store.get("migration:msess") ?? "{}")
+		expect(updated.status).toBe("failed")
+		expect(updated.failureReason).toBe("same_key")
+		expect(db.calls.some((c) => c.sql.includes("INSERT INTO discord_links"))).toBe(false)
+		expect(db.calls.some((c) => c.sql.includes("INSERT INTO migration_requests"))).toBe(false)
+	})
+
+	it("refuses to attach when a different discord completes the OAuth", async () => {
+		const cache = makeMockCache({
+			"link_state:st-w": JSON.stringify({ keyId: newKey, migrationSessionId: "msess" }),
+			"migration:msess": awaitingSession(),
+		})
+		const db = makeMockDB([])
+		const app = linkRoutes(makeEnv(db, cache), discordFetch({ id: "attacker", username: "x" }))
+
+		const res = await app.handle(
+			new Request("http://localhost/links/discord/callback?code=c&state=st-w", { redirect: "manual" })
+		)
+		expect(res.status).toBe(302)
+		expect(res.headers.get("location")).toContain("/migrate?status=wrong_account")
+		const updated = JSON.parse(cache.store.get("migration:msess") ?? "{}")
+		expect(updated.status).toBe("awaiting_new_key") // untouched, real owner can retry
+		expect(db.calls.some((c) => c.sql.includes("INSERT INTO migration_requests"))).toBe(false)
 	})
 })
 
