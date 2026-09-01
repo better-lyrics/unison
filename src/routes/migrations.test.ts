@@ -272,6 +272,18 @@ describe("POST /migrations/bot/:sessionId/commit", () => {
 		expect((await json(res)).code).toBe("MIGRATION_NOT_OWNER")
 	})
 
+	it("returns in_progress when a commit for the session is already running", async () => {
+		const cache = makeMockCache()
+		seedSession(cache, readySession())
+		cache.setNX = async () => false
+		const db = makeMockDB([{ discord_id: "disc-1", key_id: oldKey }]) // re-verify link
+		const app = migrationRoutes(makeEnv(db, cache))
+		const res = await app.handle(post("/migrations/bot/sess-1/commit", { discordId: "disc-1" }))
+		expect(res.status).toBe(409)
+		expect((await json(res)).code).toBe("MIGRATION_IN_PROGRESS")
+		expect(db.calls.some((c) => c.sql.startsWith("UPDATE") || c.sql.startsWith("DELETE"))).toBe(false)
+	})
+
 	it("commits: runs the migration, marks audit, busts caches, returns moved", async () => {
 		const cache = makeMockCache()
 		seedSession(cache, readySession())
@@ -290,7 +302,7 @@ describe("POST /migrations/bot/:sessionId/commit", () => {
 			[{ discord_id: "disc-1", key_id: oldKey }], // discord snapshot
 			[], // requests snapshot
 			{ n: 0 }, // request collisions
-			// markAuditCommitted UPDATE (run, no return)
+			// in-transaction committed audit UPDATE (run, no return)
 		])
 		const app = migrationRoutes(makeEnv(db, cache))
 		const res = await app.handle(post("/migrations/bot/sess-1/commit", { discordId: "disc-1" }))

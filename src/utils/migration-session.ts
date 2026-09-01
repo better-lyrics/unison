@@ -29,8 +29,11 @@ export interface MigrationSession {
 const SESSION_PREFIX = "migration:"
 const DISCORD_INDEX_PREFIX = "migration:by-discord:"
 
+const COMMIT_LOCK_PREFIX = "migration:commit-lock:"
+
 const sessionKey = (sessionId: string) => `${SESSION_PREFIX}${sessionId}`
 const indexKey = (discordId: string) => `${DISCORD_INDEX_PREFIX}${discordId}`
+export const commitLockKey = (sessionId: string) => `${COMMIT_LOCK_PREFIX}${sessionId}`
 
 export async function createSession(
 	env: Env,
@@ -49,14 +52,14 @@ export async function createSession(
 		createdAt: Math.floor(Date.now() / 1000),
 	}
 	await saveSession(env, session)
-	await env.CACHE.put(indexKey(params.discordId), session.sessionId, {
-		expirationTtl: config.migration.sessionTtlSeconds,
-	})
 	return session
 }
 
 export async function saveSession(env: Env, session: MigrationSession): Promise<void> {
 	await env.CACHE.put(sessionKey(session.sessionId), JSON.stringify(session), {
+		expirationTtl: config.migration.sessionTtlSeconds,
+	})
+	await env.CACHE.put(indexKey(session.discordId), session.sessionId, {
 		expirationTtl: config.migration.sessionTtlSeconds,
 	})
 }

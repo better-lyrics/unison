@@ -36,6 +36,7 @@ export const ErrorCode = {
 	MIGRATION_NOT_READY: "MIGRATION_NOT_READY",
 	MIGRATION_NOT_OWNER: "MIGRATION_NOT_OWNER",
 	MIGRATION_ALREADY_COMMITTED: "MIGRATION_ALREADY_COMMITTED",
+	MIGRATION_IN_PROGRESS: "MIGRATION_IN_PROGRESS",
 	MIGRATION_EXPIRED: "MIGRATION_EXPIRED",
 	MIGRATION_FAILED: "MIGRATION_FAILED",
 } as const
@@ -176,6 +177,10 @@ const TEMPLATES: Record<ErrorCode, Template> = {
 	MIGRATION_ALREADY_COMMITTED: {
 		error: "Already migrated",
 		hint: "This migration was already completed. There's nothing left to do.",
+	},
+	MIGRATION_IN_PROGRESS: {
+		error: "Migration in progress",
+		hint: "This migration is already being finalized. Give it a moment, then check the status.",
 	},
 	MIGRATION_EXPIRED: {
 		error: "Migration expired",

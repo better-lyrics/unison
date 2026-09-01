@@ -272,9 +272,6 @@ CREATE INDEX IF NOT EXISTS translation_cache_expires_idx ON translation_cache (e
 CREATE INDEX IF NOT EXISTS translation_cache_video_idx   ON translation_cache (video_id);
 CREATE INDEX IF NOT EXISTS translation_cache_to_lang_idx ON translation_cache (to_lang);
 
--- Account migration audit + reversible snapshot.
--- One row per migration that reached preview. The snapshot JSONB holds the full
--- pre-image of every touched row so a commit can be undone even after the fact.
 CREATE TABLE IF NOT EXISTS migration_requests (
     id BIGSERIAL PRIMARY KEY,
     session_id TEXT,

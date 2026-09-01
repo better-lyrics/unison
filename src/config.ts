@@ -36,6 +36,7 @@ export const config = {
 
 	migration: {
 		sessionTtlSeconds: 900, // time to open the new extension and finish the OAuth prove
+		commitLockSeconds: 60,
 	},
 
 	reputation: {

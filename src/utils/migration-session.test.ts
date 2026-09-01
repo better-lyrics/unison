@@ -95,6 +95,18 @@ describe("migration-session", () => {
 		expect(await getActiveSessionForDiscord(env, "disc-1")).toBeNull()
 	})
 
+	it("refreshes the by-discord index on save so the active-session guard cannot lapse", async () => {
+		const cache = makeMockCache()
+		const env = makeEnv(cache)
+		const session = await createSession(env, { discordId: "disc-1", oldKey: "oldkey" })
+
+		await cache.delete("migration:by-discord:disc-1")
+		expect(await getActiveSessionForDiscord(env, "disc-1")).toBeNull()
+
+		await saveSession(env, { ...session, status: "ready" })
+		expect((await getActiveSessionForDiscord(env, "disc-1"))?.sessionId).toBe(session.sessionId)
+	})
+
 	it("returns null active session when the index dangles past the session", async () => {
 		const cache = makeMockCache()
 		const env = makeEnv(cache)

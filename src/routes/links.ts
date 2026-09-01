@@ -33,10 +33,6 @@ const redirectToLinkPage = (status: string, name?: string) => redirectPage(LINK_
 const redirectToMigratePage = (status: string, name?: string) =>
 	redirectPage(MIGRATE_PAGE, status, name)
 
-// Proof-of-new-key branch of the Discord link flow. When the Discord that just
-// completed OAuth has an active migration session, this link IS the proof: attach
-// the proven key to the session instead of relinking Discord, so the old link
-// survives for commit-time re-verification.
 async function attachMigrationProof(
 	env: Env,
 	session: MigrationSession,

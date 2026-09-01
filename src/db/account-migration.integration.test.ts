@@ -7,7 +7,7 @@ import {
 	computeMigrationPlan,
 	createPreviewAudit,
 	getAudit,
-	markAuditCommitted,
+	markAuditFailed,
 	restoreFromSnapshot,
 	runMigration,
 } from "./account-migration"
@@ -157,9 +157,8 @@ describeIntegration("account migration (integration)", () => {
 			newKey: NEW_KEY,
 			counts: plan.counts,
 		})
-		const result = await runMigration(env, { oldKey: OLD_KEY, newKey: NEW_KEY })
+		const result = await runMigration(env, { oldKey: OLD_KEY, newKey: NEW_KEY, migrationId: auditId })
 		if ("error" in result) throw new Error(result.error)
-		await markAuditCommitted(env, auditId, result.moved, result.snapshot)
 
 		expect(result.moved).toEqual({
 			submissions: 2,
@@ -262,12 +261,12 @@ describeIntegration("account migration (integration)", () => {
 			newKey: NEW_KEY,
 			counts: plan.counts,
 		})
-		const result = await runMigration(env, { oldKey: OLD_KEY, newKey: NEW_KEY })
+		const result = await runMigration(env, { oldKey: OLD_KEY, newKey: NEW_KEY, migrationId: auditId })
 		if ("error" in result) throw new Error(result.error)
-		await markAuditCommitted(env, auditId, result.moved, result.snapshot)
 
 		const audit = await getAudit(env, auditId)
 		expect(audit?.status).toBe("committed")
+		expect(audit?.snapshot).not.toBeNull()
 
 		const restore = await restoreFromSnapshot(env, auditId)
 		expect(restore).toEqual({ restored: true })
@@ -326,9 +325,9 @@ describeIntegration("account migration (integration)", () => {
 			oldKey: OLD_KEY,
 			newKey: NEW_KEY,
 			keepNickname: "new",
+			migrationId: auditId,
 		})
 		if ("error" in result) throw new Error(result.error)
-		await markAuditCommitted(env, auditId, result.moved, result.snapshot)
 
 		const survivor = await one<{ nickname: string }>("SELECT nickname FROM users WHERE id = $1", [
 			oldUser.id,
@@ -341,5 +340,67 @@ describeIntegration("account migration (integration)", () => {
 		])
 		expect(reverted.nickname).toBe("Caplump")
 		expect(await num("SELECT count(*)::int n FROM users WHERE nickname = 'tropicawhale'", [])).toBe(1)
+	})
+
+	it("markAuditFailed does not clobber an already-committed audit row", async () => {
+		await pool.query("INSERT INTO public_keys (key_id, public_key) VALUES ($1, 'x'), ($2, 'y')", [
+			OLD_KEY,
+			NEW_KEY,
+		])
+		await pool.query("INSERT INTO users (key_id) VALUES ($1)", [OLD_KEY])
+
+		const plan = await computeMigrationPlan(env, OLD_KEY, NEW_KEY)
+		if ("error" in plan) throw new Error(plan.error)
+		const auditId = await createPreviewAudit(env, {
+			sessionId: "sess-fail",
+			discordId: "disc-1",
+			oldKey: OLD_KEY,
+			newKey: NEW_KEY,
+			counts: plan.counts,
+		})
+		const result = await runMigration(env, { oldKey: OLD_KEY, newKey: NEW_KEY, migrationId: auditId })
+		if ("error" in result) throw new Error(result.error)
+
+		await markAuditFailed(env, auditId, "late failure")
+
+		const audit = await getAudit(env, auditId)
+		expect(audit?.status).toBe("committed")
+		expect(audit?.error).toBeNull()
+	})
+
+	it("refuses to restore and preserves interim activity created after commit", async () => {
+		await pool.query("INSERT INTO public_keys (key_id, public_key) VALUES ($1, 'x'), ($2, 'y')", [
+			OLD_KEY,
+			NEW_KEY,
+		])
+		const oldUser = await one<{ id: number }>(
+			"INSERT INTO users (key_id) VALUES ($1) RETURNING id",
+			[OLD_KEY]
+		)
+		await pool.query("INSERT INTO users (key_id) VALUES ($1)", [NEW_KEY])
+		await insertLyric(oldUser.id, "vidL1")
+
+		const plan = await computeMigrationPlan(env, OLD_KEY, NEW_KEY)
+		if ("error" in plan) throw new Error(plan.error)
+		const auditId = await createPreviewAudit(env, {
+			sessionId: "sess-interim",
+			discordId: "disc-1",
+			oldKey: OLD_KEY,
+			newKey: NEW_KEY,
+			counts: plan.counts,
+		})
+		const result = await runMigration(env, { oldKey: OLD_KEY, newKey: NEW_KEY, migrationId: auditId })
+		if ("error" in result) throw new Error(result.error)
+
+		// survivor (now NEW_KEY, id = oldUser.id) casts a vote after commit
+		const l2 = await insertLyric(oldUser.id, "vidL2")
+		await pool.query("INSERT INTO votes (lyrics_id, user_id, vote, is_self_vote) VALUES ($1,$2,1,1)", [
+			l2,
+			oldUser.id,
+		])
+
+		expect(await restoreFromSnapshot(env, auditId)).toEqual({ error: "HAS_INTERIM_ACTIVITY" })
+		expect(await num("SELECT count(*)::int n FROM votes WHERE lyrics_id = $1", [l2])).toBe(1)
+		expect((await getAudit(env, auditId))?.status).toBe("committed")
 	})
 })

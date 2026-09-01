@@ -135,15 +135,11 @@ async function countTx(tx: D1Compat, sql: string, params: unknown[]): Promise<nu
 	return row?.n ?? 0
 }
 
-// Move the OLD identity's whole history onto NEW key in one transaction.
-// The OLD users row survives (it owns the history) and is relabelled to NEW key;
-// if NEW already had its own users row, its activity is folded in first, dropping
-// duplicate votes/reports on the UNIQUE(lyrics_id, user_id) constraint.
 export async function runMigration(
 	env: Env,
-	params: { oldKey: string; newKey: string; keepNickname?: "old" | "new" }
+	params: { oldKey: string; newKey: string; keepNickname?: "old" | "new"; migrationId: number }
 ): Promise<MigrationResult | MigrationRunError> {
-	const { oldKey, newKey, keepNickname } = params
+	const { oldKey, newKey, keepNickname, migrationId } = params
 	if (oldKey === newKey) return { error: "SAME_KEY" }
 
 	return env.DB.transaction(async (tx) => {
@@ -199,7 +195,7 @@ export async function runMigration(
 		const fulfillmentRows = snapshot.request_fulfillments as { submitter_id: number | null }[]
 
 		const moved = {
-			submissions: lyricsRows.filter((r) => r.submitter_id === newId).length,
+			submissions: newId !== null ? lyricsRows.filter((r) => r.submitter_id === newId).length : 0,
 			votes: votesRows.filter((r) => r.user_id === newId).length,
 			reports: reportsRows.filter((r) => r.user_id === newId).length,
 			fulfillments: fulfillmentRows.filter((r) => r.submitter_id === newId).length,
@@ -320,6 +316,26 @@ export async function runMigration(
 
 		moved.collisionsDropped = voteCollisions + reportCollisions + reqCollisions
 
+		await tx
+			.prepare(
+				`UPDATE migration_requests SET
+					status = 'committed',
+					moved_submissions = ?, moved_votes = ?, moved_reports = ?, moved_fulfillments = ?,
+					collisions_dropped = ?, snapshot = ?::jsonb, updated_at = ?
+				 WHERE id = ?`
+			)
+			.bind(
+				moved.submissions,
+				moved.votes,
+				moved.reports,
+				moved.fulfillments,
+				moved.collisionsDropped,
+				JSON.stringify(snapshot),
+				now(),
+				migrationId
+			)
+			.run()
+
 		return { moved, snapshot, affectedLyricsIds, affectedVideoIds }
 	})
 }
@@ -375,36 +391,10 @@ export async function createPreviewAudit(
 	return row!.id
 }
 
-export async function markAuditCommitted(
-	env: Env,
-	id: number,
-	moved: MigrationResult["moved"],
-	snapshot: MigrationSnapshot
-): Promise<void> {
-	await env.DB.prepare(
-		`UPDATE migration_requests SET
-			status = 'committed',
-			moved_submissions = ?, moved_votes = ?, moved_reports = ?, moved_fulfillments = ?,
-			collisions_dropped = ?, snapshot = ?::jsonb, updated_at = ?
-		 WHERE id = ?`
-	)
-		.bind(
-			moved.submissions,
-			moved.votes,
-			moved.reports,
-			moved.fulfillments,
-			moved.collisionsDropped,
-			JSON.stringify(snapshot),
-			now(),
-			id
-		)
-		.run()
-}
-
 export async function markAuditFailed(env: Env, id: number, error: string): Promise<void> {
 	await env.DB.prepare(
 		"UPDATE migration_requests SET status = 'failed', error = ?, updated_at = " +
-			"EXTRACT(EPOCH FROM NOW())::INTEGER WHERE id = ?"
+			"EXTRACT(EPOCH FROM NOW())::INTEGER WHERE id = ? AND status <> 'committed'"
 	)
 		.bind(error, id)
 		.run()
@@ -466,13 +456,11 @@ interface SnapRequest {
 	created_at: number
 }
 
-// Reverse of runMigration, driven entirely by the stored pre-image. Order matters:
-// relabel the survivor back to the old key before re-inserting the new user row (both
-// hold the same key at commit time), and never DELETE lyrics (it would cascade its votes).
+// Restores lyrics by UPDATE, never DELETE: deleting a lyric cascades to its votes/reports.
 export async function restoreFromSnapshot(
 	env: Env,
 	migrationId: number
-): Promise<{ restored: true } | { error: "NOT_FOUND" | "NOT_COMMITTED" }> {
+): Promise<{ restored: true } | { error: "NOT_FOUND" | "NOT_COMMITTED" | "HAS_INTERIM_ACTIVITY" }> {
 	const audit = await getAudit(env, migrationId)
 	if (!audit) return { error: "NOT_FOUND" }
 	if (audit.status !== "committed" || !audit.snapshot) return { error: "NOT_COMMITTED" }
@@ -487,6 +475,25 @@ export async function restoreFromSnapshot(
 	const ids = newSnap ? [oldSnap.id, newSnap.id] : [oldSnap.id]
 
 	return env.DB.transaction(async (tx) => {
+		const snapVoteIds = new Set((snap.votes as SnapVote[]).map((v) => v.id))
+		const snapReportIds = new Set((snap.reports as SnapReport[]).map((r) => r.id))
+		const currentVotes = await all<{ id: number }>(
+			tx,
+			"SELECT id FROM votes WHERE user_id = ANY(?)",
+			[ids]
+		)
+		const currentReports = await all<{ id: number }>(
+			tx,
+			"SELECT id FROM reports WHERE user_id = ANY(?)",
+			[ids]
+		)
+		if (
+			currentVotes.some((v) => !snapVoteIds.has(v.id)) ||
+			currentReports.some((r) => !snapReportIds.has(r.id))
+		) {
+			return { error: "HAS_INTERIM_ACTIVITY" } as const
+		}
+
 		await tx
 			.prepare(
 				"UPDATE users SET key_id = ?, reputation = ?, vote_count = ?, avg_vote = ?, nickname = ?, nickname_updated_at = ? WHERE id = ?"

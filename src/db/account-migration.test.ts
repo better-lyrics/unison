@@ -4,7 +4,6 @@ import {
 	computeMigrationPlan,
 	createPreviewAudit,
 	getAudit,
-	markAuditCommitted,
 	markAuditFailed,
 	restoreFromSnapshot,
 	runMigration,
@@ -151,7 +150,7 @@ function mergeSeed(): unknown[] {
 describe("runMigration (merge case)", () => {
 	it("returns moved counts and collisionsDropped from the snapshot and collision queries", async () => {
 		const db = makeMockDB(mergeSeed())
-		const result = await runMigration(makeEnv(db), { oldKey: "oldkey", newKey: "newkey" })
+		const result = await runMigration(makeEnv(db), { oldKey: "oldkey", newKey: "newkey", migrationId: 7 })
 		if ("error" in result) throw new Error(`unexpected error: ${result.error}`)
 		expect(result.moved).toEqual({
 			submissions: 2,
@@ -164,7 +163,7 @@ describe("runMigration (merge case)", () => {
 
 	it("captures a snapshot of every touched table", async () => {
 		const db = makeMockDB(mergeSeed())
-		const result = await runMigration(makeEnv(db), { oldKey: "oldkey", newKey: "newkey" })
+		const result = await runMigration(makeEnv(db), { oldKey: "oldkey", newKey: "newkey", migrationId: 7 })
 		if ("error" in result) throw new Error("unexpected error")
 		expect(Object.keys(result.snapshot).sort()).toEqual(
 			[
@@ -183,7 +182,7 @@ describe("runMigration (merge case)", () => {
 
 	it("reports affected lyrics and video ids for cache busting and score recompute", async () => {
 		const db = makeMockDB(mergeSeed())
-		const result = await runMigration(makeEnv(db), { oldKey: "oldkey", newKey: "newkey" })
+		const result = await runMigration(makeEnv(db), { oldKey: "oldkey", newKey: "newkey", migrationId: 7 })
 		if ("error" in result) throw new Error("unexpected error")
 		expect(result.affectedLyricsIds).toEqual(expect.arrayContaining([10, 11, 12, 20, 21]))
 		expect(result.affectedVideoIds).toEqual(expect.arrayContaining(["vidA", "vidB", "vidC"]))
@@ -191,7 +190,7 @@ describe("runMigration (merge case)", () => {
 
 	it("dedupes votes/reports before re-pointing, deletes the new user before relabel", async () => {
 		const db = makeMockDB(mergeSeed())
-		await runMigration(makeEnv(db), { oldKey: "oldkey", newKey: "newkey" })
+		await runMigration(makeEnv(db), { oldKey: "oldkey", newKey: "newkey", migrationId: 7 })
 		const calls = db.calls
 		expect(idx(calls, "DELETE FROM votes")).toBeLessThan(idx(calls, "UPDATE votes SET user_id"))
 		expect(idx(calls, "DELETE FROM reports")).toBeLessThan(idx(calls, "UPDATE reports SET user_id"))
@@ -204,7 +203,7 @@ describe("runMigration (merge case)", () => {
 
 	it("regression: lyrics_requests dedup keeps the survivor's (old key) request and drops the new key's dup", async () => {
 		const db = makeMockDB(mergeSeed())
-		await runMigration(makeEnv(db), { oldKey: "oldkey", newKey: "newkey" })
+		await runMigration(makeEnv(db), { oldKey: "oldkey", newKey: "newkey", migrationId: 7 })
 		const del = db.calls.find(
 			(c) => c.sql.includes("DELETE FROM lyrics_requests") && c.sql.includes("requester_type")
 		)
@@ -220,20 +219,24 @@ describe("runMigration (merge case)", () => {
 			{ discord_id: "disc-old", key_id: "oldkey" }, // old link
 			{ discord_id: "disc-new", key_id: "newkey" }, // new link
 		])
-		const result = await runMigration(makeEnv(db), { oldKey: "oldkey", newKey: "newkey" })
+		const result = await runMigration(makeEnv(db), { oldKey: "oldkey", newKey: "newkey", migrationId: 7 })
 		expect(result).toEqual({ error: "BOTH_KEYS_LINKED" })
 		expect(db.calls.some((c) => c.sql.startsWith("UPDATE") || c.sql.startsWith("DELETE"))).toBe(false)
 	})
 
 	it("rejects SAME_KEY defensively", async () => {
 		const db = makeMockDB([])
-		const result = await runMigration(makeEnv(db), { oldKey: "samekey", newKey: "samekey" })
+		const result = await runMigration(makeEnv(db), {
+			oldKey: "samekey",
+			newKey: "samekey",
+			migrationId: 7,
+		})
 		expect(result).toEqual({ error: "SAME_KEY" })
 	})
 
 	it("reports OLD_KEY_NO_USER when the old key has no user row", async () => {
 		const db = makeMockDB([null])
-		const result = await runMigration(makeEnv(db), { oldKey: "oldkey", newKey: "newkey" })
+		const result = await runMigration(makeEnv(db), { oldKey: "oldkey", newKey: "newkey", migrationId: 7 })
 		expect(result).toEqual({ error: "OLD_KEY_NO_USER" })
 	})
 })
@@ -250,13 +253,13 @@ describe("runMigration nickname handling", () => {
 
 	it("keeps the survivor's nickname by default (no nickname update)", async () => {
 		const db = makeMockDB(seedWithNewNickname())
-		await runMigration(makeEnv(db), { oldKey: "oldkey", newKey: "newkey" })
+		await runMigration(makeEnv(db), { oldKey: "oldkey", newKey: "newkey", migrationId: 7 })
 		expect(db.calls.some((c) => c.sql.includes("UPDATE users SET nickname"))).toBe(false)
 	})
 
 	it("applies the new key's nickname to the survivor when keepNickname is 'new'", async () => {
 		const db = makeMockDB(seedWithNewNickname())
-		await runMigration(makeEnv(db), { oldKey: "oldkey", newKey: "newkey", keepNickname: "new" })
+		await runMigration(makeEnv(db), { oldKey: "oldkey", newKey: "newkey", keepNickname: "new", migrationId: 7 })
 		const call = db.calls.find((c) => c.sql.includes("UPDATE users SET nickname"))
 		expect(call).toBeDefined()
 		expect(call?.params[0]).toBe("newnick")
@@ -272,8 +275,34 @@ describe("runMigration nickname handling", () => {
 			{ id: 2, key_id: "newkey", nickname: null },
 		]
 		const db = makeMockDB(seed)
-		await runMigration(makeEnv(db), { oldKey: "oldkey", newKey: "newkey", keepNickname: "new" })
+		await runMigration(makeEnv(db), { oldKey: "oldkey", newKey: "newkey", keepNickname: "new", migrationId: 7 })
 		expect(db.calls.some((c) => c.sql.includes("UPDATE users SET nickname"))).toBe(false)
+	})
+})
+
+describe("runMigration audit", () => {
+	it("writes the committed audit row inside the migration transaction", async () => {
+		const db = makeMockDB(mergeSeed())
+		await runMigration(makeEnv(db), { oldKey: "oldkey", newKey: "newkey", migrationId: 7 })
+		const auditUpdate = db.calls.find(
+			(c) => c.sql.includes("UPDATE migration_requests") && c.sql.includes("status = 'committed'")
+		)
+		expect(auditUpdate).toBeDefined()
+		expect(auditUpdate?.params[auditUpdate.params.length - 1]).toBe(7)
+		expect(
+			auditUpdate?.params.some((p) => typeof p === "string" && p.includes('"users"'))
+		).toBe(true)
+	})
+
+	it("does not write a committed audit row on an error short-circuit", async () => {
+		const db = makeMockDB([null]) // old user missing
+		const result = await runMigration(makeEnv(db), {
+			oldKey: "oldkey",
+			newKey: "newkey",
+			migrationId: 7,
+		})
+		expect(result).toEqual({ error: "OLD_KEY_NO_USER" })
+		expect(db.calls.some((c) => c.sql.includes("UPDATE migration_requests"))).toBe(false)
 	})
 })
 
@@ -297,7 +326,7 @@ describe("runMigration (relabel case)", () => {
 
 	it("does not re-point votes or reports (no colliding user row), but relabels requests and the key", async () => {
 		const db = makeMockDB(relabelSeed())
-		const result = await runMigration(makeEnv(db), { oldKey: "oldkey", newKey: "newkey" })
+		const result = await runMigration(makeEnv(db), { oldKey: "oldkey", newKey: "newkey", migrationId: 7 })
 		if ("error" in result) throw new Error("unexpected error")
 		expect(result.moved).toEqual({
 			submissions: 0,
@@ -310,6 +339,30 @@ describe("runMigration (relabel case)", () => {
 		expect(db.calls.some((c) => c.sql.includes("DELETE FROM users"))).toBe(false)
 		expect(idx(db.calls, "UPDATE lyrics_requests SET requester_id")).toBeGreaterThanOrEqual(0)
 		expect(idx(db.calls, "UPDATE users SET key_id")).toBeGreaterThanOrEqual(0)
+	})
+
+	it("regression: does not count null-submitter lyrics (deleted-by rows) as moved submissions", async () => {
+		const db = makeMockDB([
+			{ id: 1 }, // old user
+			null, // new user (relabel case)
+			{ discord_id: "disc-old", key_id: "oldkey" }, // old link
+			null, // new link
+			[{ id: 1, key_id: "oldkey" }], // users snapshot
+			[], // votes snapshot
+			[], // reports snapshot
+			[{ id: 99, submitter_id: null, video_id: "vidX" }], // lyrics snapshot: pulled in via deleted_by_user_id
+			[], // fulfillments snapshot
+			[{ discord_id: "disc-old", key_id: "oldkey" }], // discord snapshot
+			[], // requests snapshot
+			{ n: 0 }, // request collisions
+		])
+		const result = await runMigration(makeEnv(db), {
+			oldKey: "oldkey",
+			newKey: "newkey",
+			migrationId: 7,
+		})
+		if ("error" in result) throw new Error("unexpected error")
+		expect(result.moved.submissions).toBe(0)
 	})
 })
 
@@ -331,26 +384,12 @@ describe("migration audit", () => {
 		expect(insert.params).toEqual(["sess-1", "disc-1", "oldkey", "newkey", 5, 9, 1, 2, 3])
 	})
 
-	it("markAuditCommitted writes committed status, moved counts, and the JSON snapshot", async () => {
-		const db = makeMockDB([])
-		const snapshot = { users: [{ id: 1 }] }
-		await markAuditCommitted(
-			makeEnv(db),
-			42,
-			{ submissions: 5, votes: 9, reports: 1, fulfillments: 2, collisionsDropped: 3 },
-			snapshot as never
-		)
-		const update = db.calls[0]
-		expect(update.sql).toContain("status = 'committed'")
-		expect(update.params).toContain(JSON.stringify(snapshot))
-		expect(update.params[update.params.length - 1]).toBe(42)
-	})
-
 	it("markAuditFailed records the error and failed status", async () => {
 		const db = makeMockDB([])
 		await markAuditFailed(makeEnv(db), 42, "boom")
 		const update = db.calls[0]
 		expect(update.sql).toContain("status = 'failed'")
+		expect(update.sql).toContain("status <> 'committed'")
 		expect(update.params).toEqual(["boom", 42])
 	})
 
@@ -421,6 +460,22 @@ describe("restoreFromSnapshot", () => {
 	it("refuses to restore a non-committed migration", async () => {
 		const db = makeMockDB([{ id: 7, status: "preview", old_key: "o", new_key: "n", snapshot: {} }])
 		expect(await restoreFromSnapshot(makeEnv(db), 7)).toEqual({ error: "NOT_COMMITTED" })
+	})
+
+	it("refuses and mutates nothing when the survivor has interim activity after commit", async () => {
+		const db = makeMockDB([
+			committedAuditRow(), // getAudit
+			[{ id: 11 }, { id: 999 }], // current votes: snapshot's 11 + interim 999
+			// current reports all() -> [] from the empty queue
+		])
+		const result = await restoreFromSnapshot(makeEnv(db), 7)
+		expect(result).toEqual({ error: "HAS_INTERIM_ACTIVITY" })
+		expect(
+			db.calls.some(
+				(c) =>
+					c.sql.startsWith("DELETE") || c.sql.startsWith("UPDATE") || c.sql.startsWith("INSERT")
+			)
+		).toBe(false)
 	})
 
 	it("reverses the migration: survivor first, new user re-inserted, leaf tables delete+reinsert, lyrics updated", async () => {

@@ -1,9 +1,6 @@
 import { Elysia, t } from "elysia"
-import {
-	markAuditCommitted,
-	markAuditFailed,
-	runMigration,
-} from "@/db/account-migration"
+import { config } from "@/config"
+import { markAuditFailed, runMigration } from "@/db/account-migration"
 import { getByDiscordId } from "@/db/discordLinks"
 import { invalidateCuratorLeaderboardCache } from "@/db/leaderboard"
 import { invalidateCacheForSubmitter } from "@/db/lyrics"
@@ -15,6 +12,7 @@ import { isAuthorizedBot } from "@/utils/bot-auth"
 import { ErrorCode, buildError } from "@/utils/errors"
 import {
 	clearDiscordIndex,
+	commitLockKey,
 	createSession,
 	getActiveSessionForDiscord,
 	getSession,
@@ -29,6 +27,7 @@ const bodyCommit = t.Object({
 	discordId: t.String(),
 	keepNickname: t.Optional(t.Union([t.Literal("old"), t.Literal("new")])),
 })
+const paramsSession = t.Object({ sessionId: t.String() })
 
 export const migrationRoutes = (env: Env) =>
 	new Elysia({ prefix: "/migrations" })
@@ -70,36 +69,40 @@ export const migrationRoutes = (env: Env) =>
 			},
 			{ body: bodyDiscordId }
 		)
-		.get("/bot/:sessionId", async ({ env, headers, params, status }) => {
-			if (!isAuthorizedBot(headers.authorization, env)) {
-				return status(401, buildError(ErrorCode.AUTH_REQUIRED))
-			}
-			const session = await getSession(env, params.sessionId)
-			if (!session) {
+		.get(
+			"/bot/:sessionId",
+			async ({ env, headers, params, status }) => {
+				if (!isAuthorizedBot(headers.authorization, env)) {
+					return status(401, buildError(ErrorCode.AUTH_REQUIRED))
+				}
+				const session = await getSession(env, params.sessionId)
+				if (!session) {
+					return status(200, {
+						success: true,
+						data: {
+							status: "expired",
+							oldKeyId: null,
+							newKeyId: null,
+							oldNickname: null,
+							newNickname: null,
+							counts: null,
+						},
+					})
+				}
 				return status(200, {
 					success: true,
 					data: {
-						status: "expired",
-						oldKeyId: null,
-						newKeyId: null,
-						oldNickname: null,
-						newNickname: null,
-						counts: null,
+						status: session.status,
+						oldKeyId: shortKeyId(session.oldKey),
+						newKeyId: session.newKey ? shortKeyId(session.newKey) : null,
+						oldNickname: session.oldNickname,
+						newNickname: session.newNickname,
+						counts: session.counts,
 					},
 				})
-			}
-			return status(200, {
-				success: true,
-				data: {
-					status: session.status,
-					oldKeyId: shortKeyId(session.oldKey),
-					newKeyId: session.newKey ? shortKeyId(session.newKey) : null,
-					oldNickname: session.oldNickname,
-					newNickname: session.newNickname,
-					counts: session.counts,
-				},
-			})
-		})
+			},
+			{ params: paramsSession }
+		)
 		.post(
 			"/bot/:sessionId/commit",
 			async ({ env, headers, params, body, status }) => {
@@ -125,19 +128,24 @@ export const migrationRoutes = (env: Env) =>
 					return status(403, buildError(ErrorCode.MIGRATION_NOT_OWNER))
 				}
 
+				const lockKey = commitLockKey(session.sessionId)
+				const locked = await env.CACHE.setNX(lockKey, "1", config.migration.commitLockSeconds)
+				if (!locked) return status(409, buildError(ErrorCode.MIGRATION_IN_PROGRESS))
+
 				const result = await runMigration(env, {
 					oldKey: session.oldKey,
 					newKey: session.newKey,
 					keepNickname: keepNickname ?? "old",
+					migrationId: session.migrationId,
 				})
 				if ("error" in result) {
+					await env.CACHE.delete(lockKey)
 					await markAuditFailed(env, session.migrationId, result.error)
 					await saveSession(env, { ...session, status: "failed", failureReason: result.error })
 					log.error("migration commit failed", { sessionId: session.sessionId, error: result.error })
 					return status(500, buildError(ErrorCode.MIGRATION_FAILED))
 				}
 
-				await markAuditCommitted(env, session.migrationId, result.moved, result.snapshot)
 				await saveSession(env, { ...session, status: "committed" })
 				await clearDiscordIndex(env, discordId)
 
@@ -159,5 +167,5 @@ export const migrationRoutes = (env: Env) =>
 					data: { migrationId: session.migrationId, moved: result.moved },
 				})
 			},
-			{ body: bodyCommit }
+			{ params: paramsSession, body: bodyCommit }
 		)
