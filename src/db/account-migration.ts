@@ -195,10 +195,10 @@ export async function runMigration(
 		const fulfillmentRows = snapshot.request_fulfillments as { submitter_id: number | null }[]
 
 		const moved = {
-			submissions: newId !== null ? lyricsRows.filter((r) => r.submitter_id === newId).length : 0,
-			votes: votesRows.filter((r) => r.user_id === newId).length,
-			reports: reportsRows.filter((r) => r.user_id === newId).length,
-			fulfillments: fulfillmentRows.filter((r) => r.submitter_id === newId).length,
+			submissions: lyricsRows.filter((r) => r.submitter_id === oldId).length,
+			votes: votesRows.filter((r) => r.user_id === oldId).length,
+			reports: reportsRows.filter((r) => r.user_id === oldId).length,
+			fulfillments: fulfillmentRows.filter((r) => r.submitter_id === oldId).length,
 			collisionsDropped: 0,
 		}
 

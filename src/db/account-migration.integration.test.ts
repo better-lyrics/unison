@@ -142,11 +142,12 @@ describeIntegration("account migration (integration)", () => {
 
 		const plan = await computeMigrationPlan(env, OLD_KEY, NEW_KEY)
 		if ("error" in plan) throw new Error(plan.error)
+		// counts describe the old identity's carried history (L1 submission, 1 vote, 1 report)
 		expect(plan.counts).toEqual({
-			submissions: 2,
-			votes: 4,
+			submissions: 1,
+			votes: 1,
 			reports: 1,
-			fulfillments: 1,
+			fulfillments: 0,
 			collisions: 3, // 1 vote + 1 report + 1 request
 		})
 
@@ -161,10 +162,10 @@ describeIntegration("account migration (integration)", () => {
 		if ("error" in result) throw new Error(result.error)
 
 		expect(result.moved).toEqual({
-			submissions: 2,
-			votes: 4,
+			submissions: 1,
+			votes: 1,
 			reports: 1,
-			fulfillments: 1,
+			fulfillments: 0,
 			collisionsDropped: 3,
 		})
 

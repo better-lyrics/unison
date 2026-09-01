@@ -177,15 +177,15 @@ function mergeSeed(): unknown[] {
 }
 
 describe("runMigration (merge case)", () => {
-	it("returns moved counts and collisionsDropped from the snapshot and collision queries", async () => {
+	it("reports the old identity's carried history as moved, plus collisionsDropped", async () => {
 		const db = makeMockDB(mergeSeed())
 		const result = await runMigration(makeEnv(db), { oldKey: "oldkey", newKey: "newkey", migrationId: 7 })
 		if ("error" in result) throw new Error(`unexpected error: ${result.error}`)
 		expect(result.moved).toEqual({
-			submissions: 2,
+			submissions: 1,
 			votes: 2,
-			reports: 1,
-			fulfillments: 2,
+			reports: 0,
+			fulfillments: 1,
 			collisionsDropped: 2,
 		})
 	})
@@ -357,9 +357,11 @@ describe("runMigration (relabel case)", () => {
 		const db = makeMockDB(relabelSeed())
 		const result = await runMigration(makeEnv(db), { oldKey: "oldkey", newKey: "newkey", migrationId: 7 })
 		if ("error" in result) throw new Error("unexpected error")
+		// regression: the relabel case carries the old identity's whole history, so moved is
+		// its holdings (1 submission, 1 vote here), never all-zeros
 		expect(result.moved).toEqual({
-			submissions: 0,
-			votes: 0,
+			submissions: 1,
+			votes: 1,
 			reports: 0,
 			fulfillments: 0,
 			collisionsDropped: 0,
