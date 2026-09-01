@@ -1,6 +1,14 @@
 import { describe, expect, it } from "vitest"
 import type { Env } from "@/types"
-import { computeMigrationPlan, runMigration } from "./account-migration"
+import {
+	computeMigrationPlan,
+	createPreviewAudit,
+	getAudit,
+	markAuditCommitted,
+	markAuditFailed,
+	restoreFromSnapshot,
+	runMigration,
+} from "./account-migration"
 
 function idx(calls: { sql: string }[], needle: string): number {
 	return calls.findIndex((c) => c.sql.includes(needle))
@@ -259,5 +267,132 @@ describe("runMigration (relabel case)", () => {
 		expect(db.calls.some((c) => c.sql.includes("DELETE FROM users"))).toBe(false)
 		expect(idx(db.calls, "UPDATE lyrics_requests SET requester_id")).toBeGreaterThanOrEqual(0)
 		expect(idx(db.calls, "UPDATE users SET key_id")).toBeGreaterThanOrEqual(0)
+	})
+})
+
+describe("migration audit", () => {
+	it("createPreviewAudit inserts a preview row with projected counts and returns its id", async () => {
+		const db = makeMockDB([{ id: 42 }])
+		const id = await createPreviewAudit(makeEnv(db), {
+			sessionId: "sess-1",
+			discordId: "disc-1",
+			oldKey: "oldkey",
+			newKey: "newkey",
+			counts: { submissions: 5, votes: 9, reports: 1, fulfillments: 2, collisions: 3 },
+		})
+		expect(id).toBe(42)
+		const insert = db.calls[0]
+		expect(insert.sql).toContain("INSERT INTO migration_requests")
+		expect(insert.sql).toContain("'preview'")
+		expect(insert.sql).toContain("RETURNING id")
+		expect(insert.params).toEqual(["sess-1", "disc-1", "oldkey", "newkey", 5, 9, 1, 2, 3])
+	})
+
+	it("markAuditCommitted writes committed status, moved counts, and the JSON snapshot", async () => {
+		const db = makeMockDB([])
+		const snapshot = { users: [{ id: 1 }] }
+		await markAuditCommitted(
+			makeEnv(db),
+			42,
+			{ submissions: 5, votes: 9, reports: 1, fulfillments: 2, collisionsDropped: 3 },
+			snapshot as never
+		)
+		const update = db.calls[0]
+		expect(update.sql).toContain("status = 'committed'")
+		expect(update.params).toContain(JSON.stringify(snapshot))
+		expect(update.params[update.params.length - 1]).toBe(42)
+	})
+
+	it("markAuditFailed records the error and failed status", async () => {
+		const db = makeMockDB([])
+		await markAuditFailed(makeEnv(db), 42, "boom")
+		const update = db.calls[0]
+		expect(update.sql).toContain("status = 'failed'")
+		expect(update.params).toEqual(["boom", 42])
+	})
+
+	it("getAudit selects the row by id", async () => {
+		const db = makeMockDB([{ id: 42, status: "committed" }])
+		const row = await getAudit(makeEnv(db), 42)
+		expect(row).toEqual({ id: 42, status: "committed" })
+		expect(db.calls[0].sql).toContain("FROM migration_requests")
+	})
+})
+
+function committedAuditRow() {
+	return {
+		id: 7,
+		status: "committed",
+		old_key: "oldkey",
+		new_key: "newkey",
+		snapshot: {
+			users: [
+				{
+					id: 1,
+					key_id: "oldkey",
+					reputation: 1.2,
+					vote_count: 5,
+					avg_vote: 0.4,
+					created_at: 100,
+					nickname: "old",
+					nickname_updated_at: 90,
+				},
+				{
+					id: 2,
+					key_id: "newkey",
+					reputation: 1.0,
+					vote_count: 2,
+					avg_vote: 0.0,
+					created_at: 200,
+					nickname: null,
+					nickname_updated_at: null,
+				},
+			],
+			votes: [{ id: 11, lyrics_id: 10, user_id: 1, vote: 1, is_self_vote: 0, created_at: 100 }],
+			reports: [],
+			lyrics: [{ id: 10, submitter_id: 1, deleted_by_user_id: null, video_id: "vidA" }],
+			request_fulfillments: [{ id: 5, submitter_id: 1 }],
+			discord_links: [
+				{ discord_id: "disc-old", key_id: "oldkey", discord_username: "u", linked_at: 100 },
+			],
+			lyrics_requests: [
+				{
+					id: 3,
+					video_id: "vidA",
+					requester_id: "oldkey",
+					requester_type: "extension",
+					weight: 1.0,
+					created_at: 100,
+				},
+			],
+		},
+	}
+}
+
+describe("restoreFromSnapshot", () => {
+	it("returns NOT_FOUND when the audit row is missing", async () => {
+		const db = makeMockDB([null])
+		expect(await restoreFromSnapshot(makeEnv(db), 999)).toEqual({ error: "NOT_FOUND" })
+	})
+
+	it("refuses to restore a non-committed migration", async () => {
+		const db = makeMockDB([{ id: 7, status: "preview", old_key: "o", new_key: "n", snapshot: {} }])
+		expect(await restoreFromSnapshot(makeEnv(db), 7)).toEqual({ error: "NOT_COMMITTED" })
+	})
+
+	it("reverses the migration: survivor first, new user re-inserted, leaf tables delete+reinsert, lyrics updated", async () => {
+		const db = makeMockDB([committedAuditRow()])
+		const result = await restoreFromSnapshot(makeEnv(db), 7)
+		expect(result).toEqual({ restored: true })
+
+		const calls = db.calls
+		expect(idx(calls, "UPDATE users SET key_id")).toBeLessThan(idx(calls, "INSERT INTO users"))
+		expect(idx(calls, "DELETE FROM votes")).toBeLessThan(idx(calls, "INSERT INTO votes"))
+		expect(idx(calls, "DELETE FROM discord_links")).toBeLessThan(
+			idx(calls, "INSERT INTO discord_links")
+		)
+		// lyrics restored by targeted UPDATE, never deleted (would cascade its votes/reports)
+		expect(calls.some((c) => c.sql.includes("DELETE FROM lyrics "))).toBe(false)
+		expect(idx(calls, "UPDATE lyrics SET submitter_id")).toBeGreaterThanOrEqual(0)
 	})
 })

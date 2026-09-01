@@ -2,6 +2,8 @@ import type { D1Compat } from "@/infra/database"
 import type { Env } from "@/types"
 import type { MigrationCounts } from "@/utils/migration-session"
 
+const now = () => Math.floor(Date.now() / 1000)
+
 export interface MigrationResolved {
 	oldUserId: number
 	newUserId: number | null
@@ -303,5 +305,262 @@ export async function runMigration(
 		moved.collisionsDropped = voteCollisions + reportCollisions + reqCollisions
 
 		return { moved, snapshot, affectedLyricsIds, affectedVideoIds }
+	})
+}
+
+export interface MigrationAuditRow {
+	id: number
+	session_id: string | null
+	discord_id: string
+	old_key: string
+	new_key: string
+	status: "preview" | "committed" | "failed"
+	moved_submissions: number
+	moved_votes: number
+	moved_reports: number
+	moved_fulfillments: number
+	collisions_dropped: number
+	snapshot: MigrationSnapshot | null
+	error: string | null
+	created_at: number
+	updated_at: number
+}
+
+export async function createPreviewAudit(
+	env: Env,
+	params: {
+		sessionId: string
+		discordId: string
+		oldKey: string
+		newKey: string
+		counts: MigrationCounts
+	}
+): Promise<number> {
+	const { sessionId, discordId, oldKey, newKey, counts } = params
+	const row = await env.DB.prepare(
+		`INSERT INTO migration_requests
+			(session_id, discord_id, old_key, new_key, status,
+			 moved_submissions, moved_votes, moved_reports, moved_fulfillments, collisions_dropped)
+		 VALUES (?, ?, ?, ?, 'preview', ?, ?, ?, ?, ?)
+		 RETURNING id`
+	)
+		.bind(
+			sessionId,
+			discordId,
+			oldKey,
+			newKey,
+			counts.submissions,
+			counts.votes,
+			counts.reports,
+			counts.fulfillments,
+			counts.collisions
+		)
+		.first<{ id: number }>()
+	return row!.id
+}
+
+export async function markAuditCommitted(
+	env: Env,
+	id: number,
+	moved: MigrationResult["moved"],
+	snapshot: MigrationSnapshot
+): Promise<void> {
+	await env.DB.prepare(
+		`UPDATE migration_requests SET
+			status = 'committed',
+			moved_submissions = ?, moved_votes = ?, moved_reports = ?, moved_fulfillments = ?,
+			collisions_dropped = ?, snapshot = ?::jsonb, updated_at = ?
+		 WHERE id = ?`
+	)
+		.bind(
+			moved.submissions,
+			moved.votes,
+			moved.reports,
+			moved.fulfillments,
+			moved.collisionsDropped,
+			JSON.stringify(snapshot),
+			now(),
+			id
+		)
+		.run()
+}
+
+export async function markAuditFailed(env: Env, id: number, error: string): Promise<void> {
+	await env.DB.prepare(
+		"UPDATE migration_requests SET status = 'failed', error = ?, updated_at = " +
+			"EXTRACT(EPOCH FROM NOW())::INTEGER WHERE id = ?"
+	)
+		.bind(error, id)
+		.run()
+}
+
+export async function getAudit(env: Env, id: number): Promise<MigrationAuditRow | null> {
+	return env.DB.prepare("SELECT * FROM migration_requests WHERE id = ?")
+		.bind(id)
+		.first<MigrationAuditRow>()
+}
+
+interface SnapUser {
+	id: number
+	key_id: string
+	reputation: number
+	vote_count: number
+	avg_vote: number
+	created_at: number
+	nickname: string | null
+	nickname_updated_at: number | null
+}
+interface SnapDiscord {
+	discord_id: string
+	key_id: string
+	discord_username: string | null
+	linked_at: number
+}
+interface SnapVote {
+	id: number
+	lyrics_id: number
+	user_id: number
+	vote: number
+	is_self_vote: number
+	created_at: number
+}
+interface SnapReport {
+	id: number
+	lyrics_id: number
+	user_id: number
+	reason: string
+	details: string | null
+	created_at: number
+}
+interface SnapLyrics {
+	id: number
+	submitter_id: number | null
+	deleted_by_user_id: number | null
+}
+interface SnapFulfillment {
+	id: number
+	submitter_id: number | null
+}
+interface SnapRequest {
+	id: number
+	video_id: string
+	requester_id: string
+	requester_type: string
+	weight: number
+	created_at: number
+}
+
+// Reverse of runMigration, driven entirely by the stored pre-image. Order matters:
+// relabel the survivor back to the old key before re-inserting the new user row (both
+// hold the same key at commit time), and never DELETE lyrics (it would cascade its votes).
+export async function restoreFromSnapshot(
+	env: Env,
+	migrationId: number
+): Promise<{ restored: true } | { error: "NOT_FOUND" | "NOT_COMMITTED" }> {
+	const audit = await getAudit(env, migrationId)
+	if (!audit) return { error: "NOT_FOUND" }
+	if (audit.status !== "committed" || !audit.snapshot) return { error: "NOT_COMMITTED" }
+
+	const snap = audit.snapshot
+	const oldKey = audit.old_key
+	const newKey = audit.new_key
+	const users = snap.users as SnapUser[]
+	const oldSnap = users.find((u) => u.key_id === oldKey)
+	const newSnap = users.find((u) => u.key_id === newKey)
+	if (!oldSnap) return { error: "NOT_COMMITTED" }
+	const ids = newSnap ? [oldSnap.id, newSnap.id] : [oldSnap.id]
+
+	return env.DB.transaction(async (tx) => {
+		await tx
+			.prepare(
+				"UPDATE users SET key_id = ?, reputation = ?, vote_count = ?, avg_vote = ?, nickname = ?, nickname_updated_at = ? WHERE id = ?"
+			)
+			.bind(
+				oldSnap.key_id,
+				oldSnap.reputation,
+				oldSnap.vote_count,
+				oldSnap.avg_vote,
+				oldSnap.nickname,
+				oldSnap.nickname_updated_at,
+				oldSnap.id
+			)
+			.run()
+
+		if (newSnap) {
+			await tx
+				.prepare(
+					"INSERT INTO users (id, key_id, reputation, vote_count, avg_vote, created_at, nickname, nickname_updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
+				)
+				.bind(
+					newSnap.id,
+					newSnap.key_id,
+					newSnap.reputation,
+					newSnap.vote_count,
+					newSnap.avg_vote,
+					newSnap.created_at,
+					newSnap.nickname,
+					newSnap.nickname_updated_at
+				)
+				.run()
+		}
+
+		await tx.prepare("DELETE FROM discord_links WHERE key_id = ANY(?)").bind([oldKey, newKey]).run()
+		for (const d of snap.discord_links as SnapDiscord[]) {
+			await tx
+				.prepare(
+					"INSERT INTO discord_links (discord_id, key_id, discord_username, linked_at) VALUES (?, ?, ?, ?)"
+				)
+				.bind(d.discord_id, d.key_id, d.discord_username, d.linked_at)
+				.run()
+		}
+
+		await tx.prepare("DELETE FROM votes WHERE user_id = ANY(?)").bind(ids).run()
+		for (const v of snap.votes as SnapVote[]) {
+			await tx
+				.prepare(
+					"INSERT INTO votes (id, lyrics_id, user_id, vote, is_self_vote, created_at) VALUES (?, ?, ?, ?, ?, ?)"
+				)
+				.bind(v.id, v.lyrics_id, v.user_id, v.vote, v.is_self_vote, v.created_at)
+				.run()
+		}
+
+		await tx.prepare("DELETE FROM reports WHERE user_id = ANY(?)").bind(ids).run()
+		for (const r of snap.reports as SnapReport[]) {
+			await tx
+				.prepare(
+					"INSERT INTO reports (id, lyrics_id, user_id, reason, details, created_at) VALUES (?, ?, ?, ?, ?, ?)"
+				)
+				.bind(r.id, r.lyrics_id, r.user_id, r.reason, r.details, r.created_at)
+				.run()
+		}
+
+		for (const l of snap.lyrics as SnapLyrics[]) {
+			await tx
+				.prepare("UPDATE lyrics SET submitter_id = ?, deleted_by_user_id = ? WHERE id = ?")
+				.bind(l.submitter_id, l.deleted_by_user_id, l.id)
+				.run()
+		}
+
+		for (const f of snap.request_fulfillments as SnapFulfillment[]) {
+			await tx
+				.prepare("UPDATE request_fulfillments SET submitter_id = ? WHERE id = ?")
+				.bind(f.submitter_id, f.id)
+				.run()
+		}
+
+		await tx
+			.prepare("DELETE FROM lyrics_requests WHERE requester_id = ANY(?)")
+			.bind([oldKey, newKey])
+			.run()
+		for (const rq of snap.lyrics_requests as SnapRequest[]) {
+			await tx
+				.prepare(
+					"INSERT INTO lyrics_requests (id, video_id, requester_id, requester_type, weight, created_at) VALUES (?, ?, ?, ?, ?, ?)"
+				)
+				.bind(rq.id, rq.video_id, rq.requester_id, rq.requester_type, rq.weight, rq.created_at)
+				.run()
+		}
+
+		return { restored: true } as const
 	})
 }
