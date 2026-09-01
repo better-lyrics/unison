@@ -271,3 +271,26 @@ ALTER TABLE translation_cache ADD COLUMN IF NOT EXISTS failure_count INT NOT NUL
 CREATE INDEX IF NOT EXISTS translation_cache_expires_idx ON translation_cache (expires_at);
 CREATE INDEX IF NOT EXISTS translation_cache_video_idx   ON translation_cache (video_id);
 CREATE INDEX IF NOT EXISTS translation_cache_to_lang_idx ON translation_cache (to_lang);
+
+-- Account migration audit + reversible snapshot.
+-- One row per migration that reached preview. The snapshot JSONB holds the full
+-- pre-image of every touched row so a commit can be undone even after the fact.
+CREATE TABLE IF NOT EXISTS migration_requests (
+    id BIGSERIAL PRIMARY KEY,
+    session_id TEXT,
+    discord_id TEXT NOT NULL,
+    old_key TEXT NOT NULL,
+    new_key TEXT NOT NULL,
+    status TEXT NOT NULL CHECK (status IN ('preview', 'committed', 'failed')),
+    moved_submissions INTEGER NOT NULL DEFAULT 0,
+    moved_votes INTEGER NOT NULL DEFAULT 0,
+    moved_reports INTEGER NOT NULL DEFAULT 0,
+    moved_fulfillments INTEGER NOT NULL DEFAULT 0,
+    collisions_dropped INTEGER NOT NULL DEFAULT 0,
+    snapshot JSONB,
+    error TEXT,
+    created_at INTEGER NOT NULL DEFAULT (EXTRACT(EPOCH FROM NOW())::INTEGER),
+    updated_at INTEGER NOT NULL DEFAULT (EXTRACT(EPOCH FROM NOW())::INTEGER)
+);
+
+CREATE INDEX IF NOT EXISTS idx_migration_requests_discord ON migration_requests(discord_id);
