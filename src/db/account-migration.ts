@@ -277,16 +277,23 @@ export async function runMigration(
 		}
 		await tx.prepare("UPDATE users SET key_id = ? WHERE id = ?").bind(newKey, oldId).run()
 
-		if (keepNickname === "new" && newId !== null) {
-			const newSnapUser = (snapshot.users as { key_id: string; nickname: string | null }[]).find(
-				(u) => u.key_id === newKey
-			)
-			if (newSnapUser?.nickname) {
-				await tx
-					.prepare("UPDATE users SET nickname = ?, nickname_updated_at = ? WHERE id = ?")
-					.bind(newSnapUser.nickname, now(), oldId)
-					.run()
-			}
+		// Nickname survival is a data rule, not the client's call: keep whichever real nickname
+		// exists. keepNickname only breaks the tie when both identities carry one; it can never
+		// drop a nickname that has no counterpart.
+		const snapUsers = snapshot.users as { key_id: string; nickname: string | null }[]
+		const oldNickname = snapUsers.find((u) => u.key_id === oldKey)?.nickname ?? null
+		const newNickname = snapUsers.find((u) => u.key_id === newKey)?.nickname ?? null
+		const survivingNickname =
+			oldNickname && newNickname
+				? keepNickname === "new"
+					? newNickname
+					: oldNickname
+				: (oldNickname ?? newNickname)
+		if (survivingNickname !== null && survivingNickname !== oldNickname) {
+			await tx
+				.prepare("UPDATE users SET nickname = ?, nickname_updated_at = ? WHERE id = ?")
+				.bind(survivingNickname, now(), oldId)
+				.run()
 		}
 
 		if (oldLink) {

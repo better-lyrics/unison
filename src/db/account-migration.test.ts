@@ -307,6 +307,30 @@ describe("runMigration nickname handling", () => {
 		await runMigration(makeEnv(db), { oldKey: "oldkey", newKey: "newkey", keepNickname: "new", migrationId: 7 })
 		expect(db.calls.some((c) => c.sql.includes("UPDATE users SET nickname"))).toBe(false)
 	})
+
+	it("regression: keeps the new key's nickname when the old identity has none, even with keepNickname:'old'", async () => {
+		const seed = mergeSeed()
+		seed[4] = [
+			{ id: 1, key_id: "oldkey", nickname: null },
+			{ id: 2, key_id: "newkey", nickname: "newnick" },
+		]
+		const db = makeMockDB(seed)
+		await runMigration(makeEnv(db), { oldKey: "oldkey", newKey: "newkey", keepNickname: "old", migrationId: 7 })
+		const call = db.calls.find((c) => c.sql.includes("UPDATE users SET nickname"))
+		expect(call).toBeDefined()
+		expect(call?.params[0]).toBe("newnick")
+	})
+
+	it("writes no nickname when neither identity has one, so the generated petname stands", async () => {
+		const seed = mergeSeed()
+		seed[4] = [
+			{ id: 1, key_id: "oldkey", nickname: null },
+			{ id: 2, key_id: "newkey", nickname: null },
+		]
+		const db = makeMockDB(seed)
+		await runMigration(makeEnv(db), { oldKey: "oldkey", newKey: "newkey", keepNickname: "new", migrationId: 7 })
+		expect(db.calls.some((c) => c.sql.includes("UPDATE users SET nickname"))).toBe(false)
+	})
 })
 
 describe("runMigration audit", () => {
