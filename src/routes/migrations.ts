@@ -25,6 +25,10 @@ import { shortKeyId } from "@/utils/short-key-id"
 const log = new Logger("migrations")
 
 const bodyDiscordId = t.Object({ discordId: t.String() })
+const bodyCommit = t.Object({
+	discordId: t.String(),
+	keepNickname: t.Optional(t.Union([t.Literal("old"), t.Literal("new")])),
+})
 
 export const migrationRoutes = (env: Env) =>
 	new Elysia({ prefix: "/migrations" })
@@ -78,7 +82,8 @@ export const migrationRoutes = (env: Env) =>
 						status: "expired",
 						oldKeyId: null,
 						newKeyId: null,
-						nicknameKept: true,
+						oldNickname: null,
+						newNickname: null,
 						counts: null,
 					},
 				})
@@ -89,7 +94,8 @@ export const migrationRoutes = (env: Env) =>
 					status: session.status,
 					oldKeyId: shortKeyId(session.oldKey),
 					newKeyId: session.newKey ? shortKeyId(session.newKey) : null,
-					nicknameKept: session.nicknameKept,
+					oldNickname: session.oldNickname,
+					newNickname: session.newNickname,
 					counts: session.counts,
 				},
 			})
@@ -100,7 +106,7 @@ export const migrationRoutes = (env: Env) =>
 				if (!isAuthorizedBot(headers.authorization, env)) {
 					return status(401, buildError(ErrorCode.AUTH_REQUIRED))
 				}
-				const { discordId } = body
+				const { discordId, keepNickname } = body
 
 				const session = await getSession(env, params.sessionId)
 				if (!session) return status(410, buildError(ErrorCode.MIGRATION_EXPIRED))
@@ -119,7 +125,11 @@ export const migrationRoutes = (env: Env) =>
 					return status(403, buildError(ErrorCode.MIGRATION_NOT_OWNER))
 				}
 
-				const result = await runMigration(env, { oldKey: session.oldKey, newKey: session.newKey })
+				const result = await runMigration(env, {
+					oldKey: session.oldKey,
+					newKey: session.newKey,
+					keepNickname: keepNickname ?? "old",
+				})
 				if ("error" in result) {
 					await markAuditFailed(env, session.migrationId, result.error)
 					await saveSession(env, { ...session, status: "failed", failureReason: result.error })
@@ -149,5 +159,5 @@ export const migrationRoutes = (env: Env) =>
 					data: { migrationId: session.migrationId, moved: result.moved },
 				})
 			},
-			{ body: bodyDiscordId }
+			{ body: bodyCommit }
 		)

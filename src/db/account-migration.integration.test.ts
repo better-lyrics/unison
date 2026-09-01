@@ -295,4 +295,51 @@ describeIntegration("account migration (integration)", () => {
 		expect(await num("SELECT count(*)::int n FROM discord_links WHERE key_id = $1", [OLD_KEY])).toBe(1)
 		expect(await num("SELECT count(*)::int n FROM discord_links WHERE key_id = $1", [NEW_KEY])).toBe(0)
 	})
+
+	it("applies the new key's nickname when keepNickname is 'new', and restore reverts it", async () => {
+		await pool.query("INSERT INTO public_keys (key_id, public_key) VALUES ($1, 'x'), ($2, 'y')", [
+			OLD_KEY,
+			NEW_KEY,
+		])
+		const oldUser = await one<{ id: number }>(
+			"INSERT INTO users (key_id, nickname, nickname_updated_at) VALUES ($1, 'Caplump', 1) RETURNING id",
+			[OLD_KEY]
+		)
+		await pool.query(
+			"INSERT INTO users (key_id, nickname, nickname_updated_at) VALUES ($1, 'tropicawhale', 1)",
+			[NEW_KEY]
+		)
+
+		const plan = await computeMigrationPlan(env, OLD_KEY, NEW_KEY)
+		if ("error" in plan) throw new Error(plan.error)
+		expect(plan.oldNickname).toBe("Caplump")
+		expect(plan.newNickname).toBe("tropicawhale")
+
+		const auditId = await createPreviewAudit(env, {
+			sessionId: "sess-3",
+			discordId: "disc-1",
+			oldKey: OLD_KEY,
+			newKey: NEW_KEY,
+			counts: plan.counts,
+		})
+		const result = await runMigration(env, {
+			oldKey: OLD_KEY,
+			newKey: NEW_KEY,
+			keepNickname: "new",
+		})
+		if ("error" in result) throw new Error(result.error)
+		await markAuditCommitted(env, auditId, result.moved, result.snapshot)
+
+		const survivor = await one<{ nickname: string }>("SELECT nickname FROM users WHERE id = $1", [
+			oldUser.id,
+		])
+		expect(survivor.nickname).toBe("tropicawhale")
+
+		expect(await restoreFromSnapshot(env, auditId)).toEqual({ restored: true })
+		const reverted = await one<{ nickname: string }>("SELECT nickname FROM users WHERE id = $1", [
+			oldUser.id,
+		])
+		expect(reverted.nickname).toBe("Caplump")
+		expect(await num("SELECT count(*)::int n FROM users WHERE nickname = 'tropicawhale'", [])).toBe(1)
+	})
 })

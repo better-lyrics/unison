@@ -120,7 +120,8 @@ function baseSession(overrides: Partial<MigrationSession> = {}): MigrationSessio
 		oldKey: `${"a".repeat(58)}oldkey`,
 		newKey: null,
 		status: "awaiting_new_key",
-		nicknameKept: true,
+		oldNickname: null,
+		newNickname: null,
 		counts: null,
 		migrationId: null,
 		createdAt: 100,
@@ -187,9 +188,11 @@ describe("GET /migrations/bot/:sessionId", () => {
 		expect(data.status).toBe("expired")
 		expect(data.counts).toBeNull()
 		expect(data.newKeyId).toBeNull()
+		expect(data.oldNickname).toBeNull()
+		expect(data.newNickname).toBeNull()
 	})
 
-	it("reports awaiting_new_key with null new key and counts", async () => {
+	it("reports awaiting_new_key with null new key, counts, and nicknames", async () => {
 		const cache = makeMockCache()
 		seedSession(cache, baseSession())
 		const app = migrationRoutes(makeEnv(makeMockDB(), cache))
@@ -198,10 +201,11 @@ describe("GET /migrations/bot/:sessionId", () => {
 		expect(data.status).toBe("awaiting_new_key")
 		expect(data.newKeyId).toBeNull()
 		expect(data.counts).toBeNull()
-		expect(data.nicknameKept).toBe(true)
+		expect(data.oldNickname).toBeNull()
+		expect(data.newNickname).toBeNull()
 	})
 
-	it("reports ready with short new key id and dry-run counts", async () => {
+	it("reports ready with short new key id, dry-run counts, and both nicknames", async () => {
 		const cache = makeMockCache()
 		seedSession(
 			cache,
@@ -209,6 +213,8 @@ describe("GET /migrations/bot/:sessionId", () => {
 				status: "ready",
 				newKey: `${"b".repeat(58)}newkey`,
 				migrationId: 7,
+				oldNickname: "Caplump",
+				newNickname: "tropicawhale",
 				counts: { submissions: 2, votes: 3, reports: 0, fulfillments: 1, collisions: 1 },
 			})
 		)
@@ -217,6 +223,8 @@ describe("GET /migrations/bot/:sessionId", () => {
 			{}) as Record<string, unknown>
 		expect(data.status).toBe("ready")
 		expect(data.newKeyId).toBe("newkey")
+		expect(data.oldNickname).toBe("Caplump")
+		expect(data.newNickname).toBe("tropicawhale")
 		expect(data.counts).toEqual({ submissions: 2, votes: 3, reports: 0, fulfillments: 1, collisions: 1 })
 	})
 })
@@ -304,6 +312,40 @@ describe("POST /migrations/bot/:sessionId/commit", () => {
 		expect(committed.status).toBe("committed")
 		// discord index cleared
 		expect(cache.store.has("migration:by-discord:disc-1")).toBe(false)
+	})
+
+	it("forwards keepNickname:new so the survivor takes the new key's nickname", async () => {
+		const cache = makeMockCache()
+		seedSession(cache, readySession())
+		// re-verify link, then a merge-case runMigration where the new user has a nickname
+		const db = makeMockDB([
+			{ discord_id: "disc-1", key_id: oldKey }, // re-verify
+			{ id: 1 }, // old user
+			{ id: 2 }, // new user (merge case)
+			{ discord_id: "disc-1", key_id: oldKey }, // old link
+			null, // new link
+			[
+				{ id: 1, key_id: oldKey, nickname: "Caplump" },
+				{ id: 2, key_id: newKey, nickname: "tropicawhale" },
+			], // users snapshot
+			[], // votes
+			[], // reports
+			[], // lyrics
+			[], // fulfillments
+			[{ discord_id: "disc-1", key_id: oldKey }], // discord snapshot
+			[], // requests
+			{ n: 0 }, // vote collisions
+			{ n: 0 }, // report collisions
+			{ n: 0 }, // request collisions
+		])
+		const app = migrationRoutes(makeEnv(db, cache))
+		const res = await app.handle(
+			post("/migrations/bot/sess-1/commit", { discordId: "disc-1", keepNickname: "new" })
+		)
+		expect(res.status).toBe(200)
+		const nick = db.calls.find((c) => c.sql.includes("UPDATE users SET nickname"))
+		expect(nick).toBeDefined()
+		expect(nick?.params[0]).toBe("tropicawhale")
 	})
 
 	it("returns already_committed for a committed session", async () => {

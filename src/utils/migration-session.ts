@@ -19,7 +19,8 @@ export interface MigrationSession {
 	newKey: string | null
 	status: MigrationStatus
 	failureReason?: string
-	nicknameKept: true
+	oldNickname: string | null
+	newNickname: string | null
 	counts: MigrationCounts | null
 	migrationId: number | null
 	createdAt: number
@@ -41,7 +42,8 @@ export async function createSession(
 		oldKey: params.oldKey,
 		newKey: null,
 		status: "awaiting_new_key",
-		nicknameKept: true,
+		oldNickname: null,
+		newNickname: null,
 		counts: null,
 		migrationId: null,
 		createdAt: Math.floor(Date.now() / 1000),

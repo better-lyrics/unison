@@ -67,6 +67,8 @@ async function attachMigrationProof(
 		...session,
 		newKey: provenKeyId,
 		counts: plan.counts,
+		oldNickname: plan.oldNickname,
+		newNickname: plan.newNickname,
 		status: "ready",
 		migrationId,
 	})

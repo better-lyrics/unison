@@ -52,7 +52,8 @@ describe("migration-session", () => {
 		expect(session.oldKey).toBe("oldkey")
 		expect(session.newKey).toBeNull()
 		expect(session.counts).toBeNull()
-		expect(session.nicknameKept).toBe(true)
+		expect(session.oldNickname).toBeNull()
+		expect(session.newNickname).toBeNull()
 
 		const fetched = await getSession(env, session.sessionId)
 		expect(fetched).toEqual(session)

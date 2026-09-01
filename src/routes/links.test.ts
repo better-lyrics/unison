@@ -305,7 +305,8 @@ describe("GET /links/discord/callback - migration attach", () => {
 			oldKey,
 			newKey: null,
 			status: "awaiting_new_key",
-			nicknameKept: true,
+			oldNickname: null,
+			newNickname: null,
 			counts: null,
 			migrationId: null,
 			createdAt: 1,
@@ -317,8 +318,8 @@ describe("GET /links/discord/callback - migration attach", () => {
 	it("treats a link from a discord with an active migration session as the proof, and does NOT relink", async () => {
 		const cache = makeMockCache({ "link_state:st-m": newKey })
 		seedActiveSession(cache)
-		// computeMigrationPlan (relabel: old user, no new user, req collisions) + createPreviewAudit
-		const db = makeMockDB([{ id: 1 }, null, { n: 0 }, { id: 99 }])
+		// computeMigrationPlan (relabel: old user with nickname, no new user, req collisions) + createPreviewAudit
+		const db = makeMockDB([{ id: 1, nickname: "Caplump" }, null, { n: 0 }, { id: 99 }])
 		const app = linkRoutes(
 			makeEnv(db, cache),
 			discordFetch({ id: "d-1", username: "alice", global_name: "Alice" })
@@ -336,6 +337,8 @@ describe("GET /links/discord/callback - migration attach", () => {
 		expect(updated.status).toBe("ready")
 		expect(updated.newKey).toBe(newKey)
 		expect(updated.migrationId).toBe(99)
+		expect(updated.oldNickname).toBe("Caplump")
+		expect(updated.newNickname).toBeNull()
 		expect(updated.counts).toEqual({
 			submissions: 0,
 			votes: 0,
