@@ -161,7 +161,7 @@ describe("POST /migrations/bot/start", () => {
 		expect(data.oldKeyId).toBe("oldkey")
 		expect(typeof data.sessionId).toBe("string")
 		expect(data.signUrl).toContain("https://unison.boidu.dev/migrate?session=")
-		expect(cache.store.get(`migration:by-discord:disc-1`)).toBe(data.sessionId)
+		expect(cache.store.get("migration:by-discord:disc-1")).toBe(data.sessionId)
 	})
 
 	it("returns already_active when a session already exists", async () => {
