@@ -64,7 +64,7 @@ describe("computeMigrationPlan", () => {
 
 	it("relabel case: new key has no user, only request collisions can be non-zero", async () => {
 		const db = makeMockDB([
-			{ id: 1 }, // old user
+			{ id: 1, nickname: "oldnick" }, // old user
 			null, // new user (none)
 			{ n: 2 }, // request collisions
 		])
@@ -72,14 +72,16 @@ describe("computeMigrationPlan", () => {
 		expect(result).toEqual({
 			oldUserId: 1,
 			newUserId: null,
+			oldNickname: "oldnick",
+			newNickname: null,
 			counts: { submissions: 0, votes: 0, reports: 0, fulfillments: 0, collisions: 2 },
 		})
 	})
 
-	it("merge case: projects moved counts and total collisions", async () => {
+	it("merge case: projects moved counts, collisions, and both nicknames", async () => {
 		const db = makeMockDB([
-			{ id: 1 }, // old user
-			{ id: 2 }, // new user
+			{ id: 1, nickname: "oldnick" }, // old user
+			{ id: 2, nickname: "newnick" }, // new user
 			{ n: 5 }, // submissions on new user
 			{ n: 9 }, // votes on new user
 			{ n: 1 }, // reports on new user
@@ -92,6 +94,8 @@ describe("computeMigrationPlan", () => {
 		expect(result).toEqual({
 			oldUserId: 1,
 			newUserId: 2,
+			oldNickname: "oldnick",
+			newNickname: "newnick",
 			counts: { submissions: 5, votes: 9, reports: 1, fulfillments: 2, collisions: 3 + 1 + 4 },
 		})
 	})
@@ -110,7 +114,7 @@ describe("computeMigrationPlan", () => {
 	})
 })
 
-function mergeSeed() {
+function mergeSeed(): unknown[] {
 	return [
 		{ id: 1 }, // old user
 		{ id: 2 }, // new user
@@ -231,6 +235,45 @@ describe("runMigration (merge case)", () => {
 		const db = makeMockDB([null])
 		const result = await runMigration(makeEnv(db), { oldKey: "oldkey", newKey: "newkey" })
 		expect(result).toEqual({ error: "OLD_KEY_NO_USER" })
+	})
+})
+
+describe("runMigration nickname handling", () => {
+	function seedWithNewNickname() {
+		const seed = mergeSeed()
+		seed[4] = [
+			{ id: 1, key_id: "oldkey", nickname: "oldnick" },
+			{ id: 2, key_id: "newkey", nickname: "newnick" },
+		]
+		return seed
+	}
+
+	it("keeps the survivor's nickname by default (no nickname update)", async () => {
+		const db = makeMockDB(seedWithNewNickname())
+		await runMigration(makeEnv(db), { oldKey: "oldkey", newKey: "newkey" })
+		expect(db.calls.some((c) => c.sql.includes("UPDATE users SET nickname"))).toBe(false)
+	})
+
+	it("applies the new key's nickname to the survivor when keepNickname is 'new'", async () => {
+		const db = makeMockDB(seedWithNewNickname())
+		await runMigration(makeEnv(db), { oldKey: "oldkey", newKey: "newkey", keepNickname: "new" })
+		const call = db.calls.find((c) => c.sql.includes("UPDATE users SET nickname"))
+		expect(call).toBeDefined()
+		expect(call?.params[0]).toBe("newnick")
+		expect(call?.params[call.params.length - 1]).toBe(1) // survivor id
+		// nickname is applied only after the new user row is deleted (frees the unique nickname_lower)
+		expect(idx(db.calls, "DELETE FROM users")).toBeLessThan(idx(db.calls, "UPDATE users SET nickname"))
+	})
+
+	it("falls back to the old nickname when keepNickname is 'new' but the new key has none", async () => {
+		const seed = mergeSeed()
+		seed[4] = [
+			{ id: 1, key_id: "oldkey", nickname: "oldnick" },
+			{ id: 2, key_id: "newkey", nickname: null },
+		]
+		const db = makeMockDB(seed)
+		await runMigration(makeEnv(db), { oldKey: "oldkey", newKey: "newkey", keepNickname: "new" })
+		expect(db.calls.some((c) => c.sql.includes("UPDATE users SET nickname"))).toBe(false)
 	})
 })
 

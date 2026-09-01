@@ -7,6 +7,8 @@ const now = () => Math.floor(Date.now() / 1000)
 export interface MigrationResolved {
 	oldUserId: number
 	newUserId: number | null
+	oldNickname: string | null
+	newNickname: string | null
 	counts: MigrationCounts
 }
 
@@ -51,15 +53,15 @@ export async function computeMigrationPlan(
 	oldKey: string,
 	newKey: string
 ): Promise<MigrationResolved | { error: "OLD_KEY_NO_USER" }> {
-	const oldUser = await env.DB.prepare("SELECT id FROM users WHERE key_id = ?")
+	const oldUser = await env.DB.prepare("SELECT id, nickname FROM users WHERE key_id = ?")
 		.bind(oldKey)
-		.first<{ id: number }>()
+		.first<{ id: number; nickname: string | null }>()
 	if (!oldUser) return { error: "OLD_KEY_NO_USER" }
 	const oldUserId = oldUser.id
 
-	const newUser = await env.DB.prepare("SELECT id FROM users WHERE key_id = ?")
+	const newUser = await env.DB.prepare("SELECT id, nickname FROM users WHERE key_id = ?")
 		.bind(newKey)
-		.first<{ id: number }>()
+		.first<{ id: number; nickname: string | null }>()
 	const newUserId = newUser?.id ?? null
 
 	let submissions = 0
@@ -105,6 +107,8 @@ export async function computeMigrationPlan(
 	return {
 		oldUserId,
 		newUserId,
+		oldNickname: oldUser.nickname ?? null,
+		newNickname: newUser?.nickname ?? null,
 		counts: {
 			submissions,
 			votes,
@@ -137,9 +141,9 @@ async function countTx(tx: D1Compat, sql: string, params: unknown[]): Promise<nu
 // duplicate votes/reports on the UNIQUE(lyrics_id, user_id) constraint.
 export async function runMigration(
 	env: Env,
-	params: { oldKey: string; newKey: string }
+	params: { oldKey: string; newKey: string; keepNickname?: "old" | "new" }
 ): Promise<MigrationResult | MigrationRunError> {
-	const { oldKey, newKey } = params
+	const { oldKey, newKey, keepNickname } = params
 	if (oldKey === newKey) return { error: "SAME_KEY" }
 
 	return env.DB.transaction(async (tx) => {
@@ -276,6 +280,18 @@ export async function runMigration(
 			await tx.prepare("DELETE FROM users WHERE id = ?").bind(newId).run()
 		}
 		await tx.prepare("UPDATE users SET key_id = ? WHERE id = ?").bind(newKey, oldId).run()
+
+		if (keepNickname === "new" && newId !== null) {
+			const newSnapUser = (snapshot.users as { key_id: string; nickname: string | null }[]).find(
+				(u) => u.key_id === newKey
+			)
+			if (newSnapUser?.nickname) {
+				await tx
+					.prepare("UPDATE users SET nickname = ?, nickname_updated_at = ? WHERE id = ?")
+					.bind(newSnapUser.nickname, now(), oldId)
+					.run()
+			}
+		}
 
 		if (oldLink) {
 			await tx
