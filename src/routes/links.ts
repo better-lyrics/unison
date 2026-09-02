@@ -65,6 +65,8 @@ async function attachMigrationProof(
 		counts: plan.counts,
 		oldNickname: plan.oldNickname,
 		newNickname: plan.newNickname,
+		oldDisplayName: plan.oldDisplayName,
+		newDisplayName: plan.newDisplayName,
 		status: "ready",
 		migrationId,
 	})

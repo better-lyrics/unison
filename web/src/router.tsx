@@ -8,6 +8,7 @@ import { DownloadsPage } from "./pages/DownloadsPage"
 import { LinkPage } from "./pages/LinkPage"
 import { LyricsPage } from "./pages/LyricsPage"
 import { MePage } from "./pages/MePage"
+import { MigratePage } from "./pages/MigratePage"
 import { QueuePage } from "./pages/QueuePage"
 import { SearchPage } from "./pages/SearchPage"
 import { SongsPage } from "./pages/SongsPage"
@@ -23,6 +24,7 @@ if (import.meta.env.DEV) {
     { path: "dev/link", load: () => import("./pages/DevLinkPreview") },
     { path: "dev/curators", load: () => import("./pages/DevCuratorsPreview") },
     { path: "dev/me", load: () => import("./pages/DevMePreview") },
+    { path: "dev/migrate", load: () => import("./pages/DevMigratePreview") },
   ]
   for (const { path, load } of devPages) {
     const Page = lazy(load)
@@ -53,6 +55,7 @@ const router = createBrowserRouter([
       { path: "downloads", element: <DownloadsPage /> },
       { path: "docs", element: <DocsPage /> },
       { path: "link", element: <LinkPage /> },
+      { path: "migrate", element: <MigratePage /> },
       ...devRoutes,
     ],
   },

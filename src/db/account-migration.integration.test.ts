@@ -92,26 +92,26 @@ describeIntegration("account migration (integration)", () => {
 		const l4 = await insertLyric(otherUser.id, "vidL4")
 
 		// both voted on L1 (collision); new also voted on L2/L3 (self) and L4 (not self)
-		await pool.query("INSERT INTO votes (lyrics_id, user_id, vote, is_self_vote) VALUES ($1,$2,1,0)", [
-			l1,
-			oldUser.id,
-		])
-		await pool.query("INSERT INTO votes (lyrics_id, user_id, vote, is_self_vote) VALUES ($1,$2,-1,0)", [
-			l1,
-			newUser.id,
-		])
-		await pool.query("INSERT INTO votes (lyrics_id, user_id, vote, is_self_vote) VALUES ($1,$2,1,1)", [
-			l2,
-			newUser.id,
-		])
-		await pool.query("INSERT INTO votes (lyrics_id, user_id, vote, is_self_vote) VALUES ($1,$2,1,0)", [
-			l3,
-			newUser.id,
-		])
-		await pool.query("INSERT INTO votes (lyrics_id, user_id, vote, is_self_vote) VALUES ($1,$2,1,0)", [
-			l4,
-			newUser.id,
-		])
+		await pool.query(
+			"INSERT INTO votes (lyrics_id, user_id, vote, is_self_vote) VALUES ($1,$2,1,0)",
+			[l1, oldUser.id]
+		)
+		await pool.query(
+			"INSERT INTO votes (lyrics_id, user_id, vote, is_self_vote) VALUES ($1,$2,-1,0)",
+			[l1, newUser.id]
+		)
+		await pool.query(
+			"INSERT INTO votes (lyrics_id, user_id, vote, is_self_vote) VALUES ($1,$2,1,1)",
+			[l2, newUser.id]
+		)
+		await pool.query(
+			"INSERT INTO votes (lyrics_id, user_id, vote, is_self_vote) VALUES ($1,$2,1,0)",
+			[l3, newUser.id]
+		)
+		await pool.query(
+			"INSERT INTO votes (lyrics_id, user_id, vote, is_self_vote) VALUES ($1,$2,1,0)",
+			[l4, newUser.id]
+		)
 
 		// both reported L1 (collision)
 		await pool.query(
@@ -142,11 +142,12 @@ describeIntegration("account migration (integration)", () => {
 
 		const plan = await computeMigrationPlan(env, OLD_KEY, NEW_KEY)
 		if ("error" in plan) throw new Error(plan.error)
+		// counts describe the old identity's carried history (L1 submission, 1 vote, 1 report)
 		expect(plan.counts).toEqual({
-			submissions: 2,
-			votes: 4,
+			submissions: 1,
+			votes: 1,
 			reports: 1,
-			fulfillments: 1,
+			fulfillments: 0,
 			collisions: 3, // 1 vote + 1 report + 1 request
 		})
 
@@ -157,21 +158,29 @@ describeIntegration("account migration (integration)", () => {
 			newKey: NEW_KEY,
 			counts: plan.counts,
 		})
-		const result = await runMigration(env, { oldKey: OLD_KEY, newKey: NEW_KEY, migrationId: auditId })
+		const result = await runMigration(env, {
+			oldKey: OLD_KEY,
+			newKey: NEW_KEY,
+			migrationId: auditId,
+		})
 		if ("error" in result) throw new Error(result.error)
 
 		expect(result.moved).toEqual({
-			submissions: 2,
-			votes: 4,
+			submissions: 1,
+			votes: 1,
 			reports: 1,
-			fulfillments: 1,
+			fulfillments: 0,
 			collisionsDropped: 3,
 		})
 
 		// invariants (mirrors scripts/local/migrate-account.cjs)
-		expect(await num("SELECT count(*)::int n FROM lyrics WHERE submitter_id = $1", [oldUser.id])).toBe(3)
+		expect(
+			await num("SELECT count(*)::int n FROM lyrics WHERE submitter_id = $1", [oldUser.id])
+		).toBe(3)
 		expect(await num("SELECT count(*)::int n FROM votes WHERE user_id = $1", [oldUser.id])).toBe(4) // 1+4-1
-		expect(await num("SELECT count(*)::int n FROM reports WHERE user_id = $1", [oldUser.id])).toBe(1) // 1+1-1
+		expect(await num("SELECT count(*)::int n FROM reports WHERE user_id = $1", [oldUser.id])).toBe(
+			1
+		) // 1+1-1
 		expect(await num("SELECT count(*)::int n FROM users WHERE key_id = $1", [OLD_KEY])).toBe(0)
 		expect(await num("SELECT count(*)::int n FROM users WHERE key_id = $1", [NEW_KEY])).toBe(1)
 		expect(await num("SELECT count(*)::int n FROM users WHERE id = $1", [newUser.id])).toBe(0)
@@ -184,19 +193,19 @@ describeIntegration("account migration (integration)", () => {
 		// is_self_vote recomputed from the merged submitter/voter relationship:
 		// L1/L2/L3 are the survivor's own submissions (self), L4 is the third party's (not self)
 		expect(
-			await num(
-				"SELECT count(*)::int n FROM votes WHERE user_id = $1 AND is_self_vote = 1",
-				[oldUser.id]
-			)
+			await num("SELECT count(*)::int n FROM votes WHERE user_id = $1 AND is_self_vote = 1", [
+				oldUser.id,
+			])
 		).toBe(3)
 		expect(
-			await num(
-				"SELECT count(*)::int n FROM votes WHERE user_id = $1 AND is_self_vote = 0",
-				[oldUser.id]
-			)
+			await num("SELECT count(*)::int n FROM votes WHERE user_id = $1 AND is_self_vote = 0", [
+				oldUser.id,
+			])
 		).toBe(1)
 		// discord link followed to the new key
-		expect(await num("SELECT count(*)::int n FROM discord_links WHERE key_id = $1", [NEW_KEY])).toBe(1)
+		expect(
+			await num("SELECT count(*)::int n FROM discord_links WHERE key_id = $1", [NEW_KEY])
+		).toBe(1)
 		// extension requests deduped and relabelled
 		expect(
 			await num("SELECT count(*)::int n FROM lyrics_requests WHERE requester_id = $1", [NEW_KEY])
@@ -221,18 +230,18 @@ describeIntegration("account migration (integration)", () => {
 		)
 		const l1 = await insertLyric(oldUser.id, "vidL1")
 		const l2 = await insertLyric(newUser.id, "vidL2")
-		await pool.query("INSERT INTO votes (lyrics_id, user_id, vote, is_self_vote) VALUES ($1,$2,1,0)", [
-			l1,
-			oldUser.id,
-		])
-		await pool.query("INSERT INTO votes (lyrics_id, user_id, vote, is_self_vote) VALUES ($1,$2,-1,0)", [
-			l1,
-			newUser.id,
-		])
-		await pool.query("INSERT INTO votes (lyrics_id, user_id, vote, is_self_vote) VALUES ($1,$2,1,1)", [
-			l2,
-			newUser.id,
-		])
+		await pool.query(
+			"INSERT INTO votes (lyrics_id, user_id, vote, is_self_vote) VALUES ($1,$2,1,0)",
+			[l1, oldUser.id]
+		)
+		await pool.query(
+			"INSERT INTO votes (lyrics_id, user_id, vote, is_self_vote) VALUES ($1,$2,-1,0)",
+			[l1, newUser.id]
+		)
+		await pool.query(
+			"INSERT INTO votes (lyrics_id, user_id, vote, is_self_vote) VALUES ($1,$2,1,1)",
+			[l2, newUser.id]
+		)
 		await pool.query(
 			"INSERT INTO discord_links (discord_id, key_id, discord_username) VALUES ('disc-1', $1, 'alice')",
 			[OLD_KEY]
@@ -243,13 +252,14 @@ describeIntegration("account migration (integration)", () => {
 			usersNew: await num("SELECT count(*)::int n FROM users WHERE key_id = $1", [NEW_KEY]),
 			oldVotes: await num("SELECT count(*)::int n FROM votes WHERE user_id = $1", [oldUser.id]),
 			newVotes: await num("SELECT count(*)::int n FROM votes WHERE user_id = $1", [newUser.id]),
-			l2Submitter: (await one<{ submitter_id: number }>(
-				"SELECT submitter_id FROM lyrics WHERE id = $1",
-				[l2]
-			)).submitter_id,
-			newRep: (await one<{ reputation: number }>("SELECT reputation FROM users WHERE id = $1", [
-				newUser.id,
-			])).reputation,
+			l2Submitter: (
+				await one<{ submitter_id: number }>("SELECT submitter_id FROM lyrics WHERE id = $1", [l2])
+			).submitter_id,
+			newRep: (
+				await one<{ reputation: number }>("SELECT reputation FROM users WHERE id = $1", [
+					newUser.id,
+				])
+			).reputation,
 		}
 
 		const plan = await computeMigrationPlan(env, OLD_KEY, NEW_KEY)
@@ -261,7 +271,11 @@ describeIntegration("account migration (integration)", () => {
 			newKey: NEW_KEY,
 			counts: plan.counts,
 		})
-		const result = await runMigration(env, { oldKey: OLD_KEY, newKey: NEW_KEY, migrationId: auditId })
+		const result = await runMigration(env, {
+			oldKey: OLD_KEY,
+			newKey: NEW_KEY,
+			migrationId: auditId,
+		})
 		if ("error" in result) throw new Error(result.error)
 
 		const audit = await getAudit(env, auditId)
@@ -288,11 +302,18 @@ describeIntegration("account migration (integration)", () => {
 				.submitter_id
 		).toBe(before.l2Submitter)
 		expect(
-			(await one<{ reputation: number }>("SELECT reputation FROM users WHERE id = $1", [newUser.id]))
-				.reputation
+			(
+				await one<{ reputation: number }>("SELECT reputation FROM users WHERE id = $1", [
+					newUser.id,
+				])
+			).reputation
 		).toBe(before.newRep)
-		expect(await num("SELECT count(*)::int n FROM discord_links WHERE key_id = $1", [OLD_KEY])).toBe(1)
-		expect(await num("SELECT count(*)::int n FROM discord_links WHERE key_id = $1", [NEW_KEY])).toBe(0)
+		expect(
+			await num("SELECT count(*)::int n FROM discord_links WHERE key_id = $1", [OLD_KEY])
+		).toBe(1)
+		expect(
+			await num("SELECT count(*)::int n FROM discord_links WHERE key_id = $1", [NEW_KEY])
+		).toBe(0)
 	})
 
 	it("applies the new key's nickname when keepNickname is 'new', and restore reverts it", async () => {
@@ -339,7 +360,9 @@ describeIntegration("account migration (integration)", () => {
 			oldUser.id,
 		])
 		expect(reverted.nickname).toBe("Caplump")
-		expect(await num("SELECT count(*)::int n FROM users WHERE nickname = 'tropicawhale'", [])).toBe(1)
+		expect(await num("SELECT count(*)::int n FROM users WHERE nickname = 'tropicawhale'", [])).toBe(
+			1
+		)
 	})
 
 	it("markAuditFailed does not clobber an already-committed audit row", async () => {
@@ -358,7 +381,11 @@ describeIntegration("account migration (integration)", () => {
 			newKey: NEW_KEY,
 			counts: plan.counts,
 		})
-		const result = await runMigration(env, { oldKey: OLD_KEY, newKey: NEW_KEY, migrationId: auditId })
+		const result = await runMigration(env, {
+			oldKey: OLD_KEY,
+			newKey: NEW_KEY,
+			migrationId: auditId,
+		})
 		if ("error" in result) throw new Error(result.error)
 
 		await markAuditFailed(env, auditId, "late failure")
@@ -389,18 +416,95 @@ describeIntegration("account migration (integration)", () => {
 			newKey: NEW_KEY,
 			counts: plan.counts,
 		})
-		const result = await runMigration(env, { oldKey: OLD_KEY, newKey: NEW_KEY, migrationId: auditId })
+		const result = await runMigration(env, {
+			oldKey: OLD_KEY,
+			newKey: NEW_KEY,
+			migrationId: auditId,
+		})
 		if ("error" in result) throw new Error(result.error)
 
 		// survivor (now NEW_KEY, id = oldUser.id) casts a vote after commit
 		const l2 = await insertLyric(oldUser.id, "vidL2")
-		await pool.query("INSERT INTO votes (lyrics_id, user_id, vote, is_self_vote) VALUES ($1,$2,1,1)", [
-			l2,
-			oldUser.id,
-		])
+		await pool.query(
+			"INSERT INTO votes (lyrics_id, user_id, vote, is_self_vote) VALUES ($1,$2,1,1)",
+			[l2, oldUser.id]
+		)
 
 		expect(await restoreFromSnapshot(env, auditId)).toEqual({ error: "HAS_INTERIM_ACTIVITY" })
 		expect(await num("SELECT count(*)::int n FROM votes WHERE lyrics_id = $1", [l2])).toBe(1)
 		expect((await getAudit(env, auditId))?.status).toBe("committed")
+	})
+
+	async function commitBasicMigration(sessionId: string): Promise<number> {
+		await pool.query("INSERT INTO public_keys (key_id, public_key) VALUES ($1, 'x'), ($2, 'y')", [
+			OLD_KEY,
+			NEW_KEY,
+		])
+		const oldUser = await one<{ id: number }>(
+			"INSERT INTO users (key_id) VALUES ($1) RETURNING id",
+			[OLD_KEY]
+		)
+		await pool.query("INSERT INTO users (key_id) VALUES ($1)", [NEW_KEY])
+		await insertLyric(oldUser.id, "vidL1")
+
+		const plan = await computeMigrationPlan(env, OLD_KEY, NEW_KEY)
+		if ("error" in plan) throw new Error(plan.error)
+		const auditId = await createPreviewAudit(env, {
+			sessionId,
+			discordId: "disc-1",
+			oldKey: OLD_KEY,
+			newKey: NEW_KEY,
+			counts: plan.counts,
+		})
+		const result = await runMigration(env, {
+			oldKey: OLD_KEY,
+			newKey: NEW_KEY,
+			migrationId: auditId,
+		})
+		if ("error" in result) throw new Error(result.error)
+		return auditId
+	}
+
+	async function survivorId(): Promise<number> {
+		return (await one<{ id: number }>("SELECT id FROM users WHERE key_id = $1", [NEW_KEY])).id
+	}
+
+	it("refuses to restore over an interim lyric submitted after commit", async () => {
+		const auditId = await commitBasicMigration("sess-interim-lyric")
+		const interim = await insertLyric(await survivorId(), "vidNew")
+
+		expect(await restoreFromSnapshot(env, auditId)).toEqual({ error: "HAS_INTERIM_ACTIVITY" })
+		expect(await num("SELECT count(*)::int n FROM lyrics WHERE id = $1", [interim])).toBe(1)
+	})
+
+	it("refuses to restore over an interim fulfillment credited after commit", async () => {
+		const auditId = await commitBasicMigration("sess-interim-fulfill")
+		const id = await survivorId()
+		const lyricId = await num("SELECT id::int n FROM lyrics WHERE video_id = 'vidL1'", [])
+		await pool.query(
+			"INSERT INTO request_fulfillments (video_id, lyrics_id, submitter_id, demand_snapshot, request_count_snapshot) VALUES ($1,$2,$3,1.0,1)",
+			["vidL1", lyricId, id]
+		)
+
+		expect(await restoreFromSnapshot(env, auditId)).toEqual({ error: "HAS_INTERIM_ACTIVITY" })
+		expect(
+			await num("SELECT count(*)::int n FROM request_fulfillments WHERE submitter_id = $1", [id])
+		).toBe(1)
+	})
+
+	it("refuses to restore over an interim extension request made after commit", async () => {
+		const auditId = await commitBasicMigration("sess-interim-request")
+		await pool.query(
+			"INSERT INTO requested_songs (video_id, song, artist) VALUES ('vidReq','s','a')"
+		)
+		await pool.query(
+			"INSERT INTO lyrics_requests (video_id, requester_id, requester_type) VALUES ('vidReq',$1,'extension')",
+			[NEW_KEY]
+		)
+
+		expect(await restoreFromSnapshot(env, auditId)).toEqual({ error: "HAS_INTERIM_ACTIVITY" })
+		expect(
+			await num("SELECT count(*)::int n FROM lyrics_requests WHERE requester_id = $1", [NEW_KEY])
+		).toBe(1)
 	})
 })

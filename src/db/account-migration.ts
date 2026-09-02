@@ -1,6 +1,8 @@
+import { config } from "@/config"
 import type { D1Compat } from "@/infra/database"
 import type { Env } from "@/types"
 import type { MigrationCounts } from "@/utils/migration-session"
+import { generatePetName } from "@/utils/petname"
 
 const now = () => Math.floor(Date.now() / 1000)
 
@@ -9,6 +11,8 @@ export interface MigrationResolved {
 	newUserId: number | null
 	oldNickname: string | null
 	newNickname: string | null
+	oldDisplayName: string
+	newDisplayName: string
 	counts: MigrationCounts
 }
 
@@ -47,7 +51,7 @@ async function count(env: Env, sql: string, params: unknown[]): Promise<number> 
 	return row?.n ?? 0
 }
 
-// Reads only: resolve the two identities and project what a commit would move.
+// Reads only: resolve the two identities and count the old identity's holdings (what the survivor keeps).
 export async function computeMigrationPlan(
 	env: Env,
 	oldKey: string,
@@ -64,26 +68,26 @@ export async function computeMigrationPlan(
 		.first<{ id: number; nickname: string | null }>()
 	const newUserId = newUser?.id ?? null
 
-	let submissions = 0
-	let votes = 0
-	let reports = 0
-	let fulfillments = 0
+	const submissions = await count(
+		env,
+		"SELECT COUNT(*)::int AS n FROM lyrics WHERE submitter_id = ?",
+		[oldUserId]
+	)
+	const votes = await count(env, "SELECT COUNT(*)::int AS n FROM votes WHERE user_id = ?", [
+		oldUserId,
+	])
+	const reports = await count(env, "SELECT COUNT(*)::int AS n FROM reports WHERE user_id = ?", [
+		oldUserId,
+	])
+	const fulfillments = await count(
+		env,
+		"SELECT COUNT(*)::int AS n FROM request_fulfillments WHERE submitter_id = ?",
+		[oldUserId]
+	)
+
 	let voteCollisions = 0
 	let reportCollisions = 0
-
 	if (newUserId !== null) {
-		submissions = await count(env, "SELECT COUNT(*)::int AS n FROM lyrics WHERE submitter_id = ?", [
-			newUserId,
-		])
-		votes = await count(env, "SELECT COUNT(*)::int AS n FROM votes WHERE user_id = ?", [newUserId])
-		reports = await count(env, "SELECT COUNT(*)::int AS n FROM reports WHERE user_id = ?", [
-			newUserId,
-		])
-		fulfillments = await count(
-			env,
-			"SELECT COUNT(*)::int AS n FROM request_fulfillments WHERE submitter_id = ?",
-			[newUserId]
-		)
 		voteCollisions = await count(
 			env,
 			"SELECT COUNT(*)::int AS n FROM votes WHERE user_id = ? AND lyrics_id IN (SELECT lyrics_id FROM votes WHERE user_id = ?)",
@@ -109,6 +113,8 @@ export async function computeMigrationPlan(
 		newUserId,
 		oldNickname: oldUser.nickname ?? null,
 		newNickname: newUser?.nickname ?? null,
+		oldDisplayName: oldUser.nickname ?? generatePetName(oldKey),
+		newDisplayName: newUser?.nickname ?? generatePetName(newKey),
 		counts: {
 			submissions,
 			votes,
@@ -190,15 +196,19 @@ export async function runMigration(
 		}
 
 		const votesRows = snapshot.votes as { user_id: number; lyrics_id: number }[]
-		const lyricsRows = snapshot.lyrics as { id: number; submitter_id: number | null; video_id: string }[]
+		const lyricsRows = snapshot.lyrics as {
+			id: number
+			submitter_id: number | null
+			video_id: string
+		}[]
 		const reportsRows = snapshot.reports as { user_id: number }[]
 		const fulfillmentRows = snapshot.request_fulfillments as { submitter_id: number | null }[]
 
 		const moved = {
-			submissions: newId !== null ? lyricsRows.filter((r) => r.submitter_id === newId).length : 0,
-			votes: votesRows.filter((r) => r.user_id === newId).length,
-			reports: reportsRows.filter((r) => r.user_id === newId).length,
-			fulfillments: fulfillmentRows.filter((r) => r.submitter_id === newId).length,
+			submissions: lyricsRows.filter((r) => r.submitter_id === oldId).length,
+			votes: votesRows.filter((r) => r.user_id === oldId).length,
+			reports: reportsRows.filter((r) => r.user_id === oldId).length,
+			fulfillments: fulfillmentRows.filter((r) => r.submitter_id === oldId).length,
 			collisionsDropped: 0,
 		}
 
@@ -277,16 +287,34 @@ export async function runMigration(
 		}
 		await tx.prepare("UPDATE users SET key_id = ? WHERE id = ?").bind(newKey, oldId).run()
 
-		if (keepNickname === "new" && newId !== null) {
-			const newSnapUser = (snapshot.users as { key_id: string; nickname: string | null }[]).find(
-				(u) => u.key_id === newKey
+		// keepNickname only breaks the tie when both identities carry a nickname; a lone one always survives.
+		const snapUsers = snapshot.users as { key_id: string; nickname: string | null }[]
+		const oldNickname = snapUsers.find((u) => u.key_id === oldKey)?.nickname ?? null
+		const newNickname = snapUsers.find((u) => u.key_id === newKey)?.nickname ?? null
+		const survivingNickname =
+			oldNickname && newNickname
+				? keepNickname === "new"
+					? newNickname
+					: oldNickname
+				: (oldNickname ?? newNickname)
+		if (survivingNickname !== null && survivingNickname !== oldNickname) {
+			await tx
+				.prepare("UPDATE users SET nickname = ?, nickname_updated_at = ? WHERE id = ?")
+				.bind(survivingNickname, now(), oldId)
+				.run()
+		}
+
+		if (newId !== null) {
+			const snapReps = snapshot.users as { key_id: string; reputation: number }[]
+			const oldRep =
+				snapReps.find((u) => u.key_id === oldKey)?.reputation ?? config.reputation.default
+			const newRep =
+				snapReps.find((u) => u.key_id === newKey)?.reputation ?? config.reputation.default
+			const mergedRep = Math.max(
+				config.reputation.min,
+				Math.min(config.reputation.max, oldRep + newRep - config.reputation.default)
 			)
-			if (newSnapUser?.nickname) {
-				await tx
-					.prepare("UPDATE users SET nickname = ?, nickname_updated_at = ? WHERE id = ?")
-					.bind(newSnapUser.nickname, now(), oldId)
-					.run()
-			}
+			await tx.prepare("UPDATE users SET reputation = ? WHERE id = ?").bind(mergedRep, oldId).run()
 		}
 
 		if (oldLink) {
@@ -477,6 +505,11 @@ export async function restoreFromSnapshot(
 	return env.DB.transaction(async (tx) => {
 		const snapVoteIds = new Set((snap.votes as SnapVote[]).map((v) => v.id))
 		const snapReportIds = new Set((snap.reports as SnapReport[]).map((r) => r.id))
+		const snapLyricsIds = new Set((snap.lyrics as SnapLyrics[]).map((l) => l.id))
+		const snapFulfillmentIds = new Set(
+			(snap.request_fulfillments as SnapFulfillment[]).map((f) => f.id)
+		)
+		const snapRequestIds = new Set((snap.lyrics_requests as SnapRequest[]).map((r) => r.id))
 		const currentVotes = await all<{ id: number }>(
 			tx,
 			"SELECT id FROM votes WHERE user_id = ANY(?)",
@@ -487,9 +520,27 @@ export async function restoreFromSnapshot(
 			"SELECT id FROM reports WHERE user_id = ANY(?)",
 			[ids]
 		)
+		const currentLyrics = await all<{ id: number }>(
+			tx,
+			"SELECT id FROM lyrics WHERE submitter_id = ANY(?)",
+			[ids]
+		)
+		const currentFulfillments = await all<{ id: number }>(
+			tx,
+			"SELECT id FROM request_fulfillments WHERE submitter_id = ANY(?)",
+			[ids]
+		)
+		const currentRequests = await all<{ id: number }>(
+			tx,
+			"SELECT id FROM lyrics_requests WHERE requester_id = ANY(?)",
+			[[oldKey, newKey]]
+		)
 		if (
 			currentVotes.some((v) => !snapVoteIds.has(v.id)) ||
-			currentReports.some((r) => !snapReportIds.has(r.id))
+			currentReports.some((r) => !snapReportIds.has(r.id)) ||
+			currentLyrics.some((l) => !snapLyricsIds.has(l.id)) ||
+			currentFulfillments.some((f) => !snapFulfillmentIds.has(f.id)) ||
+			currentRequests.some((r) => !snapRequestIds.has(r.id))
 		) {
 			return { error: "HAS_INTERIM_ACTIVITY" } as const
 		}

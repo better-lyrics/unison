@@ -32,7 +32,6 @@ export const ErrorCode = {
 	LINKING_DISABLED: "LINKING_DISABLED",
 	NOT_LINKED: "NOT_LINKED",
 	MIGRATION_ALREADY_ACTIVE: "MIGRATION_ALREADY_ACTIVE",
-	MIGRATION_SAME_KEY: "MIGRATION_SAME_KEY",
 	MIGRATION_NOT_READY: "MIGRATION_NOT_READY",
 	MIGRATION_NOT_OWNER: "MIGRATION_NOT_OWNER",
 	MIGRATION_ALREADY_COMMITTED: "MIGRATION_ALREADY_COMMITTED",
@@ -161,10 +160,6 @@ const TEMPLATES: Record<ErrorCode, Template> = {
 	MIGRATION_ALREADY_ACTIVE: {
 		error: "Migration already in progress",
 		hint: "You already have a migration underway. Finish it, or wait for it to expire, before starting another.",
-	},
-	MIGRATION_SAME_KEY: {
-		error: "Same key",
-		hint: "The new install proved the same key as the old one, so there's nothing to migrate.",
 	},
 	MIGRATION_NOT_READY: {
 		error: "Migration not ready",

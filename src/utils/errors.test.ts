@@ -58,7 +58,6 @@ describe("buildError", () => {
 		const codes: ErrorCode[] = [
 			ErrorCode.NOT_LINKED,
 			ErrorCode.MIGRATION_ALREADY_ACTIVE,
-			ErrorCode.MIGRATION_SAME_KEY,
 			ErrorCode.MIGRATION_NOT_READY,
 			ErrorCode.MIGRATION_NOT_OWNER,
 			ErrorCode.MIGRATION_ALREADY_COMMITTED,

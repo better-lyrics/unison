@@ -85,6 +85,8 @@ export const migrationRoutes = (env: Env) =>
 							newKeyId: null,
 							oldNickname: null,
 							newNickname: null,
+							oldDisplayName: null,
+							newDisplayName: null,
 							counts: null,
 						},
 					})
@@ -97,6 +99,8 @@ export const migrationRoutes = (env: Env) =>
 						newKeyId: session.newKey ? shortKeyId(session.newKey) : null,
 						oldNickname: session.oldNickname,
 						newNickname: session.newNickname,
+						oldDisplayName: session.oldDisplayName,
+						newDisplayName: session.newDisplayName,
 						counts: session.counts,
 					},
 				})
@@ -132,17 +136,33 @@ export const migrationRoutes = (env: Env) =>
 				const locked = await env.CACHE.setNX(lockKey, "1", config.migration.commitLockSeconds)
 				if (!locked) return status(409, buildError(ErrorCode.MIGRATION_IN_PROGRESS))
 
-				const result = await runMigration(env, {
-					oldKey: session.oldKey,
-					newKey: session.newKey,
-					keepNickname: keepNickname ?? "old",
-					migrationId: session.migrationId,
-				})
+				let result: Awaited<ReturnType<typeof runMigration>>
+				try {
+					result = await runMigration(env, {
+						oldKey: session.oldKey,
+						newKey: session.newKey,
+						keepNickname: keepNickname ?? "old",
+						migrationId: session.migrationId,
+					})
+				} catch (err) {
+					await env.CACHE.delete(lockKey)
+					await markAuditFailed(env, session.migrationId, String(err))
+					await saveSession(env, {
+						...session,
+						status: "failed",
+						failureReason: "MIGRATION_FAILED",
+					})
+					log.error("migration commit threw", { sessionId: session.sessionId, error: String(err) })
+					return status(500, buildError(ErrorCode.MIGRATION_FAILED))
+				}
 				if ("error" in result) {
 					await env.CACHE.delete(lockKey)
 					await markAuditFailed(env, session.migrationId, result.error)
 					await saveSession(env, { ...session, status: "failed", failureReason: result.error })
-					log.error("migration commit failed", { sessionId: session.sessionId, error: result.error })
+					log.error("migration commit failed", {
+						sessionId: session.sessionId,
+						error: result.error,
+					})
 					return status(500, buildError(ErrorCode.MIGRATION_FAILED))
 				}
 

@@ -1,32 +1,15 @@
-import { IconAlertTriangle, IconBrandDiscordFilled, IconLoader2, IconProgressDown } from "@tabler/icons-react"
-import type { ReactNode } from "react"
+import {
+  AuthFlowBody as Body,
+  AuthFlowError as ErrorText,
+  AuthFlowLayout as Layout,
+  AuthFlowTitle as Title,
+} from "@/components/AuthFlowLayout"
 import { discordButtonClass, secondaryButtonClass } from "@/components/discord-ui"
-import { LogoPair } from "@/components/LogoPair"
+import { IconAlertTriangle, IconBrandDiscordFilled, IconLoader2, IconProgressDown } from "@tabler/icons-react"
 
 const installIcon = <IconProgressDown className="size-7 text-unison-text-secondary" stroke={1.5} />
 const discordIcon = <IconBrandDiscordFilled className="size-7 text-white" />
 const warnIcon = <IconAlertTriangle className="size-7 text-amber-400" stroke={1.5} />
-
-function Layout({ partner, pulsing = false, children }: { partner: ReactNode; pulsing?: boolean; children: ReactNode }) {
-  return (
-    <div className="mx-auto flex min-h-[60vh] max-w-md flex-col items-center justify-center gap-6 py-10 text-center">
-      <LogoPair partner={partner} pulsing={pulsing} />
-      {children}
-    </div>
-  )
-}
-
-function Title({ children }: { children: ReactNode }) {
-  return <h1 className="text-xl font-semibold text-unison-text">{children}</h1>
-}
-
-function Body({ children }: { children: ReactNode }) {
-  return <p className="max-w-sm text-sm leading-relaxed text-unison-text-secondary">{children}</p>
-}
-
-function ErrorText({ children }: { children: ReactNode }) {
-  return <p className="max-w-sm text-sm text-red-400">{children}</p>
-}
 
 export type LinkViewModel =
   | { kind: "loading" }
@@ -55,12 +38,7 @@ export function LinkView({ model }: { model: LinkViewModel }) {
             Linking happens through the Better Lyrics extension. Install it, then come back to this page to connect your
             Discord.
           </Body>
-          <a
-            href="https://betterlyrics.org"
-            target="_blank"
-            rel="noopener noreferrer"
-            className={secondaryButtonClass}
-          >
+          <a href="https://betterlyrics.org" target="_blank" rel="noopener noreferrer" className={secondaryButtonClass}>
             Get Better Lyrics
           </a>
         </Layout>
@@ -90,15 +68,8 @@ export function LinkView({ model }: { model: LinkViewModel }) {
       return (
         <Layout partner={discordIcon}>
           <Title>Connected to Discord</Title>
-          <Body>
-            Your account is linked{model.name ? ` as ${model.name}` : ""}. Roles update on their own.
-          </Body>
-          <button
-            type="button"
-            onClick={model.onDisconnect}
-            disabled={model.working}
-            className={secondaryButtonClass}
-          >
+          <Body>Your account is linked{model.name ? ` as ${model.name}` : ""}. Roles update on their own.</Body>
+          <button type="button" onClick={model.onDisconnect} disabled={model.working} className={secondaryButtonClass}>
             {model.working ? "Disconnecting..." : "Disconnect"}
           </button>
           {model.error ? <ErrorText>{model.error}</ErrorText> : null}
