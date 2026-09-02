@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest"
 import type { Env } from "@/types"
+import { generatePetName } from "@/utils/petname"
 import {
 	computeMigrationPlan,
 	createPreviewAudit,
@@ -77,6 +78,8 @@ describe("computeMigrationPlan", () => {
 			newUserId: null,
 			oldNickname: "oldnick",
 			newNickname: null,
+			oldDisplayName: "oldnick",
+			newDisplayName: generatePetName("newkey"),
 			counts: { submissions: 2, votes: 2, reports: 0, fulfillments: 0, collisions: 2 },
 		})
 	})
@@ -99,6 +102,8 @@ describe("computeMigrationPlan", () => {
 			newUserId: 2,
 			oldNickname: "oldnick",
 			newNickname: "newnick",
+			oldDisplayName: "oldnick",
+			newDisplayName: "newnick",
 			counts: { submissions: 5, votes: 9, reports: 1, fulfillments: 2, collisions: 3 + 1 + 4 },
 		})
 	})

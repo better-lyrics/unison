@@ -2,6 +2,7 @@ import { config } from "@/config"
 import type { D1Compat } from "@/infra/database"
 import type { Env } from "@/types"
 import type { MigrationCounts } from "@/utils/migration-session"
+import { generatePetName } from "@/utils/petname"
 
 const now = () => Math.floor(Date.now() / 1000)
 
@@ -10,6 +11,8 @@ export interface MigrationResolved {
 	newUserId: number | null
 	oldNickname: string | null
 	newNickname: string | null
+	oldDisplayName: string
+	newDisplayName: string
 	counts: MigrationCounts
 }
 
@@ -110,6 +113,8 @@ export async function computeMigrationPlan(
 		newUserId,
 		oldNickname: oldUser.nickname ?? null,
 		newNickname: newUser?.nickname ?? null,
+		oldDisplayName: oldUser.nickname ?? generatePetName(oldKey),
+		newDisplayName: newUser?.nickname ?? generatePetName(newKey),
 		counts: {
 			submissions,
 			votes,

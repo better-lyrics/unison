@@ -85,6 +85,8 @@ export const migrationRoutes = (env: Env) =>
 							newKeyId: null,
 							oldNickname: null,
 							newNickname: null,
+							oldDisplayName: null,
+							newDisplayName: null,
 							counts: null,
 						},
 					})
@@ -97,6 +99,8 @@ export const migrationRoutes = (env: Env) =>
 						newKeyId: session.newKey ? shortKeyId(session.newKey) : null,
 						oldNickname: session.oldNickname,
 						newNickname: session.newNickname,
+						oldDisplayName: session.oldDisplayName,
+						newDisplayName: session.newDisplayName,
 						counts: session.counts,
 					},
 				})

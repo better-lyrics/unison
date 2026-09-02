@@ -122,6 +122,8 @@ function baseSession(overrides: Partial<MigrationSession> = {}): MigrationSessio
 		status: "awaiting_new_key",
 		oldNickname: null,
 		newNickname: null,
+		oldDisplayName: null,
+		newDisplayName: null,
 		counts: null,
 		migrationId: null,
 		createdAt: 100,
@@ -215,6 +217,8 @@ describe("GET /migrations/bot/:sessionId", () => {
 				migrationId: 7,
 				oldNickname: "Caplump",
 				newNickname: "tropicawhale",
+				oldDisplayName: "Caplump",
+				newDisplayName: "tropicawhale",
 				counts: { submissions: 2, votes: 3, reports: 0, fulfillments: 1, collisions: 1 },
 			})
 		)
@@ -225,6 +229,8 @@ describe("GET /migrations/bot/:sessionId", () => {
 		expect(data.newKeyId).toBe("newkey")
 		expect(data.oldNickname).toBe("Caplump")
 		expect(data.newNickname).toBe("tropicawhale")
+		expect(data.oldDisplayName).toBe("Caplump")
+		expect(data.newDisplayName).toBe("tropicawhale")
 		expect(data.counts).toEqual({ submissions: 2, votes: 3, reports: 0, fulfillments: 1, collisions: 1 })
 	})
 })
