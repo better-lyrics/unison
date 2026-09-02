@@ -82,6 +82,7 @@ export function createEnv(): Env {
 		DUMP_DATABASE_URL: process.env.DUMP_DATABASE_URL || null,
 		B2: readB2Config(),
 		BUTLER_BOT_SECRET: process.env.BUTLER_BOT_SECRET || null,
+		ADMIN_SECRET: process.env.ADMIN_SECRET || null,
 		DISCORD_OAUTH: readDiscordOAuthConfig(),
 	}
 }

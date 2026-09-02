@@ -38,6 +38,13 @@ export const ErrorCode = {
 	MIGRATION_IN_PROGRESS: "MIGRATION_IN_PROGRESS",
 	MIGRATION_EXPIRED: "MIGRATION_EXPIRED",
 	MIGRATION_FAILED: "MIGRATION_FAILED",
+	MIGRATION_SAME_KEY: "MIGRATION_SAME_KEY",
+	MIGRATION_OLD_KEY_NO_USER: "MIGRATION_OLD_KEY_NO_USER",
+	MIGRATION_BOTH_KEYS_LINKED: "MIGRATION_BOTH_KEYS_LINKED",
+	MIGRATION_NOT_FOUND: "MIGRATION_NOT_FOUND",
+	MIGRATION_NOT_COMMITTED: "MIGRATION_NOT_COMMITTED",
+	MIGRATION_HAS_INTERIM_ACTIVITY: "MIGRATION_HAS_INTERIM_ACTIVITY",
+	MIGRATION_ALREADY_RESTORED: "MIGRATION_ALREADY_RESTORED",
 } as const
 
 export type ErrorCode = (typeof ErrorCode)[keyof typeof ErrorCode]
@@ -184,6 +191,34 @@ const TEMPLATES: Record<ErrorCode, Template> = {
 	MIGRATION_FAILED: {
 		error: "Migration failed",
 		hint: "Something went wrong applying the migration. Nothing was changed. Try again in a moment.",
+	},
+	MIGRATION_SAME_KEY: {
+		error: "Same key",
+		hint: "The old and new keys are the same, so there is nothing to migrate.",
+	},
+	MIGRATION_OLD_KEY_NO_USER: {
+		error: "Old key has no account",
+		hint: "The old key doesn't match any account, so there's nothing to migrate.",
+	},
+	MIGRATION_BOTH_KEYS_LINKED: {
+		error: "Both keys are linked",
+		hint: "Both keys already have a Discord link. Unlink one before migrating, otherwise the merge is ambiguous.",
+	},
+	MIGRATION_NOT_FOUND: {
+		error: "Migration not found",
+		hint: "No migration exists for that id.",
+	},
+	MIGRATION_NOT_COMMITTED: {
+		error: "Migration not committed",
+		hint: "This migration was never committed, so there's nothing to undo.",
+	},
+	MIGRATION_HAS_INTERIM_ACTIVITY: {
+		error: "Account changed since migration",
+		hint: "New activity landed on the account after the migration, so it can't be safely rolled back.",
+	},
+	MIGRATION_ALREADY_RESTORED: {
+		error: "Already restored",
+		hint: "This migration was already undone, so there is nothing to roll back.",
 	},
 }
 
