@@ -196,7 +196,11 @@ export async function runMigration(
 		}
 
 		const votesRows = snapshot.votes as { user_id: number; lyrics_id: number }[]
-		const lyricsRows = snapshot.lyrics as { id: number; submitter_id: number | null; video_id: string }[]
+		const lyricsRows = snapshot.lyrics as {
+			id: number
+			submitter_id: number | null
+			video_id: string
+		}[]
 		const reportsRows = snapshot.reports as { user_id: number }[]
 		const fulfillmentRows = snapshot.request_fulfillments as { submitter_id: number | null }[]
 
@@ -283,9 +287,7 @@ export async function runMigration(
 		}
 		await tx.prepare("UPDATE users SET key_id = ? WHERE id = ?").bind(newKey, oldId).run()
 
-		// Nickname survival is a data rule, not the client's call: keep whichever real nickname
-		// exists. keepNickname only breaks the tie when both identities carry one; it can never
-		// drop a nickname that has no counterpart.
+		// keepNickname only breaks the tie when both identities carry a nickname; a lone one always survives.
 		const snapUsers = snapshot.users as { key_id: string; nickname: string | null }[]
 		const oldNickname = snapUsers.find((u) => u.key_id === oldKey)?.nickname ?? null
 		const newNickname = snapUsers.find((u) => u.key_id === newKey)?.nickname ?? null
@@ -304,8 +306,10 @@ export async function runMigration(
 
 		if (newId !== null) {
 			const snapReps = snapshot.users as { key_id: string; reputation: number }[]
-			const oldRep = snapReps.find((u) => u.key_id === oldKey)?.reputation ?? config.reputation.default
-			const newRep = snapReps.find((u) => u.key_id === newKey)?.reputation ?? config.reputation.default
+			const oldRep =
+				snapReps.find((u) => u.key_id === oldKey)?.reputation ?? config.reputation.default
+			const newRep =
+				snapReps.find((u) => u.key_id === newKey)?.reputation ?? config.reputation.default
 			const mergedRep = Math.max(
 				config.reputation.min,
 				Math.min(config.reputation.max, oldRep + newRep - config.reputation.default)
@@ -501,6 +505,11 @@ export async function restoreFromSnapshot(
 	return env.DB.transaction(async (tx) => {
 		const snapVoteIds = new Set((snap.votes as SnapVote[]).map((v) => v.id))
 		const snapReportIds = new Set((snap.reports as SnapReport[]).map((r) => r.id))
+		const snapLyricsIds = new Set((snap.lyrics as SnapLyrics[]).map((l) => l.id))
+		const snapFulfillmentIds = new Set(
+			(snap.request_fulfillments as SnapFulfillment[]).map((f) => f.id)
+		)
+		const snapRequestIds = new Set((snap.lyrics_requests as SnapRequest[]).map((r) => r.id))
 		const currentVotes = await all<{ id: number }>(
 			tx,
 			"SELECT id FROM votes WHERE user_id = ANY(?)",
@@ -511,9 +520,27 @@ export async function restoreFromSnapshot(
 			"SELECT id FROM reports WHERE user_id = ANY(?)",
 			[ids]
 		)
+		const currentLyrics = await all<{ id: number }>(
+			tx,
+			"SELECT id FROM lyrics WHERE submitter_id = ANY(?)",
+			[ids]
+		)
+		const currentFulfillments = await all<{ id: number }>(
+			tx,
+			"SELECT id FROM request_fulfillments WHERE submitter_id = ANY(?)",
+			[ids]
+		)
+		const currentRequests = await all<{ id: number }>(
+			tx,
+			"SELECT id FROM lyrics_requests WHERE requester_id = ANY(?)",
+			[[oldKey, newKey]]
+		)
 		if (
 			currentVotes.some((v) => !snapVoteIds.has(v.id)) ||
-			currentReports.some((r) => !snapReportIds.has(r.id))
+			currentReports.some((r) => !snapReportIds.has(r.id)) ||
+			currentLyrics.some((l) => !snapLyricsIds.has(l.id)) ||
+			currentFulfillments.some((f) => !snapFulfillmentIds.has(f.id)) ||
+			currentRequests.some((r) => !snapRequestIds.has(r.id))
 		) {
 			return { error: "HAS_INTERIM_ACTIVITY" } as const
 		}

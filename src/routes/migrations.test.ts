@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 import type { Env } from "@/types"
-import type { MigrationSession } from "@/utils/migration-session"
+import { commitLockKey, type MigrationSession } from "@/utils/migration-session"
 import { migrationRoutes } from "./migrations"
 
 interface DBCall {
@@ -135,7 +135,9 @@ describe("migration bot endpoints - auth", () => {
 	it("rejects all three without a valid bearer token", async () => {
 		const app = migrationRoutes(makeEnv(makeMockDB(), makeMockCache()))
 		const noauth = { authorization: "Bearer wrong" }
-		expect((await app.handle(post("/migrations/bot/start", { discordId: "d" }, noauth))).status).toBe(401)
+		expect(
+			(await app.handle(post("/migrations/bot/start", { discordId: "d" }, noauth))).status
+		).toBe(401)
 		expect((await app.handle(get("/migrations/bot/sess-1", noauth))).status).toBe(401)
 		expect(
 			(await app.handle(post("/migrations/bot/sess-1/commit", { discordId: "d" }, noauth))).status
@@ -231,7 +233,13 @@ describe("GET /migrations/bot/:sessionId", () => {
 		expect(data.newNickname).toBe("tropicawhale")
 		expect(data.oldDisplayName).toBe("Caplump")
 		expect(data.newDisplayName).toBe("tropicawhale")
-		expect(data.counts).toEqual({ submissions: 2, votes: 3, reports: 0, fulfillments: 1, collisions: 1 })
+		expect(data.counts).toEqual({
+			submissions: 2,
+			votes: 3,
+			reports: 0,
+			fulfillments: 1,
+			collisions: 1,
+		})
 	})
 })
 
@@ -287,7 +295,9 @@ describe("POST /migrations/bot/:sessionId/commit", () => {
 		const res = await app.handle(post("/migrations/bot/sess-1/commit", { discordId: "disc-1" }))
 		expect(res.status).toBe(409)
 		expect((await json(res)).code).toBe("MIGRATION_IN_PROGRESS")
-		expect(db.calls.some((c) => c.sql.startsWith("UPDATE") || c.sql.startsWith("DELETE"))).toBe(false)
+		expect(db.calls.some((c) => c.sql.startsWith("UPDATE") || c.sql.startsWith("DELETE"))).toBe(
+			false
+		)
 	})
 
 	it("commits: runs the migration, marks audit, busts caches, returns moved", async () => {
@@ -364,6 +374,24 @@ describe("POST /migrations/bot/:sessionId/commit", () => {
 		const nick = db.calls.find((c) => c.sql.includes("UPDATE users SET nickname"))
 		expect(nick).toBeDefined()
 		expect(nick?.params[0]).toBe("tropicawhale")
+	})
+
+	it("releases the lock and marks failed when runMigration throws", async () => {
+		const cache = makeMockCache()
+		seedSession(cache, readySession())
+		const db = makeMockDB([
+			{ discord_id: "disc-1", key_id: oldKey }, // re-verify link
+		])
+		db.transaction = async () => {
+			throw new Error("db exploded")
+		}
+		const app = migrationRoutes(makeEnv(db, cache))
+		const res = await app.handle(post("/migrations/bot/sess-1/commit", { discordId: "disc-1" }))
+		expect(res.status).toBe(500)
+		expect((await json(res)).code).toBe("MIGRATION_FAILED")
+		expect(cache.deletes).toContain(commitLockKey("sess-1"))
+		const stored = JSON.parse(cache.store.get("migration:sess-1") ?? "{}") as MigrationSession
+		expect(stored.status).toBe("failed")
 	})
 
 	it("returns already_committed for a committed session", async () => {
