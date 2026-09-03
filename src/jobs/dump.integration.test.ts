@@ -30,6 +30,10 @@ describeIntegration("dump pipeline (integration)", () => {
 		tmp = await mkdtemp(join(tmpdir(), "dump-integ-"))
 		dumpPath = join(tmp, "test.dump")
 
+		await sourcePool.query("DELETE FROM boosts")
+		await sourcePool.query("DELETE FROM badge_awards")
+		await sourcePool.query("DELETE FROM committee_members")
+		await sourcePool.query("DELETE FROM contribution_events")
 		await sourcePool.query("DELETE FROM lyrics_requests")
 		await sourcePool.query("DELETE FROM requested_songs")
 		await sourcePool.query("DELETE FROM votes")
