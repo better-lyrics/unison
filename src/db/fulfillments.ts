@@ -1,3 +1,4 @@
+import { awardRequestFilledXp } from "@/db/contribution-events"
 import { AUTO_HIDE_PREDICATE, AUTO_HIDE_PREDICATE_JOINED } from "@/db/predicates"
 import { windowCutoff } from "@/db/requests"
 import { Logger } from "@/infra/logger"
@@ -20,7 +21,7 @@ export async function recordFulfillment(
 	env: Env,
 	params: RecordFulfillmentParams,
 ): Promise<RecordFulfillmentResult> {
-	return env.DB.transaction(async (tx) => {
+	const result = await env.DB.transaction<RecordFulfillmentResult>(async (tx) => {
 		await tx
 			.prepare("SELECT pg_advisory_xact_lock(hashtext(?))")
 			.bind(`fulfillment:${params.videoId}`)
@@ -86,6 +87,14 @@ export async function recordFulfillment(
 
 		return { recorded: true, id: inserted!.id, demand, requestCount }
 	})
+
+	if (result.recorded) {
+		await awardRequestFilledXp(env, params.submitterId, result.id).catch((err) =>
+			log.warn("request-filled xp failed", { error: (err as Error).message }),
+		)
+	}
+
+	return result
 }
 
 export async function getFulfillmentByLyricsId(

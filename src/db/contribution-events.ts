@@ -47,6 +47,20 @@ export async function awardConfidenceXp(
 	}
 }
 
+export async function awardRequestFilledXp(
+	env: Env,
+	fillerId: number,
+	fulfillmentId: number
+): Promise<boolean> {
+	return addEvent(env, {
+		userId: fillerId,
+		delta: config.gamification.xp.weights.requestFilled,
+		kind: "request-filled",
+		refType: "fulfillment",
+		refId: fulfillmentId,
+	})
+}
+
 export async function awardPenaltyXp(
 	env: Env,
 	submitterId: number,
