@@ -3,7 +3,7 @@ import pg from "pg"
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest"
 import { D1Compat } from "@/infra/database"
 import type { Env } from "@/types"
-import { addEvent, getXp } from "./contribution-events"
+import { addEvent, awardConfidenceXp, getXp } from "./contribution-events"
 
 const { Pool } = pg
 
@@ -184,6 +184,56 @@ describeIntegration("contribution events (integration)", () => {
 
 			expect(await getXp(env, userA)).toBe(20)
 			expect(await getXp(env, userB)).toBe(7)
+		})
+	})
+
+	describe("awardConfidenceXp", () => {
+		const kindCount = async (userId: number, kind: string): Promise<number> =>
+			num("SELECT count(*)::int n FROM contribution_events WHERE user_id = $1 AND kind = $2", [
+				userId,
+				kind,
+			])
+
+		it("emits nothing for low confidence", async () => {
+			const userId = await seedUser("key-conf-low")
+
+			await awardConfidenceXp(env, userId, 1, "low")
+
+			expect(
+				await num("SELECT count(*)::int n FROM contribution_events WHERE user_id = $1", [userId])
+			).toBe(0)
+			expect(await getXp(env, userId)).toBe(0)
+		})
+
+		it("emits exactly one reached-medium for medium confidence and is idempotent", async () => {
+			const userId = await seedUser("key-conf-medium")
+
+			await awardConfidenceXp(env, userId, 1, "medium")
+
+			expect(await kindCount(userId, "reached-medium")).toBe(1)
+			expect(await kindCount(userId, "reached-high")).toBe(0)
+			expect(await getXp(env, userId)).toBe(20)
+
+			await awardConfidenceXp(env, userId, 1, "medium")
+
+			expect(await kindCount(userId, "reached-medium")).toBe(1)
+			expect(await getXp(env, userId)).toBe(20)
+		})
+
+		it("emits both reached-medium and reached-high for high confidence and is idempotent", async () => {
+			const userId = await seedUser("key-conf-high")
+
+			await awardConfidenceXp(env, userId, 1, "high")
+
+			expect(await kindCount(userId, "reached-medium")).toBe(1)
+			expect(await kindCount(userId, "reached-high")).toBe(1)
+			expect(await getXp(env, userId)).toBe(40)
+
+			await awardConfidenceXp(env, userId, 1, "high")
+
+			expect(await kindCount(userId, "reached-medium")).toBe(1)
+			expect(await kindCount(userId, "reached-high")).toBe(1)
+			expect(await getXp(env, userId)).toBe(40)
 		})
 	})
 })

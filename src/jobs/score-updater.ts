@@ -1,5 +1,5 @@
 import { config } from "@/config"
-import { addEvent } from "@/db/contribution-events"
+import { awardConfidenceXp } from "@/db/contribution-events"
 import { invalidateCache } from "@/db/lyrics"
 import { AUTO_HIDE_PREDICATE } from "@/db/predicates"
 import { Logger } from "@/infra/logger"
@@ -70,24 +70,7 @@ export async function recalculateScore(env: Env, lyricsId: number): Promise<void
 	await invalidateCache(env, row.video_id)
 
 	if (typeof row.submitter_id === "number") {
-		if (update.confidence === "medium" || update.confidence === "high") {
-			await addEvent(env, {
-				userId: row.submitter_id,
-				delta: config.gamification.xp.weights.reachedMedium,
-				kind: "reached-medium",
-				refType: "lyric",
-				refId: lyricsId,
-			})
-		}
-		if (update.confidence === "high") {
-			await addEvent(env, {
-				userId: row.submitter_id,
-				delta: config.gamification.xp.weights.reachedHigh,
-				kind: "reached-high",
-				refType: "lyric",
-				refId: lyricsId,
-			})
-		}
+		await awardConfidenceXp(env, row.submitter_id, lyricsId, update.confidence)
 	}
 
 	log.debug("recalculated score", { lyricsId, effective_score: update.effective_score })
