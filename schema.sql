@@ -304,7 +304,6 @@ CREATE TABLE IF NOT EXISTS contribution_events (
     created_at INTEGER NOT NULL DEFAULT (EXTRACT(EPOCH FROM NOW())::INTEGER),
     UNIQUE(user_id, kind, ref_type, ref_id)
 );
-CREATE INDEX IF NOT EXISTS idx_contrib_events_user ON contribution_events(user_id);
 
 CREATE TABLE IF NOT EXISTS badge_awards (
     id SERIAL PRIMARY KEY,
@@ -315,7 +314,6 @@ CREATE TABLE IF NOT EXISTS badge_awards (
     context TEXT,
     UNIQUE(user_id, badge_key)
 );
-CREATE INDEX IF NOT EXISTS idx_badge_awards_user ON badge_awards(user_id);
 
 CREATE TABLE IF NOT EXISTS committee_members (
     user_id INTEGER PRIMARY KEY REFERENCES users(id),
