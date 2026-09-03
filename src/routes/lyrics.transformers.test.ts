@@ -180,6 +180,7 @@ describe("toSearchResponse", () => {
 		vote_count: 4,
 		confidence: "low",
 		created_at: 1700000000,
+		submitter_id: null,
 		match_score: 0.85,
 		tier: 2,
 	}
@@ -214,5 +215,37 @@ describe("toSearchResponse", () => {
 	it("does not leak created_at as snake_case", () => {
 		const result = toSearchResponse(baseSearchRow) as Record<string, unknown>
 		expect(result.created_at).toBeUndefined()
+	})
+
+	it("exposes submitter when key id and reputation are present", () => {
+		const keyId = "deadbeef".repeat(8)
+		const result = toSearchResponse({
+			...baseSearchRow,
+			submitter_id: 99,
+			submitter_key_id: keyId,
+			submitter_reputation: 1.42,
+			submitter_nickname: "Curator Cat",
+		})
+		expect(result.submitter).toEqual({ keyId, reputation: 1.42, displayName: "Curator Cat" })
+	})
+
+	it("falls back to a pet name when nickname is null", () => {
+		const keyId = "abcdef12".repeat(8)
+		const result = toSearchResponse({
+			...baseSearchRow,
+			submitter_id: 5,
+			submitter_key_id: keyId,
+			submitter_reputation: 1,
+			submitter_nickname: null,
+		})
+		expect(result.submitter).toEqual({
+			keyId,
+			reputation: 1,
+			displayName: generatePetName(keyId),
+		})
+	})
+
+	it("omits submitter for anonymous rows", () => {
+		expect(toSearchResponse(baseSearchRow).submitter).toBeUndefined()
 	})
 })

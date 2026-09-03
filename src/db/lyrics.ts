@@ -522,7 +522,7 @@ export async function softDeleteLyrics(
 const SEARCH_COLUMNS = `
 	id, video_id, song, artist, album, isrc, duration,
 	format, language, sync_type, score, effective_score,
-	vote_count, confidence, created_at
+	vote_count, confidence, created_at, submitter_id
 `
 
 export async function searchByQuery(
@@ -605,5 +605,26 @@ export async function searchByQuery(
 		)
 		.all<LyricsSearchResult>()
 
+	await attachSubmitters(env, result.results)
 	return result.results
+}
+
+async function attachSubmitters(env: Env, rows: LyricsSearchResult[]): Promise<void> {
+	const ids = [...new Set(rows.map((r) => r.submitter_id).filter((id): id is number => id != null))]
+	if (ids.length === 0) return
+	const placeholders = ids.map(() => "?").join(", ")
+	const { results } = await env.DB.prepare(
+		`SELECT id, key_id, reputation, nickname FROM users WHERE id IN (${placeholders})`
+	)
+		.bind(...ids)
+		.all<{ id: number; key_id: string; reputation: number; nickname: string | null }>()
+	const byId = new Map(results.map((u) => [u.id, u]))
+	for (const row of rows) {
+		const user = row.submitter_id != null ? byId.get(row.submitter_id) : undefined
+		if (user) {
+			row.submitter_key_id = user.key_id
+			row.submitter_reputation = user.reputation
+			row.submitter_nickname = user.nickname
+		}
+	}
 }
