@@ -17,6 +17,7 @@ import { cleanupFulfilledRequests } from "@/jobs/cleanup-fulfilled-requests"
 import { runDumpJob } from "@/jobs/dump"
 import { updateScores } from "@/jobs/score-updater"
 import { auditThresholds } from "@/jobs/threshold-audit"
+import { adminRoutes } from "@/routes/admin"
 import { authRoutes } from "@/routes/auth"
 import { compatRoutes } from "@/routes/compat"
 import { feedRoutes } from "@/routes/feed"
@@ -204,6 +205,7 @@ const app = new Elysia({ adapter: node() })
 	.use(linkStartRoutes(env))
 	.use(linkRoutes(env))
 	.use(migrationRoutes(env))
+	.use(adminRoutes(env))
 	.get("/*", ({ request }) => {
 		const { pathname } = new URL(request.url)
 

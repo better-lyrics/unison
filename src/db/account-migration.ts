@@ -416,7 +416,8 @@ export async function createPreviewAudit(
 			counts.collisions
 		)
 		.first<{ id: number }>()
-	return row!.id
+	// migration_requests.id is BIGSERIAL; node-postgres returns bigint as a string.
+	return Number(row!.id)
 }
 
 export async function markAuditFailed(env: Env, id: number, error: string): Promise<void> {
@@ -428,10 +429,37 @@ export async function markAuditFailed(env: Env, id: number, error: string): Prom
 		.run()
 }
 
+// Marks a committed migration as reverted by clearing its now-consumed snapshot,
+// so it is no longer offered for undo and reads as reverted in the history.
+export async function markAuditReverted(env: Env, id: number): Promise<void> {
+	await env.DB.prepare(
+		"UPDATE migration_requests SET snapshot = NULL, updated_at = EXTRACT(EPOCH FROM NOW())::INTEGER WHERE id = ?"
+	)
+		.bind(id)
+		.run()
+}
+
 export async function getAudit(env: Env, id: number): Promise<MigrationAuditRow | null> {
-	return env.DB.prepare("SELECT * FROM migration_requests WHERE id = ?")
+	const row = await env.DB.prepare("SELECT * FROM migration_requests WHERE id = ?")
 		.bind(id)
 		.first<MigrationAuditRow>()
+	// migration_requests.id is BIGSERIAL; node-postgres returns bigint as a string.
+	return row ? { ...row, id: Number(row.id) } : null
+}
+
+export type MigrationAuditSummary = Omit<MigrationAuditRow, "snapshot"> & { hasSnapshot: boolean }
+
+// Recent audit rows for the history view, newest first, without the heavy snapshot.
+export async function listAudits(env: Env, limit: number): Promise<MigrationAuditSummary[]> {
+	const { results } = await env.DB.prepare(
+		`SELECT id, session_id, discord_id, old_key, new_key, status,
+			moved_submissions, moved_votes, moved_reports, moved_fulfillments, collisions_dropped,
+			error, created_at, updated_at, (snapshot IS NOT NULL) AS "hasSnapshot"
+		 FROM migration_requests ORDER BY id DESC LIMIT ?`
+	)
+		.bind(limit)
+		.all<MigrationAuditSummary>()
+	return results.map((r) => ({ ...r, id: Number(r.id) }))
 }
 
 interface SnapUser {
