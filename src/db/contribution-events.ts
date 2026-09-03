@@ -61,6 +61,20 @@ export async function awardRequestFilledXp(
 	})
 }
 
+export async function awardFirstForSongXp(
+	env: Env,
+	submitterId: number,
+	lyricsId: number
+): Promise<boolean> {
+	return addEvent(env, {
+		userId: submitterId,
+		delta: config.gamification.xp.weights.firstForSong,
+		kind: "first-for-song",
+		refType: "lyric",
+		refId: lyricsId,
+	})
+}
+
 export async function awardPenaltyXp(
 	env: Env,
 	submitterId: number,
