@@ -43,6 +43,10 @@ describeIntegration("account migration (integration)", () => {
 	})
 
 	async function wipe() {
+		await pool.query("DELETE FROM boosts")
+		await pool.query("DELETE FROM badge_awards")
+		await pool.query("DELETE FROM committee_members")
+		await pool.query("DELETE FROM contribution_events")
 		await pool.query("DELETE FROM migration_requests")
 		await pool.query("DELETE FROM request_fulfillments")
 		await pool.query("DELETE FROM lyrics_requests")
