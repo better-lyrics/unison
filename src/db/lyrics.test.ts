@@ -239,12 +239,49 @@ describe("findByVideoId", () => {
 		expect(result?.submitter_reputation).toBe(1.25)
 	})
 
-	it("short-circuits to cache without hitting DB on hit", async () => {
+	it("cache hit skips the ranking lookup but refreshes submitter reputation from users", async () => {
+		// reputation is user-global, re-read live on a cache hit, not served from the frozen blob
 		const cached = {
 			...baseRow,
 			submitter_id: 7,
 			submitter_key_id: "cached-key",
 			submitter_reputation: 1.5,
+		}
+		const cache = createMockCache({ "v:vid123": JSON.stringify(cached) })
+		const db = createMockDB([{ reputation: 1.9, nickname: null }])
+		const env = createEnv(db, cache)
+
+		const result = await findByVideoId(env, "vid123")
+
+		expect(result?.submitter_key_id).toBe("cached-key")
+		expect(result?.submitter_reputation).toBe(1.9)
+		expect(db.calls.some((c) => c.sql.includes("FROM lyrics l"))).toBe(false)
+	})
+
+	it("regression: cache hit returns live reputation, not the stale cached snapshot", async () => {
+		const stale = {
+			...baseRow,
+			submitter_id: 7,
+			submitter_key_id: "key7",
+			submitter_reputation: 1.3,
+			submitter_nickname: "boredkevin",
+		}
+		const cache = createMockCache({ "v:vid123": JSON.stringify(stale) })
+		const db = createMockDB([{ reputation: 2.0, nickname: "boredkevin" }])
+		const env = createEnv(db, cache)
+
+		const result = await findByVideoId(env, "vid123")
+
+		expect(result?.submitter_reputation).toBe(2.0)
+		expect(result?.submitter_nickname).toBe("boredkevin")
+	})
+
+	it("cache hit with an anonymous submitter does not query users", async () => {
+		const cached = {
+			...baseRow,
+			submitter_id: null,
+			submitter_key_id: null,
+			submitter_reputation: null,
 		}
 		const cache = createMockCache({ "v:vid123": JSON.stringify(cached) })
 		const db = createMockDB([])
@@ -253,8 +290,7 @@ describe("findByVideoId", () => {
 		const result = await findByVideoId(env, "vid123")
 
 		expect(db.calls).toHaveLength(0)
-		expect(result?.submitter_key_id).toBe("cached-key")
-		expect(result?.submitter_reputation).toBe(1.5)
+		expect(result?.submitter_reputation).toBeNull()
 	})
 
 	it("evicts and falls back to DB when cache entry is corrupt", async () => {

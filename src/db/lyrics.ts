@@ -33,6 +33,17 @@ const LYRICS_WITH_SUBMITTER = `
 	LEFT JOIN users u ON l.submitter_id = u.id
 `
 
+async function hydrateSubmitter(env: Env, row: LyricsRow): Promise<void> {
+	if (row.submitter_id == null) return
+	const user = await env.DB.prepare("SELECT reputation, nickname FROM users WHERE id = ?")
+		.bind(row.submitter_id)
+		.first<{ reputation: number; nickname: string | null }>()
+	if (user) {
+		row.submitter_reputation = user.reputation
+		row.submitter_nickname = user.nickname
+	}
+}
+
 async function getPrimary(env: Env, videoId: string): Promise<LyricsRow | null> {
 	const cached = await env.CACHE.get(`v:${videoId}`)
 	if (cached) {
@@ -41,6 +52,7 @@ async function getPrimary(env: Env, videoId: string): Promise<LyricsRow | null> 
 			if (isCompressed(row.lyrics)) {
 				row.lyrics = await decompress(row.lyrics)
 			}
+			await hydrateSubmitter(env, row)
 			cacheLog.debug("hit", { key: `v:${videoId}` })
 			return row
 		} catch {
@@ -466,8 +478,7 @@ export async function softDeleteLyrics(
 
 	const shouldPenalise =
 		!row.reputation_penalized &&
-		(role === "admin" ||
-			(role === "submitter" && row.vote_count >= 2 && row.effective_score < 0))
+		(role === "admin" || (role === "submitter" && row.vote_count >= 2 && row.effective_score < 0))
 
 	await env.DB.transaction(async (tx) => {
 		if (shouldPenalise && row.submitter_id) {
@@ -483,9 +494,7 @@ export async function softDeleteLyrics(
 			if (flipped) {
 				const penalty = config.moderation.autoHide.reputationPenalty
 				await tx
-					.prepare(
-						"UPDATE users SET reputation = GREATEST(?, reputation - ?) WHERE id = ?"
-					)
+					.prepare("UPDATE users SET reputation = GREATEST(?, reputation - ?) WHERE id = ?")
 					.bind(config.reputation.min, penalty, row.submitter_id)
 					.run()
 			}
