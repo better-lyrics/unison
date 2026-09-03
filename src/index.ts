@@ -13,6 +13,7 @@ import { backfillNorms } from "@/jobs/backfill-norms"
 import { backfillSyncType } from "@/jobs/backfill-synctype"
 import { backfillTextSearch } from "@/jobs/backfill-text-search"
 import { backfillVoteCounts } from "@/jobs/backfill-vote-counts"
+import { backfillXp } from "@/jobs/backfill-xp"
 import { cleanupFulfilledRequests } from "@/jobs/cleanup-fulfilled-requests"
 import { runDumpJob } from "@/jobs/dump"
 import { updateScores } from "@/jobs/score-updater"
@@ -292,6 +293,13 @@ backfillVoteCounts(env)
 		if (repaired > 0) log.info("vote count backfill complete", { repaired })
 	})
 	.catch((err) => log.error("vote count backfill failed", { error: (err as Error).message }))
+
+backfillXp(env)
+	.then(({ lyrics, fulfillments, firsts }) => {
+		if (lyrics + fulfillments + firsts > 0)
+			log.info("xp backfill complete", { lyrics, fulfillments, firsts })
+	})
+	.catch((err) => log.error("xp backfill failed", { error: (err as Error).message }))
 
 process.on("unhandledRejection", (reason) => {
 	const err = reason instanceof Error ? reason : new Error(String(reason))
