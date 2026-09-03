@@ -3,7 +3,7 @@ import pg from "pg"
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest"
 import { getXp } from "@/db/contribution-events"
 import { D1Compat } from "@/infra/database"
-import { recalculateScore } from "@/jobs/score-updater"
+import { awardConsensusVotes, recalculateScore } from "@/jobs/score-updater"
 import type { Env } from "@/types"
 
 const { Pool } = pg
@@ -205,6 +205,154 @@ describeIntegration("score-updater xp emission (integration)", () => {
 			expect(await countEvents(submitter, "reached-medium")).toBe(1)
 			expect(await countEvents(submitter, "reached-high")).toBe(0)
 			expect(await getXp(env, submitter)).toBe(20)
+		})
+	})
+
+	describe("awardConsensusVotes", () => {
+		async function castVote(
+			lyricsId: number,
+			vote: number,
+			isSelfVote: number
+		): Promise<{ voterId: number; voteId: number }> {
+			const voterId = await insertUser()
+			const row = await one<{ id: number }>(
+				"INSERT INTO votes (lyrics_id, user_id, vote, is_self_vote) VALUES ($1,$2,$3,$4) RETURNING id",
+				[lyricsId, voterId, vote, isSelfVote]
+			)
+			return { voterId, voteId: row.id }
+		}
+
+		async function setScore(
+			lyricId: number,
+			effectiveScore: number,
+			voteCount: number
+		): Promise<void> {
+			await pool.query("UPDATE lyrics SET effective_score = $1, vote_count = $2 WHERE id = $3", [
+				effectiveScore,
+				voteCount,
+				lyricId,
+			])
+		}
+
+		const consensusCount = (userId: number): Promise<number> =>
+			countEvents(userId, "consensus-vote")
+
+		const refIdOf = (userId: number): Promise<number> =>
+			num(
+				"SELECT ref_id::int n FROM contribution_events WHERE user_id = $1 AND kind = 'consensus-vote'",
+				[userId]
+			)
+
+		const refTypeOf = (userId: number): Promise<string> =>
+			one<{ ref_type: string }>(
+				"SELECT ref_type FROM contribution_events WHERE user_id = $1 AND kind = 'consensus-vote'",
+				[userId]
+			).then((r) => r.ref_type)
+
+		it("credits each agreeing non-self voter on a decisive lyric and nobody else", async () => {
+			const submitter = await insertUser()
+			const decisive = await insertLyric(submitter, "vidConsensusYes")
+			await setScore(decisive, 1.0, 3)
+
+			const agreeA = await castVote(decisive, 1, 0)
+			const agreeB = await castVote(decisive, 1, 0)
+			const disagree = await castVote(decisive, -1, 0)
+			const selfAgree = await castVote(decisive, 1, 1)
+
+			const nonDecisive = await insertLyric(submitter, "vidConsensusNo")
+			await setScore(nonDecisive, 0.3, 3)
+			const nonDecisiveVoter = await castVote(nonDecisive, 1, 0)
+
+			await awardConsensusVotes(env)
+
+			expect(await consensusCount(agreeA.voterId)).toBe(1)
+			expect(await consensusCount(agreeB.voterId)).toBe(1)
+			expect(await eventDelta(agreeA.voterId, "consensus-vote")).toBe(2)
+			expect(await eventDelta(agreeB.voterId, "consensus-vote")).toBe(2)
+			expect(await refIdOf(agreeA.voterId)).toBe(agreeA.voteId)
+			expect(await refIdOf(agreeB.voterId)).toBe(agreeB.voteId)
+			expect(await refTypeOf(agreeA.voterId)).toBe("vote")
+			expect(await getXp(env, agreeA.voterId)).toBe(2)
+			expect(await getXp(env, agreeB.voterId)).toBe(2)
+
+			expect(await consensusCount(disagree.voterId)).toBe(0)
+			expect(await getXp(env, disagree.voterId)).toBe(0)
+			expect(await consensusCount(selfAgree.voterId)).toBe(0)
+			expect(await getXp(env, selfAgree.voterId)).toBe(0)
+			expect(await consensusCount(nonDecisiveVoter.voterId)).toBe(0)
+			expect(await getXp(env, nonDecisiveVoter.voterId)).toBe(0)
+		})
+
+		it("is idempotent across repeated runs", async () => {
+			const submitter = await insertUser()
+			const decisive = await insertLyric(submitter, "vidConsensusIdem")
+			await setScore(decisive, 1.0, 3)
+			const agree = await castVote(decisive, 1, 0)
+
+			await awardConsensusVotes(env)
+			await awardConsensusVotes(env)
+
+			expect(await consensusCount(agree.voterId)).toBe(1)
+			expect(await getXp(env, agree.voterId)).toBe(2)
+		})
+
+		describe("invariants", () => {
+			it("credits a downvote that agrees with a negative consensus", async () => {
+				const submitter = await insertUser()
+				const decisive = await insertLyric(submitter, "vidConsensusNeg")
+				await setScore(decisive, -1.0, 3)
+				const agree = await castVote(decisive, -1, 0)
+				const disagree = await castVote(decisive, 1, 0)
+
+				await awardConsensusVotes(env)
+
+				expect(await consensusCount(agree.voterId)).toBe(1)
+				expect(await getXp(env, agree.voterId)).toBe(2)
+				expect(await consensusCount(disagree.voterId)).toBe(0)
+			})
+
+			it("skips a lyric below the vote-count threshold even when the score is decisive", async () => {
+				const submitter = await insertUser()
+				const thin = await insertLyric(submitter, "vidConsensusThin")
+				await setScore(thin, 1.0, 2)
+				const agree = await castVote(thin, 1, 0)
+
+				await awardConsensusVotes(env)
+
+				expect(await consensusCount(agree.voterId)).toBe(0)
+				expect(await getXp(env, agree.voterId)).toBe(0)
+			})
+
+			it("skips a lyric whose score sits exactly on the 0.5 threshold", async () => {
+				const submitter = await insertUser()
+				const boundary = await insertLyric(submitter, "vidConsensusBoundary")
+				await setScore(boundary, 0.5, 3)
+				const agree = await castVote(boundary, 1, 0)
+
+				await awardConsensusVotes(env)
+
+				expect(await consensusCount(agree.voterId)).toBe(0)
+				expect(await getXp(env, agree.voterId)).toBe(0)
+			})
+
+			it("regression: a flipped vote keeps its earned consensus xp and is not re-credited", async () => {
+				const submitter = await insertUser()
+				const decisive = await insertLyric(submitter, "vidConsensusFlip")
+				await setScore(decisive, 1.0, 3)
+				const agree = await castVote(decisive, 1, 0)
+
+				await awardConsensusVotes(env)
+
+				expect(await consensusCount(agree.voterId)).toBe(1)
+				expect(await getXp(env, agree.voterId)).toBe(2)
+
+				await pool.query("UPDATE votes SET vote = -1 WHERE id = $1", [agree.voteId])
+
+				await awardConsensusVotes(env)
+
+				expect(await consensusCount(agree.voterId)).toBe(1)
+				expect(await getXp(env, agree.voterId)).toBe(2)
+			})
 		})
 	})
 })
