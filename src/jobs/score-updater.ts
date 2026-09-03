@@ -1,4 +1,5 @@
 import { config } from "@/config"
+import { addEvent } from "@/db/contribution-events"
 import { invalidateCache } from "@/db/lyrics"
 import { AUTO_HIDE_PREDICATE } from "@/db/predicates"
 import { Logger } from "@/infra/logger"
@@ -22,9 +23,11 @@ interface LyricsScoreUpdate {
 }
 
 export async function recalculateScore(env: Env, lyricsId: number): Promise<void> {
-	const row = await env.DB.prepare("SELECT video_id, deleted_at FROM lyrics WHERE id = ?")
+	const row = await env.DB.prepare(
+		"SELECT video_id, deleted_at, submitter_id FROM lyrics WHERE id = ?"
+	)
 		.bind(lyricsId)
-		.first<{ video_id: string; deleted_at: number | null }>()
+		.first<{ video_id: string; deleted_at: number | null; submitter_id: number | null }>()
 
 	if (!row || row.deleted_at !== null) return
 
@@ -65,6 +68,27 @@ export async function recalculateScore(env: Env, lyricsId: number): Promise<void
 		.run()
 
 	await invalidateCache(env, row.video_id)
+
+	if (typeof row.submitter_id === "number") {
+		if (update.confidence === "medium" || update.confidence === "high") {
+			await addEvent(env, {
+				userId: row.submitter_id,
+				delta: config.gamification.xp.weights.reachedMedium,
+				kind: "reached-medium",
+				refType: "lyric",
+				refId: lyricsId,
+			})
+		}
+		if (update.confidence === "high") {
+			await addEvent(env, {
+				userId: row.submitter_id,
+				delta: config.gamification.xp.weights.reachedHigh,
+				kind: "reached-high",
+				refType: "lyric",
+				refId: lyricsId,
+			})
+		}
+	}
 
 	log.debug("recalculated score", { lyricsId, effective_score: update.effective_score })
 }
