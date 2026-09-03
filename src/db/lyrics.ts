@@ -1,4 +1,5 @@
 import { config } from "@/config"
+import { awardFirstForSongXp } from "@/db/contribution-events"
 import { recordFulfillment } from "@/db/fulfillments"
 import {
 	AUTO_HIDE_PREDICATE,
@@ -339,6 +340,17 @@ export async function submitLyrics(
 				submitterKeyId: submitter.key_id,
 			})
 		}
+	}
+
+	const earliest = await env.DB.prepare(
+		"SELECT MIN(id) AS min_id FROM lyrics WHERE video_id = ? AND deleted_at IS NULL"
+	)
+		.bind(submission.videoId)
+		.first<{ min_id: number | null }>()
+	if (earliest && Number(earliest.min_id) === result!.id) {
+		await awardFirstForSongXp(env, submitterId, result!.id).catch((err) =>
+			log.warn("first-for-song xp failed", { error: (err as Error).message })
+		)
 	}
 
 	await invalidateCache(env, submission.videoId)
