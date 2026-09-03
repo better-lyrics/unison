@@ -3,8 +3,22 @@ import type {
 	LyricsFulfillmentBadge,
 	LyricsResponse,
 	LyricsSearchResult,
+	SubmitterInfo,
 } from "@/types"
 import { generatePetName } from "@/utils/petname"
+
+function buildSubmitter(row: {
+	submitter_key_id?: string | null
+	submitter_reputation?: number | null
+	submitter_nickname?: string | null
+}): SubmitterInfo | undefined {
+	if (row.submitter_key_id == null || row.submitter_reputation == null) return undefined
+	return {
+		keyId: row.submitter_key_id,
+		reputation: row.submitter_reputation,
+		displayName: row.submitter_nickname ?? generatePetName(row.submitter_key_id),
+	}
+}
 
 export interface LyricsRowForResponse {
 	id: number
@@ -31,15 +45,6 @@ export function toResponse(
 	row: LyricsRowForResponse,
 	fulfilled?: LyricsFulfillmentBadge | null
 ): LyricsResponse {
-	const submitter =
-		row.submitter_key_id != null && row.submitter_reputation != null
-			? {
-					keyId: row.submitter_key_id,
-					reputation: row.submitter_reputation,
-					displayName: row.submitter_nickname ?? generatePetName(row.submitter_key_id),
-				}
-			: undefined
-
 	return {
 		id: row.id,
 		videoId: row.video_id,
@@ -56,7 +61,7 @@ export function toResponse(
 		voteCount: row.vote_count,
 		confidence: row.confidence,
 		hidden: row.hidden ?? false,
-		submitter,
+		submitter: buildSubmitter(row),
 		fulfilled: fulfilled ?? undefined,
 	}
 }
@@ -78,5 +83,6 @@ export function toSearchResponse(row: LyricsSearchResult) {
 		voteCount: row.vote_count,
 		confidence: row.confidence,
 		matchScore: row.match_score,
+		submitter: buildSubmitter(row),
 	}
 }

@@ -796,6 +796,7 @@ describe("searchByQuery", () => {
 			vote_count: 0,
 			confidence: "low",
 			created_at: 1700000000,
+			submitter_id: null,
 			match_score: 0.9,
 			tier: 1,
 		}
@@ -806,6 +807,39 @@ describe("searchByQuery", () => {
 		const results = await searchByQuery(env, "longer query", 10)
 
 		expect(results).toEqual([searchHit])
+	})
+
+	it("attaches submitter details from a follow-up user lookup", async () => {
+		const searchHit: LyricsSearchResult = {
+			id: 2,
+			video_id: "v2",
+			song: "S2",
+			artist: "A2",
+			album: null,
+			isrc: null,
+			duration: 100,
+			format: "lrc",
+			language: null,
+			sync_type: "linesync",
+			score: 0,
+			effective_score: 0,
+			vote_count: 0,
+			confidence: "low",
+			created_at: 1700000000,
+			submitter_id: 99,
+			match_score: 0.9,
+			tier: 1,
+		}
+		const userRow = { id: 99, key_id: "beef".repeat(16), reputation: 1.5, nickname: "Cat" }
+		const db = createMockDB([[searchHit], [userRow]])
+		const cache = createMockCache()
+		const env = createEnv(db, cache)
+
+		const results = await searchByQuery(env, "longer query", 10)
+
+		expect(results[0].submitter_key_id).toBe("beef".repeat(16))
+		expect(results[0].submitter_reputation).toBe(1.5)
+		expect(results[0].submitter_nickname).toBe("Cat")
 	})
 })
 

@@ -149,6 +149,10 @@ export interface LyricsSearchResult {
 	vote_count: number
 	confidence: Confidence
 	created_at: number
+	submitter_id: number | null
+	submitter_key_id?: string | null
+	submitter_reputation?: number | null
+	submitter_nickname?: string | null
 	match_score: number
 	tier: number
 }
