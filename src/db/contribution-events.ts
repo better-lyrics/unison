@@ -1,4 +1,5 @@
-import type { Env } from "@/types"
+import { config } from "@/config"
+import type { Confidence, Env } from "@/types"
 
 export interface ContributionEvent {
 	userId: number
@@ -18,6 +19,32 @@ export async function addEvent(env: Env, event: ContributionEvent): Promise<bool
 		.bind(event.userId, event.delta, event.kind, event.refType, event.refId)
 		.first<{ id: number }>()
 	return row !== null
+}
+
+export async function awardConfidenceXp(
+	env: Env,
+	submitterId: number,
+	lyricsId: number,
+	confidence: Confidence
+): Promise<void> {
+	if (confidence === "medium" || confidence === "high") {
+		await addEvent(env, {
+			userId: submitterId,
+			delta: config.gamification.xp.weights.reachedMedium,
+			kind: "reached-medium",
+			refType: "lyric",
+			refId: lyricsId,
+		})
+	}
+	if (confidence === "high") {
+		await addEvent(env, {
+			userId: submitterId,
+			delta: config.gamification.xp.weights.reachedHigh,
+			kind: "reached-high",
+			refType: "lyric",
+			refId: lyricsId,
+		})
+	}
 }
 
 export async function getXp(env: Env, userId: number): Promise<number> {
