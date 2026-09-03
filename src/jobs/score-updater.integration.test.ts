@@ -3,7 +3,7 @@ import pg from "pg"
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest"
 import { getXp } from "@/db/contribution-events"
 import { D1Compat } from "@/infra/database"
-import { awardConsensusVotes, recalculateScore } from "@/jobs/score-updater"
+import { awardConsensusVotes, recalculateScore, updateScores } from "@/jobs/score-updater"
 import type { Env } from "@/types"
 
 const { Pool } = pg
@@ -44,6 +44,14 @@ describeIntegration("score-updater xp emission (integration)", () => {
 		const voterId = await insertUser(reputation, avgVote)
 		await pool.query(
 			"INSERT INTO votes (lyrics_id, user_id, vote, is_self_vote) VALUES ($1,$2,1,0)",
+			[lyricsId, voterId]
+		)
+	}
+
+	async function downvote(lyricsId: number, reputation: number, avgVote: number): Promise<void> {
+		const voterId = await insertUser(reputation, avgVote)
+		await pool.query(
+			"INSERT INTO votes (lyrics_id, user_id, vote, is_self_vote) VALUES ($1,$2,-1,0)",
 			[lyricsId, voterId]
 		)
 	}
@@ -205,6 +213,99 @@ describeIntegration("score-updater xp emission (integration)", () => {
 			expect(await countEvents(submitter, "reached-medium")).toBe(1)
 			expect(await countEvents(submitter, "reached-high")).toBe(0)
 			expect(await getXp(env, submitter)).toBe(20)
+		})
+	})
+
+	describe("auto-hide penalty xp", () => {
+		const isPenalized = async (lyricsId: number): Promise<boolean> =>
+			(
+				await one<{ reputation_penalized: boolean }>(
+					"SELECT reputation_penalized FROM lyrics WHERE id = $1",
+					[lyricsId]
+				)
+			).reputation_penalized
+
+		const penaltyEvent = (submitterId: number): Promise<{ ref_type: string; ref_id: number }> =>
+			one<{ ref_type: string; ref_id: number }>(
+				"SELECT ref_type, ref_id::int AS ref_id FROM contribution_events WHERE user_id = $1 AND kind = 'penalized'",
+				[submitterId]
+			)
+
+		const penaltyRows = (
+			submitterId: number
+		): Promise<{ ref_type: string; ref_id: number; delta: number }[]> =>
+			pool
+				.query(
+					"SELECT ref_type, ref_id::int AS ref_id, delta::int AS delta FROM contribution_events WHERE user_id = $1 AND kind = 'penalized' ORDER BY ref_id",
+					[submitterId]
+				)
+				.then((r) => r.rows)
+
+		it("deducts penalized xp once when a submission is auto-hidden", async () => {
+			const submitter = await insertUser()
+			const lyricId = await insertLyric(submitter, "vidAutoHide")
+			await downvote(lyricId, 1.0, 0)
+			await downvote(lyricId, 1.0, 0)
+			await downvote(lyricId, 1.0, 0)
+
+			await updateScores(env)
+
+			expect(await isPenalized(lyricId)).toBe(true)
+			expect(await countEvents(submitter, "penalized")).toBe(1)
+			expect(await eventDelta(submitter, "penalized")).toBe(-30)
+			const ev = await penaltyEvent(submitter)
+			expect(ev.ref_type).toBe("lyric")
+			expect(ev.ref_id).toBe(lyricId)
+			expect(await getXp(env, submitter)).toBe(-30)
+
+			await updateScores(env)
+
+			expect(await countEvents(submitter, "penalized")).toBe(1)
+			expect(await getXp(env, submitter)).toBe(-30)
+		})
+
+		it("deducts penalized xp for each newly hidden lyric of one submitter in a single run", async () => {
+			const submitter = await insertUser()
+			const lyricA = await insertLyric(submitter, "vidAutoHideMultiA")
+			await downvote(lyricA, 1.0, 0)
+			await downvote(lyricA, 1.0, 0)
+			await downvote(lyricA, 1.0, 0)
+			const lyricB = await insertLyric(submitter, "vidAutoHideMultiB")
+			await downvote(lyricB, 1.0, 0)
+			await downvote(lyricB, 1.0, 0)
+			await downvote(lyricB, 1.0, 0)
+
+			await updateScores(env)
+
+			expect(await isPenalized(lyricA)).toBe(true)
+			expect(await isPenalized(lyricB)).toBe(true)
+			expect(await countEvents(submitter, "penalized")).toBe(2)
+			const rows = await penaltyRows(submitter)
+			expect(rows.map((r) => r.ref_type)).toEqual(["lyric", "lyric"])
+			expect(rows.map((r) => r.delta)).toEqual([-30, -30])
+			expect(rows.map((r) => r.ref_id)).toEqual([lyricA, lyricB])
+			expect(await getXp(env, submitter)).toBe(-60)
+
+			await updateScores(env)
+
+			expect(await countEvents(submitter, "penalized")).toBe(2)
+			expect(await getXp(env, submitter)).toBe(-60)
+		})
+
+		describe("edge cases", () => {
+			it("emits no penalized event for a submitter-less auto-hidden lyric", async () => {
+				const lyricId = await insertLyric(null, "vidAutoHideNull")
+				await downvote(lyricId, 1.0, 0)
+				await downvote(lyricId, 1.0, 0)
+				await downvote(lyricId, 1.0, 0)
+
+				await updateScores(env)
+
+				expect(await isPenalized(lyricId)).toBe(false)
+				expect(
+					await num("SELECT count(*)::int n FROM contribution_events WHERE kind = 'penalized'")
+				).toBe(0)
+			})
 		})
 	})
 
