@@ -1,5 +1,5 @@
 import { config } from "@/config"
-import { awardConfidenceXp } from "@/db/contribution-events"
+import { awardConfidenceXp, awardPenaltyXp } from "@/db/contribution-events"
 import { invalidateCache } from "@/db/lyrics"
 import { AUTO_HIDE_PREDICATE } from "@/db/predicates"
 import { Logger } from "@/infra/logger"
@@ -161,6 +161,7 @@ async function applyAutoHidePenalty(env: Env): Promise<void> {
 				(submitterPenalty.get(r.submitter_id) ?? 0) + penalty
 			)
 			flippedIds.push(r.id)
+			await awardPenaltyXp({ ...env, DB: tx }, r.submitter_id, r.id)
 		}
 
 		for (const [sid, totalPenalty] of submitterPenalty) {

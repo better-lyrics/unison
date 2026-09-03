@@ -47,6 +47,20 @@ export async function awardConfidenceXp(
 	}
 }
 
+export async function awardPenaltyXp(
+	env: Env,
+	submitterId: number,
+	lyricsId: number
+): Promise<boolean> {
+	return addEvent(env, {
+		userId: submitterId,
+		delta: config.gamification.xp.weights.penalized,
+		kind: "penalized",
+		refType: "lyric",
+		refId: lyricsId,
+	})
+}
+
 export async function getXp(env: Env, userId: number): Promise<number> {
 	const row = await env.DB.prepare(
 		"SELECT COALESCE(SUM(delta), 0) AS xp FROM contribution_events WHERE user_id = ?"
