@@ -291,3 +291,50 @@ CREATE TABLE IF NOT EXISTS migration_requests (
 );
 
 CREATE INDEX IF NOT EXISTS idx_migration_requests_discord ON migration_requests(discord_id);
+
+-- ---- gamified reputation ----
+
+CREATE TABLE IF NOT EXISTS contribution_events (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER NOT NULL REFERENCES users(id),
+    delta INTEGER NOT NULL,
+    kind TEXT NOT NULL,
+    ref_type TEXT NOT NULL DEFAULT '',
+    ref_id INTEGER NOT NULL DEFAULT 0,
+    created_at INTEGER NOT NULL DEFAULT (EXTRACT(EPOCH FROM NOW())::INTEGER),
+    UNIQUE(user_id, kind, ref_type, ref_id)
+);
+CREATE INDEX IF NOT EXISTS idx_contrib_events_user ON contribution_events(user_id);
+
+CREATE TABLE IF NOT EXISTS badge_awards (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER NOT NULL REFERENCES users(id),
+    badge_key TEXT NOT NULL,
+    tier INTEGER,
+    awarded_at INTEGER NOT NULL DEFAULT (EXTRACT(EPOCH FROM NOW())::INTEGER),
+    context TEXT,
+    UNIQUE(user_id, badge_key)
+);
+CREATE INDEX IF NOT EXISTS idx_badge_awards_user ON badge_awards(user_id);
+
+CREATE TABLE IF NOT EXISTS committee_members (
+    user_id INTEGER PRIMARY KEY REFERENCES users(id),
+    added_at INTEGER NOT NULL DEFAULT (EXTRACT(EPOCH FROM NOW())::INTEGER),
+    added_by TEXT
+);
+
+CREATE TABLE IF NOT EXISTS boosts (
+    id SERIAL PRIMARY KEY,
+    booster_id INTEGER NOT NULL REFERENCES users(id),
+    lyrics_id INTEGER NOT NULL REFERENCES lyrics(id) ON DELETE CASCADE,
+    created_at INTEGER NOT NULL DEFAULT (EXTRACT(EPOCH FROM NOW())::INTEGER),
+    revoked_at INTEGER
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_boosts_active_lyric
+    ON boosts(lyrics_id) WHERE revoked_at IS NULL;
+CREATE INDEX IF NOT EXISTS idx_boosts_booster ON boosts(booster_id);
+
+ALTER TABLE lyrics ADD COLUMN IF NOT EXISTS committee_approved_at INTEGER;
+ALTER TABLE lyrics ADD COLUMN IF NOT EXISTS committee_approved_by INTEGER REFERENCES users(id);
+
+ALTER TABLE users ADD COLUMN IF NOT EXISTS featured_badges TEXT;
