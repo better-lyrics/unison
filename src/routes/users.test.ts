@@ -1,6 +1,22 @@
-import { describe, expect, it } from "vitest"
+import { config } from "@/config"
 import type { Env } from "@/types"
+import { describe, expect, it, vi } from "vitest"
 import { userRoutes } from "./users"
+
+vi.mock("@/db/users", async () => {
+	const actual = await vi.importActual<typeof import("@/db/users")>("@/db/users")
+	return {
+		...actual,
+		getOrCreateUser: vi.fn(async (_env: unknown, keyId: string) => ({
+			id: 42,
+			key_id: keyId,
+			reputation: 1,
+			vote_count: 0,
+			avg_vote: 0,
+			created_at: 0,
+		})),
+	}
+})
 
 interface DBCall {
 	sql: string
@@ -35,23 +51,34 @@ function makeMockDB(queue: unknown[] = []) {
 	return db
 }
 
-function makeMockCache() {
+function makeMockCache(seed: Record<string, string> = {}) {
+	const store: Record<string, string> = { ...seed }
 	return {
-		async get() {
-			return null
+		store,
+		async get(key: string) {
+			return store[key] ?? null
 		},
-		async put() {},
-		async delete() {},
+		async put(key: string, value: string) {
+			store[key] = value
+		},
+		async delete(key: string) {
+			delete store[key]
+		},
 		async keys() {
-			return []
+			return Object.keys(store)
 		},
-		async setNX() {
+		async setNX(key: string, value: string) {
+			if (store[key] !== undefined) return false
+			store[key] = value
 			return true
 		},
 	}
 }
 
-function makeEnv(db: ReturnType<typeof makeMockDB>): Env {
+function makeEnv(
+	db: ReturnType<typeof makeMockDB>,
+	cache: ReturnType<typeof makeMockCache> = makeMockCache()
+): Env {
 	const limiter = {
 		async limit() {
 			return { success: true }
@@ -59,7 +86,7 @@ function makeEnv(db: ReturnType<typeof makeMockDB>): Env {
 	}
 	return {
 		DB: db as unknown as Env["DB"],
-		CACHE: makeMockCache() as unknown as Env["CACHE"],
+		CACHE: cache as unknown as Env["CACHE"],
 		RATE_LIMITER: limiter as unknown as Env["RATE_LIMITER"],
 		READ_RATE_LIMITER: limiter as unknown as Env["READ_RATE_LIMITER"],
 		CACHE_TTL_SECONDS: "300",
@@ -68,6 +95,15 @@ function makeEnv(db: ReturnType<typeof makeMockDB>): Env {
 		DUMP_DATABASE_URL: null,
 		B2: null,
 	}
+}
+
+function seedSession(cache: ReturnType<typeof makeMockCache>, token: string, keyId: string) {
+	const issuedAt = Math.floor(Date.now() / 1000)
+	cache.store[`session:${token}`] = JSON.stringify({
+		keyId,
+		issuedAt,
+		expiresAt: issuedAt + 600,
+	})
 }
 
 function rawRow(over: Partial<Record<string, unknown>> = {}) {
@@ -251,5 +287,116 @@ describe("GET /users/:keyId/stats", () => {
 
 		const res = await app.handle(new Request(`http://localhost/users/${KEY}/stats`))
 		expect(res.status).toBe(404)
+	})
+})
+
+describe("GET /users/:keyId/badges", () => {
+	it("returns the zero-state gamification profile for an unknown user", async () => {
+		const db = makeMockDB([])
+		const env = makeEnv(db)
+		const app = userRoutes(env)
+		const res = await app.handle(new Request(`http://localhost/users/${KEY}/badges`))
+		expect(res.status).toBe(200)
+		const json = (await res.json()) as {
+			success: boolean
+			data: {
+				keyId: string
+				level: number
+				xp: number
+				xpForNext: number | null
+				tier: string | null
+				tierRank: number | null
+				badges: unknown[]
+				featured: unknown[]
+				counts: { earned: number; total: number }
+			}
+		}
+		expect(json.success).toBe(true)
+		expect(json.data.keyId).toBe(KEY)
+		expect(json.data.badges).toEqual([])
+		expect(json.data.featured).toEqual([])
+		expect(json.data.counts.earned).toBe(0)
+		expect(json.data.counts.total).toBeGreaterThan(0)
+		expect(json.data.xp).toBe(0)
+		expect(json.data.tier).toBeNull()
+		expect(json.data.tierRank).toBeNull()
+		expect(typeof json.data.level).toBe("number")
+		expect(json.data.xpForNext).not.toBeUndefined()
+	})
+
+	it("rejects a keyId that is not 64 hex characters", async () => {
+		const db = makeMockDB([])
+		const env = makeEnv(db)
+		const app = userRoutes(env)
+		const res = await app.handle(new Request("http://localhost/users/xyz/badges"))
+		expect(res.status).toBeGreaterThanOrEqual(400)
+		expect(db.calls.length).toBe(0)
+	})
+})
+
+describe("PUT /users/me/featured-badges", () => {
+	it("returns 401 when the request is unauthenticated", async () => {
+		const db = makeMockDB([])
+		const env = makeEnv(db)
+		const app = userRoutes(env)
+		const res = await app.handle(
+			new Request("http://localhost/users/me/featured-badges", { method: "PUT" })
+		)
+		expect(res.status).toBe(401)
+	})
+
+	it("returns 400 when the list exceeds the featured cap", async () => {
+		const keyId = "a".repeat(64)
+		const cache = makeMockCache()
+		seedSession(cache, "tok", keyId)
+		const db = makeMockDB([])
+		const env = makeEnv(db, cache)
+		const app = userRoutes(env)
+		const overCap = Array.from(
+			{ length: config.gamification.featured.maxSlots + 1 },
+			(_, i) => `first-submission-${i}`
+		)
+		const res = await app.handle(
+			new Request("http://localhost/users/me/featured-badges", {
+				method: "PUT",
+				headers: { authorization: "Bearer tok", "content-type": "application/json" },
+				body: JSON.stringify({ featured: overCap }),
+			})
+		)
+		expect(res.status).toBe(400)
+	})
+
+	it("returns 400 when a featured key has not been earned", async () => {
+		const keyId = "a".repeat(64)
+		const cache = makeMockCache()
+		seedSession(cache, "tok", keyId)
+		const db = makeMockDB([[]])
+		const env = makeEnv(db, cache)
+		const app = userRoutes(env)
+		const res = await app.handle(
+			new Request("http://localhost/users/me/featured-badges", {
+				method: "PUT",
+				headers: { authorization: "Bearer tok", "content-type": "application/json" },
+				body: JSON.stringify({ featured: ["committee"] }),
+			})
+		)
+		expect(res.status).toBe(400)
+	})
+
+	it("returns 400 when the body is not a string array", async () => {
+		const keyId = "a".repeat(64)
+		const cache = makeMockCache()
+		seedSession(cache, "tok", keyId)
+		const db = makeMockDB([])
+		const env = makeEnv(db, cache)
+		const app = userRoutes(env)
+		const res = await app.handle(
+			new Request("http://localhost/users/me/featured-badges", {
+				method: "PUT",
+				headers: { authorization: "Bearer tok", "content-type": "application/json" },
+				body: JSON.stringify({ featured: "not-an-array" }),
+			})
+		)
+		expect(res.status).toBe(400)
 	})
 })

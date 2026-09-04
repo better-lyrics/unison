@@ -28,6 +28,7 @@ export const ErrorCode = {
 	INVALID_REPORT_REASON: "INVALID_REPORT_REASON",
 	REPORT_DETAILS_TOO_LONG: "REPORT_DETAILS_TOO_LONG",
 	INVALID_CURSOR: "INVALID_CURSOR",
+	INVALID_FEATURED_BADGES: "INVALID_FEATURED_BADGES",
 	LINK_BLACKLISTED: "LINK_BLACKLISTED",
 	LINKING_DISABLED: "LINKING_DISABLED",
 	NOT_LINKED: "NOT_LINKED",
@@ -151,6 +152,10 @@ const TEMPLATES: Record<ErrorCode, Template> = {
 	INVALID_CURSOR: {
 		error: "Invalid cursor",
 		hint: "The page cursor looks malformed. Reload the list and try again.",
+	},
+	INVALID_FEATURED_BADGES: {
+		error: "Invalid featured badges",
+		hint: "That selection isn't valid. Pick badges you've earned, up to the featured limit.",
 	},
 	LINK_BLACKLISTED: {
 		error: "Account cannot be linked",
