@@ -593,7 +593,7 @@ describe("admin committee roster", () => {
 	})
 
 	it("adds a member, writing an INSERT with the user id and admin actor", async () => {
-		const db = makeMockDB()
+		const db = makeMockDB([{ id: 42, key_id: "k" }])
 		const app = adminRoutes(makeEnv(db, makeMockCache()))
 		const res = await app.handle(post("/admin/committee", { userId: 42 }))
 		expect(res.status).toBe(200)
@@ -601,6 +601,15 @@ describe("admin committee roster", () => {
 		const insert = db.calls.find((c) => c.sql.includes("INSERT INTO committee_members"))
 		expect(insert?.params).toContain(42)
 		expect(insert?.params).toContain("admin")
+	})
+
+	it("returns 404 NOT_FOUND when the target user does not exist", async () => {
+		const db = makeMockDB([null])
+		const app = adminRoutes(makeEnv(db, makeMockCache()))
+		const res = await app.handle(post("/admin/committee", { userId: 9999 }))
+		expect(res.status).toBe(404)
+		expect((await json(res)).code).toBe("NOT_FOUND")
+		expect(db.calls.some((c) => c.sql.includes("INSERT INTO committee_members"))).toBe(false)
 	})
 
 	it("lists the roster rows mapped to camelCase", async () => {
