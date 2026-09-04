@@ -281,7 +281,11 @@ describe("GET /feed marks and submitter", () => {
 		const db = makeMockDB([
 			[approved, plain],
 			[{ id: 40, key_id: boosterKeyId, nickname: "Council Cat" }],
+			[], // getXpForUsers (booster)
+			[], // getBadgeSummaries (booster)
 			[{ id: 50, key_id: submitterKeyId, nickname: "Submitter Sam" }],
+			[], // getXpForUsers (submitter)
+			[], // getBadgeSummaries (submitter)
 		])
 		const app = feedRoutes(makeSealEnv(db))
 
@@ -295,7 +299,14 @@ describe("GET /feed marks and submitter", () => {
 				type: "seal",
 				label: "Better Lyrics Council Approved (BLCA)",
 				icon: "/badges/committee/image.svg",
-				by: { keyId: boosterKeyId, displayName: "Council Cat", tier: "legendary" },
+				by: {
+					keyId: boosterKeyId,
+					displayName: "Council Cat",
+					tier: "legendary",
+					level: 1,
+					badgeCount: 0,
+					topBadge: null,
+				},
 				at: 1700000000,
 			},
 		])
@@ -303,6 +314,9 @@ describe("GET /feed marks and submitter", () => {
 			keyId: submitterKeyId,
 			displayName: "Submitter Sam",
 			tier: "elite",
+			level: 1,
+			badgeCount: 0,
+			topBadge: null,
 		})
 		expect(first).toMatchObject({
 			id: 1,

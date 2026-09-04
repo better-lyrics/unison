@@ -173,7 +173,7 @@ describeIntegration("curator leaderboard (integration)", () => {
 	})
 
 	describe("invariants", () => {
-		it("keeps every pre-existing field and adds exactly the four new ones", async () => {
+		it("keeps every pre-existing field and adds exactly the gamification ones", async () => {
 			const curators = await seedPopulation()
 			const rows = await getCuratorLeaderboard(env, SCAN)
 
@@ -193,6 +193,8 @@ describeIntegration("curator leaderboard (integration)", () => {
 					"level",
 					"xp",
 					"xpForNext",
+					"badgeCount",
+					"topBadge",
 				].sort()
 			)
 
@@ -206,6 +208,33 @@ describeIntegration("curator leaderboard (integration)", () => {
 			expect(rows[0].rank).toBe(1)
 			expect(rows[0].nickname).toBeNull()
 			expect(rows[0].discordLinked).toBe(false)
+			expect(rows[0].badgeCount).toBe(0)
+			expect(rows[0].topBadge).toBeNull()
+		})
+
+		it("attaches a curator's badge count and top badge to the row and rank", async () => {
+			const curators = await seedPopulation()
+			await pool.query(
+				"INSERT INTO badge_awards (user_id, badge_key, tier) VALUES ($1, 'verified-contributor', 3), ($1, 'community', NULL)",
+				[curators[0].id]
+			)
+
+			const rows = await getCuratorLeaderboard(env, SCAN)
+			expect(rows[0].keyId).toBe(curators[0].keyId)
+			expect(rows[0].badgeCount).toBe(2)
+			expect(rows[0].topBadge).toEqual({
+				key: "verified-contributor",
+				name: "Verified Contributor",
+				tier: 3,
+			})
+
+			const rank = await getCuratorRank(env, curators[0].keyId)
+			expect(rank?.badgeCount).toBe(2)
+			expect(rank?.topBadge).toEqual({
+				key: "verified-contributor",
+				name: "Verified Contributor",
+				tier: 3,
+			})
 		})
 	})
 

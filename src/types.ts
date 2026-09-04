@@ -88,16 +88,29 @@ export interface LyricsRow {
 	hidden?: boolean
 }
 
+export interface BadgeRef {
+	key: string
+	name: string
+	tier?: number
+}
+
 export interface SubmitterInfo {
 	keyId: string
 	reputation: number
 	displayName: string
+	tier: TierName | null
+	level: number
+	badgeCount: number
+	topBadge: BadgeRef | null
 }
 
 export interface MarkActor {
 	keyId: string
 	displayName: string
 	tier: TierName | null
+	level: number
+	badgeCount: number
+	topBadge: BadgeRef | null
 }
 
 export interface Mark {

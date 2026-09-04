@@ -1,4 +1,4 @@
-import type { LyricsSearchResult, Mark } from "@/types"
+import type { BadgeRef, LyricsSearchResult, Mark, MarkActor } from "@/types"
 import { generatePetName } from "@/utils/petname"
 import { describe, expect, it } from "vitest"
 import { type LyricsRowForResponse, toResponse, toSearchResponse } from "./lyrics.transformers"
@@ -7,8 +7,25 @@ const sealMark: Mark = {
 	type: "seal",
 	label: "Better Lyrics Council Approved (BLCA)",
 	icon: "/badges/committee/image.svg",
-	by: { keyId: "feedbeef".repeat(8), displayName: "Council Cat", tier: "legendary" },
+	by: {
+		keyId: "feedbeef".repeat(8),
+		displayName: "Council Cat",
+		tier: "legendary",
+		level: 1,
+		badgeCount: 0,
+		topBadge: null,
+	},
 	at: 1700000000,
+}
+
+const topBadge: BadgeRef = { key: "verified-contributor", name: "Verified Contributor", tier: 3 }
+const submitterActor: MarkActor = {
+	keyId: "0".repeat(64),
+	displayName: "Actor Ann",
+	tier: "elite",
+	level: 6,
+	badgeCount: 4,
+	topBadge,
 }
 
 const baseRow: LyricsRowForResponse = {
@@ -63,6 +80,35 @@ describe("toResponse", () => {
 			keyId,
 			reputation: 1.42,
 			displayName: "Curator Cat",
+			tier: null,
+			level: 1,
+			badgeCount: 0,
+			topBadge: null,
+		})
+	})
+
+	it("carries the passed submitter actor's gamification fields", () => {
+		const keyId = "deadbeef".repeat(8)
+		const result = toResponse(
+			{
+				...baseRow,
+				submitter_key_id: keyId,
+				submitter_reputation: 1.42,
+				submitter_nickname: "Curator Cat",
+			},
+			undefined,
+			undefined,
+			submitterActor
+		)
+
+		expect(result.submitter).toEqual({
+			keyId,
+			reputation: 1.42,
+			displayName: "Curator Cat",
+			tier: "elite",
+			level: 6,
+			badgeCount: 4,
+			topBadge,
 		})
 	})
 
@@ -79,6 +125,10 @@ describe("toResponse", () => {
 			keyId,
 			reputation: 1.0,
 			displayName: generatePetName(keyId),
+			tier: null,
+			level: 1,
+			badgeCount: 0,
+			topBadge: null,
 		})
 	})
 
@@ -117,6 +167,10 @@ describe("toResponse", () => {
 			keyId,
 			reputation: 0,
 			displayName: generatePetName(keyId),
+			tier: null,
+			level: 1,
+			badgeCount: 0,
+			topBadge: null,
 		})
 	})
 
@@ -234,7 +288,39 @@ describe("toSearchResponse", () => {
 			submitter_reputation: 1.42,
 			submitter_nickname: "Curator Cat",
 		})
-		expect(result.submitter).toEqual({ keyId, reputation: 1.42, displayName: "Curator Cat" })
+		expect(result.submitter).toEqual({
+			keyId,
+			reputation: 1.42,
+			displayName: "Curator Cat",
+			tier: null,
+			level: 1,
+			badgeCount: 0,
+			topBadge: null,
+		})
+	})
+
+	it("carries the passed submitter actor's gamification fields", () => {
+		const keyId = "deadbeef".repeat(8)
+		const result = toSearchResponse(
+			{
+				...baseSearchRow,
+				submitter_id: 99,
+				submitter_key_id: keyId,
+				submitter_reputation: 1.42,
+				submitter_nickname: "Curator Cat",
+			},
+			undefined,
+			submitterActor
+		)
+		expect(result.submitter).toEqual({
+			keyId,
+			reputation: 1.42,
+			displayName: "Curator Cat",
+			tier: "elite",
+			level: 6,
+			badgeCount: 4,
+			topBadge,
+		})
 	})
 
 	it("falls back to a pet name when nickname is null", () => {
@@ -250,6 +336,10 @@ describe("toSearchResponse", () => {
 			keyId,
 			reputation: 1,
 			displayName: generatePetName(keyId),
+			tier: null,
+			level: 1,
+			badgeCount: 0,
+			topBadge: null,
 		})
 	})
 
