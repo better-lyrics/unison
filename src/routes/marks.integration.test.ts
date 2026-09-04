@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs"
 import { config } from "@/config"
+import { getCuratorTierMap } from "@/db/leaderboard"
 import { D1Compat } from "@/infra/database"
 import type { Env } from "@/types"
 import pg from "pg"
@@ -127,6 +128,13 @@ describeIntegration("seal marks (integration)", () => {
 			tier: "legendary",
 		})
 		expect(marks.has(unapprovedId)).toBe(false)
+	})
+
+	it("evicts a corrupt tier-map cache entry instead of throwing", async () => {
+		store.set("curator:tier-map", "{ not valid json")
+		const map = await getCuratorTierMap(env)
+		expect(map).toBeInstanceOf(Map)
+		expect(store.get("curator:tier-map")).not.toBe("{ not valid json")
 	})
 
 	it("resolves the booster display name from a pet name when there is no nickname", async () => {

@@ -322,7 +322,13 @@ export async function getCuratorRank(
 
 export async function getCuratorTierMap(env: Env): Promise<Map<string, TierName | null>> {
 	const cached = await env.CACHE.get("curator:tier-map")
-	if (cached) return new Map(JSON.parse(cached) as [string, TierName | null][])
+	if (cached) {
+		try {
+			return new Map(JSON.parse(cached) as [string, TierName | null][])
+		} catch {
+			await env.CACHE.delete("curator:tier-map")
+		}
+	}
 	const board = await getCuratorLeaderboard(env, config.requests.leaderboard.rankScanLimit)
 	const entries = board.map((r) => [r.keyId, r.tier] as [string, TierName | null])
 	await env.CACHE.put("curator:tier-map", JSON.stringify(entries), {
