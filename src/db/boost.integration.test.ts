@@ -3,7 +3,7 @@ import { D1Compat } from "@/infra/database"
 import type { Env } from "@/types"
 import pg from "pg"
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest"
-import { createBoost, getQuota, revokeBoost } from "./boost"
+import { createBoost, getQuota, revokeBoost, revokeBoostByAdmin } from "./boost"
 
 const { Pool } = pg
 
@@ -223,6 +223,36 @@ describeIntegration("boost store (integration)", () => {
 			const submitter = await newUser()
 			const lyricsId = await insertLyric(submitter, "vidNoActive")
 			expect(await revokeBoost(env, actor, lyricsId)).toEqual({ ok: false, reason: "not_found" })
+		})
+	})
+
+	describe("admin revoke", () => {
+		it("clears an active boost with no ownership check and frees the slot", async () => {
+			const booster = await newUser()
+			await addToCommittee(booster)
+			const submitter = await newUser()
+			const lyricsId = await insertLyric(submitter, "vidAdminRevoke")
+
+			expect((await createBoost(env, booster, lyricsId)).ok).toBe(true)
+			expect(await revokeBoostByAdmin(env, lyricsId)).toEqual({ ok: true })
+
+			const mirror = await lyricMirror(lyricsId)
+			expect(mirror.committee_approved_at).toBeNull()
+			expect(mirror.committee_approved_by).toBeNull()
+
+			const revoked = await one<{ revoked_at: number | null }>(
+				"SELECT revoked_at FROM boosts WHERE lyrics_id = $1 ORDER BY id DESC LIMIT 1",
+				[lyricsId]
+			)
+			expect(revoked.revoked_at).not.toBeNull()
+
+			expect((await createBoost(env, booster, lyricsId)).ok).toBe(true)
+		})
+
+		it("not_found when there is no active boost", async () => {
+			const submitter = await newUser()
+			const lyricsId = await insertLyric(submitter, "vidAdminNoBoost")
+			expect(await revokeBoostByAdmin(env, lyricsId)).toEqual({ ok: false, reason: "not_found" })
 		})
 	})
 

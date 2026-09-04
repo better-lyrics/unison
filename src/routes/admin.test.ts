@@ -631,3 +631,33 @@ describe("admin committee roster", () => {
 		expect(remove?.params).toContain(5)
 	})
 })
+
+describe("DELETE /admin/boost/:lyricsId", () => {
+	it("rejects without a valid admin bearer", async () => {
+		const app = adminRoutes(makeEnv(makeMockDB(), makeMockCache()))
+		const res = await app.handle(del("/admin/boost/5", { authorization: "Bearer wrong" }))
+		expect(res.status).toBe(401)
+	})
+
+	it("returns 404 when ADMIN_SECRET is unset (deploy dark)", async () => {
+		const app = adminRoutes(makeEnv(makeMockDB(), makeMockCache(), { ADMIN_SECRET: null }))
+		const res = await app.handle(del("/admin/boost/5"))
+		expect(res.status).toBe(404)
+	})
+
+	it("revokes an active boost and returns revoked:true", async () => {
+		const db = makeMockDB([{ id: 1 }, { video_id: "v" }])
+		const app = adminRoutes(makeEnv(db, makeMockCache()))
+		const res = await app.handle(del("/admin/boost/5"))
+		expect(res.status).toBe(200)
+		expect((await json(res)).data).toEqual({ revoked: true })
+	})
+
+	it("returns 404 NOT_FOUND when there is no active boost", async () => {
+		const db = makeMockDB([null])
+		const app = adminRoutes(makeEnv(db, makeMockCache()))
+		const res = await app.handle(del("/admin/boost/5"))
+		expect(res.status).toBe(404)
+		expect((await json(res)).code).toBe("NOT_FOUND")
+	})
+})
