@@ -94,3 +94,52 @@ describe("GET /badges", () => {
 		expect(res.headers.get("cache-control")).toContain("max-age")
 	})
 })
+
+describe("GET /badges/:key/image.svg", () => {
+	it("serves the color art for a known key", async () => {
+		const app = badgeRoutes(makeEnv())
+		const res = await app.handle(new Request("http://localhost/badges/most-loved/image.svg"))
+		expect(res.status).toBe(200)
+		expect(res.headers.get("content-type")).toMatch(/^image\/svg\+xml/)
+		const body = await res.text()
+		expect(body).toContain("<svg")
+	})
+
+	it("serves the mono art when variant=mono", async () => {
+		const app = badgeRoutes(makeEnv())
+		const res = await app.handle(
+			new Request("http://localhost/badges/most-loved/image.svg?variant=mono")
+		)
+		expect(res.status).toBe(200)
+		expect(res.headers.get("content-type")).toMatch(/^image\/svg\+xml/)
+	})
+
+	it("serves a placeholder key that is not backed by real art", async () => {
+		const app = badgeRoutes(makeEnv())
+		const res = await app.handle(new Request("http://localhost/badges/committee/image.svg"))
+		expect(res.status).toBe(200)
+	})
+
+	it("ignores tier and cache-busting query params", async () => {
+		const app = badgeRoutes(makeEnv())
+		const res = await app.handle(
+			new Request("http://localhost/badges/legendary/image.svg?tier=3&v=abc")
+		)
+		expect(res.status).toBe(200)
+	})
+
+	it("returns 404 for an unknown key", async () => {
+		const app = badgeRoutes(makeEnv())
+		const res = await app.handle(new Request("http://localhost/badges/nope/image.svg"))
+		expect(res.status).toBe(404)
+	})
+
+	it("rejects a path traversal attempt", async () => {
+		const app = badgeRoutes(makeEnv())
+		const res = await app.handle(
+			new Request("http://localhost/badges/..%2F..%2Fetc%2Fpasswd/image.svg")
+		)
+		expect(res.status).toBeGreaterThanOrEqual(400)
+		expect(res.status).toBeLessThan(500)
+	})
+})
