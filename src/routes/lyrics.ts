@@ -317,13 +317,14 @@ export const lyricsRoutes = (env: Env) =>
 					items.map((i) => i.id),
 					lyricsUserId
 				)
+				const marks = await buildSealMarks(env, items)
 
 				const nextCursor = items.length === limit ? offset + items.length : undefined
 
 				return {
 					success: true,
 					data: items.map((item) => ({
-						...toFeedResponse(item),
+						...toFeedResponse(item, marks.get(item.id)),
 						userVote: votesMap.get(item.id) ?? null,
 					})),
 					nextCursor,
