@@ -119,6 +119,25 @@ export async function createBoost(
 	return { ok: true, quota: await getQuota(env, boosterId) }
 }
 
+async function clearBoost(env: Env, boostId: number, lyricsId: number): Promise<void> {
+	const nowEpoch = Math.floor(Date.now() / 1000)
+	await env.DB.prepare("UPDATE boosts SET revoked_at = ? WHERE id = ?")
+		.bind(nowEpoch, boostId)
+		.run()
+	await env.DB.prepare(
+		"UPDATE lyrics SET committee_approved_at = NULL, committee_approved_by = NULL WHERE id = ?"
+	)
+		.bind(lyricsId)
+		.run()
+
+	const videoRow = await env.DB.prepare("SELECT video_id FROM lyrics WHERE id = ?")
+		.bind(lyricsId)
+		.first<{ video_id: string }>()
+	if (videoRow) {
+		await invalidateCache(env, videoRow.video_id)
+	}
+}
+
 export async function revokeBoost(
 	env: Env,
 	actorId: number,
@@ -136,22 +155,20 @@ export async function revokeBoost(
 		return { ok: false, reason: "forbidden" }
 	}
 
-	const nowEpoch = Math.floor(Date.now() / 1000)
-	await env.DB.prepare("UPDATE boosts SET revoked_at = ? WHERE id = ?")
-		.bind(nowEpoch, boost.id)
-		.run()
-	await env.DB.prepare(
-		"UPDATE lyrics SET committee_approved_at = NULL, committee_approved_by = NULL WHERE id = ?"
+	await clearBoost(env, boost.id, lyricsId)
+	return { ok: true }
+}
+
+export async function revokeBoostByAdmin(env: Env, lyricsId: number): Promise<RevokeResult> {
+	const boost = await env.DB.prepare(
+		"SELECT id FROM boosts WHERE lyrics_id = ? AND revoked_at IS NULL"
 	)
 		.bind(lyricsId)
-		.run()
-
-	const videoRow = await env.DB.prepare("SELECT video_id FROM lyrics WHERE id = ?")
-		.bind(lyricsId)
-		.first<{ video_id: string }>()
-	if (videoRow) {
-		await invalidateCache(env, videoRow.video_id)
+		.first<{ id: number }>()
+	if (!boost) {
+		return { ok: false, reason: "not_found" }
 	}
 
+	await clearBoost(env, boost.id, lyricsId)
 	return { ok: true }
 }
