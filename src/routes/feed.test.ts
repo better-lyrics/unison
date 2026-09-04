@@ -191,11 +191,7 @@ describe("GET /feed", () => {
 	})
 
 	it("routes authenticated requests to getPersonalizedFeed and forwards filters", async () => {
-		const db = makeMockDB([
-			{ id: 42 },
-			[{ artist_norm: "limbo" }],
-			[],
-		])
+		const db = makeMockDB([{ id: 42 }, [{ artist_norm: "limbo" }], []])
 		const app = feedRoutes(makeEnv(db))
 
 		const res = await app.handle(
@@ -226,5 +222,100 @@ describe("GET /feed", () => {
 		expect(res.status).toBe(200)
 		expect(body.data).toHaveLength(3)
 		expect(body.nextCursor).toBeUndefined()
+	})
+})
+
+describe("GET /feed marks and submitter", () => {
+	const kid = (n: number): string => n.toString(16).padStart(64, "0")
+	const boosterKeyId = kid(1000)
+	const submitterKeyId = kid(2000)
+
+	function makeSealCache() {
+		const tierMap = JSON.stringify([
+			[boosterKeyId, "legendary"],
+			[submitterKeyId, "elite"],
+		])
+		return {
+			async get(k: string) {
+				return k === "curator:tier-map" ? tierMap : null
+			},
+			async put() {},
+			async delete() {},
+			async keys() {
+				return []
+			},
+			async setNX() {
+				return true
+			},
+		}
+	}
+
+	function makeSealEnv(db: ReturnType<typeof makeMockDB>): Env {
+		const limiter = {
+			async limit() {
+				return { success: true }
+			},
+		}
+		return {
+			DB: db as unknown as Env["DB"],
+			CACHE: makeSealCache() as unknown as Env["CACHE"],
+			RATE_LIMITER: limiter as unknown as Env["RATE_LIMITER"],
+			READ_RATE_LIMITER: limiter as unknown as Env["READ_RATE_LIMITER"],
+			CACHE_TTL_SECONDS: "300",
+			DUMPS_ENABLED: false,
+			DUMP_PUBLIC_BASE_URL: "",
+			DUMP_DATABASE_URL: null,
+			B2: null,
+		}
+	}
+
+	it("attaches a seal mark and submitter to an approved item, and neither to a plain one", async () => {
+		const approved = makeFeedRow({
+			id: 1,
+			video_id: "vApproved",
+			submitter_id: 50,
+			committee_approved_at: 1700000000,
+			committee_approved_by: 40,
+		})
+		const plain = makeFeedRow({ id: 2, video_id: "vPlain", submitter_id: null })
+		const db = makeMockDB([
+			[approved, plain],
+			[{ id: 40, key_id: boosterKeyId, nickname: "Council Cat" }],
+			[{ id: 50, key_id: submitterKeyId, nickname: "Submitter Sam" }],
+		])
+		const app = feedRoutes(makeSealEnv(db))
+
+		const res = await app.handle(new Request("http://localhost/feed"))
+		const body = (await res.json()) as { data: Record<string, unknown>[] }
+
+		expect(res.status).toBe(200)
+		const first = body.data[0]
+		expect(first.marks).toEqual([
+			{
+				type: "seal",
+				label: "Better Lyrics Council Approved (BLCA)",
+				icon: "/badges/committee/image.svg",
+				by: { keyId: boosterKeyId, displayName: "Council Cat", tier: "legendary" },
+				at: 1700000000,
+			},
+		])
+		expect(first.submitter).toEqual({
+			keyId: submitterKeyId,
+			displayName: "Submitter Sam",
+			tier: "elite",
+		})
+		expect(first).toMatchObject({
+			id: 1,
+			videoId: "vApproved",
+			song: "S",
+			artist: "A",
+			syncType: "linesync",
+			hidden: false,
+		})
+
+		const second = body.data[1]
+		expect(second.marks).toBeUndefined()
+		expect(second.submitter).toBeUndefined()
+		expect(second).toMatchObject({ id: 2, videoId: "vPlain" })
 	})
 })

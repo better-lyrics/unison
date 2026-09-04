@@ -534,7 +534,8 @@ export async function softDeleteLyrics(
 const SEARCH_COLUMNS = `
 	id, video_id, song, artist, album, isrc, duration,
 	format, language, sync_type, score, effective_score,
-	vote_count, confidence, created_at, submitter_id
+	vote_count, confidence, created_at, submitter_id,
+	committee_approved_at, committee_approved_by
 `
 
 export async function searchByQuery(

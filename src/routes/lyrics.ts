@@ -16,11 +16,12 @@ import { getUserVote, getUserVotesForIds } from "@/db/votes"
 import { Logger } from "@/infra/logger"
 import { toFeedResponse } from "@/routes/feed"
 import { toResponse, toSearchResponse } from "@/routes/lyrics.transformers"
+import { buildSealMarks } from "@/routes/marks"
 import type { Env, LyricsSubmission } from "@/types"
 import { signedRequest } from "@/utils/auth"
 import { ErrorCode, buildError } from "@/utils/errors"
-import { getSession } from "@/utils/session"
 import { readRateLimit } from "@/utils/read-rate-limit"
+import { getSession } from "@/utils/session"
 import {
 	detectFormat,
 	detectPrettyPrintedTtml,
@@ -103,7 +104,11 @@ export const lyricsRoutes = (env: Env) =>
 						lyricsUserId ? getUserVote(env, result.id, lyricsUserId) : Promise.resolve(null),
 						getFulfillmentByLyricsId(env, result.id),
 					])
-					return { success: true, data: { ...toResponse(result, fulfilled), userVote } }
+					const marks = await buildSealMarks(env, [result])
+					return {
+						success: true,
+						data: { ...toResponse(result, fulfilled, marks.get(result.id)), userVote },
+					}
 				}
 
 				if (query.song && query.artist) {
@@ -122,7 +127,11 @@ export const lyricsRoutes = (env: Env) =>
 						lyricsUserId ? getUserVote(env, result.id, lyricsUserId) : Promise.resolve(null),
 						getFulfillmentByLyricsId(env, result.id),
 					])
-					return { success: true, data: { ...toResponse(result, fulfilled), userVote } }
+					const marks = await buildSealMarks(env, [result])
+					return {
+						success: true,
+						data: { ...toResponse(result, fulfilled, marks.get(result.id)), userVote },
+					}
 				}
 
 				return status(400, buildError(ErrorCode.MISSING_QUERY))
@@ -153,7 +162,11 @@ export const lyricsRoutes = (env: Env) =>
 						top_tier: results[0]?.tier,
 						top_match_score: results[0]?.match_score,
 					})
-					return { success: true, data: results.map(toSearchResponse) }
+					const marks = await buildSealMarks(env, results)
+					return {
+						success: true,
+						data: results.map((row) => toSearchResponse(row, marks.get(row.id))),
+					}
 				}
 
 				if (query.song && query.artist) {
@@ -166,7 +179,11 @@ export const lyricsRoutes = (env: Env) =>
 						query.album,
 						limit
 					)
-					return { success: true, data: results.map((row) => toResponse(row)) }
+					const marks = await buildSealMarks(env, results)
+					return {
+						success: true,
+						data: results.map((row) => toResponse(row, undefined, marks.get(row.id))),
+					}
 				}
 
 				return status(
@@ -208,10 +225,11 @@ export const lyricsRoutes = (env: Env) =>
 							lyricsBearerUserId
 						)
 					: null
+				const marks = await buildSealMarks(env, results)
 				return {
 					success: true,
 					data: results.map((row) => ({
-						...toResponse(row),
+						...toResponse(row, undefined, marks.get(row.id)),
 						userVote: votesMap?.get(row.id) ?? null,
 					})),
 				}
@@ -287,7 +305,11 @@ export const lyricsRoutes = (env: Env) =>
 					lyricsUserId ? getUserVote(env, result.id, lyricsUserId) : Promise.resolve(null),
 					getFulfillmentByLyricsId(env, result.id),
 				])
-				return { success: true, data: { ...toResponse(result, fulfilled), userVote } }
+				const marks = await buildSealMarks(env, [result])
+				return {
+					success: true,
+					data: { ...toResponse(result, fulfilled, marks.get(result.id)), userVote },
+				}
 			},
 			{
 				params: t.Object({ id: t.String() }),
