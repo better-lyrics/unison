@@ -97,3 +97,21 @@ export async function getXp(env: Env, userId: number): Promise<number> {
 		.first<{ xp: string | number }>()
 	return Number(row?.xp ?? 0)
 }
+
+export async function getXpForUsers(env: Env, userIds: number[]): Promise<Map<number, number>> {
+	const xp = new Map<number, number>()
+	if (userIds.length === 0) return xp
+	const placeholders = userIds.map(() => "?").join(", ")
+	const res = await env.DB.prepare(
+		`SELECT user_id, COALESCE(SUM(delta), 0) AS xp
+		 FROM contribution_events
+		 WHERE user_id IN (${placeholders})
+		 GROUP BY user_id`
+	)
+		.bind(...userIds)
+		.all<{ user_id: number; xp: string | number }>()
+	for (const row of res.results) {
+		xp.set(Number(row.user_id), Number(row.xp))
+	}
+	return xp
+}
