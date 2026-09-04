@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { BADGES, type BadgeCategory, type BadgeKind } from "./definitions"
+import { BADGES, type BadgeCategory, type BadgeKind, CATALOGUE, TIER_BADGES } from "./definitions"
 
 const CATEGORIES: BadgeCategory[] = [
 	"tier",
@@ -80,5 +80,47 @@ describe("badge definitions", () => {
 		for (const key of LAUNCH_KEYS) {
 			expect(keys).toContain(key)
 		}
+	})
+})
+
+const TIER_KEYS = ["lyricist", "elite", "master", "grandmaster", "legendary"]
+
+describe("tier title definitions", () => {
+	it("exposes the five position-tier titles", () => {
+		expect(TIER_BADGES.map((b) => b.key)).toEqual(TIER_KEYS)
+	})
+
+	it("marks every title as category tier and kind title with no tiers", () => {
+		for (const b of TIER_BADGES) {
+			expect(b.category).toBe("tier")
+			expect(b.kind).toBe("title")
+			expect(b.tiers).toBeUndefined()
+		}
+	})
+
+	it("gives every title a non-empty name and description", () => {
+		for (const b of TIER_BADGES) {
+			expect(b.name.length).toBeGreaterThan(0)
+			expect(b.description.length).toBeGreaterThan(0)
+		}
+	})
+
+	it("resolves color and mono image URLs on the documented scheme", () => {
+		for (const b of TIER_BADGES) {
+			expect(b.image.color).toBe(`/badges/${b.key}/image.svg?variant=color`)
+			expect(b.image.mono).toBe(`/badges/${b.key}/image.svg?variant=mono`)
+		}
+	})
+})
+
+describe("catalogue", () => {
+	it("combines BADGES and TIER_BADGES", () => {
+		expect(CATALOGUE).toEqual([...BADGES, ...TIER_BADGES])
+	})
+
+	it("holds fourteen entries with unique keys", () => {
+		const keys = CATALOGUE.map((b) => b.key)
+		expect(keys.length).toBe(14)
+		expect(new Set(keys).size).toBe(14)
 	})
 })
