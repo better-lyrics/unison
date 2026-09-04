@@ -275,6 +275,12 @@ backfillConfidence(env)
 		if (updated > 0) log.info("confidence backfill complete", { updated })
 	})
 	.catch((err) => log.error("confidence backfill failed", { error: (err as Error).message }))
+	.then(() => backfillXp(env))
+	.then(({ lyrics, fulfillments, firsts }) => {
+		if (lyrics + fulfillments + firsts > 0)
+			log.info("xp backfill complete", { lyrics, fulfillments, firsts })
+	})
+	.catch((err) => log.error("xp backfill failed", { error: (err as Error).message }))
 
 backfillNorms(env)
 	.then(({ scanned, updated }) => {
@@ -293,13 +299,6 @@ backfillVoteCounts(env)
 		if (repaired > 0) log.info("vote count backfill complete", { repaired })
 	})
 	.catch((err) => log.error("vote count backfill failed", { error: (err as Error).message }))
-
-backfillXp(env)
-	.then(({ lyrics, fulfillments, firsts }) => {
-		if (lyrics + fulfillments + firsts > 0)
-			log.info("xp backfill complete", { lyrics, fulfillments, firsts })
-	})
-	.catch((err) => log.error("xp backfill failed", { error: (err as Error).message }))
 
 process.on("unhandledRejection", (reason) => {
 	const err = reason instanceof Error ? reason : new Error(String(reason))
