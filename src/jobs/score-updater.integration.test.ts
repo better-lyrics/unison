@@ -456,4 +456,34 @@ describeIntegration("score-updater xp emission (integration)", () => {
 			})
 		})
 	})
+
+	describe("badge evaluation", () => {
+		const badgeTierFor = (userId: number, badgeKey: string): Promise<number | null | undefined> =>
+			pool
+				.query("SELECT tier FROM badge_awards WHERE user_id = $1 AND badge_key = $2", [
+					userId,
+					badgeKey,
+				])
+				.then((r) => (r.rows[0] ? (r.rows[0].tier as number | null) : undefined))
+
+		it("awards verified-contributor to a submitter whose lyric reaches medium and stays idempotent", async () => {
+			const submitter = await insertUser()
+			const lyricId = await insertLyric(submitter, "vidBadgeMedium")
+			await upvote(lyricId, 1.0, 0)
+			await upvote(lyricId, 1.0, 0)
+			await upvote(lyricId, 1.0, 0)
+
+			const result = await updateScores(env)
+
+			expect(await confidenceOf(lyricId)).toBe("medium")
+			expect(await badgeTierFor(submitter, "verified-contributor")).toBe(1)
+
+			const entry = result.awarded.find((a) => a.userId === submitter)
+			expect(entry).toBeDefined()
+			expect(entry?.badges.map((b) => b.key)).toContain("verified-contributor")
+
+			const second = await updateScores(env)
+			expect(second.awarded.find((a) => a.userId === submitter)).toBeUndefined()
+		})
+	})
 })
