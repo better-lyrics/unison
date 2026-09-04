@@ -591,7 +591,50 @@ describe("invariants", () => {
 		expect(json.lines).toHaveLength(request.lines.length)
 	})
 
-	it("echoes the caller-supplied from as detectedLang", async () => {
+	it("reports the reliably detected language over a conflicting caller from", async () => {
+		const routes = await loadFreshRoutes()
+		const fetchSpy = vi.fn(
+			async () =>
+				new Response(fixture("ja-en-no-romanization"), {
+					status: 200,
+					headers: { version: "v-1" },
+				})
+		)
+		vi.stubGlobal("fetch", fetchSpy)
+		const db = makeMockDB([null])
+		const app = routes(makeEnv(db))
+
+		const res = await post(app, { lines: ["夜に駆ける", "君の名は"], to: "en", from: "zh" })
+
+		const json = (await res.json()) as TranslateOk
+		expect(json.detectedLang).toBe("ja")
+	})
+})
+
+describe("regressions", () => {
+	it("regression: does not return all-null when a caller mislabels foreign lyrics as the target language", async () => {
+		const routes = await loadFreshRoutes()
+		const fetchSpy = vi.fn(
+			async () =>
+				new Response(fixture("ja-en-no-romanization"), {
+					status: 200,
+					headers: { version: "v-1" },
+				})
+		)
+		vi.stubGlobal("fetch", fetchSpy)
+		const db = makeMockDB([null])
+		const app = routes(makeEnv(db))
+
+		const res = await post(app, { lines: ["夜に駆ける", "君の名は"], to: "en", from: "en" })
+
+		expect(res.status).toBe(200)
+		const json = (await res.json()) as TranslateOk
+		expect(fetchSpy).toHaveBeenCalledTimes(1)
+		expect(json.detectedLang).toBe("ja")
+		expect(json.lines.every((l) => l.translation === null)).toBe(false)
+	})
+
+	it("falls back to the caller from when detection is unreliable", async () => {
 		const routes = await loadFreshRoutes()
 		const fetchSpy = vi.fn(
 			async () =>
@@ -604,10 +647,12 @@ describe("invariants", () => {
 		const db = makeMockDB([null])
 		const app = routes(makeEnv(db))
 
-		const res = await post(app, { lines: ["你好世界"], to: "en", from: "zh" })
+		const res = await post(app, { lines: ["12345 67890 000 111"], to: "en", from: "zh" })
 
+		expect(res.status).toBe(200)
 		const json = (await res.json()) as TranslateOk
 		expect(json.detectedLang).toBe("zh")
+		expect(fetchSpy).toHaveBeenCalledTimes(1)
 	})
 })
 
