@@ -360,6 +360,51 @@ describe("GET /leaderboard/users/:keyId", () => {
 		expect(json.data.discordLinked).toBe(false)
 	})
 
+	it("exposes level, xp, tier, badgeCount and topBadge on a ranked curator profile", async () => {
+		const keyId = "a".repeat(64)
+		const db = makeMockDB([
+			[
+				{
+					user_id: 7,
+					key_id: keyId,
+					reputation: 1.2,
+					score: 5,
+					submission_count: 2,
+					total_upvotes: 8,
+				},
+			],
+			{ last_vote_at: 1700000123 },
+			null, // getByKeyId -> not linked
+			[{ user_id: 7, xp: 200 }], // getXpForUsers
+			[{ user_id: 7, badge_key: "verified-contributor", tier: 3 }], // getBadgeSummaries
+			{ nickname: null },
+		])
+		const env = makeEnv(db)
+		const app = leaderboardRoutes(env)
+		const res = await app.handle(new Request(`http://localhost/leaderboard/users/${keyId}`))
+		expect(res.status).toBe(200)
+		const json = (await res.json()) as {
+			data: {
+				ranked: boolean
+				level: number
+				xp: number
+				tier: string | null
+				badgeCount: number
+				topBadge: { key: string; name: string; tier?: number } | null
+			}
+		}
+		expect(json.data.ranked).toBe(true)
+		expect(json.data.xp).toBe(200)
+		expect(json.data.level).toBe(3)
+		expect(json.data.tier).toBe("legendary")
+		expect(json.data.badgeCount).toBe(1)
+		expect(json.data.topBadge).toEqual({
+			key: "verified-contributor",
+			name: "Verified Contributor",
+			tier: 3,
+		})
+	})
+
 	it("reports discordLinked: true when the curator has a linked Discord account", async () => {
 		const keyId = "c".repeat(64)
 		const db = makeMockDB([
