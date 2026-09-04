@@ -334,6 +334,7 @@ describe("GET /leaderboard/users/:keyId", () => {
 			[{ key_id: keyId, reputation: 1.2, score: 5, submission_count: 2, total_upvotes: 8 }],
 			{ last_vote_at: 1700000123 },
 			null, // getByKeyId -> not linked
+			[], // getXpForUsers
 			{ nickname: null },
 		])
 		const env = makeEnv(db)
@@ -364,6 +365,7 @@ describe("GET /leaderboard/users/:keyId", () => {
 			[{ key_id: keyId, reputation: 1.2, score: 5, submission_count: 2, total_upvotes: 8 }],
 			{ last_vote_at: 1700000123 },
 			{ discord_id: "d1", key_id: keyId, discord_username: "alice", linked_at: 1 },
+			[], // getXpForUsers
 			{ nickname: null },
 		])
 		const env = makeEnv(db)
@@ -411,6 +413,7 @@ describe("GET /leaderboard/users/:keyId", () => {
 			[{ key_id: keyId, reputation: 1.0, score: 3, submission_count: 1, total_upvotes: 4 }],
 			{ last_vote_at: 1700000456 },
 			null, // getByKeyId -> not linked
+			[], // getXpForUsers
 			{ nickname: "Brook" },
 		])
 		const env = makeEnv(db)

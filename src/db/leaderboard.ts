@@ -1,7 +1,10 @@
 import { config } from "@/config"
+import { getXpForUsers } from "@/db/contribution-events"
 import { AUTO_HIDE_PREDICATE, AUTO_HIDE_PREDICATE_JOINED, RANKING_EXPR } from "@/db/predicates"
 import { windowCutoff } from "@/db/requests"
 import type { Env } from "@/types"
+import { type TierName, tierForRank } from "@/utils/tiers"
+import { levelForXp } from "@/utils/xp"
 
 export const CURATOR_LEADERBOARD_CACHE_KEY = "leaderboard:users"
 
@@ -216,9 +219,14 @@ export interface CuratorLeaderboardRow {
 	rank: number
 	nickname: string | null
 	discordLinked: boolean
+	tier: TierName | null
+	level: number
+	xp: number
+	xpForNext: number | null
 }
 
 interface CuratorRow {
+	user_id: number
 	key_id: string
 	reputation: number
 	score: number
@@ -228,18 +236,25 @@ interface CuratorRow {
 	fulfilled_demand: number
 	nickname: string | null
 	discord_linked: boolean
+	total_count: number
 }
 
 export async function getCuratorLeaderboard(
 	env: Env,
 	limit: number
 ): Promise<CuratorLeaderboardRow[]> {
+	const excludedKeyIds = [...config.linking.blacklistedKeyIds]
+	const exclusion = excludedKeyIds.length
+		? `AND u.key_id NOT IN (${excludedKeyIds.map(() => "?").join(", ")})`
+		: ""
+
 	const res = await env.DB.prepare(
-		`SELECT u.key_id, u.reputation, u.nickname,
+		`SELECT u.id AS user_id, u.key_id, u.reputation, u.nickname,
 		        agg.score, agg.submission_count, agg.total_upvotes,
 		        COALESCE(ff.fulfilled_count, 0) AS fulfilled_count,
 		        COALESCE(ff.fulfilled_demand, 0) AS fulfilled_demand,
-		        (dl.key_id IS NOT NULL) AS discord_linked
+		        (dl.key_id IS NOT NULL) AS discord_linked,
+		        COUNT(*) OVER () AS total_count
 		 FROM (
 		   SELECT submitter_id,
 		          SUM(effective_score) AS score,
@@ -251,7 +266,7 @@ export async function getCuratorLeaderboard(
 		     AND NOT ${AUTO_HIDE_PREDICATE}
 		   GROUP BY submitter_id
 		 ) agg
-		 JOIN users u ON u.id = agg.submitter_id
+		 JOIN users u ON u.id = agg.submitter_id ${exclusion}
 		 LEFT JOIN (
 		   SELECT f.submitter_id,
 		          COUNT(*) AS fulfilled_count,
@@ -265,21 +280,36 @@ export async function getCuratorLeaderboard(
 		 ORDER BY agg.score DESC, u.key_id ASC
 		 LIMIT ?`
 	)
-		.bind(limit)
+		.bind(...excludedKeyIds, limit)
 		.all<CuratorRow>()
 
-	return res.results.map((r, i) => ({
-		keyId: r.key_id,
-		reputation: Number(r.reputation),
-		score: Number(r.score),
-		submissionCount: Number(r.submission_count),
-		totalUpvotes: Number(r.total_upvotes),
-		fulfilledCount: Number(r.fulfilled_count ?? 0),
-		fulfilledDemand: Number(r.fulfilled_demand ?? 0),
-		rank: i + 1,
-		nickname: r.nickname ?? null,
-		discordLinked: Boolean(r.discord_linked),
-	}))
+	const rows = res.results
+	const total = Number(rows[0]?.total_count ?? 0)
+	const xpMap = await getXpForUsers(
+		env,
+		rows.map((r) => r.user_id)
+	)
+
+	return rows.map((r, i) => {
+		const xp = xpMap.get(r.user_id) ?? 0
+		const { level, xpForNext } = levelForXp(xp, config.gamification.xp.levelThresholds)
+		return {
+			keyId: r.key_id,
+			reputation: Number(r.reputation),
+			score: Number(r.score),
+			submissionCount: Number(r.submission_count),
+			totalUpvotes: Number(r.total_upvotes),
+			fulfilledCount: Number(r.fulfilled_count ?? 0),
+			fulfilledDemand: Number(r.fulfilled_demand ?? 0),
+			rank: i + 1,
+			nickname: r.nickname ?? null,
+			discordLinked: Boolean(r.discord_linked),
+			tier: tierForRank(i + 1, total, config.gamification.tiers),
+			level,
+			xp,
+			xpForNext,
+		}
+	})
 }
 
 export async function getCuratorRank(
