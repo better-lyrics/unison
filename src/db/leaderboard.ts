@@ -1,8 +1,9 @@
 import { config } from "@/config"
+import { getBadgeSummaries } from "@/db/badge-summary"
 import { getXpForUsers } from "@/db/contribution-events"
 import { AUTO_HIDE_PREDICATE, AUTO_HIDE_PREDICATE_JOINED, RANKING_EXPR } from "@/db/predicates"
 import { windowCutoff } from "@/db/requests"
-import type { Env } from "@/types"
+import type { BadgeRef, Env } from "@/types"
 import { type TierName, tierForRank } from "@/utils/tiers"
 import { levelForXp } from "@/utils/xp"
 
@@ -223,6 +224,8 @@ export interface CuratorLeaderboardRow {
 	level: number
 	xp: number
 	xpForNext: number | null
+	badgeCount: number
+	topBadge: BadgeRef | null
 }
 
 interface CuratorRow {
@@ -285,14 +288,16 @@ export async function getCuratorLeaderboard(
 
 	const rows = res.results
 	const total = Number(rows[0]?.total_count ?? 0)
-	const xpMap = await getXpForUsers(
-		env,
-		rows.map((r) => r.user_id)
-	)
+	const userIds = rows.map((r) => r.user_id)
+	const [xpMap, badgeSummaries] = await Promise.all([
+		getXpForUsers(env, userIds),
+		getBadgeSummaries(env, userIds),
+	])
 
 	return rows.map((r, i) => {
 		const xp = xpMap.get(r.user_id) ?? 0
 		const { level, xpForNext } = levelForXp(xp, config.gamification.xp.levelThresholds)
+		const summary = badgeSummaries.get(r.user_id)
 		return {
 			keyId: r.key_id,
 			reputation: Number(r.reputation),
@@ -308,6 +313,8 @@ export async function getCuratorLeaderboard(
 			level,
 			xp,
 			xpForNext,
+			badgeCount: summary?.badgeCount ?? 0,
+			topBadge: summary?.topBadge ?? null,
 		}
 	})
 }

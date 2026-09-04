@@ -16,7 +16,7 @@ import { getUserVote, getUserVotesForIds } from "@/db/votes"
 import { Logger } from "@/infra/logger"
 import { toFeedResponse } from "@/routes/feed"
 import { toResponse, toSearchResponse } from "@/routes/lyrics.transformers"
-import { buildSealMarks } from "@/routes/marks"
+import { buildSealMarks, resolveActors } from "@/routes/marks"
 import type { Env, LyricsSubmission } from "@/types"
 import { signedRequest } from "@/utils/auth"
 import { ErrorCode, buildError } from "@/utils/errors"
@@ -105,9 +105,21 @@ export const lyricsRoutes = (env: Env) =>
 						getFulfillmentByLyricsId(env, result.id),
 					])
 					const marks = await buildSealMarks(env, [result])
+					const actors = await resolveActors(
+						env,
+						result.submitter_id != null ? [result.submitter_id] : []
+					)
 					return {
 						success: true,
-						data: { ...toResponse(result, fulfilled, marks.get(result.id)), userVote },
+						data: {
+							...toResponse(
+								result,
+								fulfilled,
+								marks.get(result.id),
+								result.submitter_id != null ? actors.get(result.submitter_id) : undefined
+							),
+							userVote,
+						},
 					}
 				}
 
@@ -128,9 +140,21 @@ export const lyricsRoutes = (env: Env) =>
 						getFulfillmentByLyricsId(env, result.id),
 					])
 					const marks = await buildSealMarks(env, [result])
+					const actors = await resolveActors(
+						env,
+						result.submitter_id != null ? [result.submitter_id] : []
+					)
 					return {
 						success: true,
-						data: { ...toResponse(result, fulfilled, marks.get(result.id)), userVote },
+						data: {
+							...toResponse(
+								result,
+								fulfilled,
+								marks.get(result.id),
+								result.submitter_id != null ? actors.get(result.submitter_id) : undefined
+							),
+							userVote,
+						},
 					}
 				}
 
@@ -163,9 +187,19 @@ export const lyricsRoutes = (env: Env) =>
 						top_match_score: results[0]?.match_score,
 					})
 					const marks = await buildSealMarks(env, results)
+					const actors = await resolveActors(
+						env,
+						results.map((r) => r.submitter_id)
+					)
 					return {
 						success: true,
-						data: results.map((row) => toSearchResponse(row, marks.get(row.id))),
+						data: results.map((row) =>
+							toSearchResponse(
+								row,
+								marks.get(row.id),
+								row.submitter_id != null ? actors.get(row.submitter_id) : undefined
+							)
+						),
 					}
 				}
 
@@ -180,9 +214,20 @@ export const lyricsRoutes = (env: Env) =>
 						limit
 					)
 					const marks = await buildSealMarks(env, results)
+					const actors = await resolveActors(
+						env,
+						results.map((r) => r.submitter_id)
+					)
 					return {
 						success: true,
-						data: results.map((row) => toResponse(row, undefined, marks.get(row.id))),
+						data: results.map((row) =>
+							toResponse(
+								row,
+								undefined,
+								marks.get(row.id),
+								row.submitter_id != null ? actors.get(row.submitter_id) : undefined
+							)
+						),
 					}
 				}
 
@@ -226,10 +271,19 @@ export const lyricsRoutes = (env: Env) =>
 						)
 					: null
 				const marks = await buildSealMarks(env, results)
+				const actors = await resolveActors(
+					env,
+					results.map((r) => r.submitter_id)
+				)
 				return {
 					success: true,
 					data: results.map((row) => ({
-						...toResponse(row, undefined, marks.get(row.id)),
+						...toResponse(
+							row,
+							undefined,
+							marks.get(row.id),
+							row.submitter_id != null ? actors.get(row.submitter_id) : undefined
+						),
 						userVote: votesMap?.get(row.id) ?? null,
 					})),
 				}
@@ -306,9 +360,21 @@ export const lyricsRoutes = (env: Env) =>
 					getFulfillmentByLyricsId(env, result.id),
 				])
 				const marks = await buildSealMarks(env, [result])
+				const actors = await resolveActors(
+					env,
+					result.submitter_id != null ? [result.submitter_id] : []
+				)
 				return {
 					success: true,
-					data: { ...toResponse(result, fulfilled, marks.get(result.id)), userVote },
+					data: {
+						...toResponse(
+							result,
+							fulfilled,
+							marks.get(result.id),
+							result.submitter_id != null ? actors.get(result.submitter_id) : undefined
+						),
+						userVote,
+					},
 				}
 			},
 			{

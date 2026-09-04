@@ -3,6 +3,7 @@ import { config } from "@/config"
 import { getCuratorTierMap } from "@/db/leaderboard"
 import { D1Compat } from "@/infra/database"
 import type { Env } from "@/types"
+import { levelForXp } from "@/utils/xp"
 import pg from "pg"
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest"
 import { buildSealMarks, resolveActors } from "./marks"
@@ -126,6 +127,9 @@ describeIntegration("seal marks (integration)", () => {
 			keyId: boosterKeyId,
 			displayName: "Council Cat",
 			tier: "legendary",
+			level: 1,
+			badgeCount: 0,
+			topBadge: null,
 		})
 		expect(marks.has(unapprovedId)).toBe(false)
 	})
@@ -150,6 +154,34 @@ describeIntegration("seal marks (integration)", () => {
 		expect(actors.get(booster)?.keyId).toBe(boosterKeyId)
 		expect(actors.get(booster)?.displayName).not.toBe("")
 		expect(actors.get(booster)?.tier).toBe("legendary")
+		expect(actors.get(booster)?.level).toBe(1)
+		expect(actors.get(booster)?.badgeCount).toBe(0)
+		expect(actors.get(booster)?.topBadge).toBeNull()
+	})
+
+	it("enriches an actor with level, badge count and top badge from ledger and awards", async () => {
+		const actorKeyId = kid(2500)
+		const actor = await insertUser(actorKeyId, "Badge Bard")
+		await insertLyric(actor, "vidActor", 1)
+		await pool.query(
+			"INSERT INTO contribution_events (user_id, delta, kind, ref_type, ref_id) VALUES ($1, 60, 'seed', 'test', 1)",
+			[actor]
+		)
+		await pool.query(
+			"INSERT INTO badge_awards (user_id, badge_key, tier) VALUES ($1, 'verified-contributor', 2), ($1, 'community', NULL)",
+			[actor]
+		)
+
+		const actors = await resolveActors(env, [actor])
+		const resolved = actors.get(actor)
+
+		expect(resolved?.level).toBe(levelForXp(60, config.gamification.xp.levelThresholds).level)
+		expect(resolved?.badgeCount).toBe(2)
+		expect(resolved?.topBadge).toEqual({
+			key: "verified-contributor",
+			name: "Verified Contributor",
+			tier: 2,
+		})
 	})
 
 	it("batches over many approved rows sharing one booster (no N+1)", async () => {
@@ -175,6 +207,9 @@ describeIntegration("seal marks (integration)", () => {
 				keyId: boosterKeyId,
 				displayName: "Council Cat",
 				tier: "legendary",
+				level: 1,
+				badgeCount: 0,
+				topBadge: null,
 			})
 		}
 	})
