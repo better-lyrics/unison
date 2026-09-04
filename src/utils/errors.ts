@@ -46,6 +46,12 @@ export const ErrorCode = {
 	MIGRATION_NOT_COMMITTED: "MIGRATION_NOT_COMMITTED",
 	MIGRATION_HAS_INTERIM_ACTIVITY: "MIGRATION_HAS_INTERIM_ACTIVITY",
 	MIGRATION_ALREADY_RESTORED: "MIGRATION_ALREADY_RESTORED",
+	NOT_COMMITTEE: "NOT_COMMITTEE",
+	BOOST_SELF: "BOOST_SELF",
+	BOOST_TARGET_COMMITTEE: "BOOST_TARGET_COMMITTEE",
+	BOOST_QUOTA_EXCEEDED: "BOOST_QUOTA_EXCEEDED",
+	BOOST_ALREADY_ACTIVE: "BOOST_ALREADY_ACTIVE",
+	BOOST_NOT_OWNER: "BOOST_NOT_OWNER",
 } as const
 
 export type ErrorCode = (typeof ErrorCode)[keyof typeof ErrorCode]
@@ -224,6 +230,30 @@ const TEMPLATES: Record<ErrorCode, Template> = {
 	MIGRATION_ALREADY_RESTORED: {
 		error: "Already restored",
 		hint: "This migration was already undone, so there is nothing to roll back.",
+	},
+	NOT_COMMITTEE: {
+		error: "Not a council member",
+		hint: "This action is limited to Better Lyrics Council members.",
+	},
+	BOOST_SELF: {
+		error: "Cannot boost your own submission",
+		hint: "You can't boost lyrics you submitted yourself.",
+	},
+	BOOST_TARGET_COMMITTEE: {
+		error: "Cannot boost a council submission",
+		hint: "This lyric was submitted by a council member, so it can't be boosted.",
+	},
+	BOOST_QUOTA_EXCEEDED: {
+		error: "Boost quota reached",
+		hint: "You've used all your boosts for this month. They reset at the start of next month.",
+	},
+	BOOST_ALREADY_ACTIVE: {
+		error: "Already boosted",
+		hint: "This lyric already has an active council boost.",
+	},
+	BOOST_NOT_OWNER: {
+		error: "Not your boost",
+		hint: "You can only revoke a boost you applied yourself.",
 	},
 }
 
