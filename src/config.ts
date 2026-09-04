@@ -87,6 +87,20 @@ export const config = {
 			rankingBonus: 1.5,
 		},
 		featured: { maxSlots: 5 },
+		display: {
+			inlineGlyphs: 1,
+			rarityThreshold: 0.1,
+			categoryOrder: [
+				"tier",
+				"output",
+				"craft",
+				"coverage",
+				"curation",
+				"acclaim",
+				"consistency",
+				"special",
+			],
+		},
 	},
 
 	exploration: {

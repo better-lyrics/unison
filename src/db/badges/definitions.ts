@@ -123,3 +123,48 @@ export const BADGES: BadgeDef[] = [
 		image: image("community"),
 	},
 ]
+
+export const TIER_BADGES: BadgeDef[] = [
+	{
+		key: "lyricist",
+		name: "Lyricist",
+		description: "Ranked in the top 20% of curators.",
+		category: "tier",
+		kind: "title",
+		image: image("lyricist"),
+	},
+	{
+		key: "elite",
+		name: "Elite",
+		description: "Ranked in the top 5% of curators.",
+		category: "tier",
+		kind: "title",
+		image: image("elite"),
+	},
+	{
+		key: "master",
+		name: "Master",
+		description: "The third ranked curator.",
+		category: "tier",
+		kind: "title",
+		image: image("master"),
+	},
+	{
+		key: "grandmaster",
+		name: "Grandmaster",
+		description: "The second ranked curator.",
+		category: "tier",
+		kind: "title",
+		image: image("grandmaster"),
+	},
+	{
+		key: "legendary",
+		name: "Legendary",
+		description: "The top ranked curator.",
+		category: "tier",
+		kind: "title",
+		image: image("legendary"),
+	},
+]
+
+export const CATALOGUE: BadgeDef[] = [...BADGES, ...TIER_BADGES]

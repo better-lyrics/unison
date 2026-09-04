@@ -20,6 +20,7 @@ import { updateScores } from "@/jobs/score-updater"
 import { auditThresholds } from "@/jobs/threshold-audit"
 import { adminRoutes } from "@/routes/admin"
 import { authRoutes } from "@/routes/auth"
+import { badgeRoutes } from "@/routes/badges"
 import { compatRoutes } from "@/routes/compat"
 import { feedRoutes } from "@/routes/feed"
 import { leaderboardRoutes } from "@/routes/leaderboard"
@@ -201,6 +202,7 @@ const app = new Elysia({ adapter: node() })
 	.use(requestRoutes(env))
 	.use(leaderboardRoutes(env))
 	.use(translateRoutes(env))
+	.use(badgeRoutes(env))
 	.use(userRoutes(env))
 	.use(authRoutes(env))
 	.use(linkStartRoutes(env))
