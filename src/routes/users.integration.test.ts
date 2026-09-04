@@ -170,6 +170,36 @@ describeIntegration("user badges and featured routes (integration)", () => {
 		expect(get.data.counts.earned).toBeGreaterThanOrEqual(2)
 	})
 
+	it("exposes level, xp, tier and badge counts on the self gamification profile", async () => {
+		const keyId = "f".repeat(64)
+		const userId = await seedUser(keyId)
+		await insertLyric(userId, "medium")
+		await pool.query(
+			"INSERT INTO contribution_events (user_id, delta, kind, ref_type, ref_id) VALUES ($1, 50, 'seed', 'test', 1)",
+			[userId]
+		)
+		await evaluateAndAward(env, userId)
+
+		const app = userRoutes(env)
+		const res = await app.handle(new Request(`http://localhost/users/${keyId}/badges`))
+		expect(res.status).toBe(200)
+		const json = (await res.json()) as {
+			data: {
+				keyId: string
+				level: number
+				xp: number
+				tier: string | null
+				counts: { earned: number; total: number }
+			}
+		}
+		expect(json.data.keyId).toBe(keyId)
+		expect(json.data.xp).toBe(50)
+		expect(json.data.level).toBe(2)
+		expect(json.data.tier).toBe("legendary")
+		expect(json.data.counts.earned).toBeGreaterThanOrEqual(1)
+		expect(json.data.counts.total).toBeGreaterThan(0)
+	})
+
 	it("rejects an unearned featured key with 400", async () => {
 		const keyId = "b".repeat(64)
 		await seedUser(keyId)
