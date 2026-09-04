@@ -52,13 +52,17 @@ const UPSERT_AWARD = `INSERT INTO badge_awards (user_id, badge_key, tier)
 	WHERE COALESCE(EXCLUDED.tier, 0) > COALESCE(badge_awards.tier, 0)
 	RETURNING id`
 
-function keysToEvaluate(keyId: string): string[] {
-	return isLinkBlacklisted(keyId) ? ["community"] : Object.keys(DERIVATIONS)
+const NON_COMMUNITY_KEYS = BADGES.map((b) => b.key).filter(
+	(k) => k !== "community" && DERIVATIONS[k] !== undefined
+)
+
+function applicableKeys(keyId: string): string[] {
+	return isLinkBlacklisted(keyId) ? ["community"] : NON_COMMUNITY_KEYS
 }
 
-function presentedKeys(keyId: string): string[] {
-	if (isLinkBlacklisted(keyId)) return ["community"]
-	return BADGES.map((b) => b.key).filter((k) => DERIVATIONS[k] !== undefined)
+function higherTier(a: number | null | undefined, b: number | undefined): number | undefined {
+	const tiers = [a, b].filter((t): t is number => typeof t === "number")
+	return tiers.length > 0 ? Math.max(...tiers) : undefined
 }
 
 export async function evaluateAndAward(env: Env, userId: number): Promise<AwardedBadge[]> {
@@ -68,7 +72,7 @@ export async function evaluateAndAward(env: Env, userId: number): Promise<Awarde
 	if (!user) return []
 
 	const awarded: AwardedBadge[] = []
-	for (const key of keysToEvaluate(user.key_id)) {
+	for (const key of applicableKeys(user.key_id)) {
 		const evaluation = await DERIVATIONS[key](env, userId)
 		if (!evaluation.earned) continue
 		const row = await env.DB.prepare(UPSERT_AWARD)
@@ -106,6 +110,7 @@ async function computeTopExpertise(env: Env, userId: number): Promise<ExpertiseE
 			`SELECT COUNT(*) + 1 AS rank FROM (
 			   SELECT submitter_id, COUNT(*) AS n FROM lyrics
 			   WHERE artist = ? AND deleted_at IS NULL AND confidence IN ('medium','high')
+			     AND submitter_id IS NOT NULL
 			   GROUP BY submitter_id
 			 ) t WHERE t.n > ?`
 		)
@@ -128,6 +133,7 @@ async function computeTopExpertise(env: Env, userId: number): Promise<ExpertiseE
 			`SELECT COUNT(*) + 1 AS rank FROM (
 			   SELECT submitter_id, COUNT(*) AS n FROM lyrics
 			   WHERE language = ? AND deleted_at IS NULL AND confidence IN ('medium','high')
+			     AND submitter_id IS NOT NULL
 			   GROUP BY submitter_id
 			 ) t WHERE t.n > ?`
 		)
@@ -161,7 +167,7 @@ export async function getUserBadges(env: Env, keyId: string): Promise<UserGamifi
 			tierRank: null,
 			badges: [],
 			featured: [],
-			counts: { earned: 0, total: BADGES.length },
+			counts: { earned: 0, total: applicableKeys(keyId).length },
 		}
 	}
 
@@ -177,23 +183,23 @@ export async function getUserBadges(env: Env, keyId: string): Promise<UserGamifi
 	)
 		.bind(userId)
 		.all<{ badge_key: string; tier: number | null; awarded_at: string | number }>()
-	const earnedMap = new Map<string, number>()
+	const earnedMap = new Map<string, { tier: number | null; awardedAt: number }>()
 	for (const r of earnedRows.results) {
-		earnedMap.set(r.badge_key, Number(r.awarded_at))
+		earnedMap.set(r.badge_key, { tier: r.tier, awardedAt: Number(r.awarded_at) })
 	}
 
 	const community = isLinkBlacklisted(keyId)
 
 	const badges: UserBadge[] = []
-	for (const key of presentedKeys(keyId)) {
+	for (const key of applicableKeys(keyId)) {
 		const evaluation = await DERIVATIONS[key](env, userId)
-		const earnedAt = earnedMap.get(key)
-		const earned = earnedAt !== undefined || evaluation.earned
+		const award = earnedMap.get(key)
+		const earned = award !== undefined || evaluation.earned
 		badges.push({
 			key,
 			earned,
-			earnedAt: earned ? earnedAt : undefined,
-			tier: earned ? evaluation.tier : undefined,
+			earnedAt: award?.awardedAt,
+			tier: earned ? higherTier(award?.tier, evaluation.tier) : undefined,
 			progress: evaluation.progress,
 			featured: earned && featured.includes(key),
 		})
@@ -208,7 +214,7 @@ export async function getUserBadges(env: Env, keyId: string): Promise<UserGamifi
 		tierRank: rank?.rank ?? null,
 		badges,
 		featured,
-		counts: { earned: badges.filter((b) => b.earned).length, total: BADGES.length },
+		counts: { earned: badges.filter((b) => b.earned).length, total: badges.length },
 	}
 
 	if (!community) {
