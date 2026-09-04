@@ -28,6 +28,18 @@ describe("toFeedResponse", () => {
 	it("passes through hidden when present", () => {
 		expect(toFeedResponse({ ...baseItem, hidden: true }).hidden).toBe(true)
 	})
+
+	it("does not leak internal columns onto the wire", () => {
+		const rendered = toFeedResponse({
+			...baseItem,
+			submitter_id: 99,
+			committee_approved_at: 1700000000,
+			committee_approved_by: 40,
+		})
+		expect(rendered).not.toHaveProperty("committee_approved_at")
+		expect(rendered).not.toHaveProperty("committee_approved_by")
+		expect(rendered).not.toHaveProperty("submitter_id")
+	})
 })
 
 interface DBCall {
@@ -326,6 +338,9 @@ describe("GET /feed marks and submitter", () => {
 			syncType: "linesync",
 			hidden: false,
 		})
+		expect(first).not.toHaveProperty("committee_approved_at")
+		expect(first).not.toHaveProperty("committee_approved_by")
+		expect(first).not.toHaveProperty("submitter_id")
 
 		const second = body.data[1]
 		expect(second.marks).toBeUndefined()
