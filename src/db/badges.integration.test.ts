@@ -196,7 +196,7 @@ describeIntegration("badges award and read model (integration)", () => {
 				tierRank: null,
 				badges: [],
 				featured: [],
-				counts: { earned: 0, total: BADGES.length },
+				counts: { earned: 0, total: BADGES.length - 1 },
 			})
 		})
 
@@ -232,8 +232,10 @@ describeIntegration("badges award and read model (integration)", () => {
 			expect(sharpEar?.progress).toEqual({ current: 5, next: 10 })
 			expect(sharpEar?.featured).toBe(false)
 
-			expect(g.badges.map((b) => b.key)).toEqual(BADGES.map((b) => b.key))
-			expect(g.counts).toEqual({ earned: 2, total: BADGES.length })
+			expect(g.badges.map((b) => b.key)).toEqual(
+				BADGES.map((b) => b.key).filter((k) => k !== "community")
+			)
+			expect(g.counts).toEqual({ earned: 2, total: BADGES.length - 1 })
 			expect(g.featured).toEqual(["verified-contributor"])
 
 			expect(g.xp).toBe(50)
@@ -289,6 +291,31 @@ describeIntegration("badges award and read model (integration)", () => {
 				{ scope: "artist", name: "Radiohead", rank: 2 },
 				{ scope: "language", name: "en", rank: 2 },
 			])
+		})
+
+		it("does not claw back an earned tier when the underlying count drops", async () => {
+			const keyId = "e".repeat(64)
+			const userId = await seedUser(keyId)
+			const ids: number[] = []
+			for (let i = 0; i < 3; i++)
+				ids.push(await insertLyric({ submitterId: userId, confidence: "medium" }))
+
+			await evaluateAndAward(env, userId)
+			expect((await awardsFor(userId)).find((a) => a.badge_key === "verified-contributor")?.tier).toBe(
+				2
+			)
+
+			await pool.query(
+				`UPDATE lyrics SET deleted_at = $1, deleted_by_user_id = $2, deleted_by_role = 'submitter'
+				 WHERE id = ANY($3)`,
+				[nowEpoch(), userId, [ids[0], ids[1]]]
+			)
+
+			const verified = (await getUserBadges(env, keyId)).badges.find(
+				(b) => b.key === "verified-contributor"
+			)
+			expect(verified?.earned).toBe(true)
+			expect(verified?.tier).toBe(2)
 		})
 	})
 
