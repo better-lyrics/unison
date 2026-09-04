@@ -99,9 +99,16 @@ export async function createBoost(
 	}
 
 	const nowEpoch = Math.floor(Date.now() / 1000)
-	await env.DB.prepare("INSERT INTO boosts (booster_id, lyrics_id) VALUES (?, ?)")
-		.bind(boosterId, lyricsId)
-		.run()
+	try {
+		await env.DB.prepare("INSERT INTO boosts (booster_id, lyrics_id) VALUES (?, ?)")
+			.bind(boosterId, lyricsId)
+			.run()
+	} catch (err) {
+		if ((err as { code?: string }).code === "23505") {
+			return { ok: false, reason: "already_boosted" }
+		}
+		throw err
+	}
 	await env.DB.prepare(
 		"UPDATE lyrics SET committee_approved_at = ?, committee_approved_by = ? WHERE id = ?"
 	)
