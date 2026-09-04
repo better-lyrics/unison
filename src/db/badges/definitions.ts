@@ -100,8 +100,8 @@ export const BADGES: BadgeDef[] = [
 	},
 	{
 		key: "committee",
-		name: "Committee",
-		description: "A handpicked Better Lyrics committee reviewer.",
+		name: "Better Lyrics Council",
+		description: "A member of the Better Lyrics Council.",
 		category: "special",
 		kind: "special",
 		image: image("committee"),
