@@ -11,6 +11,7 @@ import {
 	restoreFromSnapshot,
 	runMigration,
 } from "@/db/account-migration"
+import { addCommittee, listCommittee, removeCommittee } from "@/db/committee"
 import { getByKeyId } from "@/db/discordLinks"
 import { invalidateCuratorLeaderboardCache } from "@/db/leaderboard"
 import { invalidateCacheForSubmitter } from "@/db/lyrics"
@@ -251,4 +252,24 @@ export const adminRoutes = (env: Env) =>
 				return status(200, { success: true, data: { ...rest, hasSnapshot: snapshot !== null } })
 			},
 			{ params: paramsId }
+		)
+		.get("/committee", async ({ env, status }) => {
+			const rows = await listCommittee(env)
+			return status(200, { success: true, data: rows })
+		})
+		.post(
+			"/committee",
+			async ({ env, body, status }) => {
+				await addCommittee(env, body.userId, "admin")
+				return status(200, { success: true, data: { userId: body.userId } })
+			},
+			{ body: t.Object({ userId: t.Numeric() }) }
+		)
+		.delete(
+			"/committee/:userId",
+			async ({ env, params, status }) => {
+				await removeCommittee(env, params.userId)
+				return status(200, { success: true, data: { removed: true } })
+			},
+			{ params: t.Object({ userId: t.Numeric() }) }
 		)
