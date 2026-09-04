@@ -1,14 +1,36 @@
-import { Elysia, t } from "elysia"
 import { config } from "@/config"
+import { type BoostResult, type RevokeResult, createBoost, getQuota, revokeBoost } from "@/db/boost"
+import { isCommittee } from "@/db/committee"
 import { getLyricsById } from "@/db/lyrics"
 import { submitReport } from "@/db/reports"
 import { castVote, removeVote } from "@/db/votes"
 import type { Env } from "@/types"
 import { eitherAuth } from "@/utils/either-auth"
-import { buildError, ErrorCode } from "@/utils/errors"
+import { ErrorCode, buildError } from "@/utils/errors"
+import { Elysia, t } from "elysia"
 
 const VALID_REPORT_REASONS = ["wrong_song", "bad_sync", "offensive", "spam", "other"] as const
 type ReportReason = (typeof VALID_REPORT_REASONS)[number]
+
+const BOOST_ERROR: Record<
+	Extract<BoostResult, { ok: false }>["reason"],
+	{ status: number; code: ErrorCode }
+> = {
+	not_committee: { status: 403, code: ErrorCode.NOT_COMMITTEE },
+	lyric_not_found: { status: 404, code: ErrorCode.NOT_FOUND },
+	self: { status: 400, code: ErrorCode.BOOST_SELF },
+	target_committee: { status: 400, code: ErrorCode.BOOST_TARGET_COMMITTEE },
+	over_quota: { status: 429, code: ErrorCode.BOOST_QUOTA_EXCEEDED },
+	already_boosted: { status: 409, code: ErrorCode.BOOST_ALREADY_ACTIVE },
+}
+
+const REVOKE_ERROR: Record<
+	Extract<RevokeResult, { ok: false }>["reason"],
+	{ status: number; code: ErrorCode }
+> = {
+	not_found: { status: 404, code: ErrorCode.NOT_FOUND },
+	forbidden: { status: 403, code: ErrorCode.BOOST_NOT_OWNER },
+}
 
 function isReportReason(value: unknown): value is ReportReason {
 	return typeof value === "string" && (VALID_REPORT_REASONS as readonly string[]).includes(value)
@@ -121,3 +143,55 @@ export const voteRoutes = (env: Env) =>
 			},
 			{ params: t.Object({ id: t.String() }) }
 		)
+		.post(
+			"/:id/boost",
+			async ({ params, env, userId, keyId, status }) => {
+				const id = Number(params.id)
+				if (Number.isNaN(id)) {
+					return status(400, buildError(ErrorCode.INVALID_ID))
+				}
+
+				const { success } = await env.RATE_LIMITER.limit({ key: keyId })
+				if (!success) {
+					return status(429, buildError(ErrorCode.RATE_LIMITED))
+				}
+
+				const result = await createBoost(env, userId, id)
+				if (!result.ok) {
+					const mapped = BOOST_ERROR[result.reason]
+					return status(mapped.status, buildError(mapped.code))
+				}
+
+				return { success: true, quota: result.quota }
+			},
+			{ params: t.Object({ id: t.String() }) }
+		)
+		.delete(
+			"/:id/boost",
+			async ({ params, env, userId, status }) => {
+				const id = Number(params.id)
+				if (Number.isNaN(id)) {
+					return status(400, buildError(ErrorCode.INVALID_ID))
+				}
+
+				if (!(await isCommittee(env, userId))) {
+					return status(403, buildError(ErrorCode.NOT_COMMITTEE))
+				}
+
+				const result = await revokeBoost(env, userId, id)
+				if (!result.ok) {
+					const mapped = REVOKE_ERROR[result.reason]
+					return status(mapped.status, buildError(mapped.code))
+				}
+
+				return { success: true }
+			},
+			{ params: t.Object({ id: t.String() }) }
+		)
+		.get("/boost/quota", async ({ env, userId, status }) => {
+			if (!(await isCommittee(env, userId))) {
+				return status(403, buildError(ErrorCode.NOT_COMMITTEE))
+			}
+
+			return { success: true, quota: await getQuota(env, userId) }
+		})
