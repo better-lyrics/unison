@@ -1,4 +1,5 @@
 import { config } from "@/config"
+import { type AwardedBadge, evaluateAndAward } from "@/db/badges"
 import { awardConfidenceXp, awardPenaltyXp } from "@/db/contribution-events"
 import { invalidateCache } from "@/db/lyrics"
 import { AUTO_HIDE_PREDICATE } from "@/db/predicates"
@@ -82,7 +83,14 @@ export async function recalculateScore(env: Env, lyricsId: number): Promise<void
 	log.debug("recalculated score", { lyricsId, effective_score: update.effective_score })
 }
 
-export async function updateScores(env: Env): Promise<{ updated: number }> {
+export interface UserBadgeAward {
+	userId: number
+	badges: AwardedBadge[]
+}
+
+export async function updateScores(
+	env: Env
+): Promise<{ updated: number; awarded: UserBadgeAward[] }> {
 	await env.DB.prepare(`
 		UPDATE users SET
 			avg_vote = COALESCE((SELECT AVG(vote) FROM votes WHERE votes.user_id = users.id), 0),
@@ -105,8 +113,10 @@ export async function updateScores(env: Env): Promise<{ updated: number }> {
 			AND l.deleted_at IS NULL
 	`).all<{ lyrics_id: number }>()
 
+	const staleIds = (staleLyrics.results || []).map((r) => r.lyrics_id)
+
 	let updated = 0
-	for (const { lyrics_id } of staleLyrics.results || []) {
+	for (const lyrics_id of staleIds) {
 		await recalculateScore(env, lyrics_id)
 		updated++
 	}
@@ -115,7 +125,33 @@ export async function updateScores(env: Env): Promise<{ updated: number }> {
 
 	await applyAutoHidePenalty(env)
 
-	return { updated }
+	const awarded = await evaluateAffectedBadges(env, staleIds)
+
+	return { updated, awarded }
+}
+
+async function evaluateAffectedBadges(env: Env, staleIds: number[]): Promise<UserBadgeAward[]> {
+	if (staleIds.length === 0) return []
+
+	const placeholders = staleIds.map(() => "?").join(", ")
+	const affected = await env.DB.prepare(
+		`SELECT DISTINCT submitter_id AS user_id FROM lyrics
+		 WHERE id IN (${placeholders}) AND submitter_id IS NOT NULL
+		 UNION
+		 SELECT DISTINCT user_id FROM votes WHERE lyrics_id IN (${placeholders})`
+	)
+		.bind(...staleIds, ...staleIds)
+		.all<{ user_id: number }>()
+
+	const awarded: UserBadgeAward[] = []
+	for (const { user_id } of affected.results || []) {
+		const badges = await evaluateAndAward(env, user_id).catch((err) => {
+			log.error("badge eval failed", { userId: user_id, error: (err as Error).message })
+			return [] as AwardedBadge[]
+		})
+		if (badges.length > 0) awarded.push({ userId: user_id, badges })
+	}
+	return awarded
 }
 
 export async function recomputeAllScores(env: Env): Promise<{ updated: number }> {
