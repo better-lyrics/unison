@@ -1,8 +1,8 @@
 import { config } from "@/config"
 import {
+	type FeedFilters,
 	buildFilterFragments,
 	buildOrderByClause,
-	type FeedFilters,
 	hasAnyFilter,
 } from "@/db/feed-filters"
 import { AUTO_HIDE_PREDICATE, RANKING_EXPR } from "@/db/predicates"
@@ -14,7 +14,8 @@ const log = new Logger("feed")
 const FEED_COLUMNS = `
 	id, video_id, song, artist, album, isrc, duration,
 	format, language, sync_type, score, effective_score,
-	vote_count, confidence, created_at
+	vote_count, confidence, created_at, submitter_id,
+	committee_approved_at, committee_approved_by
 `
 
 export async function getGlobalFeed(

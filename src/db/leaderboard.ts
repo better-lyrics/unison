@@ -319,3 +319,14 @@ export async function getCuratorRank(
 	const all = await getCuratorLeaderboard(env, config.requests.leaderboard.rankScanLimit)
 	return all.find((r) => r.keyId === keyId) ?? null
 }
+
+export async function getCuratorTierMap(env: Env): Promise<Map<string, TierName | null>> {
+	const cached = await env.CACHE.get("curator:tier-map")
+	if (cached) return new Map(JSON.parse(cached) as [string, TierName | null][])
+	const board = await getCuratorLeaderboard(env, config.requests.leaderboard.rankScanLimit)
+	const entries = board.map((r) => [r.keyId, r.tier] as [string, TierName | null])
+	await env.CACHE.put("curator:tier-map", JSON.stringify(entries), {
+		expirationTtl: config.requests.leaderboard.cacheTtl,
+	})
+	return new Map(entries)
+}

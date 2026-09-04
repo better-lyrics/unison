@@ -3,6 +3,7 @@ import type {
 	LyricsFulfillmentBadge,
 	LyricsResponse,
 	LyricsSearchResult,
+	Mark,
 	SubmitterInfo,
 } from "@/types"
 import { generatePetName } from "@/utils/petname"
@@ -38,12 +39,15 @@ export interface LyricsRowForResponse {
 	submitter_key_id?: string | null
 	submitter_reputation?: number | null
 	submitter_nickname?: string | null
+	committee_approved_at?: number | null
+	committee_approved_by?: number | null
 	hidden?: boolean
 }
 
 export function toResponse(
 	row: LyricsRowForResponse,
-	fulfilled?: LyricsFulfillmentBadge | null
+	fulfilled?: LyricsFulfillmentBadge | null,
+	marks?: Mark[]
 ): LyricsResponse {
 	return {
 		id: row.id,
@@ -63,10 +67,11 @@ export function toResponse(
 		hidden: row.hidden ?? false,
 		submitter: buildSubmitter(row),
 		fulfilled: fulfilled ?? undefined,
+		marks: marks && marks.length > 0 ? marks : undefined,
 	}
 }
 
-export function toSearchResponse(row: LyricsSearchResult) {
+export function toSearchResponse(row: LyricsSearchResult, marks?: Mark[]) {
 	return {
 		id: row.id,
 		videoId: row.video_id,
@@ -84,5 +89,6 @@ export function toSearchResponse(row: LyricsSearchResult) {
 		confidence: row.confidence,
 		matchScore: row.match_score,
 		submitter: buildSubmitter(row),
+		marks: marks && marks.length > 0 ? marks : undefined,
 	}
 }

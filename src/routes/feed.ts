@@ -1,12 +1,13 @@
-import { Elysia, t } from "elysia"
+import { config } from "@/config"
 import { getGlobalFeed, getPersonalizedFeed } from "@/db/feed"
 import { parseFeedFilters } from "@/db/feed-filters"
 import { getUserVotesForIds } from "@/db/votes"
-import { config } from "@/config"
-import type { Env, FeedItem } from "@/types"
+import { buildSealMarks, resolveActors } from "@/routes/marks"
+import type { Env, FeedItem, Mark, MarkActor } from "@/types"
 import { readRateLimit } from "@/utils/read-rate-limit"
+import { Elysia, t } from "elysia"
 
-export function toFeedResponse(row: FeedItem) {
+export function toFeedResponse(row: FeedItem, marks?: Mark[], submitter?: MarkActor) {
 	return {
 		id: row.id,
 		videoId: row.video_id,
@@ -24,6 +25,8 @@ export function toFeedResponse(row: FeedItem) {
 		confidence: row.confidence,
 		createdAt: row.created_at,
 		hidden: row.hidden ?? false,
+		marks: marks && marks.length > 0 ? marks : undefined,
+		submitter: submitter ?? undefined,
 	}
 }
 
@@ -49,9 +52,7 @@ export const feedRoutes = (env: Env) =>
 					config.feed.maxLimit
 				)
 				const parsedCursor = query.cursor ? Number(query.cursor) : 0
-				const offset = Number.isFinite(parsedCursor)
-					? Math.floor(Math.max(0, parsedCursor))
-					: 0
+				const offset = Number.isFinite(parsedCursor) ? Math.floor(Math.max(0, parsedCursor)) : 0
 
 				const filters = parseFeedFilters(query)
 
@@ -69,10 +70,20 @@ export const feedRoutes = (env: Env) =>
 						)
 					: null
 
+				const marks = await buildSealMarks(env, items)
+				const submitters = await resolveActors(
+					env,
+					items.map((i) => i.submitter_id)
+				)
+
 				return {
 					success: true,
 					data: items.map((item) => ({
-						...toFeedResponse(item),
+						...toFeedResponse(
+							item,
+							marks.get(item.id),
+							item.submitter_id != null ? submitters.get(item.submitter_id) : undefined
+						),
 						userVote: votesMap?.get(item.id) ?? null,
 					})),
 					nextCursor,

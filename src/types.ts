@@ -1,6 +1,7 @@
 import type { KVCompat } from "@/infra/cache"
 import type { D1Compat } from "@/infra/database"
 import type { RedisRateLimiter } from "@/infra/rate-limiter"
+import type { TierName } from "@/utils/tiers"
 
 export interface B2Config {
 	keyId: string
@@ -93,6 +94,20 @@ export interface SubmitterInfo {
 	displayName: string
 }
 
+export interface MarkActor {
+	keyId: string
+	displayName: string
+	tier: TierName | null
+}
+
+export interface Mark {
+	type: string
+	label: string
+	icon: string
+	by?: MarkActor
+	at?: number
+}
+
 export interface LyricsSubmission {
 	videoId: string
 	song: string
@@ -125,6 +140,7 @@ export interface LyricsResponse {
 	submitter?: SubmitterInfo
 	fulfilled?: LyricsFulfillmentBadge | null
 	userVote?: 1 | -1 | null
+	marks?: Mark[]
 }
 
 export interface LyricsFulfillmentBadge {
@@ -153,6 +169,8 @@ export interface LyricsSearchResult {
 	submitter_key_id?: string | null
 	submitter_reputation?: number | null
 	submitter_nickname?: string | null
+	committee_approved_at?: number | null
+	committee_approved_by?: number | null
 	match_score: number
 	tier: number
 }
@@ -173,6 +191,9 @@ export interface FeedItem {
 	vote_count: number
 	confidence: Confidence
 	created_at: number
+	submitter_id?: number | null
+	committee_approved_at?: number | null
+	committee_approved_by?: number | null
 	hidden?: boolean
 }
 
