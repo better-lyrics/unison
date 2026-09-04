@@ -101,6 +101,7 @@ export const config = {
 				"special",
 			],
 		},
+		seal: { label: "Better Lyrics Council Approved (BLCA)" },
 	},
 
 	exploration: {
