@@ -540,6 +540,83 @@ describe("GET /lyrics/mine", () => {
 		expect(sql).not.toMatch(/ORDER BY\s+created_at ASC/)
 		expect(sql).not.toContain("sync_type = ?")
 	})
+
+	it("surfaces a seal mark on an approved own submission without a feed submitter", async () => {
+		const boosterKeyId = "b".repeat(64)
+		const approved = makeFeedRow({
+			id: 7,
+			video_id: "vMine",
+			submitter_id: 99,
+			committee_approved_at: 1700000000,
+			committee_approved_by: 40,
+		})
+		const db = makeMockDB([
+			{ id: 99 }, // derive caller
+			[approved], // getMySubmissions
+			[], // getUserVotesForIds
+			[{ id: 40, key_id: boosterKeyId, nickname: "Council Cat" }], // resolveActors users
+			[], // getXpForUsers
+			[], // getBadgeSummaries
+		])
+		const cache = {
+			async get(key: string) {
+				return key === "curator:tier-map" ? JSON.stringify([[boosterKeyId, "legendary"]]) : null
+			},
+			async put() {},
+			async delete() {},
+			async keys() {
+				return []
+			},
+			async setNX() {
+				return true
+			},
+		}
+		const limiter = {
+			async limit() {
+				return { success: true }
+			},
+		}
+		const env: Env = {
+			DB: db as unknown as Env["DB"],
+			CACHE: cache as unknown as Env["CACHE"],
+			RATE_LIMITER: limiter as unknown as Env["RATE_LIMITER"],
+			READ_RATE_LIMITER: limiter as unknown as Env["READ_RATE_LIMITER"],
+			CACHE_TTL_SECONDS: "300",
+			DUMPS_ENABLED: false,
+			DUMP_PUBLIC_BASE_URL: "",
+			DUMP_DATABASE_URL: null,
+			B2: null,
+		}
+		const app = lyricsRoutes(env)
+
+		const res = await app.handle(
+			new Request("http://localhost/lyrics/mine", {
+				headers: { "x-key-id": "user-key" },
+			})
+		)
+		const body = (await res.json()) as { data: Record<string, unknown>[] }
+
+		expect(res.status).toBe(200)
+		const first = body.data[0]
+		expect(first.marks).toEqual([
+			{
+				type: "seal",
+				label: "Better Lyrics Council Approved (BLCA)",
+				icon: "/badges/committee/image.svg",
+				by: {
+					keyId: boosterKeyId,
+					displayName: "Council Cat",
+					tier: "legendary",
+					level: 1,
+					badgeCount: 0,
+					topBadge: null,
+				},
+				at: 1700000000,
+			},
+		])
+		expect(first.submitter).toBeUndefined()
+		expect(first).toMatchObject({ id: 7, videoId: "vMine", hidden: false })
+	})
 })
 
 interface VariantRowOverrides {
@@ -605,7 +682,11 @@ describe("GET /lyrics/variants/:videoId", () => {
 	})
 
 	it("returns userVote null when only an x-key-id header is sent (variants requires Bearer)", async () => {
-		const rows = [makeVariantRow({ id: 10 }), makeVariantRow({ id: 11 }), makeVariantRow({ id: 12 })]
+		const rows = [
+			makeVariantRow({ id: 10 }),
+			makeVariantRow({ id: 11 }),
+			makeVariantRow({ id: 12 }),
+		]
 		const userRow = { id: 99 }
 		const db = makeMockDB([userRow, rows])
 		const app = lyricsRoutes(makeEnv(db))
@@ -1206,19 +1287,21 @@ describe("POST /lyrics/submit formatted-TTML rejection", () => {
 					duration: 100,
 					lyrics,
 					format: "ttml",
-				}),
-			),
+				})
+			)
 		)
-		const hints = await Promise.all(results.map(({ res }) => res.json() as Promise<{ hint: string }>))
+		const hints = await Promise.all(
+			results.map(({ res }) => res.json() as Promise<{ hint: string }>)
+		)
 		expect(new Set(hints.map((h) => h.hint)).size).toBe(3)
 	})
 
 	it("accepts adjacent-syllable spans without inter-span whitespace (regression guard)", async () => {
 		const ttml =
-			'<tt><body><div><p>' +
+			"<tt><body><div><p>" +
 			'<span begin="0:00.0" end="0:00.5">Hel</span>' +
 			'<span begin="0:00.5" end="0:01.0">lo</span>' +
-			'</p></div></body></tt>'
+			"</p></div></body></tt>"
 		const { res } = await submit({
 			videoId: "abc",
 			song: "S",
@@ -1232,12 +1315,12 @@ describe("POST /lyrics/submit formatted-TTML rejection", () => {
 
 	it("accepts background-span container with clean inner spans", async () => {
 		const ttml =
-			'<tt><body><div><p>' +
+			"<tt><body><div><p>" +
 			'<span begin="0:00.0" end="0:01.0">Main</span> ' +
 			'<span ttm:role="x-bg">' +
 			'<span begin="0:00.5" end="0:01.0">bg</span>' +
-			'</span>' +
-			'</p></div></body></tt>'
+			"</span>" +
+			"</p></div></body></tt>"
 		const { res } = await submit({
 			videoId: "abc",
 			song: "S",
