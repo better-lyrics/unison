@@ -72,15 +72,14 @@ export const translateRoutes = (env: Env) => {
 				return status(400, { success: false, error: "No translatable lines" })
 			}
 
+			const detected = await detectLanguage(kept.join("\n"))
 			let from: string
-			if (body.from) {
+			if (detected.language) {
+				from = detected.language
+			} else if (body.from) {
 				from = body.from
 			} else {
-				const detected = await detectLanguage(kept.join("\n"))
-				if (!detected.language) {
-					return status(400, { success: false, error: "Could not detect source language" })
-				}
-				from = detected.language
+				return status(400, { success: false, error: "Could not detect source language" })
 			}
 
 			const to = body.to
