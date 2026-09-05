@@ -3,11 +3,13 @@ import { AUTHED_FETCH_ERRORS, authedFetch } from "./authedFetch"
 import { IS_SPA_EXPANSION_SEED } from "./seed-flag"
 import type {
   ApiEnvelope,
+  BadgeCatalogue,
   CuratorsLeaderboardResponse,
   DumpManifest,
   LyricsSearchHit,
   QueueEntry,
   SongsLeaderboardResponse,
+  UserGamification,
   UserRankResponse,
   UserSubmissionsResponse,
   VariantFull,
@@ -44,6 +46,16 @@ export async function fetchUserSubmissions(keyId: string, cursor?: string): Prom
   if (USE_SEED) return (await import("./dev-seed")).seedUserSubmissions(keyId)
   const params = cursor !== undefined ? `?cursor=${encodeURIComponent(cursor)}` : ""
   return getJson<UserSubmissionsResponse>(`/users/${encodeURIComponent(keyId)}/submissions${params}`)
+}
+
+export async function fetchBadgeCatalogue(): Promise<BadgeCatalogue> {
+  if (USE_SEED) return (await import("./dev-seed")).seedBadgeCatalogue()
+  return getJson<BadgeCatalogue>("/badges")
+}
+
+export async function fetchUserBadges(keyId: string): Promise<UserGamification> {
+  if (USE_SEED) return (await import("./dev-seed")).seedUserBadges(keyId)
+  return getJson<UserGamification>(`/users/${encodeURIComponent(keyId)}/badges`)
 }
 
 interface SearchLyricsParams {

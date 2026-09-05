@@ -1,7 +1,12 @@
 import type {
+  BadgeCatalogue,
+  BadgeDef,
+  BadgeImage,
+  BadgeTier,
   CuratorLeaderboardEntry,
   CuratorsLeaderboardResponse,
   SongsLeaderboardResponse,
+  UserGamification,
   UserRankResponse,
   UserSubmission,
   UserSubmissionsResponse,
@@ -218,4 +223,191 @@ const SEED_SUBMISSIONS: UserSubmission[] = [
 export async function seedUserSubmissions(_keyId: string): Promise<UserSubmissionsResponse> {
   await delay()
   return { submissions: SEED_SUBMISSIONS }
+}
+
+function badgeImage(key: string): BadgeImage {
+  return {
+    color: `/badges/${key}/image.svg?variant=color`,
+    mono: `/badges/${key}/image.svg?variant=mono`,
+  }
+}
+
+function badgeTiers(key: string, thresholds: number[]): BadgeTier[] {
+  return thresholds.map((threshold, i) => ({
+    level: i + 1,
+    threshold,
+    image: {
+      color: `/badges/${key}/image.svg?variant=color&tier=${i + 1}`,
+      mono: `/badges/${key}/image.svg?variant=mono`,
+    },
+  }))
+}
+
+const SEED_BADGES: BadgeDef[] = [
+  {
+    key: "verified-contributor",
+    name: "Verified Contributor",
+    description: "Submitted lyrics that reached medium or higher confidence.",
+    category: "output",
+    kind: "medal",
+    tiers: badgeTiers("verified-contributor", [1, 3, 10]),
+    image: badgeImage("verified-contributor"),
+  },
+  {
+    key: "sharp-ear",
+    name: "Sharp Ear",
+    description: "Cast votes that matched the community consensus.",
+    category: "curation",
+    kind: "medal",
+    tiers: badgeTiers("sharp-ear", [10, 25, 50]),
+    image: badgeImage("sharp-ear"),
+  },
+  {
+    key: "trailblazer",
+    name: "Trailblazer",
+    description: "First to add lyrics for a song.",
+    category: "coverage",
+    kind: "medal",
+    tiers: badgeTiers("trailblazer", [5, 25, 100]),
+    rarity: 0.08,
+    image: badgeImage("trailblazer"),
+  },
+  {
+    key: "first-responder",
+    name: "First Responder",
+    description: "First to fill a requested song.",
+    category: "coverage",
+    kind: "medal",
+    tiers: badgeTiers("first-responder", [1, 3, 5]),
+    image: badgeImage("first-responder"),
+  },
+  {
+    key: "polyglot",
+    name: "Polyglot",
+    description: "Contributed lyrics across several languages.",
+    category: "coverage",
+    kind: "medal",
+    tiers: badgeTiers("polyglot", [3, 5, 10]),
+    rarity: 0.05,
+    image: badgeImage("polyglot"),
+  },
+  {
+    key: "most-loved",
+    name: "Most Loved",
+    description: "A lyric you submitted earned a high score with strong community support.",
+    category: "acclaim",
+    kind: "medal",
+    rarity: 0.03,
+    image: badgeImage("most-loved"),
+  },
+  {
+    key: "first-submission",
+    name: "First Submission",
+    description: "Submitted your first lyric.",
+    category: "special",
+    kind: "special",
+    image: badgeImage("first-submission"),
+  },
+  {
+    key: "committee",
+    name: "Better Lyrics Council",
+    description: "A member of the Better Lyrics Council.",
+    category: "special",
+    kind: "special",
+    image: badgeImage("committee"),
+  },
+  {
+    key: "community",
+    name: "Community",
+    description: "The shared community lyrics account.",
+    category: "special",
+    kind: "special",
+    image: badgeImage("community"),
+  },
+]
+
+const SEED_TIER_BADGES: BadgeDef[] = [
+  {
+    key: "lyricist",
+    name: "Lyricist",
+    description: "Ranked in the top 20% of curators.",
+    category: "tier",
+    kind: "title",
+    image: badgeImage("lyricist"),
+  },
+  {
+    key: "elite",
+    name: "Elite",
+    description: "Ranked in the top 5% of curators.",
+    category: "tier",
+    kind: "title",
+    image: badgeImage("elite"),
+  },
+  {
+    key: "master",
+    name: "Master",
+    description: "The third ranked curator.",
+    category: "tier",
+    kind: "title",
+    image: badgeImage("master"),
+  },
+  {
+    key: "grandmaster",
+    name: "Grandmaster",
+    description: "The second ranked curator.",
+    category: "tier",
+    kind: "title",
+    image: badgeImage("grandmaster"),
+  },
+  {
+    key: "legendary",
+    name: "Legendary",
+    description: "The top ranked curator.",
+    category: "tier",
+    kind: "title",
+    image: badgeImage("legendary"),
+  },
+]
+
+const SEED_CATALOGUE: BadgeCatalogue = {
+  badges: [...SEED_BADGES, ...SEED_TIER_BADGES],
+  display: {
+    inlineGlyphs: 1,
+    featuredMax: 5,
+    rarityThreshold: 0.1,
+    categoryOrder: ["tier", "output", "craft", "coverage", "curation", "acclaim", "consistency", "special"],
+  },
+}
+
+export async function seedBadgeCatalogue(): Promise<BadgeCatalogue> {
+  await delay()
+  return SEED_CATALOGUE
+}
+
+export async function seedUserBadges(keyId: string): Promise<UserGamification> {
+  await delay()
+  return {
+    keyId,
+    level: 8,
+    xp: 3200,
+    xpForNext: 4000,
+    tier: "legendary",
+    tierRank: 1,
+    featured: ["most-loved", "legendary", "verified-contributor", "sharp-ear", "trailblazer"],
+    counts: { earned: 6, total: SEED_CATALOGUE.badges.length },
+    topExpertise: [
+      { scope: "artist", name: "Radiohead", rank: 2 },
+      { scope: "language", name: "Japanese", rank: 5 },
+    ],
+    badges: [
+      { key: "verified-contributor", earned: true, tier: 3, earnedAt: SEEDED_NOW - 30 * 86400, featured: true },
+      { key: "sharp-ear", earned: true, tier: 2, earnedAt: SEEDED_NOW - 20 * 86400, featured: true },
+      { key: "trailblazer", earned: true, tier: 2, earnedAt: SEEDED_NOW - 14 * 86400, featured: true },
+      { key: "most-loved", earned: true, earnedAt: SEEDED_NOW - 10 * 86400, featured: true },
+      { key: "first-submission", earned: true, earnedAt: SEEDED_NOW - 60 * 86400, featured: false },
+      { key: "legendary", earned: true, earnedAt: SEEDED_NOW - 2 * 86400, featured: true },
+      { key: "polyglot", earned: false, tier: 1, progress: { current: 2, next: 3 }, featured: false },
+      { key: "first-responder", earned: false, progress: { current: 0, next: 1 }, featured: false },
+    ],
+  }
 }

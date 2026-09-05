@@ -315,4 +315,138 @@ describe("UserProfileView", () => {
     await waitFor(() => expect(screen.getByText("Song Two")).toBeTruthy())
     expect(screen.queryByRole("button", { name: /load more/i })).toBeNull()
   })
+
+  const catalogue = {
+    badges: [
+      {
+        key: "most-loved",
+        name: "Most Loved",
+        description: "desc",
+        category: "acclaim",
+        kind: "medal",
+        image: { color: "/badges/most-loved/color", mono: "/badges/most-loved/mono" },
+      },
+    ],
+    display: { inlineGlyphs: 1, featuredMax: 5, rarityThreshold: 0.1, categoryOrder: ["acclaim"] },
+  }
+
+  function respondCommon(url: string): Promise<Response> | null {
+    if (url === `/users/${keyId}/submissions`) {
+      return Promise.resolve(
+        new Response(JSON.stringify({ success: true, data: { submissions: [] } }), { status: 200 }),
+      )
+    }
+    if (url === "/badges") {
+      return Promise.resolve(new Response(JSON.stringify({ success: true, data: catalogue }), { status: 200 }))
+    }
+    return null
+  }
+
+  it("renders the gamification header and badge wall from gamification data", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockImplementation((url: string) => {
+        if (url === `/leaderboard/users/${keyId}`) {
+          return Promise.resolve(
+            new Response(
+              JSON.stringify({
+                success: true,
+                data: {
+                  ranked: true,
+                  keyId,
+                  displayName: "AlphaUser",
+                  reputation: 1.2,
+                  score: 7.4,
+                  submissionCount: 3,
+                  totalUpvotes: 11,
+                  rank: 12,
+                  lastVoteAt: null,
+                },
+              }),
+              { status: 200 },
+            ),
+          )
+        }
+        if (url === `/users/${keyId}/badges`) {
+          return Promise.resolve(
+            new Response(
+              JSON.stringify({
+                success: true,
+                data: {
+                  keyId,
+                  level: 8,
+                  xp: 3200,
+                  xpForNext: 4000,
+                  tier: "legendary",
+                  tierRank: 1,
+                  featured: ["most-loved"],
+                  counts: { earned: 1, total: 1 },
+                  topExpertise: [{ scope: "artist", name: "Radiohead", rank: 2 }],
+                  badges: [{ key: "most-loved", earned: true, featured: true }],
+                },
+              }),
+              { status: 200 },
+            ),
+          )
+        }
+        const common = respondCommon(url)
+        if (common) return common
+        return Promise.reject(new Error(`unexpected url ${url}`))
+      }),
+    )
+
+    renderView("Profile")
+    await waitFor(() => expect(screen.getByText("Level 8")).toBeTruthy())
+    expect(screen.getByText("Legendary")).toBeTruthy()
+    expect(screen.getAllByText("Most Loved").length).toBeGreaterThan(0)
+    expect(screen.getByText("Radiohead")).toBeTruthy()
+  })
+
+  it("does not crash for a user with no tier and no earned badges", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockImplementation((url: string) => {
+        if (url === `/leaderboard/users/${keyId}`) {
+          return Promise.resolve(
+            new Response(
+              JSON.stringify({
+                success: true,
+                data: { ranked: false, keyId, displayName: "QuietUser", lastVoteAt: null },
+              }),
+              { status: 200 },
+            ),
+          )
+        }
+        if (url === `/users/${keyId}/badges`) {
+          return Promise.resolve(
+            new Response(
+              JSON.stringify({
+                success: true,
+                data: {
+                  keyId,
+                  level: 3,
+                  xp: 200,
+                  xpForNext: 350,
+                  tier: null,
+                  tierRank: null,
+                  featured: [],
+                  counts: { earned: 0, total: 1 },
+                  badges: [],
+                },
+              }),
+              { status: 200 },
+            ),
+          )
+        }
+        const common = respondCommon(url)
+        if (common) return common
+        return Promise.reject(new Error(`unexpected url ${url}`))
+      }),
+    )
+
+    renderView()
+    await waitFor(() => expect(screen.getByText("QuietUser")).toBeTruthy())
+    await waitFor(() => expect(screen.getByText("Level 3")).toBeTruthy())
+    expect(screen.queryByText("Legendary")).toBeNull()
+  })
 })
