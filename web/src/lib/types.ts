@@ -135,6 +135,78 @@ export interface QueueEntry {
   requestCount: number
 }
 
+export type TierName = "lyricist" | "elite" | "master" | "grandmaster" | "legendary"
+
+export interface BadgeImage {
+  color: string
+  mono: string
+}
+
+export interface BadgeTier {
+  level: number
+  name?: string
+  threshold: number
+  image?: BadgeImage
+}
+
+export interface BadgeDef {
+  key: string
+  name: string
+  description: string
+  category: string
+  kind: "title" | "medal" | "special"
+  tiers?: BadgeTier[]
+  secret?: boolean
+  rarity?: number
+  legacy?: boolean
+  image: BadgeImage
+}
+
+export interface BadgeDisplay {
+  inlineGlyphs: number
+  featuredMax: number
+  rarityThreshold: number
+  categoryOrder: string[]
+}
+
+export interface BadgeCatalogue {
+  badges: BadgeDef[]
+  display: BadgeDisplay
+}
+
+export interface BadgeProgress {
+  current: number
+  next: number | null
+}
+
+export interface UserBadge {
+  key: string
+  earned: boolean
+  earnedAt?: number
+  tier?: number
+  progress?: BadgeProgress
+  featured: boolean
+}
+
+export interface ExpertiseEntry {
+  scope: "artist" | "language"
+  name: string
+  rank: number
+}
+
+export interface UserGamification {
+  keyId: string
+  level: number
+  xp: number
+  xpForNext: number | null
+  tier: TierName | null
+  tierRank: number | null
+  badges: UserBadge[]
+  featured: string[]
+  counts: { earned: number; total: number }
+  topExpertise?: ExpertiseEntry[]
+}
+
 export interface DumpManifest {
   schema_version: 1
   generated_at: string

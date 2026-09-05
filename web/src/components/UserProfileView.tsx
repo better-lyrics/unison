@@ -1,5 +1,7 @@
 import { IconCheck, IconCopy } from "@tabler/icons-react"
 import { type ReactNode, useCallback, useState } from "react"
+import { BadgeCatalogueProvider } from "@/components/BadgeCatalogueContext"
+import { BadgeWall } from "@/components/BadgeWall"
 import { DiscordBadge } from "@/components/DiscordBadge"
 import { EmptyState } from "@/components/EmptyState"
 import { LeaderboardSection } from "@/components/LeaderboardSection"
@@ -7,7 +9,7 @@ import { LoadingPlaceholder } from "@/components/LoadingPlaceholder"
 import { MedalRank } from "@/components/MedalRank"
 import { SubmissionsList } from "@/components/SubmissionsList"
 import { useAsyncData } from "@/hooks/useAsyncData"
-import { fetchUserRank } from "@/lib/api"
+import { fetchUserBadges, fetchUserRank } from "@/lib/api"
 import { dicebearThumbsDataUri } from "@/lib/avatar"
 import { formatExact, formatRelativeTime } from "@/lib/format"
 
@@ -33,6 +35,8 @@ function Stat({ label, value }: StatProps) {
 export function UserProfileView({ keyId, title = "Profile" }: UserProfileViewProps) {
   const rankFetcher = useCallback(() => fetchUserRank(keyId), [keyId])
   const rank = useAsyncData(rankFetcher, `leaderboard:user:${keyId}`)
+  const badgesFetcher = useCallback(() => fetchUserBadges(keyId), [keyId])
+  const gamification = useAsyncData(badgesFetcher, `user:badges:${keyId}`)
   const [copied, setCopied] = useState(false)
 
   const copyKey = async () => {
@@ -104,6 +108,16 @@ export function UserProfileView({ keyId, title = "Profile" }: UserProfileViewPro
             title="No leaderboard activity yet"
             hint="Submit lyrics via Better Lyrics to start showing up on the leaderboard."
           />
+        )}
+
+        {gamification.status === "loading" ? (
+          <LoadingPlaceholder rows={2} />
+        ) : gamification.status === "error" ? (
+          <EmptyState title="Achievements unavailable" hint={gamification.error.message} />
+        ) : (
+          <BadgeCatalogueProvider>
+            <BadgeWall gamification={gamification.data} />
+          </BadgeCatalogueProvider>
         )}
 
         <SubmissionsList keyId={keyId} />
