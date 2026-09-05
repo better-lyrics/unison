@@ -84,7 +84,7 @@ export const DERIVATIONS: Record<string, Evaluator> = {
 
 	"first-responder": async (env, userId) => {
 		const { fulfilledCount } = await getFulfillmentStatsBySubmitter(env, userId)
-		return { earned: fulfilledCount > 0 }
+		return tiered(fulfilledCount, thresholdsFor("first-responder"))
 	},
 
 	"most-loved": async (env, userId) => {
