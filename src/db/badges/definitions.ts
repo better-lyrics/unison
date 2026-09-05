@@ -19,6 +19,7 @@ export interface BadgeTier {
 	level: number
 	name?: string
 	threshold: number
+	image?: BadgeImage
 }
 
 export interface BadgeDef {
@@ -41,8 +42,15 @@ function image(key: string): BadgeImage {
 	}
 }
 
-function tiers(thresholds: number[]): BadgeTier[] {
-	return thresholds.map((threshold, i) => ({ level: i + 1, threshold }))
+function tiers(key: string, thresholds: number[]): BadgeTier[] {
+	return thresholds.map((threshold, i) => ({
+		level: i + 1,
+		threshold,
+		image: {
+			color: `/badges/${key}/image.svg?variant=color&tier=${i + 1}`,
+			mono: `/badges/${key}/image.svg?variant=mono`,
+		},
+	}))
 }
 
 export const BADGES: BadgeDef[] = [
@@ -60,7 +68,7 @@ export const BADGES: BadgeDef[] = [
 		description: "Cast votes that matched the community consensus.",
 		category: "curation",
 		kind: "medal",
-		tiers: tiers([10, 25, 50]),
+		tiers: tiers("sharp-ear", [10, 25, 50]),
 		image: image("sharp-ear"),
 	},
 	{
@@ -69,7 +77,7 @@ export const BADGES: BadgeDef[] = [
 		description: "Submitted lyrics that reached medium or higher confidence.",
 		category: "output",
 		kind: "medal",
-		tiers: tiers([1, 3, 10]),
+		tiers: tiers("verified-contributor", [1, 3, 10]),
 		image: image("verified-contributor"),
 	},
 	{
@@ -78,7 +86,7 @@ export const BADGES: BadgeDef[] = [
 		description: "First to add lyrics for a song.",
 		category: "coverage",
 		kind: "medal",
-		tiers: tiers([5, 25, 100]),
+		tiers: tiers("trailblazer", [5, 25, 100]),
 		image: image("trailblazer"),
 	},
 	{
@@ -87,6 +95,7 @@ export const BADGES: BadgeDef[] = [
 		description: "First to fill a requested song.",
 		category: "coverage",
 		kind: "medal",
+		tiers: tiers("first-responder", [1, 3, 5]),
 		image: image("first-responder"),
 	},
 	{
@@ -95,7 +104,7 @@ export const BADGES: BadgeDef[] = [
 		description: "Contributed lyrics across several languages.",
 		category: "coverage",
 		kind: "medal",
-		tiers: tiers([3, 5, 10]),
+		tiers: tiers("polyglot", [3, 5, 10]),
 		image: image("polyglot"),
 	},
 	{

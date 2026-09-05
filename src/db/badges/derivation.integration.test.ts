@@ -145,6 +145,13 @@ describeIntegration("badge derivation (integration)", () => {
 		)
 	}
 
+	async function seedFulfillments(userId: number, count: number): Promise<void> {
+		for (let i = 0; i < count; i++) {
+			const lyricId = await insertLyric({ submitterId: userId, confidence: "high" })
+			await insertFulfillment(userId, lyricId)
+		}
+	}
+
 	const run = (key: string, userId: number): Promise<BadgeEvaluation> =>
 		DERIVATIONS[key](env, userId)
 
@@ -205,6 +212,16 @@ describeIntegration("badge derivation (integration)", () => {
 			])
 		})
 
+		// first-responder became a tiered badge counting fulfilled requests
+		it("first-responder walks 1/3/5 across every tier boundary", async () => {
+			await checkTiered("first-responder", seedFulfillments, [
+				{ n: 0, expected: { earned: false, tier: undefined, progress: { current: 0, next: 1 } } },
+				{ n: 1, expected: { earned: true, tier: 1, progress: { current: 1, next: 3 } } },
+				{ n: 3, expected: { earned: true, tier: 2, progress: { current: 3, next: 5 } } },
+				{ n: 5, expected: { earned: true, tier: 3, progress: { current: 5, next: null } } },
+			])
+		})
+
 		it("verified-contributor counts a lyric once even with both reached events, ignoring deleted and low", async () => {
 			const userId = await seedUser()
 			const lyricId = await insertLyric({ submitterId: userId, confidence: "high" })
@@ -238,22 +255,6 @@ describeIntegration("badge derivation (integration)", () => {
 	})
 
 	describe("single badges", () => {
-		it("first-responder earns from a fulfillment on a live lyric only", async () => {
-			const filler = await seedUser()
-			const lyricId = await insertLyric({ submitterId: filler, confidence: "high" })
-			await insertFulfillment(filler, lyricId)
-			const earned = await run("first-responder", filler)
-			expect(earned.earned).toBe(true)
-			expect(earned.tier).toBeUndefined()
-			expect(earned.progress).toBeUndefined()
-
-			const none = await seedUser()
-			const empty = await run("first-responder", none)
-			expect(empty).toEqual({ earned: false })
-			expect(empty.tier).toBeUndefined()
-			expect(empty.progress).toBeUndefined()
-		})
-
 		it("most-loved earns from a high-scoring, well-voted lyric only", async () => {
 			const loved = await seedUser()
 			await insertLyric({ submitterId: loved, effectiveScore: 0.95, voteCount: 30 })

@@ -128,6 +128,66 @@ describe("GET /badges/:key/image.svg", () => {
 		expect(res.status).toBe(200)
 	})
 
+	async function bodyOf(app: ReturnType<typeof badgeRoutes>, url: string): Promise<string> {
+		const res = await app.handle(new Request(url))
+		expect(res.status).toBe(200)
+		expect(res.headers.get("content-type")).toMatch(/^image\/svg\+xml/)
+		return res.text()
+	}
+
+	it("serves distinct per-tier color art for a tiered key", async () => {
+		const app = badgeRoutes(makeEnv())
+		const base = "http://localhost/badges/verified-contributor/image.svg?variant=color"
+		const t1 = await bodyOf(app, `${base}&tier=1`)
+		const t2 = await bodyOf(app, `${base}&tier=2`)
+		const t3 = await bodyOf(app, `${base}&tier=3`)
+		expect(t1).toContain("<svg")
+		expect(t1).not.toBe(t2)
+		expect(t2).not.toBe(t3)
+		expect(t1).not.toBe(t3)
+	})
+
+	it("ignores tier for the mono variant of a tiered key", async () => {
+		const app = badgeRoutes(makeEnv())
+		const withTier = await bodyOf(
+			app,
+			"http://localhost/badges/verified-contributor/image.svg?variant=mono&tier=3"
+		)
+		const noTier = await bodyOf(
+			app,
+			"http://localhost/badges/verified-contributor/image.svg?variant=mono"
+		)
+		expect(withTier).toBe(noTier)
+	})
+
+	it("defaults a tiered key with no tier param to tier 1", async () => {
+		const app = badgeRoutes(makeEnv())
+		const noTier = await bodyOf(
+			app,
+			"http://localhost/badges/verified-contributor/image.svg?variant=color"
+		)
+		const tier1 = await bodyOf(
+			app,
+			"http://localhost/badges/verified-contributor/image.svg?variant=color&tier=1"
+		)
+		expect(noTier).toBe(tier1)
+	})
+
+	it("clamps an out-of-range or non-numeric tier to tier 1", async () => {
+		const app = badgeRoutes(makeEnv())
+		const tier1 = await bodyOf(
+			app,
+			"http://localhost/badges/verified-contributor/image.svg?variant=color&tier=1"
+		)
+		for (const bad of ["99", "0", "abc"]) {
+			const got = await bodyOf(
+				app,
+				`http://localhost/badges/verified-contributor/image.svg?variant=color&tier=${bad}`
+			)
+			expect(got).toBe(tier1)
+		}
+	})
+
 	it("returns 404 for an unknown key", async () => {
 		const app = badgeRoutes(makeEnv())
 		const res = await app.handle(new Request("http://localhost/badges/nope/image.svg"))

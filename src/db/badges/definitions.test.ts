@@ -69,6 +69,18 @@ describe("badge definitions", () => {
 		}
 	})
 
+	it("gives tiered badges per-tier image URLs keyed by level", () => {
+		for (const b of BADGES) {
+			if (!b.tiers) continue
+			for (const tier of b.tiers) {
+				expect(tier.image?.color).toBe(
+					`/badges/${b.key}/image.svg?variant=color&tier=${tier.level}`
+				)
+				expect(tier.image?.mono).toBe(`/badges/${b.key}/image.svg?variant=mono`)
+			}
+		}
+	})
+
 	it("pins the exact URL for a sample badge", () => {
 		const community = BADGES.find((b) => b.key === "community")
 		expect(community?.image.color).toBe("/badges/community/image.svg?variant=color")
