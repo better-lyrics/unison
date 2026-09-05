@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs"
 import pg from "pg"
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest"
 import { COMMUNITY_KEY_ID } from "@/config"
+import { addCommittee } from "@/db/committee"
 import { D1Compat } from "@/infra/database"
 import { backfillBadges } from "@/jobs/backfill-badges"
 import { backfillXp } from "@/jobs/backfill-xp"
@@ -112,6 +113,21 @@ describeIntegration("backfill badges (integration)", () => {
 
 			const rows = await awardsFor(communityId)
 			expect(rows.map((r) => r.badge_key)).toEqual(["community"])
+		})
+	})
+
+	describe("committee", () => {
+		it("persists the committee badge for a member with zero contributions", async () => {
+			const userId = await seedUser()
+			await addCommittee(env, userId, "admin")
+
+			const result = await backfillBadges(env)
+
+			expect(result.evaluated).toBe(1)
+			expect(result.awarded).toBe(1)
+
+			const rows = await awardsFor(userId)
+			expect(rows.map((r) => r.badge_key)).toEqual(["committee"])
 		})
 	})
 

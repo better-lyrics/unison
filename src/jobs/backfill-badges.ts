@@ -8,12 +8,16 @@ const log = new Logger("backfill-badges")
 export async function backfillBadges(env: Env): Promise<{ evaluated: number; awarded: number }> {
 	const blacklisted = [...config.linking.blacklistedKeyIds]
 
-	const sql =
-		blacklisted.length > 0
-			? `SELECT DISTINCT user_id FROM contribution_events
-			 UNION
-			 SELECT id AS user_id FROM users WHERE key_id IN (${blacklisted.map(() => "?").join(", ")})`
-			: "SELECT DISTINCT user_id FROM contribution_events"
+	const parts = [
+		"SELECT DISTINCT user_id FROM contribution_events",
+		"SELECT user_id FROM committee_members",
+	]
+	if (blacklisted.length > 0) {
+		parts.push(
+			`SELECT id AS user_id FROM users WHERE key_id IN (${blacklisted.map(() => "?").join(", ")})`
+		)
+	}
+	const sql = parts.join(" UNION ")
 
 	const earners = await env.DB.prepare(sql)
 		.bind(...blacklisted)
