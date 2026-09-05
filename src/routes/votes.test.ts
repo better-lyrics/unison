@@ -641,3 +641,87 @@ describe("GET /lyrics/boost/quota", () => {
 		expect(await res.json()).toEqual({ success: true, quota: BOOST_QUOTA })
 	})
 })
+
+describe("vote rate limiting", () => {
+	function limitFailEnv(): { env: Env; app: ReturnType<typeof voteRoutes> } {
+		const { env, app } = seedBoostAuth()
+		env.RATE_LIMITER = {
+			async limit() {
+				return { success: false }
+			},
+		} as unknown as Env["RATE_LIMITER"]
+		return { env, app }
+	}
+
+	it("casts a vote (200) when under the write rate limit", async () => {
+		const keyId = "a".repeat(64)
+		const cache = makeMockCache()
+		seedSession(cache, "tok", keyId)
+		const userId = 42
+		const db = makeMockDB([
+			{ id: userId, key_id: keyId },
+			LYRICS_ROW,
+			{ submitter_id: 99, video_id: "vid7", deleted_at: null },
+			null,
+			null,
+			null,
+		])
+		const app = voteRoutes(makeEnv(db, cache))
+		const res = await app.handle(
+			new Request("http://localhost/lyrics/7/vote", {
+				method: "POST",
+				headers: { authorization: "Bearer tok", "content-type": "application/json" },
+				body: JSON.stringify({ vote: 1 }),
+			})
+		)
+		expect(res.status).toBe(200)
+		expect(((await res.json()) as { success: boolean }).success).toBe(true)
+	})
+
+	it("rejects a cast with 429 RATE_LIMITED when the write limit is exceeded", async () => {
+		const { app } = limitFailEnv()
+		const res = await app.handle(
+			new Request("http://localhost/lyrics/7/vote", {
+				method: "POST",
+				headers: { authorization: "Bearer tok", "content-type": "application/json" },
+				body: JSON.stringify({ vote: 1 }),
+			})
+		)
+		expect(res.status).toBe(429)
+		expect(((await res.json()) as { code: string }).code).toBe("RATE_LIMITED")
+	})
+
+	it("removes a vote (200) when under the write rate limit", async () => {
+		const keyId = "a".repeat(64)
+		const cache = makeMockCache()
+		seedSession(cache, "tok", keyId)
+		const db = makeMockDB([
+			{ id: 11, key_id: keyId },
+			LYRICS_ROW,
+			{ vote: 1, video_id: "vid7" },
+			null,
+			null,
+		])
+		const app = voteRoutes(makeEnv(db, cache))
+		const res = await app.handle(
+			new Request("http://localhost/lyrics/7/vote", {
+				method: "DELETE",
+				headers: { authorization: "Bearer tok" },
+			})
+		)
+		expect(res.status).toBe(200)
+		expect(((await res.json()) as { success: boolean }).success).toBe(true)
+	})
+
+	it("rejects a remove with 429 RATE_LIMITED when the write limit is exceeded", async () => {
+		const { app } = limitFailEnv()
+		const res = await app.handle(
+			new Request("http://localhost/lyrics/7/vote", {
+				method: "DELETE",
+				headers: { authorization: "Bearer tok" },
+			})
+		)
+		expect(res.status).toBe(429)
+		expect(((await res.json()) as { code: string }).code).toBe("RATE_LIMITED")
+	})
+})

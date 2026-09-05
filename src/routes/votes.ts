@@ -66,10 +66,15 @@ export const voteRoutes = (env: Env) =>
 		.use(eitherAuth)
 		.post(
 			"/:id/vote",
-			async ({ params, env, userId, body, status }) => {
+			async ({ params, env, userId, keyId, body, status }) => {
 				const id = Number(params.id)
 				if (Number.isNaN(id)) {
 					return status(400, buildError(ErrorCode.INVALID_ID))
+				}
+
+				const { success } = await env.RATE_LIMITER.limit({ key: keyId })
+				if (!success) {
+					return status(429, buildError(ErrorCode.RATE_LIMITED))
 				}
 
 				const lyrics = await getLyricsById(env, id)
@@ -93,10 +98,15 @@ export const voteRoutes = (env: Env) =>
 		)
 		.delete(
 			"/:id/vote",
-			async ({ params, env, userId, status }) => {
+			async ({ params, env, userId, keyId, status }) => {
 				const id = Number(params.id)
 				if (Number.isNaN(id)) {
 					return status(400, buildError(ErrorCode.INVALID_ID))
+				}
+
+				const { success } = await env.RATE_LIMITER.limit({ key: keyId })
+				if (!success) {
+					return status(429, buildError(ErrorCode.RATE_LIMITED))
 				}
 
 				const lyrics = await getLyricsById(env, id)
