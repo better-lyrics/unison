@@ -21,6 +21,7 @@ export interface CuratorLeaderboardEntry {
   submissionCount: number
   totalUpvotes: number
   rank: number
+  community?: boolean
   discordLinked: boolean
 }
 
@@ -39,6 +40,7 @@ export interface UserStats {
   keyId: string
   displayName: string
   handle?: string | null
+  community?: boolean
   lastVoteAt: number | null
   discordLinked: boolean
 }

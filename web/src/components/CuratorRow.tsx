@@ -1,4 +1,4 @@
-import { IconBrandDiscordFilled } from "@tabler/icons-react"
+import { IconBrandDiscordFilled, IconStarFilled } from "@tabler/icons-react"
 import { Link } from "react-router-dom"
 import { MedalRank } from "@/components/MedalRank"
 import { dicebearThumbsDataUri } from "@/lib/avatar"
@@ -24,7 +24,14 @@ export function CuratorRow({ entry, isSelf = false, appended = false }: CuratorR
           isSelf ? "bg-white/[0.06]" : "bg-white/[0.02]",
         )}
       >
-        <MedalRank rank={entry.rank} size="sm" />
+        {entry.community ? (
+          <span className="inline-flex w-10 shrink-0 items-center justify-center" title="Community account">
+            <IconStarFilled className="size-4 text-unison-medal-gold" />
+            <span className="sr-only">Community account</span>
+          </span>
+        ) : (
+          <MedalRank rank={entry.rank} size="sm" />
+        )}
         <img
           src={avatar}
           alt=""

@@ -4,6 +4,7 @@ import { getXpForUsers } from "@/db/contribution-events"
 import { AUTO_HIDE_PREDICATE, AUTO_HIDE_PREDICATE_JOINED, RANKING_EXPR } from "@/db/predicates"
 import { windowCutoff } from "@/db/requests"
 import type { BadgeRef, Env } from "@/types"
+import { isLinkBlacklisted } from "@/utils/blacklist"
 import { type TierName, tierForRank } from "@/utils/tiers"
 import { levelForXp } from "@/utils/xp"
 
@@ -218,6 +219,7 @@ export interface CuratorLeaderboardRow {
 	fulfilledCount: number
 	fulfilledDemand: number
 	rank: number
+	community: boolean
 	nickname: string | null
 	discordLinked: boolean
 	tier: TierName | null
@@ -246,11 +248,6 @@ export async function getCuratorLeaderboard(
 	env: Env,
 	limit: number
 ): Promise<CuratorLeaderboardRow[]> {
-	const excludedKeyIds = [...config.linking.blacklistedKeyIds]
-	const exclusion = excludedKeyIds.length
-		? `AND u.key_id NOT IN (${excludedKeyIds.map(() => "?").join(", ")})`
-		: ""
-
 	const res = await env.DB.prepare(
 		`SELECT u.id AS user_id, u.key_id, u.reputation, u.nickname,
 		        agg.score, agg.submission_count, agg.total_upvotes,
@@ -269,7 +266,7 @@ export async function getCuratorLeaderboard(
 		     AND NOT ${AUTO_HIDE_PREDICATE}
 		   GROUP BY submitter_id
 		 ) agg
-		 JOIN users u ON u.id = agg.submitter_id ${exclusion}
+		 JOIN users u ON u.id = agg.submitter_id
 		 LEFT JOIN (
 		   SELECT f.submitter_id,
 		          COUNT(*) AS fulfilled_count,
@@ -283,7 +280,7 @@ export async function getCuratorLeaderboard(
 		 ORDER BY agg.score DESC, u.key_id ASC
 		 LIMIT ?`
 	)
-		.bind(...excludedKeyIds, limit)
+		.bind(limit)
 		.all<CuratorRow>()
 
 	const rows = res.results
@@ -294,10 +291,16 @@ export async function getCuratorLeaderboard(
 		getBadgeSummaries(env, userIds),
 	])
 
-	return rows.map((r, i) => {
+	// The community account is shown by score but sits outside the competition: it holds no
+	// rank or tier and is excluded from the denominator, so real curators own ranks 1..N.
+	const rankedTotal = total - rows.filter((r) => isLinkBlacklisted(r.key_id)).length
+	let rankedSoFar = 0
+	return rows.map((r) => {
 		const xp = xpMap.get(r.user_id) ?? 0
 		const { level, xpForNext } = levelForXp(xp, config.gamification.xp.levelThresholds)
 		const summary = badgeSummaries.get(r.user_id)
+		const community = isLinkBlacklisted(r.key_id)
+		const rank = community ? 0 : ++rankedSoFar
 		return {
 			keyId: r.key_id,
 			reputation: Number(r.reputation),
@@ -306,10 +309,11 @@ export async function getCuratorLeaderboard(
 			totalUpvotes: Number(r.total_upvotes),
 			fulfilledCount: Number(r.fulfilled_count ?? 0),
 			fulfilledDemand: Number(r.fulfilled_demand ?? 0),
-			rank: i + 1,
+			rank,
+			community,
 			nickname: r.nickname ?? null,
 			discordLinked: Boolean(r.discord_linked),
-			tier: tierForRank(i + 1, total, config.gamification.tiers),
+			tier: community ? null : tierForRank(rank, rankedTotal, config.gamification.tiers),
 			level,
 			xp,
 			xpForNext,

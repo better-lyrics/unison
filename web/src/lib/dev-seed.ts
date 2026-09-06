@@ -102,7 +102,20 @@ const realSeed = Object.values(import.meta.glob<RealSeed>("./dev-seed.real.ts", 
   | RealSeed
   | undefined
 
-export const SEED_CURATORS: CuratorLeaderboardEntry[] = realSeed?.REAL_CURATORS ?? DEFAULT_CURATORS
+const COMMUNITY_KEY_ID = "cea10b57de8e060ed1a180a00c2bc717a2ab4f231d88fd33ffa6a50a04f23b6e"
+
+const RAW_CURATORS: CuratorLeaderboardEntry[] = realSeed?.REAL_CURATORS ?? DEFAULT_CURATORS
+
+// The community account is shown by score but sits outside the ranks: it holds no rank,
+// and real curators keep contiguous ranks 1..N (mirrors getCuratorLeaderboard).
+export const SEED_CURATORS: CuratorLeaderboardEntry[] = (() => {
+  let ranked = 0
+  return RAW_CURATORS.map((c) =>
+    c.keyId === COMMUNITY_KEY_ID
+      ? { ...c, rank: 0, community: true }
+      : { ...c, rank: ++ranked, community: false },
+  )
+})()
 
 const delay = (ms = 120) => new Promise((resolve) => setTimeout(resolve, ms))
 
@@ -134,6 +147,7 @@ export async function seedUserRank(keyId: string): Promise<UserRankResponse> {
     keyId: entry.keyId,
     displayName: entry.displayName,
     handle: toHandle(entry.displayName),
+    community: entry.community ?? false,
     reputation: entry.reputation,
     score: entry.score,
     submissionCount: entry.submissionCount,
@@ -419,7 +433,6 @@ export async function seedBadgeCatalogue(): Promise<BadgeCatalogue> {
 // Secret badges (community, committee) are not attainable by the public, so they never
 // count toward the "of N" total unless earned. No seeded user earns them here.
 const BADGE_TOTAL = SEED_CATALOGUE.badges.filter((b) => !b.secret).length
-const COMMUNITY_KEY_ID = "cea10b57de8e060ed1a180a00c2bc717a2ab4f231d88fd33ffa6a50a04f23b6e"
 const DAY = 86400
 const EXPERTISE_ARTISTS = ["Radiohead", "The Weeknd", "Tame Impala", "Daft Punk", "Björk", "Arca", "Fishmans"]
 const EXPERTISE_LANGS = ["Japanese", "Korean", "Spanish", "French", "Portuguese", "German", "Icelandic"]
