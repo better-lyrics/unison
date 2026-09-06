@@ -38,6 +38,7 @@ export type ApiEnvelope<T> = { success: true; data: T } | { success: false; erro
 export interface UserStats {
   keyId: string
   displayName: string
+  handle?: string | null
   lastVoteAt: number | null
   discordLinked: boolean
 }

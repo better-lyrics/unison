@@ -14,6 +14,7 @@ import type {
   UserSubmission,
   UserSubmissionsResponse,
 } from "./types"
+import { toHandle } from "./handle"
 
 const SEEDED_NOW = Math.floor(Date.now() / 1000)
 
@@ -110,6 +111,7 @@ export async function seedUserRank(keyId: string): Promise<UserRankResponse> {
       ranked: false,
       keyId,
       displayName: "Unknown Curator",
+      handle: null,
       lastVoteAt: null,
       discordLinked: false,
     }
@@ -118,6 +120,7 @@ export async function seedUserRank(keyId: string): Promise<UserRankResponse> {
     ranked: true,
     keyId: entry.keyId,
     displayName: entry.displayName,
+    handle: toHandle(entry.displayName),
     reputation: entry.reputation,
     score: entry.score,
     submissionCount: entry.submissionCount,
@@ -126,6 +129,14 @@ export async function seedUserRank(keyId: string): Promise<UserRankResponse> {
     lastVoteAt: SEEDED_NOW - 3600,
     discordLinked: true,
   }
+}
+
+export async function seedUserByHandle(handle: string): Promise<{ keyId: string }> {
+  await delay()
+  const wanted = handle.toLowerCase()
+  const match = SEED_CURATORS.find((c) => toHandle(c.displayName) === wanted)
+  if (!match) throw new Error(`HTTP 404 for /users/by-handle/${handle}`)
+  return { keyId: match.keyId }
 }
 
 const SEED_SUBMISSIONS: UserSubmission[] = [
