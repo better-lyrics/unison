@@ -507,7 +507,8 @@ function derivedGamification(entry: CuratorLeaderboardEntry): UserGamification {
     key: "polyglot",
     earned: false,
     tier: 1,
-    progress: { current: (entry.rank % 3) + 1, next: 3 },
+    // A locked badge must stay below its threshold, so cap progress at next - 1.
+    progress: { current: (entry.rank % 2) + 1, next: 3 },
     featured: false,
   })
   badges.push({ key: "first-responder", earned: false, progress: { current: 0, next: 1 }, featured: false })
