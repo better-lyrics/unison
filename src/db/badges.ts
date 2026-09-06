@@ -56,6 +56,10 @@ const NON_COMMUNITY_KEYS = BADGES.map((b) => b.key).filter(
 	(k) => k !== "community" && DERIVATIONS[k] !== undefined
 )
 
+// Secret badges are not attainable by the general public, so they only appear in a
+// user's list (and count) once earned, never as a locked "havable" badge.
+const SECRET_KEYS = new Set(BADGES.filter((b) => b.secret).map((b) => b.key))
+
 function applicableKeys(keyId: string): string[] {
 	return isLinkBlacklisted(keyId) ? ["community"] : NON_COMMUNITY_KEYS
 }
@@ -167,7 +171,7 @@ export async function getUserBadges(env: Env, keyId: string): Promise<UserGamifi
 			tierRank: null,
 			badges: [],
 			featured: [],
-			counts: { earned: 0, total: applicableKeys(keyId).length },
+			counts: { earned: 0, total: applicableKeys(keyId).filter((k) => !SECRET_KEYS.has(k)).length },
 		}
 	}
 
@@ -195,6 +199,7 @@ export async function getUserBadges(env: Env, keyId: string): Promise<UserGamifi
 		const evaluation = await DERIVATIONS[key](env, userId)
 		const award = earnedMap.get(key)
 		const earned = award !== undefined || evaluation.earned
+		if (SECRET_KEYS.has(key) && !earned) continue
 		badges.push({
 			key,
 			earned,

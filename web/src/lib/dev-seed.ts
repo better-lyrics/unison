@@ -344,6 +344,7 @@ const SEED_BADGES: BadgeDef[] = [
     description: "A member of the Better Lyrics Council.",
     category: "special",
     kind: "special",
+    secret: true,
     image: badgeImage("committee"),
   },
   {
@@ -352,6 +353,7 @@ const SEED_BADGES: BadgeDef[] = [
     description: "The shared community lyrics account.",
     category: "special",
     kind: "special",
+    secret: true,
     image: badgeImage("community"),
   },
 ]
@@ -414,7 +416,10 @@ export async function seedBadgeCatalogue(): Promise<BadgeCatalogue> {
   return SEED_CATALOGUE
 }
 
-const BADGE_TOTAL = SEED_CATALOGUE.badges.length
+// Secret badges (community, committee) are not attainable by the public, so they never
+// count toward the "of N" total unless earned. No seeded user earns them here.
+const BADGE_TOTAL = SEED_CATALOGUE.badges.filter((b) => !b.secret).length
+const COMMUNITY_KEY_ID = "cea10b57de8e060ed1a180a00c2bc717a2ab4f231d88fd33ffa6a50a04f23b6e"
 const DAY = 86400
 const EXPERTISE_ARTISTS = ["Radiohead", "The Weeknd", "Tame Impala", "Daft Punk", "Björk", "Arca", "Fishmans"]
 const EXPERTISE_LANGS = ["Japanese", "Korean", "Spanish", "French", "Portuguese", "German", "Icelandic"]
@@ -510,6 +515,19 @@ function derivedGamification(entry: CuratorLeaderboardEntry): UserGamification {
 
 export async function seedUserBadges(keyId: string): Promise<UserGamification> {
   await delay()
+  if (keyId === COMMUNITY_KEY_ID) {
+    return {
+      keyId,
+      level: 1,
+      xp: 0,
+      xpForNext: 50,
+      tier: null,
+      tierRank: null,
+      featured: ["community"],
+      counts: { earned: 1, total: 1 },
+      badges: [{ key: "community", earned: true, earnedAt: SEEDED_NOW - 90 * DAY, featured: true }],
+    }
+  }
   const entry = SEED_CURATORS.find((c) => c.keyId === keyId)
   if (!entry) {
     return { keyId, level: 1, xp: 0, xpForNext: 50, tier: null, tierRank: null, featured: [], counts: { earned: 0, total: BADGE_TOTAL }, badges: [] }

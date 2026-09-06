@@ -93,6 +93,16 @@ describe("badge definitions", () => {
 			expect(keys).toContain(key)
 		}
 	})
+
+	it("marks the non-attainable account badges secret so they never show as havable", () => {
+		expect(BADGES.find((b) => b.key === "community")?.secret).toBe(true)
+		expect(BADGES.find((b) => b.key === "committee")?.secret).toBe(true)
+	})
+
+	it("keeps ordinary badges non-secret", () => {
+		expect(BADGES.find((b) => b.key === "first-submission")?.secret).toBeUndefined()
+		expect(BADGES.find((b) => b.key === "verified-contributor")?.secret).toBeUndefined()
+	})
 })
 
 const TIER_KEYS = ["lyricist", "elite", "master", "grandmaster", "legendary"]
