@@ -176,7 +176,7 @@ export function ProfileHeader({ keyId, rank, gamification, catalogue }: ProfileH
         </div>
 
         {rank.community || rank.ranked || gamification ? (
-          <div className="mt-3.5 flex flex-wrap items-center gap-2.5 text-[13px] max-sm:-ml-[112px] max-sm:w-[calc(100%_+_112px)]">
+          <div className="mt-10 flex flex-wrap items-center gap-2.5 text-[13px] max-sm:-ml-[112px] max-sm:w-[calc(100%_+_112px)] sm:mt-3.5">
             {rank.community ? (
               <span className="inline-flex h-7 items-center gap-1.5 rounded-full bg-[rgba(255,200,61,0.12)] px-[11px] text-xs font-semibold text-unison-medal-gold">
                 <IconStarFilled className="size-3.5" />
