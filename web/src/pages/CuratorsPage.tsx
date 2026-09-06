@@ -1,5 +1,6 @@
 import { useCallback, useEffect } from "react"
 import { useSession } from "@/auth/useSession"
+import { BadgeCatalogueProvider } from "@/components/BadgeCatalogueContext"
 import { CuratorRow } from "@/components/CuratorRow"
 import { EmptyState } from "@/components/EmptyState"
 import { LeaderboardSection } from "@/components/LeaderboardSection"
@@ -61,32 +62,34 @@ export function CuratorsPage() {
   const showNotRankedHint = signedIn && myRank.status === "success" && !myRank.data.ranked && merged.list.length > 0
 
   return (
-    <LeaderboardSection title="Leaderboard" subtitle="Ranked by total reputation-weighted contribution score">
-      {merged.list.length === 0 ? (
-        signedIn ? (
-          <EmptyState title="No one ranked yet" hint="Be the first by submitting lyrics from Better Lyrics." />
+    <BadgeCatalogueProvider>
+      <LeaderboardSection title="Leaderboard" subtitle="Ranked by total reputation-weighted contribution score">
+        {merged.list.length === 0 ? (
+          signedIn ? (
+            <EmptyState title="No one ranked yet" hint="Be the first by submitting lyrics from Better Lyrics." />
+          ) : (
+            <EmptyState title="No one ranked yet" />
+          )
         ) : (
-          <EmptyState title="No one ranked yet" />
-        )
-      ) : (
-        <>
-          <ul className="space-y-2">
-            {merged.list.map((entry) => (
-              <CuratorRow
-                key={entry.keyId}
-                entry={entry}
-                isSelf={selfKeyId === entry.keyId}
-                appended={entry.keyId === merged.appendedKeyId}
-              />
-            ))}
-          </ul>
-          {showNotRankedHint ? (
-            <p className="mt-4 text-xs text-unison-text-muted">
-              You haven't ranked yet. Open YT Music with Better Lyrics installed and submit some lyrics to climb in.
-            </p>
-          ) : null}
-        </>
-      )}
-    </LeaderboardSection>
+          <>
+            <ul className="space-y-2">
+              {merged.list.map((entry) => (
+                <CuratorRow
+                  key={entry.keyId}
+                  entry={entry}
+                  isSelf={selfKeyId === entry.keyId}
+                  appended={entry.keyId === merged.appendedKeyId}
+                />
+              ))}
+            </ul>
+            {showNotRankedHint ? (
+              <p className="mt-4 text-xs text-unison-text-muted">
+                You haven't ranked yet. Open YT Music with Better Lyrics installed and submit some lyrics to climb in.
+              </p>
+            ) : null}
+          </>
+        )}
+      </LeaderboardSection>
+    </BadgeCatalogueProvider>
   )
 }

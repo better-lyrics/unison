@@ -22,3 +22,9 @@ export function useBadgeCatalogue(): CatalogueState {
   }
   return ctx
 }
+
+// Non-throwing variant for components (like CuratorRow) that render both inside
+// and outside a provider and degrade gracefully when the catalogue is absent.
+export function useBadgeCatalogueOptional(): CatalogueState | null {
+  return useContext(BadgeCatalogueContext)
+}

@@ -4,6 +4,7 @@ import type {
   BadgeImage,
   BadgeTier,
   CuratorLeaderboardEntry,
+  LeaderboardBadge,
   CuratorsLeaderboardResponse,
   ExpertiseEntry,
   SongsLeaderboardResponse,
@@ -106,15 +107,44 @@ const COMMUNITY_KEY_ID = "cea10b57de8e060ed1a180a00c2bc717a2ab4f231d88fd33ffa6a5
 
 const RAW_CURATORS: CuratorLeaderboardEntry[] = realSeed?.REAL_CURATORS ?? DEFAULT_CURATORS
 
+// Synthetic tier and top-badge values so the leaderboard preview shows gems and
+// badges. Real backend data carries these fields directly.
+const tierForSeedRank = (rank: number): string =>
+  rank === 1 ? "legendary" : rank === 2 ? "grandmaster" : rank === 3 ? "master" : rank <= 8 ? "elite" : "lyricist"
+
+const SAMPLE_TOP_BADGES: LeaderboardBadge[] = [
+  { key: "most-loved", name: "Most Loved" },
+  { key: "sharp-ear", name: "Sharp Ear", tier: 3 },
+  { key: "trailblazer", name: "Trailblazer", tier: 2 },
+  { key: "verified-contributor", name: "Verified Contributor", tier: 2 },
+  { key: "first-responder", name: "First Responder", tier: 1 },
+]
+
 // The community account is shown by score but sits outside the ranks: it holds no rank,
 // and real curators keep contiguous ranks 1..N (mirrors getCuratorLeaderboard).
 export const SEED_CURATORS: CuratorLeaderboardEntry[] = (() => {
   let ranked = 0
-  return RAW_CURATORS.map((c) =>
-    c.keyId === COMMUNITY_KEY_ID
-      ? { ...c, rank: 0, community: true }
-      : { ...c, rank: ++ranked, community: false },
-  )
+  return RAW_CURATORS.map((c) => {
+    if (c.keyId === COMMUNITY_KEY_ID) {
+      return {
+        ...c,
+        rank: 0,
+        community: true,
+        tier: null,
+        topBadge: { key: "community", name: "Community account" },
+        badgeCount: 1,
+      }
+    }
+    const rank = ++ranked
+    return {
+      ...c,
+      rank,
+      community: false,
+      tier: tierForSeedRank(rank),
+      topBadge: SAMPLE_TOP_BADGES[rank % SAMPLE_TOP_BADGES.length],
+      badgeCount: (rank % 5) + 2,
+    }
+  })
 })()
 
 const delay = (ms = 120) => new Promise((resolve) => setTimeout(resolve, ms))
