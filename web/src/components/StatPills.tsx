@@ -30,7 +30,7 @@ export function StatPills({ score, submissions, upvotes }: StatPillsProps) {
         <div
           key={key}
           data-testid={`stat-${key}`}
-          className="flex items-center gap-3 rounded-full bg-[rgba(255,255,255,0.02)] py-2.5 pr-4 pl-2.5"
+          className="flex h-12 items-center gap-3 rounded-full bg-[rgba(255,255,255,0.02)] pr-4 pl-2.5 shadow-inset-rim"
         >
           <span className="grid size-[30px] shrink-0 place-items-center rounded-full bg-[rgba(255,200,61,0.12)]">
             <Icon className="size-4 text-unison-medal-gold" />
