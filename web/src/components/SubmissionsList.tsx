@@ -168,7 +168,7 @@ export function SubmissionsList({ keyId }: SubmissionsListProps) {
             <li key={s.id}>
               <Link
                 to={`/song/${s.videoId}`}
-                className="flex items-center gap-3 rounded-lg border-t border-unison-border px-2 py-3.5 transition-colors hover:bg-unison-bg-hover"
+                className="flex items-center gap-3 border-t border-unison-border px-2 py-3.5 transition-colors hover:bg-unison-bg-hover"
               >
                 <div className="min-w-0 flex-1">
                   <p className="flex items-center gap-2 truncate text-sm font-medium text-unison-text">
