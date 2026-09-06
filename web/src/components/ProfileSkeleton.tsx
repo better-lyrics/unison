@@ -1,5 +1,5 @@
-import { cn } from "@/lib/cn"
 import { editableCardClass } from "@/components/ui"
+import { cn } from "@/lib/cn"
 
 const shimmer = "animate-pulse bg-white/[0.04] motion-reduce:animate-none"
 
@@ -7,19 +7,20 @@ function Block({ className }: { className?: string }) {
   return <div className={cn(shimmer, "rounded-md", className)} />
 }
 
-// Matches a CollapsibleSection header (28px row: chevron + title, optional right summary).
-function SectionHeaderSkeleton({ summary, className }: { summary?: boolean; className?: string }) {
+// Mirrors an OwnerControls LeaderboardSection: title + subtitle header, then a card.
+function ControlSectionSkeleton({ card }: { card: string }) {
   return (
-    <div className={cn("flex items-center gap-3", className)}>
-      <div className="flex h-7 items-center gap-2">
-        <Block className="size-4" />
-        <Block className="h-[18px] w-28" />
+    <div className="space-y-3">
+      <div className="space-y-1.5">
+        <Block className="h-5 w-24" />
+        <Block className="h-3 w-56" />
       </div>
-      {summary ? <Block className="ml-auto h-3 w-40" /> : null}
+      <Block className={cn("w-full rounded-lg", card)} />
     </div>
   )
 }
 
+// Reserves the owner's edit block so the sections below it don't shift when data resolves.
 function OwnerBlockSkeleton() {
   return (
     <div className="mt-12 space-y-6">
@@ -27,7 +28,13 @@ function OwnerBlockSkeleton() {
         <Block className="h-9 w-40 rounded-lg" />
       </div>
       <div>
-        <SectionHeaderSkeleton summary />
+        <div className="flex items-center gap-3">
+          <div className="flex h-7 items-center gap-2">
+            <Block className="size-4" />
+            <Block className="h-[18px] w-32" />
+          </div>
+          <Block className="ml-auto h-3 w-16" />
+        </div>
         <div className={cn(editableCardClass, "mt-5")}>
           <Block className="h-3 w-64" />
           <div className="flex flex-wrap gap-2">
@@ -41,8 +48,8 @@ function OwnerBlockSkeleton() {
           </div>
         </div>
       </div>
-      <Block className="h-28 w-full rounded-lg" />
-      <Block className="h-28 w-full rounded-lg" />
+      <ControlSectionSkeleton card="h-[168px]" />
+      <ControlSectionSkeleton card="h-[124px]" />
     </div>
   )
 }
@@ -53,9 +60,8 @@ export function ProfileSkeleton({ owner = false }: { owner?: boolean }) {
       <div className="flex items-start gap-5">
         <div className={cn(shimmer, "size-[92px] shrink-0 rounded-full")} />
         <div className="min-w-0 flex-1 pt-1">
-          <Block className="h-7 w-56" />
-          <Block className="mt-3 h-4 w-44" />
-          <div className="mt-4 flex gap-2.5">
+          <Block className="h-[30px] w-56" />
+          <div className="mt-3.5 flex gap-2.5">
             <Block className="h-7 w-28 rounded-full" />
             <Block className="h-7 w-20 rounded-full" />
           </div>
@@ -63,15 +69,12 @@ export function ProfileSkeleton({ owner = false }: { owner?: boolean }) {
       </div>
 
       <div className="mt-6 flex flex-wrap gap-3">
-        <Block className="h-[50px] w-40 rounded-full" />
-        <Block className="h-[50px] w-44 rounded-full" />
-        <Block className="h-[50px] w-40 rounded-full" />
+        <Block className="h-12 w-40 rounded-full" />
+        <Block className="h-12 w-44 rounded-full" />
+        <Block className="h-12 w-40 rounded-full" />
       </div>
 
       {owner ? <OwnerBlockSkeleton /> : null}
-
-      <SectionHeaderSkeleton summary className="mt-12" />
-      <SectionHeaderSkeleton className="mt-12" />
     </div>
   )
 }
