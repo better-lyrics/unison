@@ -35,11 +35,32 @@ export async function updateUserReputation(env: Env, userId: number, delta: numb
 		.run()
 }
 
-export async function resolveDisplayName(env: Env, keyId: string): Promise<string> {
-	const row = await env.DB.prepare("SELECT nickname FROM users WHERE key_id = ?")
+export interface UserIdentity {
+	displayName: string
+	handle: string | null
+}
+
+// The handle is the lowercased nickname (a unique, indexed generated column). Users
+// without a nickname have no reversible handle, so it is null and they keep /curator/:keyId.
+export async function resolveIdentity(env: Env, keyId: string): Promise<UserIdentity> {
+	const row = await env.DB.prepare("SELECT nickname, nickname_lower FROM users WHERE key_id = ?")
 		.bind(keyId)
-		.first<{ nickname: string | null }>()
-	return row?.nickname ?? generatePetName(keyId)
+		.first<{ nickname: string | null; nickname_lower: string | null }>()
+	return {
+		displayName: row?.nickname ?? generatePetName(keyId),
+		handle: row?.nickname_lower ?? null,
+	}
+}
+
+export async function resolveDisplayName(env: Env, keyId: string): Promise<string> {
+	return (await resolveIdentity(env, keyId)).displayName
+}
+
+export async function resolveKeyIdByHandle(env: Env, handle: string): Promise<string | null> {
+	const row = await env.DB.prepare("SELECT key_id FROM users WHERE nickname_lower = ?")
+		.bind(handle.toLowerCase())
+		.first<{ key_id: string }>()
+	return row?.key_id ?? null
 }
 
 export type SetNicknameResult = { ok: true } | { ok: false; reason: "TAKEN" }
