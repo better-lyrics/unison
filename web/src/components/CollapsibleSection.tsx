@@ -82,7 +82,7 @@ export function CollapsibleSection({
                 open ? "" : "-rotate-90",
               )}
             />
-            <span className="text-[17px] font-bold tracking-[-0.01em] text-unison-text">{title}</span>
+            <span className="text-[17px] leading-7 font-bold tracking-[-0.01em] text-unison-text">{title}</span>
           </button>
         </h2>
         {summary ? <div className="shrink-0">{summary}</div> : null}
@@ -93,7 +93,8 @@ export function CollapsibleSection({
         style={{ height: height === "auto" ? undefined : height, overflow: height === "auto" ? undefined : "hidden" }}
         className="transition-[height] duration-300 ease-[cubic-bezier(0.2,0,0,1)] motion-reduce:transition-none"
       >
-        <div className={cn("pt-5", open && "cs-reveal")}>{children}</div>
+        {/* cs-reveal is applied once on mount so the entrance plays on load, not on every toggle. */}
+        <div className="cs-reveal pt-5">{children}</div>
       </div>
     </section>
   )

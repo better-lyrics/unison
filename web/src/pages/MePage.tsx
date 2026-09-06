@@ -13,7 +13,7 @@ function SignedInMe({ keyId }: { keyId: string }) {
   const rankFetcher = useCallback(() => fetchUserRank(keyId), [keyId])
   const rank = useAsyncData(rankFetcher, `leaderboard:user:${keyId}`)
 
-  if (rank.status === "loading") return <ProfileSkeleton />
+  if (rank.status === "loading") return <ProfileSkeleton owner />
   if (rank.status === "success" && rank.data.handle) {
     return <Navigate to={`/u/${rank.data.handle}`} replace />
   }

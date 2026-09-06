@@ -115,11 +115,11 @@ export function ProfileHeader({ keyId, rank, gamification, catalogue }: ProfileH
       type="button"
       onClick={() => copyShare(link.url)}
       className={cn(
-        "cursor-pointer items-center gap-1.5 rounded-lg bg-unison-surface font-medium text-unison-text-secondary transition-colors hover:bg-unison-bg-hover hover:text-unison-text active:scale-[0.96]",
+        "cursor-pointer items-center gap-2 rounded-lg bg-unison-surface font-medium text-unison-text-secondary transition-colors hover:bg-unison-bg-hover hover:text-unison-text active:scale-[0.96]",
         className,
       )}
     >
-      {shareCopied ? <IconCheck className="size-[15px]" stroke={1.7} /> : <IconShare className="size-[15px]" stroke={1.7} />}
+      {shareCopied ? <IconCheck className="size-3" stroke={1.7} /> : <IconShare className="size-3" stroke={1.7} />}
       {shareCopied ? "Copied" : "Share"}
     </button>
   )
@@ -172,7 +172,7 @@ export function ProfileHeader({ keyId, rank, gamification, catalogue }: ProfileH
             {rank.displayName}
           </h1>
           {gamification && catalogue ? <FeaturedBadges gamification={gamification} catalogue={catalogue} /> : null}
-          {renderShare("hidden sm:ml-auto sm:inline-flex px-3 py-2 text-[13px]")}
+          {renderShare("hidden sm:ml-auto sm:inline-flex py-2 pr-4 pl-3 text-[13px]")}
         </div>
 
         {rank.community || rank.ranked || gamification ? (
@@ -194,7 +194,7 @@ export function ProfileHeader({ keyId, rank, gamification, catalogue }: ProfileH
                 ) : null}
               </>
             )}
-            {renderShare("ml-auto inline-flex h-7 px-3 text-[13px] sm:hidden")}
+            {renderShare("ml-auto inline-flex h-7 pr-4 pl-3 text-[13px] sm:hidden")}
             {!rank.community && gamification ? (
               <span className="w-full text-unison-text-muted sm:ml-auto sm:w-auto">
                 Level{" "}

@@ -88,7 +88,21 @@ export function SubmissionsList({ keyId }: SubmissionsListProps) {
     })
   }, [all, toolbar])
 
-  if (firstPage.status === "loading") return null
+  if (firstPage.status === "loading") {
+    const rows = ["a", "b", "c"]
+    return (
+      <CollapsibleSection title="Submissions">
+        <div className="space-y-3">
+          <div className="h-9 animate-pulse rounded-md bg-white/[0.04] motion-reduce:animate-none" />
+          <div className="space-y-px">
+            {rows.map((k) => (
+              <div key={k} className="h-14 animate-pulse rounded-md bg-white/[0.04] motion-reduce:animate-none" />
+            ))}
+          </div>
+        </div>
+      </CollapsibleSection>
+    )
+  }
   if (firstPage.status === "error") {
     return <EmptyState title="Could not load submissions" hint={firstPage.error.message} />
   }
