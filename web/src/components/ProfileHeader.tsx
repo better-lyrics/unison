@@ -1,6 +1,5 @@
 import { IconBrandDiscordFilled, IconCheck, IconCopy, IconShare, IconStarFilled } from "@tabler/icons-react"
 import { useState } from "react"
-import { Link } from "react-router-dom"
 import { useBadgeModal } from "@/components/BadgeModalContext"
 import { OdometerNumber } from "@/components/OdometerNumber"
 import { TierChip } from "@/components/TierChip"
@@ -175,15 +174,7 @@ export function ProfileHeader({ keyId, rank, gamification, catalogue }: ProfileH
 
         <div className="mt-2 flex items-center gap-2.5 text-sm text-unison-text-muted">
           {link.handle ? (
-            <>
-              <span className="font-mono font-medium text-unison-text-secondary">@{link.handle}</span>
-              <Link
-                to={link.path}
-                className="font-mono text-white/30 transition-colors hover:text-unison-text-secondary"
-              >
-                {link.label}
-              </Link>
-            </>
+            <span className="font-mono font-medium text-unison-text-secondary">@{link.handle}</span>
           ) : (
             <code className="font-mono text-unison-text-secondary" title={keyId}>
               {link.label}
