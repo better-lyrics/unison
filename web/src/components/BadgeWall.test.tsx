@@ -119,6 +119,25 @@ describe("BadgeWall", () => {
     expect(dialog.getAttribute("aria-label")).toBe("most-loved")
   })
 
+  it("shows only the community badge for the community account, not the aspirational catalogue", () => {
+    const catalogue = catalogueFrom([
+      def("verified-contributor", "output"),
+      def("sharp-ear", "curation"),
+      def("community", "special", { secret: true }),
+    ])
+    const gamification = gam({
+      tier: null,
+      tierRank: null,
+      counts: { earned: 1, total: 1 },
+      badges: [{ key: "community", earned: true, featured: true }],
+    })
+    render(<BadgeWall gamification={gamification} catalogue={catalogue} />)
+    expect(screen.getAllByText("community").length).toBeGreaterThan(0)
+    expect(screen.queryByText("verified-contributor")).toBeNull()
+    expect(screen.queryByText("sharp-ear")).toBeNull()
+    expect(document.querySelectorAll("[data-earned]")).toHaveLength(1)
+  })
+
   describe("edge cases", () => {
     it("renders an all-locked wall for a user with zero earned badges", () => {
       const catalogue = catalogueFrom([def("a", "output"), def("b", "coverage")])
