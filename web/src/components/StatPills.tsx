@@ -1,5 +1,5 @@
 import type { Format } from "@number-flow/react"
-import { IconArrowBigUp, IconMusic, IconTrophy } from "@tabler/icons-react"
+import { IconArrowBigUpFilled, IconFileMusicFilled, IconTrophyFilled } from "@tabler/icons-react"
 import type { ComponentType } from "react"
 import { OdometerNumber } from "@/components/OdometerNumber"
 
@@ -19,9 +19,9 @@ interface Stat {
 
 export function StatPills({ score, submissions, upvotes }: StatPillsProps) {
   const stats: Stat[] = [
-    { key: "score", label: "Score", value: score, icon: IconTrophy, format: { maximumFractionDigits: 1 } },
-    { key: "submissions", label: "Submissions", value: submissions, icon: IconMusic },
-    { key: "upvotes", label: "Upvotes", value: upvotes, icon: IconArrowBigUp },
+    { key: "score", label: "Score", value: score, icon: IconTrophyFilled, format: { maximumFractionDigits: 1 } },
+    { key: "submissions", label: "Submissions", value: submissions, icon: IconFileMusicFilled },
+    { key: "upvotes", label: "Upvotes", value: upvotes, icon: IconArrowBigUpFilled },
   ]
 
   return (
@@ -33,7 +33,7 @@ export function StatPills({ score, submissions, upvotes }: StatPillsProps) {
           className="flex items-center gap-3 rounded-full bg-[rgba(255,255,255,0.02)] py-2.5 pr-4 pl-2.5"
         >
           <span className="grid size-[30px] shrink-0 place-items-center rounded-full bg-[rgba(255,200,61,0.12)]">
-            <Icon className="size-4 text-unison-medal-gold" stroke={2} />
+            <Icon className="size-4 text-unison-medal-gold" />
           </span>
           <OdometerNumber
             value={value}
