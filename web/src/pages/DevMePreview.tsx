@@ -2,13 +2,12 @@ import { useState } from "react"
 import { SessionContext } from "@/auth/AuthProvider"
 import { type DiscordSectionModel, DiscordSectionView } from "@/components/DiscordSection"
 import { LeaderboardSection } from "@/components/LeaderboardSection"
-import { NicknameEditor } from "@/components/NicknameEditor"
 import { UserProfileView } from "@/components/UserProfileView"
 import { SEED_CURATORS } from "@/lib/dev-seed"
 
-// Mirrors the Me page against a fixture session so the profile and nickname
-// cards render with seed data, while the Discord card is swappable across its
-// states. Nickname save/reset hit no backend here.
+// Mirrors the signed-in Me page against a fixture session so the owner layout (preview
+// toggle, edit controls, collapsible sections) renders with seed data. The Discord card
+// below is a separate dev-only gallery for its individual states.
 const curator = SEED_CURATORS[0]
 const fakeSession = {
   status: "signed-in",
@@ -53,10 +52,7 @@ export default function DevMePreview() {
     <SessionContext.Provider value={fakeSession}>
       <div className="space-y-6">
         <UserProfileView keyId={curator.keyId} />
-        <LeaderboardSection title="Nickname" subtitle="How you appear across Unison.">
-          <NicknameEditor />
-        </LeaderboardSection>
-        <LeaderboardSection title="Discord" subtitle="Link your account for leaderboard roles.">
+        <LeaderboardSection title="Discord states (dev)" subtitle="Swap the Discord card across its states.">
           <div className="space-y-3">
             <div className="flex flex-wrap gap-2">
               {sectionStates.map((s, i) => (

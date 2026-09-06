@@ -1,5 +1,6 @@
 import { Fragment, type ReactNode } from "react"
 import { useBadgeModal } from "@/components/BadgeModalContext"
+import { CollapsibleSection } from "@/components/CollapsibleSection"
 import { OdometerNumber } from "@/components/OdometerNumber"
 import { groupBadgesByCategory, isRareBadge, resolveBadgeImage } from "@/lib/badge-view"
 import { cn } from "@/lib/cn"
@@ -8,6 +9,7 @@ import type { BadgeCatalogue, BadgeDef, UserBadge, UserGamification } from "@/li
 interface BadgeWallProps {
   gamification: UserGamification
   catalogue: BadgeCatalogue
+  defaultOpen?: boolean
 }
 
 function titleCase(value: string): string {
@@ -154,7 +156,7 @@ function BadgeTile({
   )
 }
 
-export function BadgeWall({ gamification, catalogue }: BadgeWallProps) {
+export function BadgeWall({ gamification, catalogue, defaultOpen = true }: BadgeWallProps) {
   const { badges, display } = catalogue
   const userByKey = new Map(gamification.badges.map((ub) => [ub.key, ub]))
   const defByKey = new Map(badges.map((def) => [def.key, def]))
@@ -176,26 +178,25 @@ export function BadgeWall({ gamification, catalogue }: BadgeWallProps) {
   const { earned, total } = gamification.counts
   const barPct = total > 0 ? Math.round((earned / total) * 100) : 0
 
-  return (
-    <section className="mt-2">
-      <div className="mb-5 flex items-center gap-4">
-        <h2 className="text-[17px] font-bold tracking-[-0.01em] text-unison-text">Badges</h2>
-        <div className="ml-auto flex items-center gap-2.5 text-[13px] text-unison-text-muted">
-          <div className="h-1.5 w-24 overflow-hidden rounded-full bg-white/[0.08]">
-            <span
-              style={{ width: `${barPct}%` }}
-              className="pf-bar-fill block h-full rounded-full bg-gradient-to-r from-[#ffb020] to-unison-medal-gold"
-            />
-          </div>
-          <span>
-            <b className="font-bold text-unison-medal-gold">
-              <OdometerNumber value={earned} />
-            </b>{" "}
-            of {total} unlocked
-          </span>
-        </div>
+  const summary = (
+    <div className="flex items-center gap-2.5 text-[13px] text-unison-text-muted">
+      <div className="h-1.5 w-24 overflow-hidden rounded-full bg-white/[0.08]">
+        <span
+          style={{ width: `${barPct}%` }}
+          className="pf-bar-fill block h-full rounded-full bg-gradient-to-r from-[#ffb020] to-unison-medal-gold"
+        />
       </div>
+      <span>
+        <b className="font-bold text-unison-medal-gold">
+          <OdometerNumber value={earned} />
+        </b>{" "}
+        of {total} unlocked
+      </span>
+    </div>
+  )
 
+  return (
+    <CollapsibleSection title="Badges" summary={summary} defaultOpen={defaultOpen} className="mt-2">
       <div className="space-y-8">
         {groups.map((group, i) => {
           const earnedInGroup = group.badges.filter((def) => userByKey.get(def.key)?.earned).length
@@ -228,6 +229,6 @@ export function BadgeWall({ gamification, catalogue }: BadgeWallProps) {
           )
         })}
       </div>
-    </section>
+    </CollapsibleSection>
   )
 }

@@ -57,6 +57,9 @@
 .pf-group {
   animation: pf-rise-in 0.5s cubic-bezier(0.2, 0, 0, 1) both;
 }
+.cs-reveal {
+  animation: pf-rise-in 0.42s cubic-bezier(0.2, 0, 0, 1) both;
+}
 .pf-bar-fill {
   transform-origin: left;
   animation: pf-bar-fill 1s cubic-bezier(0.2, 0, 0, 1) 0.3s both;
@@ -102,6 +105,7 @@
   .pf-arc,
   .pf-fbadge,
   .pf-group,
+  .cs-reveal,
   .pf-bar-fill {
     animation: none !important;
   }

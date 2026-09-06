@@ -63,6 +63,15 @@ export async function fetchUserBadges(keyId: string): Promise<UserGamification> 
   return getJson<UserGamification>(`/users/${encodeURIComponent(keyId)}/badges`)
 }
 
+export async function putFeaturedBadges(keyId: string, featured: string[]): Promise<UserGamification> {
+  if (USE_SEED) return (await import("./dev-seed")).seedSetFeatured(keyId, featured)
+  return authedFetch<UserGamification>("/users/me/featured-badges", {
+    method: "PUT",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ featured }),
+  })
+}
+
 interface SearchLyricsParams {
   q?: string
   song?: string
