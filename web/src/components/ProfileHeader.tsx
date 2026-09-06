@@ -5,6 +5,7 @@ import { OdometerNumber } from "@/components/OdometerNumber"
 import { TierChip } from "@/components/TierChip"
 import { isRareBadge, resolveBadgeImage } from "@/lib/badge-view"
 import { dicebearThumbsDataUri } from "@/lib/avatar"
+import { cn } from "@/lib/cn"
 import { toHandle } from "@/lib/handle"
 import { levelProgress } from "@/lib/level"
 import type { BadgeCatalogue, UserGamification, UserRankResponse } from "@/lib/types"
@@ -109,6 +110,20 @@ export function ProfileHeader({ keyId, rank, gamification, catalogue }: ProfileH
     gamification?.tier && catalogue ? catalogue.badges.find((d) => d.key === gamification.tier) : undefined
   const gemSrc = tierDef ? resolveBadgeImage(tierDef, undefined, "color") : undefined
 
+  const renderShare = (className: string) => (
+    <button
+      type="button"
+      onClick={() => copyShare(link.url)}
+      className={cn(
+        "cursor-pointer items-center gap-1.5 rounded-lg bg-unison-surface font-medium text-unison-text-secondary transition-colors hover:bg-unison-bg-hover hover:text-unison-text active:scale-[0.96]",
+        className,
+      )}
+    >
+      {shareCopied ? <IconCheck className="size-[15px]" stroke={1.7} /> : <IconShare className="size-[15px]" stroke={1.7} />}
+      {shareCopied ? "Copied" : "Share"}
+    </button>
+  )
+
   return (
     <header className="flex items-start gap-5">
       <div className="relative size-[92px] shrink-0">
@@ -157,38 +172,30 @@ export function ProfileHeader({ keyId, rank, gamification, catalogue }: ProfileH
             {rank.displayName}
           </h1>
           {gamification && catalogue ? <FeaturedBadges gamification={gamification} catalogue={catalogue} /> : null}
-          <button
-            type="button"
-            onClick={() => copyShare(link.url)}
-            className="sm:ml-auto inline-flex cursor-pointer items-center gap-1.5 rounded-lg bg-unison-surface px-3 py-2 text-[13px] font-medium text-unison-text-secondary transition-colors hover:bg-unison-bg-hover hover:text-unison-text active:scale-[0.96]"
-          >
-            {shareCopied ? (
-              <IconCheck className="size-[15px]" stroke={1.7} />
-            ) : (
-              <IconShare className="size-[15px]" stroke={1.7} />
-            )}
-            {shareCopied ? "Copied" : "Share"}
-          </button>
+          {renderShare("hidden sm:ml-auto sm:inline-flex px-3 py-2 text-[13px]")}
         </div>
 
-        {rank.community ? (
+        {rank.community || rank.ranked || gamification ? (
           <div className="mt-3.5 flex flex-wrap items-center gap-2.5 text-[13px] max-sm:-ml-[112px] max-sm:w-[calc(100%_+_112px)]">
-            <span className="inline-flex h-7 items-center gap-1.5 rounded-full bg-[rgba(255,200,61,0.12)] px-[11px] text-xs font-semibold text-unison-medal-gold">
-              <IconStarFilled className="size-3.5" />
-              Community account
-            </span>
-          </div>
-        ) : rank.ranked || gamification ? (
-          <div className="mt-3.5 flex flex-wrap items-center gap-2.5 text-[13px] max-sm:-ml-[112px] max-sm:w-[calc(100%_+_112px)]">
-            {gamification?.tier ? (
-              <TierChip tier={gamification.tier} rank={gamification.tierRank} gemSrc={gemSrc} />
-            ) : null}
-            {rank.ranked ? (
-              <span className="inline-flex h-7 items-center rounded-full bg-[rgba(255,200,61,0.12)] px-[11px] text-xs font-semibold text-unison-medal-gold">
-                Rank #{rank.rank}
+            {rank.community ? (
+              <span className="inline-flex h-7 items-center gap-1.5 rounded-full bg-[rgba(255,200,61,0.12)] px-[11px] text-xs font-semibold text-unison-medal-gold">
+                <IconStarFilled className="size-3.5" />
+                Community account
               </span>
-            ) : null}
-            {gamification ? (
+            ) : (
+              <>
+                {gamification?.tier ? (
+                  <TierChip tier={gamification.tier} rank={gamification.tierRank} gemSrc={gemSrc} />
+                ) : null}
+                {rank.ranked ? (
+                  <span className="inline-flex h-7 items-center rounded-full bg-[rgba(255,200,61,0.12)] px-[11px] text-xs font-semibold text-unison-medal-gold">
+                    Rank #{rank.rank}
+                  </span>
+                ) : null}
+              </>
+            )}
+            {renderShare("ml-auto inline-flex h-7 px-3 text-[13px] sm:hidden")}
+            {!rank.community && gamification ? (
               <span className="w-full text-unison-text-muted sm:ml-auto sm:w-auto">
                 Level{" "}
                 <b className="font-bold text-unison-text-secondary">
