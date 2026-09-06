@@ -1,9 +1,10 @@
 import { IconBrandDiscordFilled, IconCheck, IconCopy, IconShare } from "@tabler/icons-react"
 import { useState } from "react"
 import { Link } from "react-router-dom"
+import { useBadgeModal } from "@/components/BadgeModalContext"
 import { OdometerNumber } from "@/components/OdometerNumber"
 import { TierChip } from "@/components/TierChip"
-import { resolveBadgeImage } from "@/lib/badge-view"
+import { isRareBadge, resolveBadgeImage } from "@/lib/badge-view"
 import { dicebearThumbsDataUri } from "@/lib/avatar"
 import { toHandle } from "@/lib/handle"
 import { levelProgress } from "@/lib/level"
@@ -60,23 +61,39 @@ function FeaturedBadges({
     .slice(0, catalogue.display.featuredMax)
     .map((key) => defByKey.get(key))
     .filter((def): def is NonNullable<typeof def> => def !== undefined)
+  const { open } = useBadgeModal()
 
   if (featured.length === 0) return null
 
   return (
     <span data-testid="featured-badges" className="pf-featured flex items-center gap-1.5 pl-3.5">
       {featured.map((def, i) => {
-        const tier = userByKey.get(def.key)?.tier
+        const userBadge = userByKey.get(def.key)
+        const tier = userBadge?.tier
         return (
-          <img
+          <button
             key={def.key}
-            src={resolveBadgeImage(def, tier, "color")}
-            alt={def.name}
+            type="button"
+            onClick={() =>
+              open({
+                def,
+                userBadge,
+                rare: isRareBadge(def, catalogue.display.rarityThreshold),
+                isCurrentTier: def.key === gamification.tier,
+                tierRank: gamification.tierRank,
+              })
+            }
             title={tier !== undefined ? `${def.name}, tier ${tier}` : def.name}
-            draggable={false}
-            style={{ animationDelay: `${0.35 + i * 0.07}s` }}
-            className="pf-fbadge size-7 transition-transform duration-200 ease-[cubic-bezier(0.2,0,0,1)] hover:-translate-y-0.5 hover:scale-110"
-          />
+            className="inline-flex cursor-pointer appearance-none bg-transparent p-0"
+          >
+            <img
+              src={resolveBadgeImage(def, tier, "color")}
+              alt={def.name}
+              draggable={false}
+              style={{ animationDelay: `${0.35 + i * 0.07}s` }}
+              className="pf-fbadge size-7 transition-transform duration-200 ease-[cubic-bezier(0.2,0,0,1)] hover:-translate-y-0.5 hover:scale-110"
+            />
+          </button>
         )
       })}
     </span>

@@ -1,6 +1,7 @@
-import { cleanup, render, screen } from "@testing-library/react"
+import { cleanup, fireEvent, render, screen } from "@testing-library/react"
 import { afterEach, describe, expect, it } from "vitest"
 import type { BadgeCatalogue, BadgeDef, UserGamification } from "@/lib/types"
+import { BadgeModalProvider } from "./BadgeModalContext"
 import { BadgeWall } from "./BadgeWall"
 
 function def(key: string, category: string, extra: Partial<BadgeDef> = {}): BadgeDef {
@@ -102,6 +103,20 @@ describe("BadgeWall", () => {
     })
     render(<BadgeWall gamification={gamification} catalogue={catalogue} />)
     expect(screen.getByText("Rank #1")).toBeTruthy()
+  })
+
+  it("opens the badge detail modal when a tile is clicked", () => {
+    const catalogue = catalogueFrom([def("most-loved", "acclaim")])
+    const gamification = gam({ badges: [{ key: "most-loved", earned: true, featured: false }] })
+    render(
+      <BadgeModalProvider>
+        <BadgeWall gamification={gamification} catalogue={catalogue} />
+      </BadgeModalProvider>,
+    )
+    expect(screen.queryByRole("dialog")).toBeNull()
+    fireEvent.click(screen.getByRole("button", { name: /most-loved/i }))
+    const dialog = screen.getByRole("dialog")
+    expect(dialog.getAttribute("aria-label")).toBe("most-loved")
   })
 
   describe("edge cases", () => {
