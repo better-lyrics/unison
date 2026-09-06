@@ -13,6 +13,12 @@ export interface SongLeaderboardEntry {
   rank: number
 }
 
+export interface LeaderboardBadge {
+  key: string
+  name: string
+  tier?: number
+}
+
 export interface CuratorLeaderboardEntry {
   keyId: string
   displayName: string
@@ -23,6 +29,9 @@ export interface CuratorLeaderboardEntry {
   rank: number
   community?: boolean
   discordLinked: boolean
+  tier?: string | null
+  topBadge?: LeaderboardBadge | null
+  badgeCount?: number
 }
 
 export interface SongsLeaderboardResponse {
