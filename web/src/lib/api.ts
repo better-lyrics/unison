@@ -42,6 +42,11 @@ export async function fetchUserRank(keyId: string): Promise<UserRankResponse> {
   return getJson<UserRankResponse>(`/leaderboard/users/${encodeURIComponent(keyId)}`)
 }
 
+export async function fetchUserByHandle(handle: string): Promise<{ keyId: string }> {
+  if (USE_SEED) return (await import("./dev-seed")).seedUserByHandle(handle)
+  return getJson<{ keyId: string }>(`/users/by-handle/${encodeURIComponent(handle)}`)
+}
+
 export async function fetchUserSubmissions(keyId: string, cursor?: string): Promise<UserSubmissionsResponse> {
   if (USE_SEED) return (await import("./dev-seed")).seedUserSubmissions(keyId)
   const params = cursor !== undefined ? `?cursor=${encodeURIComponent(cursor)}` : ""
