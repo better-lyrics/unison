@@ -3,20 +3,29 @@ import type {
 	LyricsFulfillmentBadge,
 	LyricsResponse,
 	LyricsSearchResult,
+	Mark,
+	MarkActor,
 	SubmitterInfo,
 } from "@/types"
 import { generatePetName } from "@/utils/petname"
 
-function buildSubmitter(row: {
-	submitter_key_id?: string | null
-	submitter_reputation?: number | null
-	submitter_nickname?: string | null
-}): SubmitterInfo | undefined {
+function buildSubmitter(
+	row: {
+		submitter_key_id?: string | null
+		submitter_reputation?: number | null
+		submitter_nickname?: string | null
+	},
+	actor?: MarkActor
+): SubmitterInfo | undefined {
 	if (row.submitter_key_id == null || row.submitter_reputation == null) return undefined
 	return {
 		keyId: row.submitter_key_id,
 		reputation: row.submitter_reputation,
 		displayName: row.submitter_nickname ?? generatePetName(row.submitter_key_id),
+		tier: actor?.tier ?? null,
+		level: actor?.level ?? 1,
+		badgeCount: actor?.badgeCount ?? 0,
+		topBadge: actor?.topBadge ?? null,
 	}
 }
 
@@ -38,12 +47,16 @@ export interface LyricsRowForResponse {
 	submitter_key_id?: string | null
 	submitter_reputation?: number | null
 	submitter_nickname?: string | null
+	committee_approved_at?: number | null
+	committee_approved_by?: number | null
 	hidden?: boolean
 }
 
 export function toResponse(
 	row: LyricsRowForResponse,
-	fulfilled?: LyricsFulfillmentBadge | null
+	fulfilled?: LyricsFulfillmentBadge | null,
+	marks?: Mark[],
+	submitterActor?: MarkActor
 ): LyricsResponse {
 	return {
 		id: row.id,
@@ -61,12 +74,17 @@ export function toResponse(
 		voteCount: row.vote_count,
 		confidence: row.confidence,
 		hidden: row.hidden ?? false,
-		submitter: buildSubmitter(row),
+		submitter: buildSubmitter(row, submitterActor),
 		fulfilled: fulfilled ?? undefined,
+		marks: marks && marks.length > 0 ? marks : undefined,
 	}
 }
 
-export function toSearchResponse(row: LyricsSearchResult) {
+export function toSearchResponse(
+	row: LyricsSearchResult,
+	marks?: Mark[],
+	submitterActor?: MarkActor
+) {
 	return {
 		id: row.id,
 		videoId: row.video_id,
@@ -83,6 +101,7 @@ export function toSearchResponse(row: LyricsSearchResult) {
 		voteCount: row.vote_count,
 		confidence: row.confidence,
 		matchScore: row.match_score,
-		submitter: buildSubmitter(row),
+		submitter: buildSubmitter(row, submitterActor),
+		marks: marks && marks.length > 0 ? marks : undefined,
 	}
 }

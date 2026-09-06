@@ -1,7 +1,12 @@
 import { config } from "@/config"
+import { getBadgeSummaries } from "@/db/badge-summary"
+import { getXpForUsers } from "@/db/contribution-events"
 import { AUTO_HIDE_PREDICATE, AUTO_HIDE_PREDICATE_JOINED, RANKING_EXPR } from "@/db/predicates"
 import { windowCutoff } from "@/db/requests"
-import type { Env } from "@/types"
+import type { BadgeRef, Env } from "@/types"
+import { isLinkBlacklisted } from "@/utils/blacklist"
+import { type TierName, tierForRank } from "@/utils/tiers"
+import { levelForXp } from "@/utils/xp"
 
 export const CURATOR_LEADERBOARD_CACHE_KEY = "leaderboard:users"
 
@@ -214,11 +219,19 @@ export interface CuratorLeaderboardRow {
 	fulfilledCount: number
 	fulfilledDemand: number
 	rank: number
+	community: boolean
 	nickname: string | null
 	discordLinked: boolean
+	tier: TierName | null
+	level: number
+	xp: number
+	xpForNext: number | null
+	badgeCount: number
+	topBadge: BadgeRef | null
 }
 
 interface CuratorRow {
+	user_id: number
 	key_id: string
 	reputation: number
 	score: number
@@ -228,6 +241,7 @@ interface CuratorRow {
 	fulfilled_demand: number
 	nickname: string | null
 	discord_linked: boolean
+	total_count: number
 }
 
 export async function getCuratorLeaderboard(
@@ -235,11 +249,12 @@ export async function getCuratorLeaderboard(
 	limit: number
 ): Promise<CuratorLeaderboardRow[]> {
 	const res = await env.DB.prepare(
-		`SELECT u.key_id, u.reputation, u.nickname,
+		`SELECT u.id AS user_id, u.key_id, u.reputation, u.nickname,
 		        agg.score, agg.submission_count, agg.total_upvotes,
 		        COALESCE(ff.fulfilled_count, 0) AS fulfilled_count,
 		        COALESCE(ff.fulfilled_demand, 0) AS fulfilled_demand,
-		        (dl.key_id IS NOT NULL) AS discord_linked
+		        (dl.key_id IS NOT NULL) AS discord_linked,
+		        COUNT(*) OVER () AS total_count
 		 FROM (
 		   SELECT submitter_id,
 		          SUM(effective_score) AS score,
@@ -268,18 +283,44 @@ export async function getCuratorLeaderboard(
 		.bind(limit)
 		.all<CuratorRow>()
 
-	return res.results.map((r, i) => ({
-		keyId: r.key_id,
-		reputation: Number(r.reputation),
-		score: Number(r.score),
-		submissionCount: Number(r.submission_count),
-		totalUpvotes: Number(r.total_upvotes),
-		fulfilledCount: Number(r.fulfilled_count ?? 0),
-		fulfilledDemand: Number(r.fulfilled_demand ?? 0),
-		rank: i + 1,
-		nickname: r.nickname ?? null,
-		discordLinked: Boolean(r.discord_linked),
-	}))
+	const rows = res.results
+	const total = Number(rows[0]?.total_count ?? 0)
+	const userIds = rows.map((r) => r.user_id)
+	const [xpMap, badgeSummaries] = await Promise.all([
+		getXpForUsers(env, userIds),
+		getBadgeSummaries(env, userIds),
+	])
+
+	// The community account is shown by score but sits outside the competition: it holds no
+	// rank or tier and is excluded from the denominator, so real curators own ranks 1..N.
+	const rankedTotal = total - rows.filter((r) => isLinkBlacklisted(r.key_id)).length
+	let rankedSoFar = 0
+	return rows.map((r) => {
+		const xp = xpMap.get(r.user_id) ?? 0
+		const { level, xpForNext } = levelForXp(xp, config.gamification.xp.levelThresholds)
+		const summary = badgeSummaries.get(r.user_id)
+		const community = isLinkBlacklisted(r.key_id)
+		const rank = community ? 0 : ++rankedSoFar
+		return {
+			keyId: r.key_id,
+			reputation: Number(r.reputation),
+			score: Number(r.score),
+			submissionCount: Number(r.submission_count),
+			totalUpvotes: Number(r.total_upvotes),
+			fulfilledCount: Number(r.fulfilled_count ?? 0),
+			fulfilledDemand: Number(r.fulfilled_demand ?? 0),
+			rank,
+			community,
+			nickname: r.nickname ?? null,
+			discordLinked: Boolean(r.discord_linked),
+			tier: community ? null : tierForRank(rank, rankedTotal, config.gamification.tiers),
+			level,
+			xp,
+			xpForNext,
+			badgeCount: summary?.badgeCount ?? 0,
+			topBadge: summary?.topBadge ?? null,
+		}
+	})
 }
 
 export async function getCuratorRank(
@@ -288,4 +329,21 @@ export async function getCuratorRank(
 ): Promise<CuratorLeaderboardRow | null> {
 	const all = await getCuratorLeaderboard(env, config.requests.leaderboard.rankScanLimit)
 	return all.find((r) => r.keyId === keyId) ?? null
+}
+
+export async function getCuratorTierMap(env: Env): Promise<Map<string, TierName | null>> {
+	const cached = await env.CACHE.get("curator:tier-map")
+	if (cached) {
+		try {
+			return new Map(JSON.parse(cached) as [string, TierName | null][])
+		} catch {
+			await env.CACHE.delete("curator:tier-map")
+		}
+	}
+	const board = await getCuratorLeaderboard(env, config.requests.leaderboard.rankScanLimit)
+	const entries = board.map((r) => [r.keyId, r.tier] as [string, TierName | null])
+	await env.CACHE.put("curator:tier-map", JSON.stringify(entries), {
+		expirationTtl: config.requests.leaderboard.cacheTtl,
+	})
+	return new Map(entries)
 }

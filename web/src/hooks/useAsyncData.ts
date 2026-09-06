@@ -11,6 +11,10 @@ export function clearAsyncDataCache(): void {
   cache.clear()
 }
 
+export function setAsyncData<T>(cacheKey: string, value: T): void {
+  cache.set(cacheKey, value)
+}
+
 export function useAsyncData<T>(fetcher: () => Promise<T>, cacheKey?: string): State<T> {
   const cached = cacheKey !== undefined ? (cache.get(cacheKey) as T | undefined) : undefined
   const [state, setState] = useState<State<T>>(

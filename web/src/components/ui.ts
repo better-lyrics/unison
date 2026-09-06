@@ -1,3 +1,6 @@
-// Translucent surface for cards that hold buttons or editable content, so the
-// controls inside read against the panel instead of matching the page elevation.
-export const editableCardClass = "space-y-3 rounded-lg border border-unison-surface bg-unison-surface p-4"
+// Borderless translucent panel: the standard container surface across the SPA. Structure comes
+// from the fill and surrounding whitespace, not a border.
+export const panelClass = "rounded-lg bg-white/[0.02]"
+
+// Panels that hold controls or editable content also want inner padding and vertical rhythm.
+export const editableCardClass = `${panelClass} space-y-3 p-4`

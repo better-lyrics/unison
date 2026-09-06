@@ -1,7 +1,32 @@
-import type { LyricsSearchResult } from "@/types"
+import type { BadgeRef, LyricsSearchResult, Mark, MarkActor } from "@/types"
 import { generatePetName } from "@/utils/petname"
 import { describe, expect, it } from "vitest"
 import { type LyricsRowForResponse, toResponse, toSearchResponse } from "./lyrics.transformers"
+
+const sealMark: Mark = {
+	type: "seal",
+	label: "Better Lyrics Council Approved (BLCA)",
+	icon: "/badges/committee/image.svg",
+	by: {
+		keyId: "feedbeef".repeat(8),
+		displayName: "Council Cat",
+		tier: "legendary",
+		level: 1,
+		badgeCount: 0,
+		topBadge: null,
+	},
+	at: 1700000000,
+}
+
+const topBadge: BadgeRef = { key: "verified-contributor", name: "Verified Contributor", tier: 3 }
+const submitterActor: MarkActor = {
+	keyId: "0".repeat(64),
+	displayName: "Actor Ann",
+	tier: "elite",
+	level: 6,
+	badgeCount: 4,
+	topBadge,
+}
 
 const baseRow: LyricsRowForResponse = {
 	id: 42,
@@ -55,6 +80,35 @@ describe("toResponse", () => {
 			keyId,
 			reputation: 1.42,
 			displayName: "Curator Cat",
+			tier: null,
+			level: 1,
+			badgeCount: 0,
+			topBadge: null,
+		})
+	})
+
+	it("carries the passed submitter actor's gamification fields", () => {
+		const keyId = "deadbeef".repeat(8)
+		const result = toResponse(
+			{
+				...baseRow,
+				submitter_key_id: keyId,
+				submitter_reputation: 1.42,
+				submitter_nickname: "Curator Cat",
+			},
+			undefined,
+			undefined,
+			submitterActor
+		)
+
+		expect(result.submitter).toEqual({
+			keyId,
+			reputation: 1.42,
+			displayName: "Curator Cat",
+			tier: "elite",
+			level: 6,
+			badgeCount: 4,
+			topBadge,
 		})
 	})
 
@@ -71,6 +125,10 @@ describe("toResponse", () => {
 			keyId,
 			reputation: 1.0,
 			displayName: generatePetName(keyId),
+			tier: null,
+			level: 1,
+			badgeCount: 0,
+			topBadge: null,
 		})
 	})
 
@@ -109,6 +167,10 @@ describe("toResponse", () => {
 			keyId,
 			reputation: 0,
 			displayName: generatePetName(keyId),
+			tier: null,
+			level: 1,
+			badgeCount: 0,
+			topBadge: null,
 		})
 	})
 
@@ -226,7 +288,39 @@ describe("toSearchResponse", () => {
 			submitter_reputation: 1.42,
 			submitter_nickname: "Curator Cat",
 		})
-		expect(result.submitter).toEqual({ keyId, reputation: 1.42, displayName: "Curator Cat" })
+		expect(result.submitter).toEqual({
+			keyId,
+			reputation: 1.42,
+			displayName: "Curator Cat",
+			tier: null,
+			level: 1,
+			badgeCount: 0,
+			topBadge: null,
+		})
+	})
+
+	it("carries the passed submitter actor's gamification fields", () => {
+		const keyId = "deadbeef".repeat(8)
+		const result = toSearchResponse(
+			{
+				...baseSearchRow,
+				submitter_id: 99,
+				submitter_key_id: keyId,
+				submitter_reputation: 1.42,
+				submitter_nickname: "Curator Cat",
+			},
+			undefined,
+			submitterActor
+		)
+		expect(result.submitter).toEqual({
+			keyId,
+			reputation: 1.42,
+			displayName: "Curator Cat",
+			tier: "elite",
+			level: 6,
+			badgeCount: 4,
+			topBadge,
+		})
 	})
 
 	it("falls back to a pet name when nickname is null", () => {
@@ -242,10 +336,112 @@ describe("toSearchResponse", () => {
 			keyId,
 			reputation: 1,
 			displayName: generatePetName(keyId),
+			tier: null,
+			level: 1,
+			badgeCount: 0,
+			topBadge: null,
 		})
 	})
 
 	it("omits submitter for anonymous rows", () => {
 		expect(toSearchResponse(baseSearchRow).submitter).toBeUndefined()
+	})
+})
+
+describe("marks additivity", () => {
+	const preChangeResponse = {
+		id: 42,
+		videoId: "abc123",
+		song: "Test Song",
+		artist: "Test Artist",
+		album: "Test Album",
+		isrc: "USRC17607839",
+		lyrics: "[00:00.00] Test",
+		format: "lrc",
+		language: "en",
+		syncType: "linesync",
+		score: 5,
+		effectiveScore: 0.75,
+		voteCount: 10,
+		confidence: "medium",
+		hidden: false,
+		submitter: undefined,
+		fulfilled: undefined,
+	}
+
+	it("toResponse without marks is byte-identical to the pre-change response", () => {
+		const result = toResponse(baseRow)
+		expect(result).toEqual(preChangeResponse)
+		expect(result.marks).toBeUndefined()
+		expect(JSON.stringify(result)).toBe(JSON.stringify(preChangeResponse))
+	})
+
+	it("toResponse with marks keeps every existing field byte-identical and appends marks", () => {
+		const without = toResponse(baseRow)
+		const withMarks = toResponse(baseRow, undefined, [sealMark])
+		const { marks, ...rest } = withMarks
+		expect(rest).toEqual(without)
+		expect(marks).toEqual([sealMark])
+	})
+
+	it("toResponse drops an empty marks array (no key on the wire)", () => {
+		const result = toResponse(baseRow, undefined, [])
+		expect(result.marks).toBeUndefined()
+		expect(JSON.stringify(result)).toBe(JSON.stringify(preChangeResponse))
+	})
+
+	const preChangeSearch = {
+		id: 7,
+		videoId: "vid",
+		song: "Song",
+		artist: "Artist",
+		album: undefined,
+		isrc: undefined,
+		duration: 240,
+		format: "ttml",
+		language: undefined,
+		syncType: "richsync",
+		score: 3,
+		effectiveScore: 0.5,
+		voteCount: 4,
+		confidence: "low",
+		matchScore: 0.85,
+		submitter: undefined,
+	}
+
+	const baseSearchRow: LyricsSearchResult = {
+		id: 7,
+		video_id: "vid",
+		song: "Song",
+		artist: "Artist",
+		album: null,
+		isrc: null,
+		duration: 240,
+		format: "ttml",
+		language: null,
+		sync_type: "richsync",
+		score: 3,
+		effective_score: 0.5,
+		vote_count: 4,
+		confidence: "low",
+		created_at: 1700000000,
+		submitter_id: null,
+		match_score: 0.85,
+		tier: 2,
+	}
+
+	it("toSearchResponse without marks is byte-identical to the pre-change response", () => {
+		const result = toSearchResponse(baseSearchRow)
+		expect(result).toEqual(preChangeSearch)
+		expect(result.marks).toBeUndefined()
+		expect(JSON.stringify(result)).toBe(JSON.stringify(preChangeSearch))
+	})
+
+	it("toSearchResponse with marks keeps every existing field byte-identical and appends marks", () => {
+		const without = toSearchResponse(baseSearchRow)
+		const withMarks = toSearchResponse(baseSearchRow, [sealMark])
+		const { marks, ...rest } = withMarks
+		expect(rest).toEqual(without)
+		expect(marks).toEqual([sealMark])
 	})
 })

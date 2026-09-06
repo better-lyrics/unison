@@ -6,6 +6,7 @@ import { closePool } from "@/infra/database"
 import { createEnv } from "@/infra/env"
 import { Logger, flushLogs } from "@/infra/logger"
 import { startWatchdog } from "@/infra/watchdog"
+import { backfillBadges } from "@/jobs/backfill-badges"
 import { backfillConfidence } from "@/jobs/backfill-confidence"
 import { backfillFormatDetection } from "@/jobs/backfill-format-detection"
 import { backfillLanguage } from "@/jobs/backfill-language"
@@ -13,12 +14,14 @@ import { backfillNorms } from "@/jobs/backfill-norms"
 import { backfillSyncType } from "@/jobs/backfill-synctype"
 import { backfillTextSearch } from "@/jobs/backfill-text-search"
 import { backfillVoteCounts } from "@/jobs/backfill-vote-counts"
+import { backfillXp } from "@/jobs/backfill-xp"
 import { cleanupFulfilledRequests } from "@/jobs/cleanup-fulfilled-requests"
 import { runDumpJob } from "@/jobs/dump"
 import { updateScores } from "@/jobs/score-updater"
 import { auditThresholds } from "@/jobs/threshold-audit"
 import { adminRoutes } from "@/routes/admin"
 import { authRoutes } from "@/routes/auth"
+import { badgeRoutes } from "@/routes/badges"
 import { compatRoutes } from "@/routes/compat"
 import { feedRoutes } from "@/routes/feed"
 import { leaderboardRoutes } from "@/routes/leaderboard"
@@ -200,6 +203,7 @@ const app = new Elysia({ adapter: node() })
 	.use(requestRoutes(env))
 	.use(leaderboardRoutes(env))
 	.use(translateRoutes(env))
+	.use(badgeRoutes(env))
 	.use(userRoutes(env))
 	.use(authRoutes(env))
 	.use(linkStartRoutes(env))
@@ -274,6 +278,17 @@ backfillConfidence(env)
 		if (updated > 0) log.info("confidence backfill complete", { updated })
 	})
 	.catch((err) => log.error("confidence backfill failed", { error: (err as Error).message }))
+	.then(() => backfillXp(env))
+	.then(({ lyrics, fulfillments, firsts }) => {
+		if (lyrics + fulfillments + firsts > 0)
+			log.info("xp backfill complete", { lyrics, fulfillments, firsts })
+	})
+	.catch((err) => log.error("xp backfill failed", { error: (err as Error).message }))
+	.then(() => backfillBadges(env))
+	.then(({ evaluated, awarded }) => {
+		if (awarded > 0) log.info("badge backfill complete", { evaluated, awarded })
+	})
+	.catch((err) => log.error("badge backfill failed", { error: (err as Error).message }))
 
 backfillNorms(env)
 	.then(({ scanned, updated }) => {

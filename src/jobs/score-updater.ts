@@ -1,4 +1,6 @@
 import { config } from "@/config"
+import { type AwardedBadge, evaluateAndAward } from "@/db/badges"
+import { awardConfidenceXp, awardPenaltyXp } from "@/db/contribution-events"
 import { invalidateCache } from "@/db/lyrics"
 import { AUTO_HIDE_PREDICATE } from "@/db/predicates"
 import { Logger } from "@/infra/logger"
@@ -21,10 +23,18 @@ interface LyricsScoreUpdate {
 	confidence: Confidence
 }
 
+const CONSENSUS_LYRICS_CTE = `WITH consensus_lyrics AS (
+	SELECT id, CASE WHEN effective_score > 0 THEN 1 ELSE -1 END AS consensus
+	FROM lyrics
+	WHERE ABS(effective_score) > 0.5 AND vote_count >= ?
+)`
+
 export async function recalculateScore(env: Env, lyricsId: number): Promise<void> {
-	const row = await env.DB.prepare("SELECT video_id, deleted_at FROM lyrics WHERE id = ?")
+	const row = await env.DB.prepare(
+		"SELECT video_id, deleted_at, submitter_id FROM lyrics WHERE id = ?"
+	)
 		.bind(lyricsId)
-		.first<{ video_id: string; deleted_at: number | null }>()
+		.first<{ video_id: string; deleted_at: number | null; submitter_id: number | null }>()
 
 	if (!row || row.deleted_at !== null) return
 
@@ -66,10 +76,21 @@ export async function recalculateScore(env: Env, lyricsId: number): Promise<void
 
 	await invalidateCache(env, row.video_id)
 
+	if (typeof row.submitter_id === "number") {
+		await awardConfidenceXp(env, row.submitter_id, lyricsId, update.confidence)
+	}
+
 	log.debug("recalculated score", { lyricsId, effective_score: update.effective_score })
 }
 
-export async function updateScores(env: Env): Promise<{ updated: number }> {
+export interface UserBadgeAward {
+	userId: number
+	badges: AwardedBadge[]
+}
+
+export async function updateScores(
+	env: Env
+): Promise<{ updated: number; awarded: UserBadgeAward[] }> {
 	await env.DB.prepare(`
 		UPDATE users SET
 			avg_vote = COALESCE((SELECT AVG(vote) FROM votes WHERE votes.user_id = users.id), 0),
@@ -77,6 +98,10 @@ export async function updateScores(env: Env): Promise<{ updated: number }> {
 	`).run()
 
 	await updateReputations(env)
+
+	await awardConsensusVotes(env).catch((err) =>
+		log.error("consensus xp failed", { error: (err as Error).message })
+	)
 
 	const staleLyrics = await env.DB.prepare(`
 		SELECT id AS lyrics_id FROM lyrics
@@ -88,8 +113,10 @@ export async function updateScores(env: Env): Promise<{ updated: number }> {
 			AND l.deleted_at IS NULL
 	`).all<{ lyrics_id: number }>()
 
+	const staleIds = (staleLyrics.results || []).map((r) => r.lyrics_id)
+
 	let updated = 0
-	for (const { lyrics_id } of staleLyrics.results || []) {
+	for (const lyrics_id of staleIds) {
 		await recalculateScore(env, lyrics_id)
 		updated++
 	}
@@ -98,7 +125,33 @@ export async function updateScores(env: Env): Promise<{ updated: number }> {
 
 	await applyAutoHidePenalty(env)
 
-	return { updated }
+	const awarded = await evaluateAffectedBadges(env, staleIds)
+
+	return { updated, awarded }
+}
+
+async function evaluateAffectedBadges(env: Env, staleIds: number[]): Promise<UserBadgeAward[]> {
+	if (staleIds.length === 0) return []
+
+	const placeholders = staleIds.map(() => "?").join(", ")
+	const affected = await env.DB.prepare(
+		`SELECT DISTINCT submitter_id AS user_id FROM lyrics
+		 WHERE id IN (${placeholders}) AND submitter_id IS NOT NULL
+		 UNION
+		 SELECT DISTINCT user_id FROM votes WHERE lyrics_id IN (${placeholders})`
+	)
+		.bind(...staleIds, ...staleIds)
+		.all<{ user_id: number }>()
+
+	const awarded: UserBadgeAward[] = []
+	for (const { user_id } of affected.results || []) {
+		const badges = await evaluateAndAward(env, user_id).catch((err) => {
+			log.error("badge eval failed", { userId: user_id, error: (err as Error).message })
+			return [] as AwardedBadge[]
+		})
+		if (badges.length > 0) awarded.push({ userId: user_id, badges })
+	}
+	return awarded
 }
 
 export async function recomputeAllScores(env: Env): Promise<{ updated: number }> {
@@ -144,6 +197,7 @@ async function applyAutoHidePenalty(env: Env): Promise<void> {
 				(submitterPenalty.get(r.submitter_id) ?? 0) + penalty
 			)
 			flippedIds.push(r.id)
+			await awardPenaltyXp({ ...env, DB: tx }, r.submitter_id, r.id)
 		}
 
 		for (const [sid, totalPenalty] of submitterPenalty) {
@@ -212,12 +266,7 @@ export async function updateReputations(env: Env): Promise<void> {
 	// Do NOT add `deleted_at IS NULL` here. Reputation depends on historical
 	// voting signal; filtering deleted lyrics destroys it (and reintroduces the
 	// cascade-delete problem soft-delete was meant to solve).
-	await env.DB.prepare(`
-		WITH consensus_lyrics AS (
-			SELECT id, CASE WHEN effective_score > 0 THEN 1 ELSE -1 END AS consensus
-			FROM lyrics
-			WHERE ABS(effective_score) > 0.5 AND vote_count >= ?
-		),
+	await env.DB.prepare(`${CONSENSUS_LYRICS_CTE},
 		deltas AS (
 			SELECT v.user_id,
 				SUM(CASE WHEN v.vote = cl.consensus THEN ?::DOUBLE PRECISION ELSE ?::DOUBLE PRECISION END) AS delta
@@ -238,5 +287,17 @@ export async function updateReputations(env: Env): Promise<void> {
 			config.reputation.min,
 			config.reputation.max
 		)
+		.run()
+}
+
+export async function awardConsensusVotes(env: Env): Promise<void> {
+	await env.DB.prepare(`${CONSENSUS_LYRICS_CTE}
+		INSERT INTO contribution_events (user_id, delta, kind, ref_type, ref_id)
+		SELECT v.user_id, ?, 'consensus-vote', 'vote', v.id
+		FROM votes v
+		JOIN consensus_lyrics cl ON v.lyrics_id = cl.id
+		WHERE v.vote = cl.consensus AND v.is_self_vote = 0
+		ON CONFLICT (user_id, kind, ref_type, ref_id) DO NOTHING`)
+		.bind(config.reputation.minVotesForConfidence, config.gamification.xp.weights.consensusVote)
 		.run()
 }

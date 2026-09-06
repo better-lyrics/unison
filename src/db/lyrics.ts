@@ -1,4 +1,5 @@
 import { config } from "@/config"
+import { awardFirstForSongXp } from "@/db/contribution-events"
 import { recordFulfillment } from "@/db/fulfillments"
 import {
 	AUTO_HIDE_PREDICATE,
@@ -341,6 +342,17 @@ export async function submitLyrics(
 		}
 	}
 
+	const earliest = await env.DB.prepare(
+		"SELECT MIN(id) AS min_id FROM lyrics WHERE video_id = ? AND deleted_at IS NULL"
+	)
+		.bind(submission.videoId)
+		.first<{ min_id: number | null }>()
+	if (earliest && Number(earliest.min_id) === result!.id) {
+		await awardFirstForSongXp(env, submitterId, result!.id).catch((err) =>
+			log.warn("first-for-song xp failed", { error: (err as Error).message })
+		)
+	}
+
 	await invalidateCache(env, submission.videoId)
 
 	return { id: result!.id, created: true }
@@ -522,7 +534,8 @@ export async function softDeleteLyrics(
 const SEARCH_COLUMNS = `
 	id, video_id, song, artist, album, isrc, duration,
 	format, language, sync_type, score, effective_score,
-	vote_count, confidence, created_at, submitter_id
+	vote_count, confidence, created_at, submitter_id,
+	committee_approved_at, committee_approved_by
 `
 
 export async function searchByQuery(

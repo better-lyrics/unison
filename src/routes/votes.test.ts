@@ -1,7 +1,9 @@
-import { describe, expect, it, vi } from "vitest"
 import { config } from "@/config"
+import { createBoost, getQuota, revokeBoost } from "@/db/boost"
+import { isCommittee } from "@/db/committee"
 import type { Env } from "@/types"
 import { canonicalJson, hashPublicKey } from "@/utils/crypto"
+import { describe, expect, it, vi } from "vitest"
 import { voteRoutes } from "./votes"
 
 vi.mock("@/jobs/score-updater", () => ({
@@ -14,6 +16,14 @@ vi.mock("@/db/users", async () => {
 		updateUserAvgVote: vi.fn(() => Promise.resolve()),
 	}
 })
+vi.mock("@/db/boost", () => ({
+	createBoost: vi.fn(),
+	revokeBoost: vi.fn(),
+	getQuota: vi.fn(),
+}))
+vi.mock("@/db/committee", () => ({
+	isCommittee: vi.fn(),
+}))
 
 interface DBCall {
 	sql: string
@@ -500,5 +510,218 @@ describe("signed-envelope path regression", () => {
 		expect(res.status).toBe(201)
 		const json = (await res.json()) as { success: boolean }
 		expect(json.success).toBe(true)
+	})
+})
+
+const BOOST_QUOTA = { quota: 2, used: 1, remaining: 1, resetsAt: 4102444800 }
+
+function seedBoostAuth(userId = 7): { env: Env; app: ReturnType<typeof voteRoutes> } {
+	const keyId = "a".repeat(64)
+	const cache = makeMockCache()
+	seedSession(cache, "tok", keyId)
+	const db = makeMockDB([{ id: userId, key_id: keyId }])
+	const env = makeEnv(db, cache)
+	return { env, app: voteRoutes(env) }
+}
+
+function boostReq(id: number, method: "POST" | "DELETE", headers: Record<string, string>) {
+	return new Request(`http://localhost/lyrics/${id}/boost`, {
+		method,
+		headers: { "content-type": "application/json", ...headers },
+		body: method === "POST" ? JSON.stringify({}) : undefined,
+	})
+}
+
+describe("POST /lyrics/:id/boost", () => {
+	it("returns 401 when the bearer token is unknown", async () => {
+		const env = makeEnv(makeMockDB(), makeMockCache())
+		const app = voteRoutes(env)
+		const res = await app.handle(boostReq(5, "POST", { authorization: "Bearer nope" }))
+		expect(res.status).toBe(401)
+		expect(((await res.json()) as { code: string }).code).toBe("AUTH_REQUIRED")
+	})
+
+	it("maps not_committee to 403 NOT_COMMITTEE", async () => {
+		const { app } = seedBoostAuth()
+		vi.mocked(createBoost).mockResolvedValue({ ok: false, reason: "not_committee" })
+		const res = await app.handle(boostReq(5, "POST", { authorization: "Bearer tok" }))
+		expect(res.status).toBe(403)
+		expect(((await res.json()) as { code: string }).code).toBe("NOT_COMMITTEE")
+	})
+
+	it("echoes the fresh quota on success", async () => {
+		const { app } = seedBoostAuth()
+		vi.mocked(createBoost).mockResolvedValue({ ok: true, quota: BOOST_QUOTA })
+		const res = await app.handle(boostReq(5, "POST", { authorization: "Bearer tok" }))
+		expect(res.status).toBe(200)
+		expect(await res.json()).toEqual({ success: true, quota: BOOST_QUOTA })
+	})
+
+	it("maps over_quota to 429 BOOST_QUOTA_EXCEEDED", async () => {
+		const { app } = seedBoostAuth()
+		vi.mocked(createBoost).mockResolvedValue({ ok: false, reason: "over_quota" })
+		const res = await app.handle(boostReq(5, "POST", { authorization: "Bearer tok" }))
+		expect(res.status).toBe(429)
+		expect(((await res.json()) as { code: string }).code).toBe("BOOST_QUOTA_EXCEEDED")
+	})
+
+	it("maps already_boosted to 409 BOOST_ALREADY_ACTIVE", async () => {
+		const { app } = seedBoostAuth()
+		vi.mocked(createBoost).mockResolvedValue({ ok: false, reason: "already_boosted" })
+		const res = await app.handle(boostReq(5, "POST", { authorization: "Bearer tok" }))
+		expect(res.status).toBe(409)
+		expect(((await res.json()) as { code: string }).code).toBe("BOOST_ALREADY_ACTIVE")
+	})
+
+	it("rejects with 429 RATE_LIMITED before calling createBoost", async () => {
+		const { env, app } = seedBoostAuth()
+		env.RATE_LIMITER = {
+			async limit() {
+				return { success: false }
+			},
+		} as unknown as Env["RATE_LIMITER"]
+		vi.mocked(createBoost).mockClear()
+		const res = await app.handle(boostReq(5, "POST", { authorization: "Bearer tok" }))
+		expect(res.status).toBe(429)
+		expect(((await res.json()) as { code: string }).code).toBe("RATE_LIMITED")
+		expect(vi.mocked(createBoost)).not.toHaveBeenCalled()
+	})
+})
+
+describe("DELETE /lyrics/:id/boost", () => {
+	it("returns 403 NOT_COMMITTEE for a non-committee actor", async () => {
+		const { app } = seedBoostAuth()
+		vi.mocked(isCommittee).mockResolvedValue(false)
+		const res = await app.handle(boostReq(5, "DELETE", { authorization: "Bearer tok" }))
+		expect(res.status).toBe(403)
+		expect(((await res.json()) as { code: string }).code).toBe("NOT_COMMITTEE")
+	})
+
+	it("revokes an active boost for a committee actor", async () => {
+		const { app } = seedBoostAuth()
+		vi.mocked(isCommittee).mockResolvedValue(true)
+		vi.mocked(revokeBoost).mockResolvedValue({ ok: true })
+		const res = await app.handle(boostReq(5, "DELETE", { authorization: "Bearer tok" }))
+		expect(res.status).toBe(200)
+		expect(await res.json()).toEqual({ success: true })
+	})
+
+	it("maps forbidden to 403 BOOST_NOT_OWNER", async () => {
+		const { app } = seedBoostAuth()
+		vi.mocked(isCommittee).mockResolvedValue(true)
+		vi.mocked(revokeBoost).mockResolvedValue({ ok: false, reason: "forbidden" })
+		const res = await app.handle(boostReq(5, "DELETE", { authorization: "Bearer tok" }))
+		expect(res.status).toBe(403)
+		expect(((await res.json()) as { code: string }).code).toBe("BOOST_NOT_OWNER")
+	})
+})
+
+describe("GET /lyrics/boost/quota", () => {
+	function quotaReq() {
+		return new Request("http://localhost/lyrics/boost/quota", {
+			method: "GET",
+			headers: { authorization: "Bearer tok" },
+		})
+	}
+
+	it("returns 403 NOT_COMMITTEE for a non-committee caller", async () => {
+		const { app } = seedBoostAuth()
+		vi.mocked(isCommittee).mockResolvedValue(false)
+		const res = await app.handle(quotaReq())
+		expect(res.status).toBe(403)
+		expect(((await res.json()) as { code: string }).code).toBe("NOT_COMMITTEE")
+	})
+
+	it("returns the quota for a committee caller", async () => {
+		const { app } = seedBoostAuth()
+		vi.mocked(isCommittee).mockResolvedValue(true)
+		vi.mocked(getQuota).mockResolvedValue(BOOST_QUOTA)
+		const res = await app.handle(quotaReq())
+		expect(res.status).toBe(200)
+		expect(await res.json()).toEqual({ success: true, quota: BOOST_QUOTA })
+	})
+})
+
+describe("vote rate limiting", () => {
+	function limitFailEnv(): { env: Env; app: ReturnType<typeof voteRoutes> } {
+		const { env, app } = seedBoostAuth()
+		env.RATE_LIMITER = {
+			async limit() {
+				return { success: false }
+			},
+		} as unknown as Env["RATE_LIMITER"]
+		return { env, app }
+	}
+
+	it("casts a vote (200) when under the write rate limit", async () => {
+		const keyId = "a".repeat(64)
+		const cache = makeMockCache()
+		seedSession(cache, "tok", keyId)
+		const userId = 42
+		const db = makeMockDB([
+			{ id: userId, key_id: keyId },
+			LYRICS_ROW,
+			{ submitter_id: 99, video_id: "vid7", deleted_at: null },
+			null,
+			null,
+			null,
+		])
+		const app = voteRoutes(makeEnv(db, cache))
+		const res = await app.handle(
+			new Request("http://localhost/lyrics/7/vote", {
+				method: "POST",
+				headers: { authorization: "Bearer tok", "content-type": "application/json" },
+				body: JSON.stringify({ vote: 1 }),
+			})
+		)
+		expect(res.status).toBe(200)
+		expect(((await res.json()) as { success: boolean }).success).toBe(true)
+	})
+
+	it("rejects a cast with 429 RATE_LIMITED when the write limit is exceeded", async () => {
+		const { app } = limitFailEnv()
+		const res = await app.handle(
+			new Request("http://localhost/lyrics/7/vote", {
+				method: "POST",
+				headers: { authorization: "Bearer tok", "content-type": "application/json" },
+				body: JSON.stringify({ vote: 1 }),
+			})
+		)
+		expect(res.status).toBe(429)
+		expect(((await res.json()) as { code: string }).code).toBe("RATE_LIMITED")
+	})
+
+	it("removes a vote (200) when under the write rate limit", async () => {
+		const keyId = "a".repeat(64)
+		const cache = makeMockCache()
+		seedSession(cache, "tok", keyId)
+		const db = makeMockDB([
+			{ id: 11, key_id: keyId },
+			LYRICS_ROW,
+			{ vote: 1, video_id: "vid7" },
+			null,
+			null,
+		])
+		const app = voteRoutes(makeEnv(db, cache))
+		const res = await app.handle(
+			new Request("http://localhost/lyrics/7/vote", {
+				method: "DELETE",
+				headers: { authorization: "Bearer tok" },
+			})
+		)
+		expect(res.status).toBe(200)
+		expect(((await res.json()) as { success: boolean }).success).toBe(true)
+	})
+
+	it("rejects a remove with 429 RATE_LIMITED when the write limit is exceeded", async () => {
+		const { app } = limitFailEnv()
+		const res = await app.handle(
+			new Request("http://localhost/lyrics/7/vote", {
+				method: "DELETE",
+				headers: { authorization: "Bearer tok" },
+			})
+		)
+		expect(res.status).toBe(429)
+		expect(((await res.json()) as { code: string }).code).toBe("RATE_LIMITED")
 	})
 })

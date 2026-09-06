@@ -61,7 +61,7 @@ export function AboutPage() {
         </p>
       </section>
 
-      <section className="rounded-2xl border border-unison-border/50 bg-unison-bg-elevated/50 px-3.5 py-2.5 text-sm leading-relaxed text-pretty text-unison-text-secondary">
+      <section className="rounded-2xl border border-unison-border/50 bg-[rgba(255,255,255,0.075)] px-3.5 py-2.5 text-sm leading-relaxed text-pretty text-unison-text-secondary">
         Heads up: signing in with Better Lyrics doesn't work in Firefox yet. You'll need a Chromium browser like Chrome
         or Edge for now.
       </section>
@@ -86,6 +86,28 @@ export function AboutPage() {
             discord.gg/UsHE3d5fWF
           </a>
           .
+        </p>
+      </section>
+
+      <section className="space-y-3">
+        <h2 className="text-lg font-semibold text-unison-text">The badges</h2>
+        <p className="text-sm leading-relaxed text-unison-text-secondary">
+          Every badge you see on Unison, the tier gems on the leaderboard and the achievement badges on profiles, was
+          drawn by the incredibly talented{" "}
+          <a
+            href="https://github.com/KiyoshiTheDevil"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="font-medium text-unison-text transition-colors hover:text-unison-text-secondary"
+          >
+            <img
+              src="https://github.com/KiyoshiTheDevil.png?size=48"
+              alt=""
+              className="mr-1.5 inline-block size-5 rounded-full object-cover align-[-0.3em] ring-1 ring-white/10"
+            />
+            Kiyoshi
+          </a>
+          . Thank you for making Unison look this good!
         </p>
       </section>
 
