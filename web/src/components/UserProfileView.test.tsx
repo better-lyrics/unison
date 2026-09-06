@@ -242,7 +242,8 @@ describe("UserProfileView", () => {
     await waitFor(() => expect(screen.getByText("Legendary")).toBeTruthy())
     expect(screen.getByText(/XP to Level 9/)).toBeTruthy()
     expect(screen.getByText("Radiohead")).toBeTruthy()
-    expect(screen.getAllByText("Most Loved").length).toBeGreaterThan(0)
+    // The badge wall depends on the separate catalogue fetch, so await it rather than assuming order.
+    await waitFor(() => expect(screen.getAllByText("Most Loved").length).toBeGreaterThan(0))
   })
 
   it("does not crash for a user with no tier and no earned badges", async () => {
