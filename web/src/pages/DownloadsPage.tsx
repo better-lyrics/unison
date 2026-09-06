@@ -96,7 +96,7 @@ function highlightBashLine(line: string, lineIdx: number): ReactNode[] {
         </span>
       ) : (
         <span key={key}>{word + ws}</span>
-      )
+      ),
     )
   }
   return out
@@ -123,15 +123,15 @@ function HeroSection({ manifest }: { manifest: DumpManifest }) {
       <div className="space-y-3">
         <h2 className="text-lg font-semibold text-unison-text">Download the Unison database</h2>
         <p className="text-sm leading-relaxed text-unison-text-secondary">
-          A daily snapshot of the lyrics corpus and the request queue. No user IDs, votes, or
-          reports. Each day's snapshot lands at the same <code>latest.dump</code> URL, so a cron
-          pointed at it stays current with no extra plumbing.
+          A daily snapshot of the lyrics corpus and the request queue. No user IDs, votes, or reports. Each day's
+          snapshot lands at the same <code>latest.dump</code> URL, so a cron pointed at it stays current with no extra
+          plumbing.
         </p>
       </div>
       <div className="flex flex-wrap items-center gap-3">
         <a
           href={manifest.latest_url}
-          className="inline-flex items-center gap-2 rounded-md bg-unison-bg-elevated px-3 py-1.5 text-sm font-medium text-unison-text transition-colors hover:bg-unison-bg-hover"
+          className="inline-flex items-center gap-2 rounded-md bg-unison-bg-elevated py-1.5 pr-4 pl-3 text-sm font-medium text-unison-text transition-colors hover:bg-unison-bg-hover"
         >
           <IconDownload className="size-4" stroke={1.5} />
           Download latest dump
@@ -167,8 +167,7 @@ function HeroError({ message }: { message: string }) {
       <div className="space-y-3">
         <h2 className="text-lg font-semibold text-unison-text">Download the Unison database</h2>
         <p className="text-sm leading-relaxed text-unison-text-secondary">
-          A daily snapshot of the lyrics corpus and the request queue. No user IDs, votes, or
-          reports.
+          A daily snapshot of the lyrics corpus and the request queue. No user IDs, votes, or reports.
         </p>
       </div>
       <div className="space-y-2 rounded-2xl border border-unison-border/50 bg-unison-bg-elevated/50 px-4 py-3 text-sm leading-relaxed text-unison-text-secondary">
@@ -216,8 +215,8 @@ function LicenseSection() {
         >
           ODbL 1.0
         </a>{" "}
-        covers FOSS use; credit Unison and you're done. For anything commercial (streaming
-        platforms, labels, distributors), reach out for a commercial license.
+        covers FOSS use; credit Unison and you're done. For anything commercial (streaming platforms, labels,
+        distributors), reach out for a commercial license.
       </p>
       <div className="space-y-2">
         <p className="text-xs uppercase tracking-wider text-unison-text-muted">Required attribution</p>

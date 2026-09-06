@@ -84,9 +84,7 @@ export function VoteControls({ variantId, videoId, variant }: VoteControlsProps)
           className={cn("transition-opacity", upActive ? "opacity-100" : "opacity-50 group-hover:opacity-100")}
         />
       </button>
-      <span className="min-w-[2ch] text-center text-xs font-medium tabular-nums text-unison-text">
-        {variant.score}
-      </span>
+      <span className="min-w-[2ch] text-center text-xs font-medium tabular-nums text-unison-text">{variant.score}</span>
       <button
         type="button"
         aria-label="Downvote variant"
@@ -115,7 +113,7 @@ export function VoteControls({ variantId, videoId, variant }: VoteControlsProps)
         title={disabledTitle}
         onClick={() => setMenuOpen((v) => !v)}
         className={cn(
-          "ml-1 inline-flex h-7 items-center gap-1 rounded border border-unison-border px-2 text-xs text-unison-text-muted transition-colors",
+          "ml-1 inline-flex h-7 items-center gap-1 rounded border border-unison-border pr-3 pl-2 text-xs text-unison-text-muted transition-colors",
           !disabled && "hover:border-unison-border-strong hover:text-unison-text",
           disabled && "cursor-not-allowed opacity-60",
         )}
