@@ -120,7 +120,7 @@ function BadgeTile({
           alt={def.name}
           draggable={false}
           className={cn(
-            "max-h-[60px] max-w-[60px] select-none transition-transform duration-200 ease-[cubic-bezier(0.2,0,0,1)]",
+            "size-12 select-none object-contain transition-transform duration-200 ease-[cubic-bezier(0.2,0,0,1)]",
             earned ? "group-hover:-translate-y-[3px] group-hover:scale-[1.07]" : "opacity-[0.32]",
           )}
         />
