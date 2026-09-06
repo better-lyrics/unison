@@ -1,194 +1,215 @@
-import { BadgeIcon } from "@/components/BadgeIcon"
-import { useBadgeCatalogue } from "@/components/BadgeCatalogueContext"
-import { EmptyState } from "@/components/EmptyState"
-import { LoadingPlaceholder } from "@/components/LoadingPlaceholder"
-import { TierChip } from "@/components/TierChip"
-import { groupBadgesByCategory, isRareBadge } from "@/lib/badge-view"
+import { Fragment, type ReactNode } from "react"
+import { OdometerNumber } from "@/components/OdometerNumber"
+import { groupBadgesByCategory, isRareBadge, resolveBadgeImage } from "@/lib/badge-view"
 import { cn } from "@/lib/cn"
-import { formatExact, formatRank } from "@/lib/format"
-import type { BadgeDef, BadgeDisplay, ExpertiseEntry, UserBadge, UserGamification } from "@/lib/types"
+import type { BadgeCatalogue, BadgeDef, UserBadge, UserGamification } from "@/lib/types"
 
 interface BadgeWallProps {
   gamification: UserGamification
+  catalogue: BadgeCatalogue
 }
 
 function titleCase(value: string): string {
   return value.charAt(0).toUpperCase() + value.slice(1)
 }
 
-function GamificationHeader({ gamification }: { gamification: UserGamification }) {
-  const { level, xp, xpForNext, tier, tierRank, counts } = gamification
-  const pct = xpForNext !== null && xpForNext > 0 ? Math.min(100, Math.round((xp / xpForNext) * 100)) : 100
+function stateText(userBadge: UserBadge | undefined): string {
+  if (userBadge?.earned) {
+    return userBadge.tier !== undefined ? `Earned, tier ${userBadge.tier}` : "Earned"
+  }
+  const progress = userBadge?.progress
+  if (progress?.next != null) return `Locked · ${progress.current} of ${progress.next}`
+  return "Locked"
+}
+
+function Pips({ current, next }: { current: number; next: number }) {
+  const dots = Array.from({ length: next }, (_, i) => i < current)
   return (
-    <div className="space-y-3 rounded-lg border border-unison-border bg-unison-bg-elevated p-4">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="flex items-center gap-2">
-          <span className="font-mono text-lg text-unison-text">Level {level}</span>
-          {tier !== null ? <TierChip tier={tier} rank={tierRank} /> : null}
-        </div>
-        <span className="font-mono text-xs text-unison-text-muted">
-          {formatExact(counts.earned)} / {formatExact(counts.total)} badges
-        </span>
-      </div>
-      <div className="space-y-1">
-        <div className="h-1.5 w-full overflow-hidden rounded-full bg-unison-bg-hover">
-          <div className="h-full rounded-full bg-unison-medal-gold" style={{ width: `${pct}%` }} />
-        </div>
-        <p className="font-mono text-[10px] text-unison-text-muted">
-          {xpForNext !== null
-            ? `${formatExact(xp)} / ${formatExact(xpForNext)} XP`
-            : `${formatExact(xp)} XP · max level`}
-        </p>
-      </div>
+    <div className="mt-1.5 flex justify-center gap-[3px]">
+      {dots.map((on, i) => (
+        <span
+          // biome-ignore lint/suspicious/noArrayIndexKey: fixed-length progress pips have no id
+          key={i}
+          className={cn("h-[3px] w-3 rounded-full", on ? "bg-unison-medal-gold" : "bg-white/10")}
+        />
+      ))}
     </div>
   )
 }
 
-function RarePill() {
-  return (
-    <span className="rounded bg-unison-bg-hover px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-unison-warn">
-      Rare
-    </span>
-  )
-}
-
-function ProgressBar({ current, next }: { current: number; next: number | null }) {
-  const pct = next !== null && next > 0 ? Math.min(100, Math.round((current / next) * 100)) : 0
-  return (
-    <div className="w-full space-y-1">
-      <div className="h-1 w-full overflow-hidden rounded-full bg-unison-bg-hover">
-        <div className="h-full rounded-full bg-unison-text-muted" style={{ width: `${pct}%` }} />
-      </div>
-      <p className="font-mono text-[9px] text-unison-text-muted">
-        {next !== null ? `${formatExact(current)} / ${formatExact(next)}` : formatExact(current)}
-      </p>
-    </div>
-  )
-}
-
-function BadgeTile({ badge, userBadge, display }: { badge: BadgeDef; userBadge?: UserBadge; display: BadgeDisplay }) {
+function BadgeMeta({
+  def,
+  userBadge,
+  rare,
+  isCurrentTier,
+  tierRank,
+}: {
+  def: BadgeDef
+  userBadge: UserBadge | undefined
+  rare: boolean
+  isCurrentTier: boolean
+  tierRank: number | null
+}) {
   const earned = userBadge?.earned ?? false
   const tier = userBadge?.tier
-  const rare = isRareBadge(badge, display.rarityThreshold)
-  return (
-    <div
-      data-earned={earned}
-      className={cn(
-        "flex flex-col items-center gap-1.5 rounded-lg border border-unison-border bg-unison-bg-elevated p-3 text-center",
-        !earned && "opacity-80",
-      )}
-    >
-      <BadgeIcon badge={badge} tier={tier} variant={earned ? "color" : "mono"} earned={earned} size="md" />
-      <p className={cn("text-xs font-medium", earned ? "text-unison-text" : "text-unison-text-muted")}>{badge.name}</p>
-      <div className="flex flex-wrap items-center justify-center gap-1">
-        {earned && tier !== undefined ? (
-          <span className="rounded bg-unison-bg-hover px-1.5 py-0.5 font-mono text-[9px] text-unison-text-secondary">
-            Tier {tier}
-          </span>
-        ) : null}
-        {rare ? <RarePill /> : null}
-      </div>
-      {!earned && userBadge?.progress ? (
-        <ProgressBar current={userBadge.progress.current} next={userBadge.progress.next} />
-      ) : null}
-    </div>
-  )
-}
+  const progress = userBadge?.progress
+  const parts: { key: string; node: ReactNode }[] = []
 
-function BadgeShowcase({
-  gamification,
-  defByKey,
-  userByKey,
-  display,
-}: {
-  gamification: UserGamification
-  defByKey: Map<string, BadgeDef>
-  userByKey: Map<string, UserBadge>
-  display: BadgeDisplay
-}) {
-  const featured = gamification.featured
-    .slice(0, display.featuredMax)
-    .map((key) => defByKey.get(key))
-    .filter((def): def is BadgeDef => def !== undefined)
-
-  if (featured.length === 0) return null
-
-  return (
-    <div className="space-y-2">
-      <h3 className="text-sm font-semibold text-unison-text">Featured</h3>
-      <div data-testid="badge-showcase" className="flex flex-wrap gap-4">
-        {featured.map((def) => (
-          <div key={def.key} className="flex w-20 flex-col items-center gap-1.5 text-center">
-            <BadgeIcon badge={def} tier={userByKey.get(def.key)?.tier} variant="color" size="lg" />
-            <p className="text-[11px] font-medium text-unison-text">{def.name}</p>
-          </div>
-        ))}
-      </div>
-    </div>
-  )
-}
-
-function ExpertiseStrip({ entries }: { entries: ExpertiseEntry[] }) {
-  if (entries.length === 0) return null
-  return (
-    <div className="space-y-2">
-      <h3 className="text-sm font-semibold text-unison-text">Top expertise</h3>
-      <div className="flex flex-wrap gap-2">
-        {entries.map((entry) => (
-          <span
-            key={`${entry.scope}:${entry.name}`}
-            className="inline-flex items-center gap-2 rounded-lg border border-unison-border bg-unison-bg-elevated px-3 py-1.5"
-          >
-            <span className="text-[10px] uppercase tracking-wider text-unison-text-muted">
-              {titleCase(entry.scope)}
-            </span>
-            <span className="text-sm text-unison-text">{entry.name}</span>
-            <span className="font-mono text-xs text-unison-text-secondary">{formatRank(entry.rank)}</span>
-          </span>
-        ))}
-      </div>
-    </div>
-  )
-}
-
-export function BadgeWall({ gamification }: BadgeWallProps) {
-  const catalogue = useBadgeCatalogue()
-
-  if (catalogue.status === "loading") return <LoadingPlaceholder rows={2} />
-  if (catalogue.status === "error") {
-    return <EmptyState title="Badges unavailable" hint={catalogue.error.message} />
+  if (isCurrentTier && tierRank != null) {
+    parts.push({ key: "rank", node: <span className="text-white/30">Rank #{tierRank}</span> })
+  } else if (earned && tier !== undefined && def.tiers) {
+    parts.push({ key: "tier", node: <span className="text-white/30">Tier {tier}</span> })
   }
-
-  const { badges, display } = catalogue.data
-  const defByKey = new Map(badges.map((def) => [def.key, def]))
-  const userByKey = new Map(gamification.badges.map((ub) => [ub.key, ub]))
-  const groups = groupBadgesByCategory(badges, display.categoryOrder).map((group) => ({
-    category: group.category,
-    badges: group.badges.filter((def) => !(def.secret && !(userByKey.get(def.key)?.earned ?? false))),
-  }))
+  if (!earned && progress?.next != null) {
+    parts.push({
+      key: "prog",
+      node: (
+        <span className="font-mono text-white/30">
+          {progress.current} / {progress.next}
+        </span>
+      ),
+    })
+  }
+  if (rare) {
+    parts.push({ key: "rare", node: <span className="font-semibold text-unison-warn">Rare</span> })
+  }
+  if (parts.length === 0) return null
 
   return (
-    <div className="space-y-6">
-      <GamificationHeader gamification={gamification} />
-      <BadgeShowcase gamification={gamification} defByKey={defByKey} userByKey={userByKey} display={display} />
-      <div className="space-y-4">
-        <h3 className="text-sm font-semibold text-unison-text">Badges</h3>
-        {groups.map((group) =>
-          group.badges.length === 0 ? null : (
-            <div key={group.category} className="space-y-2">
-              <h4 className="text-[10px] uppercase tracking-wider text-unison-text-muted">
-                {titleCase(group.category)}
-              </h4>
-              <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 lg:grid-cols-6">
-                {group.badges.map((def) => (
-                  <BadgeTile key={def.key} badge={def} userBadge={userByKey.get(def.key)} display={display} />
-                ))}
+    <div className="mt-2 flex items-center justify-center gap-[7px] text-xs leading-none">
+      {parts.map((part, i) => (
+        <Fragment key={part.key}>
+          {i > 0 ? <span className="text-white/30">·</span> : null}
+          {part.node}
+        </Fragment>
+      ))}
+    </div>
+  )
+}
+
+function BadgeTile({
+  def,
+  userBadge,
+  rare,
+  isCurrentTier,
+  tierRank,
+}: {
+  def: BadgeDef
+  userBadge: UserBadge | undefined
+  rare: boolean
+  isCurrentTier: boolean
+  tierRank: number | null
+}) {
+  const earned = userBadge?.earned ?? false
+  const tier = userBadge?.tier
+  const progress = userBadge?.progress
+  const pipsNext = !earned && progress?.next != null && progress.next <= 6 ? progress.next : null
+
+  return (
+    <div data-earned={earned} className="group relative w-[84px] text-center">
+      <div className="grid h-[60px] place-items-center">
+        <img
+          src={resolveBadgeImage(def, tier, earned ? "color" : "mono")}
+          alt={def.name}
+          draggable={false}
+          className={cn(
+            "max-h-[60px] max-w-[60px] select-none transition-transform duration-200 ease-[cubic-bezier(0.2,0,0,1)]",
+            earned ? "group-hover:-translate-y-[3px] group-hover:scale-[1.07]" : "opacity-[0.32]",
+          )}
+        />
+      </div>
+      <div
+        className={cn(
+          "mt-2.5 text-xs font-medium leading-[1.25]",
+          earned ? "text-unison-text-secondary" : "text-unison-text-muted",
+        )}
+      >
+        {def.name}
+      </div>
+      {pipsNext !== null && progress ? <Pips current={progress.current} next={pipsNext} /> : null}
+      <BadgeMeta def={def} userBadge={userBadge} rare={rare} isCurrentTier={isCurrentTier} tierRank={tierRank} />
+
+      <div className="pointer-events-none absolute bottom-full left-1/2 z-20 w-52 -translate-x-1/2 -translate-y-1.5 rounded-xl bg-[#1f2023] p-3 text-left opacity-0 shadow-[inset_0_0_0_1px_var(--color-unison-border-strong),0_10px_30px_rgba(0,0,0,0.45)] transition-[opacity,transform] duration-150 ease-[cubic-bezier(0.2,0,0,1)] group-hover:-translate-y-2.5 group-hover:opacity-100">
+        <div className="text-[13px] font-bold text-unison-text">{def.name}</div>
+        <div
+          className={cn(
+            "mt-0.5 text-[11px] font-semibold",
+            earned ? "text-unison-medal-gold" : "text-unison-text-muted",
+          )}
+        >
+          {stateText(userBadge)}
+        </div>
+        <div className="mt-1.5 text-xs leading-[1.4] text-unison-text-secondary">{def.description}</div>
+      </div>
+    </div>
+  )
+}
+
+export function BadgeWall({ gamification, catalogue }: BadgeWallProps) {
+  const { badges, display } = catalogue
+  const userByKey = new Map(gamification.badges.map((ub) => [ub.key, ub]))
+  const groups = groupBadgesByCategory(badges, display.categoryOrder)
+    .map((group) => ({
+      category: group.category,
+      badges: group.badges.filter((def) => !(def.secret && !(userByKey.get(def.key)?.earned ?? false))),
+    }))
+    .filter((group) => group.badges.length > 0)
+
+  const { earned, total } = gamification.counts
+  const barPct = total > 0 ? Math.round((earned / total) * 100) : 0
+
+  return (
+    <section className="mt-2">
+      <div className="mb-5 flex items-center gap-4">
+        <h2 className="text-[17px] font-bold tracking-[-0.01em] text-unison-text">Badges</h2>
+        <div className="ml-auto flex items-center gap-2.5 text-[13px] text-unison-text-muted">
+          <div className="h-1.5 w-24 overflow-hidden rounded-full bg-white/[0.08]">
+            <span
+              style={{ width: `${barPct}%` }}
+              className="pf-bar-fill block h-full rounded-full bg-gradient-to-r from-[#ffb020] to-unison-medal-gold"
+            />
+          </div>
+          <span>
+            <b className="font-bold text-unison-medal-gold">
+              <OdometerNumber value={earned} />
+            </b>{" "}
+            of {total} unlocked
+          </span>
+        </div>
+      </div>
+
+      <div className="space-y-8">
+        {groups.map((group, i) => {
+          const earnedInGroup = group.badges.filter((def) => userByKey.get(def.key)?.earned).length
+          return (
+            <div key={group.category} className="pf-group" style={{ animationDelay: `${i * 0.07}s` }}>
+              <div className="mb-5 flex items-center gap-3">
+                <h3 className="text-[13px] font-semibold text-unison-text-secondary">{titleCase(group.category)}</h3>
+                <span className="text-xs text-white/30">
+                  {earnedInGroup} of {group.badges.length}
+                </span>
+                <span className="h-px flex-1 bg-unison-border" />
+              </div>
+              <div className="flex flex-wrap gap-x-7 gap-y-6">
+                {group.badges.map((def) => {
+                  const userBadge = userByKey.get(def.key)
+                  const isCurrentTier = group.category === "tier" && def.key === gamification.tier
+                  return (
+                    <BadgeTile
+                      key={def.key}
+                      def={def}
+                      userBadge={userBadge}
+                      rare={isRareBadge(def, display.rarityThreshold)}
+                      isCurrentTier={isCurrentTier}
+                      tierRank={gamification.tierRank}
+                    />
+                  )
+                })}
               </div>
             </div>
-          ),
-        )}
+          )
+        })}
       </div>
-      {gamification.topExpertise ? <ExpertiseStrip entries={gamification.topExpertise} /> : null}
-    </div>
+    </section>
   )
 }

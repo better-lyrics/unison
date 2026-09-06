@@ -1,0 +1,191 @@
+import { IconBrandDiscordFilled, IconCheck, IconCopy, IconShare } from "@tabler/icons-react"
+import { useState } from "react"
+import { OdometerNumber } from "@/components/OdometerNumber"
+import { TierChip } from "@/components/TierChip"
+import { resolveBadgeImage } from "@/lib/badge-view"
+import { dicebearThumbsDataUri } from "@/lib/avatar"
+import { levelProgress } from "@/lib/level"
+import type { BadgeCatalogue, UserGamification, UserRankResponse } from "@/lib/types"
+
+const RING_CIRCUMFERENCE = 277
+
+interface ProfileHeaderProps {
+  keyId: string
+  rank: UserRankResponse
+  gamification: UserGamification | null
+  catalogue: BadgeCatalogue | null
+}
+
+function useCopied(): [boolean, (text: string) => void] {
+  const [copied, setCopied] = useState(false)
+  const copy = (text: string) => {
+    void navigator.clipboard.writeText(text)
+    setCopied(true)
+    window.setTimeout(() => setCopied(false), 1500)
+  }
+  return [copied, copy]
+}
+
+function shareUrl(keyId: string): string {
+  const origin = typeof window !== "undefined" ? window.location.origin : ""
+  return `${origin}/curator/${keyId}`
+}
+
+function FeaturedBadges({
+  gamification,
+  catalogue,
+}: {
+  gamification: UserGamification
+  catalogue: BadgeCatalogue
+}) {
+  const userByKey = new Map(gamification.badges.map((b) => [b.key, b]))
+  const defByKey = new Map(catalogue.badges.map((d) => [d.key, d]))
+  const featured = gamification.featured
+    .slice(0, catalogue.display.featuredMax)
+    .map((key) => defByKey.get(key))
+    .filter((def): def is NonNullable<typeof def> => def !== undefined)
+
+  if (featured.length === 0) return null
+
+  return (
+    <span data-testid="featured-badges" className="pf-featured flex items-center gap-1.5 pl-3.5">
+      {featured.map((def, i) => {
+        const tier = userByKey.get(def.key)?.tier
+        return (
+          <img
+            key={def.key}
+            src={resolveBadgeImage(def, tier, "color")}
+            alt={def.name}
+            title={tier !== undefined ? `${def.name}, tier ${tier}` : def.name}
+            draggable={false}
+            style={{ animationDelay: `${0.35 + i * 0.07}s` }}
+            className="pf-fbadge size-7 transition-transform duration-200 ease-[cubic-bezier(0.2,0,0,1)] hover:-translate-y-0.5 hover:scale-110"
+          />
+        )
+      })}
+    </span>
+  )
+}
+
+export function ProfileHeader({ keyId, rank, gamification, catalogue }: ProfileHeaderProps) {
+  const [linkCopied, copyLink] = useCopied()
+  const [idCopied, copyId] = useCopied()
+
+  const progress = gamification ? levelProgress(gamification.xp, gamification.xpForNext) : null
+  const ringOffset = progress ? RING_CIRCUMFERENCE * (1 - progress.pct) : RING_CIRCUMFERENCE
+  const tierDef =
+    gamification?.tier && catalogue ? catalogue.badges.find((d) => d.key === gamification.tier) : undefined
+  const gemSrc = tierDef ? resolveBadgeImage(tierDef, undefined, "color") : undefined
+
+  return (
+    <header className="flex items-start gap-5">
+      <div className="relative size-[92px] shrink-0">
+        <svg
+          className="absolute inset-0"
+          style={{ transform: "rotate(-90deg)" }}
+          width="92"
+          height="92"
+          viewBox="0 0 92 92"
+          aria-hidden="true"
+        >
+          <circle cx="46" cy="46" r="44" fill="none" strokeWidth="4" stroke="rgba(255,255,255,0.1)" />
+          {progress ? (
+            <circle
+              className="pf-arc"
+              cx="46"
+              cy="46"
+              r="44"
+              fill="none"
+              strokeWidth="4"
+              stroke="var(--color-unison-medal-gold)"
+              strokeLinecap="round"
+              strokeDasharray={RING_CIRCUMFERENCE}
+              strokeDashoffset={ringOffset}
+            />
+          ) : null}
+        </svg>
+        <img
+          src={dicebearThumbsDataUri(keyId)}
+          alt=""
+          className="absolute top-2 left-2 block size-[76px] rounded-full bg-unison-bg-elevated"
+        />
+        {rank.discordLinked ? (
+          <span
+            title="Discord linked"
+            className="absolute right-0 bottom-0 z-10 grid size-[26px] place-items-center rounded-full border-4 border-unison-bg bg-[#5865f2]"
+          >
+            <IconBrandDiscordFilled className="size-3.5 text-white" />
+          </span>
+        ) : null}
+      </div>
+
+      <div className="min-w-0 flex-1 pt-1">
+        <div className="flex flex-wrap items-center gap-3.5">
+          <h1 className="text-[28px] font-bold leading-[1.1] tracking-[-0.015em] text-unison-text">
+            {rank.displayName}
+          </h1>
+          {gamification && catalogue ? <FeaturedBadges gamification={gamification} catalogue={catalogue} /> : null}
+          <button
+            type="button"
+            onClick={() => copyLink(shareUrl(keyId))}
+            className="ml-auto inline-flex cursor-pointer items-center gap-1.5 rounded-lg bg-unison-surface px-3 py-2 text-[13px] font-medium text-unison-text-secondary transition-colors hover:bg-unison-bg-hover hover:text-unison-text active:scale-[0.96]"
+          >
+            {linkCopied ? (
+              <IconCheck className="size-[15px]" stroke={1.7} />
+            ) : (
+              <IconShare className="size-[15px]" stroke={1.7} />
+            )}
+            {linkCopied ? "Copied" : "Share"}
+          </button>
+        </div>
+
+        <div className="mt-2 flex items-center gap-2.5 text-sm text-unison-text-muted">
+          <code className="font-mono text-unison-text-secondary" title={keyId}>
+            {`${keyId.slice(0, 6)}…${keyId.slice(-6)}`}
+          </code>
+          <button
+            type="button"
+            onClick={() => copyId(keyId)}
+            aria-label={idCopied ? "Copied" : "Copy key id"}
+            className="inline-flex cursor-pointer text-white/30 transition-colors hover:text-unison-text-secondary"
+          >
+            {idCopied ? (
+              <IconCheck className="size-[13px]" stroke={1.7} />
+            ) : (
+              <IconCopy className="size-[13px]" stroke={1.7} />
+            )}
+          </button>
+        </div>
+
+        {rank.ranked || gamification ? (
+          <div className="mt-3.5 flex flex-wrap items-center gap-2.5 text-[13px]">
+            {gamification?.tier ? (
+              <TierChip tier={gamification.tier} rank={gamification.tierRank} gemSrc={gemSrc} />
+            ) : null}
+            {rank.ranked ? (
+              <span className="inline-flex h-7 items-center rounded-full bg-[rgba(255,200,61,0.12)] px-[11px] text-xs font-semibold text-unison-medal-gold">
+                Rank #{rank.rank}
+              </span>
+            ) : null}
+            {gamification ? (
+              <span className="ml-auto text-unison-text-muted">
+                Level{" "}
+                <b className="font-bold text-unison-text-secondary">
+                  <OdometerNumber value={gamification.level} />
+                </b>
+                <span className="mx-[7px] text-white/30">·</span>
+                {progress?.atMax ? (
+                  "Max level"
+                ) : (
+                  <>
+                    <OdometerNumber value={progress?.remaining ?? 0} /> XP to Level {gamification.level + 1}
+                  </>
+                )}
+              </span>
+            ) : null}
+          </div>
+        ) : null}
+      </div>
+    </header>
+  )
+}

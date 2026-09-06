@@ -1,0 +1,71 @@
+/* Entrance motion for the profile. One-shot keyframes (per better-ui: keyframes for
+   staged entrances, transitions for interactive state). Delays are set inline per index
+   so the stagger survives React reordering. */
+
+@keyframes pf-arc-fill {
+  from {
+    stroke-dashoffset: 277;
+  }
+}
+@keyframes pf-pop-in {
+  from {
+    opacity: 0;
+    transform: translateY(7px) scale(0.8);
+  }
+}
+@keyframes pf-rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+}
+@keyframes pf-divider-in {
+  from {
+    transform: scaleY(0);
+  }
+}
+@keyframes pf-bar-fill {
+  from {
+    transform: scaleX(0);
+  }
+}
+
+.pf-arc {
+  animation: pf-arc-fill 1.1s cubic-bezier(0.2, 0, 0, 1) 0.2s both;
+}
+.pf-featured {
+  position: relative;
+}
+.pf-featured::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: var(--color-unison-border);
+  animation: pf-divider-in 0.32s cubic-bezier(0.2, 0, 0, 1) 0.26s both;
+}
+.pf-fbadge {
+  animation: pf-pop-in 0.4s cubic-bezier(0.2, 0, 0, 1) both;
+}
+.pf-group {
+  animation: pf-rise-in 0.5s cubic-bezier(0.2, 0, 0, 1) both;
+}
+.pf-bar-fill {
+  transform-origin: left;
+  animation: pf-bar-fill 1s cubic-bezier(0.2, 0, 0, 1) 0.3s both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pf-arc,
+  .pf-fbadge,
+  .pf-group,
+  .pf-bar-fill {
+    animation: none !important;
+  }
+  .pf-featured::before {
+    animation: none !important;
+    transform: none;
+  }
+}

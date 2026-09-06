@@ -225,10 +225,12 @@ export async function seedUserSubmissions(_keyId: string): Promise<UserSubmissio
   return { submissions: SEED_SUBMISSIONS }
 }
 
+// Dev seed points at the flat art served by the devBadgeArt vite plugin (see vite.config.ts).
+// Production uses the API's /badges/:key/image.svg endpoint instead.
 function badgeImage(key: string): BadgeImage {
   return {
-    color: `/badges/${key}/image.svg?variant=color`,
-    mono: `/badges/${key}/image.svg?variant=mono`,
+    color: `/badge-art/${key}.svg`,
+    mono: `/badge-art/${key}_mono.svg`,
   }
 }
 
@@ -237,8 +239,8 @@ function badgeTiers(key: string, thresholds: number[]): BadgeTier[] {
     level: i + 1,
     threshold,
     image: {
-      color: `/badges/${key}/image.svg?variant=color&tier=${i + 1}`,
-      mono: `/badges/${key}/image.svg?variant=mono`,
+      color: `/badge-art/${key}_${i + 1}.svg`,
+      mono: `/badge-art/${key}_mono.svg`,
     },
   }))
 }

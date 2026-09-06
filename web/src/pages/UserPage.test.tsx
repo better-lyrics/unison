@@ -100,6 +100,5 @@ describe("UserPage", () => {
     renderAt(`/curator/${keyId}`)
     await waitFor(() => expect(screen.getByText("UnrankedUser")).toBeTruthy())
     expect(screen.getByText(/no leaderboard activity yet/i)).toBeTruthy()
-    expect(screen.getByText(/hasn't voted yet/i)).toBeTruthy()
   })
 })

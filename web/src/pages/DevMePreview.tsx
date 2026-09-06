@@ -52,7 +52,7 @@ export default function DevMePreview() {
   return (
     <SessionContext.Provider value={fakeSession}>
       <div className="space-y-6">
-        <UserProfileView keyId={curator.keyId} title="Me" />
+        <UserProfileView keyId={curator.keyId} />
         <LeaderboardSection title="Nickname" subtitle="How you appear across Unison.">
           <NicknameEditor />
         </LeaderboardSection>
