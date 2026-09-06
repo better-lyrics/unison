@@ -21,11 +21,9 @@ export function VariantList({ variants, selectedId, onSelect }: VariantListProps
               aria-current={isSelected ? "true" : undefined}
               onClick={() => onSelect(variant.id)}
               className={cn(
-                "flex w-full items-center gap-3 rounded-lg border px-3 py-2 text-left transition-colors",
+                "flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left transition-colors",
                 "focus:outline-none focus-visible:ring-2 focus-visible:ring-unison-border-strong",
-                isSelected
-                  ? "border-unison-border-strong bg-unison-bg-hover"
-                  : "border-unison-border bg-unison-bg-elevated hover:border-unison-border-strong hover:bg-unison-bg-hover",
+                isSelected ? "bg-unison-bg-hover" : "bg-white/[0.02] hover:bg-unison-bg-hover",
               )}
             >
               <span className="shrink-0 font-mono text-xs tabular-nums text-unison-text-muted">

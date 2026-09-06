@@ -157,7 +157,7 @@ describe("UserProfileView", () => {
     await waitFor(() => expect(screen.getByText(/no submissions yet/i)).toBeTruthy())
   })
 
-  it("copies the key id to the clipboard", async () => {
+  it("copies the profile link from the handle row", async () => {
     const writeText = vi.fn().mockResolvedValue(undefined)
     vi.stubGlobal("navigator", { ...navigator, clipboard: { writeText } })
     vi.stubGlobal(
@@ -172,14 +172,14 @@ describe("UserProfileView", () => {
     )
 
     renderView()
-    await waitFor(() => expect(screen.getByText("QuietUser")).toBeTruthy())
+    await waitFor(() => expect(screen.getByText("@quietuser")).toBeTruthy())
     await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: /copy key id/i }))
+      fireEvent.click(screen.getByRole("button", { name: /copy profile link/i }))
     })
-    expect(writeText).toHaveBeenCalledWith(keyId)
+    expect(writeText).toHaveBeenCalledWith(expect.stringContaining("/u/quietuser"))
   })
 
-  it("shares the public curator link", async () => {
+  it("shares the /u profile link", async () => {
     const writeText = vi.fn().mockResolvedValue(undefined)
     vi.stubGlobal("navigator", { ...navigator, clipboard: { writeText } })
     vi.stubGlobal(
@@ -198,7 +198,7 @@ describe("UserProfileView", () => {
     await act(async () => {
       fireEvent.click(screen.getByRole("button", { name: /share/i }))
     })
-    expect(writeText).toHaveBeenCalledWith(expect.stringContaining(`/curator/${keyId}`))
+    expect(writeText).toHaveBeenCalledWith(expect.stringContaining("/u/quietuser"))
   })
 
   it("renders tier, level line, expertise, and badges from gamification", async () => {

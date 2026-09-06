@@ -1,9 +1,11 @@
 import { IconBrandDiscordFilled, IconCheck, IconCopy, IconShare } from "@tabler/icons-react"
 import { useState } from "react"
+import { Link } from "react-router-dom"
 import { OdometerNumber } from "@/components/OdometerNumber"
 import { TierChip } from "@/components/TierChip"
 import { resolveBadgeImage } from "@/lib/badge-view"
 import { dicebearThumbsDataUri } from "@/lib/avatar"
+import { toHandle } from "@/lib/handle"
 import { levelProgress } from "@/lib/level"
 import type { BadgeCatalogue, UserGamification, UserRankResponse } from "@/lib/types"
 
@@ -26,9 +28,23 @@ function useCopied(): [boolean, (text: string) => void] {
   return [copied, copy]
 }
 
-function shareUrl(keyId: string): string {
+interface ProfileLink {
+  handle: string | null
+  path: string
+  url: string
+  label: string
+}
+
+function profileLink(displayName: string, keyId: string): ProfileLink {
   const origin = typeof window !== "undefined" ? window.location.origin : ""
-  return `${origin}/curator/${keyId}`
+  const host = typeof window !== "undefined" ? window.location.host : "unison.boidu.dev"
+  const handle = toHandle(displayName)
+  if (handle.length === 0) {
+    const path = `/curator/${keyId}`
+    return { handle: null, path, url: `${origin}${path}`, label: `${keyId.slice(0, 6)}…${keyId.slice(-6)}` }
+  }
+  const path = `/u/${handle}`
+  return { handle, path, url: `${origin}${path}`, label: `${host}${path}` }
 }
 
 function FeaturedBadges({
@@ -68,8 +84,9 @@ function FeaturedBadges({
 }
 
 export function ProfileHeader({ keyId, rank, gamification, catalogue }: ProfileHeaderProps) {
-  const [linkCopied, copyLink] = useCopied()
-  const [idCopied, copyId] = useCopied()
+  const [shareCopied, copyShare] = useCopied()
+  const [urlCopied, copyUrl] = useCopied()
+  const link = profileLink(rank.displayName, keyId)
 
   const progress = gamification ? levelProgress(gamification.xp, gamification.xpForNext) : null
   const ringOffset = progress ? RING_CIRCUMFERENCE * (1 - progress.pct) : RING_CIRCUMFERENCE
@@ -127,29 +144,41 @@ export function ProfileHeader({ keyId, rank, gamification, catalogue }: ProfileH
           {gamification && catalogue ? <FeaturedBadges gamification={gamification} catalogue={catalogue} /> : null}
           <button
             type="button"
-            onClick={() => copyLink(shareUrl(keyId))}
+            onClick={() => copyShare(link.url)}
             className="ml-auto inline-flex cursor-pointer items-center gap-1.5 rounded-lg bg-unison-surface px-3 py-2 text-[13px] font-medium text-unison-text-secondary transition-colors hover:bg-unison-bg-hover hover:text-unison-text active:scale-[0.96]"
           >
-            {linkCopied ? (
+            {shareCopied ? (
               <IconCheck className="size-[15px]" stroke={1.7} />
             ) : (
               <IconShare className="size-[15px]" stroke={1.7} />
             )}
-            {linkCopied ? "Copied" : "Share"}
+            {shareCopied ? "Copied" : "Share"}
           </button>
         </div>
 
         <div className="mt-2 flex items-center gap-2.5 text-sm text-unison-text-muted">
-          <code className="font-mono text-unison-text-secondary" title={keyId}>
-            {`${keyId.slice(0, 6)}…${keyId.slice(-6)}`}
-          </code>
+          {link.handle ? (
+            <>
+              <span className="font-mono font-medium text-unison-text-secondary">@{link.handle}</span>
+              <Link
+                to={link.path}
+                className="font-mono text-white/30 transition-colors hover:text-unison-text-secondary"
+              >
+                {link.label}
+              </Link>
+            </>
+          ) : (
+            <code className="font-mono text-unison-text-secondary" title={keyId}>
+              {link.label}
+            </code>
+          )}
           <button
             type="button"
-            onClick={() => copyId(keyId)}
-            aria-label={idCopied ? "Copied" : "Copy key id"}
+            onClick={() => copyUrl(link.url)}
+            aria-label={urlCopied ? "Copied" : "Copy profile link"}
             className="inline-flex cursor-pointer text-white/30 transition-colors hover:text-unison-text-secondary"
           >
-            {idCopied ? (
+            {urlCopied ? (
               <IconCheck className="size-[13px]" stroke={1.7} />
             ) : (
               <IconCopy className="size-[13px]" stroke={1.7} />

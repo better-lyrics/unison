@@ -20,8 +20,8 @@ export function CuratorRow({ entry, isSelf = false, appended = false }: CuratorR
       <Link
         to={href}
         className={cn(
-          "flex items-center gap-4 rounded-lg border bg-unison-bg-elevated px-4 py-3 transition-colors hover:border-unison-border-strong",
-          isSelf ? "border-unison-border-strong" : "border-unison-border",
+          "flex items-center gap-4 rounded-lg px-4 py-3 transition-colors hover:bg-unison-bg-hover",
+          isSelf ? "bg-white/[0.06]" : "bg-white/[0.02]",
         )}
       >
         <MedalRank rank={entry.rank} size="sm" />
