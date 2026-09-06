@@ -1,6 +1,7 @@
 import "./profile.css"
 import { useCallback } from "react"
 import { BadgeCatalogueProvider, useBadgeCatalogue } from "@/components/BadgeCatalogueContext"
+import { BadgeModalProvider } from "@/components/BadgeModalContext"
 import { BadgeWall } from "@/components/BadgeWall"
 import { EmptyState } from "@/components/EmptyState"
 import { ProfileHeader } from "@/components/ProfileHeader"
@@ -97,7 +98,9 @@ export function UserProfileView({ keyId }: UserProfileViewProps) {
 
   return (
     <BadgeCatalogueProvider>
-      <ProfileBody keyId={keyId} rank={rank.data} gamification={gam} />
+      <BadgeModalProvider>
+        <ProfileBody keyId={keyId} rank={rank.data} gamification={gam} />
+      </BadgeModalProvider>
     </BadgeCatalogueProvider>
   )
 }

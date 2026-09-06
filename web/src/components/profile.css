@@ -57,6 +57,42 @@
   animation: pf-bar-fill 1s cubic-bezier(0.2, 0, 0, 1) 0.3s both;
 }
 
+@keyframes bm-fade {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes bm-pop {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.96);
+  }
+}
+@keyframes bm-fadeout {
+  to {
+    opacity: 0;
+  }
+}
+@keyframes bm-popout {
+  to {
+    opacity: 0;
+    transform: translateY(6px) scale(0.98);
+  }
+}
+
+.bm-overlay {
+  animation: bm-fade 0.18s ease-out;
+}
+.bm-overlay.bm-closing {
+  animation: bm-fadeout 0.16s ease-out forwards;
+}
+.bm-card {
+  animation: bm-pop 0.28s cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+.bm-card.bm-closing {
+  animation: bm-popout 0.16s ease-out forwards;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .pf-arc,
   .pf-fbadge,
@@ -67,5 +103,11 @@
   .pf-featured::before {
     animation: none !important;
     transform: none;
+  }
+  .bm-overlay,
+  .bm-overlay.bm-closing,
+  .bm-card,
+  .bm-card.bm-closing {
+    animation: none;
   }
 }

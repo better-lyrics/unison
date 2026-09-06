@@ -1,4 +1,5 @@
 import { Fragment, type ReactNode } from "react"
+import { useBadgeModal } from "@/components/BadgeModalContext"
 import { OdometerNumber } from "@/components/OdometerNumber"
 import { groupBadgesByCategory, isRareBadge, resolveBadgeImage } from "@/lib/badge-view"
 import { cn } from "@/lib/cn"
@@ -104,9 +105,15 @@ function BadgeTile({
   const tier = userBadge?.tier
   const progress = userBadge?.progress
   const pipsNext = !earned && progress?.next != null && progress.next <= 6 ? progress.next : null
+  const { open } = useBadgeModal()
 
   return (
-    <div data-earned={earned} className="group relative w-[84px] text-center">
+    <button
+      type="button"
+      data-earned={earned}
+      onClick={() => open({ def, userBadge, rare, isCurrentTier, tierRank })}
+      className="group relative grid w-[84px] cursor-pointer appearance-none grid-rows-subgrid row-span-3 gap-y-0 bg-transparent p-0 text-center text-inherit"
+    >
       <div className="grid h-[60px] place-items-center">
         <img
           src={resolveBadgeImage(def, tier, earned ? "color" : "mono")}
@@ -126,8 +133,10 @@ function BadgeTile({
       >
         {def.name}
       </div>
-      {pipsNext !== null && progress ? <Pips current={progress.current} next={pipsNext} /> : null}
-      <BadgeMeta def={def} userBadge={userBadge} rare={rare} isCurrentTier={isCurrentTier} tierRank={tierRank} />
+      <div>
+        {pipsNext !== null && progress ? <Pips current={progress.current} next={pipsNext} /> : null}
+        <BadgeMeta def={def} userBadge={userBadge} rare={rare} isCurrentTier={isCurrentTier} tierRank={tierRank} />
+      </div>
 
       <div className="pointer-events-none absolute bottom-full left-1/2 z-20 w-52 -translate-x-1/2 -translate-y-2 rounded-xl bg-[#1f2023] p-3 text-left opacity-0 shadow-[inset_0_0_0_1px_var(--color-unison-border-strong),0_10px_30px_rgba(0,0,0,0.45)] transition-opacity duration-150 ease-out group-hover:opacity-100">
         <div className="text-[13px] font-bold text-unison-text">{def.name}</div>
@@ -141,7 +150,7 @@ function BadgeTile({
         </div>
         <div className="mt-1.5 text-xs leading-[1.4] text-unison-text-secondary">{def.description}</div>
       </div>
-    </div>
+    </button>
   )
 }
 
@@ -190,7 +199,7 @@ export function BadgeWall({ gamification, catalogue }: BadgeWallProps) {
                 </span>
                 <span className="h-px flex-1 bg-unison-border" />
               </div>
-              <div className="flex flex-wrap gap-x-7 gap-y-6">
+              <div className="grid grid-cols-[repeat(auto-fill,84px)] gap-x-7 gap-y-6">
                 {group.badges.map((def) => {
                   const userBadge = userByKey.get(def.key)
                   const isCurrentTier = group.category === "tier" && def.key === gamification.tier
