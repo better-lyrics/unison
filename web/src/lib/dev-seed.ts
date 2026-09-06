@@ -5,7 +5,10 @@ import type {
   BadgeTier,
   CuratorLeaderboardEntry,
   CuratorsLeaderboardResponse,
+  ExpertiseEntry,
   SongsLeaderboardResponse,
+  TierName,
+  UserBadge,
   UserGamification,
   UserRankResponse,
   UserSubmission,
@@ -386,8 +389,26 @@ export async function seedBadgeCatalogue(): Promise<BadgeCatalogue> {
   return SEED_CATALOGUE
 }
 
-export async function seedUserBadges(keyId: string): Promise<UserGamification> {
-  await delay()
+const BADGE_TOTAL = SEED_CATALOGUE.badges.length
+const DAY = 86400
+const EXPERTISE_ARTISTS = ["Radiohead", "The Weeknd", "Tame Impala", "Daft Punk", "Björk", "Arca", "Fishmans"]
+const EXPERTISE_LANGS = ["Japanese", "Korean", "Spanish", "French", "Portuguese", "German", "Icelandic"]
+
+function tierForRank(rank: number): { tier: TierName; tierRank: number | null } {
+  if (rank === 1) return { tier: "legendary", tierRank: 1 }
+  if (rank === 2) return { tier: "grandmaster", tierRank: 2 }
+  if (rank === 3) return { tier: "master", tierRank: 3 }
+  if (rank <= 5) return { tier: "elite", tierRank: null }
+  return { tier: "lyricist", tierRank: null }
+}
+
+function medalTier(count: number, thresholds: number[]): number | undefined {
+  const reached = thresholds.filter((t) => t <= count).length
+  return reached > 0 ? reached : undefined
+}
+
+// The showcased rank-1 profile, kept stable so /dev/me matches the finalised design reference.
+function auroraShowcase(keyId: string): UserGamification {
   return {
     keyId,
     level: 8,
@@ -396,20 +417,77 @@ export async function seedUserBadges(keyId: string): Promise<UserGamification> {
     tier: "legendary",
     tierRank: 1,
     featured: ["most-loved", "legendary", "verified-contributor", "sharp-ear", "trailblazer"],
-    counts: { earned: 6, total: SEED_CATALOGUE.badges.length },
+    counts: { earned: 6, total: BADGE_TOTAL },
     topExpertise: [
       { scope: "artist", name: "Radiohead", rank: 2 },
       { scope: "language", name: "Japanese", rank: 5 },
     ],
     badges: [
-      { key: "verified-contributor", earned: true, tier: 3, earnedAt: SEEDED_NOW - 30 * 86400, featured: true },
-      { key: "sharp-ear", earned: true, tier: 2, earnedAt: SEEDED_NOW - 20 * 86400, featured: true },
-      { key: "trailblazer", earned: true, tier: 2, earnedAt: SEEDED_NOW - 14 * 86400, featured: true },
-      { key: "most-loved", earned: true, earnedAt: SEEDED_NOW - 10 * 86400, featured: true },
-      { key: "first-submission", earned: true, earnedAt: SEEDED_NOW - 60 * 86400, featured: false },
-      { key: "legendary", earned: true, earnedAt: SEEDED_NOW - 2 * 86400, featured: true },
+      { key: "verified-contributor", earned: true, tier: 3, earnedAt: SEEDED_NOW - 30 * DAY, featured: true },
+      { key: "sharp-ear", earned: true, tier: 2, earnedAt: SEEDED_NOW - 20 * DAY, featured: true },
+      { key: "trailblazer", earned: true, tier: 2, earnedAt: SEEDED_NOW - 14 * DAY, featured: true },
+      { key: "most-loved", earned: true, earnedAt: SEEDED_NOW - 10 * DAY, featured: true },
+      { key: "first-submission", earned: true, earnedAt: SEEDED_NOW - 60 * DAY, featured: false },
+      { key: "legendary", earned: true, earnedAt: SEEDED_NOW - 2 * DAY, featured: true },
       { key: "polyglot", earned: false, tier: 1, progress: { current: 2, next: 3 }, featured: false },
       { key: "first-responder", earned: false, progress: { current: 0, next: 1 }, featured: false },
     ],
   }
+}
+
+function derivedGamification(entry: CuratorLeaderboardEntry): UserGamification {
+  const { tier, tierRank } = tierForRank(entry.rank)
+  const level = Math.min(12, Math.max(1, Math.round(entry.score / 30) + 1))
+  const xp = Math.round(entry.score * 12)
+  const xpForNext = level >= 12 ? null : xp + Math.max(60, 260 - Math.round(entry.score))
+
+  const badges: UserBadge[] = [
+    { key: "first-submission", earned: true, earnedAt: SEEDED_NOW - 55 * DAY, featured: false },
+    { key: tier, earned: true, earnedAt: SEEDED_NOW - 4 * DAY, featured: true },
+  ]
+
+  const vc = medalTier(entry.submissionCount, [1, 3, 10])
+  if (vc) badges.push({ key: "verified-contributor", earned: true, tier: vc, earnedAt: SEEDED_NOW - 25 * DAY, featured: vc >= 2 })
+
+  const se = medalTier(entry.totalUpvotes, [50, 200, 400])
+  if (se) badges.push({ key: "sharp-ear", earned: true, tier: se, earnedAt: SEEDED_NOW - 18 * DAY, featured: se >= 3 })
+
+  if (entry.rank <= 3) {
+    badges.push({ key: "trailblazer", earned: true, tier: 2, earnedAt: SEEDED_NOW - 12 * DAY, featured: true })
+  } else {
+    badges.push({ key: "trailblazer", earned: false, tier: 1, progress: { current: Math.max(1, 6 - entry.rank), next: 5 }, featured: false })
+  }
+
+  if (entry.score >= 120) badges.push({ key: "most-loved", earned: true, earnedAt: SEEDED_NOW - 8 * DAY, featured: true })
+
+  badges.push({
+    key: "polyglot",
+    earned: false,
+    tier: 1,
+    progress: { current: (entry.rank % 3) + 1, next: 3 },
+    featured: false,
+  })
+  badges.push({ key: "first-responder", earned: false, progress: { current: 0, next: 1 }, featured: false })
+
+  const featured = badges
+    .filter((b) => b.earned && b.featured)
+    .map((b) => b.key)
+    .slice(0, 5)
+  const earned = badges.filter((b) => b.earned).length
+
+  const topExpertise: ExpertiseEntry[] = [
+    { scope: "artist", name: EXPERTISE_ARTISTS[entry.rank % EXPERTISE_ARTISTS.length], rank: entry.rank },
+    { scope: "language", name: EXPERTISE_LANGS[entry.rank % EXPERTISE_LANGS.length], rank: (entry.rank % 7) + 1 },
+  ]
+
+  return { keyId: entry.keyId, level, xp, xpForNext, tier, tierRank, featured, counts: { earned, total: BADGE_TOTAL }, topExpertise, badges }
+}
+
+export async function seedUserBadges(keyId: string): Promise<UserGamification> {
+  await delay()
+  const entry = SEED_CURATORS.find((c) => c.keyId === keyId)
+  if (!entry) {
+    return { keyId, level: 1, xp: 0, xpForNext: 50, tier: null, tierRank: null, featured: [], counts: { earned: 0, total: BADGE_TOTAL }, badges: [] }
+  }
+  return entry.rank === 1 ? auroraShowcase(keyId) : derivedGamification(entry)
 }
