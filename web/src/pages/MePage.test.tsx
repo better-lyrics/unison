@@ -152,7 +152,7 @@ describe("MePage", () => {
     expect(screen.getByTestId("stat-score").textContent).toContain("12.7")
     expect(screen.getByTestId("stat-submissions").textContent).toContain("5")
     expect(screen.getByTestId("stat-upvotes").textContent).toContain("23")
-    expect(screen.getByRole("button", { name: /copy key id/i })).toBeTruthy()
+    expect(screen.getByRole("button", { name: /copy profile link/i })).toBeTruthy()
   })
 
   it("renders identity but no stats when signed-in and not ranked", async () => {

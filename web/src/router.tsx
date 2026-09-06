@@ -9,6 +9,7 @@ import { LinkPage } from "./pages/LinkPage"
 import { LyricsPage } from "./pages/LyricsPage"
 import { MePage } from "./pages/MePage"
 import { MigratePage } from "./pages/MigratePage"
+import { NicknamePage } from "./pages/NicknamePage"
 import { QueuePage } from "./pages/QueuePage"
 import { SearchPage } from "./pages/SearchPage"
 import { SongsPage } from "./pages/SongsPage"
@@ -51,6 +52,7 @@ const router = createBrowserRouter([
       { path: "song/:videoId", element: <LyricsPage /> },
       { path: "me", element: <MePage /> },
       { path: "curator/:keyId", element: <UserPage /> },
+      { path: "u/:nickname", element: <NicknamePage /> },
       { path: "about", element: <AboutPage /> },
       { path: "downloads", element: <DownloadsPage /> },
       { path: "docs", element: <DocsPage /> },

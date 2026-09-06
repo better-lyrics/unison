@@ -129,7 +129,7 @@ function BadgeTile({
       {pipsNext !== null && progress ? <Pips current={progress.current} next={pipsNext} /> : null}
       <BadgeMeta def={def} userBadge={userBadge} rare={rare} isCurrentTier={isCurrentTier} tierRank={tierRank} />
 
-      <div className="pointer-events-none absolute bottom-full left-1/2 z-20 w-52 -translate-x-1/2 -translate-y-1.5 rounded-xl bg-[#1f2023] p-3 text-left opacity-0 shadow-[inset_0_0_0_1px_var(--color-unison-border-strong),0_10px_30px_rgba(0,0,0,0.45)] transition-[opacity,transform] duration-150 ease-[cubic-bezier(0.2,0,0,1)] group-hover:-translate-y-2.5 group-hover:opacity-100">
+      <div className="pointer-events-none absolute bottom-full left-1/2 z-20 w-52 -translate-x-1/2 -translate-y-2 rounded-xl bg-[#1f2023] p-3 text-left opacity-0 shadow-[inset_0_0_0_1px_var(--color-unison-border-strong),0_10px_30px_rgba(0,0,0,0.45)] transition-opacity duration-150 ease-out group-hover:opacity-100">
         <div className="text-[13px] font-bold text-unison-text">{def.name}</div>
         <div
           className={cn(
