@@ -157,7 +157,16 @@ function BadgeTile({
 export function BadgeWall({ gamification, catalogue }: BadgeWallProps) {
   const { badges, display } = catalogue
   const userByKey = new Map(gamification.badges.map((ub) => [ub.key, ub]))
-  const groups = groupBadgesByCategory(badges, display.categoryOrder)
+  const defByKey = new Map(badges.map((def) => [def.key, def]))
+
+  // The shared community account sits outside the gamification system: it can only ever
+  // hold the community badge, so its wall shows exactly that, not the aspirational catalogue.
+  const communityOnly = gamification.badges.some((b) => b.key === "community" && b.earned)
+  const sourceDefs = communityOnly
+    ? gamification.badges.map((b) => defByKey.get(b.key)).filter((def): def is BadgeDef => def !== undefined)
+    : badges
+
+  const groups = groupBadgesByCategory(sourceDefs, display.categoryOrder)
     .map((group) => ({
       category: group.category,
       badges: group.badges.filter((def) => !(def.secret && !(userByKey.get(def.key)?.earned ?? false))),
