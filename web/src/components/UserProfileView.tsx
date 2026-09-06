@@ -3,8 +3,8 @@ import { useCallback } from "react"
 import { BadgeCatalogueProvider, useBadgeCatalogue } from "@/components/BadgeCatalogueContext"
 import { BadgeWall } from "@/components/BadgeWall"
 import { EmptyState } from "@/components/EmptyState"
-import { LoadingPlaceholder } from "@/components/LoadingPlaceholder"
 import { ProfileHeader } from "@/components/ProfileHeader"
+import { BadgesSkeleton, ProfileSkeleton } from "@/components/ProfileSkeleton"
 import { StatPills } from "@/components/StatPills"
 import { SubmissionsList } from "@/components/SubmissionsList"
 import { useAsyncData } from "@/hooks/useAsyncData"
@@ -69,7 +69,7 @@ function ProfileBody({
         ) : catalogueState.status === "error" ? (
           <EmptyState title="Achievements unavailable" hint={catalogueState.error.message} />
         ) : (
-          <LoadingPlaceholder rows={2} />
+          <BadgesSkeleton />
         )}
       </div>
 
@@ -90,7 +90,7 @@ export function UserProfileView({ keyId }: UserProfileViewProps) {
   const badgesFetcher = useCallback(() => fetchUserBadges(keyId), [keyId])
   const gamification = useAsyncData(badgesFetcher, `user:badges:${keyId}`)
 
-  if (rank.status === "loading") return <LoadingPlaceholder />
+  if (rank.status === "loading") return <ProfileSkeleton />
   if (rank.status === "error") return <EmptyState title="Could not load profile" hint={rank.error.message} />
 
   const gam = gamification.status === "success" ? gamification.data : null
