@@ -1,3 +1,4 @@
+import { CollapsibleSection } from "@/components/CollapsibleSection"
 import { EmptyState } from "@/components/EmptyState"
 import { useAsyncData } from "@/hooks/useAsyncData"
 import { fetchUserSubmissions } from "@/lib/api"
@@ -124,93 +125,94 @@ export function SubmissionsList({ keyId }: SubmissionsListProps) {
     "rounded-md border border-unison-border bg-unison-bg-elevated px-3 py-1.5 text-sm text-unison-text transition-colors hover:bg-unison-bg-hover focus:border-unison-border-strong focus:outline-none"
 
   return (
-    <div className="space-y-3">
-      <h2 className="text-[17px] font-bold tracking-[-0.01em] text-unison-text">Submissions</h2>
-      <div className="flex flex-wrap items-center gap-2">
-        <input
-          type="search"
-          value={toolbar.search}
-          onChange={(e) => setToolbar((t) => ({ ...t, search: e.target.value }))}
-          placeholder="Search song or artist"
-          aria-label="Search submissions"
-          className={`${inputClass} min-w-0 flex-1 placeholder:text-unison-text-muted`}
-        />
-        <select
-          value={toolbar.syncType}
-          onChange={(e) => setToolbar((t) => ({ ...t, syncType: e.target.value as SyncFilter }))}
-          aria-label="Filter by sync type"
-          className={`${inputClass} cursor-pointer`}
-        >
-          <option value="all">All sync types</option>
-          <option value="richsync">Richsync</option>
-          <option value="linesync">Linesync</option>
-          <option value="plain">Plain</option>
-        </select>
-        <select
-          value={toolbar.sort}
-          onChange={(e) => setToolbar((t) => ({ ...t, sort: e.target.value as SortMode }))}
-          aria-label="Sort submissions"
-          className={`${inputClass} cursor-pointer`}
-        >
-          <option value="newest">Newest first</option>
-          <option value="oldest">Oldest first</option>
-          <option value="most_votes">Most votes</option>
-          <option value="least_votes">Least votes</option>
-        </select>
-      </div>
-      {visible.length === 0 ? (
-        <p className="text-xs text-unison-text-muted">
-          No matches in loaded submissions. Try clearing filters or loading more.
-        </p>
-      ) : (
-        <ul className="border-b border-unison-border">
-          {visible.map((s) => (
-            <li key={s.id}>
-              <Link
-                to={`/song/${s.videoId}`}
-                className="flex items-center gap-3 border-t border-unison-border px-2 py-3.5 transition-colors hover:bg-unison-bg-hover"
-              >
-                <div className="min-w-0 flex-1">
-                  <p className="flex items-center gap-2 truncate text-sm font-medium text-unison-text">
-                    <span className="truncate">{s.song}</span>
-                    {s.hidden ? (
-                      <span className="shrink-0 rounded bg-unison-bg-hover px-1.5 py-0.5 text-[10px] uppercase tracking-wider text-unison-text-secondary">
-                        hidden
-                      </span>
-                    ) : null}
-                  </p>
-                  <p className="truncate text-xs text-unison-text-muted">
-                    {s.artist} · {s.syncType} · {formatRelativeTime(s.createdAt)}
-                  </p>
-                </div>
-                <p
-                  title={`${formatExact(s.voteCount)} votes`}
-                  className="shrink-0 font-mono text-xs text-unison-text-muted"
-                >
-                  {formatCompact(s.voteCount)} votes
-                </p>
-              </Link>
-            </li>
-          ))}
-        </ul>
-      )}
-      {cursor !== undefined ? (
-        <div className="space-y-2">
-          <button
-            type="button"
-            onClick={loadMore}
-            disabled={page.loadingMore}
-            className="cursor-pointer rounded-md border border-unison-border bg-unison-bg-elevated px-3 py-1.5 text-xs text-unison-text-secondary transition-colors hover:bg-unison-bg-hover hover:text-unison-text disabled:opacity-50"
+    <CollapsibleSection title="Submissions">
+      <div className="space-y-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <input
+            type="search"
+            value={toolbar.search}
+            onChange={(e) => setToolbar((t) => ({ ...t, search: e.target.value }))}
+            placeholder="Search song or artist"
+            aria-label="Search submissions"
+            className={`${inputClass} min-w-0 flex-1 placeholder:text-unison-text-muted`}
+          />
+          <select
+            value={toolbar.syncType}
+            onChange={(e) => setToolbar((t) => ({ ...t, syncType: e.target.value as SyncFilter }))}
+            aria-label="Filter by sync type"
+            className={`${inputClass} cursor-pointer`}
           >
-            {page.loadingMore ? "Loading..." : page.loadMoreError ? "Retry" : "Load more"}
-          </button>
-          {page.loadMoreError ? (
-            <p role="alert" className="text-xs text-unison-text-muted">
-              {page.loadMoreError}
-            </p>
-          ) : null}
+            <option value="all">All sync types</option>
+            <option value="richsync">Richsync</option>
+            <option value="linesync">Linesync</option>
+            <option value="plain">Plain</option>
+          </select>
+          <select
+            value={toolbar.sort}
+            onChange={(e) => setToolbar((t) => ({ ...t, sort: e.target.value as SortMode }))}
+            aria-label="Sort submissions"
+            className={`${inputClass} cursor-pointer`}
+          >
+            <option value="newest">Newest first</option>
+            <option value="oldest">Oldest first</option>
+            <option value="most_votes">Most votes</option>
+            <option value="least_votes">Least votes</option>
+          </select>
         </div>
-      ) : null}
-    </div>
+        {visible.length === 0 ? (
+          <p className="text-xs text-unison-text-muted">
+            No matches in loaded submissions. Try clearing filters or loading more.
+          </p>
+        ) : (
+          <ul className="border-b border-unison-border">
+            {visible.map((s) => (
+              <li key={s.id}>
+                <Link
+                  to={`/song/${s.videoId}`}
+                  className="flex items-center gap-3 border-t border-unison-border px-2 py-3.5 transition-colors hover:bg-unison-bg-hover"
+                >
+                  <div className="min-w-0 flex-1">
+                    <p className="flex items-center gap-2 truncate text-sm font-medium text-unison-text">
+                      <span className="truncate">{s.song}</span>
+                      {s.hidden ? (
+                        <span className="shrink-0 rounded bg-unison-bg-hover px-1.5 py-0.5 text-[10px] uppercase tracking-wider text-unison-text-secondary">
+                          hidden
+                        </span>
+                      ) : null}
+                    </p>
+                    <p className="truncate text-xs text-unison-text-muted">
+                      {s.artist} · {s.syncType} · {formatRelativeTime(s.createdAt)}
+                    </p>
+                  </div>
+                  <p
+                    title={`${formatExact(s.voteCount)} votes`}
+                    className="shrink-0 font-mono text-xs text-unison-text-muted"
+                  >
+                    {formatCompact(s.voteCount)} votes
+                  </p>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        )}
+        {cursor !== undefined ? (
+          <div className="space-y-2">
+            <button
+              type="button"
+              onClick={loadMore}
+              disabled={page.loadingMore}
+              className="cursor-pointer rounded-md border border-unison-border bg-unison-bg-elevated px-3 py-1.5 text-xs text-unison-text-secondary transition-colors hover:bg-unison-bg-hover hover:text-unison-text disabled:opacity-50"
+            >
+              {page.loadingMore ? "Loading..." : page.loadMoreError ? "Retry" : "Load more"}
+            </button>
+            {page.loadMoreError ? (
+              <p role="alert" className="text-xs text-unison-text-muted">
+                {page.loadMoreError}
+              </p>
+            ) : null}
+          </div>
+        ) : null}
+      </div>
+    </CollapsibleSection>
   )
 }

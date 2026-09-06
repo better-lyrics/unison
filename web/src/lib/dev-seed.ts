@@ -578,3 +578,18 @@ export async function seedUserBadges(keyId: string): Promise<UserGamification> {
   }
   return entry.rank === 1 ? auroraShowcase(keyId) : derivedGamification(entry)
 }
+
+// Mirrors the backend setFeatured contract for the dev preview: only earned badges may be
+// featured, and the selection is capped at featuredMax.
+export async function seedSetFeatured(keyId: string, featured: string[]): Promise<UserGamification> {
+  await delay()
+  const current = await seedUserBadges(keyId)
+  const earnedKeys = new Set(current.badges.filter((b) => b.earned).map((b) => b.key))
+  const next = featured.filter((k) => earnedKeys.has(k)).slice(0, SEED_CATALOGUE.display.featuredMax)
+  const nextSet = new Set(next)
+  return {
+    ...current,
+    featured: next,
+    badges: current.badges.map((b) => ({ ...b, featured: b.earned && nextSet.has(b.key) })),
+  }
+}

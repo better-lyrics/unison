@@ -4,7 +4,6 @@ import { useSession } from "@/auth/useSession"
 import { EmptyState } from "@/components/EmptyState"
 import { LeaderboardSection } from "@/components/LeaderboardSection"
 import { LoadingPlaceholder } from "@/components/LoadingPlaceholder"
-import { OwnerControls } from "@/components/OwnerControls"
 import { ProfileSkeleton } from "@/components/ProfileSkeleton"
 import { UserProfileView } from "@/components/UserProfileView"
 import { useAsyncData } from "@/hooks/useAsyncData"
@@ -19,12 +18,7 @@ function SignedInMe({ keyId }: { keyId: string }) {
     return <Navigate to={`/u/${rank.data.handle}`} replace />
   }
 
-  return (
-    <div className="space-y-6">
-      <UserProfileView keyId={keyId} />
-      <OwnerControls />
-    </div>
-  )
+  return <UserProfileView keyId={keyId} />
 }
 
 export function MePage() {
