@@ -196,7 +196,8 @@ describeIntegration("badges award and read model (integration)", () => {
 				tierRank: null,
 				badges: [],
 				featured: [],
-				counts: { earned: 0, total: BADGES.length - 1 },
+				// Excludes community (blacklist-only) and committee (secret, unearned here).
+				counts: { earned: 0, total: BADGES.length - 2 },
 			})
 		})
 
@@ -233,9 +234,9 @@ describeIntegration("badges award and read model (integration)", () => {
 			expect(sharpEar?.featured).toBe(false)
 
 			expect(g.badges.map((b) => b.key)).toEqual(
-				BADGES.map((b) => b.key).filter((k) => k !== "community")
+				BADGES.map((b) => b.key).filter((k) => k !== "community" && k !== "committee")
 			)
-			expect(g.counts).toEqual({ earned: 2, total: BADGES.length - 1 })
+			expect(g.counts).toEqual({ earned: 2, total: BADGES.length - 2 })
 			expect(g.featured).toEqual(["verified-contributor"])
 
 			expect(g.xp).toBe(50)
@@ -268,6 +269,7 @@ describeIntegration("badges award and read model (integration)", () => {
 
 			expect(g.badges.map((b) => b.key)).toEqual(["community"])
 			expect(g.badges[0].earned).toBe(true)
+			expect(g.counts).toEqual({ earned: 1, total: 1 })
 			expect(g.tier).toBeNull()
 			expect(g.tierRank).toBeNull()
 			expect(g.topExpertise).toBeUndefined()

@@ -113,6 +113,7 @@ export const BADGES: BadgeDef[] = [
 		description: "A member of the Better Lyrics Council.",
 		category: "special",
 		kind: "special",
+		secret: true,
 		image: image("committee"),
 	},
 	{
@@ -129,6 +130,7 @@ export const BADGES: BadgeDef[] = [
 		description: "The shared community lyrics account.",
 		category: "special",
 		kind: "special",
+		secret: true,
 		image: image("community"),
 	},
 ]
