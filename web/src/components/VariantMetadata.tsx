@@ -26,7 +26,7 @@ function truncateKey(keyId: string): string {
 
 export function VariantMetadata({ variant }: VariantMetadataProps) {
   return (
-    <aside className="rounded-lg border border-unison-border bg-unison-bg-elevated p-4">
+    <aside className="rounded-lg bg-white/[0.02] p-4">
       {variant.hidden ? (
         <div className="mb-3 rounded border border-unison-warn/40 bg-unison-warn/10 px-3 py-2 text-xs text-unison-warn">
           This variant has been auto-hidden by community downvotes.
