@@ -1,4 +1,4 @@
-import { IconBrandDiscordFilled, IconCheck, IconCopy, IconShare, IconStarFilled } from "@tabler/icons-react"
+import { IconBrandDiscordFilled, IconCheck, IconShare, IconStarFilled } from "@tabler/icons-react"
 import { useState } from "react"
 import { useBadgeModal } from "@/components/BadgeModalContext"
 import { OdometerNumber } from "@/components/OdometerNumber"
@@ -65,7 +65,7 @@ function FeaturedBadges({
   if (featured.length === 0) return null
 
   return (
-    <span data-testid="featured-badges" className="pf-featured flex items-center gap-1.5 pl-3.5">
+    <span data-testid="featured-badges" className="pf-featured flex items-center gap-1.5 sm:pl-3.5">
       {featured.map((def, i) => {
         const userBadge = userByKey.get(def.key)
         const tier = userBadge?.tier
@@ -101,7 +101,6 @@ function FeaturedBadges({
 
 export function ProfileHeader({ keyId, rank, gamification, catalogue }: ProfileHeaderProps) {
   const [shareCopied, copyShare] = useCopied()
-  const [urlCopied, copyUrl] = useCopied()
   const link = profileLink(rank.displayName, keyId)
 
   const progress = gamification ? levelProgress(gamification.xp, gamification.xpForNext) : null
@@ -161,7 +160,7 @@ export function ProfileHeader({ keyId, rank, gamification, catalogue }: ProfileH
           <button
             type="button"
             onClick={() => copyShare(link.url)}
-            className="ml-auto inline-flex cursor-pointer items-center gap-1.5 rounded-lg bg-unison-surface px-3 py-2 text-[13px] font-medium text-unison-text-secondary transition-colors hover:bg-unison-bg-hover hover:text-unison-text active:scale-[0.96]"
+            className="sm:ml-auto inline-flex cursor-pointer items-center gap-1.5 rounded-lg bg-unison-surface px-3 py-2 text-[13px] font-medium text-unison-text-secondary transition-colors hover:bg-unison-bg-hover hover:text-unison-text active:scale-[0.96]"
           >
             {shareCopied ? (
               <IconCheck className="size-[15px]" stroke={1.7} />
@@ -172,37 +171,15 @@ export function ProfileHeader({ keyId, rank, gamification, catalogue }: ProfileH
           </button>
         </div>
 
-        <div className="mt-2 flex items-center gap-2.5 text-sm text-unison-text-muted">
-          {link.handle ? (
-            <span className="font-mono font-medium text-unison-text-secondary">@{link.handle}</span>
-          ) : (
-            <code className="font-mono text-unison-text-secondary" title={keyId}>
-              {link.label}
-            </code>
-          )}
-          <button
-            type="button"
-            onClick={() => copyUrl(link.url)}
-            aria-label={urlCopied ? "Copied" : "Copy profile link"}
-            className="inline-flex cursor-pointer text-white/30 transition-colors hover:text-unison-text-secondary"
-          >
-            {urlCopied ? (
-              <IconCheck className="size-[13px]" stroke={1.7} />
-            ) : (
-              <IconCopy className="size-[13px]" stroke={1.7} />
-            )}
-          </button>
-        </div>
-
         {rank.community ? (
-          <div className="mt-3.5 flex flex-wrap items-center gap-2.5 text-[13px]">
+          <div className="mt-3.5 flex flex-wrap items-center gap-2.5 text-[13px] max-sm:-ml-[112px] max-sm:w-[calc(100%_+_112px)]">
             <span className="inline-flex h-7 items-center gap-1.5 rounded-full bg-[rgba(255,200,61,0.12)] px-[11px] text-xs font-semibold text-unison-medal-gold">
               <IconStarFilled className="size-3.5" />
               Community account
             </span>
           </div>
         ) : rank.ranked || gamification ? (
-          <div className="mt-3.5 flex flex-wrap items-center gap-2.5 text-[13px]">
+          <div className="mt-3.5 flex flex-wrap items-center gap-2.5 text-[13px] max-sm:-ml-[112px] max-sm:w-[calc(100%_+_112px)]">
             {gamification?.tier ? (
               <TierChip tier={gamification.tier} rank={gamification.tierRank} gemSrc={gemSrc} />
             ) : null}
@@ -212,7 +189,7 @@ export function ProfileHeader({ keyId, rank, gamification, catalogue }: ProfileH
               </span>
             ) : null}
             {gamification ? (
-              <span className="ml-auto text-unison-text-muted">
+              <span className="w-full text-unison-text-muted sm:ml-auto sm:w-auto">
                 Level{" "}
                 <b className="font-bold text-unison-text-secondary">
                   <OdometerNumber value={gamification.level} />

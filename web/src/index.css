@@ -7,8 +7,8 @@
 @import "@braccato/core/styles/instrumental.css";
 
 @theme {
-  --color-unison-bg: #28292c;
-  --color-unison-bg-elevated: #3e3e41;
+  --color-unison-bg: #0f0e13;
+  --color-unison-bg-elevated: #141316;
   --color-unison-bg-hover: rgba(255, 255, 255, 0.06);
   --color-unison-surface: rgba(255, 255, 255, 0.05);
   --color-unison-border: rgba(255, 255, 255, 0.1);

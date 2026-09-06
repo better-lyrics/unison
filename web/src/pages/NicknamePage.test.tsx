@@ -71,7 +71,6 @@ describe("NicknamePage", () => {
 
     renderAt("/u/aurorawynter")
     await waitFor(() => expect(screen.getByText("Aurora Wynter")).toBeTruthy())
-    expect(screen.getByText("@aurorawynter")).toBeTruthy()
   })
 
   it("resolves a mixed-case handle via the lowercased lookup", async () => {

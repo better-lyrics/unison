@@ -46,6 +46,11 @@
   background: var(--color-unison-border);
   animation: pf-divider-in 0.32s cubic-bezier(0.2, 0, 0, 1) 0.26s both;
 }
+@media (width < 640px) {
+  .pf-featured::before {
+    display: none;
+  }
+}
 .pf-fbadge {
   animation: pf-pop-in 0.4s cubic-bezier(0.2, 0, 0, 1) both;
 }

@@ -157,28 +157,6 @@ describe("UserProfileView", () => {
     await waitFor(() => expect(screen.getByText(/no submissions yet/i)).toBeTruthy())
   })
 
-  it("copies the profile link from the handle row", async () => {
-    const writeText = vi.fn().mockResolvedValue(undefined)
-    vi.stubGlobal("navigator", { ...navigator, clipboard: { writeText } })
-    vi.stubGlobal(
-      "fetch",
-      vi.fn().mockImplementation((url: string) => {
-        if (url === `/leaderboard/users/${keyId}`) {
-          return ok({ ranked: false, keyId, displayName: "QuietUser", lastVoteAt: null })
-        }
-        if (url === `/users/${keyId}/submissions`) return ok({ submissions: [] })
-        return Promise.reject(new Error(`unexpected url ${url}`))
-      }),
-    )
-
-    renderView()
-    await waitFor(() => expect(screen.getByText("@quietuser")).toBeTruthy())
-    await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: /copy profile link/i }))
-    })
-    expect(writeText).toHaveBeenCalledWith(expect.stringContaining("/u/quietuser"))
-  })
-
   it("shares the /u profile link", async () => {
     const writeText = vi.fn().mockResolvedValue(undefined)
     vi.stubGlobal("navigator", { ...navigator, clipboard: { writeText } })
