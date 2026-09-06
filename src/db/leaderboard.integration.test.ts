@@ -113,55 +113,65 @@ describeIntegration("curator leaderboard (integration)", () => {
 		const curators = await seedPopulation()
 		const rows = await getCuratorLeaderboard(env, SCAN)
 
-		expect(rows).toHaveLength(TOTAL)
-		expect(rows[0].keyId).toBe(curators[0].keyId)
+		// The community account is shown (by its huge score) but sits outside the ranks.
+		expect(rows).toHaveLength(TOTAL + 1)
+		const real = rows.filter((r) => !r.community)
+		expect(real).toHaveLength(TOTAL)
+		expect(real[0].keyId).toBe(curators[0].keyId)
 
-		expect(rows[0].tier).toBe("legendary")
-		expect(rows[1].tier).toBe("grandmaster")
-		expect(rows[2].tier).toBe("master")
-		expect(rows[3].tier).toBe("elite")
-		expect(rows[4].tier).toBe("lyricist")
-		expect(rows[TOTAL - 1].tier).toBeNull()
+		expect(real[0].tier).toBe("legendary")
+		expect(real[1].tier).toBe("grandmaster")
+		expect(real[2].tier).toBe("master")
+		expect(real[3].tier).toBe("elite")
+		expect(real[4].tier).toBe("lyricist")
+		expect(real[TOTAL - 1].tier).toBeNull()
 
-		expect(rows[0].xp).toBe(4500)
-		expect({ level: rows[0].level, xpForNext: rows[0].xpForNext }).toEqual(
+		expect(real[0].xp).toBe(4500)
+		expect({ level: real[0].level, xpForNext: real[0].xpForNext }).toEqual(
 			levelForXp(4500, thresholds)
 		)
-		expect({ level: rows[0].level, xpForNext: rows[0].xpForNext }).toEqual({
+		expect({ level: real[0].level, xpForNext: real[0].xpForNext }).toEqual({
 			level: 9,
 			xpForNext: null,
 		})
 
-		expect(rows[1].xp).toBe(0)
-		expect({ level: rows[1].level, xpForNext: rows[1].xpForNext }).toEqual({
+		expect(real[1].xp).toBe(0)
+		expect({ level: real[1].level, xpForNext: real[1].xpForNext }).toEqual({
 			level: 1,
 			xpForNext: 50,
 		})
 
-		expect(rows[3].xp).toBe(200)
-		expect({ level: rows[3].level, xpForNext: rows[3].xpForNext }).toEqual(
+		expect(real[3].xp).toBe(200)
+		expect({ level: real[3].level, xpForNext: real[3].xpForNext }).toEqual(
 			levelForXp(200, thresholds)
 		)
-		expect({ level: rows[3].level, xpForNext: rows[3].xpForNext }).toEqual({
+		expect({ level: real[3].level, xpForNext: real[3].xpForNext }).toEqual({
 			level: 3,
 			xpForNext: 350,
 		})
 
-		expect(rows[4].xp).toBe(50)
-		expect({ level: rows[4].level, xpForNext: rows[4].xpForNext }).toEqual({
+		expect(real[4].xp).toBe(50)
+		expect({ level: real[4].level, xpForNext: real[4].xpForNext }).toEqual({
 			level: 2,
 			xpForNext: 150,
 		})
 	})
 
-	it("excludes the community key so real curators own the ranks", async () => {
+	it("shows the community account by score but untiered, so real curators own the ranks", async () => {
 		const curators = await seedPopulation()
 		const rows = await getCuratorLeaderboard(env, SCAN)
 
-		expect(rows.some((r) => r.keyId === COMMUNITY_KEY_ID)).toBe(false)
-		expect(rows[0].keyId).toBe(curators[0].keyId)
-		expect(rows[0].rank).toBe(1)
-		expect(rows[0].tier).toBe("legendary")
+		const community = rows.find((r) => r.keyId === COMMUNITY_KEY_ID)
+		expect(community).toBeDefined()
+		expect(community?.community).toBe(true)
+		expect(community?.rank).toBe(0)
+		expect(community?.tier).toBeNull()
+
+		const real = rows.filter((r) => !r.community)
+		expect(real[0].keyId).toBe(curators[0].keyId)
+		expect(real[0].rank).toBe(1)
+		expect(real[0].tier).toBe("legendary")
+		expect(real.map((r) => r.rank)).toEqual(real.map((_, i) => i + 1))
 
 		const rank = await getCuratorRank(env, curators[0].keyId)
 		expect(rank?.rank).toBe(1)
@@ -169,7 +179,10 @@ describeIntegration("curator leaderboard (integration)", () => {
 		expect(rank?.xp).toBe(4500)
 		expect(rank?.level).toBe(9)
 
-		expect(await getCuratorRank(env, COMMUNITY_KEY_ID)).toBeNull()
+		const communityRank = await getCuratorRank(env, COMMUNITY_KEY_ID)
+		expect(communityRank?.community).toBe(true)
+		expect(communityRank?.rank).toBe(0)
+		expect(communityRank?.tier).toBeNull()
 	})
 
 	describe("invariants", () => {
@@ -187,6 +200,7 @@ describeIntegration("curator leaderboard (integration)", () => {
 					"fulfilledCount",
 					"fulfilledDemand",
 					"rank",
+					"community",
 					"nickname",
 					"discordLinked",
 					"tier",
@@ -198,18 +212,19 @@ describeIntegration("curator leaderboard (integration)", () => {
 				].sort()
 			)
 
-			expect(rows[0].keyId).toBe(curators[0].keyId)
-			expect(rows[0].reputation).toBe(1)
-			expect(rows[0].score).toBe(TOTAL * 100)
-			expect(rows[0].submissionCount).toBe(1)
-			expect(rows[0].totalUpvotes).toBe(5)
-			expect(rows[0].fulfilledCount).toBe(0)
-			expect(rows[0].fulfilledDemand).toBe(0)
-			expect(rows[0].rank).toBe(1)
-			expect(rows[0].nickname).toBeNull()
-			expect(rows[0].discordLinked).toBe(false)
-			expect(rows[0].badgeCount).toBe(0)
-			expect(rows[0].topBadge).toBeNull()
+			const top = rows.filter((r) => !r.community)[0]
+			expect(top.keyId).toBe(curators[0].keyId)
+			expect(top.reputation).toBe(1)
+			expect(top.score).toBe(TOTAL * 100)
+			expect(top.submissionCount).toBe(1)
+			expect(top.totalUpvotes).toBe(5)
+			expect(top.fulfilledCount).toBe(0)
+			expect(top.fulfilledDemand).toBe(0)
+			expect(top.rank).toBe(1)
+			expect(top.nickname).toBeNull()
+			expect(top.discordLinked).toBe(false)
+			expect(top.badgeCount).toBe(0)
+			expect(top.topBadge).toBeNull()
 		})
 
 		it("attaches a curator's badge count and top badge to the row and rank", async () => {
@@ -220,9 +235,10 @@ describeIntegration("curator leaderboard (integration)", () => {
 			)
 
 			const rows = await getCuratorLeaderboard(env, SCAN)
-			expect(rows[0].keyId).toBe(curators[0].keyId)
-			expect(rows[0].badgeCount).toBe(2)
-			expect(rows[0].topBadge).toEqual({
+			const top = rows.filter((r) => !r.community)[0]
+			expect(top.keyId).toBe(curators[0].keyId)
+			expect(top.badgeCount).toBe(2)
+			expect(top.topBadge).toEqual({
 				key: "verified-contributor",
 				name: "Verified Contributor",
 				tier: 3,
@@ -246,7 +262,8 @@ describeIntegration("curator leaderboard (integration)", () => {
 
 			expect(page).toHaveLength(5)
 			expect(page.map((r) => r.tier)).toEqual(full.slice(0, 5).map((r) => r.tier))
-			expect(page[4].tier).toBe("lyricist")
+			// A page-tail curator keeps its full-population band, not one recomputed over 5 rows.
+			expect(page[4].tier).toBe(full[4].tier)
 		})
 	})
 

@@ -1,4 +1,4 @@
-import { IconBrandDiscordFilled, IconCheck, IconCopy, IconShare } from "@tabler/icons-react"
+import { IconBrandDiscordFilled, IconCheck, IconCopy, IconShare, IconStarFilled } from "@tabler/icons-react"
 import { useState } from "react"
 import { Link } from "react-router-dom"
 import { useBadgeModal } from "@/components/BadgeModalContext"
@@ -203,7 +203,14 @@ export function ProfileHeader({ keyId, rank, gamification, catalogue }: ProfileH
           </button>
         </div>
 
-        {rank.ranked || gamification ? (
+        {rank.community ? (
+          <div className="mt-3.5 flex flex-wrap items-center gap-2.5 text-[13px]">
+            <span className="inline-flex h-7 items-center gap-1.5 rounded-full bg-[rgba(255,200,61,0.12)] px-[11px] text-xs font-semibold text-unison-medal-gold">
+              <IconStarFilled className="size-3.5" />
+              Community account
+            </span>
+          </div>
+        ) : rank.ranked || gamification ? (
           <div className="mt-3.5 flex flex-wrap items-center gap-2.5 text-[13px]">
             {gamification?.tier ? (
               <TierChip tier={gamification.tier} rank={gamification.tierRank} gemSrc={gemSrc} />

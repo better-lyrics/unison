@@ -246,6 +246,63 @@ describe("UserProfileView", () => {
     await waitFor(() => expect(screen.getAllByText("Most Loved").length).toBeGreaterThan(0))
   })
 
+  it("renders the community account with a Community chip and no rank pill", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockImplementation((url: string) => {
+        if (url === `/leaderboard/users/${keyId}`) {
+          return ok({
+            ranked: true,
+            keyId,
+            displayName: "Community",
+            community: true,
+            reputation: 2,
+            score: 99,
+            submissionCount: 500,
+            totalUpvotes: 9,
+            rank: 0,
+            lastVoteAt: null,
+          })
+        }
+        if (url === `/users/${keyId}/badges`) {
+          return ok({
+            keyId,
+            level: 1,
+            xp: 0,
+            xpForNext: 50,
+            tier: null,
+            tierRank: null,
+            featured: ["community"],
+            counts: { earned: 1, total: 1 },
+            badges: [{ key: "community", earned: true, featured: true }],
+          })
+        }
+        if (url === `/users/${keyId}/submissions`) return ok({ submissions: [] })
+        if (url === "/badges") {
+          return ok({
+            badges: [
+              {
+                key: "community",
+                name: "Community",
+                description: "shared",
+                category: "special",
+                kind: "special",
+                secret: true,
+                image: { color: "/badge-art/community.svg", mono: "/badge-art/community_mono.svg" },
+              },
+            ],
+            display: { inlineGlyphs: 1, featuredMax: 5, rarityThreshold: 0.1, categoryOrder: ["special"] },
+          })
+        }
+        return Promise.reject(new Error(`unexpected url ${url}`))
+      }),
+    )
+
+    renderView()
+    await waitFor(() => expect(screen.getByText("Community account")).toBeTruthy())
+    expect(screen.queryByText(/Rank #/)).toBeNull()
+  })
+
   it("does not crash for a user with no tier and no earned badges", async () => {
     vi.stubGlobal(
       "fetch",
