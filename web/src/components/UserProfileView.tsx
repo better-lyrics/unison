@@ -10,7 +10,7 @@ import { EmptyState } from "@/components/EmptyState"
 import { FeaturedBadgeEditor } from "@/components/FeaturedBadgeEditor"
 import { OwnerControls } from "@/components/OwnerControls"
 import { ProfileHeader } from "@/components/ProfileHeader"
-import { BadgesSkeleton, ProfileSkeleton } from "@/components/ProfileSkeleton"
+import { ProfileSkeleton } from "@/components/ProfileSkeleton"
 import { StatPills } from "@/components/StatPills"
 import { SubmissionsList } from "@/components/SubmissionsList"
 import { setAsyncData, useAsyncData } from "@/hooks/useAsyncData"
@@ -54,7 +54,7 @@ function OwnerBlock({
 
   if (preview) {
     return (
-      <div className="mt-12 flex items-center justify-between gap-3 rounded-lg bg-white/[0.04] px-4 py-2.5">
+      <div className="mt-12 flex items-center justify-between gap-3 rounded-lg bg-white/[0.04] py-2.5 pr-3.5 pl-4">
         <span className="flex items-center gap-2 text-sm text-unison-text-secondary">
           <IconEye className="size-4" stroke={1.7} />
           You're previewing your public profile.
@@ -76,9 +76,9 @@ function OwnerBlock({
         <button
           type="button"
           onClick={() => setPreview(true)}
-          className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg bg-unison-surface px-3 py-2 text-[13px] font-medium text-unison-text-secondary transition-colors hover:bg-unison-bg-hover hover:text-unison-text active:scale-[0.96]"
+          className="inline-flex cursor-pointer items-center gap-2 rounded-lg bg-unison-surface py-2 pr-4 pl-3 text-[13px] font-medium text-unison-text-secondary transition-colors hover:bg-unison-bg-hover hover:text-unison-text active:scale-[0.96]"
         >
-          <IconEye className="size-[15px]" stroke={1.7} />
+          <IconEye className="size-3" stroke={1.7} />
           Preview as a visitor
         </button>
       </div>
@@ -94,18 +94,17 @@ function ProfileBody({
   keyId,
   rank,
   gamification,
+  catalogue,
   isOwner,
   onGamificationChange,
 }: {
   keyId: string
   rank: UserRankResponse
   gamification: UserGamification | null
+  catalogue: BadgeCatalogue | null
   isOwner: boolean
   onGamificationChange: (updated: UserGamification) => void
 }) {
-  const catalogueState = useBadgeCatalogue()
-  const catalogue = catalogueState.status === "success" ? catalogueState.data : null
-
   return (
     <div>
       <ProfileHeader keyId={keyId} rank={rank} gamification={gamification} catalogue={catalogue} />
@@ -128,10 +127,8 @@ function ProfileBody({
       <div className="mt-12">
         {gamification && catalogue ? (
           <BadgeWall gamification={gamification} catalogue={catalogue} defaultOpen={false} />
-        ) : catalogueState.status === "error" ? (
-          <EmptyState title="Achievements unavailable" hint={catalogueState.error.message} />
         ) : (
-          <BadgesSkeleton />
+          <EmptyState title="Achievements unavailable" hint="Achievements couldn't be loaded right now." />
         )}
       </div>
 
@@ -143,6 +140,45 @@ function ProfileBody({
         <SubmissionsList keyId={keyId} />
       </div>
     </div>
+  )
+}
+
+function ProfileGate({
+  keyId,
+  rank,
+  rankError,
+  rankLoading,
+  gamification,
+  gamSettled,
+  isOwner,
+  onGamificationChange,
+}: {
+  keyId: string
+  rank: UserRankResponse | null
+  rankError: Error | null
+  rankLoading: boolean
+  gamification: UserGamification | null
+  gamSettled: boolean
+  isOwner: boolean
+  onGamificationChange: (updated: UserGamification) => void
+}) {
+  const catalogueState = useBadgeCatalogue()
+  const catalogue = catalogueState.status === "success" ? catalogueState.data : null
+
+  if (rankError) return <EmptyState title="Could not load profile" hint={rankError.message} />
+  if (rankLoading || !rank || !gamSettled || catalogueState.status === "loading") {
+    return <ProfileSkeleton owner={isOwner} />
+  }
+
+  return (
+    <ProfileBody
+      keyId={keyId}
+      rank={rank}
+      gamification={gamification}
+      catalogue={catalogue}
+      isOwner={isOwner}
+      onGamificationChange={onGamificationChange}
+    />
   )
 }
 
@@ -161,19 +197,20 @@ export function UserProfileView({ keyId }: UserProfileViewProps) {
     setAsyncData(`user:badges:${updated.keyId}`, updated)
   }, [])
 
-  if (rank.status === "loading") return <ProfileSkeleton />
-  if (rank.status === "error") return <EmptyState title="Could not load profile" hint={rank.error.message} />
-
   const fetched = gamification.status === "success" ? gamification.data : null
   const gam = override?.keyId === keyId ? override : fetched
+  const gamSettled = override?.keyId === keyId || gamification.status !== "loading"
 
   return (
     <BadgeCatalogueProvider>
       <BadgeModalProvider>
-        <ProfileBody
+        <ProfileGate
           keyId={keyId}
-          rank={rank.data}
+          rank={rank.status === "success" ? rank.data : null}
+          rankError={rank.status === "error" ? rank.error : null}
+          rankLoading={rank.status === "loading"}
           gamification={gam}
+          gamSettled={gamSettled}
           isOwner={isOwner}
           onGamificationChange={onGamificationChange}
         />
