@@ -18,7 +18,7 @@ import { toHandle } from "./handle"
 
 const SEEDED_NOW = Math.floor(Date.now() / 1000)
 
-export const SEED_CURATORS: CuratorLeaderboardEntry[] = [
+const DEFAULT_CURATORS: CuratorLeaderboardEntry[] = [
   {
     keyId: "a".repeat(64),
     displayName: "Aurora Wynter",
@@ -90,6 +90,19 @@ export const SEED_CURATORS: CuratorLeaderboardEntry[] = [
     discordLinked: false,
   },
 ]
+
+interface RealSeed {
+  REAL_CURATORS: CuratorLeaderboardEntry[]
+  REAL_SUBMISSIONS: Record<string, UserSubmission[]>
+}
+
+// Optional local real-data override (web/src/lib/dev-seed.real.ts, gitignored) built from a
+// prod dump. Absent in committed builds, so this falls back to the synthetic curators.
+const realSeed = Object.values(import.meta.glob<RealSeed>("./dev-seed.real.ts", { eager: true }))[0] as
+  | RealSeed
+  | undefined
+
+export const SEED_CURATORS: CuratorLeaderboardEntry[] = realSeed?.REAL_CURATORS ?? DEFAULT_CURATORS
 
 const delay = (ms = 120) => new Promise((resolve) => setTimeout(resolve, ms))
 
@@ -234,9 +247,10 @@ const SEED_SUBMISSIONS: UserSubmission[] = [
   },
 ]
 
-export async function seedUserSubmissions(_keyId: string): Promise<UserSubmissionsResponse> {
+export async function seedUserSubmissions(keyId: string): Promise<UserSubmissionsResponse> {
   await delay()
-  return { submissions: SEED_SUBMISSIONS }
+  const real = realSeed?.REAL_SUBMISSIONS?.[keyId]
+  return { submissions: real ?? SEED_SUBMISSIONS }
 }
 
 // Dev seed points at the flat art served by the devBadgeArt vite plugin (see vite.config.ts).
