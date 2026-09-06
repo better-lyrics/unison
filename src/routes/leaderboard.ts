@@ -11,7 +11,7 @@ import {
 } from "@/db/leaderboard"
 import { getByKeyId } from "@/db/discordLinks"
 import { getLastVoteAt } from "@/db/profile"
-import { resolveDisplayName } from "@/db/users"
+import { resolveIdentity } from "@/db/users"
 import type { Env } from "@/types"
 import { buildError, ErrorCode } from "@/utils/errors"
 import { generatePetName } from "@/utils/petname"
@@ -149,7 +149,7 @@ export const leaderboardRoutes = (env: Env) =>
 					getLastVoteAt(env, params.keyId),
 					getByKeyId(env, params.keyId),
 				])
-				const displayName = await resolveDisplayName(env, params.keyId)
+				const { displayName, handle } = await resolveIdentity(env, params.keyId)
 				const discordLinked = link !== null
 				if (row) {
 					const { nickname: _nickname, ...rest } = row
@@ -159,6 +159,7 @@ export const leaderboardRoutes = (env: Env) =>
 							ranked: true,
 							...rest,
 							displayName,
+							handle,
 							lastVoteAt,
 							discordLinked,
 						},
@@ -170,6 +171,7 @@ export const leaderboardRoutes = (env: Env) =>
 						ranked: false,
 						keyId: params.keyId,
 						displayName,
+						handle,
 						lastVoteAt,
 						discordLinked,
 					},

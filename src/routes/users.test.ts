@@ -129,6 +129,41 @@ function rawRow(over: Partial<Record<string, unknown>> = {}) {
 const KEY = "a".repeat(64)
 const OTHER_KEY = "b".repeat(64)
 
+describe("GET /users/by-handle/:handle", () => {
+	it("resolves a handle to its key id", async () => {
+		const db = makeMockDB([{ key_id: KEY }])
+		const app = userRoutes(makeEnv(db))
+		const res = await app.handle(new Request("http://localhost/users/by-handle/aurora"))
+		expect(res.status).toBe(200)
+		const json = (await res.json()) as { data: { keyId: string } }
+		expect(json.data.keyId).toBe(KEY)
+		expect(db.calls[0].sql).toBe("SELECT key_id FROM users WHERE nickname_lower = ?")
+		expect(db.calls[0].params).toEqual(["aurora"])
+	})
+
+	it("lowercases the handle before resolving", async () => {
+		const db = makeMockDB([{ key_id: KEY }])
+		const app = userRoutes(makeEnv(db))
+		const res = await app.handle(new Request("http://localhost/users/by-handle/Aurora"))
+		expect(res.status).toBe(200)
+		expect(db.calls[0].params).toEqual(["aurora"])
+	})
+
+	it("returns 404 when no curator has that handle", async () => {
+		const db = makeMockDB([null])
+		const app = userRoutes(makeEnv(db))
+		const res = await app.handle(new Request("http://localhost/users/by-handle/ghost"))
+		expect(res.status).toBe(404)
+	})
+
+	it("rejects a handle shorter than the nickname minimum", async () => {
+		const db = makeMockDB([])
+		const app = userRoutes(makeEnv(db))
+		const res = await app.handle(new Request("http://localhost/users/by-handle/ab"))
+		expect(res.status).toBeGreaterThanOrEqual(400)
+	})
+})
+
 describe("GET /users/:keyId/submissions", () => {
 	it("returns submissions for a known user", async () => {
 		const db = makeMockDB([

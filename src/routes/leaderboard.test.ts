@@ -454,6 +454,35 @@ describe("GET /leaderboard/users/:keyId", () => {
 		expect(res.status).toBeGreaterThanOrEqual(400)
 	})
 
+	it("exposes a handle equal to the lowercased nickname for a nicknamed curator", async () => {
+		const keyId = "d".repeat(64)
+		const db = makeMockDB([
+			[{ key_id: keyId, reputation: 1.0, score: 3, submission_count: 1, total_upvotes: 4 }],
+			{ last_vote_at: 1700000456 },
+			null, // getByKeyId -> not linked
+			[], // getXpForUsers
+			[], // getBadgeSummaries
+			{ nickname: "Brook", nickname_lower: "brook" },
+		])
+		const env = makeEnv(db)
+		const app = leaderboardRoutes(env)
+		const res = await app.handle(new Request(`http://localhost/leaderboard/users/${keyId}`))
+		expect(res.status).toBe(200)
+		const json = (await res.json()) as { data: { handle?: string | null } }
+		expect(json.data.handle).toBe("brook")
+	})
+
+	it("returns a null handle for a curator without a nickname", async () => {
+		const keyId = "e".repeat(64)
+		const db = makeMockDB([[], { last_vote_at: null }, null, { nickname: null, nickname_lower: null }])
+		const env = makeEnv(db)
+		const app = leaderboardRoutes(env)
+		const res = await app.handle(new Request(`http://localhost/leaderboard/users/${keyId}`))
+		expect(res.status).toBe(200)
+		const json = (await res.json()) as { data: { handle?: string | null } }
+		expect(json.data.handle).toBeNull()
+	})
+
 	it("/leaderboard/:keyId reflects a custom nickname when set", async () => {
 		const keyId = "c".repeat(64)
 		const db = makeMockDB([

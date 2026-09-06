@@ -2,6 +2,7 @@ import { config } from "@/config"
 import { getUserBadges, setFeatured } from "@/db/badges"
 import { getFulfillmentStatsBySubmitter } from "@/db/fulfillments"
 import { getSubmissionsByUser } from "@/db/profile"
+import { resolveKeyIdByHandle } from "@/db/users"
 import type { Env } from "@/types"
 import { eitherAuth } from "@/utils/either-auth"
 import { ErrorCode, buildError } from "@/utils/errors"
@@ -27,6 +28,15 @@ export const userRoutes = (env: Env) =>
 	new Elysia({ prefix: "/users" })
 		.decorate("env", env)
 		.use(readRateLimit)
+		.get(
+			"/by-handle/:handle",
+			async ({ params, env, status }) => {
+				const keyId = await resolveKeyIdByHandle(env, params.handle)
+				if (!keyId) return status(404, buildError(ErrorCode.NOT_FOUND))
+				return { success: true, data: { keyId } }
+			},
+			{ params: t.Object({ handle: t.String({ pattern: "^[A-Za-z0-9_]{3,20}$" }) }) }
+		)
 		.get(
 			"/:keyId/submissions",
 			async ({ params, query, env }) => {
