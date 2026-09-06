@@ -10,7 +10,7 @@ describe("TierChip", () => {
     expect(screen.getByText("Legendary")).toBeTruthy()
   })
 
-  it("capitalizes a compound tier name", () => {
+  it("capitalizes a compound tier name without uppercasing it", () => {
     render(<TierChip tier="grandmaster" />)
     expect(screen.getByText("Grandmaster")).toBeTruthy()
   })
@@ -23,5 +23,16 @@ describe("TierChip", () => {
   it("includes the rank in the title when provided", () => {
     const { container } = render(<TierChip tier="master" rank={3} />)
     expect(container.querySelector('[data-tier="master"]')?.getAttribute("title")).toContain("#3")
+  })
+
+  it("renders the gem artwork when a source is given", () => {
+    const { container } = render(<TierChip tier="legendary" gemSrc="/badge-art/legendary.svg" />)
+    expect(container.querySelector('img[src="/badge-art/legendary.svg"]')).not.toBeNull()
+  })
+
+  it("falls back to the award icon without a gem source", () => {
+    const { container } = render(<TierChip tier="legendary" />)
+    expect(container.querySelector("img")).toBeNull()
+    expect(container.querySelector("svg")).not.toBeNull()
   })
 })

@@ -23,7 +23,7 @@ export function MePage() {
 
   return (
     <div className="space-y-6">
-      <UserProfileView keyId={session.identity.keyId} title="Me" />
+      <UserProfileView keyId={session.identity.keyId} />
       <LeaderboardSection title="Nickname" subtitle="How you appear across Unison.">
         <NicknameEditor />
       </LeaderboardSection>

@@ -125,7 +125,7 @@ export function SubmissionsList({ keyId }: SubmissionsListProps) {
 
   return (
     <div className="space-y-3">
-      <h3 className="text-sm font-semibold text-unison-text">Submissions</h3>
+      <h2 className="text-[17px] font-bold tracking-[-0.01em] text-unison-text">Submissions</h2>
       <div className="flex flex-wrap items-center gap-2">
         <input
           type="search"
@@ -163,12 +163,12 @@ export function SubmissionsList({ keyId }: SubmissionsListProps) {
           No matches in loaded submissions. Try clearing filters or loading more.
         </p>
       ) : (
-        <ul className="space-y-2">
+        <ul className="border-b border-unison-border">
           {visible.map((s) => (
             <li key={s.id}>
               <Link
                 to={`/song/${s.videoId}`}
-                className="flex items-center gap-3 rounded-lg border border-unison-border bg-unison-bg-elevated px-4 py-3 transition-colors hover:border-unison-border-strong hover:bg-unison-bg-hover"
+                className="flex items-center gap-3 rounded-lg border-t border-unison-border px-2 py-3.5 transition-colors hover:bg-unison-bg-hover"
               >
                 <div className="min-w-0 flex-1">
                   <p className="flex items-center gap-2 truncate text-sm font-medium text-unison-text">
