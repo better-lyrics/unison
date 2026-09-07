@@ -1,9 +1,9 @@
 import {
 	awardConfidenceXp,
+	awardConsensusVotes,
 	awardFirstForSongXp,
 	awardRequestFilledXp,
 } from "@/db/contribution-events"
-import { awardConsensusVotes } from "@/jobs/score-updater"
 import type { Confidence, Env } from "@/types"
 
 export async function backfillXp(

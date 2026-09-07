@@ -2,9 +2,9 @@ import { readFileSync } from "node:fs"
 import pg from "pg"
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest"
 import { config } from "@/config"
-import { getXp } from "@/db/contribution-events"
+import { awardConsensusVotes, getXp } from "@/db/contribution-events"
 import { D1Compat } from "@/infra/database"
-import { awardConsensusVotes, recalculateScore, updateScores } from "@/jobs/score-updater"
+import { recalculateScore, updateScores } from "@/jobs/score-updater"
 import type { Env } from "@/types"
 
 const { Pool } = pg
@@ -420,9 +420,9 @@ describeIntegration("score-updater xp emission (integration)", () => {
 			expect(await consensusCount(agreeB.voterId)).toBe(1)
 			expect(await eventDelta(agreeA.voterId, "consensus-vote")).toBe(2)
 			expect(await eventDelta(agreeB.voterId, "consensus-vote")).toBe(2)
-			expect(await refIdOf(agreeA.voterId)).toBe(agreeA.voteId)
-			expect(await refIdOf(agreeB.voterId)).toBe(agreeB.voteId)
-			expect(await refTypeOf(agreeA.voterId)).toBe("vote")
+			expect(await refIdOf(agreeA.voterId)).toBe(decisive)
+			expect(await refIdOf(agreeB.voterId)).toBe(decisive)
+			expect(await refTypeOf(agreeA.voterId)).toBe("lyric")
 			expect(await getXp(env, agreeA.voterId)).toBe(2)
 			expect(await getXp(env, agreeB.voterId)).toBe(2)
 
@@ -498,6 +498,29 @@ describeIntegration("score-updater xp emission (integration)", () => {
 				expect(await getXp(env, agree.voterId)).toBe(2)
 
 				await pool.query("UPDATE votes SET vote = -1 WHERE id = $1", [agree.voteId])
+
+				await awardConsensusVotes(env)
+
+				expect(await consensusCount(agree.voterId)).toBe(1)
+				expect(await getXp(env, agree.voterId)).toBe(2)
+			})
+
+			it("regression: un-voting then re-voting the same lyric does not re-credit consensus xp", async () => {
+				const submitter = await insertUser()
+				const decisive = await insertLyric(submitter, "vidConsensusRevote")
+				await setScore(decisive, 1.0, 3)
+				const agree = await castVote(decisive, 1, 0)
+
+				await awardConsensusVotes(env)
+				expect(await consensusCount(agree.voterId)).toBe(1)
+				expect(await getXp(env, agree.voterId)).toBe(2)
+
+				// removeVote deletes the row; a re-cast inserts a fresh vote id
+				await pool.query("DELETE FROM votes WHERE id = $1", [agree.voteId])
+				await pool.query(
+					"INSERT INTO votes (lyrics_id, user_id, vote, is_self_vote) VALUES ($1, $2, 1, 0)",
+					[decisive, agree.voterId]
+				)
 
 				await awardConsensusVotes(env)
 

@@ -51,3 +51,9 @@ const provenExpr = (repExpr: string, prefix: string) => `(
 )`
 
 export const PROVEN_EXPR_JOINED = provenExpr("u.reputation", "l.")
+
+export const CONSENSUS_LYRICS_CTE = `WITH consensus_lyrics AS (
+	SELECT id, CASE WHEN effective_score > 0 THEN 1 ELSE -1 END AS consensus
+	FROM lyrics
+	WHERE ABS(effective_score) > 0.5 AND vote_count >= ?
+)`

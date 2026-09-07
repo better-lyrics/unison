@@ -1,4 +1,5 @@
 import { config } from "@/config"
+import { CONSENSUS_LYRICS_CTE } from "@/db/predicates"
 import type { Confidence, Env } from "@/types"
 
 export interface ContributionEvent {
@@ -96,6 +97,18 @@ export async function awardPenaltyXp(
 		refType: "lyric",
 		refId: lyricsId,
 	})
+}
+
+export async function awardConsensusVotes(env: Env): Promise<void> {
+	await env.DB.prepare(`${CONSENSUS_LYRICS_CTE}
+		INSERT INTO contribution_events (user_id, delta, kind, ref_type, ref_id)
+		SELECT v.user_id, ?, 'consensus-vote', 'lyric', v.lyrics_id
+		FROM votes v
+		JOIN consensus_lyrics cl ON v.lyrics_id = cl.id
+		WHERE v.vote = cl.consensus AND v.is_self_vote = 0
+		ON CONFLICT (user_id, kind, ref_type, ref_id) DO NOTHING`)
+		.bind(config.reputation.minVotesForConfidence, config.gamification.xp.weights.consensusVote)
+		.run()
 }
 
 export async function getXp(env: Env, userId: number): Promise<number> {

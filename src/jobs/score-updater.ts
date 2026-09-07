@@ -1,8 +1,13 @@
 import { config } from "@/config"
 import { type AwardedBadge, evaluateAndAward } from "@/db/badges"
-import { awardConfidenceXp, awardFirstForSongXp, awardPenaltyXp } from "@/db/contribution-events"
+import {
+	awardConfidenceXp,
+	awardConsensusVotes,
+	awardFirstForSongXp,
+	awardPenaltyXp,
+} from "@/db/contribution-events"
 import { invalidateCache } from "@/db/lyrics"
-import { AUTO_HIDE_PREDICATE } from "@/db/predicates"
+import { AUTO_HIDE_PREDICATE, CONSENSUS_LYRICS_CTE } from "@/db/predicates"
 import { Logger } from "@/infra/logger"
 import type { Confidence, Env } from "@/types"
 
@@ -22,12 +27,6 @@ interface LyricsScoreUpdate {
 	diversity_bonus: number
 	confidence: Confidence
 }
-
-const CONSENSUS_LYRICS_CTE = `WITH consensus_lyrics AS (
-	SELECT id, CASE WHEN effective_score > 0 THEN 1 ELSE -1 END AS consensus
-	FROM lyrics
-	WHERE ABS(effective_score) > 0.5 AND vote_count >= ?
-)`
 
 export async function recalculateScore(env: Env, lyricsId: number): Promise<void> {
 	const row = await env.DB.prepare(
@@ -288,17 +287,5 @@ export async function updateReputations(env: Env): Promise<void> {
 			config.reputation.min,
 			config.reputation.max
 		)
-		.run()
-}
-
-export async function awardConsensusVotes(env: Env): Promise<void> {
-	await env.DB.prepare(`${CONSENSUS_LYRICS_CTE}
-		INSERT INTO contribution_events (user_id, delta, kind, ref_type, ref_id)
-		SELECT v.user_id, ?, 'consensus-vote', 'vote', v.id
-		FROM votes v
-		JOIN consensus_lyrics cl ON v.lyrics_id = cl.id
-		WHERE v.vote = cl.consensus AND v.is_self_vote = 0
-		ON CONFLICT (user_id, kind, ref_type, ref_id) DO NOTHING`)
-		.bind(config.reputation.minVotesForConfidence, config.gamification.xp.weights.consensusVote)
 		.run()
 }
