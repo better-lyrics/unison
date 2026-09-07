@@ -1,9 +1,10 @@
 import { readFileSync } from "node:fs"
 import pg from "pg"
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest"
+import { config } from "@/config"
 import { D1Compat } from "@/infra/database"
 import type { Env } from "@/types"
-import { addEvent, awardConfidenceXp, getXp } from "./contribution-events"
+import { addEvent, awardConfidenceXp, awardFirstForSongXp, getXp } from "./contribution-events"
 
 const { Pool } = pg
 
@@ -48,6 +49,15 @@ describeIntegration("contribution events (integration)", () => {
 		const row = await one<{ id: number }>("INSERT INTO users (key_id) VALUES ($1) RETURNING id", [
 			keyId,
 		])
+		return row.id
+	}
+
+	async function insertLyric(submitterId: number, videoId: string): Promise<number> {
+		const row = await one<{ id: number }>(
+			`INSERT INTO lyrics (video_id, song, artist, duration, song_norm, artist_norm, lyrics, format, sync_type, submitter_id)
+			 VALUES ($1,'Song','Artist',180,'song','artist','gz','plain','plain',$2) RETURNING id`,
+			[videoId, submitterId]
+		)
 		return row.id
 	}
 
@@ -234,6 +244,53 @@ describeIntegration("contribution events (integration)", () => {
 			expect(await kindCount(userId, "reached-medium")).toBe(1)
 			expect(await kindCount(userId, "reached-high")).toBe(1)
 			expect(await getXp(env, userId)).toBe(40)
+		})
+	})
+
+	describe("awardFirstForSongXp", () => {
+		const FIRST = config.gamification.xp.weights.firstForSong
+
+		it("emits nothing for a low-confidence lyric", async () => {
+			const userId = await seedUser("ffs-low")
+			const lyricId = await insertLyric(userId, "vidLow")
+
+			expect(await awardFirstForSongXp(env, userId, lyricId, "vidLow", "low")).toBe(false)
+			expect(await getXp(env, userId)).toBe(0)
+		})
+
+		it("emits nothing when the lyric is not the earliest for its video", async () => {
+			const early = await seedUser("ffs-early")
+			const late = await seedUser("ffs-late")
+			await insertLyric(early, "vidMulti")
+			const later = await insertLyric(late, "vidMulti")
+
+			expect(await awardFirstForSongXp(env, late, later, "vidMulti", "medium")).toBe(false)
+			expect(await getXp(env, late)).toBe(0)
+		})
+
+		it("awards the earliest lyric once it reaches medium confidence", async () => {
+			const userId = await seedUser("ffs-medium")
+			const lyricId = await insertLyric(userId, "vidMed")
+
+			expect(await awardFirstForSongXp(env, userId, lyricId, "vidMed", "medium")).toBe(true)
+			expect(await getXp(env, userId)).toBe(FIRST)
+		})
+
+		it("awards on high confidence as well", async () => {
+			const userId = await seedUser("ffs-high")
+			const lyricId = await insertLyric(userId, "vidHigh")
+
+			expect(await awardFirstForSongXp(env, userId, lyricId, "vidHigh", "high")).toBe(true)
+			expect(await getXp(env, userId)).toBe(FIRST)
+		})
+
+		it("is idempotent for a repeated award", async () => {
+			const userId = await seedUser("ffs-idem")
+			const lyricId = await insertLyric(userId, "vidIdem")
+
+			expect(await awardFirstForSongXp(env, userId, lyricId, "vidIdem", "medium")).toBe(true)
+			expect(await awardFirstForSongXp(env, userId, lyricId, "vidIdem", "medium")).toBe(false)
+			expect(await getXp(env, userId)).toBe(FIRST)
 		})
 	})
 })

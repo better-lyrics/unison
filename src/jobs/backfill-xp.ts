@@ -32,13 +32,13 @@ export async function backfillXp(
 	}
 
 	const firstRows = await env.DB.prepare(
-		"SELECT DISTINCT ON (video_id) id, submitter_id FROM lyrics WHERE deleted_at IS NULL ORDER BY video_id, id ASC"
-	).all<{ id: number; submitter_id: number | null }>()
+		"SELECT DISTINCT ON (video_id) id, submitter_id, video_id, confidence FROM lyrics WHERE deleted_at IS NULL ORDER BY video_id, id ASC"
+	).all<{ id: number; submitter_id: number | null; video_id: string; confidence: Confidence }>()
 
 	let firsts = 0
 	for (const row of firstRows.results || []) {
 		if (row.submitter_id !== null) {
-			await awardFirstForSongXp(env, row.submitter_id, row.id)
+			await awardFirstForSongXp(env, row.submitter_id, row.id, row.video_id, row.confidence)
 			firsts++
 		}
 	}

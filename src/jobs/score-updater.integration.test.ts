@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs"
 import pg from "pg"
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest"
+import { config } from "@/config"
 import { getXp } from "@/db/contribution-events"
 import { D1Compat } from "@/infra/database"
 import { awardConsensusVotes, recalculateScore, updateScores } from "@/jobs/score-updater"
@@ -139,6 +140,53 @@ describeIntegration("score-updater xp emission (integration)", () => {
 		expect(await countEvents(submitter, "reached-high")).toBe(1)
 	})
 
+	describe("first-for-song", () => {
+		const FIRST = config.gamification.xp.weights.firstForSong
+
+		it("awards first-for-song when the earliest lyric for a video reaches medium confidence", async () => {
+			const submitter = await insertUser()
+			const lyricId = await insertLyric(submitter, "vidFirst")
+			await upvote(lyricId, 1.0, 0)
+			await upvote(lyricId, 1.0, 0)
+			await upvote(lyricId, 1.0, 0)
+
+			await recalculateScore(env, lyricId)
+
+			expect(await confidenceOf(lyricId)).toBe("medium")
+			expect(await countEvents(submitter, "first-for-song")).toBe(1)
+			expect(await eventDelta(submitter, "first-for-song")).toBe(FIRST)
+
+			await recalculateScore(env, lyricId)
+			expect(await countEvents(submitter, "first-for-song")).toBe(1)
+		})
+
+		it("regression: does not award first-for-song while the earliest lyric stays low confidence", async () => {
+			const submitter = await insertUser()
+			const lyricId = await insertLyric(submitter, "vidStillLow")
+			await upvote(lyricId, 1.0, 0)
+
+			await recalculateScore(env, lyricId)
+
+			expect(await confidenceOf(lyricId)).toBe("low")
+			expect(await countEvents(submitter, "first-for-song")).toBe(0)
+		})
+
+		it("does not award first-for-song to a later variant that reaches medium", async () => {
+			const first = await insertUser()
+			const second = await insertUser()
+			await insertLyric(first, "vidVariants")
+			const secondLyric = await insertLyric(second, "vidVariants")
+			await upvote(secondLyric, 1.0, 0)
+			await upvote(secondLyric, 1.0, 0)
+			await upvote(secondLyric, 1.0, 0)
+
+			await recalculateScore(env, secondLyric)
+
+			expect(await confidenceOf(secondLyric)).toBe("medium")
+			expect(await countEvents(second, "first-for-song")).toBe(0)
+		})
+	})
+
 	describe("edge cases", () => {
 		it("emits no events for a submitter-less lyric that reaches medium", async () => {
 			const lyricId = await insertLyric(null, "vidNoSubmitter")
@@ -169,6 +217,7 @@ describeIntegration("score-updater xp emission (integration)", () => {
 	describe("insert-only ratchet invariants", () => {
 		it("adds reached-high on a later upgrade without re-crediting reached-medium", async () => {
 			const submitter = await insertUser()
+			await insertLyric(await insertUser(), "vidMediumThenHigh")
 			const lyricId = await insertLyric(submitter, "vidMediumThenHigh")
 			await upvote(lyricId, 1.0, 0)
 			await upvote(lyricId, 1.0, 0)
@@ -192,6 +241,7 @@ describeIntegration("score-updater xp emission (integration)", () => {
 
 		it("does not claw back reached-medium when a lyric drops back to low", async () => {
 			const submitter = await insertUser()
+			await insertLyric(await insertUser(), "vidMediumThenLow")
 			const lyricId = await insertLyric(submitter, "vidMediumThenLow")
 			await upvote(lyricId, 1.0, 0)
 			await upvote(lyricId, 1.0, 0)

@@ -6,7 +6,6 @@ import { TierChip } from "@/components/TierChip"
 import { isRareBadge, resolveBadgeImage } from "@/lib/badge-view"
 import { dicebearThumbsDataUri } from "@/lib/avatar"
 import { cn } from "@/lib/cn"
-import { toHandle } from "@/lib/handle"
 import { levelProgress } from "@/lib/level"
 import type { BadgeCatalogue, UserGamification, UserRankResponse } from "@/lib/types"
 
@@ -36,11 +35,10 @@ interface ProfileLink {
   label: string
 }
 
-function profileLink(displayName: string, keyId: string): ProfileLink {
+function profileLink(handle: string | null, keyId: string): ProfileLink {
   const origin = typeof window !== "undefined" ? window.location.origin : ""
   const host = typeof window !== "undefined" ? window.location.host : "unison.boidu.dev"
-  const handle = toHandle(displayName)
-  if (handle.length === 0) {
+  if (!handle) {
     const path = `/curator/${keyId}`
     return { handle: null, path, url: `${origin}${path}`, label: `${keyId.slice(0, 6)}…${keyId.slice(-6)}` }
   }
@@ -102,7 +100,7 @@ function FeaturedBadges({
 
 export function ProfileHeader({ keyId, rank, gamification, catalogue }: ProfileHeaderProps) {
   const [shareCopied, copyShare] = useCopied()
-  const link = profileLink(rank.displayName, keyId)
+  const link = profileLink(rank.handle ?? null, keyId)
 
   const progress = gamification ? levelProgress(gamification.xp, gamification.xpForNext) : null
   const ringOffset = progress ? RING_CIRCUMFERENCE * (1 - progress.pct) : RING_CIRCUMFERENCE

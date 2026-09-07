@@ -1,6 +1,6 @@
 import { config } from "@/config"
 import { type AwardedBadge, evaluateAndAward } from "@/db/badges"
-import { awardConfidenceXp, awardPenaltyXp } from "@/db/contribution-events"
+import { awardConfidenceXp, awardFirstForSongXp, awardPenaltyXp } from "@/db/contribution-events"
 import { invalidateCache } from "@/db/lyrics"
 import { AUTO_HIDE_PREDICATE } from "@/db/predicates"
 import { Logger } from "@/infra/logger"
@@ -78,6 +78,7 @@ export async function recalculateScore(env: Env, lyricsId: number): Promise<void
 
 	if (typeof row.submitter_id === "number") {
 		await awardConfidenceXp(env, row.submitter_id, lyricsId, update.confidence)
+		await awardFirstForSongXp(env, row.submitter_id, lyricsId, row.video_id, update.confidence)
 	}
 
 	log.debug("recalculated score", { lyricsId, effective_score: update.effective_score })

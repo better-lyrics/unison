@@ -84,39 +84,50 @@ export async function createBoost(
 		return { ok: false, reason: "target_committee" }
 	}
 
-	const { quota, used } = await getQuota(env, boosterId)
-	if (used >= quota) {
-		return { ok: false, reason: "over_quota" }
-	}
-
-	const active = await env.DB.prepare(
-		"SELECT 1 AS one FROM boosts WHERE lyrics_id = ? AND revoked_at IS NULL"
-	)
-		.bind(lyricsId)
-		.first<{ one: number }>()
-	if (active) {
-		return { ok: false, reason: "already_boosted" }
-	}
-
-	const nowEpoch = Math.floor(Date.now() / 1000)
+	let result: BoostResult
 	try {
-		await env.DB.prepare("INSERT INTO boosts (booster_id, lyrics_id) VALUES (?, ?)")
-			.bind(boosterId, lyricsId)
-			.run()
+		result = await env.DB.transaction(async (tx): Promise<BoostResult> => {
+			const txEnv = { ...env, DB: tx }
+			await tx.prepare("SELECT id FROM users WHERE id = ? FOR UPDATE").bind(boosterId).run()
+
+			const { quota, used } = await getQuota(txEnv, boosterId)
+			if (used >= quota) {
+				return { ok: false, reason: "over_quota" }
+			}
+
+			const active = await tx
+				.prepare("SELECT 1 AS one FROM boosts WHERE lyrics_id = ? AND revoked_at IS NULL")
+				.bind(lyricsId)
+				.first<{ one: number }>()
+			if (active) {
+				return { ok: false, reason: "already_boosted" }
+			}
+
+			const nowEpoch = Math.floor(Date.now() / 1000)
+			await tx
+				.prepare("INSERT INTO boosts (booster_id, lyrics_id) VALUES (?, ?)")
+				.bind(boosterId, lyricsId)
+				.run()
+			await tx
+				.prepare(
+					"UPDATE lyrics SET committee_approved_at = ?, committee_approved_by = ? WHERE id = ?"
+				)
+				.bind(nowEpoch, boosterId, lyricsId)
+				.run()
+
+			return { ok: true, quota: await getQuota(txEnv, boosterId) }
+		})
 	} catch (err) {
 		if ((err as { code?: string }).code === "23505") {
 			return { ok: false, reason: "already_boosted" }
 		}
 		throw err
 	}
-	await env.DB.prepare(
-		"UPDATE lyrics SET committee_approved_at = ?, committee_approved_by = ? WHERE id = ?"
-	)
-		.bind(nowEpoch, boosterId, lyricsId)
-		.run()
-	await invalidateCache(env, lyric.video_id)
 
-	return { ok: true, quota: await getQuota(env, boosterId) }
+	if (result.ok) {
+		await invalidateCache(env, lyric.video_id)
+	}
+	return result
 }
 
 async function clearBoost(env: Env, boostId: number, lyricsId: number): Promise<void> {

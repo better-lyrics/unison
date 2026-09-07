@@ -112,6 +112,58 @@ describe("UserProfileView", () => {
     expect(screen.getByText(/^hidden$/i)).toBeTruthy()
   })
 
+  function stubProfile(rankExtra: Record<string, unknown>) {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockImplementation((url: string) => {
+        if (url === `/leaderboard/users/${keyId}`) {
+          return ok({
+            ranked: true,
+            keyId,
+            displayName: "AlphaUser",
+            reputation: 1,
+            score: 1,
+            submissionCount: 0,
+            totalUpvotes: 0,
+            rank: 5,
+            ...rankExtra,
+          })
+        }
+        if (url === `/users/${keyId}/submissions`) return ok({ submissions: [] })
+        return Promise.reject(new Error(`unexpected url ${url}`))
+      }),
+    )
+  }
+
+  it("regression: shares the /curator link for a ranked curator with no handle", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined)
+    vi.stubGlobal("navigator", { ...navigator, clipboard: { writeText } })
+    stubProfile({})
+
+    renderView()
+    await waitFor(() => expect(screen.getByText("AlphaUser")).toBeTruthy())
+
+    fireEvent.click(screen.getAllByText("Share")[0])
+
+    expect(writeText).toHaveBeenCalledTimes(1)
+    expect(writeText.mock.calls[0][0]).toContain(`/curator/${keyId}`)
+    expect(writeText.mock.calls[0][0]).not.toContain("/u/")
+  })
+
+  it("shares the /u handle link when the curator has a handle", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined)
+    vi.stubGlobal("navigator", { ...navigator, clipboard: { writeText } })
+    stubProfile({ handle: "alphauser" })
+
+    renderView()
+    await waitFor(() => expect(screen.getByText("AlphaUser")).toBeTruthy())
+
+    fireEvent.click(screen.getAllByText("Share")[0])
+
+    expect(writeText).toHaveBeenCalledTimes(1)
+    expect(writeText.mock.calls[0][0]).toContain("/u/alphauser")
+  })
+
   it("shows a gold rank pill for a rank-1 curator", async () => {
     vi.stubGlobal(
       "fetch",
@@ -157,7 +209,7 @@ describe("UserProfileView", () => {
     await waitFor(() => expect(screen.getByText(/no submissions yet/i)).toBeTruthy())
   })
 
-  it("shares the /u profile link", async () => {
+  it("regression: shares the /curator link (not a displayName slug) when the curator has no handle", async () => {
     const writeText = vi.fn().mockResolvedValue(undefined)
     vi.stubGlobal("navigator", { ...navigator, clipboard: { writeText } })
     vi.stubGlobal(
@@ -176,7 +228,8 @@ describe("UserProfileView", () => {
     await act(async () => {
       fireEvent.click(screen.getByRole("button", { name: /share/i }))
     })
-    expect(writeText).toHaveBeenCalledWith(expect.stringContaining("/u/quietuser"))
+    expect(writeText).toHaveBeenCalledWith(expect.stringContaining(`/curator/${keyId}`))
+    expect(writeText).not.toHaveBeenCalledWith(expect.stringContaining("/u/quietuser"))
   })
 
   it("renders tier, level line, expertise, and badges from gamification", async () => {

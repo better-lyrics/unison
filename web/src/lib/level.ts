@@ -4,9 +4,7 @@ export interface LevelProgress {
   atMax: boolean
 }
 
-// The backend hands us cumulative xp plus xpForNext (the xp threshold of the next level, or
-// null at max). It does not expose the current level's floor, so the ring uses xp/xpForNext
-// (the finalised design's choice); the remaining figure is exact.
+// Backend exposes xp and xpForNext but not the level floor, so the ring uses xp/xpForNext.
 export function levelProgress(xp: number, xpForNext: number | null): LevelProgress {
   if (xpForNext === null || xpForNext <= 0) {
     return { pct: 1, remaining: 0, atMax: true }

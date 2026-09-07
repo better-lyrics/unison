@@ -1,6 +1,4 @@
-/* Entrance motion for the profile. One-shot keyframes (per better-ui: keyframes for
-   staged entrances, transitions for interactive state). Delays are set inline per index
-   so the stagger survives React reordering. */
+/* Delays are set inline per index so the stagger survives React reordering. */
 
 @keyframes pf-arc-fill {
   from {

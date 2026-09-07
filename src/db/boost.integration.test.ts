@@ -282,5 +282,25 @@ describeIntegration("boost store (integration)", () => {
 			expect(freed.used).toBe(1)
 			expect(freed.remaining).toBe(1)
 		})
+
+		it("regression: concurrent boosts cannot exceed the monthly quota", async () => {
+			const booster = await newUser()
+			await addToCommittee(booster)
+			const submitter = await newUser()
+			const lyricIds = await Promise.all(
+				["cc1", "cc2", "cc3", "cc4", "cc5"].map((v) => insertLyric(submitter, v))
+			)
+
+			const results = await Promise.all(lyricIds.map((id) => createBoost(env, booster, id)))
+
+			expect(results.filter((r) => r.ok).length).toBe(2)
+			expect(results.filter((r) => !r.ok && r.reason === "over_quota").length).toBe(3)
+
+			const active = await one<{ n: number }>(
+				"SELECT count(*)::int n FROM boosts WHERE booster_id = $1 AND revoked_at IS NULL",
+				[booster]
+			)
+			expect(Number(active.n)).toBe(2)
+		})
 	})
 })

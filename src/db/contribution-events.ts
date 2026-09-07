@@ -64,8 +64,17 @@ export async function awardRequestFilledXp(
 export async function awardFirstForSongXp(
 	env: Env,
 	submitterId: number,
-	lyricsId: number
+	lyricsId: number,
+	videoId: string,
+	confidence: Confidence
 ): Promise<boolean> {
+	if (confidence !== "medium" && confidence !== "high") return false
+	const earliest = await env.DB.prepare(
+		"SELECT MIN(id) AS min_id FROM lyrics WHERE video_id = ? AND deleted_at IS NULL"
+	)
+		.bind(videoId)
+		.first<{ min_id: number | null }>()
+	if (!earliest || Number(earliest.min_id) !== lyricsId) return false
 	return addEvent(env, {
 		userId: submitterId,
 		delta: config.gamification.xp.weights.firstForSong,

@@ -158,13 +158,13 @@ describeIntegration("backfill xp (integration)", () => {
 		const expected: Record<number, number> = {
 			[uMed]: MEDIUM + FIRST,
 			[uHigh]: HIGH + FIRST,
-			[uLow]: FIRST,
+			[uLow]: 0,
 			[uDeleted]: 0,
-			[uDec]: FIRST,
+			[uDec]: 0,
 			[uAgree]: CONSENSUS,
 			[uDisagree]: 0,
-			[uFill]: FILLED + FIRST,
-			[uFirst]: FIRST,
+			[uFill]: FILLED,
+			[uFirst]: 0,
 			[uSecond]: 0,
 		}
 
@@ -206,13 +206,13 @@ describeIntegration("backfill xp (integration)", () => {
 		it("first-for-song follows the live min-id predicate and ignores a deleted earlier lyric", async () => {
 			const uDeletedEarly = await seedUser()
 			const uSurvivor = await seedUser()
-			await insertLyric(uDeletedEarly, "vidDelFirst", "low", true)
-			await insertLyric(uSurvivor, "vidDelFirst", "low")
+			await insertLyric(uDeletedEarly, "vidDelFirst", "high", true)
+			await insertLyric(uSurvivor, "vidDelFirst", "medium")
 
 			const counts = await backfillXp(env)
 
 			expect(counts.firsts).toBe(1)
-			expect(await getXp(env, uSurvivor)).toBe(FIRST)
+			expect(await getXp(env, uSurvivor)).toBe(MEDIUM + FIRST)
 			expect(await getXp(env, uDeletedEarly)).toBe(0)
 		})
 	})
