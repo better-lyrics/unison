@@ -90,7 +90,7 @@ export async function createBoost(
 			const txEnv = { ...env, DB: tx }
 			await tx.prepare("SELECT id FROM users WHERE id = ? FOR UPDATE").bind(boosterId).run()
 
-			const { quota, used } = await getQuota(txEnv, boosterId)
+			const { quota, used, resetsAt } = await getQuota(txEnv, boosterId)
 			if (used >= quota) {
 				return { ok: false, reason: "over_quota" }
 			}
@@ -115,7 +115,11 @@ export async function createBoost(
 				.bind(nowEpoch, boosterId, lyricsId)
 				.run()
 
-			return { ok: true, quota: await getQuota(txEnv, boosterId) }
+			const usedAfter = used + 1
+			return {
+				ok: true,
+				quota: { quota, used: usedAfter, remaining: Math.max(0, quota - usedAfter), resetsAt },
+			}
 		})
 	} catch (err) {
 		if ((err as { code?: string }).code === "23505") {
