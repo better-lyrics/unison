@@ -102,6 +102,28 @@ export const config = {
 			],
 		},
 		seal: { label: "Better Lyrics Council Approved (BLCA)" },
+		badges: {
+			firefighterMinDemand: 3,
+			rarityCommonLanguages: [
+				"en",
+				"ja",
+				"es",
+				"ko",
+				"zh",
+				"ms",
+				"ru",
+				"pt",
+				"id",
+				"hi",
+				"vi",
+				"fr",
+			],
+			fanFavoriteMinNet: 50,
+			flawlessMinVotes: 5,
+			perfectionistMinScore: 0.9,
+			tastemaker: { winnerScore: 0.9, earlyWindow: 3 },
+			earlyAdopterCutoff: 1790812800,
+		},
 	},
 
 	exploration: {

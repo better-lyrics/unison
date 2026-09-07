@@ -11,6 +11,8 @@ export async function backfillBadges(env: Env): Promise<{ evaluated: number; awa
 	const parts = [
 		"SELECT DISTINCT user_id FROM contribution_events",
 		"SELECT user_id FROM committee_members",
+		"SELECT DISTINCT submitter_id AS user_id FROM lyrics WHERE submitter_id IS NOT NULL",
+		"SELECT DISTINCT user_id FROM reports",
 	]
 	if (blacklisted.length > 0) {
 		parts.push(
