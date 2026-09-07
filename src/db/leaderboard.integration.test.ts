@@ -209,6 +209,7 @@ describeIntegration("curator leaderboard (integration)", () => {
 					"xpForNext",
 					"badgeCount",
 					"topBadge",
+					"featured",
 				].sort()
 			)
 
