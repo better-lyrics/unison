@@ -114,6 +114,23 @@ export interface VariantSubmitter {
   reputation: number
 }
 
+export interface MarkActor {
+  keyId: string
+  displayName: string
+  tier: TierName | null
+  level: number
+  badgeCount: number
+  topBadge: LeaderboardBadge | null
+}
+
+export interface Mark {
+  type: string
+  label: string
+  icon: string
+  by?: MarkActor
+  at?: number
+}
+
 export interface VariantSummary {
   id: number
   videoId: string
@@ -130,6 +147,7 @@ export interface VariantSummary {
   confidence: Confidence
   hidden: boolean
   submitter?: VariantSubmitter
+  marks?: Mark[]
   userVote?: 1 | -1 | null
 }
 

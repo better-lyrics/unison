@@ -1,6 +1,7 @@
 import type {
   LyricsFormat,
   LyricsSearchHit,
+  Mark,
   QueueEntry,
   SongLeaderboardEntry,
   SongsLeaderboardResponse,
@@ -35,6 +36,7 @@ interface VariantTemplate {
   submitterIdx?: number
   userVote: 1 | -1 | null
   lyricsLines: string[]
+  marks?: Mark[]
 }
 
 const SEED_TEMPLATES: VariantTemplate[] = [
@@ -61,6 +63,22 @@ const SEED_TEMPLATES: VariantTemplate[] = [
       "Chorus line two until the day",
       "Bridge line one a quiet glow",
       "Bridge line two the rivers flow",
+    ],
+    marks: [
+      {
+        type: "seal",
+        label: "Better Lyrics Council Approved (BLCA)",
+        icon: "/badges/committee/image.svg",
+        by: {
+          keyId: "c".repeat(64),
+          displayName: "Kiyoshi",
+          tier: "master",
+          level: 14,
+          badgeCount: 9,
+          topBadge: null,
+        },
+        at: 1_725_000_000,
+      },
     ],
   },
   {
@@ -465,6 +483,7 @@ function buildVariant(template: VariantTemplate): VariantFull {
     confidence: template.confidence,
     hidden: template.hidden,
     submitter: template.submitterIdx !== undefined ? { ...SEEDED_SUBMITTERS[template.submitterIdx] } : undefined,
+    marks: template.marks,
     userVote: template.userVote,
     lyrics: buildLyrics(template),
   }

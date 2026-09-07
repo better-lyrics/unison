@@ -1,7 +1,7 @@
 import { cleanup, render, screen } from "@testing-library/react"
 import { MemoryRouter } from "react-router-dom"
 import { afterEach, describe, expect, it } from "vitest"
-import type { VariantFull } from "@/lib/types"
+import type { Mark, VariantFull } from "@/lib/types"
 import { VariantMetadata } from "./VariantMetadata"
 
 afterEach(() => cleanup())
@@ -115,5 +115,67 @@ describe("VariantMetadata", () => {
   it("omits the hidden banner when hidden is false", () => {
     renderMeta(makeVariant({ hidden: false }))
     expect(screen.queryByText(/auto-hidden/i)).toBeNull()
+  })
+
+  describe("marks", () => {
+    function makeSeal(overrides: Partial<Mark> = {}): Mark {
+      return {
+        type: "seal",
+        label: "Better Lyrics Council Approved (BLCA)",
+        icon: "/badges/committee/image.svg",
+        ...overrides,
+      }
+    }
+
+    it("renders a mark using its server-passed label and icon", () => {
+      const { container } = renderMeta(makeVariant({ marks: [makeSeal()] }))
+      expect(screen.getByText("Better Lyrics Council Approved (BLCA)")).toBeTruthy()
+      const img = container.querySelector("img")
+      expect(img?.getAttribute("src")).toBe("/badges/committee/image.svg")
+    })
+
+    it("links to the approving member's profile when `by` is present", () => {
+      const keyId = "committeekey0123456789012345abcd"
+      renderMeta(
+        makeVariant({
+          marks: [
+            makeSeal({
+              by: { keyId, displayName: "Kiyoshi", tier: "master", level: 12, badgeCount: 4, topBadge: null },
+            }),
+          ],
+        }),
+      )
+      const link = screen.getByRole("link", { name: /Kiyoshi/i })
+      expect(link.getAttribute("href")).toBe(`/curator/${keyId}`)
+    })
+
+    it("omits the `by` attribution when the actor is absent", () => {
+      renderMeta(makeVariant({ marks: [makeSeal()] }))
+      expect(screen.queryByRole("link")).toBeNull()
+    })
+
+    it("renders an unknown mark type generically from label and icon", () => {
+      renderMeta(
+        makeVariant({
+          marks: [{ type: "spotlight", label: "Editor's pick", icon: "/badges/spotlight/image.svg" }],
+        }),
+      )
+      expect(screen.getByText("Editor's pick")).toBeTruthy()
+    })
+
+    it("renders every mark when several are present", () => {
+      renderMeta(
+        makeVariant({
+          marks: [makeSeal(), { type: "spotlight", label: "Editor's pick", icon: "/badges/spotlight/image.svg" }],
+        }),
+      )
+      expect(screen.getByText("Better Lyrics Council Approved (BLCA)")).toBeTruthy()
+      expect(screen.getByText("Editor's pick")).toBeTruthy()
+    })
+
+    it("renders nothing seal-like when there are no marks", () => {
+      renderMeta(makeVariant())
+      expect(screen.queryByText(/Approved/i)).toBeNull()
+    })
   })
 })
