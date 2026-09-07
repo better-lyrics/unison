@@ -216,7 +216,7 @@ export async function getUserBadges(env: Env, keyId: string): Promise<UserGamifi
 		xp,
 		xpForNext,
 		tier: rank?.tier ?? null,
-		tierRank: rank?.rank ?? null,
+		tierRank: community ? null : (rank?.rank ?? null),
 		badges,
 		featured,
 		counts: { earned: badges.filter((b) => b.earned).length, total: badges.length },
