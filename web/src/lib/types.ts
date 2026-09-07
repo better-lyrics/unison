@@ -189,7 +189,6 @@ export interface BadgeDef {
   tiers?: BadgeTier[]
   secret?: boolean
   rarity?: number
-  legacy?: boolean
   image: BadgeImage
 }
 
