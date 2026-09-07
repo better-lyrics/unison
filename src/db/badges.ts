@@ -239,22 +239,26 @@ export async function setFeatured(
 		return { ok: false, reason: "over_cap" }
 	}
 
+	const user = await env.DB.prepare("SELECT key_id FROM users WHERE id = ?")
+		.bind(userId)
+		.first<{ key_id: string }>()
+	if (!user) throw new Error(`user ${userId} not found`)
+
 	const earnedRows = await env.DB.prepare("SELECT badge_key FROM badge_awards WHERE user_id = ?")
 		.bind(userId)
 		.all<{ badge_key: string }>()
 	const earnedKeys = new Set(earnedRows.results.map((r) => r.badge_key))
+	const applicable = new Set(applicableKeys(user.key_id))
 	for (const key of keys) {
-		if (!earnedKeys.has(key)) return { ok: false, reason: "unearned" }
+		if (earnedKeys.has(key)) continue
+		if (!applicable.has(key) || !(await DERIVATIONS[key](env, userId)).earned) {
+			return { ok: false, reason: "unearned" }
+		}
 	}
 
 	await env.DB.prepare("UPDATE users SET featured_badges = ? WHERE id = ?")
 		.bind(JSON.stringify(keys), userId)
 		.run()
-
-	const user = await env.DB.prepare("SELECT key_id FROM users WHERE id = ?")
-		.bind(userId)
-		.first<{ key_id: string }>()
-	if (!user) throw new Error(`user ${userId} not found`)
 
 	return { ok: true, gamification: await getUserBadges(env, user.key_id) }
 }

@@ -333,6 +333,18 @@ describeIntegration("badges award and read model (integration)", () => {
 			})
 		})
 
+		it("regression: accepts a badge earned live before the cron persists the award", async () => {
+			const keyId = "e".repeat(64)
+			const userId = await seedUser(keyId)
+			await insertLyric({ submitterId: userId, confidence: "medium" })
+			// No evaluateAndAward: the badge is earned by live derivation but not yet in badge_awards.
+
+			const result = await setFeatured(env, userId, ["verified-contributor"])
+			expect(result.ok).toBe(true)
+			if (!result.ok) throw new Error("expected ok result")
+			expect(result.gamification.featured).toEqual(["verified-contributor"])
+		})
+
 		it("rejects a list over the featured cap", async () => {
 			const userId = await seedUser()
 			const overCap = Array.from({ length: config.gamification.featured.maxSlots + 1 }, (_, i) => `k${i}`)
