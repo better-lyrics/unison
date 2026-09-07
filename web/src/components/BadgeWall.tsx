@@ -159,6 +159,10 @@ function BadgeTile({
 export function BadgeWall({ gamification, catalogue, defaultOpen = true }: BadgeWallProps) {
   const { badges, display } = catalogue
   const userByKey = new Map(gamification.badges.map((ub) => [ub.key, ub]))
+  // The held tier is authoritative on `gamification.tier`, not the earned badge list.
+  if (gamification.tier && !userByKey.has(gamification.tier)) {
+    userByKey.set(gamification.tier, { key: gamification.tier, earned: true, featured: false })
+  }
   const defByKey = new Map(badges.map((def) => [def.key, def]))
 
   // The shared community account sits outside the gamification system: it can only ever

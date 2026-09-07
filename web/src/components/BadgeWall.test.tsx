@@ -105,6 +105,15 @@ describe("BadgeWall", () => {
     expect(screen.getByText("Rank #1")).toBeTruthy()
   })
 
+  it("lights the current tier gem even when the server omits it from the badges list", () => {
+    const catalogue = catalogueFrom([def("elite", "tier", { kind: "title" }), def("master", "tier", { kind: "title" })])
+    const gamification = gam({ tier: "elite", tierRank: 7, badges: [] })
+    render(<BadgeWall gamification={gamification} catalogue={catalogue} />)
+    expect(screen.getByText("Rank #7")).toBeTruthy()
+    expect(document.querySelectorAll('[data-earned="true"]')).toHaveLength(1)
+    expect(document.querySelectorAll('[data-earned="false"]')).toHaveLength(1)
+  })
+
   it("opens the badge detail modal when a tile is clicked", () => {
     const catalogue = catalogueFrom([def("most-loved", "acclaim")])
     const gamification = gam({ badges: [{ key: "most-loved", earned: true, featured: false }] })
