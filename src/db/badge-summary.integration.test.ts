@@ -120,6 +120,36 @@ describeIntegration("badge summaries (integration)", () => {
 		expect(summary?.topBadge).toEqual({ key: "most-loved", name: "Most Loved", tier: undefined })
 	})
 
+	async function feature(userId: number, keys: string[]): Promise<void> {
+		await pool.query("UPDATE users SET featured_badges = $1 WHERE id = $2", [
+			JSON.stringify(keys),
+			userId,
+		])
+	}
+
+	it("resolves the featured badges in stored order with their awarded tiers", async () => {
+		const userId = await newUser()
+		await award(userId, "verified-contributor", 2)
+		await award(userId, "most-loved", null)
+		await feature(userId, ["most-loved", "verified-contributor"])
+
+		const summary = (await getBadgeSummaries(env, [userId])).get(userId)
+
+		expect(summary?.featured).toEqual([
+			{ key: "most-loved", name: "Most Loved", tier: undefined },
+			{ key: "verified-contributor", name: "Verified Contributor", tier: 2 },
+		])
+	})
+
+	it("returns an empty featured list when the user has featured nothing", async () => {
+		const userId = await newUser()
+		await award(userId, "most-loved", null)
+
+		const summary = (await getBadgeSummaries(env, [userId])).get(userId)
+
+		expect(summary?.featured).toEqual([])
+	})
+
 	it("returns a null topBadge but a nonzero count for a community-only user", async () => {
 		const userId = await newUser()
 		await award(userId, "community", null)

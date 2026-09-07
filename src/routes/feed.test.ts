@@ -294,10 +294,12 @@ describe("GET /feed marks and submitter", () => {
 			[approved, plain],
 			[{ id: 40, key_id: boosterKeyId, nickname: "Council Cat" }],
 			[], // getXpForUsers (booster)
-			[], // getBadgeSummaries (booster)
+			[], // getBadgeSummaries awards (booster)
+			[], // getBadgeSummaries featured (booster)
 			[{ id: 50, key_id: submitterKeyId, nickname: "Submitter Sam" }],
 			[], // getXpForUsers (submitter)
-			[], // getBadgeSummaries (submitter)
+			[], // getBadgeSummaries awards (submitter)
+			[], // getBadgeSummaries featured (submitter)
 		])
 		const app = feedRoutes(makeSealEnv(db))
 

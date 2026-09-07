@@ -31,6 +31,7 @@ export interface CuratorLeaderboardEntry {
   discordLinked: boolean
   tier?: string | null
   topBadge?: LeaderboardBadge | null
+  featured?: LeaderboardBadge[]
   badgeCount?: number
 }
 

@@ -120,6 +120,14 @@ const SAMPLE_TOP_BADGES: LeaderboardBadge[] = [
   { key: "first-responder", name: "First Responder", tier: 1 },
 ]
 
+const SAMPLE_FEATURED: LeaderboardBadge[] = [
+  { key: "legendary", name: "Legendary" },
+  { key: "verified-contributor", name: "Verified Contributor", tier: 3 },
+  { key: "sharp-ear", name: "Sharp Ear", tier: 2 },
+  { key: "trailblazer", name: "Trailblazer", tier: 2 },
+  { key: "most-loved", name: "Most Loved" },
+]
+
 // The community account is shown by score but sits outside the ranks: it holds no rank,
 // and real curators keep contiguous ranks 1..N (mirrors getCuratorLeaderboard).
 export const SEED_CURATORS: CuratorLeaderboardEntry[] = (() => {
@@ -132,6 +140,7 @@ export const SEED_CURATORS: CuratorLeaderboardEntry[] = (() => {
         community: true,
         tier: null,
         topBadge: { key: "community", name: "Community account" },
+        featured: [{ key: "community", name: "Community account" }],
         badgeCount: 1,
       }
     }
@@ -142,6 +151,7 @@ export const SEED_CURATORS: CuratorLeaderboardEntry[] = (() => {
       community: false,
       tier: tierForSeedRank(rank),
       topBadge: SAMPLE_TOP_BADGES[rank % SAMPLE_TOP_BADGES.length],
+      featured: SAMPLE_FEATURED.slice(0, (rank % 4) + 2),
       badgeCount: (rank % 5) + 2,
     }
   })
@@ -520,7 +530,14 @@ function derivedGamification(entry: CuratorLeaderboardEntry): UserGamification {
   ]
 
   const vc = medalTier(entry.submissionCount, [1, 3, 10])
-  if (vc) badges.push({ key: "verified-contributor", earned: true, tier: vc, earnedAt: SEEDED_NOW - 25 * DAY, featured: vc >= 2 })
+  if (vc)
+    badges.push({
+      key: "verified-contributor",
+      earned: true,
+      tier: vc,
+      earnedAt: SEEDED_NOW - 25 * DAY,
+      featured: vc >= 2,
+    })
 
   const se = medalTier(entry.totalUpvotes, [50, 200, 400])
   if (se) badges.push({ key: "sharp-ear", earned: true, tier: se, earnedAt: SEEDED_NOW - 18 * DAY, featured: se >= 3 })
@@ -528,10 +545,17 @@ function derivedGamification(entry: CuratorLeaderboardEntry): UserGamification {
   if (entry.rank <= 3) {
     badges.push({ key: "trailblazer", earned: true, tier: 2, earnedAt: SEEDED_NOW - 12 * DAY, featured: true })
   } else {
-    badges.push({ key: "trailblazer", earned: false, tier: 1, progress: { current: Math.max(1, 6 - entry.rank), next: 5 }, featured: false })
+    badges.push({
+      key: "trailblazer",
+      earned: false,
+      tier: 1,
+      progress: { current: Math.max(1, 6 - entry.rank), next: 5 },
+      featured: false,
+    })
   }
 
-  if (entry.score >= 120) badges.push({ key: "most-loved", earned: true, earnedAt: SEEDED_NOW - 8 * DAY, featured: true })
+  if (entry.score >= 120)
+    badges.push({ key: "most-loved", earned: true, earnedAt: SEEDED_NOW - 8 * DAY, featured: true })
 
   badges.push({
     key: "polyglot",
@@ -554,7 +578,18 @@ function derivedGamification(entry: CuratorLeaderboardEntry): UserGamification {
     { scope: "language", name: EXPERTISE_LANGS[entry.rank % EXPERTISE_LANGS.length], rank: (entry.rank % 7) + 1 },
   ]
 
-  return { keyId: entry.keyId, level, xp, xpForNext, tier, tierRank, featured, counts: { earned, total: BADGE_TOTAL }, topExpertise, badges }
+  return {
+    keyId: entry.keyId,
+    level,
+    xp,
+    xpForNext,
+    tier,
+    tierRank,
+    featured,
+    counts: { earned, total: BADGE_TOTAL },
+    topExpertise,
+    badges,
+  }
 }
 
 export async function seedUserBadges(keyId: string): Promise<UserGamification> {
@@ -574,7 +609,17 @@ export async function seedUserBadges(keyId: string): Promise<UserGamification> {
   }
   const entry = SEED_CURATORS.find((c) => c.keyId === keyId)
   if (!entry) {
-    return { keyId, level: 1, xp: 0, xpForNext: 50, tier: null, tierRank: null, featured: [], counts: { earned: 0, total: BADGE_TOTAL }, badges: [] }
+    return {
+      keyId,
+      level: 1,
+      xp: 0,
+      xpForNext: 50,
+      tier: null,
+      tierRank: null,
+      featured: [],
+      counts: { earned: 0, total: BADGE_TOTAL },
+      badges: [],
+    }
   }
   return entry.rank === 1 ? auroraShowcase(keyId) : derivedGamification(entry)
 }

@@ -228,6 +228,7 @@ export interface CuratorLeaderboardRow {
 	xpForNext: number | null
 	badgeCount: number
 	topBadge: BadgeRef | null
+	featured: BadgeRef[]
 }
 
 interface CuratorRow {
@@ -319,6 +320,7 @@ export async function getCuratorLeaderboard(
 			xpForNext,
 			badgeCount: summary?.badgeCount ?? 0,
 			topBadge: summary?.topBadge ?? null,
+			featured: summary?.featured ?? [],
 		}
 	})
 }

@@ -335,7 +335,8 @@ describe("GET /leaderboard/users/:keyId", () => {
 			{ last_vote_at: 1700000123 },
 			null, // getByKeyId -> not linked
 			[], // getXpForUsers
-			[], // getBadgeSummaries
+			[], // getBadgeSummaries awards
+			[], // getBadgeSummaries featured
 			{ nickname: null },
 		])
 		const env = makeEnv(db)
@@ -376,7 +377,8 @@ describe("GET /leaderboard/users/:keyId", () => {
 			{ last_vote_at: 1700000123 },
 			null, // getByKeyId -> not linked
 			[{ user_id: 7, xp: 200 }], // getXpForUsers
-			[{ user_id: 7, badge_key: "verified-contributor", tier: 3 }], // getBadgeSummaries
+			[{ user_id: 7, badge_key: "verified-contributor", tier: 3 }], // getBadgeSummaries awards
+			[], // getBadgeSummaries featured
 			{ nickname: null },
 		])
 		const env = makeEnv(db)
@@ -412,7 +414,8 @@ describe("GET /leaderboard/users/:keyId", () => {
 			{ last_vote_at: 1700000123 },
 			{ discord_id: "d1", key_id: keyId, discord_username: "alice", linked_at: 1 },
 			[], // getXpForUsers
-			[], // getBadgeSummaries
+			[], // getBadgeSummaries awards
+			[], // getBadgeSummaries featured
 			{ nickname: null },
 		])
 		const env = makeEnv(db)
@@ -461,7 +464,8 @@ describe("GET /leaderboard/users/:keyId", () => {
 			{ last_vote_at: 1700000456 },
 			null, // getByKeyId -> not linked
 			[], // getXpForUsers
-			[], // getBadgeSummaries
+			[], // getBadgeSummaries awards
+			[], // getBadgeSummaries featured
 			{ nickname: "Brook", nickname_lower: "brook" },
 		])
 		const env = makeEnv(db)
@@ -490,7 +494,8 @@ describe("GET /leaderboard/users/:keyId", () => {
 			{ last_vote_at: 1700000456 },
 			null, // getByKeyId -> not linked
 			[], // getXpForUsers
-			[], // getBadgeSummaries
+			[], // getBadgeSummaries awards
+			[], // getBadgeSummaries featured
 			{ nickname: "Brook" },
 		])
 		const env = makeEnv(db)

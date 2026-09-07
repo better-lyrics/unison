@@ -26,6 +26,7 @@ export function CuratorRow({ entry, isSelf = false, appended = false }: CuratorR
   }
   const podium = !entry.community && entry.rank >= 1 && entry.rank <= 3
   const rankGem = podium && entry.tier ? badgeImage(entry.tier) : null
+  const featuredBadges = entry.featured ?? []
   const topBadgeImage = entry.topBadge ? badgeImage(entry.topBadge.key, entry.topBadge.tier) : null
   const extraBadges = (entry.badgeCount ?? 0) - 1
 
@@ -71,7 +72,22 @@ export function CuratorRow({ entry, isSelf = false, appended = false }: CuratorR
         <div className="min-w-0 flex-1">
           <p className="flex items-center gap-2 truncate text-sm font-medium text-unison-text">
             <span className="truncate">{entry.displayName}</span>
-            {topBadgeImage ? (
+            {featuredBadges.length > 0 ? (
+              <span className="inline-flex shrink-0 items-center gap-1">
+                {featuredBadges.map((badge) => {
+                  const img = badgeImage(badge.key, badge.tier)
+                  return img ? (
+                    <img
+                      key={badge.key}
+                      src={img}
+                      alt={badge.name}
+                      title={badge.name}
+                      className="size-4 object-contain"
+                    />
+                  ) : null
+                })}
+              </span>
+            ) : topBadgeImage ? (
               <span className="inline-flex shrink-0 items-center gap-1">
                 <img
                   src={topBadgeImage}
