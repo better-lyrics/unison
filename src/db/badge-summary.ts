@@ -19,7 +19,7 @@ interface AwardRow {
 }
 
 function isEligible(def: BadgeDef): boolean {
-	return def.key !== "community" && def.category !== "tier"
+	return def.category !== "tier"
 }
 
 function isBetter(aDef: BadgeDef, aTier: number, bDef: BadgeDef, bTier: number): boolean {
@@ -72,7 +72,7 @@ export function defaultFeaturedKeys(awards: { key: string; tier: number | null }
 	const eligible = awards
 		.map((award) => ({ def: DEF_BY_KEY.get(award.key), tier: award.tier }))
 		.filter((entry): entry is { def: BadgeDef; tier: number | null } => {
-			return entry.def !== undefined && isEligible(entry.def) && !entry.def.secret
+			return entry.def !== undefined && isEligible(entry.def)
 		})
 	eligible.sort((a, b) => {
 		if (isBetter(a.def, a.tier ?? 0, b.def, b.tier ?? 0)) return -1
