@@ -118,7 +118,11 @@ describeIntegration("backfill badges (integration)", () => {
 
 	describe("committee", () => {
 		it("persists the committee badge for a member with zero contributions", async () => {
-			const userId = await seedUser()
+			const member = await one<{ id: number }>(
+				"INSERT INTO users (key_id, created_at) VALUES ($1, 1000) RETURNING id",
+				["c".repeat(64)]
+			)
+			const userId = member.id
 			await addCommittee(env, userId, "admin")
 
 			const result = await backfillBadges(env)
@@ -127,7 +131,7 @@ describeIntegration("backfill badges (integration)", () => {
 			expect(result.awarded).toBe(1)
 
 			const rows = await awardsFor(userId)
-			expect(rows.map((r) => r.badge_key)).toEqual(["committee"])
+			expect(rows.map((r) => r.badge_key)).toEqual(["committee", "early-adopter"])
 		})
 	})
 
@@ -140,6 +144,50 @@ describeIntegration("backfill badges (integration)", () => {
 			expect(result).toEqual({ evaluated: 0, awarded: 0 })
 			expect(await awardsFor(userId)).toEqual([])
 			expect(await num("SELECT count(*)::int n FROM badge_awards")).toBe(0)
+		})
+	})
+
+	describe("wave 2 tail", () => {
+		it("visits a low-confidence-only submitter so prolific persists without events", async () => {
+			const submitter = await seedUser()
+			for (let i = 0; i < 25; i++) await insertLyric(submitter, "low")
+
+			await backfillBadges(env)
+
+			const rows = await awardsFor(submitter)
+			const keys = rows.map((r) => r.badge_key)
+			expect(keys).toContain("prolific")
+			expect(keys).toContain("first-submission")
+
+			const row = rows.find((r) => r.badge_key === "prolific")
+			expect(row?.tier).toBe(1)
+		})
+
+		it("visits a pure reporter so guardian persists without events", async () => {
+			const reporter = await seedUser()
+
+			for (let i = 0; i < 3; i++) {
+				const author = await seedUser()
+				const lyric = await one<{ id: number }>(
+					`INSERT INTO lyrics
+						(video_id, song, artist, duration, song_norm, artist_norm, lyrics, format, sync_type, submitter_id, confidence, reputation_penalized)
+					 VALUES ($1,'Song','Artist',180,'song','artist','gz','lrc','linesync',$2,'low',TRUE) RETURNING id`,
+					[`vidg${i}`, author]
+				)
+				await pool.query(
+					"INSERT INTO reports (lyrics_id, user_id, reason) VALUES ($1, $2, 'wrong_song')",
+					[lyric.id, reporter]
+				)
+			}
+
+			await backfillBadges(env)
+
+			const rows = await awardsFor(reporter)
+			const keys = rows.map((r) => r.badge_key)
+			expect(keys).toContain("guardian")
+
+			const row = rows.find((r) => r.badge_key === "guardian")
+			expect(row?.tier).toBe(1)
 		})
 	})
 

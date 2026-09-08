@@ -196,14 +196,19 @@ describeIntegration("badges award and read model (integration)", () => {
 				tierRank: null,
 				badges: [],
 				featured: [],
-				// Excludes community (blacklist-only) and committee (secret, unearned here).
-				counts: { earned: 0, total: BADGES.length - 2 },
+				// Excludes community (blacklist-only) and the secret committee and early-adopter badges (unearned here).
+				counts: { earned: 0, total: BADGES.length - 3 },
 			})
 		})
 
 		it("returns earned and in-progress badges with counts, featured, level, and curator tier", async () => {
 			const keyId = "a".repeat(64)
-			const userId = await seedUser(keyId)
+			const userId = (
+				await one<{ id: number }>(
+					"INSERT INTO users (key_id, created_at) VALUES ($1, 1000) RETURNING id",
+					[keyId]
+				)
+			).id
 			await insertLyric({ submitterId: userId, confidence: "medium", language: "en" })
 			await seedEvents(userId, "consensus-vote", 5, 2)
 			await seedEvents(userId, "reached-medium", 1, 20)
@@ -236,7 +241,7 @@ describeIntegration("badges award and read model (integration)", () => {
 			expect(g.badges.map((b) => b.key)).toEqual(
 				BADGES.map((b) => b.key).filter((k) => k !== "community" && k !== "committee")
 			)
-			expect(g.counts).toEqual({ earned: 2, total: BADGES.length - 2 })
+			expect(g.counts).toEqual({ earned: 3, total: BADGES.length - 2 })
 			expect(g.featured).toEqual(["verified-contributor"])
 
 			expect(g.xp).toBe(50)

@@ -26,6 +26,20 @@ const LAUNCH_KEYS = [
 	"community",
 ]
 
+const WAVE2_KEYS = [
+	"prolific",
+	"firefighter",
+	"karaoke-master",
+	"line-dancer",
+	"rarity-hunter",
+	"tastemaker",
+	"guardian",
+	"fan-favorite",
+	"flawless",
+	"perfectionist",
+	"early-adopter",
+]
+
 describe("badge definitions", () => {
 	it("has unique keys", () => {
 		const keys = BADGES.map((b) => b.key)
@@ -94,6 +108,17 @@ describe("badge definitions", () => {
 		}
 	})
 
+	it("includes every wave 2 key", () => {
+		const keys = BADGES.map((b) => b.key)
+		for (const key of WAVE2_KEYS) {
+			expect(keys).toContain(key)
+		}
+	})
+
+	it("marks early-adopter secret so it never shows as an unearnable locked badge", () => {
+		expect(BADGES.find((b) => b.key === "early-adopter")?.secret).toBe(true)
+	})
+
 	it("marks the non-attainable account badges secret so they never show as havable", () => {
 		expect(BADGES.find((b) => b.key === "community")?.secret).toBe(true)
 		expect(BADGES.find((b) => b.key === "committee")?.secret).toBe(true)
@@ -140,9 +165,9 @@ describe("catalogue", () => {
 		expect(CATALOGUE).toEqual([...BADGES, ...TIER_BADGES])
 	})
 
-	it("holds fourteen entries with unique keys", () => {
+	it("holds twenty-five entries with unique keys", () => {
 		const keys = CATALOGUE.map((b) => b.key)
-		expect(keys.length).toBe(14)
-		expect(new Set(keys).size).toBe(14)
+		expect(keys.length).toBe(25)
+		expect(new Set(keys).size).toBe(25)
 	})
 })

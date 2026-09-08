@@ -1,5 +1,5 @@
 import { config } from "@/config"
-import { BADGES, TIER_BADGES } from "@/db/badges/definitions"
+import { BADGES, CATALOGUE, TIER_BADGES } from "@/db/badges/definitions"
 import type { Env } from "@/types"
 import { describe, expect, it } from "vitest"
 import { badgeRoutes } from "./badges"
@@ -67,7 +67,7 @@ describe("GET /badges", () => {
 		expect(json.data.display.categoryOrder.length).toBeGreaterThan(0)
 	})
 
-	it("exposes every renderable mark: the nine badges and five tier titles", async () => {
+	it("exposes every renderable mark: the twenty badges and five tier titles", async () => {
 		const app = badgeRoutes(makeEnv())
 		const res = await app.handle(new Request("http://localhost/badges"))
 		const json = (await res.json()) as CatalogueBody
@@ -75,7 +75,7 @@ describe("GET /badges", () => {
 		for (const key of [...BADGES, ...TIER_BADGES].map((b) => b.key)) {
 			expect(keys).toContain(key)
 		}
-		expect(keys.length).toBe(14)
+		expect(keys.length).toBe(25)
 	})
 
 	it("gives every entry resolvable color and mono image URLs", async () => {
@@ -112,6 +112,27 @@ describe("GET /badges/:key/image.svg", () => {
 		)
 		expect(res.status).toBe(200)
 		expect(res.headers.get("content-type")).toMatch(/^image\/svg\+xml/)
+	})
+
+	it("resolves art for every catalogue badge across variants and tiers", async () => {
+		const app = badgeRoutes(makeEnv())
+		for (const badge of CATALOGUE) {
+			const tiers = badge.tiers ? badge.tiers.map((tier) => tier.level) : [undefined]
+			for (const level of tiers) {
+				const suffix = level === undefined ? "" : `&tier=${level}`
+				const color = await app.handle(
+					new Request(`http://localhost/badges/${badge.key}/image.svg?variant=color${suffix}`)
+				)
+				expect(color.status).toBe(200)
+				expect(color.headers.get("content-type")).toMatch(/^image\/svg\+xml/)
+				expect(await color.text()).toContain("<svg")
+			}
+			const mono = await app.handle(
+				new Request(`http://localhost/badges/${badge.key}/image.svg?variant=mono`)
+			)
+			expect(mono.status).toBe(200)
+			expect(mono.headers.get("content-type")).toMatch(/^image\/svg\+xml/)
+		}
 	})
 
 	it("serves a placeholder key that is not backed by real art", async () => {
