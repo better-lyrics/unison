@@ -11,10 +11,12 @@ import {
 	restoreFromSnapshot,
 	runMigration,
 } from "@/db/account-migration"
+import { revokeBoostByAdmin } from "@/db/boost"
+import { addCommittee, listCommittee, removeCommittee } from "@/db/committee"
 import { getByKeyId } from "@/db/discordLinks"
 import { invalidateCuratorLeaderboardCache } from "@/db/leaderboard"
 import { invalidateCacheForSubmitter } from "@/db/lyrics"
-import { type AccountSearchRow, getUserByKeyId, searchAccounts } from "@/db/users"
+import { type AccountSearchRow, getUserById, getUserByKeyId, searchAccounts } from "@/db/users"
 import { Logger } from "@/infra/logger"
 import { recalculateScore } from "@/jobs/score-updater"
 import type { Env } from "@/types"
@@ -251,4 +253,39 @@ export const adminRoutes = (env: Env) =>
 				return status(200, { success: true, data: { ...rest, hasSnapshot: snapshot !== null } })
 			},
 			{ params: paramsId }
+		)
+		.get("/committee", async ({ env, status }) => {
+			const rows = await listCommittee(env)
+			return status(200, { success: true, data: rows })
+		})
+		.post(
+			"/committee",
+			async ({ env, body, status }) => {
+				const user = await getUserById(env, body.userId)
+				if (!user) {
+					return status(404, buildError(ErrorCode.NOT_FOUND))
+				}
+				await addCommittee(env, body.userId, "admin")
+				return status(200, { success: true, data: { userId: body.userId } })
+			},
+			{ body: t.Object({ userId: t.Numeric() }) }
+		)
+		.delete(
+			"/committee/:userId",
+			async ({ env, params, status }) => {
+				await removeCommittee(env, params.userId)
+				return status(200, { success: true, data: { removed: true } })
+			},
+			{ params: t.Object({ userId: t.Numeric() }) }
+		)
+		.delete(
+			"/boost/:lyricsId",
+			async ({ env, params, status }) => {
+				const result = await revokeBoostByAdmin(env, params.lyricsId)
+				if (!result.ok) {
+					return status(404, buildError(ErrorCode.NOT_FOUND))
+				}
+				return status(200, { success: true, data: { revoked: true } })
+			},
+			{ params: t.Object({ lyricsId: t.Numeric() }) }
 		)

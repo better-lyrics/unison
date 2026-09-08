@@ -64,6 +64,46 @@ export const config = {
 		},
 	},
 
+	gamification: {
+		xp: {
+			weights: {
+				reachedMedium: 20,
+				reachedHigh: 20,
+				consensusVote: 2,
+				requestFilled: 15,
+				firstForSong: 10,
+				penalized: -30,
+			},
+			levelThresholds: [0, 50, 150, 350, 700, 1200, 1900, 2800, 4000],
+		},
+		tiers: {
+			podium: ["legendary", "grandmaster", "master"] as const,
+			elite: { topPercent: 5 },
+			lyricist: { topPercent: 20 },
+		},
+		boost: {
+			quotaBase: 2,
+			quotaPerTier: 2,
+			rankingBonus: 1.5,
+		},
+		featured: { maxSlots: 5 },
+		display: {
+			inlineGlyphs: 1,
+			rarityThreshold: 0.1,
+			categoryOrder: [
+				"tier",
+				"output",
+				"craft",
+				"coverage",
+				"curation",
+				"acclaim",
+				"consistency",
+				"special",
+			],
+		},
+		seal: { label: "Better Lyrics Council Approved (BLCA)" },
+	},
+
 	exploration: {
 		enabled: true,
 		epsilon: { low: 0.3, medium: 0.1, high: 0.03 },

@@ -1,5 +1,5 @@
 import { cleanup, render, screen, waitFor } from "@testing-library/react"
-import { MemoryRouter } from "react-router-dom"
+import { MemoryRouter, Route, Routes, useParams } from "react-router-dom"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { AuthProvider } from "@/auth/AuthProvider"
 import { clearAsyncDataCache } from "@/hooks/useAsyncData"
@@ -7,6 +7,11 @@ import { type StoredSession, saveStoredSession } from "@/lib/auth"
 import { MePage } from "./MePage"
 
 const ownKeyId = "k".repeat(64)
+
+function HandleProbe() {
+  const { nickname } = useParams<{ nickname: string }>()
+  return <div data-testid="handle-probe">{nickname}</div>
+}
 const valid: StoredSession = {
   sessionToken: "tok",
   keyId: ownKeyId,
@@ -148,11 +153,10 @@ describe("MePage", () => {
     )
     renderPage()
     await waitFor(() => expect(screen.getByText(valid.displayName)).toBeTruthy())
-    await waitFor(() => expect(screen.getByText(/#7/)).toBeTruthy())
-    expect(screen.getByText("12.7")).toBeTruthy()
-    expect(screen.getByText("5")).toBeTruthy()
-    expect(screen.getByText("23")).toBeTruthy()
-    expect(screen.getByRole("button", { name: /copy key id/i })).toBeTruthy()
+    await waitFor(() => expect(screen.getByText("Rank #7")).toBeTruthy())
+    expect(screen.getByTestId("stat-score").textContent).toContain("12.7")
+    expect(screen.getByTestId("stat-submissions").textContent).toContain("5")
+    expect(screen.getByTestId("stat-upvotes").textContent).toContain("23")
   })
 
   it("renders identity but no stats when signed-in and not ranked", async () => {
@@ -202,5 +206,59 @@ describe("MePage", () => {
     renderPage()
     await waitFor(() => expect(screen.getByText(valid.displayName)).toBeTruthy())
     await waitFor(() => expect(screen.getByText(/no leaderboard activity yet/i)).toBeTruthy())
+  })
+
+  it("redirects the signed-in owner to their canonical /u/<handle>", async () => {
+    saveStoredSession(valid)
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockImplementation((url: string) => {
+        if (url === "/auth/me") {
+          return Promise.resolve(
+            new Response(
+              JSON.stringify({
+                success: true,
+                data: { keyId: ownKeyId, displayName: valid.displayName, expiresAt: valid.expiresAt },
+              }),
+              { status: 200 },
+            ),
+          )
+        }
+        if (url === `/leaderboard/users/${ownKeyId}`) {
+          return Promise.resolve(
+            new Response(
+              JSON.stringify({
+                success: true,
+                data: {
+                  ranked: true,
+                  keyId: ownKeyId,
+                  displayName: valid.displayName,
+                  handle: "brightvivaceroll",
+                  reputation: 1.5,
+                  score: 12.7,
+                  submissionCount: 5,
+                  totalUpvotes: 23,
+                  rank: 7,
+                  lastVoteAt: null,
+                },
+              }),
+              { status: 200 },
+            ),
+          )
+        }
+        return Promise.reject(new Error(`unexpected url ${url}`))
+      }),
+    )
+    render(
+      <MemoryRouter initialEntries={["/me"]}>
+        <AuthProvider>
+          <Routes>
+            <Route path="/me" element={<MePage />} />
+            <Route path="/u/:nickname" element={<HandleProbe />} />
+          </Routes>
+        </AuthProvider>
+      </MemoryRouter>,
+    )
+    await waitFor(() => expect(screen.getByTestId("handle-probe").textContent).toBe("brightvivaceroll"))
   })
 })

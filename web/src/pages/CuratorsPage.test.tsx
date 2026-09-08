@@ -500,4 +500,33 @@ describe("CuratorsPage", () => {
     expect(rows).toHaveLength(1)
     expect(container.querySelector('[data-self="true"]')).toBeNull()
   })
+
+  it("shows the community account with a marker and no rank, real curators keep their ranks", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockImplementation((url: string) => {
+        if (url === "/leaderboard/users") {
+          return Promise.resolve(
+            jsonResponse({
+              success: true,
+              data: {
+                curators: [
+                  { keyId: otherKeyId, displayName: "TopReal", reputation: 1, score: 40, submissionCount: 5, totalUpvotes: 12, rank: 1, community: false },
+                  { keyId: thirdKeyId, displayName: "CommunityAcct", reputation: 2, score: 99, submissionCount: 500, totalUpvotes: 9, rank: 0, community: true },
+                  { keyId: "w".repeat(64), displayName: "SecondReal", reputation: 1, score: 20, submissionCount: 2, totalUpvotes: 3, rank: 2, community: false },
+                ],
+              },
+            }),
+          )
+        }
+        return Promise.reject(new Error(`unexpected url ${url}`))
+      }),
+    )
+    renderPage()
+    await waitFor(() => expect(screen.getByText("CommunityAcct")).toBeTruthy())
+    expect(screen.getByText("Community account")).toBeTruthy()
+    expect(screen.getByText("1st place")).toBeTruthy()
+    expect(screen.getByText("TopReal")).toBeTruthy()
+    expect(screen.getByText("SecondReal")).toBeTruthy()
+  })
 })

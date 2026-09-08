@@ -1,21 +1,26 @@
 import { config } from "@/config"
 
 const { syncTypeBoost } = config.ranking
-const buildRankingExpr = (prefix: string) => {
+const buildRankingExpr = (prefix: string, committeeBonus = false) => {
 	const syncTypeBoostExpr = `CASE ${prefix}sync_type
 		WHEN 'richsync' THEN ${syncTypeBoost.richsync}
 		WHEN 'linesync' THEN ${syncTypeBoost.linesync}
 		ELSE ${syncTypeBoost.plain}
 	END`
+	const committeeBonusExpr = committeeBonus
+		? ` + CASE WHEN ${prefix}committee_approved_at IS NOT NULL THEN ${config.gamification.boost.rankingBonus} ELSE 0 END`
+		: ""
 	return `(
 		(${prefix}effective_score * LN(${prefix}vote_count + ${config.ranking.confidenceBase})
-		+ ${config.ranking.recencyWeight} / (1.0 + (EXTRACT(EPOCH FROM NOW())::INTEGER - ${prefix}created_at) / 86400.0))
+		+ ${config.ranking.recencyWeight} / (1.0 + (EXTRACT(EPOCH FROM NOW())::INTEGER - ${prefix}created_at) / 86400.0)${committeeBonusExpr})
 		* ${syncTypeBoostExpr}
 	)`
 }
 
 export const RANKING_EXPR = buildRankingExpr("")
+// Committee bonus applies only to canonical-variant selection of a known video, not song/artist search.
 export const RANKING_EXPR_JOINED = buildRankingExpr("l.")
+export const RANKING_EXPR_VARIANT = buildRankingExpr("l.", true)
 
 const { autoHide } = config.moderation
 
@@ -44,6 +49,13 @@ const provenExpr = (repExpr: string, prefix: string) => `(
 		${prefix}vote_count >= ${primarySlot.minVotes}
 		AND ${prefix}effective_score > 0
 	)
+	OR ${prefix}committee_approved_at IS NOT NULL
 )`
 
 export const PROVEN_EXPR_JOINED = provenExpr("u.reputation", "l.")
+
+export const CONSENSUS_LYRICS_CTE = `WITH consensus_lyrics AS (
+	SELECT id, CASE WHEN effective_score > 0 THEN 1 ELSE -1 END AS consensus
+	FROM lyrics
+	WHERE ABS(effective_score) > 0.5 AND vote_count >= ?
+)`

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest"
 import type { Env } from "@/types"
 import { generatePetName } from "@/utils/petname"
-import { clearNickname, resolveDisplayName, setNickname } from "./users"
+import { clearNickname, resolveDisplayName, resolveIdentity, resolveKeyIdByHandle, setNickname } from "./users"
 
 interface DBCall {
 	sql: string
@@ -97,7 +97,7 @@ describe("resolveDisplayName", () => {
 		const env = makeEnv(db)
 		const result = await resolveDisplayName(env, "k1")
 		expect(result).toBe("Alex")
-		expect(db.calls[0].sql).toBe("SELECT nickname FROM users WHERE key_id = ?")
+		expect(db.calls[0].sql).toBe("SELECT nickname, nickname_lower FROM users WHERE key_id = ?")
 		expect(db.calls[0].params).toEqual(["k1"])
 	})
 
@@ -117,6 +117,50 @@ describe("resolveDisplayName", () => {
 		const result = await resolveDisplayName(env, keyId)
 		expect(result).toBe(generatePetName(keyId))
 		expect(db.calls[0].params).toEqual([keyId])
+	})
+})
+
+describe("resolveIdentity", () => {
+	it("returns the nickname as displayName and nickname_lower as handle", async () => {
+		const db = makeMockDB([{ nickname: "Brook", nickname_lower: "brook" }])
+		const env = makeEnv(db)
+		const identity = await resolveIdentity(env, "k1")
+		expect(identity).toEqual({ displayName: "Brook", handle: "brook" })
+	})
+
+	it("returns a petname displayName and null handle when no nickname is set", async () => {
+		const keyId = "abcdef0123456789"
+		const db = makeMockDB([{ nickname: null, nickname_lower: null }])
+		const env = makeEnv(db)
+		const identity = await resolveIdentity(env, keyId)
+		expect(identity.displayName).toBe(generatePetName(keyId))
+		expect(identity.handle).toBeNull()
+	})
+
+	it("returns a petname displayName and null handle when the row is missing", async () => {
+		const keyId = "0011223344556677"
+		const db = makeMockDB([null])
+		const env = makeEnv(db)
+		const identity = await resolveIdentity(env, keyId)
+		expect(identity.displayName).toBe(generatePetName(keyId))
+		expect(identity.handle).toBeNull()
+	})
+})
+
+describe("resolveKeyIdByHandle", () => {
+	it("resolves a handle to a key id via nickname_lower, lowercasing the input", async () => {
+		const db = makeMockDB([{ key_id: "kkk" }])
+		const env = makeEnv(db)
+		const keyId = await resolveKeyIdByHandle(env, "Brook")
+		expect(keyId).toBe("kkk")
+		expect(db.calls[0].sql).toBe("SELECT key_id FROM users WHERE nickname_lower = ?")
+		expect(db.calls[0].params).toEqual(["brook"])
+	})
+
+	it("returns null when no user has that handle", async () => {
+		const db = makeMockDB([null])
+		const env = makeEnv(db)
+		expect(await resolveKeyIdByHandle(env, "ghost")).toBeNull()
 	})
 })
 

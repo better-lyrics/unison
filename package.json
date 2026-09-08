@@ -18,6 +18,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:integration": "RUN_INTEGRATION=1 vitest run --no-file-parallelism integration.test",
     "test:coverage": "vitest run --coverage",
     "submit": "tsx cli/submit.ts",
     "admin:delete": "tsx scripts/admin-delete.ts",

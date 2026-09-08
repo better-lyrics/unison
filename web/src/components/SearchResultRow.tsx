@@ -18,7 +18,7 @@ export function SearchResultRow({ entry, rank }: SearchResultRowProps) {
       <Link
         to={`/song/${entry.videoId}?variantId=${entry.id}`}
         aria-label={`Open lyrics for ${entry.song} by ${entry.artist}`}
-        className="flex items-center gap-4 rounded-lg border border-unison-border bg-unison-bg-elevated px-4 py-3 transition-colors hover:border-unison-border-strong hover:bg-unison-bg-hover"
+        className="flex items-center gap-4 rounded-lg bg-white/[0.02] px-4 py-3 transition-colors hover:bg-unison-bg-hover"
       >
         <span className="shrink-0 font-mono text-xs tabular-nums text-unison-text-muted">{formatRank(rank)}</span>
         <div

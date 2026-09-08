@@ -1,9 +1,13 @@
-import { Elysia, t } from "elysia"
+import { config } from "@/config"
+import { getUserBadges, setFeatured } from "@/db/badges"
 import { getFulfillmentStatsBySubmitter } from "@/db/fulfillments"
 import { getSubmissionsByUser } from "@/db/profile"
+import { resolveKeyIdByHandle } from "@/db/users"
 import type { Env } from "@/types"
+import { eitherAuth } from "@/utils/either-auth"
 import { ErrorCode, buildError } from "@/utils/errors"
 import { readRateLimit } from "@/utils/read-rate-limit"
+import { Elysia, t } from "elysia"
 
 const DEFAULT_LIMIT = 20
 const MAX_LIMIT = 50
@@ -13,10 +17,26 @@ function parseCursor(raw: string): { createdAt: number; id: number } {
 	return { createdAt: Number(createdAtStr), id: Number(idStr) }
 }
 
+function parseFeaturedKeys(body: unknown): string[] | null {
+	if (!body || typeof body !== "object") return null
+	const featured = (body as { featured?: unknown }).featured
+	if (!Array.isArray(featured) || !featured.every((k) => typeof k === "string")) return null
+	return featured
+}
+
 export const userRoutes = (env: Env) =>
 	new Elysia({ prefix: "/users" })
 		.decorate("env", env)
 		.use(readRateLimit)
+		.get(
+			"/by-handle/:handle",
+			async ({ params, env, status }) => {
+				const keyId = await resolveKeyIdByHandle(env, params.handle)
+				if (!keyId) return status(404, buildError(ErrorCode.NOT_FOUND))
+				return { success: true, data: { keyId } }
+			},
+			{ params: t.Object({ handle: t.String({ pattern: "^[A-Za-z0-9_]{3,20}$" }) }) }
+		)
 		.get(
 			"/:keyId/submissions",
 			async ({ params, query, env }) => {
@@ -60,3 +80,29 @@ export const userRoutes = (env: Env) =>
 			},
 			{ params: t.Object({ keyId: t.String({ pattern: "^[0-9a-fA-F]{64}$" }) }) }
 		)
+		.get(
+			"/:keyId/badges",
+			async ({ params, env }) => ({
+				success: true,
+				data: await getUserBadges(env, params.keyId),
+			}),
+			{ params: t.Object({ keyId: t.String({ pattern: "^[0-9a-fA-F]{64}$" }) }) }
+		)
+		.use(eitherAuth)
+		.put("/me/featured-badges", async ({ env, keyId, userId, body, status }) => {
+			const { success } = await env.RATE_LIMITER.limit({ key: keyId })
+			if (!success) return status(429, buildError(ErrorCode.RATE_LIMITED))
+
+			const featured = parseFeaturedKeys(body)
+			if (!featured) return status(400, buildError(ErrorCode.INVALID_FEATURED_BADGES))
+
+			const result = await setFeatured(env, userId, featured)
+			if (!result.ok) {
+				const hint =
+					result.reason === "over_cap"
+						? `You can feature up to ${config.gamification.featured.maxSlots} badges. Remove some and try again.`
+						: "You can only feature badges you've earned."
+				return status(400, buildError(ErrorCode.INVALID_FEATURED_BADGES, { hint }))
+			}
+			return { success: true, data: result.gamification }
+		})

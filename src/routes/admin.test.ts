@@ -99,6 +99,10 @@ function post(path: string, body: unknown, headers: Record<string, string> = ADM
 	})
 }
 
+function del(path: string, headers: Record<string, string> = ADMIN) {
+	return new Request(`http://localhost${path}`, { method: "DELETE", headers })
+}
+
 async function json(res: Response) {
 	return (await res.json()) as { success: boolean; data?: unknown; code?: string }
 }
@@ -570,5 +574,90 @@ describe("GET /admin/migrations/:id", () => {
 		expect(data.moved_votes).toBe(3)
 		expect(data.hasSnapshot).toBe(true)
 		expect(data.snapshot).toBeUndefined()
+	})
+})
+
+describe("admin committee roster", () => {
+	it("rejects POST without a valid admin bearer", async () => {
+		const app = adminRoutes(makeEnv(makeMockDB(), makeMockCache()))
+		const res = await app.handle(
+			post("/admin/committee", { userId: 5 }, { authorization: "Bearer wrong" })
+		)
+		expect(res.status).toBe(401)
+	})
+
+	it("returns 404 on POST when ADMIN_SECRET is unset (deploy dark)", async () => {
+		const app = adminRoutes(makeEnv(makeMockDB(), makeMockCache(), { ADMIN_SECRET: null }))
+		const res = await app.handle(post("/admin/committee", { userId: 5 }))
+		expect(res.status).toBe(404)
+	})
+
+	it("adds a member, writing an INSERT with the user id and admin actor", async () => {
+		const db = makeMockDB([{ id: 42, key_id: "k" }])
+		const app = adminRoutes(makeEnv(db, makeMockCache()))
+		const res = await app.handle(post("/admin/committee", { userId: 42 }))
+		expect(res.status).toBe(200)
+		expect((await json(res)).data).toEqual({ userId: 42 })
+		const insert = db.calls.find((c) => c.sql.includes("INSERT INTO committee_members"))
+		expect(insert?.params).toContain(42)
+		expect(insert?.params).toContain("admin")
+	})
+
+	it("returns 404 NOT_FOUND when the target user does not exist", async () => {
+		const db = makeMockDB([null])
+		const app = adminRoutes(makeEnv(db, makeMockCache()))
+		const res = await app.handle(post("/admin/committee", { userId: 9999 }))
+		expect(res.status).toBe(404)
+		expect((await json(res)).code).toBe("NOT_FOUND")
+		expect(db.calls.some((c) => c.sql.includes("INSERT INTO committee_members"))).toBe(false)
+	})
+
+	it("lists the roster rows mapped to camelCase", async () => {
+		const db = makeMockDB([[{ user_id: 5, added_at: 100, added_by: "admin" }]])
+		const app = adminRoutes(makeEnv(db, makeMockCache()))
+		const res = await app.handle(get("/admin/committee"))
+		expect(res.status).toBe(200)
+		const data = (await json(res)).data as Record<string, unknown>[]
+		expect(data).toEqual([{ userId: 5, addedAt: 100, addedBy: "admin" }])
+	})
+
+	it("removes a member, writing a DELETE with the user id", async () => {
+		const db = makeMockDB()
+		const app = adminRoutes(makeEnv(db, makeMockCache()))
+		const res = await app.handle(del("/admin/committee/5"))
+		expect(res.status).toBe(200)
+		expect((await json(res)).data).toEqual({ removed: true })
+		const remove = db.calls.find((c) => c.sql.includes("DELETE FROM committee_members"))
+		expect(remove?.params).toContain(5)
+	})
+})
+
+describe("DELETE /admin/boost/:lyricsId", () => {
+	it("rejects without a valid admin bearer", async () => {
+		const app = adminRoutes(makeEnv(makeMockDB(), makeMockCache()))
+		const res = await app.handle(del("/admin/boost/5", { authorization: "Bearer wrong" }))
+		expect(res.status).toBe(401)
+	})
+
+	it("returns 404 when ADMIN_SECRET is unset (deploy dark)", async () => {
+		const app = adminRoutes(makeEnv(makeMockDB(), makeMockCache(), { ADMIN_SECRET: null }))
+		const res = await app.handle(del("/admin/boost/5"))
+		expect(res.status).toBe(404)
+	})
+
+	it("revokes an active boost and returns revoked:true", async () => {
+		const db = makeMockDB([{ id: 1 }, { video_id: "v" }])
+		const app = adminRoutes(makeEnv(db, makeMockCache()))
+		const res = await app.handle(del("/admin/boost/5"))
+		expect(res.status).toBe(200)
+		expect((await json(res)).data).toEqual({ revoked: true })
+	})
+
+	it("returns 404 NOT_FOUND when there is no active boost", async () => {
+		const db = makeMockDB([null])
+		const app = adminRoutes(makeEnv(db, makeMockCache()))
+		const res = await app.handle(del("/admin/boost/5"))
+		expect(res.status).toBe(404)
+		expect((await json(res)).code).toBe("NOT_FOUND")
 	})
 })
