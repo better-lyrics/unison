@@ -17,7 +17,12 @@ import {
 	softDeleteLyrics,
 	submitLyrics,
 } from "./lyrics"
-import { AUTO_HIDE_PREDICATE, RANKING_EXPR, RANKING_EXPR_JOINED } from "./predicates"
+import {
+	AUTO_HIDE_PREDICATE,
+	RANKING_EXPR,
+	RANKING_EXPR_JOINED,
+	RANKING_EXPR_VARIANT,
+} from "./predicates"
 
 // -- Mocks -----------------------------------------------------------------
 
@@ -363,7 +368,7 @@ describe("findByVideoId", () => {
 		expect(lookupCall?.sql).toMatch(/vote_count >= 3/)
 		expect(lookupCall!.sql).toMatch(/ORDER BY \(CASE WHEN[\s\S]+?\) DESC,/)
 		const caseIdx = lookupCall!.sql.indexOf("CASE WHEN")
-		const rankingIdx = lookupCall!.sql.indexOf(RANKING_EXPR_JOINED)
+		const rankingIdx = lookupCall!.sql.indexOf(RANKING_EXPR_VARIANT)
 		expect(caseIdx).toBeGreaterThan(-1)
 		expect(rankingIdx).toBeGreaterThan(caseIdx)
 	})

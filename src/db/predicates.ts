@@ -18,7 +18,9 @@ const buildRankingExpr = (prefix: string, committeeBonus = false) => {
 }
 
 export const RANKING_EXPR = buildRankingExpr("")
-export const RANKING_EXPR_JOINED = buildRankingExpr("l.", true)
+// Committee bonus applies only to canonical-variant selection of a known video, not song/artist search.
+export const RANKING_EXPR_JOINED = buildRankingExpr("l.")
+export const RANKING_EXPR_VARIANT = buildRankingExpr("l.", true)
 
 const { autoHide } = config.moderation
 
