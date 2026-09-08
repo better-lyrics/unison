@@ -229,6 +229,7 @@ export interface UserGamification {
   level: number
   xp: number
   xpForNext: number | null
+  xpFloor: number
   tier: TierName | null
   tierRank: number | null
   badges: UserBadge[]

@@ -33,6 +33,7 @@ export interface UserGamification {
 	level: number
 	xp: number
 	xpForNext: number | null
+	xpFloor: number
 	tier: TierName | null
 	tierRank: number | null
 	badges: UserBadge[]
@@ -161,12 +162,13 @@ export async function getUserBadges(env: Env, keyId: string): Promise<UserGamifi
 		.first<{ id: number; featured_badges: string | null }>()
 
 	if (!user) {
-		const { level, xpForNext } = levelForXp(0, thresholds)
+		const { level, xpForNext, xpFloor } = levelForXp(0, thresholds)
 		return {
 			keyId,
 			level,
 			xp: 0,
 			xpForNext,
+			xpFloor,
 			tier: null,
 			tierRank: null,
 			badges: [],
@@ -177,7 +179,7 @@ export async function getUserBadges(env: Env, keyId: string): Promise<UserGamifi
 
 	const userId = user.id
 	const xp = await getXp(env, userId)
-	const { level, xpForNext } = levelForXp(xp, thresholds)
+	const { level, xpForNext, xpFloor } = levelForXp(xp, thresholds)
 
 	const rank = await getCuratorRank(env, keyId)
 	const featured = parseFeatured(user.featured_badges)
@@ -215,6 +217,7 @@ export async function getUserBadges(env: Env, keyId: string): Promise<UserGamifi
 		level,
 		xp,
 		xpForNext,
+		xpFloor,
 		tier: rank?.tier ?? null,
 		tierRank: community ? null : (rank?.rank ?? null),
 		badges,

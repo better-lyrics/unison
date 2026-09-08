@@ -55,6 +55,7 @@ function gamification(overrides: Partial<UserGamification> = {}): UserGamificati
     level: 5,
     xp: 100,
     xpForNext: 200,
+    xpFloor: 50,
     tier: null,
     tierRank: null,
     featured: [],

@@ -10,8 +10,15 @@ import { levelForXp } from "@/utils/xp"
 
 export const CURATOR_LEADERBOARD_CACHE_KEY = "leaderboard:users"
 
+const curatorBoardCacheKey = (limit: number) => `${CURATOR_LEADERBOARD_CACHE_KEY}:board:${limit}`
+
 export async function invalidateCuratorLeaderboardCache(env: Env): Promise<void> {
-	await env.CACHE.delete(CURATOR_LEADERBOARD_CACHE_KEY)
+	const { rankScanLimit, topN } = config.requests.leaderboard
+	await Promise.all([
+		env.CACHE.delete(CURATOR_LEADERBOARD_CACHE_KEY),
+		env.CACHE.delete(curatorBoardCacheKey(rankScanLimit)),
+		env.CACHE.delete(curatorBoardCacheKey(topN)),
+	])
 }
 
 export interface SongLeaderboardRow {
@@ -226,6 +233,7 @@ export interface CuratorLeaderboardRow {
 	level: number
 	xp: number
 	xpForNext: number | null
+	xpFloor: number
 	badgeCount: number
 	topBadge: BadgeRef | null
 	featured: BadgeRef[]
@@ -249,6 +257,16 @@ export async function getCuratorLeaderboard(
 	env: Env,
 	limit: number
 ): Promise<CuratorLeaderboardRow[]> {
+	const cacheKey = curatorBoardCacheKey(limit)
+	const cached = await env.CACHE.get(cacheKey)
+	if (cached) {
+		try {
+			return JSON.parse(cached) as CuratorLeaderboardRow[]
+		} catch {
+			await env.CACHE.delete(cacheKey)
+		}
+	}
+
 	const res = await env.DB.prepare(
 		`SELECT u.id AS user_id, u.key_id, u.reputation, u.nickname,
 		        agg.score, agg.submission_count, agg.total_upvotes,
@@ -296,9 +314,9 @@ export async function getCuratorLeaderboard(
 	// rank or tier and is excluded from the denominator, so real curators own ranks 1..N.
 	const rankedTotal = total - rows.filter((r) => isLinkBlacklisted(r.key_id)).length
 	let rankedSoFar = 0
-	return rows.map((r) => {
+	const board = rows.map((r) => {
 		const xp = xpMap.get(r.user_id) ?? 0
-		const { level, xpForNext } = levelForXp(xp, config.gamification.xp.levelThresholds)
+		const { level, xpForNext, xpFloor } = levelForXp(xp, config.gamification.xp.levelThresholds)
 		const summary = badgeSummaries.get(r.user_id)
 		const community = isLinkBlacklisted(r.key_id)
 		const rank = community ? 0 : ++rankedSoFar
@@ -318,11 +336,17 @@ export async function getCuratorLeaderboard(
 			level,
 			xp,
 			xpForNext,
+			xpFloor,
 			badgeCount: summary?.badgeCount ?? 0,
 			topBadge: summary?.topBadge ?? null,
 			featured: summary?.featured ?? [],
 		}
 	})
+
+	await env.CACHE.put(cacheKey, JSON.stringify(board), {
+		expirationTtl: config.requests.leaderboard.cacheTtl,
+	})
+	return board
 }
 
 export async function getCuratorRank(

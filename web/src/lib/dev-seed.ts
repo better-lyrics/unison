@@ -497,6 +497,7 @@ function auroraShowcase(keyId: string): UserGamification {
     level: 8,
     xp: 3200,
     xpForNext: 4000,
+    xpFloor: 2800,
     tier: "legendary",
     tierRank: 1,
     featured: ["most-loved", "legendary", "verified-contributor", "sharp-ear", "trailblazer"],
@@ -522,7 +523,9 @@ function derivedGamification(entry: CuratorLeaderboardEntry): UserGamification {
   const { tier, tierRank } = tierForRank(entry.rank)
   const level = Math.min(12, Math.max(1, Math.round(entry.score / 30) + 1))
   const xp = Math.round(entry.score * 12)
-  const xpForNext = level >= 12 ? null : xp + Math.max(60, 260 - Math.round(entry.score))
+  const step = Math.max(60, 260 - Math.round(entry.score))
+  const xpForNext = level >= 12 ? null : xp + step
+  const xpFloor = Math.max(0, xp - step)
 
   const badges: UserBadge[] = [
     { key: "first-submission", earned: true, earnedAt: SEEDED_NOW - 55 * DAY, featured: false },
@@ -583,6 +586,7 @@ function derivedGamification(entry: CuratorLeaderboardEntry): UserGamification {
     level,
     xp,
     xpForNext,
+    xpFloor,
     tier,
     tierRank,
     featured,
@@ -600,6 +604,7 @@ export async function seedUserBadges(keyId: string): Promise<UserGamification> {
       level: 1,
       xp: 0,
       xpForNext: 50,
+      xpFloor: 0,
       tier: null,
       tierRank: null,
       featured: ["community"],
@@ -614,6 +619,7 @@ export async function seedUserBadges(keyId: string): Promise<UserGamification> {
       level: 1,
       xp: 0,
       xpForNext: 50,
+      xpFloor: 0,
       tier: null,
       tierRank: null,
       featured: [],

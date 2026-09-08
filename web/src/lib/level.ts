@@ -4,12 +4,11 @@ export interface LevelProgress {
   atMax: boolean
 }
 
-// Backend exposes xp and xpForNext but not the level floor, so the ring uses xp/xpForNext.
-export function levelProgress(xp: number, xpForNext: number | null): LevelProgress {
-  if (xpForNext === null || xpForNext <= 0) {
+export function levelProgress(xp: number, xpForNext: number | null, xpFloor = 0): LevelProgress {
+  if (xpForNext === null || xpForNext <= xpFloor) {
     return { pct: 1, remaining: 0, atMax: true }
   }
-  const pct = Math.min(1, Math.max(0, xp / xpForNext))
+  const pct = Math.min(1, Math.max(0, (xp - xpFloor) / (xpForNext - xpFloor)))
   const remaining = Math.max(0, xpForNext - xp)
   return { pct, remaining, atMax: false }
 }

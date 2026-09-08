@@ -102,7 +102,7 @@ export function ProfileHeader({ keyId, rank, gamification, catalogue }: ProfileH
   const [shareCopied, copyShare] = useCopied()
   const link = profileLink(rank.handle ?? null, keyId)
 
-  const progress = gamification ? levelProgress(gamification.xp, gamification.xpForNext) : null
+  const progress = gamification ? levelProgress(gamification.xp, gamification.xpForNext, gamification.xpFloor) : null
   const ringOffset = progress ? RING_CIRCUMFERENCE * (1 - progress.pct) : RING_CIRCUMFERENCE
   const tierDef =
     gamification?.tier && catalogue ? catalogue.badges.find((d) => d.key === gamification.tier) : undefined

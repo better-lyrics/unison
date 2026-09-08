@@ -331,13 +331,13 @@ describe("GET /leaderboard/users/:keyId", () => {
 	it("returns ranked: true with displayName and lastVoteAt when the user is on the board", async () => {
 		const keyId = "a".repeat(64)
 		const db = makeMockDB([
-			[{ key_id: keyId, reputation: 1.2, score: 5, submission_count: 2, total_upvotes: 8 }],
-			{ last_vote_at: 1700000123 },
+			{ last_vote_at: 1700000123 }, // getLastVoteAt
 			null, // getByKeyId -> not linked
+			[{ key_id: keyId, reputation: 1.2, score: 5, submission_count: 2, total_upvotes: 8 }], // getCuratorLeaderboard
 			[], // getXpForUsers
 			[], // getBadgeSummaries awards
 			[], // getBadgeSummaries featured
-			{ nickname: null },
+			{ nickname: null }, // resolveIdentity
 		])
 		const env = makeEnv(db)
 		const app = leaderboardRoutes(env)
@@ -364,6 +364,8 @@ describe("GET /leaderboard/users/:keyId", () => {
 	it("exposes level, xp, tier, badgeCount and topBadge on a ranked curator profile", async () => {
 		const keyId = "a".repeat(64)
 		const db = makeMockDB([
+			{ last_vote_at: 1700000123 }, // getLastVoteAt
+			null, // getByKeyId -> not linked
 			[
 				{
 					user_id: 7,
@@ -373,13 +375,11 @@ describe("GET /leaderboard/users/:keyId", () => {
 					submission_count: 2,
 					total_upvotes: 8,
 				},
-			],
-			{ last_vote_at: 1700000123 },
-			null, // getByKeyId -> not linked
+			], // getCuratorLeaderboard
 			[{ user_id: 7, xp: 200 }], // getXpForUsers
 			[{ user_id: 7, badge_key: "verified-contributor", tier: 3 }], // getBadgeSummaries awards
 			[], // getBadgeSummaries featured
-			{ nickname: null },
+			{ nickname: null }, // resolveIdentity
 		])
 		const env = makeEnv(db)
 		const app = leaderboardRoutes(env)
@@ -410,13 +410,13 @@ describe("GET /leaderboard/users/:keyId", () => {
 	it("reports discordLinked: true when the curator has a linked Discord account", async () => {
 		const keyId = "c".repeat(64)
 		const db = makeMockDB([
-			[{ key_id: keyId, reputation: 1.2, score: 5, submission_count: 2, total_upvotes: 8 }],
-			{ last_vote_at: 1700000123 },
-			{ discord_id: "d1", key_id: keyId, discord_username: "alice", linked_at: 1 },
+			{ last_vote_at: 1700000123 }, // getLastVoteAt
+			{ discord_id: "d1", key_id: keyId, discord_username: "alice", linked_at: 1 }, // getByKeyId
+			[{ key_id: keyId, reputation: 1.2, score: 5, submission_count: 2, total_upvotes: 8 }], // getCuratorLeaderboard
 			[], // getXpForUsers
 			[], // getBadgeSummaries awards
 			[], // getBadgeSummaries featured
-			{ nickname: null },
+			{ nickname: null }, // resolveIdentity
 		])
 		const env = makeEnv(db)
 		const app = leaderboardRoutes(env)
@@ -428,7 +428,7 @@ describe("GET /leaderboard/users/:keyId", () => {
 
 	it("returns ranked: false with displayName and null lastVoteAt for an unknown user", async () => {
 		const keyId = "b".repeat(64)
-		const db = makeMockDB([[], { last_vote_at: null }, null, { nickname: null }])
+		const db = makeMockDB([{ last_vote_at: null }, null, [], { nickname: null }])
 		const env = makeEnv(db)
 		const app = leaderboardRoutes(env)
 		const res = await app.handle(new Request(`http://localhost/leaderboard/users/${keyId}`))
@@ -460,13 +460,13 @@ describe("GET /leaderboard/users/:keyId", () => {
 	it("exposes a handle equal to the lowercased nickname for a nicknamed curator", async () => {
 		const keyId = "d".repeat(64)
 		const db = makeMockDB([
-			[{ key_id: keyId, reputation: 1.0, score: 3, submission_count: 1, total_upvotes: 4 }],
-			{ last_vote_at: 1700000456 },
+			{ last_vote_at: 1700000456 }, // getLastVoteAt
 			null, // getByKeyId -> not linked
+			[{ key_id: keyId, reputation: 1.0, score: 3, submission_count: 1, total_upvotes: 4 }], // getCuratorLeaderboard
 			[], // getXpForUsers
 			[], // getBadgeSummaries awards
 			[], // getBadgeSummaries featured
-			{ nickname: "Brook", nickname_lower: "brook" },
+			{ nickname: "Brook", nickname_lower: "brook" }, // resolveIdentity
 		])
 		const env = makeEnv(db)
 		const app = leaderboardRoutes(env)
@@ -478,7 +478,12 @@ describe("GET /leaderboard/users/:keyId", () => {
 
 	it("returns a null handle for a curator without a nickname", async () => {
 		const keyId = "e".repeat(64)
-		const db = makeMockDB([[], { last_vote_at: null }, null, { nickname: null, nickname_lower: null }])
+		const db = makeMockDB([
+			[],
+			{ last_vote_at: null },
+			null,
+			{ nickname: null, nickname_lower: null },
+		])
 		const env = makeEnv(db)
 		const app = leaderboardRoutes(env)
 		const res = await app.handle(new Request(`http://localhost/leaderboard/users/${keyId}`))
@@ -490,13 +495,13 @@ describe("GET /leaderboard/users/:keyId", () => {
 	it("/leaderboard/:keyId reflects a custom nickname when set", async () => {
 		const keyId = "c".repeat(64)
 		const db = makeMockDB([
-			[{ key_id: keyId, reputation: 1.0, score: 3, submission_count: 1, total_upvotes: 4 }],
-			{ last_vote_at: 1700000456 },
+			{ last_vote_at: 1700000456 }, // getLastVoteAt
 			null, // getByKeyId -> not linked
+			[{ key_id: keyId, reputation: 1.0, score: 3, submission_count: 1, total_upvotes: 4 }], // getCuratorLeaderboard
 			[], // getXpForUsers
 			[], // getBadgeSummaries awards
 			[], // getBadgeSummaries featured
-			{ nickname: "Brook" },
+			{ nickname: "Brook" }, // resolveIdentity
 		])
 		const env = makeEnv(db)
 		const app = leaderboardRoutes(env)

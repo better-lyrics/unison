@@ -35,6 +35,7 @@ function gam(overrides: Partial<UserGamification> = {}): UserGamification {
     level: 5,
     xp: 700,
     xpForNext: 1200,
+    xpFloor: 700,
     tier: "elite",
     tierRank: 4,
     featured: [],

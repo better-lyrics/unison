@@ -257,6 +257,82 @@ describe("getCuratorLeaderboard", () => {
 	})
 })
 
+describe("getCuratorLeaderboard caching", () => {
+	const boardRow = {
+		keyId: "k1",
+		reputation: 1.5,
+		score: 30,
+		submissionCount: 8,
+		totalUpvotes: 50,
+		fulfilledCount: 0,
+		fulfilledDemand: 0,
+		rank: 1,
+		community: false,
+		nickname: null,
+		discordLinked: false,
+		tier: "elite",
+		level: 5,
+		xp: 700,
+		xpForNext: 1200,
+		xpFloor: 700,
+		badgeCount: 0,
+		topBadge: null,
+		featured: [],
+	}
+
+	it("returns the cached board without touching the database on a hit", async () => {
+		const db = makeMockDB([])
+		const env = makeEnv(db)
+		env.CACHE = {
+			async get() {
+				return JSON.stringify([boardRow])
+			},
+			async put() {},
+			async delete() {},
+			async keys() {
+				return []
+			},
+			async setNX() {
+				return true
+			},
+		} as unknown as Env["CACHE"]
+
+		const result = await getCuratorLeaderboard(env, 5000)
+
+		expect(result).toEqual([boardRow])
+		expect(db.calls).toHaveLength(0)
+	})
+
+	it("error path: recomputes from the database when the cached entry is corrupt", async () => {
+		let deleted = false
+		const db = makeMockDB([
+			[{ key_id: "k1", reputation: 1, score: 5, submission_count: 1, total_upvotes: 2 }],
+		])
+		const env = makeEnv(db)
+		env.CACHE = {
+			async get() {
+				return "not json{"
+			},
+			async put() {},
+			async delete() {
+				deleted = true
+			},
+			async keys() {
+				return []
+			},
+			async setNX() {
+				return true
+			},
+		} as unknown as Env["CACHE"]
+
+		const result = await getCuratorLeaderboard(env, 5000)
+
+		expect(deleted).toBe(true)
+		expect(result[0]).toMatchObject({ keyId: "k1", rank: 1 })
+		expect(db.calls.length).toBeGreaterThan(0)
+	})
+})
+
 describe("getCuratorLeaderboard fulfillment fields", () => {
 	it("returns fulfilledCount and fulfilledDemand on each row", async () => {
 		const db = makeMockDB([
