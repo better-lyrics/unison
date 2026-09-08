@@ -123,6 +123,7 @@ export const config = {
 			perfectionistMinScore: 0.9,
 			tastemaker: { winnerScore: 0.9, earlyWindow: 3 },
 			earlyAdopterCutoff: 1790812800,
+			evergreenMinDays: 90,
 		},
 	},
 

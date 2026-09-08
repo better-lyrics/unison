@@ -67,7 +67,7 @@ describe("GET /badges", () => {
 		expect(json.data.display.categoryOrder.length).toBeGreaterThan(0)
 	})
 
-	it("exposes every renderable mark: the twenty badges and five tier titles", async () => {
+	it("exposes every renderable mark: the twenty-three badges and five tier titles", async () => {
 		const app = badgeRoutes(makeEnv())
 		const res = await app.handle(new Request("http://localhost/badges"))
 		const json = (await res.json()) as CatalogueBody
@@ -75,7 +75,7 @@ describe("GET /badges", () => {
 		for (const key of [...BADGES, ...TIER_BADGES].map((b) => b.key)) {
 			expect(keys).toContain(key)
 		}
-		expect(keys.length).toBe(25)
+		expect(keys.length).toBe(28)
 	})
 
 	it("gives every entry resolvable color and mono image URLs", async () => {

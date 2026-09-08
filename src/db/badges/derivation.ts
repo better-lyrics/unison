@@ -1,5 +1,6 @@
 import { config } from "@/config"
 import { getFulfillmentStatsBySubmitter } from "@/db/fulfillments"
+import { AUTO_HIDE_PREDICATE_JOINED, PROVEN_EXPR_JOINED, RANKING_EXPR_VARIANT } from "@/db/predicates"
 import type { Env } from "@/types"
 import { isLinkBlacklisted } from "@/utils/blacklist"
 import { BADGES } from "./definitions"
@@ -47,6 +48,13 @@ async function scalar(env: Env, sql: string, ...params: unknown[]): Promise<numb
 		.first<{ n: string | number }>()
 	return Number(row?.n ?? 0)
 }
+
+// Weeks and months a user showed up: real submissions plus non-self votes. Bound twice (votes, lyrics).
+const ACTIVITY_CTE = `WITH activity AS (
+	SELECT created_at FROM votes WHERE user_id = ? AND is_self_vote = 0
+	UNION ALL
+	SELECT created_at FROM lyrics WHERE submitter_id = ? AND deleted_at IS NULL
+)`
 
 export const DERIVATIONS: Record<string, Evaluator> = {
 	"verified-contributor": async (env, userId) => {
@@ -182,6 +190,56 @@ export const DERIVATIONS: Record<string, Evaluator> = {
 			"SELECT COUNT(*) AS n FROM users WHERE id = ? AND created_at < ?",
 			userId,
 			config.gamification.badges.earlyAdopterCutoff
+		)
+		return { earned: count > 0 }
+	},
+
+	"on-a-roll": async (env, userId) => {
+		const streak = await scalar(
+			env,
+			`${ACTIVITY_CTE},
+			 weeks AS (
+				SELECT DISTINCT
+					(EXTRACT(EPOCH FROM date_trunc('week', to_timestamp(created_at) AT TIME ZONE 'UTC'))::bigint / 604800) AS wk
+				FROM activity
+			 ),
+			 runs AS (
+				SELECT wk - ROW_NUMBER() OVER (ORDER BY wk) AS grp FROM weeks
+			 )
+			 SELECT COALESCE(MAX(cnt), 0) AS n FROM (SELECT COUNT(*) AS cnt FROM runs GROUP BY grp) t`,
+			userId,
+			userId
+		)
+		return tiered(streak, thresholdsFor("on-a-roll"))
+	},
+
+	regular: async (env, userId) => {
+		const months = await scalar(
+			env,
+			`${ACTIVITY_CTE}
+			 SELECT COUNT(DISTINCT date_trunc('month', to_timestamp(created_at) AT TIME ZONE 'UTC')) AS n FROM activity`,
+			userId,
+			userId
+		)
+		return tiered(months, thresholdsFor("regular"))
+	},
+
+	evergreen: async (env, userId) => {
+		const count = await scalar(
+			env,
+			`SELECT COUNT(*) AS n FROM lyrics le
+			 WHERE le.submitter_id = ?
+			   AND le.deleted_at IS NULL
+			   AND le.created_at <= (EXTRACT(EPOCH FROM NOW())::INTEGER - ?)
+			   AND le.id = (
+				 SELECT l.id FROM lyrics l
+				 LEFT JOIN users u ON u.id = l.submitter_id
+				 WHERE l.video_id = le.video_id AND l.deleted_at IS NULL AND NOT ${AUTO_HIDE_PREDICATE_JOINED}
+				 ORDER BY (CASE WHEN ${PROVEN_EXPR_JOINED} THEN 1 ELSE 0 END) DESC, ${RANKING_EXPR_VARIANT} DESC
+				 LIMIT 1
+			   )`,
+			userId,
+			config.gamification.badges.evergreenMinDays * 86400
 		)
 		return { earned: count > 0 }
 	},
