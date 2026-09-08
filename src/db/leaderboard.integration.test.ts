@@ -30,7 +30,14 @@ describeIntegration("curator leaderboard (integration)", () => {
 		pool = new Pool({ connectionString: url })
 		const schema = readFileSync(new URL("../../schema.sql", import.meta.url), "utf-8")
 		await pool.query(schema)
-		env = { DB: new D1Compat(pool) } as unknown as Env
+		const cache = {
+			async get() {
+				return null
+			},
+			async put() {},
+			async delete() {},
+		}
+		env = { DB: new D1Compat(pool), CACHE: cache } as unknown as Env
 	})
 
 	afterAll(async () => {
@@ -127,9 +134,11 @@ describeIntegration("curator leaderboard (integration)", () => {
 		expect(real[TOTAL - 1].tier).toBeNull()
 
 		expect(real[0].xp).toBe(4500)
-		expect({ level: real[0].level, xpForNext: real[0].xpForNext }).toEqual(
-			levelForXp(4500, thresholds)
-		)
+		expect({
+			level: real[0].level,
+			xpForNext: real[0].xpForNext,
+			xpFloor: real[0].xpFloor,
+		}).toEqual(levelForXp(4500, thresholds))
 		expect({ level: real[0].level, xpForNext: real[0].xpForNext }).toEqual({
 			level: 9,
 			xpForNext: null,
@@ -142,9 +151,11 @@ describeIntegration("curator leaderboard (integration)", () => {
 		})
 
 		expect(real[3].xp).toBe(200)
-		expect({ level: real[3].level, xpForNext: real[3].xpForNext }).toEqual(
-			levelForXp(200, thresholds)
-		)
+		expect({
+			level: real[3].level,
+			xpForNext: real[3].xpForNext,
+			xpFloor: real[3].xpFloor,
+		}).toEqual(levelForXp(200, thresholds))
 		expect({ level: real[3].level, xpForNext: real[3].xpForNext }).toEqual({
 			level: 3,
 			xpForNext: 350,
@@ -207,6 +218,7 @@ describeIntegration("curator leaderboard (integration)", () => {
 					"level",
 					"xp",
 					"xpForNext",
+					"xpFloor",
 					"badgeCount",
 					"topBadge",
 					"featured",

@@ -1,4 +1,5 @@
 import { config } from "@/config"
+import { defaultFeaturedKeys } from "@/db/badge-summary"
 import { BADGES } from "@/db/badges/definitions"
 import { DERIVATIONS } from "@/db/badges/derivation"
 import { getXp } from "@/db/contribution-events"
@@ -182,7 +183,7 @@ export async function getUserBadges(env: Env, keyId: string): Promise<UserGamifi
 	const { level, xpForNext, xpFloor } = levelForXp(xp, thresholds)
 
 	const rank = await getCuratorRank(env, keyId)
-	const featured = parseFeatured(user.featured_badges)
+	const storedFeatured = parseFeatured(user.featured_badges)
 
 	const earnedRows = await env.DB.prepare(
 		"SELECT badge_key, tier, awarded_at FROM badge_awards WHERE user_id = ?"
@@ -208,9 +209,17 @@ export async function getUserBadges(env: Env, keyId: string): Promise<UserGamifi
 			earnedAt: award?.awardedAt,
 			tier: earned ? higherTier(award?.tier, evaluation.tier) : undefined,
 			progress: evaluation.progress,
-			featured: earned && featured.includes(key),
+			featured: false,
 		})
 	}
+
+	const earnedAwards = badges
+		.filter((b) => b.earned)
+		.map((b) => ({ key: b.key, tier: b.tier ?? null }))
+	const featured =
+		storedFeatured.length > 0 ? storedFeatured : defaultFeaturedKeys(earnedAwards)
+	const featuredSet = new Set(featured)
+	for (const b of badges) b.featured = b.earned && featuredSet.has(b.key)
 
 	const result: UserGamification = {
 		keyId,

@@ -66,6 +66,22 @@ function resolveFeatured(keys: string[], tierByKey: Map<string, number | null>):
 	return featured
 }
 
+// When a user has not chosen a featured set, showcase their strongest earned medals by the same
+// ranking topBadge uses (category order, then tier, then key), capped at the featured slot count.
+export function defaultFeaturedKeys(awards: { key: string; tier: number | null }[]): string[] {
+	const eligible = awards
+		.map((award) => ({ def: DEF_BY_KEY.get(award.key), tier: award.tier }))
+		.filter((entry): entry is { def: BadgeDef; tier: number | null } => {
+			return entry.def !== undefined && isEligible(entry.def) && !entry.def.secret
+		})
+	eligible.sort((a, b) => {
+		if (isBetter(a.def, a.tier ?? 0, b.def, b.tier ?? 0)) return -1
+		if (isBetter(b.def, b.tier ?? 0, a.def, a.tier ?? 0)) return 1
+		return 0
+	})
+	return eligible.slice(0, FEATURED_MAX).map((entry) => entry.def.key)
+}
+
 export async function getBadgeSummaries(
 	env: Env,
 	userIds: number[]
@@ -101,7 +117,14 @@ export async function getBadgeSummaries(
 	for (const [id, rows] of byUser) {
 		const tierByKey = new Map<string, number | null>()
 		for (const r of rows) tierByKey.set(r.badge_key, r.tier == null ? null : Number(r.tier))
-		const featured = resolveFeatured(featuredByUser.get(id) ?? [], tierByKey)
+		const stored = featuredByUser.get(id) ?? []
+		const keys =
+			stored.length > 0
+				? stored
+				: defaultFeaturedKeys(
+						rows.map((r) => ({ key: r.badge_key, tier: r.tier == null ? null : Number(r.tier) }))
+					)
+		const featured = resolveFeatured(keys, tierByKey)
 		summaries.set(id, { badgeCount: rows.length, topBadge: pickTopBadge(rows), featured })
 	}
 	return summaries

@@ -31,7 +31,14 @@ describeIntegration("badges award and read model (integration)", () => {
 		pool = new Pool({ connectionString: url })
 		const schema = readFileSync(new URL("../../schema.sql", import.meta.url), "utf-8")
 		await pool.query(schema)
-		env = { DB: new D1Compat(pool) } as unknown as Env
+		const cache = {
+			async get() {
+				return null
+			},
+			async put() {},
+			async delete() {},
+		}
+		env = { DB: new D1Compat(pool), CACHE: cache } as unknown as Env
 	})
 
 	afterAll(async () => {
@@ -186,12 +193,13 @@ describeIntegration("badges award and read model (integration)", () => {
 	describe("getUserBadges", () => {
 		it("returns a zero-state for an unknown key", async () => {
 			const g = await getUserBadges(env, "does-not-exist")
-			const { level, xpForNext } = levelForXp(0, thresholds)
+			const { level, xpForNext, xpFloor } = levelForXp(0, thresholds)
 			expect(g).toEqual({
 				keyId: "does-not-exist",
 				level,
 				xp: 0,
 				xpForNext,
+				xpFloor,
 				tier: null,
 				tierRank: null,
 				badges: [],
@@ -250,6 +258,23 @@ describeIntegration("badges award and read model (integration)", () => {
 
 			expect(g.tier).toBe("legendary")
 			expect(g.tierRank).toBe(1)
+		})
+
+		it("auto-features the top earned medals when the user has featured nothing", async () => {
+			const keyId = "f".repeat(64)
+			const userId = (
+				await one<{ id: number }>(
+					"INSERT INTO users (key_id, created_at) VALUES ($1, 2000000000) RETURNING id",
+					[keyId]
+				)
+			).id
+			await insertLyric({ submitterId: userId, confidence: "medium" })
+
+			const g = await getUserBadges(env, keyId)
+
+			expect(g.featured).toEqual(["verified-contributor", "first-submission"])
+			expect(g.badges.find((b) => b.key === "verified-contributor")?.featured).toBe(true)
+			expect(g.badges.find((b) => b.key === "first-submission")?.featured).toBe(true)
 		})
 
 		it("gives a pure voter xp and level but no curator tier", async () => {

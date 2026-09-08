@@ -141,13 +141,51 @@ describeIntegration("badge summaries (integration)", () => {
 		])
 	})
 
-	it("returns an empty featured list when the user has featured nothing", async () => {
+	it("auto-features the user's top medals when they have featured nothing", async () => {
 		const userId = await newUser()
 		await award(userId, "most-loved", null)
 
 		const summary = (await getBadgeSummaries(env, [userId])).get(userId)
 
-		expect(summary?.featured).toEqual([])
+		expect(summary?.featured).toEqual([
+			{ key: "most-loved", name: "Most Loved", tier: undefined },
+		])
+	})
+
+	it("auto-features the strongest medals by category, tier, then key, capped at the slot count", async () => {
+		const userId = await newUser()
+		await award(userId, "prolific", 2) // output
+		await award(userId, "verified-contributor", 2) // output, same tier, key after "prolific"
+		await award(userId, "karaoke-master", 3) // craft
+		await award(userId, "trailblazer", 3) // coverage
+		await award(userId, "sharp-ear", 3) // curation
+		await award(userId, "fan-favorite", null) // acclaim, dropped past the cap
+		await award(userId, "most-loved", null) // acclaim, dropped past the cap
+		await award(userId, "lyricist", null) // tier category, excluded
+		await award(userId, "community", null) // community, excluded
+
+		const summary = (await getBadgeSummaries(env, [userId])).get(userId)
+
+		expect(summary?.featured.map((b) => b.key)).toEqual([
+			"prolific",
+			"verified-contributor",
+			"karaoke-master",
+			"trailblazer",
+			"sharp-ear",
+		])
+	})
+
+	it("keeps an explicit featured selection instead of the auto default", async () => {
+		const userId = await newUser()
+		await award(userId, "verified-contributor", 2)
+		await award(userId, "most-loved", null)
+		await feature(userId, ["most-loved"])
+
+		const summary = (await getBadgeSummaries(env, [userId])).get(userId)
+
+		expect(summary?.featured).toEqual([
+			{ key: "most-loved", name: "Most Loved", tier: undefined },
+		])
 	})
 
 	it("returns a null topBadge but a nonzero count for a community-only user", async () => {
