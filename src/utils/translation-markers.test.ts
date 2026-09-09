@@ -35,11 +35,23 @@ describe("hasTranslationMarkers", () => {
 </tt>`
 			expect(hasTranslationMarkers(ttml)).toBe(true)
 		})
-	})
 
-	describe("dual language", () => {
-		it("flags two distinct xml:lang values", () => {
-			const ttml = wrap('<p xml:lang="es">Hola</p><p xml:lang="en">Hello</p>', 'xml:lang="es"')
+		it("flags a head-based <transliterations> block", () => {
+			const ttml = `<?xml version="1.0"?>
+<tt xmlns="http://www.w3.org/ns/ttml" xml:lang="ja">
+  <head><metadata>
+    <transliterations><transliteration xml:lang="ja-Latn"><text for="L1">kimi</text></transliteration></transliterations>
+  </metadata></head>
+  <body><div><p itunes:key="L1">君</p></div></body>
+</tt>`
+			expect(hasTranslationMarkers(ttml)).toBe(true)
+		})
+
+		it("flags a bare <transliteration> element", () => {
+			const ttml = `<?xml version="1.0"?>
+<tt xmlns="http://www.w3.org/ns/ttml" xml:lang="ja">
+  <body><div><p>君</p><transliteration>kimi</transliteration></div></body>
+</tt>`
 			expect(hasTranslationMarkers(ttml)).toBe(true)
 		})
 	})
@@ -47,6 +59,11 @@ describe("hasTranslationMarkers", () => {
 	describe("negatives", () => {
 		it("does not flag a monolingual document", () => {
 			const ttml = wrap("<p>First line</p><p>Second line</p>")
+			expect(hasTranslationMarkers(ttml)).toBe(false)
+		})
+
+		it("does not flag a multilingual document without translation markers", () => {
+			const ttml = wrap('<p xml:lang="es">Hola</p><p xml:lang="en">Hello</p>', 'xml:lang="es"')
 			expect(hasTranslationMarkers(ttml)).toBe(false)
 		})
 
@@ -76,17 +93,12 @@ describe("hasTranslationMarkers", () => {
 	})
 
 	describe("regressions", () => {
-		it("regression: does not flag region subtags of one language (en + en-US + en-GB)", () => {
-			const ttml = wrap('<p xml:lang="en-US">Color</p><p xml:lang="en-GB">Colour</p>')
-			expect(hasTranslationMarkers(ttml)).toBe(false)
-		})
-
-		it("regression: still flags two languages that carry region subtags (en-US + fr-CA)", () => {
+		it("regression: multiple distinct xml:lang values alone do not imply a translation", () => {
 			const ttml = wrap(
 				'<p xml:lang="en-US">Hello</p><p xml:lang="fr-CA">Bonjour</p>',
 				'xml:lang="en-US"'
 			)
-			expect(hasTranslationMarkers(ttml)).toBe(true)
+			expect(hasTranslationMarkers(ttml)).toBe(false)
 		})
 	})
 })

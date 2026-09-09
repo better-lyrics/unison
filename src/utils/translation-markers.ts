@@ -13,7 +13,12 @@ const parser = new XMLParser({
 })
 
 const TRANSLATION_ROLES = new Set(["x-translation", "x-roman"])
-const TRANSLATION_ELEMENTS = new Set(["translation", "translations"])
+const TRANSLATION_ELEMENTS = new Set([
+	"translation",
+	"translations",
+	"transliteration",
+	"transliterations",
+])
 
 export function hasTranslationMarkers(ttml: string): boolean {
 	let parsed: unknown
@@ -23,7 +28,6 @@ export function hasTranslationMarkers(ttml: string): boolean {
 		return false
 	}
 
-	const langs = new Set<string>()
 	let marked = false
 
 	function walk(node: unknown): void {
@@ -42,10 +46,6 @@ export function hasTranslationMarkers(ttml: string): boolean {
 				marked = true
 				return
 			}
-			const lang = attrs["@_lang"]
-			if (typeof lang === "string" && lang.trim()) {
-				langs.add(lang.trim().split("-")[0].toLowerCase())
-			}
 		}
 
 		for (const key of Object.keys(el)) {
@@ -59,5 +59,5 @@ export function hasTranslationMarkers(ttml: string): boolean {
 	}
 
 	walk(parsed)
-	return marked || langs.size >= 2
+	return marked
 }
