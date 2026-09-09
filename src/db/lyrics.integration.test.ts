@@ -100,4 +100,34 @@ describeIntegration("submitLyrics does not award first-for-song xp on raw submit
 		expect(await firstForSongCount(a)).toBe(0)
 		expect(await getXp(env, a)).toBe(0)
 	})
+
+	it("stores has_translation = true when a submitted TTML carries a translation marker", async () => {
+		const a = await seedUser("key-t")
+		const ttml = `<?xml version="1.0"?>
+<tt xmlns="http://www.w3.org/ns/ttml" xmlns:ttm="http://www.w3.org/ns/ttml#metadata" xml:lang="ja">
+  <body><div><p><span>原文</span><span ttm:role="x-translation">source</span></p></div></body>
+</tt>`
+		const result = await submitLyrics(
+			env,
+			buildSubmission({ videoId: "VT", format: "ttml", lyrics: ttml }),
+			a
+		)
+
+		const row = await one<{ has_translation: boolean | null }>(
+			"SELECT has_translation FROM lyrics WHERE id = $1",
+			[result.id]
+		)
+		expect(row.has_translation).toBe(true)
+	})
+
+	it("stores has_translation = false for a plain submission", async () => {
+		const a = await seedUser("key-p")
+		const result = await submitLyrics(env, buildSubmission({ videoId: "VP" }), a)
+
+		const row = await one<{ has_translation: boolean | null }>(
+			"SELECT has_translation FROM lyrics WHERE id = $1",
+			[result.id]
+		)
+		expect(row.has_translation).toBe(false)
+	})
 })
