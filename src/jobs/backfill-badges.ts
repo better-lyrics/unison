@@ -13,6 +13,7 @@ export async function backfillBadges(env: Env): Promise<{ evaluated: number; awa
 		"SELECT user_id FROM committee_members",
 		"SELECT DISTINCT submitter_id AS user_id FROM lyrics WHERE submitter_id IS NOT NULL",
 		"SELECT DISTINCT user_id FROM reports",
+		"SELECT DISTINCT user_id FROM votes",
 	]
 	if (blacklisted.length > 0) {
 		parts.push(

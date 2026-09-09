@@ -165,9 +165,9 @@ describe("catalogue", () => {
 		expect(CATALOGUE).toEqual([...BADGES, ...TIER_BADGES])
 	})
 
-	it("holds twenty-five entries with unique keys", () => {
+	it("holds thirty-one entries with unique keys", () => {
 		const keys = CATALOGUE.map((b) => b.key)
-		expect(keys.length).toBe(25)
-		expect(new Set(keys).size).toBe(25)
+		expect(keys.length).toBe(31)
+		expect(new Set(keys).size).toBe(31)
 	})
 })

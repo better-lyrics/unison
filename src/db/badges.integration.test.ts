@@ -249,7 +249,7 @@ describeIntegration("badges award and read model (integration)", () => {
 			expect(g.badges.map((b) => b.key)).toEqual(
 				BADGES.map((b) => b.key).filter((k) => k !== "community" && k !== "committee")
 			)
-			expect(g.counts).toEqual({ earned: 3, total: BADGES.length - 2 })
+			expect(g.counts).toEqual({ earned: 4, total: BADGES.length - 2 })
 			expect(g.featured).toEqual(["verified-contributor"])
 
 			expect(g.xp).toBe(50)

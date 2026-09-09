@@ -21,6 +21,7 @@ import {
 } from "@/utils/exploration"
 import { extractPlainText } from "@/utils/extract-text"
 import { normalize, normalizeArtist, normalizeSong } from "@/utils/normalize"
+import { hasTranslationMarkers } from "@/utils/translation-markers"
 
 const log = new Logger("db")
 const cacheLog = new Logger("cache")
@@ -245,6 +246,8 @@ export async function submitLyrics(
 ): Promise<{ id: number; created: boolean }> {
 	const compressedLyrics = await compress(submission.lyrics)
 	const plainText = extractPlainText(submission.lyrics, submission.format)
+	const hasTranslation =
+		submission.format === "ttml" ? hasTranslationMarkers(submission.lyrics) : false
 	const songNorm = normalizeSong(submission.song)
 	const artistNorm = normalizeArtist(submission.artist)
 	const albumNorm = submission.album ? normalize(submission.album) : null
@@ -292,10 +295,11 @@ export async function submitLyrics(
 			duration, song_norm, artist_norm, album_norm,
 			lyrics, format, language, sync_type, submitter_id,
 			lyrics_text_search,
-			language_source, language_detector_version, language_detection_attempted_at
+			language_source, language_detector_version, language_detection_attempted_at,
+			has_translation
 		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, to_tsvector('simple', ?), ?, ?, ${
 			languageDetectionAttemptedAt === "NOW" ? "NOW()" : "NULL"
-		})
+		}, ?)
 		RETURNING id
 		`
 	)
@@ -316,7 +320,8 @@ export async function submitLyrics(
 			submitterId,
 			plainText,
 			languageSource,
-			languageDetectorVersion
+			languageDetectorVersion,
+			hasTranslation
 		)
 		.first<{ id: number }>()
 

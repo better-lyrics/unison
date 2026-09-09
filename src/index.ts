@@ -13,6 +13,7 @@ import { backfillLanguage } from "@/jobs/backfill-language"
 import { backfillNorms } from "@/jobs/backfill-norms"
 import { backfillSyncType } from "@/jobs/backfill-synctype"
 import { backfillTextSearch } from "@/jobs/backfill-text-search"
+import { backfillTranslationMarkers } from "@/jobs/backfill-translation-markers"
 import { backfillVoteCounts } from "@/jobs/backfill-vote-counts"
 import { backfillXp } from "@/jobs/backfill-xp"
 import { cleanupFulfilledRequests } from "@/jobs/cleanup-fulfilled-requests"
@@ -22,6 +23,7 @@ import { auditThresholds } from "@/jobs/threshold-audit"
 import { adminRoutes } from "@/routes/admin"
 import { authRoutes } from "@/routes/auth"
 import { badgeRoutes } from "@/routes/badges"
+import { committeeBotRoutes } from "@/routes/committee"
 import { compatRoutes } from "@/routes/compat"
 import { feedRoutes } from "@/routes/feed"
 import { leaderboardRoutes } from "@/routes/leaderboard"
@@ -31,7 +33,7 @@ import { migrationRoutes } from "@/routes/migrations"
 import { requestRoutes } from "@/routes/requests"
 import { translateRoutes } from "@/routes/translate"
 import { userRoutes } from "@/routes/users"
-import { voteRoutes } from "@/routes/votes"
+import { voteBotRoutes, voteRoutes } from "@/routes/votes"
 import { cors } from "@elysiajs/cors"
 import { cron } from "@elysiajs/cron"
 import { node } from "@elysiajs/node"
@@ -200,6 +202,8 @@ const app = new Elysia({ adapter: node() })
 	.use(lyricsRoutes(env))
 	.use(feedRoutes(env))
 	.use(voteRoutes(env))
+	.use(voteBotRoutes(env))
+	.use(committeeBotRoutes(env))
 	.use(requestRoutes(env))
 	.use(leaderboardRoutes(env))
 	.use(translateRoutes(env))
@@ -307,6 +311,14 @@ backfillVoteCounts(env)
 		if (repaired > 0) log.info("vote count backfill complete", { repaired })
 	})
 	.catch((err) => log.error("vote count backfill failed", { error: (err as Error).message }))
+
+backfillTranslationMarkers(env)
+	.then(({ scanned, flagged }) => {
+		if (scanned > 0) log.info("translation marker backfill complete", { scanned, flagged })
+	})
+	.catch((err) =>
+		log.error("translation marker backfill failed", { error: (err as Error).message })
+	)
 
 process.on("unhandledRejection", (reason) => {
 	const err = reason instanceof Error ? reason : new Error(String(reason))

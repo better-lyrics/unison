@@ -87,6 +87,8 @@ describeIntegration("badge derivation (integration)", () => {
 		reputationPenalized?: boolean
 		deleted?: boolean
 		deletedByRole?: "submitter" | "admin"
+		createdAt?: number
+		videoId?: string
 	}): Promise<number> {
 		videoSeq++
 		const deleted = opts.deleted ?? false
@@ -94,12 +96,12 @@ describeIntegration("badge derivation (integration)", () => {
 			`INSERT INTO lyrics
 				(video_id, song, artist, duration, song_norm, artist_norm, lyrics, format, sync_type,
 				 submitter_id, confidence, language, effective_score, upvotes, downvotes, vote_count,
-				 diversity_bonus, reputation_penalized, deleted_at, deleted_by_user_id, deleted_by_role)
+				 diversity_bonus, reputation_penalized, deleted_at, deleted_by_user_id, deleted_by_role, created_at)
 			 VALUES ($1,'Song','Artist',180,'song','artist','gz','lrc',$2,
-				 $3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
+				 $3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
 			 RETURNING id`,
 			[
-				`vid${videoSeq}`,
+				opts.videoId ?? `vid${videoSeq}`,
 				opts.syncType ?? "linesync",
 				opts.submitterId,
 				opts.confidence ?? "low",
@@ -113,6 +115,7 @@ describeIntegration("badge derivation (integration)", () => {
 				deleted ? nowEpoch() : null,
 				deleted ? opts.submitterId : null,
 				deleted ? (opts.deletedByRole ?? "submitter") : null,
+				opts.createdAt ?? nowEpoch(),
 			]
 		)
 		return row.id
@@ -226,6 +229,23 @@ describeIntegration("badge derivation (integration)", () => {
 				"INSERT INTO reports (lyrics_id, user_id, reason) VALUES ($1, $2, 'wrong_song')",
 				[lyricId, userId]
 			)
+		}
+	}
+
+	const WEEK = 604800
+	// A fixed weekday well in the past, so streak/month windows are deterministic regardless of "now".
+	const ROLL_BASE = 1_600_000_000
+	const MONTH_STEP = 32 * 86400
+
+	async function seedRoll(userId: number, weeks: number): Promise<void> {
+		for (let i = 0; i < weeks; i++) {
+			await insertLyric({ submitterId: userId, createdAt: ROLL_BASE + i * WEEK })
+		}
+	}
+
+	async function seedRegularMonths(userId: number, months: number): Promise<void> {
+		for (let i = 0; i < months; i++) {
+			await insertLyric({ submitterId: userId, createdAt: ROLL_BASE + i * MONTH_STEP })
 		}
 	}
 
@@ -635,6 +655,306 @@ describeIntegration("badge derivation (integration)", () => {
 				["b".repeat(64)]
 			)
 			expect(await run("early-adopter", late.id)).toEqual({ earned: false })
+		})
+	})
+
+	describe("wave 3 consistency badges", () => {
+		it("on-a-roll walks 4/12/26 across every tier boundary", async () => {
+			await checkTiered("on-a-roll", seedRoll, [
+				{ n: 0, expected: { earned: false, tier: undefined, progress: { current: 0, next: 4 } } },
+				{ n: 4, expected: { earned: true, tier: 1, progress: { current: 4, next: 12 } } },
+				{ n: 12, expected: { earned: true, tier: 2, progress: { current: 12, next: 26 } } },
+				{ n: 26, expected: { earned: true, tier: 3, progress: { current: 26, next: null } } },
+				{ n: 27, expected: { earned: true, tier: 3, progress: { current: 27, next: null } } },
+			])
+		})
+
+		it("regular walks 3/6/12 across every tier boundary", async () => {
+			await checkTiered("regular", seedRegularMonths, [
+				{ n: 0, expected: { earned: false, tier: undefined, progress: { current: 0, next: 3 } } },
+				{ n: 3, expected: { earned: true, tier: 1, progress: { current: 3, next: 6 } } },
+				{ n: 6, expected: { earned: true, tier: 2, progress: { current: 6, next: 12 } } },
+				{ n: 12, expected: { earned: true, tier: 3, progress: { current: 12, next: null } } },
+				{ n: 13, expected: { earned: true, tier: 3, progress: { current: 13, next: null } } },
+			])
+		})
+
+		it("on-a-roll takes the longest consecutive run and ignores gaps", async () => {
+			const userId = await seedUser()
+			for (const i of [0, 1, 2, 4, 5]) {
+				await insertLyric({ submitterId: userId, createdAt: ROLL_BASE + i * WEEK })
+			}
+			expect(await run("on-a-roll", userId)).toEqual({
+				earned: false,
+				tier: undefined,
+				progress: { current: 3, next: 4 },
+			})
+		})
+
+		it("on-a-roll counts votes as activity and collapses multiple actions in one week", async () => {
+			const userId = await seedUser()
+			const author = await seedUser()
+			await insertLyric({ submitterId: userId, createdAt: ROLL_BASE })
+			const first = await insertLyric({ submitterId: author })
+			await seedVote(first, userId, 1, ROLL_BASE + 100)
+			for (const i of [1, 2, 3]) {
+				const l = await insertLyric({ submitterId: author })
+				await seedVote(l, userId, 1, ROLL_BASE + i * WEEK)
+			}
+			expect(await run("on-a-roll", userId)).toEqual({
+				earned: true,
+				tier: 1,
+				progress: { current: 4, next: 12 },
+			})
+		})
+
+		it("on-a-roll ignores self-votes and deleted submissions", async () => {
+			const userId = await seedUser()
+			const author = await seedUser()
+			for (const i of [0, 1, 2, 3]) {
+				const l = await insertLyric({ submitterId: author })
+				await pool.query(
+					"INSERT INTO votes (lyrics_id, user_id, vote, is_self_vote, created_at) VALUES ($1, $2, 1, 1, $3)",
+					[l, userId, ROLL_BASE + i * WEEK]
+				)
+				await insertLyric({ submitterId: userId, createdAt: ROLL_BASE + i * WEEK, deleted: true })
+			}
+			expect(await run("on-a-roll", userId)).toEqual({
+				earned: false,
+				tier: undefined,
+				progress: { current: 0, next: 4 },
+			})
+		})
+
+		it("regular counts distinct months, collapsing same-month actions and counting votes", async () => {
+			const userId = await seedUser()
+			const author = await seedUser()
+			await insertLyric({ submitterId: userId, createdAt: ROLL_BASE })
+			await insertLyric({ submitterId: userId, createdAt: ROLL_BASE + 86400 })
+			for (const i of [1, 2]) {
+				const l = await insertLyric({ submitterId: author })
+				await seedVote(l, userId, 1, ROLL_BASE + i * MONTH_STEP)
+			}
+			expect(await run("regular", userId)).toEqual({
+				earned: true,
+				tier: 1,
+				progress: { current: 3, next: 6 },
+			})
+		})
+	})
+
+	describe("wave 3 evergreen", () => {
+		const OLD = (): number => nowEpoch() - 91 * 86400
+		const RECENT = (): number => nowEpoch() - 30 * 86400
+
+		it("earns from a lyric that has been the primary variant for 90+ days", async () => {
+			const userId = await seedUser()
+			await insertLyric({ submitterId: userId, createdAt: OLD() })
+			const res = await run("evergreen", userId)
+			expect(res.earned).toBe(true)
+			expect(res.tier).toBeUndefined()
+			expect(res.progress).toBeUndefined()
+		})
+
+		it("does not earn before 90 days", async () => {
+			const userId = await seedUser()
+			await insertLyric({ submitterId: userId, createdAt: RECENT() })
+			expect(await run("evergreen", userId)).toEqual({ earned: false })
+		})
+
+		it("does not earn from a deleted lyric", async () => {
+			const userId = await seedUser()
+			await insertLyric({ submitterId: userId, createdAt: OLD(), deleted: true })
+			expect(await run("evergreen", userId)).toEqual({ earned: false })
+		})
+
+		it("does not earn when a competing variant outranks the user's on the same video", async () => {
+			const userId = await seedUser()
+			const rival = await seedUser()
+			await insertLyric({
+				submitterId: userId,
+				videoId: "vidEvergreenLoser",
+				createdAt: OLD(),
+				effectiveScore: 0.1,
+				voteCount: 1,
+			})
+			await insertLyric({
+				submitterId: rival,
+				videoId: "vidEvergreenLoser",
+				createdAt: OLD(),
+				effectiveScore: 0.9,
+				voteCount: 30,
+			})
+			expect(await run("evergreen", userId)).toEqual({ earned: false })
+		})
+
+		it("earns when the user owns the top variant among competitors", async () => {
+			const userId = await seedUser()
+			const rival = await seedUser()
+			await insertLyric({
+				submitterId: userId,
+				videoId: "vidEvergreenWinner",
+				createdAt: OLD(),
+				effectiveScore: 0.9,
+				voteCount: 30,
+			})
+			await insertLyric({
+				submitterId: rival,
+				videoId: "vidEvergreenWinner",
+				createdAt: OLD(),
+				effectiveScore: 0.1,
+				voteCount: 1,
+			})
+			expect((await run("evergreen", userId)).earned).toBe(true)
+		})
+
+		it("does not earn from an auto-hidden lyric", async () => {
+			const userId = await seedUser()
+			await insertLyric({
+				submitterId: userId,
+				createdAt: OLD(),
+				voteCount: 10,
+				downvotes: 10,
+				upvotes: 0,
+				effectiveScore: -1,
+			})
+			expect(await run("evergreen", userId)).toEqual({ earned: false })
+		})
+	})
+
+	describe("wave 4 council's choice", () => {
+		async function seal(lyricsId: number, by: number): Promise<void> {
+			await pool.query(
+				"UPDATE lyrics SET committee_approved_at = $1, committee_approved_by = $2 WHERE id = $3",
+				[nowEpoch(), by, lyricsId]
+			)
+		}
+
+		it("earns from a live sealed submission", async () => {
+			const userId = await seedUser()
+			const councillor = await seedUser()
+			const lyric = await insertLyric({ submitterId: userId })
+			await seal(lyric, councillor)
+			expect(await run("councils-choice", userId)).toEqual({ earned: true })
+		})
+
+		it("does not earn without a seal", async () => {
+			const userId = await seedUser()
+			await insertLyric({ submitterId: userId })
+			expect(await run("councils-choice", userId)).toEqual({ earned: false })
+		})
+
+		it("does not earn from a deleted sealed submission", async () => {
+			const userId = await seedUser()
+			const councillor = await seedUser()
+			const lyric = await insertLyric({ submitterId: userId, deleted: true })
+			await seal(lyric, councillor)
+			expect(await run("councils-choice", userId)).toEqual({ earned: false })
+		})
+	})
+
+	describe("wave 4 anniversary", () => {
+		const YEAR = 31536000
+
+		async function seedAnniversary(userId: number, years: number): Promise<void> {
+			await pool.query("UPDATE users SET created_at = $1 WHERE id = $2", [
+				nowEpoch() - years * YEAR,
+				userId,
+			])
+			await insertLyric({ submitterId: userId })
+		}
+
+		it("walks 1/2/3 years for an active account", async () => {
+			await checkTiered("anniversary", seedAnniversary, [
+				{ n: 0, expected: { earned: false, tier: undefined, progress: { current: 0, next: 1 } } },
+				{ n: 1, expected: { earned: true, tier: 1, progress: { current: 1, next: 2 } } },
+				{ n: 2, expected: { earned: true, tier: 2, progress: { current: 2, next: 3 } } },
+				{ n: 3, expected: { earned: true, tier: 3, progress: { current: 3, next: null } } },
+				{ n: 4, expected: { earned: true, tier: 3, progress: { current: 4, next: null } } },
+			])
+		})
+
+		it("does not earn without any activity, however old the account", async () => {
+			const userId = await seedUser()
+			await pool.query("UPDATE users SET created_at = $1 WHERE id = $2", [
+				nowEpoch() - 3 * YEAR,
+				userId,
+			])
+			expect(await run("anniversary", userId)).toEqual({
+				earned: false,
+				tier: undefined,
+				progress: { current: 0, next: 1 },
+			})
+		})
+
+		it("counts a non-self vote as activity", async () => {
+			const userId = await seedUser()
+			const author = await seedUser()
+			await pool.query("UPDATE users SET created_at = $1 WHERE id = $2", [
+				nowEpoch() - 2 * YEAR,
+				userId,
+			])
+			const lyric = await insertLyric({ submitterId: author })
+			await seedVote(lyric, userId, 1, nowEpoch())
+			expect(await run("anniversary", userId)).toEqual({
+				earned: true,
+				tier: 2,
+				progress: { current: 2, next: 3 },
+			})
+		})
+
+		it("does not earn below one full year even when active", async () => {
+			const userId = await seedUser()
+			await pool.query("UPDATE users SET created_at = $1 WHERE id = $2", [
+				nowEpoch() - 200 * 86400,
+				userId,
+			])
+			await insertLyric({ submitterId: userId })
+			expect(await run("anniversary", userId)).toEqual({
+				earned: false,
+				tier: undefined,
+				progress: { current: 0, next: 1 },
+			})
+		})
+	})
+
+	describe("wave 4 translator", () => {
+		async function markTranslation(lyricsId: number, flag: boolean): Promise<void> {
+			await pool.query("UPDATE lyrics SET has_translation = $1 WHERE id = $2", [flag, lyricsId])
+		}
+
+		it("earns from a live flagged submission", async () => {
+			const userId = await seedUser()
+			const lyric = await insertLyric({ submitterId: userId })
+			await markTranslation(lyric, true)
+			expect(await run("translator", userId)).toEqual({ earned: true })
+		})
+
+		it("does not earn when the flag is unset", async () => {
+			const userId = await seedUser()
+			await insertLyric({ submitterId: userId })
+			expect(await run("translator", userId)).toEqual({ earned: false })
+		})
+
+		it("does not earn when the flag is false", async () => {
+			const userId = await seedUser()
+			const lyric = await insertLyric({ submitterId: userId })
+			await markTranslation(lyric, false)
+			expect(await run("translator", userId)).toEqual({ earned: false })
+		})
+
+		it("does not earn from a deleted flagged submission", async () => {
+			const userId = await seedUser()
+			const lyric = await insertLyric({ submitterId: userId, deleted: true })
+			await markTranslation(lyric, true)
+			expect(await run("translator", userId)).toEqual({ earned: false })
+		})
+
+		it("does not earn from a penalized flagged submission", async () => {
+			const userId = await seedUser()
+			const lyric = await insertLyric({ submitterId: userId, reputationPenalized: true })
+			await markTranslation(lyric, true)
+			expect(await run("translator", userId)).toEqual({ earned: false })
 		})
 	})
 
