@@ -64,7 +64,7 @@ function FeaturedBadges({
   if (featured.length === 0) return null
 
   return (
-    <span data-testid="featured-badges" className="pf-featured flex items-center gap-1.5 sm:pl-3.5">
+    <span data-testid="featured-badges" className="pf-featured flex items-center gap-1.5 max-sm:basis-full sm:pl-3.5">
       {featured.map((def, i) => {
         const userBadge = userByKey.get(def.key)
         const tier = userBadge?.tier
@@ -123,8 +123,8 @@ export function ProfileHeader({ keyId, rank, gamification, catalogue }: ProfileH
   )
 
   return (
-    <header className="flex items-start gap-5">
-      <div className="relative size-[92px] shrink-0">
+    <header className="grid grid-cols-[auto_1fr] items-start gap-x-5 sm:flex sm:gap-5">
+      <div className="relative size-[92px] shrink-0 max-sm:col-start-1 max-sm:row-start-1">
         <svg
           className="absolute inset-0"
           style={{ transform: "rotate(-90deg)" }}
@@ -164,8 +164,8 @@ export function ProfileHeader({ keyId, rank, gamification, catalogue }: ProfileH
         ) : null}
       </div>
 
-      <div className="min-w-0 flex-1 pt-1">
-        <div className="flex flex-wrap items-center gap-3.5">
+      <div className="contents min-w-0 pt-1 sm:block sm:flex-1">
+        <div className="flex flex-wrap items-center gap-3.5 max-sm:col-start-2 max-sm:row-start-1 max-sm:pt-1">
           <h1 className="text-[28px] font-bold leading-[1.1] tracking-[-0.015em] text-unison-text">
             {rank.displayName}
           </h1>
@@ -174,7 +174,7 @@ export function ProfileHeader({ keyId, rank, gamification, catalogue }: ProfileH
         </div>
 
         {rank.community || rank.ranked || gamification ? (
-          <div className="mt-10 flex flex-wrap items-center gap-2.5 text-[13px] max-sm:-ml-[112px] max-sm:w-[calc(100%_+_112px)] sm:mt-3.5">
+          <div className="flex flex-wrap items-center gap-2.5 text-[13px] max-sm:col-start-1 max-sm:col-span-2 max-sm:row-start-2 max-sm:mt-6 sm:mt-3.5">
             {rank.community ? (
               <span className="inline-flex h-7 items-center gap-1.5 rounded-full bg-[rgba(255,200,61,0.12)] pr-[15px] pl-[11px] text-xs font-semibold text-unison-medal-gold">
                 <IconStarFilled className="size-3.5" />
