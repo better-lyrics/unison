@@ -190,6 +190,10 @@ ALTER TABLE lyrics ADD COLUMN IF NOT EXISTS language_source TEXT
 ALTER TABLE lyrics ADD COLUMN IF NOT EXISTS language_detector_version SMALLINT;
 ALTER TABLE lyrics ADD COLUMN IF NOT EXISTS language_detection_attempted_at TIMESTAMPTZ;
 
+-- Translation marker flag: TRUE when the stored TTML carries translation or
+-- transliteration markers. NULL means the row has not been scanned yet.
+ALTER TABLE lyrics ADD COLUMN IF NOT EXISTS has_translation BOOLEAN;
+
 -- Index for backfill sweep: pick up rows where detector wasn't authoritative.
 CREATE INDEX IF NOT EXISTS idx_lyrics_language_backfill
     ON lyrics(id)

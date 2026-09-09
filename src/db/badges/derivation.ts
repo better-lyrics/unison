@@ -1,6 +1,10 @@
 import { config } from "@/config"
 import { getFulfillmentStatsBySubmitter } from "@/db/fulfillments"
-import { AUTO_HIDE_PREDICATE_JOINED, PROVEN_EXPR_JOINED, RANKING_EXPR_VARIANT } from "@/db/predicates"
+import {
+	AUTO_HIDE_PREDICATE_JOINED,
+	PROVEN_EXPR_JOINED,
+	RANKING_EXPR_VARIANT,
+} from "@/db/predicates"
 import type { Env } from "@/types"
 import { isLinkBlacklisted } from "@/utils/blacklist"
 import { BADGES } from "./definitions"
@@ -240,6 +244,39 @@ export const DERIVATIONS: Record<string, Evaluator> = {
 			   )`,
 			userId,
 			config.gamification.badges.evergreenMinDays * 86400
+		)
+		return { earned: count > 0 }
+	},
+
+	"councils-choice": async (env, userId) => {
+		const count = await scalar(
+			env,
+			"SELECT COUNT(*) AS n FROM lyrics WHERE submitter_id = ? AND deleted_at IS NULL AND committee_approved_at IS NOT NULL",
+			userId
+		)
+		return { earned: count > 0 }
+	},
+
+	anniversary: async (env, userId) => {
+		const years = await scalar(
+			env,
+			`SELECT CASE WHEN EXISTS(SELECT 1 FROM votes WHERE user_id = ? AND is_self_vote = 0)
+			              OR EXISTS(SELECT 1 FROM lyrics WHERE submitter_id = ? AND deleted_at IS NULL)
+			            THEN FLOOR((EXTRACT(EPOCH FROM NOW())::bigint - created_at) / 31536000)
+			            ELSE 0 END AS n
+			 FROM users WHERE id = ?`,
+			userId,
+			userId,
+			userId
+		)
+		return tiered(years, thresholdsFor("anniversary"))
+	},
+
+	translator: async (env, userId) => {
+		const count = await scalar(
+			env,
+			"SELECT COUNT(*) AS n FROM lyrics WHERE submitter_id = ? AND deleted_at IS NULL AND reputation_penalized = FALSE AND has_translation = TRUE",
+			userId
 		)
 		return { earned: count > 0 }
 	},

@@ -13,6 +13,7 @@ import { backfillLanguage } from "@/jobs/backfill-language"
 import { backfillNorms } from "@/jobs/backfill-norms"
 import { backfillSyncType } from "@/jobs/backfill-synctype"
 import { backfillTextSearch } from "@/jobs/backfill-text-search"
+import { backfillTranslationMarkers } from "@/jobs/backfill-translation-markers"
 import { backfillVoteCounts } from "@/jobs/backfill-vote-counts"
 import { backfillXp } from "@/jobs/backfill-xp"
 import { cleanupFulfilledRequests } from "@/jobs/cleanup-fulfilled-requests"
@@ -307,6 +308,14 @@ backfillVoteCounts(env)
 		if (repaired > 0) log.info("vote count backfill complete", { repaired })
 	})
 	.catch((err) => log.error("vote count backfill failed", { error: (err as Error).message }))
+
+backfillTranslationMarkers(env)
+	.then(({ scanned, flagged }) => {
+		if (scanned > 0) log.info("translation marker backfill complete", { scanned, flagged })
+	})
+	.catch((err) =>
+		log.error("translation marker backfill failed", { error: (err as Error).message })
+	)
 
 process.on("unhandledRejection", (reason) => {
 	const err = reason instanceof Error ? reason : new Error(String(reason))
