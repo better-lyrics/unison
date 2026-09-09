@@ -332,6 +332,17 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_boosts_active_lyric
     ON boosts(lyrics_id) WHERE revoked_at IS NULL;
 CREATE INDEX IF NOT EXISTS idx_boosts_booster ON boosts(booster_id);
 
+CREATE TABLE IF NOT EXISTS rejections (
+    id SERIAL PRIMARY KEY,
+    lyrics_id INTEGER NOT NULL REFERENCES lyrics(id) ON DELETE CASCADE,
+    rejected_by INTEGER NOT NULL REFERENCES users(id),
+    rejected_at INTEGER NOT NULL,
+    note TEXT,
+    revoked_at INTEGER
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_rejections_active
+    ON rejections(lyrics_id) WHERE revoked_at IS NULL;
+
 ALTER TABLE lyrics ADD COLUMN IF NOT EXISTS committee_approved_at INTEGER;
 ALTER TABLE lyrics ADD COLUMN IF NOT EXISTS committee_approved_by INTEGER REFERENCES users(id);
 

@@ -30,6 +30,7 @@ import { linkRoutes, linkStartRoutes } from "@/routes/links"
 import { lyricsRoutes } from "@/routes/lyrics"
 import { migrationRoutes } from "@/routes/migrations"
 import { requestRoutes } from "@/routes/requests"
+import { reviewQueueBotRoutes } from "@/routes/review-queue"
 import { translateRoutes } from "@/routes/translate"
 import { userRoutes } from "@/routes/users"
 import { voteBotRoutes, voteRoutes } from "@/routes/votes"
@@ -203,6 +204,7 @@ const app = new Elysia({ adapter: node() })
 	.use(voteRoutes(env))
 	.use(voteBotRoutes(env))
 	.use(committeeBotRoutes(env))
+	.use(reviewQueueBotRoutes(env))
 	.use(requestRoutes(env))
 	.use(leaderboardRoutes(env))
 	.use(translateRoutes(env))
