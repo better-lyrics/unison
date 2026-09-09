@@ -43,7 +43,9 @@ export function hasTranslationMarkers(ttml: string): boolean {
 				return
 			}
 			const lang = attrs["@_lang"]
-			if (typeof lang === "string" && lang.trim()) langs.add(lang.trim())
+			if (typeof lang === "string" && lang.trim()) {
+				langs.add(lang.trim().split("-")[0].toLowerCase())
+			}
 		}
 
 		for (const key of Object.keys(el)) {

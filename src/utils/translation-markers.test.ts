@@ -74,4 +74,19 @@ describe("hasTranslationMarkers", () => {
 			expect(hasTranslationMarkers("just some lyrics with no tags")).toBe(false)
 		})
 	})
+
+	describe("regressions", () => {
+		it("regression: does not flag region subtags of one language (en + en-US + en-GB)", () => {
+			const ttml = wrap('<p xml:lang="en-US">Color</p><p xml:lang="en-GB">Colour</p>')
+			expect(hasTranslationMarkers(ttml)).toBe(false)
+		})
+
+		it("regression: still flags two languages that carry region subtags (en-US + fr-CA)", () => {
+			const ttml = wrap(
+				'<p xml:lang="en-US">Hello</p><p xml:lang="fr-CA">Bonjour</p>',
+				'xml:lang="en-US"'
+			)
+			expect(hasTranslationMarkers(ttml)).toBe(true)
+		})
+	})
 })
