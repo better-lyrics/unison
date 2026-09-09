@@ -32,7 +32,7 @@ import { migrationRoutes } from "@/routes/migrations"
 import { requestRoutes } from "@/routes/requests"
 import { translateRoutes } from "@/routes/translate"
 import { userRoutes } from "@/routes/users"
-import { voteRoutes } from "@/routes/votes"
+import { voteBotRoutes, voteRoutes } from "@/routes/votes"
 import { cors } from "@elysiajs/cors"
 import { cron } from "@elysiajs/cron"
 import { node } from "@elysiajs/node"
@@ -201,6 +201,7 @@ const app = new Elysia({ adapter: node() })
 	.use(lyricsRoutes(env))
 	.use(feedRoutes(env))
 	.use(voteRoutes(env))
+	.use(voteBotRoutes(env))
 	.use(requestRoutes(env))
 	.use(leaderboardRoutes(env))
 	.use(translateRoutes(env))
