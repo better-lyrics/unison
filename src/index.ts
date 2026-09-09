@@ -22,6 +22,7 @@ import { auditThresholds } from "@/jobs/threshold-audit"
 import { adminRoutes } from "@/routes/admin"
 import { authRoutes } from "@/routes/auth"
 import { badgeRoutes } from "@/routes/badges"
+import { committeeBotRoutes } from "@/routes/committee"
 import { compatRoutes } from "@/routes/compat"
 import { feedRoutes } from "@/routes/feed"
 import { leaderboardRoutes } from "@/routes/leaderboard"
@@ -31,7 +32,7 @@ import { migrationRoutes } from "@/routes/migrations"
 import { requestRoutes } from "@/routes/requests"
 import { translateRoutes } from "@/routes/translate"
 import { userRoutes } from "@/routes/users"
-import { voteRoutes } from "@/routes/votes"
+import { voteBotRoutes, voteRoutes } from "@/routes/votes"
 import { cors } from "@elysiajs/cors"
 import { cron } from "@elysiajs/cron"
 import { node } from "@elysiajs/node"
@@ -200,6 +201,8 @@ const app = new Elysia({ adapter: node() })
 	.use(lyricsRoutes(env))
 	.use(feedRoutes(env))
 	.use(voteRoutes(env))
+	.use(voteBotRoutes(env))
+	.use(committeeBotRoutes(env))
 	.use(requestRoutes(env))
 	.use(leaderboardRoutes(env))
 	.use(translateRoutes(env))

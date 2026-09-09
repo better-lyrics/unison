@@ -1,10 +1,12 @@
 import { config } from "@/config"
 import { createBoost, getQuota, revokeBoost } from "@/db/boost"
 import { isCommittee } from "@/db/committee"
+import { getUserByKeyId } from "@/db/users"
 import type { Env } from "@/types"
+import { isAuthorizedBot } from "@/utils/bot-auth"
 import { canonicalJson, hashPublicKey } from "@/utils/crypto"
 import { describe, expect, it, vi } from "vitest"
-import { voteRoutes } from "./votes"
+import { voteBotRoutes, voteRoutes } from "./votes"
 
 vi.mock("@/jobs/score-updater", () => ({
 	recalculateScore: vi.fn(() => Promise.resolve()),
@@ -14,6 +16,7 @@ vi.mock("@/db/users", async () => {
 	return {
 		...actual,
 		updateUserAvgVote: vi.fn(() => Promise.resolve()),
+		getUserByKeyId: vi.fn(),
 	}
 })
 vi.mock("@/db/boost", () => ({
@@ -23,6 +26,9 @@ vi.mock("@/db/boost", () => ({
 }))
 vi.mock("@/db/committee", () => ({
 	isCommittee: vi.fn(),
+}))
+vi.mock("@/utils/bot-auth", () => ({
+	isAuthorizedBot: vi.fn(),
 }))
 
 interface DBCall {
@@ -723,5 +729,114 @@ describe("vote rate limiting", () => {
 		)
 		expect(res.status).toBe(429)
 		expect(((await res.json()) as { code: string }).code).toBe("RATE_LIMITED")
+	})
+})
+
+describe("bot-authenticated committee bridge", () => {
+	const KEY = "k".repeat(64)
+	const member = { id: 7, key_id: KEY } as unknown as Awaited<ReturnType<typeof getUserByKeyId>>
+	const app = () => voteBotRoutes(makeEnv(makeMockDB(), makeMockCache()))
+
+	function botReq(id: number, method: "POST" | "DELETE", body: unknown) {
+		return new Request(`http://localhost/lyrics/${id}/boost/bot`, {
+			method,
+			headers: { authorization: "Bearer secret", "content-type": "application/json" },
+			body: JSON.stringify(body),
+		})
+	}
+
+	function quotaBotReq() {
+		return new Request(`http://localhost/lyrics/boost/quota/bot?keyId=${KEY}`, {
+			method: "GET",
+			headers: { authorization: "Bearer secret" },
+		})
+	}
+
+	it("POST rejects a bad bot secret with 401", async () => {
+		vi.mocked(isAuthorizedBot).mockReturnValue(false)
+		const res = await app().handle(botReq(5, "POST", { keyId: KEY }))
+		expect(res.status).toBe(401)
+		expect(((await res.json()) as { code: string }).code).toBe("AUTH_REQUIRED")
+	})
+
+	it("POST returns 404 NOT_FOUND for an unresolved keyId", async () => {
+		vi.mocked(isAuthorizedBot).mockReturnValue(true)
+		vi.mocked(getUserByKeyId).mockResolvedValue(null)
+		const res = await app().handle(botReq(5, "POST", { keyId: KEY }))
+		expect(res.status).toBe(404)
+		expect(((await res.json()) as { code: string }).code).toBe("NOT_FOUND")
+	})
+
+	it("POST seals and echoes the quota for a resolved member", async () => {
+		vi.mocked(isAuthorizedBot).mockReturnValue(true)
+		vi.mocked(getUserByKeyId).mockResolvedValue(member)
+		vi.mocked(createBoost).mockResolvedValue({ ok: true, quota: BOOST_QUOTA })
+		const res = await app().handle(botReq(5, "POST", { keyId: KEY }))
+		expect(res.status).toBe(200)
+		expect(await res.json()).toEqual({ success: true, quota: BOOST_QUOTA })
+	})
+
+	it("POST maps not_committee to 403", async () => {
+		vi.mocked(isAuthorizedBot).mockReturnValue(true)
+		vi.mocked(getUserByKeyId).mockResolvedValue(member)
+		vi.mocked(createBoost).mockResolvedValue({ ok: false, reason: "not_committee" })
+		const res = await app().handle(botReq(5, "POST", { keyId: KEY }))
+		expect(res.status).toBe(403)
+		expect(((await res.json()) as { code: string }).code).toBe("NOT_COMMITTEE")
+	})
+
+	it("POST maps self to 400 BOOST_SELF", async () => {
+		vi.mocked(isAuthorizedBot).mockReturnValue(true)
+		vi.mocked(getUserByKeyId).mockResolvedValue(member)
+		vi.mocked(createBoost).mockResolvedValue({ ok: false, reason: "self" })
+		const res = await app().handle(botReq(5, "POST", { keyId: KEY }))
+		expect(res.status).toBe(400)
+		expect(((await res.json()) as { code: string }).code).toBe("BOOST_SELF")
+	})
+
+	it("POST maps over_quota to 429", async () => {
+		vi.mocked(isAuthorizedBot).mockReturnValue(true)
+		vi.mocked(getUserByKeyId).mockResolvedValue(member)
+		vi.mocked(createBoost).mockResolvedValue({ ok: false, reason: "over_quota" })
+		const res = await app().handle(botReq(5, "POST", { keyId: KEY }))
+		expect(res.status).toBe(429)
+		expect(((await res.json()) as { code: string }).code).toBe("BOOST_QUOTA_EXCEEDED")
+	})
+
+	it("DELETE revokes for the owning member", async () => {
+		vi.mocked(isAuthorizedBot).mockReturnValue(true)
+		vi.mocked(getUserByKeyId).mockResolvedValue(member)
+		vi.mocked(revokeBoost).mockResolvedValue({ ok: true })
+		const res = await app().handle(botReq(5, "DELETE", { keyId: KEY }))
+		expect(res.status).toBe(200)
+		expect(await res.json()).toEqual({ success: true })
+	})
+
+	it("DELETE maps forbidden to 403 BOOST_NOT_OWNER", async () => {
+		vi.mocked(isAuthorizedBot).mockReturnValue(true)
+		vi.mocked(getUserByKeyId).mockResolvedValue(member)
+		vi.mocked(revokeBoost).mockResolvedValue({ ok: false, reason: "forbidden" })
+		const res = await app().handle(botReq(5, "DELETE", { keyId: KEY }))
+		expect(res.status).toBe(403)
+		expect(((await res.json()) as { code: string }).code).toBe("BOOST_NOT_OWNER")
+	})
+
+	it("GET quota returns the quota for a committee member", async () => {
+		vi.mocked(isAuthorizedBot).mockReturnValue(true)
+		vi.mocked(getUserByKeyId).mockResolvedValue(member)
+		vi.mocked(isCommittee).mockResolvedValue(true)
+		vi.mocked(getQuota).mockResolvedValue(BOOST_QUOTA)
+		const res = await app().handle(quotaBotReq())
+		expect(res.status).toBe(200)
+		expect(await res.json()).toEqual({ success: true, quota: BOOST_QUOTA })
+	})
+
+	it("GET quota returns 403 for a non-committee member", async () => {
+		vi.mocked(isAuthorizedBot).mockReturnValue(true)
+		vi.mocked(getUserByKeyId).mockResolvedValue(member)
+		vi.mocked(isCommittee).mockResolvedValue(false)
+		const res = await app().handle(quotaBotReq())
+		expect(res.status).toBe(403)
+		expect(((await res.json()) as { code: string }).code).toBe("NOT_COMMITTEE")
 	})
 })
