@@ -22,6 +22,7 @@ import { auditThresholds } from "@/jobs/threshold-audit"
 import { adminRoutes } from "@/routes/admin"
 import { authRoutes } from "@/routes/auth"
 import { badgeRoutes } from "@/routes/badges"
+import { committeeBotRoutes } from "@/routes/committee"
 import { compatRoutes } from "@/routes/compat"
 import { feedRoutes } from "@/routes/feed"
 import { leaderboardRoutes } from "@/routes/leaderboard"
@@ -201,6 +202,7 @@ const app = new Elysia({ adapter: node() })
 	.use(feedRoutes(env))
 	.use(voteRoutes(env))
 	.use(voteBotRoutes(env))
+	.use(committeeBotRoutes(env))
 	.use(requestRoutes(env))
 	.use(leaderboardRoutes(env))
 	.use(translateRoutes(env))

@@ -3,7 +3,13 @@ import { D1Compat } from "@/infra/database"
 import type { Env } from "@/types"
 import pg from "pg"
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest"
-import { addCommittee, isCommittee, listCommittee, removeCommittee } from "./committee"
+import {
+	addCommittee,
+	isCommittee,
+	listCommittee,
+	listCommitteeKeyIds,
+	removeCommittee,
+} from "./committee"
 
 const { Pool } = pg
 
@@ -62,6 +68,17 @@ describeIntegration("committee roster (integration)", () => {
 		expect(roster[0].userId).toBe(userId)
 		expect(roster[0].addedBy).toBe("admin")
 		expect(typeof roster[0].addedAt).toBe("number")
+	})
+
+	it("lists the roster keyIds by joining to users", async () => {
+		const keyA = "a".repeat(64)
+		const keyB = "b".repeat(64)
+		await addCommittee(env, await insertUser(keyA), "admin")
+		await addCommittee(env, await insertUser(keyB), "bot")
+
+		const keyIds = await listCommitteeKeyIds(env)
+		expect(keyIds).toHaveLength(2)
+		expect(new Set(keyIds)).toEqual(new Set([keyA, keyB]))
 	})
 
 	it("removes a member, leaving membership false and the roster empty", async () => {

@@ -37,3 +37,12 @@ export async function listCommittee(env: Env): Promise<CommitteeMember[]> {
 		addedBy: row.added_by,
 	}))
 }
+
+export async function listCommitteeKeyIds(env: Env): Promise<string[]> {
+	const res = await env.DB.prepare(
+		"SELECT u.key_id FROM committee_members c JOIN users u ON u.id = c.user_id ORDER BY c.added_at DESC"
+	)
+		.bind()
+		.all<{ key_id: string }>()
+	return res.results.map((row) => row.key_id)
+}
