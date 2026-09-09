@@ -162,7 +162,7 @@ describeIntegration("badge summaries (integration)", () => {
 		await award(userId, "fan-favorite", null) // acclaim, dropped past the cap
 		await award(userId, "most-loved", null) // acclaim, dropped past the cap
 		await award(userId, "lyricist", null) // tier category, excluded
-		await award(userId, "community", null) // community, excluded
+		await award(userId, "community", null) // community, sorts last and drops past the cap
 
 		const summary = (await getBadgeSummaries(env, [userId])).get(userId)
 
@@ -188,14 +188,15 @@ describeIntegration("badge summaries (integration)", () => {
 		])
 	})
 
-	it("returns a null topBadge but a nonzero count for a community-only user", async () => {
+	it("features the community badge as topBadge for a community-only user", async () => {
 		const userId = await newUser()
 		await award(userId, "community", null)
 
 		const summary = (await getBadgeSummaries(env, [userId])).get(userId)
 
 		expect(summary?.badgeCount).toBe(1)
-		expect(summary?.topBadge).toBeNull()
+		expect(summary?.topBadge).toEqual({ key: "community", name: "Community", tier: undefined })
+		expect(summary?.featured).toEqual([{ key: "community", name: "Community", tier: undefined }])
 	})
 
 	it("omits users with no awards from the map", async () => {
