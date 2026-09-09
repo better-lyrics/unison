@@ -172,7 +172,7 @@ export const config = {
 
 	rateLimit: {
 		read: {
-			maxRequests: 120,
+			maxRequests: 600,
 			windowSeconds: 60,
 		},
 		write: {
