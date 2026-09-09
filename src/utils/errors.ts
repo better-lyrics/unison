@@ -52,6 +52,7 @@ export const ErrorCode = {
 	BOOST_QUOTA_EXCEEDED: "BOOST_QUOTA_EXCEEDED",
 	BOOST_ALREADY_ACTIVE: "BOOST_ALREADY_ACTIVE",
 	BOOST_NOT_OWNER: "BOOST_NOT_OWNER",
+	REJECT_ALREADY_ACTIVE: "REJECT_ALREADY_ACTIVE",
 } as const
 
 export type ErrorCode = (typeof ErrorCode)[keyof typeof ErrorCode]
@@ -254,6 +255,10 @@ const TEMPLATES: Record<ErrorCode, Template> = {
 	BOOST_NOT_OWNER: {
 		error: "Not your boost",
 		hint: "You can only revoke a boost you applied yourself.",
+	},
+	REJECT_ALREADY_ACTIVE: {
+		error: "Already rejected",
+		hint: "This lyric already has an active council rejection.",
 	},
 }
 
