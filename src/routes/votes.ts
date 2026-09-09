@@ -3,8 +3,10 @@ import { type BoostResult, type RevokeResult, createBoost, getQuota, revokeBoost
 import { isCommittee } from "@/db/committee"
 import { getLyricsById } from "@/db/lyrics"
 import { submitReport } from "@/db/reports"
+import { getUserByKeyId } from "@/db/users"
 import { castVote, removeVote } from "@/db/votes"
 import type { Env } from "@/types"
+import { isAuthorizedBot } from "@/utils/bot-auth"
 import { eitherAuth } from "@/utils/either-auth"
 import { ErrorCode, buildError } from "@/utils/errors"
 import { Elysia, t } from "elysia"
@@ -205,3 +207,67 @@ export const voteRoutes = (env: Env) =>
 
 			return { success: true, quota: await getQuota(env, userId) }
 		})
+
+export const voteBotRoutes = (env: Env) =>
+	new Elysia({ prefix: "/lyrics" })
+		.decorate("env", env)
+		.post(
+			"/:id/boost/bot",
+			async ({ params, env, headers, body, status }) => {
+				if (!isAuthorizedBot(headers.authorization, env)) {
+					return status(401, buildError(ErrorCode.AUTH_REQUIRED))
+				}
+				const id = Number(params.id)
+				if (Number.isNaN(id)) {
+					return status(400, buildError(ErrorCode.INVALID_ID))
+				}
+				const user = await getUserByKeyId(env, body.keyId)
+				if (!user) {
+					return status(403, buildError(ErrorCode.NOT_COMMITTEE))
+				}
+				const result = await createBoost(env, user.id, id)
+				if (!result.ok) {
+					const mapped = BOOST_ERROR[result.reason]
+					return status(mapped.status, buildError(mapped.code))
+				}
+				return { success: true, quota: result.quota }
+			},
+			{ params: t.Object({ id: t.String() }), body: t.Object({ keyId: t.String() }) }
+		)
+		.delete(
+			"/:id/boost/bot",
+			async ({ params, env, headers, body, status }) => {
+				if (!isAuthorizedBot(headers.authorization, env)) {
+					return status(401, buildError(ErrorCode.AUTH_REQUIRED))
+				}
+				const id = Number(params.id)
+				if (Number.isNaN(id)) {
+					return status(400, buildError(ErrorCode.INVALID_ID))
+				}
+				const user = await getUserByKeyId(env, body.keyId)
+				if (!user) {
+					return status(403, buildError(ErrorCode.NOT_COMMITTEE))
+				}
+				const result = await revokeBoost(env, user.id, id)
+				if (!result.ok) {
+					const mapped = REVOKE_ERROR[result.reason]
+					return status(mapped.status, buildError(mapped.code))
+				}
+				return { success: true }
+			},
+			{ params: t.Object({ id: t.String() }), body: t.Object({ keyId: t.String() }) }
+		)
+		.get(
+			"/boost/quota/bot",
+			async ({ env, headers, query, status }) => {
+				if (!isAuthorizedBot(headers.authorization, env)) {
+					return status(401, buildError(ErrorCode.AUTH_REQUIRED))
+				}
+				const user = await getUserByKeyId(env, query.keyId)
+				if (!user || !(await isCommittee(env, user.id))) {
+					return status(403, buildError(ErrorCode.NOT_COMMITTEE))
+				}
+				return { success: true, quota: await getQuota(env, user.id) }
+			},
+			{ query: t.Object({ keyId: t.String() }) }
+		)
