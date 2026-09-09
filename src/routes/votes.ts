@@ -223,7 +223,7 @@ export const voteBotRoutes = (env: Env) =>
 				}
 				const user = await getUserByKeyId(env, body.keyId)
 				if (!user) {
-					return status(403, buildError(ErrorCode.NOT_COMMITTEE))
+					return status(404, buildError(ErrorCode.NOT_FOUND))
 				}
 				const result = await createBoost(env, user.id, id)
 				if (!result.ok) {
@@ -246,7 +246,7 @@ export const voteBotRoutes = (env: Env) =>
 				}
 				const user = await getUserByKeyId(env, body.keyId)
 				if (!user) {
-					return status(403, buildError(ErrorCode.NOT_COMMITTEE))
+					return status(404, buildError(ErrorCode.NOT_FOUND))
 				}
 				const result = await revokeBoost(env, user.id, id)
 				if (!result.ok) {
@@ -264,7 +264,10 @@ export const voteBotRoutes = (env: Env) =>
 					return status(401, buildError(ErrorCode.AUTH_REQUIRED))
 				}
 				const user = await getUserByKeyId(env, query.keyId)
-				if (!user || !(await isCommittee(env, user.id))) {
+				if (!user) {
+					return status(404, buildError(ErrorCode.NOT_FOUND))
+				}
+				if (!(await isCommittee(env, user.id))) {
 					return status(403, buildError(ErrorCode.NOT_COMMITTEE))
 				}
 				return { success: true, quota: await getQuota(env, user.id) }

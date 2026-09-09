@@ -759,12 +759,12 @@ describe("bot-authenticated committee bridge", () => {
 		expect(((await res.json()) as { code: string }).code).toBe("AUTH_REQUIRED")
 	})
 
-	it("POST returns 403 NOT_COMMITTEE for an unresolved keyId", async () => {
+	it("POST returns 404 NOT_FOUND for an unresolved keyId", async () => {
 		vi.mocked(isAuthorizedBot).mockReturnValue(true)
 		vi.mocked(getUserByKeyId).mockResolvedValue(null)
 		const res = await app().handle(botReq(5, "POST", { keyId: KEY }))
-		expect(res.status).toBe(403)
-		expect(((await res.json()) as { code: string }).code).toBe("NOT_COMMITTEE")
+		expect(res.status).toBe(404)
+		expect(((await res.json()) as { code: string }).code).toBe("NOT_FOUND")
 	})
 
 	it("POST seals and echoes the quota for a resolved member", async () => {
