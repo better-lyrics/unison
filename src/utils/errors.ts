@@ -53,6 +53,10 @@ export const ErrorCode = {
 	BOOST_ALREADY_ACTIVE: "BOOST_ALREADY_ACTIVE",
 	BOOST_NOT_OWNER: "BOOST_NOT_OWNER",
 	REJECT_ALREADY_ACTIVE: "REJECT_ALREADY_ACTIVE",
+	EXAM_TOKEN_INVALID: "EXAM_TOKEN_INVALID",
+	EXAM_TOKEN_EXPIRED: "EXAM_TOKEN_EXPIRED",
+	EXAM_ALREADY_SUBMITTED: "EXAM_ALREADY_SUBMITTED",
+	EXAM_SESSION_NOT_FOUND: "EXAM_SESSION_NOT_FOUND",
 } as const
 
 export type ErrorCode = (typeof ErrorCode)[keyof typeof ErrorCode]
@@ -259,6 +263,22 @@ const TEMPLATES: Record<ErrorCode, Template> = {
 	REJECT_ALREADY_ACTIVE: {
 		error: "Already rejected",
 		hint: "This lyric already has an active council rejection.",
+	},
+	EXAM_TOKEN_INVALID: {
+		error: "Invalid exam link",
+		hint: "This exam link isn't valid. Ask in Discord for a fresh one.",
+	},
+	EXAM_TOKEN_EXPIRED: {
+		error: "Exam link expired",
+		hint: "This exam link has expired. Ask in Discord for a fresh one.",
+	},
+	EXAM_ALREADY_SUBMITTED: {
+		error: "Exam already submitted",
+		hint: "You've already submitted this exam. Council admins review from here and you'll hear back in Discord.",
+	},
+	EXAM_SESSION_NOT_FOUND: {
+		error: "Exam session not found",
+		hint: "Couldn't find that exam session.",
 	},
 }
 

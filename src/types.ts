@@ -23,6 +23,8 @@ export interface Env {
 	BUTLER_BOT_SECRET?: string | null
 	ADMIN_SECRET?: string | null
 	DISCORD_OAUTH?: { clientId: string; clientSecret: string; redirectUri: string } | null
+	EXAM_DEV_ENABLED?: boolean
+	EXAM_BASE_URL?: string
 }
 
 export interface RateLimiter {

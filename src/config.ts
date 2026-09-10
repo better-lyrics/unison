@@ -272,6 +272,30 @@ export const config = {
 		userAgent:
 			"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
 	},
+
+	exam: {
+		cutoffPct: 0.85,
+		// Over-sealing a merely-good clip is the failure mode being screened out, so
+		// key-flagged over-seal penalties are multiplied by this. > 1 makes a wrong
+		// "seal" cost more than a wrong "reject". The single most important knob.
+		overSealPenaltyRatio: 2.0,
+		timeLimitSec: 25 * 60,
+		tokenTtlSec: 24 * 60 * 60,
+		// Stratified draw shape. Each entry names a bank category (a strata) and how
+		// many active questions to draw from it. Question content, weights, and keys
+		// live in the DB bank, never here. Categories double as the breakdown areas.
+		draw: [
+			{ category: "seal-or-not", count: 2 },
+			{ category: "a-vs-b", count: 1 },
+			{ category: "what-holds-back", count: 2 },
+			{ category: "pick-better", count: 1 },
+			{ category: "spot-whats-off", count: 1 },
+			{ category: "trap-exception", count: 1 },
+			{ category: "seal-discipline", count: 2 },
+			{ category: "scenario", count: 1 },
+			{ category: "capstone", count: 1 },
+		],
+	},
 } as const
 
 export type Config = typeof config
