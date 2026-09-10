@@ -40,7 +40,9 @@ export default defineConfig({
       "/requests": "http://localhost:3000",
       "/auth": "http://localhost:3000",
       "/links": "http://localhost:3000",
-      "/exam": "http://localhost:3000",
+      // Trailing slash so only the API sub-paths proxy; the bare /exam page route
+      // is served by the SPA (dev + prod), matching the API's route precedence.
+      "/exam/": "http://localhost:3000",
       "/health": "http://localhost:3000",
     },
   },
