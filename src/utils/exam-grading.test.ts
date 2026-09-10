@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
-import { gradeExam } from "./exam-grading"
-import type { GradeableItem } from "./exam-types"
+import { gradeExam, toGradeableItems } from "./exam-grading"
+import type { AnswerKey, GradeableItem } from "./exam-types"
 
 const OPTS = { cutoffPct: 0.85, overSealPenaltyRatio: 2 }
 
@@ -183,5 +183,33 @@ describe("gradeExam", () => {
 			const grade = gradeExam([sealOrNot(1, { verdict: "no" })], OPTS)
 			expect(grade.questions[0].awardedPoints).toBe(3)
 		})
+	})
+})
+
+describe("toGradeableItems", () => {
+	const key: AnswerKey = { parts: [{ id: "v", points: { no: 3, seal: -1 } }] }
+	const rows = [
+		{ questionId: 1, category: "seal-or-not", weight: 1, answerKey: key, answer: { v: "seal" } },
+		{ questionId: 2, category: "seal-or-not", weight: 1, answerKey: key, answer: null },
+	]
+
+	it("prefers a freshly submitted answer over the autosaved one", () => {
+		const items = toGradeableItems(rows, { "1": { v: "no" } })
+		expect(items[0].answer).toEqual({ v: "no" })
+	})
+
+	it("falls back to the autosaved answer when a question is not resubmitted", () => {
+		const items = toGradeableItems(rows, {})
+		expect(items[0].answer).toEqual({ v: "seal" })
+	})
+
+	it("leaves an untouched question unanswered", () => {
+		const items = toGradeableItems(rows, {})
+		expect(items[1].answer).toBeNull()
+	})
+
+	it("carries category, weight, and key through unchanged", () => {
+		const items = toGradeableItems(rows, {})
+		expect(items[0]).toMatchObject({ questionId: 1, category: "seal-or-not", weight: 1, answerKey: key })
 	})
 })

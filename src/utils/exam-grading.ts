@@ -1,4 +1,5 @@
 import type {
+	AnswerKey,
 	AnswerKeyPart,
 	AnswerValue,
 	AreaBreakdown,
@@ -9,6 +10,31 @@ import type {
 interface GradeOptions {
 	cutoffPct: number
 	overSealPenaltyRatio: number
+}
+
+// The captured question plus its answer, before grading. A structural superset
+// of the DB SessionQuestion so a row can be passed directly.
+interface GradeableSource {
+	questionId: number
+	category: string
+	weight: number
+	answerKey: AnswerKey
+	answer: AnswerValue | null
+}
+
+// A freshly submitted answer wins over the autosaved one; an untouched question
+// stays unanswered (scored zero, never an over-seal).
+export function toGradeableItems(
+	questions: GradeableSource[],
+	submitted: Record<string, AnswerValue>
+): GradeableItem[] {
+	return questions.map((q) => ({
+		questionId: q.questionId,
+		category: q.category,
+		weight: q.weight,
+		answerKey: q.answerKey,
+		answer: submitted[String(q.questionId)] ?? q.answer ?? null,
+	}))
 }
 
 function partMax(part: AnswerKeyPart): number {

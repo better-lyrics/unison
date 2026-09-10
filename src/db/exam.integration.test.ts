@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs"
 import { D1Compat } from "@/infra/database"
 import type { Env } from "@/types"
+import { hashExamToken } from "@/utils/exam-token"
 import type { AnswerKey } from "@/utils/exam-types"
 import pg from "pg"
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest"
@@ -13,6 +14,7 @@ import {
 	loadDrawableBank,
 	recordDecision,
 	recordGrade,
+	resolveExamSession,
 	saveAnswer,
 	startSession,
 	upsertQuestions,
@@ -109,13 +111,15 @@ describeIntegration("exam data access (integration)", () => {
 		expect(questions[0].answer).toEqual({ verdict: "no" })
 	})
 
-	it("records the grade, consumes the token, and flips state", async () => {
+	it("records the grade and flips state, keeping the hash for a submitted reload", async () => {
 		await seedBank()
+		const token = "raw-token-value"
 		const session = await startSession(
 			env,
-			{ keyId: KEY("a"), discordId: null, tokenHash: "h", seed: 1, expiresAt: SOON, isDev: false },
+			{ keyId: KEY("a"), discordId: null, tokenHash: await hashExamToken(token), seed: 1, expiresAt: SOON, isDev: false },
 			[1, 2]
 		)
+		expect((await resolveExamSession(env, token)).ok).toBe(true)
 		await recordGrade(env, session.id, {
 			state: "pending_review",
 			score: 6,
@@ -127,11 +131,12 @@ describeIntegration("exam data access (integration)", () => {
 				{ questionId: 2, awardedPoints: 3, maxPoints: 3 },
 			],
 		})
-		expect(await getSessionByTokenHash(env, "h")).toBeNull()
 		const stored = await getSessionByKeyId(env, KEY("a"))
 		expect(stored?.state).toBe("pending_review")
 		expect(stored?.score).toBe(6)
-		expect(stored?.tokenHash).toBeNull()
+
+		const resolved = await resolveExamSession(env, token)
+		expect(resolved).toEqual({ ok: false, reason: "submitted" })
 	})
 
 	it("lists applicants with a per-category breakdown, ordered by score", async () => {
@@ -213,6 +218,23 @@ describeIntegration("exam data access (integration)", () => {
 		const stored = await getSessionByKeyId(env, KEY("a"))
 		expect(stored?.state).toBe("approved")
 		expect(stored?.decidedByDiscordId).toBe("admin1")
+	})
+
+	describe("resolveExamSession", () => {
+		it("reports an unknown token as invalid", async () => {
+			expect(await resolveExamSession(env, "nope")).toEqual({ ok: false, reason: "invalid" })
+		})
+
+		it("reports an expired in_progress session as expired", async () => {
+			await seedBank()
+			const token = "expired-token"
+			await startSession(
+				env,
+				{ keyId: KEY("a"), discordId: null, tokenHash: await hashExamToken(token), seed: 1, expiresAt: 100, isDev: false },
+				[1]
+			)
+			expect(await resolveExamSession(env, token)).toEqual({ ok: false, reason: "expired" })
+		})
 	})
 
 	describe("invariants", () => {

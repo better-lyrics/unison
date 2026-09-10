@@ -1,4 +1,5 @@
 import type { Env } from "@/types"
+import { hashExamToken } from "@/utils/exam-token"
 import type { AnswerKey, AnswerValue, ExamQuestionType } from "@/utils/exam-types"
 import { resolveDisplayName } from "./users"
 
@@ -217,6 +218,34 @@ export async function getSessionByTokenHash(
 	return row ? toSession(row) : null
 }
 
+export type ResolveExamResult =
+	| { ok: true; session: ExamSession }
+	| { ok: false; reason: "invalid" | "expired" | "submitted" }
+
+// The exam SPA's only auth. The single-use link stays valid across refreshes
+// while the session is in_progress; the token is consumed by the state flip on
+// submit, not by nulling the hash, so a post-submit reload reads as "submitted".
+export async function resolveExamSession(env: Env, token: string): Promise<ResolveExamResult> {
+	const session = await getSessionByTokenHash(env, await hashExamToken(token))
+	if (!session) return { ok: false, reason: "invalid" }
+	if (Math.floor(Date.now() / 1000) > session.expiresAt) return { ok: false, reason: "expired" }
+	if (session.state !== "in_progress") return { ok: false, reason: "submitted" }
+	return { ok: true, session }
+}
+
+// Resume: mint a fresh link for an in_progress session without granting a new
+// draw. The prior token stops resolving.
+export async function reissueToken(
+	env: Env,
+	sessionId: number,
+	tokenHash: string,
+	expiresAt: number
+): Promise<void> {
+	await env.DB.prepare("UPDATE exam_session SET token_hash = ?, expires_at = ? WHERE id = ?")
+		.bind(tokenHash, expiresAt, sessionId)
+		.run()
+}
+
 export async function getSessionById(env: Env, id: number): Promise<ExamSession | null> {
 	const row = await env.DB.prepare(`SELECT ${SESSION_COLS} FROM exam_session WHERE id = ?`)
 		.bind(id)
@@ -306,8 +335,8 @@ export interface PerQuestionGrade {
 	maxPoints: number
 }
 
-// Consume the token and persist the grade. Flipping state off in_progress is the
-// authority that makes the link single-use; nulling token_hash is belt-and-braces.
+// Persist the grade and consume the token. Flipping state off in_progress is the
+// authority that makes the link single-use and lets a reload read as submitted.
 export async function recordGrade(
 	env: Env,
 	sessionId: number,
@@ -332,7 +361,7 @@ export async function recordGrade(
 		await tx
 			.prepare(
 				`UPDATE exam_session
-				SET state = ?, score = ?, max_score = ?, cutoff = ?, submitted_at = ?, token_hash = NULL
+				SET state = ?, score = ?, max_score = ?, cutoff = ?, submitted_at = ?
 				WHERE id = ?`
 			)
 			.bind(params.state, params.score, params.maxScore, params.cutoff, params.submittedAt, sessionId)

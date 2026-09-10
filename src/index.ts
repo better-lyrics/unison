@@ -24,6 +24,7 @@ import { authRoutes } from "@/routes/auth"
 import { badgeRoutes } from "@/routes/badges"
 import { committeeBotRoutes } from "@/routes/committee"
 import { compatRoutes } from "@/routes/compat"
+import { examRoutes } from "@/routes/exam"
 import { feedRoutes } from "@/routes/feed"
 import { leaderboardRoutes } from "@/routes/leaderboard"
 import { linkRoutes, linkStartRoutes } from "@/routes/links"
@@ -205,6 +206,7 @@ const app = new Elysia({ adapter: node() })
 	.use(voteBotRoutes(env))
 	.use(committeeBotRoutes(env))
 	.use(reviewQueueBotRoutes(env))
+	.use(examRoutes(env))
 	.use(requestRoutes(env))
 	.use(leaderboardRoutes(env))
 	.use(translateRoutes(env))
