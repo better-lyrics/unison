@@ -41,7 +41,7 @@ function formatRemaining(seconds: number): string {
 }
 
 const primaryButtonClass =
-  "inline-flex cursor-pointer items-center justify-center rounded-md bg-unison-accent px-4 py-2.5 text-sm font-semibold text-unison-bg transition-colors hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+  "inline-flex cursor-pointer items-center justify-center rounded-md bg-unison-text px-4 py-2.5 text-sm font-semibold text-unison-bg transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
 
 export function ExamPage() {
   const [params] = useSearchParams()

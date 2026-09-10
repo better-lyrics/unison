@@ -30,7 +30,7 @@ export function ChoiceGroup({ part, value, onChange }: ChoiceGroupProps) {
                 value={option.id}
                 checked={selected}
                 onChange={() => onChange(option.id)}
-                className="mt-0.5 accent-unison-accent"
+                className="mt-0.5 accent-unison-text"
               />
               <span>{option.label}</span>
             </label>
