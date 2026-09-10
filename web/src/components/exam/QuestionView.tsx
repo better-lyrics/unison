@@ -25,11 +25,11 @@ function ScenarioBeat({
 }) {
   return (
     <div className="space-y-3 rounded-lg bg-white/[0.02] p-4">
-      <p className="text-[11px] font-semibold uppercase tracking-wide text-unison-text-muted">
+      <span className="inline-flex items-center rounded-full border border-unison-border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-unison-text-muted">
         {STEP_LABEL[step.kind]}
-      </p>
+      </span>
       {step.author ? <p className="text-sm font-semibold text-unison-text">{step.author}</p> : null}
-      {step.text ? <p className="text-sm text-unison-text-secondary">{step.text}</p> : null}
+      {step.text ? <p className="text-sm leading-relaxed text-unison-text-secondary">{step.text}</p> : null}
       {step.clip ? <ExamClip clip={step.clip} /> : null}
       <ChoiceGroup
         part={{ part: step.id, label: "Your reply", options: step.choices }}
@@ -43,7 +43,7 @@ function ScenarioBeat({
 export function QuestionView({ question, answer, onChange }: QuestionViewProps) {
   return (
     <div className="space-y-5">
-      <h2 className="text-base font-medium text-unison-text">{question.prompt}</h2>
+      <h2 className="text-base font-medium leading-snug text-unison-text">{question.prompt}</h2>
 
       {question.type === "scenario" ? (
         <div className="space-y-4">
@@ -58,11 +58,13 @@ export function QuestionView({ question, answer, onChange }: QuestionViewProps) 
         </div>
       ) : (
         <div className="space-y-5">
-          {(question.assets?.clips ?? []).map((clip) => (
-            <ExamClip key={clip.id} clip={clip} />
-          ))}
+          {question.assets?.clip ? <ExamClip clip={question.assets.clip} /> : null}
           {question.assets?.image ? (
-            <img src={question.assets.image} alt="" className="w-full rounded-lg bg-white/[0.02]" />
+            <img
+              src={question.assets.image}
+              alt=""
+              className="w-full rounded-lg outline outline-1 -outline-offset-1 outline-white/10"
+            />
           ) : null}
           {(question.choices ?? []).map((part) => (
             <ChoiceGroup

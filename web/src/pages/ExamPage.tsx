@@ -1,7 +1,8 @@
 import { EmptyState } from "@/components/EmptyState"
 import { LoadingPlaceholder } from "@/components/LoadingPlaceholder"
-import { secondaryButtonClass } from "@/components/discord-ui"
+import { CountdownTimer } from "@/components/exam/CountdownTimer"
 import { QuestionView } from "@/components/exam/QuestionView"
+import { examButtonPrimary, examButtonSecondary } from "@/components/exam/exam-ui"
 import { panelClass } from "@/components/ui"
 import { cn } from "@/lib/cn"
 import { type ExamAnswers, autosaveAnswer, fetchExamSession, submitExam } from "@/lib/examApi"
@@ -33,15 +34,6 @@ const ERROR_COPY: Record<string, { title: string; hint: string }> = {
 function errorCopy(code: string) {
   return ERROR_COPY[code] ?? ERROR_COPY.REQUEST_FAILED
 }
-
-function formatRemaining(seconds: number): string {
-  const m = Math.floor(seconds / 60)
-  const s = seconds % 60
-  return `${m}:${s.toString().padStart(2, "0")}`
-}
-
-const primaryButtonClass =
-  "inline-flex cursor-pointer items-center justify-center rounded-md bg-unison-text px-4 py-2.5 text-sm font-semibold text-unison-bg transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
 
 export function ExamPage() {
   const [params] = useSearchParams()
@@ -115,18 +107,18 @@ export function ExamPage() {
     return (
       <div className={cn(panelClass, "mx-auto max-w-2xl space-y-5 p-6")}>
         <h1 className="text-lg font-semibold text-unison-text">Council entry exam</h1>
-        <p className="text-sm text-unison-text-secondary">
+        <p className="text-sm leading-relaxed text-unison-text-secondary">
           Welcome, {candidate.displayName}. This exam tests one thing: telling good lyrics from great ones. Judge each
           clip on timing and taste. A seal means exceptional, not just pretty good, so when in doubt, do not seal.
         </p>
-        <ul className="list-disc space-y-1 pl-5 text-sm text-unison-text-secondary">
+        <ul className="list-disc space-y-1.5 pl-5 text-sm text-unison-text-secondary">
           <li>You have {Math.round(timeLimitSec / 60)} minutes. The timer is a guide, not a cutoff.</li>
           <li>Your answers save as you go, so a refresh won't lose progress.</li>
           <li>You can only take this once.</li>
         </ul>
         <button
           type="button"
-          className={primaryButtonClass}
+          className={examButtonPrimary}
           onClick={() => {
             setEndAt(Date.now() + timeLimitSec * 1000)
             setPhase("questions")
@@ -143,7 +135,7 @@ export function ExamPage() {
     return (
       <div className={cn(panelClass, "mx-auto max-w-2xl space-y-5 p-6")}>
         <h1 className="text-lg font-semibold text-unison-text">Ready to submit?</h1>
-        <p className="text-sm text-unison-text-secondary">
+        <p className="text-sm leading-relaxed text-unison-text-secondary">
           You've answered {answeredCount} of {total}. Once you submit, you can't change your answers, and Council admins
           review from there.
         </p>
@@ -153,12 +145,12 @@ export function ExamPage() {
           </p>
         ) : null}
         <div className="flex items-center gap-3">
-          <button type="button" className={secondaryButtonClass} onClick={() => setPhase("questions")}>
+          <button type="button" className={examButtonSecondary} onClick={() => setPhase("questions")}>
             Back
           </button>
           <button
             type="button"
-            className={primaryButtonClass}
+            className={examButtonPrimary}
             disabled={submit.isPending}
             onClick={() => submit.mutate()}
           >
@@ -174,13 +166,11 @@ export function ExamPage() {
 
   return (
     <div className="mx-auto max-w-2xl space-y-6">
-      <div className="flex items-center justify-between text-xs text-unison-text-muted">
-        <span>
+      <div className="flex items-center justify-between">
+        <span className="font-mono text-xs tabular-nums text-unison-text-muted">
           Question {index + 1} of {total}
         </span>
-        {remaining !== null ? (
-          <span aria-live="polite">{remaining === 0 ? "Time's up" : formatRemaining(remaining)}</span>
-        ) : null}
+        {remaining !== null ? <CountdownTimer seconds={remaining} /> : null}
       </div>
 
       {question ? (
@@ -198,20 +188,20 @@ export function ExamPage() {
       <div className="flex items-center justify-between">
         <button
           type="button"
-          className={secondaryButtonClass}
+          className={examButtonSecondary}
           disabled={index === 0}
           onClick={() => setIndex((i) => Math.max(0, i - 1))}
         >
           Previous
         </button>
         {isLast ? (
-          <button type="button" className={primaryButtonClass} onClick={() => setPhase("confirm")}>
+          <button type="button" className={examButtonPrimary} onClick={() => setPhase("confirm")}>
             Review &amp; submit
           </button>
         ) : (
           <button
             type="button"
-            className={primaryButtonClass}
+            className={examButtonPrimary}
             onClick={() => setIndex((i) => Math.min(total - 1, i + 1))}
           >
             Next

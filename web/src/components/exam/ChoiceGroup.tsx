@@ -18,10 +18,11 @@ export function ChoiceGroup({ part, value, onChange }: ChoiceGroupProps) {
             <label
               key={option.id}
               className={cn(
-                "flex cursor-pointer items-start gap-3 rounded-md bg-white/[0.02] px-3 py-2.5 text-sm transition-colors",
+                "flex cursor-pointer items-start gap-3 rounded-lg px-3 py-2.5 text-sm transition-colors",
+                "focus-within:outline-none focus-within:ring-2 focus-within:ring-unison-border-strong",
                 selected
                   ? "bg-unison-bg-hover text-unison-text"
-                  : "text-unison-text-secondary hover:bg-unison-bg-hover/60",
+                  : "bg-white/[0.02] text-unison-text-secondary hover:bg-unison-bg-hover",
               )}
             >
               <input
@@ -30,9 +31,9 @@ export function ChoiceGroup({ part, value, onChange }: ChoiceGroupProps) {
                 value={option.id}
                 checked={selected}
                 onChange={() => onChange(option.id)}
-                className="mt-0.5 accent-unison-text"
+                className="mt-0.5 accent-unison-text outline-none"
               />
-              <span>{option.label}</span>
+              <span className="leading-relaxed">{option.label}</span>
             </label>
           )
         })}

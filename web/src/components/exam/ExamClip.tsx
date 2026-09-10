@@ -1,16 +1,19 @@
 import { LyricsRenderer } from "@/components/LyricsRenderer"
 import { YouTubeEmbed } from "@/components/YouTubeEmbed"
 import { useYouTubePlayer } from "@/hooks/useYouTubePlayer"
-import type { ExamClip as ExamClipData } from "@/lib/examApi"
+import { cn } from "@/lib/cn"
+import type { ClipAssets, ExamRendering } from "@/lib/examApi"
 import type { VariantFull } from "@/lib/types"
+import { IconPlayerPlayFilled } from "@tabler/icons-react"
 import { useCallback, useMemo } from "react"
+import { examButtonGhost } from "./exam-ui"
 
-// braccato renders against a variant; the exam only has raw TTML for a clip, so
-// we wrap it in the minimal shape the renderer needs.
-function clipVariant(clip: ExamClipData): VariantFull {
+// braccato renders against a variant; a clip only has raw TTML, so wrap it in the
+// minimal shape the renderer needs.
+function renderingVariant(videoId: string, r: ExamRendering): VariantFull {
   return {
     id: -1,
-    videoId: clip.source.videoId,
+    videoId,
     song: "",
     artist: "",
     format: "ttml",
@@ -20,14 +23,19 @@ function clipVariant(clip: ExamClipData): VariantFull {
     voteCount: 0,
     confidence: "high",
     hidden: false,
-    lyrics: clip.ttml,
+    lyrics: r.ttml,
   }
 }
 
-export function ExamClip({ clip }: { clip: ExamClipData }) {
+// One video, one or more lyric renderings driven off the same player clock. Two
+// renderings render side by side (A-vs-B); one fills the width.
+export function ExamClip({ clip }: { clip: ClipAssets }) {
   const { ref, getCurrentTime, getPlaying, seekTo, play } = useYouTubePlayer(clip.source.videoId)
-  const variant = useMemo(() => clipVariant(clip), [clip])
   const start = clip.source.start ?? 0
+  const variants = useMemo(
+    () => clip.renderings.map((r) => ({ r, variant: renderingVariant(clip.source.videoId, r) })),
+    [clip],
+  )
 
   const playFromStart = useCallback(() => {
     seekTo(start)
@@ -42,25 +50,32 @@ export function ExamClip({ clip }: { clip: ExamClipData }) {
     [seekTo, play],
   )
 
+  const sideBySide = variants.length > 1
+
   return (
-    <div className="space-y-3">
-      <YouTubeEmbed playerRef={ref} />
-      <div className="flex items-center gap-2">
-        <button
-          type="button"
-          onClick={playFromStart}
-          className="cursor-pointer rounded-md bg-unison-bg-elevated px-3 py-1.5 text-xs font-medium text-unison-text transition-colors hover:bg-unison-bg-hover"
-        >
+    <div className="space-y-4">
+      <div className="mx-auto w-full max-w-md space-y-3">
+        <YouTubeEmbed playerRef={ref} />
+        <button type="button" onClick={playFromStart} className={examButtonGhost}>
+          <IconPlayerPlayFilled className="size-3.5" />
           Play clip
         </button>
       </div>
-      <div className="overflow-hidden rounded-lg bg-white/[0.02] p-3">
-        <LyricsRenderer
-          variant={variant}
-          getCurrentTime={getCurrentTime}
-          getPlaying={getPlaying}
-          onLineClick={handleLineClick}
-        />
+
+      <div className={cn("grid gap-4", sideBySide && "sm:grid-cols-2")}>
+        {variants.map(({ r, variant }) => (
+          <div key={r.id} className="space-y-2 rounded-lg bg-white/[0.02] p-3">
+            {r.label ? (
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-unison-text-muted">{r.label}</p>
+            ) : null}
+            <LyricsRenderer
+              variant={variant}
+              getCurrentTime={getCurrentTime}
+              getPlaying={getPlaying}
+              onLineClick={handleLineClick}
+            />
+          </div>
+        ))}
       </div>
     </div>
   )

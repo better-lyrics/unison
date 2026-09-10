@@ -3,7 +3,11 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react"
 import { afterEach, describe, expect, it, vi } from "vitest"
 
 vi.mock("./ExamClip", () => ({
-  ExamClip: ({ clip }: { clip: { id: string } }) => <div data-testid="exam-clip">{clip.id}</div>,
+  ExamClip: ({ clip }: { clip: { source: { videoId: string }; renderings: { id: string }[] } }) => (
+    <div data-testid="exam-clip" data-renderings={clip.renderings.length}>
+      {clip.source.videoId}
+    </div>
+  ),
 }))
 
 import { QuestionView } from "./QuestionView"
@@ -15,7 +19,9 @@ const timing: ExamClientQuestion = {
   type: "timing",
   category: "seal-or-not",
   prompt: "Is this seal-worthy?",
-  assets: { clips: [{ id: "main", ttml: "<tt/>", source: { videoId: "abc" } }] },
+  assets: {
+    clip: { source: { videoId: "abc" }, renderings: [{ id: "main", ttml: "<tt/>" }] },
+  },
   choices: [
     {
       part: "verdict",
@@ -51,9 +57,41 @@ const scenario: ExamClientQuestion = {
 describe("QuestionView", () => {
   it("renders a timing clip and both choice parts", () => {
     render(<QuestionView question={timing} answer={{}} onChange={() => {}} />)
-    expect(screen.getByTestId("exam-clip").textContent).toBe("main")
+    const clip = screen.getByTestId("exam-clip")
+    expect(clip.textContent).toBe("abc")
+    expect(clip.getAttribute("data-renderings")).toBe("1")
     expect(screen.getByText("Your verdict")).toBeTruthy()
     expect(screen.getByText("What holds it back?")).toBeTruthy()
+  })
+
+  it("renders an A-vs-B clip with two renderings against one video", () => {
+    const avsb: ExamClientQuestion = {
+      id: 3,
+      type: "timing",
+      category: "a-vs-b",
+      prompt: "Which sync is better?",
+      assets: {
+        clip: {
+          source: { videoId: "vid" },
+          renderings: [
+            { id: "A", label: "Version A", ttml: "<tt/>" },
+            { id: "B", label: "Version B", ttml: "<tt/>" },
+          ],
+        },
+      },
+      choices: [
+        {
+          part: "pick",
+          label: "Which is better?",
+          options: [
+            { id: "A", label: "A" },
+            { id: "B", label: "B" },
+          ],
+        },
+      ],
+    }
+    render(<QuestionView question={avsb} answer={{}} onChange={() => {}} />)
+    expect(screen.getByTestId("exam-clip").getAttribute("data-renderings")).toBe("2")
   })
 
   it("reports the chosen verdict via onChange with the part id", () => {

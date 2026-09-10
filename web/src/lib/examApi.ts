@@ -11,10 +11,23 @@ export interface ChoicePart {
   options: ChoiceOption[]
 }
 
-export interface ExamClip {
+export interface ExamSource {
+  videoId: string
+  start?: number
+  end?: number
+}
+
+// One or more lyric renderings that all sync to the same video clock. A-vs-B
+// tests carry two (played side by side against one video); most carry one.
+export interface ExamRendering {
   id: string
+  label?: string
   ttml: string
-  source: { videoId: string; start?: number; end?: number }
+}
+
+export interface ClipAssets {
+  source: ExamSource
+  renderings: ExamRendering[]
 }
 
 export interface ScenarioStep {
@@ -22,7 +35,7 @@ export interface ScenarioStep {
   kind: "dm" | "queue" | "channel"
   author?: string
   text?: string
-  clip?: ExamClip
+  clip?: ClipAssets
   choices: ChoiceOption[]
 }
 
@@ -31,7 +44,7 @@ export interface ExamClientQuestion {
   type: "timing" | "mcq" | "scenario"
   category: string
   prompt: string
-  assets?: { clips?: ExamClip[]; image?: string }
+  assets?: { clip?: ClipAssets; image?: string }
   choices?: ChoicePart[]
   steps?: ScenarioStep[]
 }
