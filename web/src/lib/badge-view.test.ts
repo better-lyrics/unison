@@ -9,15 +9,19 @@ function def(key: string, category: string, extra: Partial<BadgeDef> = {}): Badg
     description: key,
     category,
     kind: "medal",
-    image: { color: `/badges/${key}/image.svg?variant=color`, mono: `/badges/${key}/image.svg?variant=mono` },
+    image: {
+      color: `/badges/${key}/image.svg?variant=color`,
+      mono: `/badges/${key}/image.svg?variant=mono`,
+      silhouette: `/badges/${key}/image.svg?variant=silhouette`,
+    },
     ...extra,
   }
 }
 
 const tiered = def("sharp-ear", "curation", {
   tiers: [
-    { level: 1, threshold: 10, image: { color: "/t1-color", mono: "/mono" } },
-    { level: 2, threshold: 25, image: { color: "/t2-color", mono: "/mono" } },
+    { level: 1, threshold: 10, image: { color: "/t1-color", mono: "/mono", silhouette: "/sil" } },
+    { level: 2, threshold: 25, image: { color: "/t2-color", mono: "/mono", silhouette: "/sil" } },
     { level: 3, threshold: 50 },
   ],
 })

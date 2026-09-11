@@ -1,8 +1,8 @@
+import { FeaturedBadgeEditor } from "@/components/FeaturedBadgeEditor"
+import type { BadgeCatalogue, BadgeDef, UserGamification } from "@/lib/types"
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react"
 import { MotionGlobalConfig } from "motion/react"
 import { afterEach, describe, expect, it, vi } from "vitest"
-import { FeaturedBadgeEditor } from "@/components/FeaturedBadgeEditor"
-import type { BadgeCatalogue, BadgeDef, UserGamification } from "@/lib/types"
 
 // Force motion to settle enter/exit instantly so AnimatePresence unmounts removed tiles in the
 // same synchronous flush, and give its reduced-motion probe the matchMedia happy-dom omits.
@@ -33,7 +33,11 @@ function def(key: string, name: string, category: string): BadgeDef {
     description: `${name} description`,
     category,
     kind: "medal",
-    image: { color: `/badge-art/${key}.svg`, mono: `/badge-art/${key}_mono.svg` },
+    image: {
+      color: `/badge-art/${key}.svg`,
+      mono: `/badge-art/${key}_mono.svg`,
+      silhouette: `/badge-art/${key}_silhouette.svg`,
+    },
   }
 }
 

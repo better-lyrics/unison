@@ -85,6 +85,7 @@ describe("GET /badges", () => {
 		for (const b of json.data.badges) {
 			expect(b.image.color).toBe(`/badges/${b.key}/image.svg?variant=color`)
 			expect(b.image.mono).toBe(`/badges/${b.key}/image.svg?variant=mono`)
+			expect(b.image.silhouette).toBe(`/badges/${b.key}/image.svg?variant=silhouette`)
 		}
 	})
 
@@ -132,7 +133,24 @@ describe("GET /badges/:key/image.svg", () => {
 			)
 			expect(mono.status).toBe(200)
 			expect(mono.headers.get("content-type")).toMatch(/^image\/svg\+xml/)
+
+			const silhouette = await app.handle(
+				new Request(`http://localhost/badges/${badge.key}/image.svg?variant=silhouette`)
+			)
+			expect(silhouette.status).toBe(200)
+			expect(silhouette.headers.get("content-type")).toMatch(/^image\/svg\+xml/)
+			expect(await silhouette.text()).toContain("<svg")
 		}
+	})
+
+	it("serves the hole-free silhouette when variant=silhouette", async () => {
+		const app = badgeRoutes(makeEnv())
+		const res = await app.handle(
+			new Request("http://localhost/badges/master/image.svg?variant=silhouette")
+		)
+		expect(res.status).toBe(200)
+		expect(res.headers.get("content-type")).toMatch(/^image\/svg\+xml/)
+		expect(await res.text()).toContain("<svg")
 	})
 
 	it("serves a placeholder key that is not backed by real art", async () => {

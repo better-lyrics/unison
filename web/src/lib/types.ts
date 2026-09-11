@@ -171,6 +171,7 @@ export type TierName = "lyricist" | "elite" | "master" | "grandmaster" | "legend
 export interface BadgeImage {
   color: string
   mono: string
+  silhouette: string
 }
 
 export interface BadgeTier {

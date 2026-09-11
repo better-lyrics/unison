@@ -1,7 +1,7 @@
-import { cleanup, render, screen, waitFor } from "@testing-library/react"
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { clearAsyncDataCache } from "@/hooks/useAsyncData"
 import type { BadgeCatalogue } from "@/lib/types"
+import { cleanup, render, screen, waitFor } from "@testing-library/react"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { BadgeCatalogueProvider, useBadgeCatalogue } from "./BadgeCatalogueContext"
 
 const catalogue: BadgeCatalogue = {
@@ -12,7 +12,7 @@ const catalogue: BadgeCatalogue = {
       description: "desc",
       category: "acclaim",
       kind: "medal",
-      image: { color: "/c", mono: "/m" },
+      image: { color: "/c", mono: "/m", silhouette: "/s" },
     },
   ],
   display: { inlineGlyphs: 1, featuredMax: 5, rarityThreshold: 0.1, categoryOrder: ["acclaim"] },
