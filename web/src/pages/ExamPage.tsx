@@ -35,6 +35,12 @@ function errorCopy(code: string) {
   return ERROR_COPY[code] ?? ERROR_COPY.REQUEST_FAILED
 }
 
+const ALREADY_SUBMITTED_ART = [
+  "https://cdn.betterlyrics.org/dog-butterfly.gif",
+  "https://cdn.betterlyrics.org/nothing-ever-happens.gif",
+  "https://cdn.betterlyrics.org/wilson.jpeg",
+]
+
 export function ExamPage() {
   const [params] = useSearchParams()
   const token = params.get("t") ?? ""
@@ -54,6 +60,9 @@ export function ExamPage() {
   const [index, setIndex] = useState(0)
   const [endAt, setEndAt] = useState<number | null>(null)
   const [now, setNow] = useState(() => Date.now())
+  const [submittedArt] = useState(
+    () => ALREADY_SUBMITTED_ART[Math.floor(Math.random() * ALREADY_SUBMITTED_ART.length)],
+  )
   const seeded = useRef(false)
 
   useEffect(() => {
@@ -114,6 +123,19 @@ export function ExamPage() {
   if (!token || query.isError) {
     const code = !token ? "EXAM_TOKEN_INVALID" : query.error instanceof Error ? query.error.message : "REQUEST_FAILED"
     const copy = errorCopy(code)
+    if (code === "EXAM_ALREADY_SUBMITTED") {
+      return (
+        <div className={cn(panelClass, "mx-auto max-w-2xl space-y-4 p-8 text-center")}>
+          <img
+            src={submittedArt}
+            alt=""
+            className="mx-auto w-48 rounded-lg outline outline-1 -outline-offset-1 outline-white/10"
+          />
+          <h1 className="text-lg font-semibold text-unison-text">{copy.title}</h1>
+          <p className="mx-auto max-w-md text-sm leading-relaxed text-unison-text-secondary">{copy.hint}</p>
+        </div>
+      )
+    }
     return <EmptyState title={copy.title} hint={copy.hint} />
   }
 

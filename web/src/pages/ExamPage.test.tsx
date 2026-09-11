@@ -93,6 +93,16 @@ describe("ExamPage", () => {
       renderExam()
       expect(await screen.findByText("You've already submitted this exam")).toBeTruthy()
     })
+
+    it("shows a random cdn image on the already-submitted screen", async () => {
+      fetchExamSession.mockRejectedValue(new Error("EXAM_ALREADY_SUBMITTED"))
+      const { container } = renderExam()
+      expect(await screen.findByText("You've already submitted this exam")).toBeTruthy()
+      const img = container.querySelector("img") as HTMLImageElement | null
+      expect(img?.getAttribute("src")).toMatch(
+        /^https:\/\/cdn\.betterlyrics\.org\/(dog-butterfly\.gif|nothing-ever-happens\.gif|wilson\.jpeg)$/,
+      )
+    })
   })
 
   describe("happy path", () => {
