@@ -1,6 +1,6 @@
 import type { ExamSessionData } from "@/lib/examApi"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react"
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react"
 import { MemoryRouter, Route, Routes } from "react-router-dom"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
@@ -168,6 +168,64 @@ describe("ExamPage", () => {
       fetchExamSession.mockResolvedValue(session({ examStartedAt: Math.floor(Date.now() / 1000) - 30 }))
       renderExam()
       expect(await screen.findByText("Question 1 of 2")).toBeTruthy()
+    })
+
+    it("does not flash the next capstone beat while a wrong commit is still in flight", async () => {
+      let resolveSave: (v: { terminated: boolean }) => void = () => {}
+      autosaveAnswer.mockReturnValue(
+        new Promise<{ terminated: boolean }>((r) => {
+          resolveSave = r
+        }),
+      )
+      const capstone: ExamSessionData["questions"][number] = {
+        id: 7,
+        type: "scenario",
+        category: "capstone",
+        prompt: "Capstone",
+        steps: [
+          {
+            id: "queue",
+            kind: "channel",
+            title: "review-queue",
+            messages: [{ author: "Butler", avatar: "/pfp/butler.svg", bot: true, embed: { title: "Queue" } }],
+            composer: {
+              style: "action",
+              choices: [
+                { id: "reject", label: "Reject", intent: "danger" },
+                { id: "seal", label: "Seal", intent: "success" },
+              ],
+            },
+          },
+          {
+            id: "dm",
+            kind: "dm",
+            title: "someone",
+            messages: [{ author: "someone", avatar: "/pfp/ape.webp", text: "next beat" }],
+            composer: { label: "Reply", choices: [{ id: "hold", label: "hold" }] },
+          },
+        ],
+      }
+      fetchExamSession.mockResolvedValue(
+        session({ questions: [capstone], examStartedAt: Math.floor(Date.now() / 1000) - 30 }),
+      )
+      renderExam()
+      const seal = (await screen.findByText("Seal")).closest("button") as HTMLButtonElement
+
+      vi.useFakeTimers()
+      fireEvent.pointerDown(seal)
+      await act(async () => {
+        vi.advanceTimersByTime(700)
+      })
+      vi.useRealTimers()
+
+      // The wrong beat is committed locally but its verdict hasn't returned, so the
+      // next beat must stay hidden instead of flashing during the round-trip.
+      expect(screen.queryByText("next beat")).toBeNull()
+
+      await act(async () => {
+        resolveSave({ terminated: true })
+      })
+      expect(screen.queryByText("next beat")).toBeNull()
     })
 
     it("keeps a terminated capstone ended after a reload (survives refresh)", async () => {

@@ -50,6 +50,7 @@ export function ExamPage() {
   const [phase, setPhase] = useState<Phase>("intro")
   const [answers, setAnswers] = useState<ExamAnswers>({})
   const [terminated, setTerminated] = useState<Set<number>>(new Set())
+  const [commitPending, setCommitPending] = useState(false)
   const [index, setIndex] = useState(0)
   const [endAt, setEndAt] = useState<number | null>(null)
   const [now, setNow] = useState(() => Date.now())
@@ -61,8 +62,6 @@ export function ExamPage() {
     const saved = data.savedAnswers ?? {}
     setAnswers(saved)
     setTerminated(new Set(data.terminatedQuestionIds ?? []))
-    // Resume: if the clock already started, skip the intro, restore the same countdown
-    // from the server anchor, and land on the first unanswered question.
     if (data.examStartedAt != null) {
       setEndAt((data.examStartedAt + data.timeLimitSec) * 1000)
       const firstUnanswered = data.questions.findIndex((q) => saved[String(q.id)] === undefined)
@@ -83,9 +82,6 @@ export function ExamPage() {
       autosaveAnswer(token, questionId, answer),
   })
 
-  // Fire-and-forget: stamps the server clock so a reload resumes the same countdown.
-  // The timer is set optimistically on click, so a slow or failed begin never blocks
-  // starting the exam.
   const begin = useMutation({ mutationFn: () => beginExam(token) })
 
   const submit = useMutation({
@@ -98,16 +94,16 @@ export function ExamPage() {
       const key = String(questionId)
       const merged = { ...(answers[key] ?? {}), [part]: optionId }
       setAnswers((prev) => ({ ...prev, [key]: merged }))
-      // The capstone is a one-shot: a committed beat may end the story, so await the
-      // server's verdict and lock the scenario when it does. Others autosave freely.
       const isCapstone = query.data?.questions.find((q) => q.id === questionId)?.category === "capstone"
       if (isCapstone) {
+        setCommitPending(true)
         autosave
           .mutateAsync({ questionId, answer: merged })
           .then((res) => {
             if (res.terminated) setTerminated((prev) => new Set(prev).add(questionId))
           })
           .catch(() => {})
+          .finally(() => setCommitPending(false))
       } else {
         autosave.mutate({ questionId, answer: merged })
       }
@@ -149,8 +145,20 @@ export function ExamPage() {
       <div className={cn(panelClass, "mx-auto max-w-2xl space-y-5 p-6")}>
         <h1 className="text-lg font-semibold text-unison-text">Council entry exam</h1>
         <p className="text-sm leading-relaxed text-unison-text-secondary">
-          Welcome, {candidate.displayName}. This exam tests one thing: telling good lyrics from great ones. Judge each
-          clip on timing and taste. A seal means exceptional, not just pretty good, so when in doubt, do not seal.
+          Welcome, {candidate.displayName}! This exam tests your ability to cherry-pick good lyrics from great ones, and
+          whether you have what it takes to be a Council member. A seal means{" "}
+          <em className="font-medium text-unison-text">exceptional</em>, not just pretty good, so when in doubt, do not
+          seal.
+        </p>
+        <p className="text-sm">
+          <a
+            href="https://composer.betterlyrics.org/guides/lyric-best-practices"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="font-medium text-unison-text underline underline-offset-4 transition-colors hover:text-unison-text-secondary"
+          >
+            Brush up before you start
+          </a>
         </p>
         <ul className="list-disc space-y-1.5 pl-5 text-sm text-unison-text-secondary">
           <li>You have {Math.round(timeLimitSec / 60)} minutes. The timer is a guide, not a cutoff.</li>
@@ -225,7 +233,7 @@ export function ExamPage() {
             answer={answers[String(question.id)] ?? {}}
             onChange={(part, optionId) => handleChange(question.id, part, optionId)}
             candidateName={candidate.displayName}
-            terminated={terminated.has(question.id)}
+            terminated={terminated.has(question.id) || commitPending}
           />
         </div>
       ) : (
