@@ -281,17 +281,24 @@ export const config = {
 		overSealPenaltyRatio: 2.0,
 		timeLimitSec: 25 * 60,
 		tokenTtlSec: 24 * 60 * 60,
-		// Stratified draw shape. Each entry names a bank category (a strata) and how
-		// many active questions to draw from it. Question content, weights, and keys
-		// live in the DB bank, never here. Categories double as the breakdown areas.
+		// Stratified draw shape, also the presentation order. Each entry names a bank
+		// category (a strata) and how many active questions to draw from it. Question
+		// content, weights, and keys live in the DB bank, never here. Categories double
+		// as the breakdown areas. A category may repeat to control order: the three
+		// single-clip is-exceptional questions are interleaved between the A/B ones so
+		// they never run back to back (repeats draw distinct questions, see drawQuestions).
 		draw: [
-			{ category: "seal-or-not", count: 2 },
+			{ category: "seal-or-not", count: 1 },
+			{ category: "is-exceptional", count: 1 },
 			{ category: "a-vs-b", count: 1 },
-			{ category: "what-holds-back", count: 2 },
-			{ category: "pick-better", count: 1 },
-			{ category: "spot-whats-off", count: 1 },
+			{ category: "is-exceptional", count: 1 },
+			{ category: "what-holds-back", count: 1 },
+			{ category: "is-exceptional", count: 1 },
+			{ category: "seal-or-not", count: 1 },
+			{ category: "is-exceptional", count: 1 },
+			{ category: "what-holds-back", count: 1 },
 			{ category: "trap-exception", count: 1 },
-			{ category: "seal-discipline", count: 2 },
+			{ category: "seal-discipline", count: 1 },
 			{ category: "scenario", count: 1 },
 			{ category: "capstone", count: 1 },
 		],

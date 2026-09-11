@@ -2,7 +2,7 @@
 import { readFileSync } from "node:fs"
 import { resolve } from "node:path"
 import pg from "pg"
-import { type ExamQuestionInput, upsertQuestions } from "@/db/exam"
+import { type ExamQuestionInput, retireQuestionsExcept, upsertQuestions } from "@/db/exam"
 import { D1Compat } from "@/infra/database"
 import type { Env } from "@/types"
 
@@ -59,6 +59,7 @@ async function main() {
 	const env = { DB: new D1Compat(pool) } as unknown as Env
 	try {
 		const count = await upsertQuestions(env, questions)
+		await retireQuestionsExcept(env, questions.map((q) => q.id))
 		const active = questions.filter((q) => q.active !== false).length
 		console.log(`seeded ${count} questions from ${bankPath} (${active} active)`)
 	} catch (err) {

@@ -23,6 +23,11 @@ function seededShuffle<T>(items: T[], rand: () => number): T[] {
 // category pool. The pool is sorted by id first so the result never depends on
 // the order rows came back from the DB, then shuffled with a per-slot seed so
 // two candidates (different `seed`) overlap only partially.
+//
+// A category may appear in more than one slot to control presentation order (e.g.
+// interleaving single-clip questions between A/B ones). Repeated slots draw
+// distinct questions: already-drawn ids are excluded, and the seed folds in the
+// slot position so the repeats do not reshuffle to the same pick.
 export function drawQuestions(
 	bank: DrawableQuestion[],
 	shape: readonly DrawSlot[],
@@ -36,10 +41,17 @@ export function drawQuestions(
 	}
 
 	const drawn: number[] = []
-	for (const slot of shape) {
-		const pool = (byCategory.get(slot.category) ?? []).slice().sort((a, b) => a - b)
-		const rand = mulberry32((seed ^ hash32(slot.category)) >>> 0)
-		drawn.push(...seededShuffle(pool, rand).slice(0, Math.max(0, slot.count)))
-	}
+	const used = new Set<number>()
+	shape.forEach((slot, slotIndex) => {
+		const pool = (byCategory.get(slot.category) ?? [])
+			.slice()
+			.sort((a, b) => a - b)
+			.filter((id) => !used.has(id))
+		const rand = mulberry32((seed ^ hash32(`${slot.category}:${slotIndex}`)) >>> 0)
+		for (const id of seededShuffle(pool, rand).slice(0, Math.max(0, slot.count))) {
+			used.add(id)
+			drawn.push(id)
+		}
+	})
 	return drawn
 }

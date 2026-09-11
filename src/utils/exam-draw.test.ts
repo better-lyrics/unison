@@ -61,6 +61,31 @@ describe("drawQuestions", () => {
 		})
 	})
 
+	describe("repeated category slots (interleaving)", () => {
+		it("draws distinct questions for a category repeated across slots, in slot order", () => {
+			const shape: DrawSlot[] = [
+				{ category: "a-vs-b", count: 1 },
+				{ category: "seal-or-not", count: 1 },
+				{ category: "a-vs-b", count: 1 },
+			]
+			const ids = drawQuestions(BANK, shape, 7)
+			const categoryOf = new Map(BANK.map((q) => [q.id, q.category]))
+			expect(ids.map((id) => categoryOf.get(id))).toEqual(["a-vs-b", "seal-or-not", "a-vs-b"])
+			expect(ids[0]).not.toBe(ids[2])
+			expect(new Set(ids).size).toBe(3)
+		})
+
+		it("never exceeds the pool across repeated slots (no duplicates)", () => {
+			const shape: DrawSlot[] = [
+				{ category: "a-vs-b", count: 2 },
+				{ category: "a-vs-b", count: 2 },
+			]
+			const ids = drawQuestions(BANK, shape, 3)
+			expect(new Set(ids).size).toBe(ids.length)
+			expect(ids.length).toBe(3)
+		})
+	})
+
 	describe("edge cases", () => {
 		it("returns an empty array for an empty shape", () => {
 			expect(drawQuestions(BANK, [], 1)).toEqual([])
