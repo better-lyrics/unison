@@ -272,6 +272,30 @@ export const config = {
 		userAgent:
 			"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
 	},
+
+	exam: {
+		cutoffPct: 0.85,
+		// >1 makes a wrong seal cost more than a wrong reject; over-sealing is what the exam screens out.
+		overSealPenaltyRatio: 2.0,
+		timeLimitSec: 25 * 60,
+		tokenTtlSec: 24 * 60 * 60,
+		// Draw shape and presentation order; a repeated category interleaves clips (see drawQuestions).
+		draw: [
+			{ category: "seal-or-not", count: 1 },
+			{ category: "is-exceptional", count: 1 },
+			{ category: "a-vs-b", count: 1 },
+			{ category: "is-exceptional", count: 1 },
+			{ category: "what-holds-back", count: 1 },
+			{ category: "is-exceptional", count: 1 },
+			{ category: "seal-or-not", count: 1 },
+			{ category: "is-exceptional", count: 1 },
+			{ category: "what-holds-back", count: 1 },
+			{ category: "trap-exception", count: 1 },
+			{ category: "seal-discipline", count: 1 },
+			{ category: "scenario", count: 1 },
+			{ category: "capstone", count: 1 },
+		],
+	},
 } as const
 
 export type Config = typeof config

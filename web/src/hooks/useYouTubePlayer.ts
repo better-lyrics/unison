@@ -5,6 +5,7 @@ interface YTPlayer {
   getPlayerState(): number
   seekTo(seconds: number, allowSeekAhead: boolean): void
   playVideo(): void
+  pauseVideo(): void
   destroy(): void
 }
 
@@ -14,7 +15,7 @@ interface YTPlayerCtorOptions {
   videoId: string
   width?: string | number
   height?: string | number
-  playerVars?: { origin?: string }
+  playerVars?: Record<string, string | number>
   events?: { onReady?: () => void }
 }
 
@@ -86,15 +87,24 @@ export interface UseYouTubePlayerResult {
   getPlaying: () => boolean
   seekTo: (seconds: number) => void
   play: () => void
+  pause: () => void
 }
 
-export function useYouTubePlayer(videoId: string | null): UseYouTubePlayerResult {
+export interface UseYouTubePlayerOptions {
+  playerVars?: Record<string, string | number>
+}
+
+export function useYouTubePlayer(videoId: string | null, options?: UseYouTubePlayerOptions): UseYouTubePlayerResult {
   const [node, setNode] = useState<HTMLDivElement | null>(null)
   const playerRef = useRef<YTPlayer | null>(null)
   // YT.Player methods aren't attached until onReady fires; calling one earlier
   // throws. The rAF sync loop polls every frame, so the getters must stay inert
   // until the player is ready or one throw kills the loop permanently.
   const readyRef = useRef(false)
+  // Read at player creation only (the effect runs on videoId/node), so a caller may
+  // pass a fresh options object each render without forcing a rebuild.
+  const playerVarsRef = useRef(options?.playerVars)
+  playerVarsRef.current = options?.playerVars
 
   useEffect(() => {
     if (!videoId || !node) return
@@ -111,7 +121,7 @@ export function useYouTubePlayer(videoId: string | null): UseYouTubePlayerResult
         videoId,
         width: "100%",
         height: "100%",
-        playerVars: { origin: win.location.origin },
+        playerVars: { origin: win.location.origin, ...playerVarsRef.current },
         events: {
           onReady: () => {
             if (!cancelled) readyRef.current = true
@@ -143,6 +153,12 @@ export function useYouTubePlayer(videoId: string | null): UseYouTubePlayerResult
     player.playVideo()
   }, [])
 
+  const pause = useCallback(() => {
+    const player = playerRef.current
+    if (!player || !readyRef.current) return
+    player.pauseVideo()
+  }, [])
+
   const getCurrentTime = useCallback(() => {
     const player = playerRef.current
     if (!player || !readyRef.current) return 0
@@ -155,5 +171,5 @@ export function useYouTubePlayer(videoId: string | null): UseYouTubePlayerResult
     return player.getPlayerState() === YT_STATE_PLAYING
   }, [])
 
-  return { ref: setNode, getCurrentTime, getPlaying, seekTo, play }
+  return { ref: setNode, getCurrentTime, getPlaying, seekTo, play, pause }
 }

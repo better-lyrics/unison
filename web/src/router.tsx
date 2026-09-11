@@ -5,6 +5,8 @@ import { AboutPage } from "./pages/AboutPage"
 import { CuratorsPage } from "./pages/CuratorsPage"
 import { DocsPage } from "./pages/DocsPage"
 import { DownloadsPage } from "./pages/DownloadsPage"
+import { MobileGate } from "./components/exam/MobileGate"
+import { ExamPage } from "./pages/ExamPage"
 import { LinkPage } from "./pages/LinkPage"
 import { LyricsPage } from "./pages/LyricsPage"
 import { MePage } from "./pages/MePage"
@@ -58,6 +60,14 @@ const router = createBrowserRouter([
       { path: "docs", element: <DocsPage /> },
       { path: "link", element: <LinkPage /> },
       { path: "migrate", element: <MigratePage /> },
+      {
+        path: "exam",
+        element: (
+          <MobileGate>
+            <ExamPage />
+          </MobileGate>
+        ),
+      },
       ...devRoutes,
     ],
   },

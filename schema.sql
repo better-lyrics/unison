@@ -347,3 +347,71 @@ ALTER TABLE lyrics ADD COLUMN IF NOT EXISTS committee_approved_at INTEGER;
 ALTER TABLE lyrics ADD COLUMN IF NOT EXISTS committee_approved_by INTEGER REFERENCES users(id);
 
 ALTER TABLE users ADD COLUMN IF NOT EXISTS featured_badges TEXT;
+
+-- ---- council entry exam ----
+-- Table structure only; question content and answer keys live only in seeded rows.
+
+CREATE TABLE IF NOT EXISTS exam_question (
+    id SERIAL PRIMARY KEY,
+    type TEXT NOT NULL CHECK (type IN ('timing', 'mcq', 'scenario')),
+    category TEXT NOT NULL,
+    prompt TEXT NOT NULL,
+    assets JSONB,
+    choices JSONB,
+    answer_key JSONB NOT NULL,
+    weight DOUBLE PRECISION NOT NULL DEFAULT 1.0,
+    steps JSONB,
+    active BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at INTEGER NOT NULL DEFAULT (EXTRACT(EPOCH FROM NOW())::INTEGER),
+    updated_at INTEGER NOT NULL DEFAULT (EXTRACT(EPOCH FROM NOW())::INTEGER)
+);
+
+CREATE INDEX IF NOT EXISTS idx_exam_question_pool
+    ON exam_question(category) WHERE active = TRUE;
+
+CREATE TABLE IF NOT EXISTS exam_session (
+    id BIGSERIAL PRIMARY KEY,
+    key_id TEXT NOT NULL,
+    discord_id TEXT,
+    state TEXT NOT NULL DEFAULT 'in_progress'
+        CHECK (state IN ('in_progress', 'pending_review', 'failed', 'approved', 'rejected')),
+    token_hash TEXT,
+    score DOUBLE PRECISION,
+    max_score DOUBLE PRECISION,
+    cutoff DOUBLE PRECISION,
+    seed BIGINT NOT NULL,
+    is_dev BOOLEAN NOT NULL DEFAULT FALSE,
+    started_at INTEGER NOT NULL DEFAULT (EXTRACT(EPOCH FROM NOW())::INTEGER),
+    exam_started_at INTEGER,
+    expires_at INTEGER NOT NULL,
+    submitted_at INTEGER,
+    decided_at INTEGER,
+    decided_by_discord_id TEXT
+);
+
+-- Stamped on first Begin (not at mint) so the clock anchors there and resumes on reload.
+ALTER TABLE exam_session ADD COLUMN IF NOT EXISTS exam_started_at INTEGER;
+
+-- DB backstop for one real attempt per account; dev sessions are exempt.
+CREATE UNIQUE INDEX IF NOT EXISTS idx_exam_session_one_per_account
+    ON exam_session(key_id) WHERE is_dev = FALSE;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_exam_session_token
+    ON exam_session(token_hash) WHERE token_hash IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_exam_session_state ON exam_session(state);
+CREATE INDEX IF NOT EXISTS idx_exam_session_discord ON exam_session(discord_id);
+
+CREATE TABLE IF NOT EXISTS exam_session_question (
+    id BIGSERIAL PRIMARY KEY,
+    session_id BIGINT NOT NULL REFERENCES exam_session(id) ON DELETE CASCADE,
+    question_id INTEGER NOT NULL REFERENCES exam_question(id),
+    position INTEGER NOT NULL,
+    answer JSONB,
+    awarded_points DOUBLE PRECISION,
+    max_points DOUBLE PRECISION,
+
+    UNIQUE(session_id, question_id),
+    UNIQUE(session_id, position)
+);
+
+CREATE INDEX IF NOT EXISTS idx_exam_session_question_session
+    ON exam_session_question(session_id);

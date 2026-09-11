@@ -5,6 +5,7 @@ import { type UseYouTubePlayerResult, __resetForTests, useYouTubePlayer } from "
 
 interface FakePlayerOptions {
   videoId: string
+  playerVars?: Record<string, string | number>
   events?: { onReady?: () => void }
 }
 
@@ -18,11 +19,14 @@ class FakePlayer {
   state = 2
   seeks: Array<{ seconds: number; allowSeekAhead: boolean }> = []
   plays = 0
+  pauses = 0
+  playerVars?: Record<string, string | number>
   onReady?: () => void
   static instances: FakePlayer[] = []
 
   constructor(_elem: HTMLElement | string, opts: FakePlayerOptions) {
     this.onReady = opts.events?.onReady
+    this.playerVars = opts.playerVars
     FakePlayer.instances.push(this)
   }
   fireReady() {
@@ -46,6 +50,11 @@ class FakePlayer {
     if (!this.ready) throw new TypeError("playVideo is not a function")
     this.plays++
     this.state = PlayerState.PLAYING
+  }
+  pauseVideo() {
+    if (!this.ready) throw new TypeError("pauseVideo is not a function")
+    this.pauses++
+    this.state = PlayerState.PAUSED
   }
   destroy() {
     this.destroyed = true
@@ -177,6 +186,53 @@ describe("useYouTubePlayer", () => {
     player.state = PlayerState.ENDED
     expect(readPlaying()).toBe(false)
 
+    unmount()
+  })
+
+  it("pause forwards to the player once ready and is inert before then", async () => {
+    installYT()
+    let pause: (() => void) | null = null
+    function CaptureHarness() {
+      const player = useYouTubePlayer("abc")
+      pause = player.pause
+      return createElement("div", { ref: player.ref })
+    }
+    const { unmount } = render(createElement(CaptureHarness))
+    await act(async () => {
+      await Promise.resolve()
+    })
+    const player = FakePlayer.instances[0]
+    if (pause === null) throw new Error("pause never captured")
+    const callPause: () => void = pause
+
+    expect(() => callPause()).not.toThrow()
+    expect(player.pauses).toBe(0)
+
+    act(() => {
+      player.fireReady()
+    })
+    act(() => {
+      callPause()
+    })
+    expect(player.pauses).toBe(1)
+    expect(player.state).toBe(PlayerState.PAUSED)
+    unmount()
+  })
+
+  it("passes caller playerVars to the player alongside origin", async () => {
+    installYT()
+    function VarsHarness() {
+      const player = useYouTubePlayer("abc", { playerVars: { controls: 0, rel: 0 } })
+      return createElement("div", { ref: player.ref })
+    }
+    const { unmount } = render(createElement(VarsHarness))
+    await act(async () => {
+      await Promise.resolve()
+    })
+    const vars = FakePlayer.instances[0].playerVars
+    expect(vars?.controls).toBe(0)
+    expect(vars?.rel).toBe(0)
+    expect(vars && "origin" in vars).toBe(true)
     unmount()
   })
 

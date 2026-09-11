@@ -1,0 +1,482 @@
+/* Scoped Discord-client simulation; palette lives here because it belongs to this one sim. */
+
+.ds-root {
+  --ds-bg: #313338;
+  --ds-header: #2b2d31;
+  --ds-input: #383a40;
+  --ds-text: #dbdee1;
+  --ds-strong: #f2f3f5;
+  --ds-muted: #949ba4;
+  --ds-channel: #80848e;
+  --ds-blurple: #5865f2;
+  --ds-role: #949cf7;
+  --ds-butler-red: #ed1c24;
+  --ds-mention-bg: rgba(88, 101, 242, 0.3);
+  --ds-mention-text: #c9cdfb;
+}
+
+.ds-client {
+  border-radius: 10px;
+  overflow: hidden;
+  background: var(--ds-bg);
+  border: 1px solid rgba(0, 0, 0, 0.4);
+}
+
+.ds-client + .ds-client {
+  margin-top: 18px;
+}
+
+.ds-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+  background: var(--ds-header);
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.2);
+  position: relative;
+  z-index: 2;
+}
+
+.ds-hash {
+  color: var(--ds-channel);
+  font-size: 22px;
+  line-height: 1;
+}
+
+.ds-at {
+  color: var(--ds-channel);
+  font-size: 18px;
+  font-weight: 500;
+}
+
+.ds-title {
+  font-weight: 600;
+  font-size: 15px;
+  color: var(--ds-strong);
+}
+
+.ds-sub {
+  color: var(--ds-muted);
+  font-size: 12px;
+  margin-left: auto;
+}
+
+.ds-thread {
+  padding: 14px 16px 8px;
+  display: flex;
+  flex-direction: column;
+}
+
+.ds-msg {
+  display: flex;
+  gap: 16px;
+  padding: 3px 0;
+  margin-top: 14px;
+}
+
+.ds-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 999px;
+  flex: none;
+  object-fit: cover;
+  background: var(--ds-header);
+}
+
+.ds-body {
+  min-width: 0;
+}
+
+.ds-msg-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  line-height: 1.2;
+}
+
+.ds-name {
+  font-weight: 500;
+  font-size: 15px;
+  color: var(--ds-strong);
+}
+
+.ds-name.ds-role {
+  color: var(--ds-role);
+}
+
+.ds-bot {
+  background: var(--ds-blurple);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 600;
+  border-radius: 4px;
+  padding: 1px 5px;
+  position: relative;
+  top: -1px;
+}
+
+.ds-ts {
+  color: var(--ds-muted);
+  font-size: 12px;
+}
+
+.ds-text {
+  font-size: 15px;
+  color: var(--ds-text);
+  margin-top: 2px;
+  word-wrap: break-word;
+}
+
+.ds-mention {
+  background: var(--ds-mention-bg);
+  color: var(--ds-mention-text);
+  border-radius: 3px;
+  padding: 0 2px;
+  font-weight: 500;
+}
+
+.ds-emoji {
+  display: inline-block;
+  height: 1.4em;
+  width: auto;
+  vertical-align: -0.35em;
+  margin: 0 1px;
+}
+
+.ds-embed {
+  margin-top: 6px;
+  border-left: 4px solid var(--ds-butler-red);
+  background: var(--ds-header);
+  border-radius: 4px;
+  padding: 14px 16px;
+  max-width: 440px;
+}
+
+.ds-embed-title {
+  font-weight: 600;
+  font-size: 15px;
+  color: var(--ds-strong);
+  margin-bottom: 4px;
+}
+
+.ds-embed-desc {
+  font-size: 13px;
+  color: var(--ds-text);
+  margin-bottom: 12px;
+}
+
+.ds-embed-fields {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px 16px;
+  margin-bottom: 12px;
+}
+
+.ds-field-name {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ds-strong);
+  margin-bottom: 1px;
+}
+
+.ds-field-val {
+  font-size: 13px;
+  color: var(--ds-text);
+}
+
+.ds-preview {
+  display: flex;
+  gap: 12px;
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 6px;
+  padding: 10px;
+  align-items: center;
+}
+
+.ds-thumb {
+  width: 128px;
+  aspect-ratio: 16 / 9;
+  border-radius: 4px;
+  flex: none;
+  background: #000 radial-gradient(circle at 50% 45%, rgba(255, 255, 255, 0.1), transparent 60%);
+  display: grid;
+  place-items: center;
+  outline: 1px solid rgba(255, 255, 255, 0.1);
+  outline-offset: -1px;
+}
+
+.ds-thumb svg {
+  width: 20px;
+  height: 20px;
+  fill: #fff;
+  margin-left: 2px;
+}
+
+.ds-preview-line {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ds-text);
+  padding: 2px 0;
+}
+
+.ds-preview-line.ds-dim {
+  opacity: 0.3;
+}
+
+.ds-embed-foot {
+  font-size: 12px;
+  color: var(--ds-muted);
+  margin-top: 10px;
+}
+
+.ds-composer {
+  padding: 4px 16px 16px;
+}
+
+.ds-composer-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ds-muted);
+  margin: 6px 0 10px;
+}
+
+.ds-reply {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--ds-input);
+  border: 1px solid transparent;
+  border-radius: 8px;
+  padding: 11px 14px;
+  margin-bottom: 8px;
+  cursor: pointer;
+  color: var(--ds-text);
+  font-size: 15px;
+  transition: background-color 0.1s ease, border-color 0.1s ease, color 0.1s ease;
+}
+
+.ds-reply:hover {
+  border-color: rgba(255, 255, 255, 0.12);
+  background: #3f4147;
+}
+
+.ds-reply:focus-within {
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.ds-reply.ds-sel {
+  border-color: var(--ds-blurple);
+  background: color-mix(in srgb, var(--ds-blurple) 14%, var(--ds-input));
+  color: #fff;
+}
+
+.ds-send {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  margin-left: auto;
+  color: var(--ds-muted);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.ds-return {
+  width: 1em;
+  height: 1em;
+}
+
+/* Discord action buttons (Seal / Reject on the queue beat). */
+.ds-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.ds-action {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 3px;
+  padding: 9px 18px;
+  font-size: 14px;
+  font-weight: 500;
+  color: #fff;
+  cursor: pointer;
+  transition: background-color 0.15s ease, box-shadow 0.15s ease, opacity 0.15s ease;
+}
+
+.ds-action-success {
+  background: #248046;
+}
+.ds-action-success:hover {
+  background: #1a6334;
+}
+.ds-action-danger {
+  background: #da373c;
+}
+.ds-action-danger:hover {
+  background: #a12b30;
+}
+.ds-action-primary {
+  background: var(--ds-blurple);
+}
+.ds-action-primary:hover {
+  background: #4752c4;
+}
+.ds-action-secondary {
+  background: #4e5058;
+}
+.ds-action-secondary:hover {
+  background: #6d6f78;
+}
+
+.ds-action.ds-sel {
+  box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.85);
+}
+
+.ds-action.ds-dim {
+  opacity: 0.45;
+}
+
+/* Each surface animates in on mount so progressive reveal reads as a new beat arriving. */
+@keyframes ds-enter {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.ds-client {
+  animation: ds-enter 0.28s ease-out both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ds-client {
+    animation: none;
+  }
+}
+
+.ds-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* One-shot capstone: final-commit warning, hold-to-confirm choices, locked committed beat. */
+.ds-oneshot-warn {
+  margin: 2px 0 12px;
+  padding: 10px 14px;
+  border-radius: 8px;
+  border: 1px solid color-mix(in srgb, var(--ds-butler-red) 45%, transparent);
+  background: color-mix(in srgb, var(--ds-butler-red) 12%, transparent);
+  color: var(--ds-text);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.ds-oneshot-warn strong {
+  color: var(--ds-strong);
+}
+
+.ds-oneshot-title {
+  display: block;
+  font-size: 15px;
+  margin-bottom: 3px;
+}
+
+.ds-oneshot-sub {
+  display: block;
+}
+
+.ds-holds {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  border: 0;
+  margin: 0;
+  padding: 0;
+  min-inline-size: 0;
+}
+
+.ds-hold {
+  position: relative;
+  overflow: hidden;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  padding: 11px 14px;
+  font-size: 15px;
+  font-weight: 500;
+  color: #fff;
+  cursor: pointer;
+  user-select: none;
+  touch-action: none;
+  transition: box-shadow 0.15s ease, opacity 0.15s ease;
+}
+
+.ds-hold:disabled,
+.ds-hold-locked {
+  cursor: default;
+}
+
+.ds-hold-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 0;
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.28));
+  pointer-events: none;
+  /* Releasing early eases the fill back instead of snapping to zero. */
+  transition: width 200ms ease-out;
+}
+
+.ds-hold.is-holding .ds-hold-fill {
+  width: 100%;
+  /* While held, the fill tracks the timer so it reaches full exactly on commit. */
+  transition: width var(--ds-hold-ms, 700ms) linear;
+}
+
+.ds-hold.is-holding {
+  box-shadow: inset 0 0 0 1.5px rgba(255, 255, 255, 0.28);
+}
+
+.ds-hold-label {
+  position: relative;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.ds-hold.ds-sel {
+  box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.85);
+}
+
+.ds-hold.ds-dim {
+  opacity: 0.4;
+}
+
+.ds-hold-hint {
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--ds-muted);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ds-hold-fill {
+    transition: none;
+  }
+  .ds-hold.is-holding .ds-hold-fill {
+    width: 100%;
+  }
+}

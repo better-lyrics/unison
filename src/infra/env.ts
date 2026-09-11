@@ -32,6 +32,18 @@ export function readTranslationProxyEnabled(): boolean {
 	return !disabled
 }
 
+function readExamDevEnabled(): boolean {
+	const raw = process.env.EXAM_DEV_ENABLED?.trim().toLowerCase() ?? ""
+	if (raw === "") return false
+	const enabled = BOOL_ENV_TRUTHY.has(raw)
+	if (!enabled) {
+		log.warn("EXAM_DEV_ENABLED is set but did not normalize to a truthy value", {
+			raw: process.env.EXAM_DEV_ENABLED,
+		})
+	}
+	return enabled
+}
+
 function readB2Config(): B2Config | null {
 	const keyId = process.env.B2_KEY_ID
 	const applicationKey = process.env.B2_APPLICATION_KEY
@@ -84,5 +96,8 @@ export function createEnv(): Env {
 		BUTLER_BOT_SECRET: process.env.BUTLER_BOT_SECRET || null,
 		ADMIN_SECRET: process.env.ADMIN_SECRET || null,
 		DISCORD_OAUTH: readDiscordOAuthConfig(),
+		EXAM_DEV_ENABLED: readExamDevEnabled(),
+		EXAM_BASE_URL: process.env.EXAM_BASE_URL || "",
+		RAILWAY_PUBLIC_DOMAIN: process.env.RAILWAY_PUBLIC_DOMAIN || "",
 	}
 }

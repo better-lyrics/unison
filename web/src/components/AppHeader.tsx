@@ -40,7 +40,7 @@ export function AppHeader() {
 			ref={headerRef}
 			className="sticky top-0 z-10 border-b border-unison-border bg-unison-bg/80 backdrop-blur"
 		>
-			<div className="mx-auto flex 5xl items-center justify-between gap-4 px-6 py-4 sm:grid sm:grid-cols-[auto_auto_1fr_auto] sm:gap-6">
+			<div className="mx-auto flex max-w-5xl items-center justify-between gap-4 px-6 py-4 sm:grid sm:grid-cols-[auto_auto_1fr_auto] sm:gap-6">
 				<Link
 					to="/"
 					aria-label="Unison home"
