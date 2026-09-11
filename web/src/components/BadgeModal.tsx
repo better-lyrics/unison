@@ -209,8 +209,8 @@ export function BadgeModal({ selection, closing, onRequestClose, onExited }: Bad
               aria-hidden="true"
               draggable={false}
               className={cn(
-                "absolute top-1/2 left-1/2 size-[92px] -translate-x-1/2 -translate-y-1/2 scale-125 blur-[24px]",
-                earned ? "opacity-50" : "opacity-[0.28]",
+                "bm-glow absolute top-[-28%] left-1/2 size-[92px] -translate-x-1/2 -translate-y-1/2 scale-x-[4] scale-y-[1.5] blur-[24px]",
+                earned ? "opacity-40" : "opacity-20",
               )}
             />
             <img

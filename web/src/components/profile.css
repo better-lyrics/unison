@@ -85,6 +85,11 @@
     transform: translateY(6px) scale(0.98);
   }
 }
+@keyframes bm-glow-in {
+  from {
+    opacity: 0;
+  }
+}
 
 .bm-overlay {
   animation: bm-fade 0.18s ease-out;
@@ -97,6 +102,9 @@
 }
 .bm-card.bm-closing {
   animation: bm-popout 0.16s ease-out forwards;
+}
+.bm-glow {
+  animation: bm-glow-in 0.6s ease-out 0.1s both;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -114,7 +122,8 @@
   .bm-overlay,
   .bm-overlay.bm-closing,
   .bm-card,
-  .bm-card.bm-closing {
+  .bm-card.bm-closing,
+  .bm-glow {
     animation: none;
   }
 }
