@@ -38,7 +38,7 @@ function makeEnv(): Env {
 
 interface BadgeEntry {
 	key: string
-	image: { color: string; mono: string }
+	image: { color: string; mono: string; silhouette: string }
 }
 
 interface CatalogueBody {
