@@ -3,6 +3,8 @@ import type { ApiEnvelope } from "./types"
 export interface ChoiceOption {
   id: string
   label: string
+  // Colours an action-style choice (a Discord action button); ignored by reply choices.
+  intent?: "success" | "danger" | "primary" | "secondary"
 }
 
 export interface ChoicePart {
@@ -30,13 +32,57 @@ export interface ClipAssets {
   renderings: ExamRendering[]
 }
 
-export interface ScenarioStep {
-  id: string
-  kind: "dm" | "queue" | "channel"
-  author?: string
+// A scenario renders as a Discord simulation: a sequence of surfaces (a channel or
+// a DM), each a thread of messages. One surface carries the composer, the reply
+// picker that scores; the others are read-only context (the queue, the DM history).
+
+export interface ScenarioEmbedField {
+  name: string
+  value: string
+}
+
+// A static, decorative lyric preview inside a bot embed (a video poster look, not a
+// playable clip). The judged clip, if any, is a full ExamClip elsewhere.
+export interface ScenarioEmbedPreviewLine {
+  text: string
+  dim?: boolean
+}
+
+export interface ScenarioEmbed {
+  title?: string
+  description?: string
+  fields?: ScenarioEmbedField[]
+  preview?: ScenarioEmbedPreviewLine[]
+  footer?: string
+}
+
+export interface ScenarioMessage {
+  author: string
+  avatar: string
+  timestamp?: string
+  self?: boolean
+  bot?: boolean
   text?: string
-  clip?: ClipAssets
+  embed?: ScenarioEmbed
+}
+
+// "reply" renders Discord reply cards (↵ send); "action" renders a row of Discord
+// action buttons (Seal / Reject). Defaults to "reply".
+export interface ScenarioComposer {
+  style?: "reply" | "action"
+  label?: string
   choices: ChoiceOption[]
+}
+
+// `id` doubles as the answer part id when the surface has a composer, so it must
+// match the answer-key part id for that beat. Context surfaces omit the composer.
+export interface ScenarioSurface {
+  id: string
+  kind: "channel" | "dm"
+  title: string
+  subtitle?: string
+  messages: ScenarioMessage[]
+  composer?: ScenarioComposer
 }
 
 export interface ExamClientQuestion {
@@ -46,7 +92,7 @@ export interface ExamClientQuestion {
   prompt: string
   assets?: { clip?: ClipAssets; image?: string }
   choices?: ChoicePart[]
-  steps?: ScenarioStep[]
+  steps?: ScenarioSurface[]
 }
 
 // One question's answer maps each part id to the chosen option id; the whole exam
@@ -59,7 +105,14 @@ export interface ExamSessionData {
   questions: ExamClientQuestion[]
   timeLimitSec: number
   expiresAt: number
+  // Epoch seconds when the candidate first clicked Begin, or null before then. Drives
+  // resume: a non-null value means the exam is underway, so reopening skips the intro
+  // and continues the same countdown.
+  examStartedAt: number | null
   savedAnswers: ExamAnswers
+  // One-shot scenario (capstone) question ids whose story has ended on a wrong commit.
+  // The client stops revealing further beats for these, and it survives a reload.
+  terminatedQuestionIds: number[]
 }
 
 // The server error code drives which screen the SPA shows, so it is what we throw.
@@ -89,8 +142,33 @@ export async function fetchExamSession(token: string): Promise<ExamSessionData> 
   return envelope.data
 }
 
-export async function autosaveAnswer(token: string, questionId: number, answer: QuestionAnswer): Promise<void> {
-  await postJson("/exam/answer", { t: token, questionId, answer })
+export async function beginExam(token: string): Promise<number> {
+  const res = await fetch("/exam/begin", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ t: token }),
+  })
+  if (!res.ok) throw new Error(await readErrorCode(res))
+  const envelope = (await res.json()) as ApiEnvelope<{ examStartedAt: number }>
+  if (!envelope.success) throw new Error("REQUEST_FAILED")
+  return envelope.data.examStartedAt
+}
+
+// Returns whether this commit ended a one-shot scenario (a wrong capstone beat). For
+// ordinary questions the server omits the flag, so this is simply false.
+export async function autosaveAnswer(
+  token: string,
+  questionId: number,
+  answer: QuestionAnswer,
+): Promise<{ terminated: boolean }> {
+  const res = await fetch("/exam/answer", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ t: token, questionId, answer }),
+  })
+  if (!res.ok) throw new Error(await readErrorCode(res))
+  const body = (await res.json()) as { success: boolean; data?: { terminated?: boolean } }
+  return { terminated: Boolean(body.data?.terminated) }
 }
 
 export async function submitExam(token: string, answers: ExamAnswers): Promise<void> {

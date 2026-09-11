@@ -35,21 +35,42 @@ const timing: ExamClientQuestion = {
   ],
 }
 
+// Fictional fixture only: no real prompt, submitter, reply copy, or answer key,
+// so the committed test cannot leak any exam content.
 const scenario: ExamClientQuestion = {
   id: 2,
   type: "scenario",
-  category: "capstone",
-  prompt: "Handle the pushback",
+  category: "scenario",
+  prompt: "Sample scenario prompt",
   steps: [
     {
-      id: "beat1",
-      kind: "dm",
-      author: "submitter",
-      text: "so much for supporting small artists",
-      choices: [
-        { id: "hold", label: "Hold the standard kindly" },
-        { id: "cave", label: "Approve to avoid conflict" },
+      id: "beat-a",
+      kind: "channel",
+      title: "sample-channel",
+      subtitle: "Context channel",
+      messages: [
+        {
+          author: "SampleBot",
+          avatar: "/pfp/butler.svg",
+          bot: true,
+          timestamp: "Today at 2:02 AM",
+          embed: { title: "Sample embed", footer: "Sample footer." },
+        },
       ],
+    },
+    {
+      id: "beat-b",
+      kind: "channel",
+      title: "public-channel",
+      subtitle: "Public",
+      messages: [{ author: "sample_user", avatar: "/pfp/ape.webp", text: "sample message" }],
+      composer: {
+        label: "Choose your reply.",
+        choices: [
+          { id: "opt1", label: "Reply option one" },
+          { id: "opt2", label: "Reply option two" },
+        ],
+      },
     },
   ],
 }
@@ -101,13 +122,21 @@ describe("QuestionView", () => {
     expect(onChange).toHaveBeenCalledWith("verdict", "no")
   })
 
-  it("renders a scenario beat as a mock-Discord message with reply choices", () => {
+  it("renders a scenario as a Discord simulation and reports the reply with its surface id", () => {
     const onChange = vi.fn()
     render(<QuestionView question={scenario} answer={{}} onChange={onChange} />)
-    expect(screen.getByText("Direct message")).toBeTruthy()
-    expect(screen.getByText("submitter")).toBeTruthy()
-    expect(screen.getByText("so much for supporting small artists")).toBeTruthy()
-    fireEvent.click(screen.getByLabelText("Hold the standard kindly"))
-    expect(onChange).toHaveBeenCalledWith("beat1", "hold")
+    expect(screen.getByText("sample-channel")).toBeTruthy()
+    expect(screen.getByText("public-channel")).toBeTruthy()
+    expect(screen.getByText("sample_user")).toBeTruthy()
+    fireEvent.click(screen.getByLabelText("Reply option two"))
+    expect(onChange).toHaveBeenCalledWith("beat-b", "opt2")
+  })
+
+  it("makes a capstone scenario one-shot: shows the finality warning and no plain radios", () => {
+    const capstone: ExamClientQuestion = { ...scenario, id: 4, category: "capstone" }
+    const { container } = render(<QuestionView question={capstone} answer={{}} onChange={() => {}} />)
+    expect(screen.getByText(/whatever option you pick is final/i)).toBeTruthy()
+    expect(container.querySelector(".ds-hold")).toBeTruthy()
+    expect(container.querySelector("input[type=radio]")).toBeNull()
   })
 })

@@ -1,5 +1,5 @@
-@import url("https://api.fontshare.com/v2/css?f[]=satoshi@400,500,700&display=swap");
-@import url("https://fonts.googleapis.com/css2?family=Geist+Mono:wght@500;600&display=swap");
+/* Satoshi + Geist Mono are loaded from <link> tags in index.html (with preconnect) so
+   the fetch starts during initial HTML parse instead of after the CSS bundle resolves. */
 @import "tailwindcss";
 /* Layered so the unlayered :root block below outranks it whatever the import order resolves to. */
 @import "@braccato/core/styles/variables.css" layer(braccato-defaults);
@@ -86,6 +86,26 @@ braccato-lyrics:has(.blyrics-user-scrolling)::-webkit-scrollbar-thumb {
 /* lyrics.css spends --blyrics-padding-bottom but hardcodes the top. */
 braccato-lyrics .blyrics-container {
   padding-top: var(--blyrics-padding-top, 2rem);
+}
+
+/* Exam clips live in narrow A/B columns, so shrink the type and tighten the line
+   spacing there (scoped, so the full-size player on the lyrics page is untouched). */
+.exam-lyrics .blyrics-container {
+  --blyrics-font-size: 1.5rem;
+  --blyrics-line-height: 1.4;
+  --blyrics-padding: 0.85rem;
+}
+
+/* Keep the exam clips chromeless: no scrollbar even while the reader scrolls, unlike
+   the main lyrics page which reveals a thin one. */
+.exam-lyrics braccato-lyrics,
+.exam-lyrics braccato-lyrics:has(.blyrics-user-scrolling) {
+  scrollbar-width: none;
+}
+
+.exam-lyrics braccato-lyrics::-webkit-scrollbar,
+.exam-lyrics braccato-lyrics:has(.blyrics-user-scrolling)::-webkit-scrollbar {
+  display: none;
 }
 
 /* Native select popups ignore the control's own background, so dark them here. */

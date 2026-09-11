@@ -7,10 +7,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 const fetchExamSession = vi.fn()
 const autosaveAnswer = vi.fn()
 const submitExam = vi.fn()
+const beginExam = vi.fn()
 vi.mock("@/lib/examApi", () => ({
   fetchExamSession: (...a: unknown[]) => fetchExamSession(...a),
   autosaveAnswer: (...a: unknown[]) => autosaveAnswer(...a),
   submitExam: (...a: unknown[]) => submitExam(...a),
+  beginExam: (...a: unknown[]) => beginExam(...a),
 }))
 
 vi.mock("@/components/exam/ExamClip", () => ({
@@ -44,7 +46,9 @@ function session(overrides: Partial<ExamSessionData> = {}): ExamSessionData {
     questions: [mcq(1, "Pick the better rendering"), mcq(2, "Which sync tracks the vocal?")],
     timeLimitSec: 1500,
     expiresAt: Math.floor(Date.now() / 1000) + 3600,
+    examStartedAt: null,
     savedAnswers: {},
+    terminatedQuestionIds: [],
     ...overrides,
   }
 }
@@ -64,8 +68,9 @@ function renderExam(entry = "/exam?t=tok") {
 
 beforeEach(() => {
   vi.clearAllMocks()
-  autosaveAnswer.mockResolvedValue(undefined)
+  autosaveAnswer.mockResolvedValue({ terminated: false })
   submitExam.mockResolvedValue(undefined)
+  beginExam.mockResolvedValue(Math.floor(Date.now() / 1000))
 })
 afterEach(cleanup)
 
@@ -136,6 +141,77 @@ describe("ExamPage", () => {
       fireEvent.click(await screen.findByRole("button", { name: "Begin" }))
       expect((screen.getByLabelText("Option B 1") as HTMLInputElement).checked).toBe(true)
       expect((screen.getByLabelText("Option A 1") as HTMLInputElement).checked).toBe(false)
+    })
+
+    it("stamps the clock on Begin so a reload can resume", async () => {
+      fetchExamSession.mockResolvedValue(session())
+      renderExam()
+      fireEvent.click(await screen.findByRole("button", { name: "Begin" }))
+      await waitFor(() => expect(beginExam).toHaveBeenCalledWith("tok"))
+    })
+
+    it("skips the intro and lands on the first unanswered question when the clock is running", async () => {
+      fetchExamSession.mockResolvedValue(
+        session({
+          examStartedAt: Math.floor(Date.now() / 1000) - 120,
+          savedAnswers: { "1": { pick: "b" } },
+        }),
+      )
+      renderExam()
+      // No intro, no Begin: straight into the exam on question 2 (question 1 is answered).
+      expect(await screen.findByText("Question 2 of 2")).toBeTruthy()
+      expect(screen.queryByText("Council entry exam")).toBeNull()
+      expect(screen.queryByRole("button", { name: "Begin" })).toBeNull()
+    })
+
+    it("resumes on the first question when nothing is answered yet", async () => {
+      fetchExamSession.mockResolvedValue(session({ examStartedAt: Math.floor(Date.now() / 1000) - 30 }))
+      renderExam()
+      expect(await screen.findByText("Question 1 of 2")).toBeTruthy()
+    })
+
+    it("keeps a terminated capstone ended after a reload (survives refresh)", async () => {
+      const capstone: ExamSessionData["questions"][number] = {
+        id: 7,
+        type: "scenario",
+        category: "capstone",
+        prompt: "Capstone",
+        steps: [
+          {
+            id: "queue",
+            kind: "channel",
+            title: "review-queue",
+            messages: [{ author: "Butler", avatar: "/pfp/butler.svg", bot: true, embed: { title: "Queue" } }],
+            composer: {
+              style: "action",
+              choices: [
+                { id: "reject", label: "Reject", intent: "danger" },
+                { id: "seal", label: "Seal", intent: "success" },
+              ],
+            },
+          },
+          {
+            id: "dm",
+            kind: "dm",
+            title: "someone",
+            messages: [{ author: "someone", avatar: "/pfp/ape.webp", text: "next beat" }],
+            composer: { label: "Reply", choices: [{ id: "hold", label: "hold" }] },
+          },
+        ],
+      }
+      fetchExamSession.mockResolvedValue(
+        session({
+          questions: [capstone],
+          examStartedAt: Math.floor(Date.now() / 1000) - 60,
+          savedAnswers: { "7": { queue: "seal" } },
+          terminatedQuestionIds: [7],
+        }),
+      )
+      renderExam()
+      // Resumes straight into the ended capstone: the finality warning is up, the wrong
+      // beat is locked, and the next beat ("next beat") is never revealed.
+      expect(await screen.findByText(/whatever option you pick is final/i)).toBeTruthy()
+      expect(screen.queryByText("next beat")).toBeNull()
     })
   })
 })

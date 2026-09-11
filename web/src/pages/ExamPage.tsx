@@ -5,7 +5,7 @@ import { QuestionView } from "@/components/exam/QuestionView"
 import { examButtonPrimary, examButtonSecondary } from "@/components/exam/exam-ui"
 import { panelClass } from "@/components/ui"
 import { cn } from "@/lib/cn"
-import { type ExamAnswers, autosaveAnswer, fetchExamSession, submitExam } from "@/lib/examApi"
+import { type ExamAnswers, autosaveAnswer, beginExam, fetchExamSession, submitExam } from "@/lib/examApi"
 import { useMutation, useQuery } from "@tanstack/react-query"
 import { useCallback, useEffect, useRef, useState } from "react"
 import { useSearchParams } from "react-router-dom"
@@ -49,16 +49,27 @@ export function ExamPage() {
 
   const [phase, setPhase] = useState<Phase>("intro")
   const [answers, setAnswers] = useState<ExamAnswers>({})
+  const [terminated, setTerminated] = useState<Set<number>>(new Set())
   const [index, setIndex] = useState(0)
   const [endAt, setEndAt] = useState<number | null>(null)
   const [now, setNow] = useState(() => Date.now())
   const seeded = useRef(false)
 
   useEffect(() => {
-    if (query.data && !seeded.current) {
-      setAnswers(query.data.savedAnswers ?? {})
-      seeded.current = true
+    if (!query.data || seeded.current) return
+    const data = query.data
+    const saved = data.savedAnswers ?? {}
+    setAnswers(saved)
+    setTerminated(new Set(data.terminatedQuestionIds ?? []))
+    // Resume: if the clock already started, skip the intro, restore the same countdown
+    // from the server anchor, and land on the first unanswered question.
+    if (data.examStartedAt != null) {
+      setEndAt((data.examStartedAt + data.timeLimitSec) * 1000)
+      const firstUnanswered = data.questions.findIndex((q) => saved[String(q.id)] === undefined)
+      setIndex(firstUnanswered === -1 ? Math.max(0, data.questions.length - 1) : firstUnanswered)
+      setPhase("questions")
     }
+    seeded.current = true
   }, [query.data])
 
   useEffect(() => {
@@ -72,6 +83,11 @@ export function ExamPage() {
       autosaveAnswer(token, questionId, answer),
   })
 
+  // Fire-and-forget: stamps the server clock so a reload resumes the same countdown.
+  // The timer is set optimistically on click, so a slow or failed begin never blocks
+  // starting the exam.
+  const begin = useMutation({ mutationFn: () => beginExam(token) })
+
   const submit = useMutation({
     mutationFn: () => submitExam(token, answers),
     onSuccess: () => setPhase("submitted"),
@@ -82,9 +98,21 @@ export function ExamPage() {
       const key = String(questionId)
       const merged = { ...(answers[key] ?? {}), [part]: optionId }
       setAnswers((prev) => ({ ...prev, [key]: merged }))
-      autosave.mutate({ questionId, answer: merged })
+      // The capstone is a one-shot: a committed beat may end the story, so await the
+      // server's verdict and lock the scenario when it does. Others autosave freely.
+      const isCapstone = query.data?.questions.find((q) => q.id === questionId)?.category === "capstone"
+      if (isCapstone) {
+        autosave
+          .mutateAsync({ questionId, answer: merged })
+          .then((res) => {
+            if (res.terminated) setTerminated((prev) => new Set(prev).add(questionId))
+          })
+          .catch(() => {})
+      } else {
+        autosave.mutate({ questionId, answer: merged })
+      }
     },
-    [answers, autosave],
+    [answers, autosave, query.data],
   )
 
   if (!token || query.isError) {
@@ -114,14 +142,18 @@ export function ExamPage() {
         <ul className="list-disc space-y-1.5 pl-5 text-sm text-unison-text-secondary">
           <li>You have {Math.round(timeLimitSec / 60)} minutes. The timer is a guide, not a cutoff.</li>
           <li>Your answers save as you go, so a refresh won't lose progress.</li>
-          <li>You can only take this once.</li>
+          <li>
+            <strong className="font-semibold text-unison-text">You can only take this once.</strong>
+          </li>
         </ul>
+        <p className="text-sm text-unison-text-secondary">Good luck!</p>
         <button
           type="button"
           className={examButtonPrimary}
           onClick={() => {
             setEndAt(Date.now() + timeLimitSec * 1000)
             setPhase("questions")
+            begin.mutate()
           }}
         >
           Begin
@@ -165,7 +197,7 @@ export function ExamPage() {
   const isLast = index === total - 1
 
   return (
-    <div className="mx-auto max-w-2xl space-y-6">
+    <div className="mx-auto max-w-4xl space-y-6">
       <div className="flex items-center justify-between">
         <span className="font-mono text-xs tabular-nums text-unison-text-muted">
           Question {index + 1} of {total}
@@ -179,6 +211,8 @@ export function ExamPage() {
             question={question}
             answer={answers[String(question.id)] ?? {}}
             onChange={(part, optionId) => handleChange(question.id, part, optionId)}
+            candidateName={candidate.displayName}
+            terminated={terminated.has(question.id)}
           />
         </div>
       ) : (

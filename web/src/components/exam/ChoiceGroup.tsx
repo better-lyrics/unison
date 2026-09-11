@@ -1,5 +1,6 @@
 import { cn } from "@/lib/cn"
 import type { ChoicePart } from "@/lib/examApi"
+import { IconCheck } from "@tabler/icons-react"
 
 interface ChoiceGroupProps {
   part: ChoicePart
@@ -7,6 +8,9 @@ interface ChoiceGroupProps {
   onChange: (optionId: string) => void
 }
 
+// Selection reads from the card state plus a check, not a visible radio dot (matching
+// the app's VariantList). The radio input stays for keyboard and radiogroup semantics
+// but is visually hidden.
 export function ChoiceGroup({ part, value, onChange }: ChoiceGroupProps) {
   return (
     <fieldset className="space-y-2">
@@ -18,11 +22,11 @@ export function ChoiceGroup({ part, value, onChange }: ChoiceGroupProps) {
             <label
               key={option.id}
               className={cn(
-                "flex cursor-pointer items-start gap-3 rounded-lg px-3 py-2.5 text-sm transition-colors",
+                "flex cursor-pointer items-center justify-between gap-3 rounded-lg border px-3.5 py-3 text-sm transition-colors",
                 "focus-within:outline-none focus-within:ring-2 focus-within:ring-unison-border-strong",
                 selected
-                  ? "bg-unison-bg-hover text-unison-text"
-                  : "bg-white/[0.02] text-unison-text-secondary hover:bg-unison-bg-hover",
+                  ? "border-unison-border bg-unison-bg-hover text-unison-text"
+                  : "border-transparent bg-white/[0.02] text-unison-text-secondary hover:bg-unison-bg-hover",
               )}
             >
               <input
@@ -31,9 +35,14 @@ export function ChoiceGroup({ part, value, onChange }: ChoiceGroupProps) {
                 value={option.id}
                 checked={selected}
                 onChange={() => onChange(option.id)}
-                className="mt-0.5 accent-unison-text outline-none"
+                className="sr-only"
               />
               <span className="leading-relaxed">{option.label}</span>
+              <IconCheck
+                className={cn("size-[18px] flex-none transition-opacity", selected ? "opacity-100" : "opacity-0")}
+                stroke={2.5}
+                aria-hidden
+              />
             </label>
           )
         })}

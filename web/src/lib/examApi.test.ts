@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest"
-import { autosaveAnswer, fetchExamSession, submitExam } from "./examApi"
+import { autosaveAnswer, beginExam, fetchExamSession, submitExam } from "./examApi"
 
 function jsonResponse(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), {
@@ -54,6 +54,33 @@ describe("autosaveAnswer", () => {
   it("throws the error code on failure", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse(409, { code: "EXAM_ALREADY_SUBMITTED" })))
     await expect(autosaveAnswer("tok", 1, {})).rejects.toThrow("EXAM_ALREADY_SUBMITTED")
+  })
+
+  it("reports the one-shot terminated flag from the response", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse(200, { success: true, data: { terminated: true } })))
+    expect(await autosaveAnswer("tok", 9, { queue: "seal" })).toEqual({ terminated: true })
+  })
+
+  it("defaults terminated to false when the server omits it", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse(200, { success: true })))
+    expect(await autosaveAnswer("tok", 1, { verdict: "no" })).toEqual({ terminated: false })
+  })
+})
+
+describe("beginExam", () => {
+  it("posts the token and returns the stamped start time", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(200, { success: true, data: { examStartedAt: 1700 } }))
+    vi.stubGlobal("fetch", fetchMock)
+    const started = await beginExam("tok")
+    const [path, init] = fetchMock.mock.calls[0]
+    expect(path).toBe("/exam/begin")
+    expect(JSON.parse(init.body)).toEqual({ t: "tok" })
+    expect(started).toBe(1700)
+  })
+
+  it("throws the error code on failure", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse(410, { code: "EXAM_TOKEN_EXPIRED" })))
+    await expect(beginExam("tok")).rejects.toThrow("EXAM_TOKEN_EXPIRED")
   })
 })
 

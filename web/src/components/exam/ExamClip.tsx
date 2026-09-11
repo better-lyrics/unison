@@ -4,9 +4,22 @@ import { useYouTubePlayer } from "@/hooks/useYouTubePlayer"
 import { cn } from "@/lib/cn"
 import type { ClipAssets, ExamRendering } from "@/lib/examApi"
 import type { VariantFull } from "@/lib/types"
-import { IconPlayerPlayFilled } from "@tabler/icons-react"
-import { useCallback, useMemo } from "react"
-import { examButtonGhost } from "./exam-ui"
+import { IconPlayerPauseFilled, IconPlayerPlayFilled, IconReload } from "@tabler/icons-react"
+import { useCallback, useEffect, useMemo, useState } from "react"
+import { clampToWindow, reachedWindowEnd, shouldRestart } from "./clip-window"
+import { examButtonPrimary, examButtonSecondary } from "./exam-ui"
+
+// Native controls off: the candidate cannot scrub, fullscreen, or roam the whole
+// video. The only ways to play are the button and a lyric-line click, both bounded.
+const EXAM_PLAYER_VARS: Record<string, number> = {
+  controls: 0,
+  disablekb: 1,
+  fs: 0,
+  modestbranding: 1,
+  rel: 0,
+  playsinline: 1,
+  iv_load_policy: 3,
+}
 
 // braccato renders against a variant; a clip only has raw TTML, so wrap it in the
 // minimal shape the renderer needs.
@@ -30,44 +43,102 @@ function renderingVariant(videoId: string, r: ExamRendering): VariantFull {
 // One video, one or more lyric renderings driven off the same player clock. Two
 // renderings render side by side (A-vs-B); one fills the width.
 export function ExamClip({ clip }: { clip: ClipAssets }) {
-  const { ref, getCurrentTime, getPlaying, seekTo, play } = useYouTubePlayer(clip.source.videoId)
+  const { ref, getCurrentTime, getPlaying, seekTo, play, pause } = useYouTubePlayer(clip.source.videoId, {
+    playerVars: EXAM_PLAYER_VARS,
+  })
   const start = clip.source.start ?? 0
+  const end = clip.source.end
   const variants = useMemo(
     () => clip.renderings.map((r) => ({ r, variant: renderingVariant(clip.source.videoId, r) })),
     [clip],
   )
 
-  const playFromStart = useCallback(() => {
-    seekTo(start)
+  const [playing, setPlaying] = useState(false)
+
+  // Our button is the sole transport (YT's native controls are off): toggle here so a
+  // glitchy iframe never leaves the state ambiguous. Resume in place inside the window,
+  // restart from the top only when the head is outside it.
+  const toggle = useCallback(() => {
+    if (getPlaying()) {
+      pause()
+      setPlaying(false)
+      return
+    }
+    if (shouldRestart(getCurrentTime(), start, end)) seekTo(start)
     play()
-  }, [seekTo, play, start])
+    setPlaying(true)
+  }, [getPlaying, pause, getCurrentTime, seekTo, play, start, end])
 
   const handleLineClick = useCallback(
     (seconds: number) => {
-      seekTo(seconds)
+      seekTo(clampToWindow(seconds, start, end))
       play()
+      setPlaying(true)
     },
-    [seekTo, play],
+    [seekTo, play, start, end],
   )
+
+  const restart = useCallback(() => {
+    seekTo(start)
+    play()
+    setPlaying(true)
+  }, [seekTo, play, start])
+
+  // Keep the button label honest and stop the clip at its window end (so the rest of
+  // the song never plays). Cheap poll: the iframe API exposes no reliable time event.
+  useEffect(() => {
+    const id = setInterval(() => {
+      const isPlaying = getPlaying()
+      if (isPlaying && end !== undefined && reachedWindowEnd(getCurrentTime(), end)) {
+        pause()
+        setPlaying(false)
+      } else {
+        setPlaying(isPlaying)
+      }
+    }, 150)
+    return () => clearInterval(id)
+  }, [end, getPlaying, getCurrentTime, pause])
 
   const sideBySide = variants.length > 1
 
   return (
     <div className="space-y-4">
       <div className="mx-auto w-full max-w-md space-y-3">
-        <YouTubeEmbed playerRef={ref} />
-        <button type="button" onClick={playFromStart} className={examButtonGhost}>
-          <IconPlayerPlayFilled className="size-3.5" />
-          Play clip
-        </button>
+        <div className="relative">
+          <YouTubeEmbed playerRef={ref} />
+          {/* Swallow clicks on the video so play/pause always routes through our
+              transport, never YT's hidden controls. */}
+          <button
+            type="button"
+            onClick={toggle}
+            aria-label={playing ? "Pause clip" : "Play clip"}
+            className="absolute inset-0 cursor-pointer"
+          />
+        </div>
+        <div className="flex gap-2">
+          <button type="button" onClick={toggle} className={cn(examButtonPrimary, "flex-1 gap-2")}>
+            {playing ? <IconPlayerPauseFilled className="size-3.5" /> : <IconPlayerPlayFilled className="size-3.5" />}
+            {playing ? "Pause clip" : "Play clip"}
+          </button>
+          <button
+            type="button"
+            onClick={restart}
+            className={cn(examButtonSecondary, "gap-2")}
+            aria-label="Start clip over"
+          >
+            <IconReload className="size-3.5" />
+            Start over
+          </button>
+        </div>
       </div>
 
       <div className={cn("grid gap-4", sideBySide && "sm:grid-cols-2")}>
         {variants.map(({ r, variant }) => (
-          <div key={r.id} className="space-y-2 rounded-lg bg-white/[0.02] p-3">
-            {r.label ? (
-              <p className="text-[11px] font-semibold uppercase tracking-wide text-unison-text-muted">{r.label}</p>
-            ) : null}
+          <div
+            key={`${clip.source.videoId}:${start}:${r.id}`}
+            className="exam-lyrics space-y-2 rounded-lg bg-white/[0.02] p-3"
+          >
+            {r.label ? <p className="text-xs font-semibold text-unison-text-muted">{r.label}</p> : null}
             <LyricsRenderer
               variant={variant}
               getCurrentTime={getCurrentTime}

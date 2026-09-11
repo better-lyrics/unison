@@ -1,61 +1,30 @@
-import type { ExamClientQuestion, QuestionAnswer, ScenarioStep } from "@/lib/examApi"
+import type { ExamClientQuestion, QuestionAnswer } from "@/lib/examApi"
 import { ChoiceGroup } from "./ChoiceGroup"
+import { DiscordScenario } from "./DiscordScenario"
 import { ExamClip } from "./ExamClip"
 
 interface QuestionViewProps {
   question: ExamClientQuestion
   answer: QuestionAnswer
   onChange: (part: string, optionId: string) => void
+  candidateName?: string
+  terminated?: boolean
 }
 
-const STEP_LABEL: Record<ScenarioStep["kind"], string> = {
-  dm: "Direct message",
-  queue: "Review queue",
-  channel: "#council",
-}
-
-function ScenarioBeat({
-  step,
-  value,
-  onChange,
-}: {
-  step: ScenarioStep
-  value?: string
-  onChange: (optionId: string) => void
-}) {
-  return (
-    <div className="space-y-3 rounded-lg bg-white/[0.02] p-4">
-      <span className="inline-flex items-center rounded-full border border-unison-border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-unison-text-muted">
-        {STEP_LABEL[step.kind]}
-      </span>
-      {step.author ? <p className="text-sm font-semibold text-unison-text">{step.author}</p> : null}
-      {step.text ? <p className="text-sm leading-relaxed text-unison-text-secondary">{step.text}</p> : null}
-      {step.clip ? <ExamClip clip={step.clip} /> : null}
-      <ChoiceGroup
-        part={{ part: step.id, label: "Your reply", options: step.choices }}
-        value={value}
-        onChange={onChange}
-      />
-    </div>
-  )
-}
-
-export function QuestionView({ question, answer, onChange }: QuestionViewProps) {
+export function QuestionView({ question, answer, onChange, candidateName, terminated }: QuestionViewProps) {
   return (
     <div className="space-y-5">
       <h2 className="text-base font-medium leading-snug text-unison-text">{question.prompt}</h2>
 
       {question.type === "scenario" ? (
-        <div className="space-y-4">
-          {(question.steps ?? []).map((step) => (
-            <ScenarioBeat
-              key={step.id}
-              step={step}
-              value={answer[step.id]}
-              onChange={(optionId) => onChange(step.id, optionId)}
-            />
-          ))}
-        </div>
+        <DiscordScenario
+          surfaces={question.steps ?? []}
+          answer={answer}
+          onChange={onChange}
+          candidateName={candidateName}
+          oneShot={question.category === "capstone"}
+          terminated={terminated}
+        />
       ) : (
         <div className="space-y-5">
           {question.assets?.clip ? <ExamClip clip={question.assets.clip} /> : null}
