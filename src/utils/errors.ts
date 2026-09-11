@@ -58,6 +58,7 @@ export const ErrorCode = {
 	EXAM_ALREADY_SUBMITTED: "EXAM_ALREADY_SUBMITTED",
 	EXAM_SESSION_NOT_FOUND: "EXAM_SESSION_NOT_FOUND",
 	EXAM_ANSWER_LOCKED: "EXAM_ANSWER_LOCKED",
+	EXAM_NOT_CONFIGURED: "EXAM_NOT_CONFIGURED",
 } as const
 
 export type ErrorCode = (typeof ErrorCode)[keyof typeof ErrorCode]
@@ -284,6 +285,10 @@ const TEMPLATES: Record<ErrorCode, Template> = {
 	EXAM_ANSWER_LOCKED: {
 		error: "Answer locked",
 		hint: "This choice is final and can't be changed.",
+	},
+	EXAM_NOT_CONFIGURED: {
+		error: "Exam not configured",
+		hint: "The exam link base URL is not set on the server.",
 	},
 }
 

@@ -32,7 +32,7 @@ const KEY = "k".repeat(64)
 const SOON = Math.floor(Date.now() / 1000) + 3600
 const user = { id: 7, key_id: KEY } as unknown as Awaited<ReturnType<typeof getUserByKeyId>>
 
-const botApp = () => examRoutes({} as Env)
+const botApp = () => examRoutes({ EXAM_BASE_URL: "https://unison.test" } as Env)
 const spaApp = (env: Partial<Env> = {}) => examRoutes(env as Env)
 
 function post(app: ReturnType<typeof botApp>, path: string, body: unknown, auth = true) {
@@ -98,9 +98,29 @@ describe("POST /exam/bot/start", () => {
 			data: { status: string; examUrl: string; expiresAt: number }
 		}
 		expect(body.data.status).toBe("eligible")
-		expect(body.data.examUrl).toMatch(/\/exam\?t=[A-Za-z0-9_-]+$/)
+		expect(body.data.examUrl).toMatch(/^https:\/\/unison\.test\/exam\?t=[A-Za-z0-9_-]+$/)
 		expect(typeof body.data.expiresAt).toBe("number")
 		expect(vi.mocked(startSession)).toHaveBeenCalled()
+	})
+
+	it("derives an absolute link from RAILWAY_PUBLIC_DOMAIN when EXAM_BASE_URL is unset", async () => {
+		vi.mocked(isAuthorizedBot).mockReturnValue(true)
+		vi.mocked(getUserByKeyId).mockResolvedValue(user)
+		vi.mocked(examDb.getSessionByKeyId).mockResolvedValue(null)
+		const app = examRoutes({ RAILWAY_PUBLIC_DOMAIN: "unison.up.railway.app" } as Env)
+		const res = await post(app, "/exam/bot/start", { keyId: KEY, discordId: "d1" })
+		const body = (await res.json()) as { data: { examUrl: string } }
+		expect(body.data.examUrl).toMatch(/^https:\/\/unison\.up\.railway\.app\/exam\?t=/)
+	})
+
+	it("returns 500 without minting when no absolute base URL can be derived", async () => {
+		vi.mocked(isAuthorizedBot).mockReturnValue(true)
+		vi.mocked(getUserByKeyId).mockResolvedValue(user)
+		vi.mocked(examDb.getSessionByKeyId).mockResolvedValue(null)
+		const res = await post(examRoutes({} as Env), "/exam/bot/start", { keyId: KEY, discordId: "d1" })
+		expect(res.status).toBe(500)
+		expect(((await res.json()) as { code: string }).code).toBe("EXAM_NOT_CONFIGURED")
+		expect(vi.mocked(startSession)).not.toHaveBeenCalled()
 	})
 
 	it("resumes an in_progress session with a fresh link, without a new draw", async () => {
@@ -407,6 +427,26 @@ describe("POST /exam/submit", () => {
 			expect.anything(),
 			5,
 			expect.objectContaining({ state: "failed" })
+		)
+	})
+
+	it("grades the capstone from the stored answer, ignoring a forged client override", async () => {
+		const capstoneKey: AnswerKey = {
+			parts: [{ id: "queue", points: { reject: 3, seal: -3 }, overSeal: "seal" }],
+		}
+		vi.mocked(examDb.getSessionQuestions).mockResolvedValue([
+			sessionQuestion({
+				questionId: 9,
+				category: "capstone",
+				answerKey: capstoneKey,
+				answer: { queue: "seal" },
+			}),
+		] as never)
+		await post(spaApp(), "/exam/submit", { t: "x", answers: { "9": { queue: "reject" } } }, false)
+		expect(vi.mocked(examDb.recordGrade)).toHaveBeenCalledWith(
+			expect.anything(),
+			5,
+			expect.objectContaining({ state: "failed", score: 0 })
 		)
 	})
 

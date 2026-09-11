@@ -32,8 +32,6 @@ import { Elysia, t } from "elysia"
 
 const DEV_KEY = "d".repeat(64)
 
-// The capstone is a one-shot roleplay: each beat is committed for good (finality),
-// and a wrong beat ends the story server-side so a reload cannot revive it.
 const ONE_SHOT_CATEGORY = "capstone"
 
 function sameAnswer(a: Record<string, string>, b: Record<string, string>): boolean {
@@ -55,12 +53,20 @@ function randomSeed(): number {
 	return Math.floor(Math.random() * 0x100000000)
 }
 
-function examUrl(env: Env, token: string): string {
-	return `${env.EXAM_BASE_URL ?? ""}/exam?t=${token}`
+function isAbsoluteHttpUrl(url: string): boolean {
+	return /^https?:\/\//.test(url)
 }
 
-// Draw a stratified set, mint a single-use token, and open a session. Shared by
-// the real bot start and the dev harness (which only differs by seed + is_dev).
+function examBaseUrl(env: Env): string {
+	if (env.EXAM_BASE_URL) return env.EXAM_BASE_URL
+	if (env.RAILWAY_PUBLIC_DOMAIN) return `https://${env.RAILWAY_PUBLIC_DOMAIN}`
+	return ""
+}
+
+function examUrl(env: Env, token: string): string {
+	return `${examBaseUrl(env)}/exam?t=${token}`
+}
+
 async function mintSession(
 	env: Env,
 	params: {
@@ -122,6 +128,9 @@ export const examRoutes = (env: Env) =>
 			async ({ env, headers, body, status }) => {
 				if (!isAuthorizedBot(headers.authorization, env)) {
 					return status(401, buildError(ErrorCode.AUTH_REQUIRED))
+				}
+				if (!isAbsoluteHttpUrl(examBaseUrl(env))) {
+					return status(500, buildError(ErrorCode.EXAM_NOT_CONFIGURED))
 				}
 				const user = await getUserByKeyId(env, body.keyId)
 				if (!user) return status(404, buildError(ErrorCode.NOT_FOUND))
@@ -289,7 +298,11 @@ export const examRoutes = (env: Env) =>
 				}
 				const session = resolved.session
 				const questions = await getSessionQuestions(env, session.id)
-				const items = toGradeableItems(questions, body.answers)
+				const clientAnswers = { ...body.answers }
+				for (const q of questions) {
+					if (q.category === ONE_SHOT_CATEGORY) delete clientAnswers[String(q.questionId)]
+				}
+				const items = toGradeableItems(questions, clientAnswers)
 				const grade = gradeExam(items, {
 					cutoffPct: config.exam.cutoffPct,
 					overSealPenaltyRatio: config.exam.overSealPenaltyRatio,
@@ -346,8 +359,6 @@ export const examRoutes = (env: Env) =>
 		.get(
 			"/dev/start",
 			async ({ env, query, status }) => {
-				// Dev convenience: open this URL in a browser to land straight in a fresh exam.
-				// `only` restricts the draw to one category (e.g. the scenario) for focused testing.
 				if (!env.EXAM_DEV_ENABLED) return status(404, buildError(ErrorCode.NOT_FOUND))
 				const drawShape: readonly DrawSlot[] = query.only
 					? [{ category: query.only, count: 50 }]

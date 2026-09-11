@@ -98,5 +98,6 @@ export function createEnv(): Env {
 		DISCORD_OAUTH: readDiscordOAuthConfig(),
 		EXAM_DEV_ENABLED: readExamDevEnabled(),
 		EXAM_BASE_URL: process.env.EXAM_BASE_URL || "",
+		RAILWAY_PUBLIC_DOMAIN: process.env.RAILWAY_PUBLIC_DOMAIN || "",
 	}
 }
