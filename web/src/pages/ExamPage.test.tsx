@@ -112,6 +112,7 @@ describe("ExamPage", () => {
 
       expect(await screen.findByText("Council entry exam")).toBeTruthy()
       expect(screen.getByText(/Welcome, Nova/)).toBeTruthy()
+      expect(screen.getByText(/permanent ban/)).toBeTruthy()
 
       fireEvent.click(screen.getByRole("button", { name: "Begin" }))
       expect(screen.getByText("Question 1 of 2")).toBeTruthy()

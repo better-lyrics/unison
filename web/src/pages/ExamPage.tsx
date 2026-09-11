@@ -188,6 +188,10 @@ export function ExamPage() {
           <li>
             <strong className="font-semibold text-unison-text">You can only take this once.</strong>
           </li>
+          <li>
+            <strong className="font-semibold text-unison-text">Don't share the questions.</strong> Leaking exam
+            questions anywhere is an instant, permanent ban.
+          </li>
         </ul>
         <p className="text-sm text-unison-text-secondary">Good luck!</p>
         <button
