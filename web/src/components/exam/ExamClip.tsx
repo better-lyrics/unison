@@ -9,8 +9,7 @@ import { useCallback, useEffect, useMemo, useState } from "react"
 import { clampToWindow, reachedWindowEnd, shouldRestart } from "./clip-window"
 import { examButtonPrimary, examButtonSecondary } from "./exam-ui"
 
-// Native controls off: the candidate cannot scrub, fullscreen, or roam the whole
-// video. The only ways to play are the button and a lyric-line click, both bounded.
+// Native controls off so the candidate cannot scrub or roam the whole video.
 const EXAM_PLAYER_VARS: Record<string, number> = {
   controls: 0,
   disablekb: 1,
@@ -21,8 +20,7 @@ const EXAM_PLAYER_VARS: Record<string, number> = {
   iv_load_policy: 3,
 }
 
-// braccato renders against a variant; a clip only has raw TTML, so wrap it in the
-// minimal shape the renderer needs.
+// braccato renders against a variant; wrap the clip's raw TTML in the minimal shape it needs.
 function renderingVariant(videoId: string, r: ExamRendering): VariantFull {
   return {
     id: -1,
@@ -40,8 +38,7 @@ function renderingVariant(videoId: string, r: ExamRendering): VariantFull {
   }
 }
 
-// One video, one or more lyric renderings driven off the same player clock. Two
-// renderings render side by side (A-vs-B); one fills the width.
+// One video drives one or more renderings off the same clock; two render side by side (A-vs-B).
 export function ExamClip({ clip }: { clip: ClipAssets }) {
   const { ref, getCurrentTime, getPlaying, seekTo, play, pause } = useYouTubePlayer(clip.source.videoId, {
     playerVars: EXAM_PLAYER_VARS,
@@ -55,9 +52,7 @@ export function ExamClip({ clip }: { clip: ClipAssets }) {
 
   const [playing, setPlaying] = useState(false)
 
-  // Our button is the sole transport (YT's native controls are off): toggle here so a
-  // glitchy iframe never leaves the state ambiguous. Resume in place inside the window,
-  // restart from the top only when the head is outside it.
+  // Our button is the sole transport; resume in place inside the window, restart only when outside.
   const toggle = useCallback(() => {
     if (getPlaying()) {
       pause()
@@ -84,8 +79,7 @@ export function ExamClip({ clip }: { clip: ClipAssets }) {
     setPlaying(true)
   }, [seekTo, play, start])
 
-  // Keep the button label honest and stop the clip at its window end (so the rest of
-  // the song never plays). Cheap poll: the iframe API exposes no reliable time event.
+  // Poll because the iframe API has no reliable time event: stop the clip at its window end.
   useEffect(() => {
     const id = setInterval(() => {
       const isPlaying = getPlaying()
@@ -106,8 +100,7 @@ export function ExamClip({ clip }: { clip: ClipAssets }) {
       <div className="mx-auto w-full max-w-md space-y-3">
         <div className="relative">
           <YouTubeEmbed playerRef={ref} />
-          {/* Swallow clicks on the video so play/pause always routes through our
-              transport, never YT's hidden controls. */}
+          {/* Swallow video clicks so play/pause always routes through our transport. */}
           <button
             type="button"
             onClick={toggle}

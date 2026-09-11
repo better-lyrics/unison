@@ -1,6 +1,4 @@
-/* Scoped Discord-client simulation for the exam's scenario questions. The palette
-   lives here rather than the app theme because it belongs to this one simulation.
-   Values track the approved mock at docs/mockups/exam-scenario.html. */
+/* Scoped Discord-client simulation; palette lives here because it belongs to this one sim. */
 
 .ds-root {
   --ds-bg: #313338;
@@ -339,8 +337,7 @@
   opacity: 0.45;
 }
 
-/* Each surface animates in on mount, which is what makes progressive reveal read as
-   a new beat arriving. Already-mounted surfaces do not re-run it. */
+/* Each surface animates in on mount so progressive reveal reads as a new beat arriving. */
 @keyframes ds-enter {
   from {
     opacity: 0;
@@ -374,8 +371,7 @@
   border: 0;
 }
 
-/* One-shot capstone: a final-commit warning, hold-to-confirm choices, and the locked
-   display of an already-committed beat. */
+/* One-shot capstone: final-commit warning, hold-to-confirm choices, locked committed beat. */
 .ds-oneshot-warn {
   margin: 2px 0 12px;
   padding: 10px 14px;

@@ -275,18 +275,11 @@ export const config = {
 
 	exam: {
 		cutoffPct: 0.85,
-		// Over-sealing a merely-good clip is the failure mode being screened out, so
-		// key-flagged over-seal penalties are multiplied by this. > 1 makes a wrong
-		// "seal" cost more than a wrong "reject". The single most important knob.
+		// >1 makes a wrong seal cost more than a wrong reject; over-sealing is what the exam screens out.
 		overSealPenaltyRatio: 2.0,
 		timeLimitSec: 25 * 60,
 		tokenTtlSec: 24 * 60 * 60,
-		// Stratified draw shape, also the presentation order. Each entry names a bank
-		// category (a strata) and how many active questions to draw from it. Question
-		// content, weights, and keys live in the DB bank, never here. Categories double
-		// as the breakdown areas. A category may repeat to control order: the three
-		// single-clip is-exceptional questions are interleaved between the A/B ones so
-		// they never run back to back (repeats draw distinct questions, see drawQuestions).
+		// Draw shape and presentation order; a repeated category interleaves clips (see drawQuestions).
 		draw: [
 			{ category: "seal-or-not", count: 1 },
 			{ category: "is-exceptional", count: 1 },

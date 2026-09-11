@@ -99,9 +99,7 @@ export interface ExamQuestionInput {
 	active?: boolean
 }
 
-// Upsert bank rows by explicit id (the private JSON / admin payload owns ids).
-// Questions are retired with active = false, never deleted, so session foreign
-// keys stay valid.
+// Retire with active = false, never delete, so session foreign keys stay valid.
 export async function upsertQuestions(env: Env, questions: ExamQuestionInput[]): Promise<number> {
 	if (questions.length === 0) return 0
 	await env.DB.transaction(async (tx) => {
@@ -214,9 +212,7 @@ export type ResolveExamResult =
 	| { ok: true; session: ExamSession }
 	| { ok: false; reason: "invalid" | "expired" | "submitted" }
 
-// The exam SPA's only auth. The single-use link stays valid across refreshes
-// while the session is in_progress; the token is consumed by the state flip on
-// submit, not by nulling the hash, so a post-submit reload reads as "submitted".
+// Single-use link stays valid across refreshes while in_progress; submit flips state, not the hash.
 export async function resolveExamSession(env: Env, token: string): Promise<ResolveExamResult> {
 	const session = await getSessionByTokenHash(env, await hashExamToken(token))
 	if (!session) return { ok: false, reason: "invalid" }
@@ -225,8 +221,7 @@ export async function resolveExamSession(env: Env, token: string): Promise<Resol
 	return { ok: true, session }
 }
 
-// Resume: mint a fresh link for an in_progress session without granting a new
-// draw. The prior token stops resolving.
+// Resume: mint a fresh link without granting a new draw; the prior token stops resolving.
 export async function reissueToken(
 	env: Env,
 	sessionId: number,
@@ -305,9 +300,7 @@ export async function getSessionQuestions(env: Env, sessionId: number): Promise<
 	}))
 }
 
-// Retire (active = FALSE) any question absent from the given id set, so removing a
-// question from the bank takes it out of future draws. Existing sessions keep their
-// drawn rows; this flips the flag, never deletes.
+// Flips active = FALSE, never deletes, so drawn rows in existing sessions stay valid.
 export async function retireQuestionsExcept(env: Env, keepIds: number[]): Promise<void> {
 	if (keepIds.length === 0) {
 		await env.DB.prepare("UPDATE exam_question SET active = FALSE WHERE active = TRUE").run()
@@ -321,9 +314,7 @@ export async function retireQuestionsExcept(env: Env, keepIds: number[]): Promis
 		.run()
 }
 
-// The council is Discord-gated, so the exam addresses the candidate by their Discord
-// name (both the welcome and the roleplay @mention read this). Falls back to the
-// Better Lyrics nickname when no link exists (e.g. dev sessions).
+// Prefer the Discord name (council is Discord-gated); fall back to the BL nickname for dev sessions.
 export async function resolveCandidateName(env: Env, keyId: string): Promise<string> {
 	const link = await getByKeyId(env, keyId)
 	return link?.discord_username ?? (await resolveDisplayName(env, keyId))
@@ -361,9 +352,7 @@ export async function getSessionQuestion(
 	}
 }
 
-// Stamp the exam clock on the first Begin and return it. Idempotent: COALESCE keeps
-// the original start, so reopening the link resumes the same countdown instead of
-// resetting it. Only stamps while in_progress.
+// Idempotent via COALESCE so reopening the link resumes the same countdown, never resets it.
 export async function markExamStarted(env: Env, sessionId: number): Promise<number> {
 	const now = Math.floor(Date.now() / 1000)
 	const row = await env.DB.prepare(
@@ -396,8 +385,7 @@ export interface PerQuestionGrade {
 	maxPoints: number
 }
 
-// Persist the grade and consume the token. Flipping state off in_progress is the
-// authority that makes the link single-use and lets a reload read as submitted.
+// Flipping state off in_progress is what makes the link single-use.
 export async function recordGrade(
 	env: Env,
 	sessionId: number,

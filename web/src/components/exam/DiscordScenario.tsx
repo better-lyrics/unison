@@ -4,18 +4,15 @@ import { Fragment } from "react"
 import { HoldToConfirm } from "./HoldToConfirm"
 import "./discord-sim.css"
 
-// Splits message text into its inline runs: the {{candidate}} placeholder, a
-// <@Role> role mention, an @mention, a :shortcode: emoji, or plain text.
+// Splits message text into inline runs: {{candidate}}, <@Role>, @mention, :shortcode:, or plain text.
 const TOKEN = /(\{\{candidate\}\}|<@[\w ]+>|@[\w.]+|:[a-z0-9_]+:)/gi
 
-// Role mentions render in the role's own colour, the way Discord does. Authored as
-// <@RoleName> so they stay distinct from a plain @user mention.
+// Role mentions render in the role's colour; <@RoleName> keeps them distinct from @user.
 const ROLE_COLORS: Record<string, string> = {
   Moderator: "#e2c648",
 }
 
-// Local, first-party emoji served from web/public/emoji. Discord renders custom
-// emoji from a :shortcode:; an unknown one stays literal text, same as Discord.
+// Local emoji from web/public/emoji; an unknown :shortcode: stays literal text, like Discord.
 const EMOJI: Record<string, string> = {
   thumbsupcat: "/emoji/thumbsupcat.png",
   pogfishanimated: "/emoji/pogfishanimated.gif",
@@ -24,9 +21,7 @@ const EMOJI: Record<string, string> = {
   "1984": "/emoji/1984.png",
 }
 
-// Stable keys for statically-derived lists (split runs, lyric lines, a message
-// thread) without leaning on the array index: identical values get a running suffix
-// so duplicates stay distinct.
+// Stable list keys without the array index; identical values get a running suffix.
 function keyer() {
   const seen = new Map<string, number>()
   return (value: string) => {
@@ -338,9 +333,7 @@ function Surface({
   )
 }
 
-// Progressive disclosure: reveal surfaces in order up to the next actionable beat.
-// A terminated one-shot scenario stops there: the next beat is never revealed, so the
-// story ends on the beat the candidate got wrong.
+// Reveal surfaces up to the next actionable beat; a terminated one-shot stops before the next.
 function visibleSurfaces(surfaces: ScenarioSurface[], answer: Record<string, string>, terminated: boolean) {
   const out: ScenarioSurface[] = []
   for (const surface of surfaces) {

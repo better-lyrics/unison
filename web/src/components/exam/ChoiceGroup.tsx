@@ -8,9 +8,7 @@ interface ChoiceGroupProps {
   onChange: (optionId: string) => void
 }
 
-// Selection reads from the card state plus a check, not a visible radio dot (matching
-// the app's VariantList). The radio input stays for keyboard and radiogroup semantics
-// but is visually hidden.
+// Radio input stays for keyboard semantics but is visually hidden; the card shows selection.
 export function ChoiceGroup({ part, value, onChange }: ChoiceGroupProps) {
   return (
     <fieldset className="space-y-2">

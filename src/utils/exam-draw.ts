@@ -19,15 +19,7 @@ function seededShuffle<T>(items: T[], rand: () => number): T[] {
 	return out
 }
 
-// Deterministic, stratified draw. Each slot draws `count` questions from its
-// category pool. The pool is sorted by id first so the result never depends on
-// the order rows came back from the DB, then shuffled with a per-slot seed so
-// two candidates (different `seed`) overlap only partially.
-//
-// A category may appear in more than one slot to control presentation order (e.g.
-// interleaving single-clip questions between A/B ones). Repeated slots draw
-// distinct questions: already-drawn ids are excluded, and the seed folds in the
-// slot position so the repeats do not reshuffle to the same pick.
+// Sort by id before shuffling so the draw is DB-order-independent; repeated slots draw distinct ids.
 export function drawQuestions(
 	bank: DrawableQuestion[],
 	shape: readonly DrawSlot[],

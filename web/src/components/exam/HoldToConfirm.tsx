@@ -1,9 +1,7 @@
 import { cn } from "@/lib/cn"
 import { type CSSProperties, type ReactNode, useEffect, useRef, useState } from "react"
 
-// A press-and-hold control: the action fires only after the pointer (or Space/Enter)
-// is held for `holdMs`. Releasing early cancels. Used for the one-shot capstone so a
-// final choice can never be committed by an accidental tap.
+// Press-and-hold so a final capstone choice can never be committed by an accidental tap.
 export function HoldToConfirm({
   onConfirm,
   className,

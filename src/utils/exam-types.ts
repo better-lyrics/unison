@@ -1,10 +1,6 @@
 export type ExamQuestionType = "timing" | "mcq" | "scenario"
 
-// A scoring part is one decision the candidate makes (a verdict, a reason, one
-// scenario beat). `points` maps each choice id to its raw points, which may be
-// negative. `overSeal` names the choice whose negative points are amplified by
-// the over-seal penalty ratio, so wrongly sealing costs more than wrongly
-// rejecting. All of this is private answer-key data and lives only in the DB.
+// overSeal names the choice whose negative points are amplified so wrongly sealing costs the most.
 export interface AnswerKeyPart {
 	id: string
 	points: Record<string, number>
@@ -15,8 +11,7 @@ export interface AnswerKey {
 	parts: AnswerKeyPart[]
 }
 
-// A candidate answer maps each part id to the chosen choice id. A missing part
-// is unanswered and scores zero (a blank is never an over-seal).
+// A missing part is unanswered and scores zero; a blank is never an over-seal.
 export type AnswerValue = Record<string, string>
 
 export interface GradeableItem {

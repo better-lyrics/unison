@@ -4,9 +4,7 @@ import { IconClock } from "@tabler/icons-react"
 
 const PAD2 = { minimumIntegerDigits: 2 } as const
 
-// mm:ss countdown. Two NumberFlow digits (trend -1 so they roll downward) around a
-// literal colon; under a minute it shifts to the warn colour as a static urgency
-// cue alongside the motion.
+// mm:ss countdown; under a minute it shifts to the warn colour as a static urgency cue.
 export function CountdownTimer({ seconds }: { seconds: number }) {
   const clamped = Math.max(0, seconds)
   const minutes = Math.floor(clamped / 60)

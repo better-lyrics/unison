@@ -9,15 +9,6 @@ import {
 	trimTtmlToWindow,
 } from "@/utils/ttml-timing"
 
-// Builds the private exam bank from a local spec. The spec (song refs, question copy,
-// answer keys) lives only in a gitignored file; this script holds no content. For each
-// timing question it fetches the word-timed TTML for the referenced ISRC, aligns it to
-// the video (per-song offset), picks a judged window, and synthesises the clean and
-// degraded renderings the question needs. Everything else (mcq, scenario) passes through.
-// Output goes to the gitignored scripts/local/exam-bank.json, ready for `pnpm exam:seed`.
-//
-// Usage: pnpm run exam:build [path-to-spec.json] [path-to-output.json]
-
 const STORAGE_BASE = "https://lyrics-storage.binimum.org"
 const UNISON_BASE = "https://unison.boidu.dev"
 
@@ -75,9 +66,7 @@ interface SpecQuestion {
 interface SongRef {
 	videoId: string
 	offset?: number
-	// Where the TTML comes from. Default fetches Apple word-timed TTML from Bini by
-	// ISRC (the song key). "unison" fetches the crowdsourced rendering from the public
-	// Unison API by videoId, so an exam clip can be the exact sync Unison serves.
+	// "unison" = crowdsourced sync from the public API; default = Apple TTML from Bini by ISRC.
 	source?: "bini" | "unison"
 }
 
@@ -161,8 +150,7 @@ async function buildClip(spec: Spec, build: BuildSpec) {
 	const round3 = (n: number) => Math.round(n * 1000) / 1000
 	const s = round3(start)
 	const e = round3(end)
-	// Trim to the judged section on the clean timeline first, so only those lines show
-	// and every rendering carries the same set (degradation only reshapes their timing).
+	// Trim on the clean timeline first so every rendering shows the same lines.
 	const windowed = trimTtmlToWindow(aligned, s, e)
 	const renderings = build.renderings.map((r) => ({
 		id: r.id,

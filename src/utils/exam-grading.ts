@@ -12,8 +12,7 @@ interface GradeOptions {
 	overSealPenaltyRatio: number
 }
 
-// The captured question plus its answer, before grading. A structural superset
-// of the DB SessionQuestion so a row can be passed directly.
+// Structural superset of the DB SessionQuestion so a row can be passed directly.
 interface GradeableSource {
 	questionId: number
 	category: string
@@ -22,8 +21,7 @@ interface GradeableSource {
 	answer: AnswerValue | null
 }
 
-// A freshly submitted answer wins over the autosaved one; an untouched question
-// stays unanswered (scored zero, never an over-seal).
+// A freshly submitted answer wins over the autosaved one; untouched stays unanswered.
 export function toGradeableItems(
 	questions: GradeableSource[],
 	submitted: Record<string, AnswerValue>

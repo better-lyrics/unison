@@ -19,8 +19,7 @@ export interface ExamSource {
   end?: number
 }
 
-// One or more lyric renderings that all sync to the same video clock. A-vs-B
-// tests carry two (played side by side against one video); most carry one.
+// Lyric renderings that share one video clock; A-vs-B carries two, most carry one.
 export interface ExamRendering {
   id: string
   label?: string
@@ -32,17 +31,14 @@ export interface ClipAssets {
   renderings: ExamRendering[]
 }
 
-// A scenario renders as a Discord simulation: a sequence of surfaces (a channel or
-// a DM), each a thread of messages. One surface carries the composer, the reply
-// picker that scores; the others are read-only context (the queue, the DM history).
+// A scenario is a sequence of Discord surfaces; one carries the composer, the rest are context.
 
 export interface ScenarioEmbedField {
   name: string
   value: string
 }
 
-// A static, decorative lyric preview inside a bot embed (a video poster look, not a
-// playable clip). The judged clip, if any, is a full ExamClip elsewhere.
+// A decorative lyric preview inside a bot embed, not a playable clip.
 export interface ScenarioEmbedPreviewLine {
   text: string
   dim?: boolean
@@ -66,16 +62,14 @@ export interface ScenarioMessage {
   embed?: ScenarioEmbed
 }
 
-// "reply" renders Discord reply cards (↵ send); "action" renders a row of Discord
-// action buttons (Seal / Reject). Defaults to "reply".
+// "reply" renders Discord reply cards; "action" renders action buttons. Defaults to "reply".
 export interface ScenarioComposer {
   style?: "reply" | "action"
   label?: string
   choices: ChoiceOption[]
 }
 
-// `id` doubles as the answer part id when the surface has a composer, so it must
-// match the answer-key part id for that beat. Context surfaces omit the composer.
+// id doubles as the answer part id when the surface has a composer; context surfaces omit it.
 export interface ScenarioSurface {
   id: string
   kind: "channel" | "dm"
@@ -95,8 +89,7 @@ export interface ExamClientQuestion {
   steps?: ScenarioSurface[]
 }
 
-// One question's answer maps each part id to the chosen option id; the whole exam
-// maps each question id to its answer.
+// A question's answer maps part id to option id; the exam maps question id to its answer.
 export type QuestionAnswer = Record<string, string>
 export type ExamAnswers = Record<string, QuestionAnswer>
 
@@ -105,13 +98,10 @@ export interface ExamSessionData {
   questions: ExamClientQuestion[]
   timeLimitSec: number
   expiresAt: number
-  // Epoch seconds when the candidate first clicked Begin, or null before then. Drives
-  // resume: a non-null value means the exam is underway, so reopening skips the intro
-  // and continues the same countdown.
+  // Epoch seconds of the first Begin, or null; non-null means the exam is underway (drives resume).
   examStartedAt: number | null
   savedAnswers: ExamAnswers
-  // One-shot scenario (capstone) question ids whose story has ended on a wrong commit.
-  // The client stops revealing further beats for these, and it survives a reload.
+  // Capstone question ids whose story ended on a wrong commit; the client stops revealing beats.
   terminatedQuestionIds: number[]
 }
 
@@ -154,8 +144,7 @@ export async function beginExam(token: string): Promise<number> {
   return envelope.data.examStartedAt
 }
 
-// Returns whether this commit ended a one-shot scenario (a wrong capstone beat). For
-// ordinary questions the server omits the flag, so this is simply false.
+// Returns whether this commit ended a one-shot scenario; the server omits the flag otherwise.
 export async function autosaveAnswer(
   token: string,
   questionId: number,

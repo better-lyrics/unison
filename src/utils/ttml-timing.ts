@@ -1,10 +1,4 @@
-// Time math for the exam bank builder. Apple/Bini TTML carries word-level times as
-// "SS.mmm", "M:SS.mmm", or "H:MM:SS.mmm" (no unit suffix). We shift those times to
-// align a sync to a chosen video (per-song offset) and to synthesise degraded
-// variants (a late/early/drifting sync) for the timing questions. Shifts are done
-// on the raw string via the begin/end attributes so the TTML structure, namespaces,
-// and word spans survive untouched; `dur` is a duration, not a timestamp, so it is
-// left alone.
+// Shifts operate on the raw begin/end strings so TTML structure survives; dur is left alone.
 
 export function parseTtmlTime(value: string): number {
 	const parts = value.trim().split(":")
@@ -31,8 +25,7 @@ export function formatTtmlTime(seconds: number): string {
 
 const TIME_ATTR_RE = /\b(begin|end)="([^"]+)"/g
 
-// Shift every begin/end by a constant. Used to align a sync to its video (offset)
-// and to make a uniformly late (+) or early (-) sync.
+// Shift every begin/end by a constant to align a sync or make it uniformly late/early.
 export function shiftTtml(ttml: string, deltaSeconds: number): string {
 	if (deltaSeconds === 0) return ttml
 	return ttml.replace(TIME_ATTR_RE, (_full, attr: string, value: string) => {
@@ -41,8 +34,7 @@ export function shiftTtml(ttml: string, deltaSeconds: number): string {
 	})
 }
 
-// A sync that starts on the beat but drifts: the offset ramps from 0 at the window
-// start to maxDelta at (and past) the window end. Times before the window are left.
+// Offset ramps from 0 at the window start to maxDelta by the end; times before the window are left.
 export function driftTtml(
 	ttml: string,
 	startSec: number,
@@ -61,9 +53,7 @@ export function driftTtml(
 
 const TEXT_NODE_RE = />([^<]+)</g
 
-// Lowercase every text node, leaving tags and attributes (times, ids) untouched. Used
-// to build a "bad casing" A/B rendering: the record uses sentence case, this one does
-// not, so the candidate compares typographic fidelity, not timing.
+// Lowercase text nodes only (tags and times untouched) for a bad-casing A/B rendering.
 export function lowercaseTtmlText(ttml: string): string {
 	return ttml.replace(TEXT_NODE_RE, (_full, text: string) => `>${text.toLowerCase()}<`)
 }
@@ -71,10 +61,7 @@ export function lowercaseTtmlText(ttml: string): string {
 const DIV_BLOCK_RE = /<div\b[^>]*>[\s\S]*?<\/div>/g
 const P_BLOCK_RE = /<p\b[^>]*>[\s\S]*?<\/p>/g
 
-// Keep only the lines the question judges: drop every <p> outside [start, end] and any
-// <div> left empty. A line overlapping the window is kept whole (its span is part of
-// the section even if it crosses the boundary). Run on the clean aligned TTML before
-// degrading, so every rendering of one clip shows the same lines.
+// Drop <p> outside [start, end] and empty <div>; a line overlapping the window is kept whole.
 export function trimTtmlToWindow(ttml: string, startSec: number, endSec: number): string {
 	return ttml.replace(DIV_BLOCK_RE, (divBlock) => {
 		const open = /^<div\b[^>]*>/.exec(divBlock)?.[0]
@@ -118,8 +105,7 @@ export function listSections(ttml: string): TtmlSection[] {
 	return out
 }
 
-// Pick a judged window: the first preferred song part (a chorus reads best), else the
-// first non-intro section, capped to maxSec so no clip runs long in a timed exam.
+// Prefer the first named song part, else the first non-intro section, capped to maxSec.
 export function pickSectionWindow(
 	ttml: string,
 	opts?: { prefer?: string[]; maxSec?: number }

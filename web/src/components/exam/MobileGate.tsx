@@ -1,15 +1,11 @@
 import { cn } from "@/lib/cn"
 import { type ReactNode, useEffect, useState } from "react"
 
-// The exam needs desktop width: side-by-side A/B clips, video, and hold-to-confirm.
-// Below this the exam is blocked outright with a roast, and it clears live the moment
-// the viewport is wide enough (a rotate or a resized window).
+// The exam needs desktop width; below MIN_WIDTH it is blocked and clears live when wide enough.
 const MIN_WIDTH = 1024
 const QUERY = `(max-width: ${MIN_WIDTH - 1}px)`
 
-// Local gifs served from web/public/gate. Klipy blocks both embedding
-// (X-Frame-Options) and server-side fetch (Cloudflare), so these are self-hosted:
-// download each from its klipy page into web/public/gate with the name below.
+// Self-hosted in web/public/gate because Klipy blocks both embedding and server-side fetch.
 const ROASTS: { gif: string; line: string; big?: boolean }[] = [
   { gif: "/gate/speed-yapping.gif", line: "DESKTOP. NOW.", big: true },
   {
@@ -45,9 +41,7 @@ export function MobileGate({ children }: { children: ReactNode }) {
   // Pick one roast per load; it stays put if the viewport toggles around the threshold.
   const [roast] = useState(() => ROASTS[Math.floor(Math.random() * ROASTS.length)])
   if (!narrow) return <>{children}</>
-  // Full-screen takeover: the gate covers the desktop app chrome (which is not built
-  // for phone widths) and clips any horizontal overflow, so a narrow screen never
-  // scrolls sideways.
+  // Full-screen takeover covers the desktop chrome and clips horizontal overflow.
   return (
     <div className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-6 overflow-x-hidden overflow-y-auto bg-unison-bg px-6 py-10 text-center">
       <img

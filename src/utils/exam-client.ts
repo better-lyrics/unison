@@ -1,9 +1,6 @@
 import type { ExamQuestionType } from "./exam-types"
 
-// The subset of a stored question the client may see. It is intentionally a
-// structural superset of the DB SessionQuestion so a row can be passed directly,
-// but the transform reads only named fields so the private answer key and weight
-// can never ride along.
+// Reads only named fields so the private answer key and weight never ride along to the client.
 export interface ClientQuestionInput {
 	questionId: number
 	type: ExamQuestionType

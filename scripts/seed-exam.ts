@@ -6,14 +6,6 @@ import { type ExamQuestionInput, retireQuestionsExcept, upsertQuestions } from "
 import { D1Compat } from "@/infra/database"
 import type { Env } from "@/types"
 
-// Seeds the private Council exam bank into the database. The bank content lives
-// only in a local, gitignored JSON file (default scripts/local/exam-bank.json) or
-// a path passed as the first argument. Nothing about question content, choices,
-// answer keys, or weights is committed. Rows are upserted by id and retired with
-// active:false, so re-running edits in place and never breaks live sessions.
-//
-// Usage: pnpm run exam:seed [path-to-bank.json]
-
 const TYPES = new Set(["timing", "mcq", "scenario"])
 
 function parseBank(raw: string): ExamQuestionInput[] {

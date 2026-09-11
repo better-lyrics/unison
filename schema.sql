@@ -349,8 +349,7 @@ ALTER TABLE lyrics ADD COLUMN IF NOT EXISTS committee_approved_by INTEGER REFERE
 ALTER TABLE users ADD COLUMN IF NOT EXISTS featured_badges TEXT;
 
 -- ---- council entry exam ----
--- Table structure only. Question content, choices, answer keys, and per-question
--- weights are private and live only in seeded rows, never in this file.
+-- Table structure only; question content and answer keys live only in seeded rows.
 
 CREATE TABLE IF NOT EXISTS exam_question (
     id SERIAL PRIMARY KEY,
@@ -390,12 +389,10 @@ CREATE TABLE IF NOT EXISTS exam_session (
     decided_by_discord_id TEXT
 );
 
--- Set when the candidate clicks Begin (not at mint), so the 25-minute clock and the
--- resume-on-reload both anchor here rather than restarting.
+-- Stamped on first Begin (not at mint) so the clock anchors there and resumes on reload.
 ALTER TABLE exam_session ADD COLUMN IF NOT EXISTS exam_started_at INTEGER;
 
--- One real attempt per account, ever. Dev sessions are exempt so the owner can
--- re-walk the exam. This is the DB backstop for the one-attempt invariant.
+-- DB backstop for one real attempt per account; dev sessions are exempt.
 CREATE UNIQUE INDEX IF NOT EXISTS idx_exam_session_one_per_account
     ON exam_session(key_id) WHERE is_dev = FALSE;
 CREATE UNIQUE INDEX IF NOT EXISTS idx_exam_session_token
