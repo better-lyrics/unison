@@ -117,7 +117,7 @@ describe("ExamPage", () => {
       expect(screen.getByText(/answered 1 of 2/)).toBeTruthy()
 
       fireEvent.click(screen.getByRole("button", { name: "Submit exam" }))
-      expect(await screen.findByText("Submitted")).toBeTruthy()
+      expect(await screen.findByText("Exam submitted")).toBeTruthy()
       expect(submitExam).toHaveBeenCalledWith("tok", { "1": { pick: "a" } })
       // never a numeric score anywhere on the closing screen
       expect(screen.queryByText(/\d+\s*\/\s*\d+/)).toBeNull()
