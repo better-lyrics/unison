@@ -32,7 +32,7 @@ describe("MobileGate", () => {
     expect(container.querySelector("img")).toBeNull()
   })
 
-  it("blocks a narrow viewport with a local gif roast and hides the exam", () => {
+  it("blocks a narrow viewport with a gif roast and hides the exam", () => {
     stubMatchMedia(true)
     const { container } = render(
       <MobileGate>
@@ -41,7 +41,7 @@ describe("MobileGate", () => {
     )
     expect(screen.queryByText("exam content")).toBeNull()
     const gif = container.querySelector("img") as HTMLImageElement | null
-    expect(gif?.getAttribute("src")).toMatch(/^\/gate\/.+\.gif$/)
+    expect(gif?.getAttribute("src")).toMatch(/^https:\/\/cdn\.betterlyrics\.org\/.+\.gif$/)
     expect(screen.getByText(/needs a desktop/i)).toBeTruthy()
   })
 })

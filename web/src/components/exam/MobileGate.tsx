@@ -5,19 +5,18 @@ import { type ReactNode, useEffect, useState } from "react"
 const MIN_WIDTH = 1024
 const QUERY = `(max-width: ${MIN_WIDTH - 1}px)`
 
-// Self-hosted in web/public/gate because Klipy blocks both embedding and server-side fetch.
 const ROASTS: { gif: string; line: string; big?: boolean }[] = [
-  { gif: "/gate/speed-yapping.gif", line: "DESKTOP. NOW.", big: true },
+  { gif: "https://cdn.betterlyrics.org/speed.gif", line: "DESKTOP. NOW.", big: true },
   {
-    gif: "/gate/flight-laughing.gif",
+    gif: "https://cdn.betterlyrics.org/flight.gif",
     line: "get your broke ass off the phone and start this from your desktop",
   },
   {
-    gif: "/gate/obama-clear.gif",
+    gif: "https://cdn.betterlyrics.org/obamna.gif",
     line: "this Council will not review lyrics from a phone. Come back with a real computer, and we'll get to work.",
   },
   {
-    gif: "/gate/walter-white.gif",
+    gif: "https://cdn.betterlyrics.org/waltuh.gif",
     line: "You clearly don't know who you're talking to. This Council does not read lyrics off a cell phone. Come back with a real computer, or we are done.",
   },
 ]
