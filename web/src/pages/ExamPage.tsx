@@ -23,7 +23,7 @@ const ERROR_COPY: Record<string, { title: string; hint: string }> = {
   },
   EXAM_ALREADY_SUBMITTED: {
     title: "You've already submitted this exam",
-    hint: "Council admins review from here. You'll hear back in Discord.",
+    hint: "The Council takes it from here, and if you're in, you'll hear back in Discord.",
   },
   REQUEST_FAILED: {
     title: "Something went wrong",
