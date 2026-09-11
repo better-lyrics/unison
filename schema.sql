@@ -383,11 +383,16 @@ CREATE TABLE IF NOT EXISTS exam_session (
     seed BIGINT NOT NULL,
     is_dev BOOLEAN NOT NULL DEFAULT FALSE,
     started_at INTEGER NOT NULL DEFAULT (EXTRACT(EPOCH FROM NOW())::INTEGER),
+    exam_started_at INTEGER,
     expires_at INTEGER NOT NULL,
     submitted_at INTEGER,
     decided_at INTEGER,
     decided_by_discord_id TEXT
 );
+
+-- Set when the candidate clicks Begin (not at mint), so the 25-minute clock and the
+-- resume-on-reload both anchor here rather than restarting.
+ALTER TABLE exam_session ADD COLUMN IF NOT EXISTS exam_started_at INTEGER;
 
 -- One real attempt per account, ever. Dev sessions are exempt so the owner can
 -- re-walk the exam. This is the DB backstop for the one-attempt invariant.

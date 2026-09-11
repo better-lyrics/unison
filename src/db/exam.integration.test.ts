@@ -4,7 +4,7 @@ import type { Env } from "@/types"
 import { hashExamToken } from "@/utils/exam-token"
 import type { AnswerKey } from "@/utils/exam-types"
 import pg from "pg"
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest"
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest"
 import {
 	type ExamQuestionInput,
 	getSessionByKeyId,
@@ -12,9 +12,12 @@ import {
 	getSessionQuestions,
 	listApplicants,
 	loadDrawableBank,
+	markExamStarted,
 	recordDecision,
 	recordGrade,
+	resolveCandidateName,
 	resolveExamSession,
+	retireQuestionsExcept,
 	saveAnswer,
 	startSession,
 	upsertQuestions,
@@ -27,7 +30,9 @@ const describeIntegration = shouldRun ? describe : describe.skip
 
 const KEY = (c: string) => c.repeat(64)
 const SOON = Math.floor(Date.now() / 1000) + 3600
-const verdictKey: AnswerKey = { parts: [{ id: "verdict", points: { no: 3, seal: -1 }, overSeal: "seal" }] }
+const verdictKey: AnswerKey = {
+	parts: [{ id: "verdict", points: { no: 3, seal: -1 }, overSeal: "seal" }],
+}
 
 function question(id: number, category: string, weight = 1): ExamQuestionInput {
 	return { id, type: "timing", category, prompt: `q${id}`, answerKey: verdictKey, weight }
@@ -72,6 +77,15 @@ describeIntegration("exam data access (integration)", () => {
 		expect(bank.map((q) => q.id).sort((a, b) => a - b)).toEqual([1, 2, 3])
 	})
 
+	it("retires questions absent from the bank so removing one drops it from draws", async () => {
+		await seedBank()
+		await retireQuestionsExcept(env, [1, 3])
+		const bank = await loadDrawableBank(env)
+		expect(bank.map((q) => q.id).sort((a, b) => a - b)).toEqual([1, 3])
+		const rows = await pool.query("SELECT active FROM exam_question WHERE id = 2")
+		expect(rows.rows[0].active).toBe(false)
+	})
+
 	it("re-upserts by id (idempotent), keeping one row and applying edits", async () => {
 		await upsertQuestions(env, [question(1, "seal-or-not")])
 		await upsertQuestions(env, [{ ...question(1, "a-vs-b", 5) }])
@@ -85,7 +99,14 @@ describeIntegration("exam data access (integration)", () => {
 		await seedBank()
 		const session = await startSession(
 			env,
-			{ keyId: KEY("a"), discordId: "d1", tokenHash: "hash-a", seed: 42, expiresAt: SOON, isDev: false },
+			{
+				keyId: KEY("a"),
+				discordId: "d1",
+				tokenHash: "hash-a",
+				seed: 42,
+				expiresAt: SOON,
+				isDev: false,
+			},
 			[3, 1, 2]
 		)
 		expect(session.state).toBe("in_progress")
@@ -97,6 +118,25 @@ describeIntegration("exam data access (integration)", () => {
 		expect(questions.map((q) => q.questionId)).toEqual([3, 1, 2])
 		expect(questions[0].position).toBe(0)
 		expect(questions[0].answer).toBeNull()
+	})
+
+	it("stamps the exam clock once and keeps it stable across reopens", async () => {
+		await seedBank()
+		const session = await startSession(
+			env,
+			{ keyId: KEY("a"), discordId: null, tokenHash: "h", seed: 1, expiresAt: SOON, isDev: false },
+			[1]
+		)
+		expect((await getSessionByKeyId(env, KEY("a")))?.examStartedAt).toBeNull()
+
+		const first = await markExamStarted(env, session.id)
+		expect(first).toBeGreaterThan(0)
+		expect((await getSessionByKeyId(env, KEY("a")))?.examStartedAt).toBe(first)
+
+		// A second Begin (a reopen) must not reset the clock.
+		await new Promise((r) => setTimeout(r, 1100))
+		const second = await markExamStarted(env, session.id)
+		expect(second).toBe(first)
 	})
 
 	it("persists an autosaved answer", async () => {
@@ -116,7 +156,14 @@ describeIntegration("exam data access (integration)", () => {
 		const token = "raw-token-value"
 		const session = await startSession(
 			env,
-			{ keyId: KEY("a"), discordId: null, tokenHash: await hashExamToken(token), seed: 1, expiresAt: SOON, isDev: false },
+			{
+				keyId: KEY("a"),
+				discordId: null,
+				tokenHash: await hashExamToken(token),
+				seed: 1,
+				expiresAt: SOON,
+				isDev: false,
+			},
 			[1, 2]
 		)
 		expect((await resolveExamSession(env, token)).ok).toBe(true)
@@ -220,6 +267,29 @@ describeIntegration("exam data access (integration)", () => {
 		expect(stored?.decidedByDiscordId).toBe("admin1")
 	})
 
+	describe("resolveCandidateName", () => {
+		afterEach(async () => {
+			await pool.query("DELETE FROM discord_links")
+			await pool.query("DELETE FROM users")
+		})
+
+		it("prefers the Discord username over the Better Lyrics nickname", async () => {
+			const key = KEY("c")
+			await pool.query("INSERT INTO users (key_id, nickname) VALUES ($1, $2)", [key, "BLName"])
+			await pool.query(
+				"INSERT INTO discord_links (discord_id, key_id, discord_username) VALUES ($1, $2, $3)",
+				["disc-c", key, "discord_name"]
+			)
+			expect(await resolveCandidateName(env, key)).toBe("discord_name")
+		})
+
+		it("falls back to the Better Lyrics nickname when there is no Discord link", async () => {
+			const key = KEY("d")
+			await pool.query("INSERT INTO users (key_id, nickname) VALUES ($1, $2)", [key, "BLName"])
+			expect(await resolveCandidateName(env, key)).toBe("BLName")
+		})
+	})
+
 	describe("resolveExamSession", () => {
 		it("reports an unknown token as invalid", async () => {
 			expect(await resolveExamSession(env, "nope")).toEqual({ ok: false, reason: "invalid" })
@@ -230,7 +300,14 @@ describeIntegration("exam data access (integration)", () => {
 			const token = "expired-token"
 			await startSession(
 				env,
-				{ keyId: KEY("a"), discordId: null, tokenHash: await hashExamToken(token), seed: 1, expiresAt: 100, isDev: false },
+				{
+					keyId: KEY("a"),
+					discordId: null,
+					tokenHash: await hashExamToken(token),
+					seed: 1,
+					expiresAt: 100,
+					isDev: false,
+				},
 				[1]
 			)
 			expect(await resolveExamSession(env, token)).toEqual({ ok: false, reason: "expired" })
@@ -242,13 +319,27 @@ describeIntegration("exam data access (integration)", () => {
 			await seedBank()
 			await startSession(
 				env,
-				{ keyId: KEY("a"), discordId: null, tokenHash: "h1", seed: 1, expiresAt: SOON, isDev: false },
+				{
+					keyId: KEY("a"),
+					discordId: null,
+					tokenHash: "h1",
+					seed: 1,
+					expiresAt: SOON,
+					isDev: false,
+				},
 				[1]
 			)
 			await expect(
 				startSession(
 					env,
-					{ keyId: KEY("a"), discordId: null, tokenHash: "h2", seed: 2, expiresAt: SOON, isDev: false },
+					{
+						keyId: KEY("a"),
+						discordId: null,
+						tokenHash: "h2",
+						seed: 2,
+						expiresAt: SOON,
+						isDev: false,
+					},
 					[2]
 				)
 			).rejects.toThrow()
@@ -258,13 +349,27 @@ describeIntegration("exam data access (integration)", () => {
 			await seedBank()
 			await startSession(
 				env,
-				{ keyId: KEY("z"), discordId: null, tokenHash: null, seed: 1, expiresAt: SOON, isDev: true },
+				{
+					keyId: KEY("z"),
+					discordId: null,
+					tokenHash: null,
+					seed: 1,
+					expiresAt: SOON,
+					isDev: true,
+				},
 				[1]
 			)
 			await expect(
 				startSession(
 					env,
-					{ keyId: KEY("z"), discordId: null, tokenHash: null, seed: 2, expiresAt: SOON, isDev: true },
+					{
+						keyId: KEY("z"),
+						discordId: null,
+						tokenHash: null,
+						seed: 2,
+						expiresAt: SOON,
+						isDev: true,
+					},
 					[2]
 				)
 			).resolves.toBeDefined()

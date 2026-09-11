@@ -57,6 +57,7 @@ export const ErrorCode = {
 	EXAM_TOKEN_EXPIRED: "EXAM_TOKEN_EXPIRED",
 	EXAM_ALREADY_SUBMITTED: "EXAM_ALREADY_SUBMITTED",
 	EXAM_SESSION_NOT_FOUND: "EXAM_SESSION_NOT_FOUND",
+	EXAM_ANSWER_LOCKED: "EXAM_ANSWER_LOCKED",
 } as const
 
 export type ErrorCode = (typeof ErrorCode)[keyof typeof ErrorCode]
@@ -279,6 +280,10 @@ const TEMPLATES: Record<ErrorCode, Template> = {
 	EXAM_SESSION_NOT_FOUND: {
 		error: "Exam session not found",
 		hint: "Couldn't find that exam session.",
+	},
+	EXAM_ANSWER_LOCKED: {
+		error: "Answer locked",
+		hint: "This choice is final and can't be changed.",
 	},
 }
 

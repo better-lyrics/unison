@@ -1,18 +1,14 @@
 import type { Env } from "@/types"
 import { hashExamToken } from "@/utils/exam-token"
 import type { AnswerKey, AnswerValue, ExamQuestionType } from "@/utils/exam-types"
+import { getByKeyId } from "./discordLinks"
 import { resolveDisplayName } from "./users"
 
 function parseJsonb<T>(value: unknown): T {
 	return typeof value === "string" ? (JSON.parse(value) as T) : (value as T)
 }
 
-export type ExamSessionState =
-	| "in_progress"
-	| "pending_review"
-	| "failed"
-	| "approved"
-	| "rejected"
+export type ExamSessionState = "in_progress" | "pending_review" | "failed" | "approved" | "rejected"
 
 export interface ExamSession {
 	id: number
@@ -26,6 +22,7 @@ export interface ExamSession {
 	seed: number
 	isDev: boolean
 	startedAt: number
+	examStartedAt: number | null
 	expiresAt: number
 	submittedAt: number | null
 	decidedAt: number | null
@@ -44,6 +41,7 @@ interface ExamSessionRow {
 	seed: number | string
 	is_dev: boolean
 	started_at: number | string
+	exam_started_at: number | string | null
 	expires_at: number | string
 	submitted_at: number | string | null
 	decided_at: number | string | null
@@ -63,6 +61,7 @@ function toSession(row: ExamSessionRow): ExamSession {
 		seed: Number(row.seed),
 		isDev: row.is_dev,
 		startedAt: Number(row.started_at),
+		examStartedAt: row.exam_started_at === null ? null : Number(row.exam_started_at),
 		expiresAt: Number(row.expires_at),
 		submittedAt: row.submitted_at === null ? null : Number(row.submitted_at),
 		decidedAt: row.decided_at === null ? null : Number(row.decided_at),
@@ -71,7 +70,7 @@ function toSession(row: ExamSessionRow): ExamSession {
 }
 
 const SESSION_COLS =
-	"id, key_id, discord_id, state, token_hash, score, max_score, cutoff, seed, is_dev, started_at, expires_at, submitted_at, decided_at, decided_by_discord_id"
+	"id, key_id, discord_id, state, token_hash, score, max_score, cutoff, seed, is_dev, started_at, exam_started_at, expires_at, submitted_at, decided_at, decided_by_discord_id"
 
 // ---- bank ----
 
@@ -81,9 +80,7 @@ export interface DrawableBankQuestion {
 }
 
 export async function loadDrawableBank(env: Env): Promise<DrawableBankQuestion[]> {
-	const res = await env.DB.prepare(
-		"SELECT id, category FROM exam_question WHERE active = TRUE"
-	)
+	const res = await env.DB.prepare("SELECT id, category FROM exam_question WHERE active = TRUE")
 		.bind()
 		.all<{ id: number | string; category: string }>()
 	return res.results.map((r) => ({ id: Number(r.id), category: r.category }))
@@ -105,10 +102,7 @@ export interface ExamQuestionInput {
 // Upsert bank rows by explicit id (the private JSON / admin payload owns ids).
 // Questions are retired with active = false, never deleted, so session foreign
 // keys stay valid.
-export async function upsertQuestions(
-	env: Env,
-	questions: ExamQuestionInput[]
-): Promise<number> {
+export async function upsertQuestions(env: Env, questions: ExamQuestionInput[]): Promise<number> {
 	if (questions.length === 0) return 0
 	await env.DB.transaction(async (tx) => {
 		for (const q of questions) {
@@ -210,9 +204,7 @@ export async function getSessionByTokenHash(
 	env: Env,
 	tokenHash: string
 ): Promise<ExamSession | null> {
-	const row = await env.DB.prepare(
-		`SELECT ${SESSION_COLS} FROM exam_session WHERE token_hash = ?`
-	)
+	const row = await env.DB.prepare(`SELECT ${SESSION_COLS} FROM exam_session WHERE token_hash = ?`)
 		.bind(tokenHash)
 		.first<ExamSessionRow>()
 	return row ? toSession(row) : null
@@ -285,10 +277,7 @@ interface SessionQuestionRow {
 	max_points: number | null
 }
 
-export async function getSessionQuestions(
-	env: Env,
-	sessionId: number
-): Promise<SessionQuestion[]> {
+export async function getSessionQuestions(env: Env, sessionId: number): Promise<SessionQuestion[]> {
 	const res = await env.DB.prepare(
 		`SELECT sq.question_id, sq.position, sq.answer, sq.awarded_points, sq.max_points,
 			q.type, q.category, q.prompt, q.assets, q.choices, q.answer_key, q.weight, q.steps
@@ -314,6 +303,78 @@ export async function getSessionQuestions(
 		awardedPoints: r.awarded_points === null ? null : Number(r.awarded_points),
 		maxPoints: r.max_points === null ? null : Number(r.max_points),
 	}))
+}
+
+// Retire (active = FALSE) any question absent from the given id set, so removing a
+// question from the bank takes it out of future draws. Existing sessions keep their
+// drawn rows; this flips the flag, never deletes.
+export async function retireQuestionsExcept(env: Env, keepIds: number[]): Promise<void> {
+	if (keepIds.length === 0) {
+		await env.DB.prepare("UPDATE exam_question SET active = FALSE WHERE active = TRUE").run()
+		return
+	}
+	const placeholders = keepIds.map(() => "?").join(", ")
+	await env.DB.prepare(
+		`UPDATE exam_question SET active = FALSE WHERE active = TRUE AND id NOT IN (${placeholders})`
+	)
+		.bind(...keepIds)
+		.run()
+}
+
+// The council is Discord-gated, so the exam addresses the candidate by their Discord
+// name (both the welcome and the roleplay @mention read this). Falls back to the
+// Better Lyrics nickname when no link exists (e.g. dev sessions).
+export async function resolveCandidateName(env: Env, keyId: string): Promise<string> {
+	const link = await getByKeyId(env, keyId)
+	return link?.discord_username ?? (await resolveDisplayName(env, keyId))
+}
+
+export async function getSessionQuestion(
+	env: Env,
+	sessionId: number,
+	questionId: number
+): Promise<SessionQuestion | null> {
+	const r = await env.DB.prepare(
+		`SELECT sq.question_id, sq.position, sq.answer, sq.awarded_points, sq.max_points,
+			q.type, q.category, q.prompt, q.assets, q.choices, q.answer_key, q.weight, q.steps
+		FROM exam_session_question sq
+		JOIN exam_question q ON q.id = sq.question_id
+		WHERE sq.session_id = ? AND sq.question_id = ?`
+	)
+		.bind(sessionId, questionId)
+		.first<SessionQuestionRow>()
+	if (!r) return null
+	return {
+		questionId: Number(r.question_id),
+		position: Number(r.position),
+		type: r.type,
+		category: r.category,
+		prompt: r.prompt,
+		assets: r.assets == null ? null : parseJsonb(r.assets),
+		choices: r.choices == null ? null : parseJsonb(r.choices),
+		answerKey: parseJsonb<AnswerKey>(r.answer_key),
+		weight: Number(r.weight),
+		steps: r.steps == null ? null : parseJsonb(r.steps),
+		answer: r.answer == null ? null : parseJsonb<AnswerValue>(r.answer),
+		awardedPoints: r.awarded_points === null ? null : Number(r.awarded_points),
+		maxPoints: r.max_points === null ? null : Number(r.max_points),
+	}
+}
+
+// Stamp the exam clock on the first Begin and return it. Idempotent: COALESCE keeps
+// the original start, so reopening the link resumes the same countdown instead of
+// resetting it. Only stamps while in_progress.
+export async function markExamStarted(env: Env, sessionId: number): Promise<number> {
+	const now = Math.floor(Date.now() / 1000)
+	const row = await env.DB.prepare(
+		`UPDATE exam_session
+		SET exam_started_at = COALESCE(exam_started_at, ?)
+		WHERE id = ? AND state = 'in_progress'
+		RETURNING exam_started_at`
+	)
+		.bind(now, sessionId)
+		.first<{ exam_started_at: number | string }>()
+	return row ? Number(row.exam_started_at) : now
 }
 
 export async function saveAnswer(
@@ -364,7 +425,14 @@ export async function recordGrade(
 				SET state = ?, score = ?, max_score = ?, cutoff = ?, submitted_at = ?
 				WHERE id = ?`
 			)
-			.bind(params.state, params.score, params.maxScore, params.cutoff, params.submittedAt, sessionId)
+			.bind(
+				params.state,
+				params.score,
+				params.maxScore,
+				params.cutoff,
+				params.submittedAt,
+				sessionId
+			)
 			.run()
 	})
 }
@@ -390,10 +458,7 @@ export interface Applicant {
 	state: ExamSessionState
 }
 
-export async function listApplicants(
-	env: Env,
-	includeBelowCutoff: boolean
-): Promise<Applicant[]> {
+export async function listApplicants(env: Env, includeBelowCutoff: boolean): Promise<Applicant[]> {
 	const states = includeBelowCutoff ? ["pending_review", "failed"] : ["pending_review"]
 	const res = await env.DB.prepare(
 		`SELECT ${SESSION_COLS} FROM exam_session WHERE state = ANY(?) ORDER BY score DESC NULLS LAST`
@@ -440,7 +505,12 @@ async function loadBreakdowns(
 		GROUP BY sq.session_id, q.category`
 	)
 		.bind(sessionIds)
-		.all<{ session_id: number | string; category: string; score: number | string; max: number | string }>()
+		.all<{
+			session_id: number | string
+			category: string
+			score: number | string
+			max: number | string
+		}>()
 	const map = new Map<number, ApplicantArea[]>()
 	for (const r of res.results) {
 		const id = Number(r.session_id)

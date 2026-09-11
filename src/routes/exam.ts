@@ -4,29 +4,43 @@ import {
 	type ResolveExamResult,
 	getSessionById,
 	getSessionByKeyId,
+	getSessionQuestion,
 	getSessionQuestions,
 	listApplicants,
 	loadDrawableBank,
+	markExamStarted,
 	recordDecision,
 	recordGrade,
 	reissueToken,
+	resolveCandidateName,
 	resolveExamSession,
 	saveAnswer,
 	startSession,
 	upsertQuestions,
 } from "@/db/exam"
-import { getUserByKeyId, resolveDisplayName } from "@/db/users"
+import { getUserByKeyId } from "@/db/users"
 import type { Env } from "@/types"
 import { isAuthorizedAdmin } from "@/utils/admin-auth"
 import { isAuthorizedBot } from "@/utils/bot-auth"
 import { toClientQuestion } from "@/utils/exam-client"
-import { drawQuestions } from "@/utils/exam-draw"
+import { type DrawSlot, drawQuestions } from "@/utils/exam-draw"
 import { gradeExam, toGradeableItems } from "@/utils/exam-grading"
+import { isScenarioTerminated } from "@/utils/exam-scenario"
 import { generateExamToken, hashExamToken } from "@/utils/exam-token"
 import { ErrorCode, buildError } from "@/utils/errors"
 import { Elysia, t } from "elysia"
 
 const DEV_KEY = "d".repeat(64)
+
+// The capstone is a one-shot roleplay: each beat is committed for good (finality),
+// and a wrong beat ends the story server-side so a reload cannot revive it.
+const ONE_SHOT_CATEGORY = "capstone"
+
+function sameAnswer(a: Record<string, string>, b: Record<string, string>): boolean {
+	const ak = Object.keys(a)
+	const bk = Object.keys(b)
+	return ak.length === bk.length && ak.every((k) => a[k] === b[k])
+}
 
 const RESOLVE_ERROR: Record<
 	Extract<ResolveExamResult, { ok: false }>["reason"],
@@ -49,10 +63,16 @@ function examUrl(env: Env, token: string): string {
 // the real bot start and the dev harness (which only differs by seed + is_dev).
 async function mintSession(
 	env: Env,
-	params: { keyId: string; discordId: string | null; seed: number; isDev: boolean }
+	params: {
+		keyId: string
+		discordId: string | null
+		seed: number
+		isDev: boolean
+		drawShape?: readonly DrawSlot[]
+	}
 ) {
 	const bank = await loadDrawableBank(env)
-	const orderedIds = drawQuestions(bank, config.exam.draw, params.seed)
+	const orderedIds = drawQuestions(bank, params.drawShape ?? config.exam.draw, params.seed)
 	const token = generateExamToken()
 	const tokenHash = await hashExamToken(token)
 	const expiresAt = Math.floor(Date.now() / 1000) + config.exam.tokenTtlSec
@@ -186,21 +206,40 @@ export const examRoutes = (env: Env) =>
 				const session = resolved.session
 				const questions = await getSessionQuestions(env, session.id)
 				const savedAnswers: Record<number, unknown> = {}
+				const terminatedQuestionIds: number[] = []
 				for (const q of questions) {
 					if (q.answer !== null) savedAnswers[q.questionId] = q.answer
+					if (q.category === ONE_SHOT_CATEGORY && isScenarioTerminated(q.answerKey, q.answer)) {
+						terminatedQuestionIds.push(q.questionId)
+					}
 				}
 				return {
 					success: true,
 					data: {
-						candidate: { displayName: await resolveDisplayName(env, session.keyId) },
+						candidate: { displayName: await resolveCandidateName(env, session.keyId) },
 						questions: questions.map(toClientQuestion),
 						timeLimitSec: config.exam.timeLimitSec,
 						expiresAt: session.expiresAt,
+						examStartedAt: session.examStartedAt,
 						savedAnswers,
+						terminatedQuestionIds,
 					},
 				}
 			},
 			{ query: t.Object({ t: t.Optional(t.String()) }) }
+		)
+		.post(
+			"/begin",
+			async ({ env, body, status }) => {
+				const resolved = await resolveExamSession(env, body.t)
+				if (!resolved.ok) {
+					const mapped = RESOLVE_ERROR[resolved.reason]
+					return status(mapped.status, buildError(mapped.code))
+				}
+				const examStartedAt = await markExamStarted(env, resolved.session.id)
+				return { success: true, data: { examStartedAt } }
+			},
+			{ body: t.Object({ t: t.String() }) }
 		)
 		.post(
 			"/answer",
@@ -209,6 +248,25 @@ export const examRoutes = (env: Env) =>
 				if (!resolved.ok) {
 					const mapped = RESOLVE_ERROR[resolved.reason]
 					return status(mapped.status, buildError(mapped.code))
+				}
+				const question = await getSessionQuestion(env, resolved.session.id, body.questionId)
+				if (question?.category === ONE_SHOT_CATEGORY) {
+					const stored = (question.answer as Record<string, string> | null) ?? {}
+					// Finality: a committed beat can never be changed or dropped.
+					for (const [beat, choice] of Object.entries(stored)) {
+						if (body.answer[beat] !== choice) {
+							return status(409, buildError(ErrorCode.EXAM_ANSWER_LOCKED))
+						}
+					}
+					// Once a wrong beat has ended the story, no further beats may be committed.
+					if (isScenarioTerminated(question.answerKey, stored) && !sameAnswer(body.answer, stored)) {
+						return status(409, buildError(ErrorCode.EXAM_ANSWER_LOCKED))
+					}
+					await saveAnswer(env, resolved.session.id, body.questionId, body.answer)
+					return {
+						success: true,
+						data: { terminated: isScenarioTerminated(question.answerKey, body.answer) },
+					}
 				}
 				await saveAnswer(env, resolved.session.id, body.questionId, body.answer)
 				return { success: true }
@@ -284,6 +342,27 @@ export const examRoutes = (env: Env) =>
 				}
 			},
 			{ body: t.Object({ keyId: t.Optional(t.String()), seed: t.Optional(t.Number()) }) }
+		)
+		.get(
+			"/dev/start",
+			async ({ env, query, status }) => {
+				// Dev convenience: open this URL in a browser to land straight in a fresh exam.
+				// `only` restricts the draw to one category (e.g. the scenario) for focused testing.
+				if (!env.EXAM_DEV_ENABLED) return status(404, buildError(ErrorCode.NOT_FOUND))
+				const drawShape: readonly DrawSlot[] = query.only
+					? [{ category: query.only, count: 50 }]
+					: config.exam.draw
+				const seed = query.seed ? Number(query.seed) : 1
+				const { token } = await mintSession(env, {
+					keyId: DEV_KEY,
+					discordId: null,
+					seed: Number.isFinite(seed) ? seed : 1,
+					isDev: true,
+					drawShape,
+				})
+				return new Response(null, { status: 302, headers: { location: examUrl(env, token) } })
+			},
+			{ query: t.Object({ only: t.Optional(t.String()), seed: t.Optional(t.String()) }) }
 		)
 		.get(
 			"/dev/result",

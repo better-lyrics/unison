@@ -13,12 +13,15 @@ vi.mock("@/db/users", () => ({ getUserByKeyId: vi.fn(), resolveDisplayName: vi.f
 vi.mock("@/db/exam", () => ({
 	getSessionByKeyId: vi.fn(),
 	getSessionById: vi.fn(),
+	getSessionQuestion: vi.fn(),
 	getSessionQuestions: vi.fn(),
 	listApplicants: vi.fn(),
 	loadDrawableBank: vi.fn(),
+	markExamStarted: vi.fn(),
 	recordDecision: vi.fn(),
 	recordGrade: vi.fn(),
 	reissueToken: vi.fn(),
+	resolveCandidateName: vi.fn(),
 	resolveExamSession: vi.fn(),
 	saveAnswer: vi.fn(),
 	startSession: vi.fn(),
@@ -54,7 +57,13 @@ function get(app: ReturnType<typeof botApp>, path: string, auth = true) {
 	)
 }
 
-const okSession = { id: 5, keyId: KEY, expiresAt: SOON, state: "in_progress" as const }
+const okSession = {
+	id: 5,
+	keyId: KEY,
+	expiresAt: SOON,
+	examStartedAt: null,
+	state: "in_progress" as const,
+}
 const { startSession, loadDrawableBank } = examDb
 
 beforeEach(() => {
@@ -62,6 +71,7 @@ beforeEach(() => {
 	vi.mocked(startSession).mockResolvedValue({ id: 9 } as never)
 	vi.mocked(loadDrawableBank).mockResolvedValue([])
 	vi.mocked(resolveDisplayName).mockResolvedValue("Tester")
+	vi.mocked(examDb.resolveCandidateName).mockResolvedValue("test_candidate")
 })
 
 describe("POST /exam/bot/start", () => {
@@ -84,7 +94,9 @@ describe("POST /exam/bot/start", () => {
 		vi.mocked(getUserByKeyId).mockResolvedValue(user)
 		vi.mocked(examDb.getSessionByKeyId).mockResolvedValue(null)
 		const res = await post(botApp(), "/exam/bot/start", { keyId: KEY, discordId: "d1" })
-		const body = (await res.json()) as { data: { status: string; examUrl: string; expiresAt: number } }
+		const body = (await res.json()) as {
+			data: { status: string; examUrl: string; expiresAt: number }
+		}
 		expect(body.data.status).toBe("eligible")
 		expect(body.data.examUrl).toMatch(/\/exam\?t=[A-Za-z0-9_-]+$/)
 		expect(typeof body.data.expiresAt).toBe("number")
@@ -131,7 +143,10 @@ describe("GET /exam/bot/applicants", () => {
 		vi.mocked(examDb.listApplicants).mockResolvedValue([{ applicantId: 1 }] as never)
 		const res = await get(botApp(), "/exam/bot/applicants?includeBelowCutoff=true")
 		expect(vi.mocked(examDb.listApplicants)).toHaveBeenCalledWith(expect.anything(), true)
-		expect((await res.json()) as unknown).toEqual({ success: true, data: { applicants: [{ applicantId: 1 }] } })
+		expect((await res.json()) as unknown).toEqual({
+			success: true,
+			data: { applicants: [{ applicantId: 1 }] },
+		})
 	})
 })
 
@@ -220,7 +235,10 @@ describe("GET /exam/session", () => {
 	})
 
 	it("returns key-free questions, saved answers, and the candidate name", async () => {
-		vi.mocked(examDb.resolveExamSession).mockResolvedValue({ ok: true, session: okSession as never })
+		vi.mocked(examDb.resolveExamSession).mockResolvedValue({
+			ok: true,
+			session: okSession as never,
+		})
 		vi.mocked(examDb.getSessionQuestions).mockResolvedValue([
 			sessionQuestion(),
 			sessionQuestion({ questionId: 2, position: 1, answer: { verdict: "no" } }),
@@ -238,19 +256,63 @@ describe("GET /exam/session", () => {
 				timeLimitSec: number
 			}
 		}
-		expect(body.data.candidate.displayName).toBe("Tester")
+		expect(body.data.candidate.displayName).toBe("test_candidate")
 		expect(body.data.questions.map((q) => q.id)).toEqual([1, 2])
 		expect(body.data.savedAnswers).toEqual({ "2": { verdict: "no" } })
 		expect(body.data.timeLimitSec).toBeGreaterThan(0)
+	})
+
+	it("surfaces examStartedAt so the client can resume the countdown", async () => {
+		vi.mocked(examDb.resolveExamSession).mockResolvedValue({
+			ok: true,
+			session: { ...okSession, examStartedAt: 1700 } as never,
+		})
+		vi.mocked(examDb.getSessionQuestions).mockResolvedValue([sessionQuestion()] as never)
+		const res = await get(spaApp(), "/exam/session?t=x", false)
+		const body = (await res.json()) as { data: { examStartedAt: number | null } }
+		expect(body.data.examStartedAt).toBe(1700)
+	})
+})
+
+describe("POST /exam/begin", () => {
+	it("stamps the exam clock and returns it for a valid token", async () => {
+		vi.mocked(examDb.resolveExamSession).mockResolvedValue({
+			ok: true,
+			session: okSession as never,
+		})
+		vi.mocked(examDb.markExamStarted).mockResolvedValue(1700)
+		const res = await post(spaApp(), "/exam/begin", { t: "x" }, false)
+		expect(res.status).toBe(200)
+		expect(vi.mocked(examDb.markExamStarted)).toHaveBeenCalledWith(expect.anything(), 5)
+		expect(((await res.json()) as { data: { examStartedAt: number } }).data.examStartedAt).toBe(
+			1700
+		)
+	})
+
+	it("rejects an invalid token without stamping", async () => {
+		vi.mocked(examDb.resolveExamSession).mockResolvedValue({ ok: false, reason: "invalid" })
+		const res = await post(spaApp(), "/exam/begin", { t: "x" }, false)
+		expect(res.status).toBe(401)
+		expect(vi.mocked(examDb.markExamStarted)).not.toHaveBeenCalled()
 	})
 })
 
 describe("POST /exam/answer", () => {
 	it("autosaves an answer for a valid token", async () => {
-		vi.mocked(examDb.resolveExamSession).mockResolvedValue({ ok: true, session: okSession as never })
-		const res = await post(spaApp(), "/exam/answer", { t: "x", questionId: 1, answer: { verdict: "no" } }, false)
+		vi.mocked(examDb.resolveExamSession).mockResolvedValue({
+			ok: true,
+			session: okSession as never,
+		})
+		const res = await post(
+			spaApp(),
+			"/exam/answer",
+			{ t: "x", questionId: 1, answer: { verdict: "no" } },
+			false
+		)
 		expect(res.status).toBe(200)
-		expect(vi.mocked(examDb.saveAnswer)).toHaveBeenCalledWith(expect.anything(), 5, 1, { verdict: "no" })
+		expect(vi.mocked(examDb.saveAnswer)).toHaveBeenCalledWith(expect.anything(), 5, 1, {
+			verdict: "no",
+		})
 	})
 
 	it("rejects an invalid token", async () => {
@@ -259,11 +321,66 @@ describe("POST /exam/answer", () => {
 		expect(res.status).toBe(401)
 		expect(vi.mocked(examDb.saveAnswer)).not.toHaveBeenCalled()
 	})
+
+	describe("one-shot capstone", () => {
+		const capstoneKey: AnswerKey = {
+			parts: [
+				{ id: "queue", points: { reject: 3, seal: -3 }, overSeal: "seal" },
+				{ id: "dm", points: { hold: 3, cave: -3, rude: -1 }, overSeal: "cave" },
+			],
+		}
+		function capstone(answer: Record<string, string> | null) {
+			return { category: "capstone", answerKey: capstoneKey, answer } as never
+		}
+		function commit(answer: Record<string, string>) {
+			vi.mocked(examDb.resolveExamSession).mockResolvedValue({ ok: true, session: okSession as never })
+			return post(spaApp(), "/exam/answer", { t: "x", questionId: 9, answer }, false)
+		}
+
+		it("commits a correct beat and reports the story is not over", async () => {
+			vi.mocked(examDb.getSessionQuestion).mockResolvedValue(capstone({}))
+			const res = await commit({ queue: "reject" })
+			expect(res.status).toBe(200)
+			expect(((await res.json()) as { data: { terminated: boolean } }).data.terminated).toBe(false)
+			expect(vi.mocked(examDb.saveAnswer)).toHaveBeenCalledWith(expect.anything(), 5, 9, { queue: "reject" })
+		})
+
+		it("commits a wrong beat and reports the story terminated", async () => {
+			vi.mocked(examDb.getSessionQuestion).mockResolvedValue(capstone({ queue: "reject" }))
+			const res = await commit({ queue: "reject", dm: "cave" })
+			expect(res.status).toBe(200)
+			expect(((await res.json()) as { data: { terminated: boolean } }).data.terminated).toBe(true)
+		})
+
+		it("rejects changing an already-committed beat", async () => {
+			vi.mocked(examDb.getSessionQuestion).mockResolvedValue(capstone({ queue: "reject" }))
+			const res = await commit({ queue: "seal" })
+			expect(res.status).toBe(409)
+			expect(((await res.json()) as { code: string }).code).toBe("EXAM_ANSWER_LOCKED")
+			expect(vi.mocked(examDb.saveAnswer)).not.toHaveBeenCalled()
+		})
+
+		it("rejects a new commit once the story has terminated", async () => {
+			vi.mocked(examDb.getSessionQuestion).mockResolvedValue(capstone({ queue: "reject", dm: "cave" }))
+			const res = await commit({ queue: "reject", dm: "cave", council: "hold" })
+			expect(res.status).toBe(409)
+			expect(vi.mocked(examDb.saveAnswer)).not.toHaveBeenCalled()
+		})
+
+		it("is idempotent: re-sending the same terminated answer is accepted", async () => {
+			vi.mocked(examDb.getSessionQuestion).mockResolvedValue(capstone({ queue: "reject", dm: "cave" }))
+			const res = await commit({ queue: "reject", dm: "cave" })
+			expect(res.status).toBe(200)
+		})
+	})
 })
 
 describe("POST /exam/submit", () => {
 	beforeEach(() => {
-		vi.mocked(examDb.resolveExamSession).mockResolvedValue({ ok: true, session: okSession as never })
+		vi.mocked(examDb.resolveExamSession).mockResolvedValue({
+			ok: true,
+			session: okSession as never,
+		})
 	})
 
 	it("grades a passing exam to pending_review and never reveals the score", async () => {
@@ -331,18 +448,59 @@ describe("dev routes", () => {
 	it("404 when the dev flag is off", async () => {
 		const start = await post(spaApp({ EXAM_DEV_ENABLED: false }), "/exam/dev/start", {}, false)
 		expect(start.status).toBe(404)
-		const result = await get(spaApp({ EXAM_DEV_ENABLED: false }), "/exam/dev/result?sessionId=1", false)
+		const result = await get(
+			spaApp({ EXAM_DEV_ENABLED: false }),
+			"/exam/dev/result?sessionId=1",
+			false
+		)
 		expect(result.status).toBe(404)
 	})
 
 	it("mints a dev session with a token when the flag is on", async () => {
 		vi.mocked(startSession).mockResolvedValue({ id: 42 } as never)
-		const res = await post(spaApp({ EXAM_DEV_ENABLED: true }), "/exam/dev/start", { seed: 3 }, false)
+		const res = await post(
+			spaApp({ EXAM_DEV_ENABLED: true }),
+			"/exam/dev/start",
+			{ seed: 3 },
+			false
+		)
 		expect(res.status).toBe(200)
-		const body = (await res.json()) as { data: { sessionId: number; token: string; examUrl: string } }
+		const body = (await res.json()) as {
+			data: { sessionId: number; token: string; examUrl: string }
+		}
 		expect(body.data.sessionId).toBe(42)
 		expect(body.data.token).toMatch(/^[A-Za-z0-9_-]+$/)
 		expect(body.data.examUrl).toContain("?t=")
+	})
+
+	it("GET /dev/start 404s when the dev flag is off", async () => {
+		const res = await get(spaApp({ EXAM_DEV_ENABLED: false }), "/exam/dev/start", false)
+		expect(res.status).toBe(404)
+	})
+
+	it("GET /dev/start redirects into the exam when the flag is on", async () => {
+		const res = await get(spaApp({ EXAM_DEV_ENABLED: true }), "/exam/dev/start", false)
+		expect(res.status).toBe(302)
+		expect(res.headers.get("location")).toContain("/exam?t=")
+	})
+
+	it("GET /dev/start?only draws just that category", async () => {
+		vi.mocked(loadDrawableBank).mockResolvedValue([
+			{ id: 1, category: "capstone" },
+			{ id: 2, category: "seal-or-not" },
+		] as never)
+		let captured: number[] = []
+		vi.mocked(startSession).mockImplementation((_env, _s, ids) => {
+			captured = ids as number[]
+			return Promise.resolve({ id: 9 } as never)
+		})
+		const res = await get(
+			spaApp({ EXAM_DEV_ENABLED: true }),
+			"/exam/dev/start?only=capstone",
+			false
+		)
+		expect(res.status).toBe(302)
+		expect(captured).toEqual([1])
 	})
 
 	it("exposes the graded result including the hidden score", async () => {
