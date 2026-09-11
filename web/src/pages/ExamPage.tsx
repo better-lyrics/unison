@@ -127,7 +127,7 @@ export function ExamPage() {
     return (
       <div className={cn(panelClass, "mx-auto max-w-2xl space-y-4 p-8 text-center")}>
         <img
-          src="/impressed.gif"
+          src="https://cdn.betterlyrics.org/impressed.gif"
           alt=""
           className="mx-auto w-48 rounded-lg outline outline-1 -outline-offset-1 outline-white/10"
         />
