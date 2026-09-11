@@ -6,7 +6,6 @@ import { examButtonPrimary, examButtonSecondary } from "@/components/exam/exam-u
 import { panelClass } from "@/components/ui"
 import { cn } from "@/lib/cn"
 import { type ExamAnswers, autosaveAnswer, beginExam, fetchExamSession, submitExam } from "@/lib/examApi"
-import { IconCircleCheckFilled } from "@tabler/icons-react"
 import { useMutation, useQuery } from "@tanstack/react-query"
 import { useCallback, useEffect, useRef, useState } from "react"
 import { useSearchParams } from "react-router-dom"
@@ -131,11 +130,15 @@ export function ExamPage() {
   if (phase === "submitted") {
     return (
       <div className={cn(panelClass, "mx-auto max-w-2xl space-y-4 p-8 text-center")}>
-        <IconCircleCheckFilled className="mx-auto size-12 text-unison-text" />
+        <img
+          src="/impressed.gif"
+          alt=""
+          className="mx-auto w-48 rounded-lg outline outline-1 -outline-offset-1 outline-white/10"
+        />
         <h1 className="text-lg font-semibold text-unison-text">Exam submitted</h1>
         <p className="mx-auto max-w-md text-sm leading-relaxed text-unison-text-secondary">
-          Nice work, {candidate.displayName}. That's the whole thing. The Council takes it from here and you'll hear
-          back in Discord. You can close this tab.
+          Nice work, {candidate.displayName}! That's the whole thing. The Council takes it from here, and if you're
+          in, you'll hear back in Discord. You can close this tab.
         </p>
       </div>
     )
