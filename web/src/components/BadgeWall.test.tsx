@@ -1,6 +1,6 @@
+import type { BadgeCatalogue, BadgeDef, UserGamification } from "@/lib/types"
 import { cleanup, fireEvent, render, screen } from "@testing-library/react"
 import { afterEach, describe, expect, it } from "vitest"
-import type { BadgeCatalogue, BadgeDef, UserGamification } from "@/lib/types"
 import { BadgeModalProvider } from "./BadgeModalContext"
 import { BadgeWall } from "./BadgeWall"
 
@@ -11,7 +11,11 @@ function def(key: string, category: string, extra: Partial<BadgeDef> = {}): Badg
     description: `${key} desc`,
     category,
     kind: "medal",
-    image: { color: `/badge-art/${key}.svg`, mono: `/badge-art/${key}_mono.svg` },
+    image: {
+      color: `/badge-art/${key}.svg`,
+      mono: `/badge-art/${key}_mono.svg`,
+      silhouette: `/badge-art/${key}_silhouette.svg`,
+    },
     ...extra,
   }
 }

@@ -1,12 +1,13 @@
+import { toHandle } from "./handle"
 import type {
   BadgeCatalogue,
   BadgeDef,
   BadgeImage,
   BadgeTier,
   CuratorLeaderboardEntry,
-  LeaderboardBadge,
   CuratorsLeaderboardResponse,
   ExpertiseEntry,
+  LeaderboardBadge,
   SongsLeaderboardResponse,
   TierName,
   UserBadge,
@@ -15,7 +16,6 @@ import type {
   UserSubmission,
   UserSubmissionsResponse,
 } from "./types"
-import { toHandle } from "./handle"
 
 const SEEDED_NOW = Math.floor(Date.now() / 1000)
 
@@ -313,6 +313,7 @@ function badgeImage(key: string): BadgeImage {
   return {
     color: `/badge-art/${key}.svg`,
     mono: `/badge-art/${key}_mono.svg`,
+    silhouette: `/badge-art/${key}_silhouette.svg`,
   }
 }
 
@@ -323,6 +324,7 @@ function badgeTiers(key: string, thresholds: number[]): BadgeTier[] {
     image: {
       color: `/badge-art/${key}_${i + 1}.svg`,
       mono: `/badge-art/${key}_mono.svg`,
+      silhouette: `/badge-art/${key}_silhouette.svg`,
     },
   }))
 }

@@ -1,8 +1,8 @@
-import { IconX } from "@tabler/icons-react"
-import { type ReactNode, useEffect, useRef } from "react"
 import { resolveBadgeImage } from "@/lib/badge-view"
 import { cn } from "@/lib/cn"
 import type { BadgeDef, UserBadge } from "@/lib/types"
+import { IconX } from "@tabler/icons-react"
+import { type ReactNode, useEffect, useRef } from "react"
 
 export interface BadgeModalSelection {
   def: BadgeDef
@@ -132,6 +132,7 @@ export function BadgeModal({ selection, closing, onRequestClose, onExited }: Bad
   const earned = userBadge?.earned ?? false
   const tier = userBadge?.tier
   const src = resolveBadgeImage(def, tier, earned ? "color" : "mono")
+  const silhouette = resolveBadgeImage(def, tier, "silhouette")
   const currentTier = earned ? (tier ?? def.tiers?.length ?? 0) : 0
   const metric = metricNode(selection)
 
@@ -186,7 +187,7 @@ export function BadgeModal({ selection, closing, onRequestClose, onExited }: Bad
         aria-modal="true"
         aria-label={def.name}
         className={cn(
-          "bm-card relative w-[380px] max-w-full overflow-hidden rounded-[20px] bg-[#1f2023] shadow-[inset_0_0_0_1px_var(--color-unison-border-strong),0_24px_60px_rgba(0,0,0,0.5)]",
+          "bm-card relative w-[380px] max-w-full overflow-hidden rounded-[20px] bg-black shadow-[inset_0_0_0_1px_var(--color-unison-border-strong),0_24px_60px_rgba(0,0,0,0.5)]",
           closing && "bm-closing",
         )}
       >
@@ -211,6 +212,13 @@ export function BadgeModal({ selection, closing, onRequestClose, onExited }: Bad
                 "absolute top-1/2 left-1/2 size-[92px] -translate-x-1/2 -translate-y-1/2 scale-125 blur-[24px]",
                 earned ? "opacity-50" : "opacity-[0.28]",
               )}
+            />
+            <img
+              src={silhouette}
+              alt=""
+              aria-hidden="true"
+              draggable={false}
+              className="absolute top-1/2 left-1/2 size-[104px] -translate-x-1/2 -translate-y-1/2 select-none"
             />
             <img
               src={src}

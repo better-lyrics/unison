@@ -25,6 +25,7 @@
     "dump:dry-run": "tsx scripts/dump-dry-run.ts",
     "exam:build": "tsx scripts/build-exam-bank.ts",
     "exam:seed": "tsx scripts/seed-exam.ts",
+    "badges:silhouettes": "python3 scripts/gen-badge-silhouettes.py",
     "web:dev": "pnpm -C web dev",
     "web:build": "pnpm -C web build",
     "web:typecheck": "pnpm -C web typecheck",

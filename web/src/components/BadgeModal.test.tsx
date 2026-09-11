@@ -1,6 +1,6 @@
+import type { BadgeDef } from "@/lib/types"
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react"
 import { afterEach, describe, expect, it, vi } from "vitest"
-import type { BadgeDef } from "@/lib/types"
 import { BadgeModal, type BadgeModalSelection } from "./BadgeModal"
 
 function def(key: string, extra: Partial<BadgeDef> = {}): BadgeDef {
@@ -10,7 +10,11 @@ function def(key: string, extra: Partial<BadgeDef> = {}): BadgeDef {
     description: `${key} description`,
     category: "acclaim",
     kind: "medal",
-    image: { color: `/badge-art/${key}.svg`, mono: `/badge-art/${key}_mono.svg` },
+    image: {
+      color: `/badge-art/${key}.svg`,
+      mono: `/badge-art/${key}_mono.svg`,
+      silhouette: `/badge-art/${key}_silhouette.svg`,
+    },
     ...extra,
   }
 }

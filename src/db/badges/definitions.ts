@@ -13,6 +13,7 @@ export type BadgeKind = "title" | "medal" | "special"
 export interface BadgeImage {
 	color: string
 	mono: string
+	silhouette: string
 }
 
 export interface BadgeTier {
@@ -38,6 +39,7 @@ function image(key: string): BadgeImage {
 	return {
 		color: `/badges/${key}/image.svg?variant=color`,
 		mono: `/badges/${key}/image.svg?variant=mono`,
+		silhouette: `/badges/${key}/image.svg?variant=silhouette`,
 	}
 }
 
@@ -48,6 +50,7 @@ function tiers(key: string, thresholds: number[]): BadgeTier[] {
 		image: {
 			color: `/badges/${key}/image.svg?variant=color&tier=${i + 1}`,
 			mono: `/badges/${key}/image.svg?variant=mono`,
+			silhouette: `/badges/${key}/image.svg?variant=silhouette`,
 		},
 	}))
 }

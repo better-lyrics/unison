@@ -11,6 +11,7 @@ import { Elysia, t } from "elysia"
 const ASSETS_DIR = fileURLToPath(new URL("../../assets/badges/", import.meta.url))
 
 function resolveImageFilename(def: BadgeDef, variant?: string, tier?: string): string {
+	if (variant === "silhouette") return `${def.key}_silhouette.svg`
 	if (variant === "mono") return `${def.key}_mono.svg`
 	if (!def.tiers) return `${def.key}.svg`
 	const parsed = Number.parseInt(tier ?? "", 10)
