@@ -208,7 +208,12 @@ describe("LyricsPage", () => {
     fetchVariants.mockResolvedValue({ variants: [makeSummary({ id: 1 })] })
     fetchVariant.mockResolvedValue({ variant: makeFull({ id: 1, lyrics: "to copy" }) })
     const writeText = vi.fn().mockResolvedValue(undefined)
-    vi.stubGlobal("navigator", { ...navigator, clipboard: { writeText } })
+    vi.stubGlobal("navigator", {
+      ...navigator,
+      userAgent: navigator.userAgent ?? "",
+      platform: navigator.platform ?? "",
+      clipboard: { writeText },
+    })
     renderAt(["/song/v1"])
     await waitFor(() => expect(screen.getByTestId("lyrics-renderer")).toBeTruthy())
     fireEvent.click(screen.getByRole("button", { name: /raw/i }))
@@ -222,7 +227,12 @@ describe("LyricsPage", () => {
       fetchVariants.mockResolvedValue({ variants: [makeSummary({ id: 1 })] })
       fetchVariant.mockResolvedValue({ variant: makeFull({ id: 1, lyrics: "ok" }) })
       const writeText = vi.fn().mockResolvedValue(undefined)
-      vi.stubGlobal("navigator", { ...navigator, clipboard: { writeText } })
+      vi.stubGlobal("navigator", {
+        ...navigator,
+        userAgent: navigator.userAgent ?? "",
+        platform: navigator.platform ?? "",
+        clipboard: { writeText },
+      })
       renderAt(["/song/v1"])
       await waitFor(() => expect(screen.getByTestId("lyrics-renderer")).toBeTruthy())
       fireEvent.click(screen.getByRole("button", { name: /raw/i }))
@@ -247,7 +257,12 @@ describe("LyricsPage", () => {
       fetchVariants.mockResolvedValue({ variants: [makeSummary({ id: 1 })] })
       fetchVariant.mockResolvedValue({ variant: makeFull({ id: 1, lyrics: "ok" }) })
       const writeText = vi.fn().mockRejectedValue(new DOMException("denied", "NotAllowedError"))
-      vi.stubGlobal("navigator", { ...navigator, clipboard: { writeText } })
+      vi.stubGlobal("navigator", {
+        ...navigator,
+        userAgent: navigator.userAgent ?? "",
+        platform: navigator.platform ?? "",
+        clipboard: { writeText },
+      })
       renderAt(["/song/v1"])
       await waitFor(() => expect(screen.getByTestId("lyrics-renderer")).toBeTruthy())
       fireEvent.click(screen.getByRole("button", { name: /raw/i }))
@@ -305,7 +320,12 @@ describe("LyricsPage", () => {
     fetchVariants.mockResolvedValue({ variants: [makeSummary({ id: 1 })] })
     fetchVariant.mockResolvedValue({ variant: makeFull({ id: 1, lyrics: "sync copy" }) })
     const writeText = vi.fn().mockResolvedValue(undefined)
-    vi.stubGlobal("navigator", { ...navigator, clipboard: { writeText } })
+    vi.stubGlobal("navigator", {
+      ...navigator,
+      userAgent: navigator.userAgent ?? "",
+      platform: navigator.platform ?? "",
+      clipboard: { writeText },
+    })
     renderAt(["/song/v1"])
     await waitFor(() => expect(screen.getByTestId("lyrics-renderer")).toBeTruthy())
     fireEvent.click(screen.getAllByRole("button", { name: /copy lyrics body to clipboard/i })[0])

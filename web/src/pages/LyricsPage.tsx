@@ -1,4 +1,3 @@
-import { IconBrandYoutube } from "@tabler/icons-react"
 import { useQuery } from "@tanstack/react-query"
 import { useCallback, useMemo, useState } from "react"
 import { useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom"
@@ -12,6 +11,7 @@ import { VariantList } from "@/components/VariantList"
 import { VariantMetadata } from "@/components/VariantMetadata"
 import { VoteControls } from "@/components/VoteControls"
 import { YouTubeEmbed } from "@/components/YouTubeEmbed"
+import { YouTubeMusicIcon } from "@/components/icons/YouTubeMusicIcon"
 import { useYouTubePlayer } from "@/hooks/useYouTubePlayer"
 import { cn } from "@/lib/cn"
 import { fetchLyricsVariant, fetchLyricsVariants } from "@/lib/api"
@@ -128,9 +128,9 @@ export function LyricsPage() {
             href={`https://music.youtube.com/watch?v=${safeVideoId}`}
             target="_blank"
             rel="noopener noreferrer"
-            className="flex items-center justify-center gap-2 rounded-md border border-unison-border bg-unison-bg-elevated py-2 pr-4 pl-3 text-xs text-unison-text-secondary transition-colors hover:border-unison-border-strong hover:bg-unison-bg-hover hover:text-unison-text"
+            className="flex items-center justify-center gap-2 rounded-[10px] bg-white/[0.08] px-4 py-3 text-[13px] font-semibold text-unison-text shadow-[0_1px_2px_rgba(0,0,0,0.4),inset_0_1px_0_0_rgba(255,255,255,0.07)] transition-colors hover:bg-white/[0.12] active:translate-y-px"
           >
-            <IconBrandYoutube className="size-4" stroke={1.75} />
+            <YouTubeMusicIcon className="size-[18px]" />
             Open on YouTube Music
           </a>
           {variant ? <VariantMetadata variant={variant} /> : null}

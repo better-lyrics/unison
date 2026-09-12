@@ -1,94 +1,219 @@
 import { Link } from "react-router-dom"
+import { useBadgeCatalogueOptional } from "@/components/BadgeCatalogueContext"
+import { TierChip } from "@/components/TierChip"
+import { Tooltip } from "@/components/Tooltip"
+import { useArtwork, youtubeThumbnailFallbackUrl, youtubeThumbnailUrl } from "@/lib/artwork"
+import { dicebearThumbsDataUri } from "@/lib/avatar"
+import { resolveBadgeImage } from "@/lib/badge-view"
+import { cn } from "@/lib/cn"
 import type { Mark, VariantFull } from "@/lib/types"
 
-interface VariantMetadataProps {
-  variant: VariantFull
+const SYNC_TIP: Record<string, string> = {
+  richsync: "Word-by-word synced lyrics that highlight as the song plays.",
+  linesync: "Line-by-line synced lyrics.",
+  plain: "Plain text with no timing.",
+}
+const FORMAT_TIP: Record<string, string> = {
+  ttml: "TTML: rich timed-text lyrics format.",
+  lrc: "LRC: standard timed-lyrics format.",
+  plain: "Plain text, no timing.",
+}
+const CONFIDENCE_TIP = (c: string) =>
+  `Confidence ${c}: how sure we are this is the best version, from vote volume and rater agreement.`
+const SCORE_TIP =
+  "Ranking score, weighted by each voter's reputation. Higher shows first. Raw net votes in parentheses."
+const VOTES_TIP = "How many people have voted on this version."
+const REP_TIP = "Submitter reputation (0 to 2). Trusted users' votes and submissions count for more."
+
+function langName(code: string): string {
+  try {
+    return new Intl.DisplayNames(["en"], { type: "language" }).of(code) ?? code
+  } catch {
+    return code
+  }
 }
 
-function MarkCallout({ mark }: { mark: Mark }) {
+function truncateKey(keyId: string): string {
+  return keyId.length <= 12 ? keyId : `${keyId.slice(0, 8)}…${keyId.slice(-4)}`
+}
+
+function Cover({ variant }: { variant: VariantFull }) {
+  const { data: art } = useArtwork(variant.videoId)
+  const src = art ?? youtubeThumbnailUrl(variant.videoId)
   return (
-    <div className="flex items-center gap-2.5 rounded-lg bg-unison-medal-gold/10 px-3 py-2">
-      <img src={mark.icon} alt="" draggable={false} className="size-7 shrink-0 select-none object-contain" />
-      <div className="min-w-0">
-        <div className="text-[13px] font-semibold leading-tight text-unison-medal-gold">{mark.label}</div>
-        {mark.by ? (
-          <div className="mt-0.5 text-[11px] text-unison-text-muted">
-            by{" "}
-            <Link
-              to={`/curator/${mark.by.keyId}`}
-              className="text-unison-text-secondary underline-offset-2 hover:underline"
-            >
-              {mark.by.displayName}
-            </Link>
-          </div>
-        ) : null}
+    <div className="relative w-full">
+      <img
+        src={src}
+        alt=""
+        onError={(e) => {
+          if (!art) e.currentTarget.src = youtubeThumbnailFallbackUrl(variant.videoId)
+        }}
+        className="block aspect-[3/2] w-full object-cover"
+      />
+      <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,transparent_28%,rgba(19,18,23,0.82)_64%,var(--color-unison-bg-elevated)_100%)]" />
+      <div className="absolute inset-x-4 bottom-3.5">
+        <div className="truncate text-[20px] font-bold leading-tight tracking-[-0.01em] text-unison-text">
+          {variant.song}
+        </div>
+        <div className="mt-0.5 flex min-w-0 items-baseline text-[13px]">
+          <span className="min-w-0 flex-[0_1_auto] truncate text-unison-text-secondary">{variant.artist}</span>
+          {variant.album ? (
+            <>
+              <span className="mx-1.5 shrink-0 text-unison-text-muted">·</span>
+              <span className="min-w-0 flex-[0_1_auto] truncate text-unison-text-muted">{variant.album}</span>
+            </>
+          ) : null}
+        </div>
       </div>
     </div>
   )
 }
 
-interface RowProps {
-  label: string
-  children: React.ReactNode
+function Pill({ tip, gold, children }: { tip: string; gold?: boolean; children: React.ReactNode }) {
+  return (
+    <Tooltip label={tip}>
+      <span
+        className={cn(
+          "inline-flex cursor-default items-center gap-1.5 rounded-full border px-2.5 py-1.5 text-[11px] font-semibold leading-none",
+          gold
+            ? "border-unison-medal-gold/35 bg-unison-medal-gold/10 text-unison-medal-gold"
+            : "border-unison-border bg-white/[0.03] text-unison-text-secondary",
+        )}
+      >
+        {children}
+      </span>
+    </Tooltip>
+  )
 }
 
-function Row({ label, children }: RowProps) {
+function SubmitterRow({ variant }: { variant: VariantFull }) {
+  const s = variant.submitter
+  const catalogue = useBadgeCatalogueOptional()
+  const cat = catalogue?.status === "success" ? catalogue.data : null
+  const badgeImage = (key: string, tier?: number) => {
+    const def = cat?.badges.find((d) => d.key === key)
+    return def ? resolveBadgeImage(def, tier, "color") : null
+  }
+  if (!s) return null
+  const gemSrc = s.tier ? badgeImage(s.tier) : null
+  const topBadgeSrc = s.topBadge ? badgeImage(s.topBadge.key, s.topBadge.tier) : null
+  const extra = s.badgeCount - 1
+
   return (
-    <div className="flex items-baseline gap-3 py-1.5">
-      <dt className="w-24 shrink-0 text-[11px] uppercase tracking-wider text-unison-text-muted">{label}</dt>
-      <dd className="min-w-0 flex-1 text-sm text-unison-text">{children}</dd>
+    <Link to={`/curator/${s.keyId}`} className="flex cursor-pointer flex-col gap-2.5">
+      <div className="flex items-center gap-2.5">
+        <img
+          src={dicebearThumbsDataUri(s.keyId)}
+          alt=""
+          className="size-10 shrink-0 rounded-full border border-unison-border bg-unison-bg-hover"
+        />
+        <div className="min-w-0 flex-1">
+          <div className="truncate text-sm font-semibold text-unison-text">{s.displayName}</div>
+          <div className="truncate font-mono text-[11px] text-unison-text-muted">{truncateKey(s.keyId)}</div>
+        </div>
+        <Tooltip label={REP_TIP}>
+          <span className="shrink-0 rounded-full bg-unison-medal-gold/12 px-2.5 py-1 font-mono text-[11px] font-semibold tabular-nums text-unison-medal-gold">
+            {s.reputation.toFixed(1)}
+          </span>
+        </Tooltip>
+      </div>
+      {s.tier || topBadgeSrc ? (
+        <div className="flex flex-wrap items-center gap-2">
+          {s.tier ? <TierChip tier={s.tier} gemSrc={gemSrc ?? undefined} /> : null}
+          {topBadgeSrc ? (
+            <span className="inline-flex items-center gap-1.5">
+              <img src={topBadgeSrc} alt={s.topBadge?.name ?? ""} className="size-5" />
+              {extra > 0 ? (
+                <span className="font-mono text-[11px] font-semibold text-unison-text-muted">+{extra}</span>
+              ) : null}
+            </span>
+          ) : null}
+        </div>
+      ) : null}
+    </Link>
+  )
+}
+
+function MarkCallout({ mark }: { mark: Mark }) {
+  return (
+    <div className="flex flex-col gap-1">
+      <span className="inline-flex w-fit max-w-full items-center gap-2 rounded-lg bg-white/10 pr-2.5">
+        <img src={mark.icon} alt="" className="size-6 shrink-0 object-contain [transform:scale(1.05)_rotate(-6deg)]" />
+        <span className="text-xs font-medium leading-tight text-white">{mark.label}</span>
+      </span>
+      {mark.by ? (
+        <span className="text-[11px] text-unison-text-muted">
+          by{" "}
+          <Link
+            to={`/curator/${mark.by.keyId}`}
+            className="text-unison-text-secondary underline-offset-2 hover:underline"
+          >
+            {mark.by.displayName}
+          </Link>
+        </span>
+      ) : null}
     </div>
   )
 }
 
-function truncateKey(keyId: string): string {
-  if (keyId.length <= 12) return keyId
-  return `${keyId.slice(0, 8)}…${keyId.slice(-4)}`
-}
-
-export function VariantMetadata({ variant }: VariantMetadataProps) {
+export function VariantMetadata({ variant }: { variant: VariantFull }) {
   return (
-    <aside className="rounded-lg bg-white/[0.02] p-4">
-      {variant.hidden ? (
-        <div className="mb-3 rounded border border-unison-warn/40 bg-unison-warn/10 px-3 py-2 text-xs text-unison-warn">
-          This variant has been auto-hidden by community downvotes.
-        </div>
-      ) : null}
-      {variant.marks && variant.marks.length > 0 ? (
-        <div className="mb-3 space-y-2">
-          {variant.marks.map((mark) => (
-            <MarkCallout key={`${mark.type}:${mark.at ?? mark.label}`} mark={mark} />
-          ))}
-        </div>
-      ) : null}
-      <dl className="divide-y divide-unison-border">
-        <Row label="Song">{variant.song}</Row>
-        <Row label="Artist">{variant.artist}</Row>
-        {variant.album ? <Row label="Album">{variant.album}</Row> : null}
-        {variant.isrc ? <Row label="ISRC">{variant.isrc}</Row> : null}
-        {variant.language ? <Row label="Language">{variant.language}</Row> : null}
-        <Row label="Format">{variant.format.toUpperCase()}</Row>
-        <Row label="Sync">{variant.syncType}</Row>
-        <Row label="Score">
-          <span className="font-mono tabular-nums">{variant.effectiveScore.toFixed(1)}</span>
-          <span className="ml-1 font-mono text-xs tabular-nums text-unison-text-muted">{`(${variant.score})`}</span>
-        </Row>
-        <Row label="Votes">
-          <span className="font-mono tabular-nums">{variant.voteCount}</span>
-        </Row>
-        <Row label="Confidence">{variant.confidence}</Row>
-        {variant.submitter ? (
-          <Row label="Submitter">
-            <Link
-              to={`/curator/${variant.submitter.keyId}`}
-              className="font-mono text-xs text-unison-text underline-offset-2 hover:underline"
-            >
-              {truncateKey(variant.submitter.keyId)}
-            </Link>
-            <span className="ml-2 text-xs text-unison-text-muted">{`rep ${variant.submitter.reputation.toFixed(1)}`}</span>
-          </Row>
+    <aside className="overflow-hidden rounded-xl border border-unison-border bg-unison-bg-elevated">
+      <Cover variant={variant} />
+      <div className="space-y-3.5 p-4 pt-1.5">
+        {variant.hidden ? (
+          <div className="rounded-lg border border-unison-warn/40 bg-unison-warn/10 px-2.5 py-2 text-[11.5px] font-medium text-unison-warn">
+            This variant has been auto-hidden by community downvotes.
+          </div>
         ) : null}
-      </dl>
+        {variant.marks?.map((mark) => (
+          <MarkCallout key={`${mark.type}:${mark.at ?? mark.label}`} mark={mark} />
+        ))}
+        <div className="flex flex-wrap gap-1.5">
+          <Pill tip={SYNC_TIP[variant.syncType] ?? variant.syncType} gold={variant.syncType === "richsync"}>
+            {variant.syncType}
+          </Pill>
+          <Pill tip={FORMAT_TIP[variant.format] ?? variant.format}>{variant.format.toUpperCase()}</Pill>
+          {variant.language ? (
+            <Pill tip={`Lyrics language: ${langName(variant.language)}.`}>{variant.language.toUpperCase()}</Pill>
+          ) : null}
+          <Pill tip={CONFIDENCE_TIP(variant.confidence)}>{variant.confidence}</Pill>
+        </div>
+        <div className="h-px bg-unison-border" />
+        <div className="flex items-end gap-5">
+          <Tooltip label={SCORE_TIP}>
+            <div className="cursor-default">
+              <div className="font-mono text-[21px] font-bold leading-none tabular-nums">
+                {variant.effectiveScore.toFixed(1)}
+                <span className="ml-1 text-xs font-semibold text-unison-text-muted">{`(${variant.score})`}</span>
+              </div>
+              <div className="mt-1 text-[11.5px] text-unison-text-muted">Score</div>
+            </div>
+          </Tooltip>
+          <div className="w-px self-stretch bg-unison-border" />
+          <Tooltip label={VOTES_TIP}>
+            <div className="cursor-default">
+              <div className="font-mono text-[21px] font-bold leading-none tabular-nums">{variant.voteCount}</div>
+              <div className="mt-1 text-[11.5px] text-unison-text-muted">Votes</div>
+            </div>
+          </Tooltip>
+        </div>
+        {variant.isrc ? (
+          <>
+            <div className="h-px bg-unison-border" />
+            <div className="flex justify-between gap-2.5 text-[11.5px] text-unison-text-muted">
+              <span>ISRC</span>
+              <span className="truncate font-mono text-unison-text-secondary">{variant.isrc}</span>
+            </div>
+          </>
+        ) : null}
+        {variant.submitter ? (
+          <>
+            <div className="h-px bg-unison-border" />
+            <SubmitterRow variant={variant} />
+          </>
+        ) : null}
+      </div>
     </aside>
   )
 }
