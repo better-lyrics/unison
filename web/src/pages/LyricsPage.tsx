@@ -152,9 +152,9 @@ export function LyricsPage() {
           </a>
         </div>
         <div className="space-y-4">
-          <div className="overflow-hidden rounded-lg bg-white/[0.02]">
+          <div className="overflow-hidden rounded-lg border border-unison-border bg-unison-bg-elevated">
             <div className="flex items-center justify-between border-b border-unison-border/60 px-3 py-2">
-              <fieldset className="inline-flex rounded-md bg-unison-bg p-0.5">
+              <fieldset className="inline-flex rounded-md border border-unison-border bg-unison-bg p-0.5">
                 <legend className="sr-only">Lyrics display mode</legend>
                 <button
                   type="button"
