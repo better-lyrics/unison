@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom"
-import { AlbumArt } from "@/components/AlbumArt"
+import { SongThumbnail } from "@/components/SongThumbnail"
 import { formatDuration, formatRank } from "@/lib/format"
 import type { LyricsSearchHit } from "@/lib/types"
 
@@ -21,12 +21,7 @@ export function SearchResultRow({ entry, rank }: SearchResultRowProps) {
         className="flex items-center gap-4 rounded-lg bg-white/[0.02] px-4 py-3 transition-colors hover:bg-unison-bg-hover"
       >
         <span className="shrink-0 font-mono text-xs tabular-nums text-unison-text-muted">{formatRank(rank)}</span>
-        <div
-          aria-hidden="true"
-          className="flex size-12 shrink-0 items-center justify-center overflow-hidden rounded-md bg-unison-bg-hover"
-        >
-          <AlbumArt videoId={entry.videoId} />
-        </div>
+        <SongThumbnail videoId={entry.videoId} className="size-12" />
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-medium text-unison-text">{entry.song}</p>
           <p className="truncate text-xs text-unison-text-secondary">{entry.artist}</p>

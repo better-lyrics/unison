@@ -1,5 +1,6 @@
 import { CollapsibleSection } from "@/components/CollapsibleSection"
 import { EmptyState } from "@/components/EmptyState"
+import { SongThumbnail } from "@/components/SongThumbnail"
 import { useAsyncData } from "@/hooks/useAsyncData"
 import { fetchUserSubmissions } from "@/lib/api"
 import { formatCompact, formatExact, formatRelativeTime } from "@/lib/format"
@@ -185,6 +186,7 @@ export function SubmissionsList({ keyId }: SubmissionsListProps) {
                   to={`/song/${s.videoId}`}
                   className="flex items-center gap-3 border-t border-unison-border px-2 py-3.5 transition-colors hover:bg-unison-bg-hover"
                 >
+                  <SongThumbnail videoId={s.videoId} className="size-11" />
                   <div className="min-w-0 flex-1">
                     <p className="flex items-center gap-2 truncate text-sm font-medium text-unison-text">
                       <span className="truncate">{s.song}</span>
