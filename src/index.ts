@@ -20,6 +20,7 @@ import { runDumpJob } from "@/jobs/dump"
 import { updateScores } from "@/jobs/score-updater"
 import { auditThresholds } from "@/jobs/threshold-audit"
 import { adminRoutes } from "@/routes/admin"
+import { artworkRoutes } from "@/routes/artwork"
 import { authRoutes } from "@/routes/auth"
 import { badgeRoutes } from "@/routes/badges"
 import { committeeBotRoutes } from "@/routes/committee"
@@ -200,6 +201,7 @@ const app = new Elysia({ adapter: node() })
 		() => new Response(null, { status: 301, headers: { location: "/logo.svg" } })
 	)
 	.use(compatRoutes(env))
+	.use(artworkRoutes(env))
 	.use(lyricsRoutes(env))
 	.use(feedRoutes(env))
 	.use(voteRoutes(env))
