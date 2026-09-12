@@ -43,7 +43,8 @@
     "fast-xml-parser": "^5.5.5",
     "ioredis": "^5.4.0",
     "obscenity": "^0.4.6",
-    "pg": "^8.13.0"
+    "pg": "^8.13.0",
+    "youtubei.js": "^18.0.0"
   },
   "devDependencies": {
     "@biomejs/biome": "^1.9.4",
