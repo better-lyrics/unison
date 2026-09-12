@@ -254,12 +254,11 @@ describe("LyricsPage", () => {
     })
     renderAt(["/song/v1"])
     await waitFor(() => expect(screen.getByTestId("lyrics-renderer")).toBeTruthy())
-    const buttons = screen.getAllByRole("button", { name: /download/i })
-    fireEvent.click(buttons[0])
+    fireEvent.click(screen.getByRole("button", { name: /download/i }))
     expect(downloadTextFile).toHaveBeenCalledWith("Song - Artist.lrc", "[00:01.00]hi", "text/plain;charset=utf-8")
   })
 
-  it("also downloads from the inline header button", async () => {
+  it("uses the xml mime and .ttml extension for a ttml variant", async () => {
     fetchVariants.mockResolvedValue({
       variants: [makeSummary({ id: 1, format: "ttml", song: "Song", artist: "Artist" })],
     })
@@ -268,9 +267,7 @@ describe("LyricsPage", () => {
     })
     renderAt(["/song/v1"])
     await waitFor(() => expect(screen.getByTestId("lyrics-renderer")).toBeTruthy())
-    const buttons = screen.getAllByRole("button", { name: /download/i })
-    expect(buttons.length).toBe(2)
-    fireEvent.click(buttons[1])
+    fireEvent.click(screen.getByRole("button", { name: /download/i }))
     expect(downloadTextFile).toHaveBeenCalledWith("Song - Artist.ttml", "<tt>x</tt>", "application/xml;charset=utf-8")
   })
 
@@ -283,6 +280,17 @@ describe("LyricsPage", () => {
     expect(button.disabled).toBe(true)
     fireEvent.click(button)
     expect(downloadTextFile).not.toHaveBeenCalled()
+  })
+
+  it("copies from the sidebar while still in synced mode", async () => {
+    fetchVariants.mockResolvedValue({ variants: [makeSummary({ id: 1 })] })
+    fetchVariant.mockResolvedValue({ variant: makeFull({ id: 1, lyrics: "sync copy" }) })
+    const writeText = vi.fn().mockResolvedValue(undefined)
+    vi.stubGlobal("navigator", { ...navigator, clipboard: { writeText } })
+    renderAt(["/song/v1"])
+    await waitFor(() => expect(screen.getByTestId("lyrics-renderer")).toBeTruthy())
+    fireEvent.click(screen.getByRole("button", { name: /copy lyrics body to clipboard/i }))
+    expect(writeText).toHaveBeenCalledWith("sync copy")
   })
 
   it("renders the hidden banner when the selected variant is hidden", async () => {

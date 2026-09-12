@@ -1,4 +1,4 @@
-import { IconBrandYoutube, IconDownload } from "@tabler/icons-react"
+import { IconBrandYoutube, IconCheck, IconCopy, IconDownload, IconX } from "@tabler/icons-react"
 import { useQuery } from "@tanstack/react-query"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom"
@@ -14,7 +14,7 @@ import { useYouTubePlayer } from "@/hooks/useYouTubePlayer"
 import { cn } from "@/lib/cn"
 import { fetchLyricsVariant, fetchLyricsVariants } from "@/lib/api"
 import { downloadTextFile } from "@/lib/download"
-import { EXTENSION_BY_FORMAT, lyricsFilename, MIME_BY_FORMAT } from "@/lib/lyrics-download"
+import { lyricsFilename, MIME_BY_FORMAT } from "@/lib/lyrics-download"
 
 type Mode = "synced" | "raw"
 type CopyState = "idle" | "copied" | "failed"
@@ -29,6 +29,9 @@ const COPY_LABEL: Record<CopyState, string> = {
   copied: "Copied!",
   failed: "Copy failed",
 }
+
+const ICON_BUTTON_CLASS =
+  "flex items-center justify-center rounded-md border border-unison-border bg-unison-bg-elevated p-2 text-unison-text-secondary transition-colors hover:border-unison-border-strong hover:bg-unison-bg-hover hover:text-unison-text"
 
 export function LyricsPage() {
   const { videoId } = useParams<{ videoId: string }>()
@@ -172,25 +175,52 @@ export function LyricsPage() {
       <div className="grid gap-6 sm:grid-cols-[minmax(0,384px)_minmax(0,1fr)]">
         <div className="space-y-4">
           <YouTubeEmbed playerRef={ref} />
-          <a
-            href={`https://music.youtube.com/watch?v=${safeVideoId}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex items-center justify-center gap-2 rounded-md border border-unison-border bg-unison-bg-elevated py-2 pr-4 pl-3 text-xs text-unison-text-secondary transition-colors hover:border-unison-border-strong hover:bg-unison-bg-hover hover:text-unison-text"
-          >
-            <IconBrandYoutube className="size-4" stroke={1.75} />
-            Open on YouTube Music
-          </a>
-          <button
-            type="button"
-            onClick={handleDownload}
-            disabled={!variant}
-            aria-label="Download lyrics file"
-            className="flex items-center justify-center gap-2 rounded-md border border-unison-border bg-unison-bg-elevated py-2 pr-4 pl-3 text-xs text-unison-text-secondary transition-colors hover:border-unison-border-strong hover:bg-unison-bg-hover hover:text-unison-text disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            <IconDownload className="size-4" stroke={1.75} />
-            Download {variant ? EXTENSION_BY_FORMAT[variant.format].toUpperCase() : "lyrics"}
-          </button>
+          <div className="flex items-center gap-2">
+            <a
+              href={`https://music.youtube.com/watch?v=${safeVideoId}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label="Open on YouTube Music"
+              title="Open on YouTube Music"
+              className={ICON_BUTTON_CLASS}
+            >
+              <IconBrandYoutube className="size-4" stroke={1.75} />
+            </a>
+            <button
+              type="button"
+              onClick={handleDownload}
+              disabled={!variant}
+              aria-label="Download lyrics file"
+              title="Download lyrics"
+              className={cn(ICON_BUTTON_CLASS, "disabled:cursor-not-allowed disabled:opacity-60")}
+            >
+              <IconDownload className="size-4" stroke={1.75} />
+            </button>
+            <button
+              type="button"
+              onClick={handleCopy}
+              disabled={!variant || !canCopy}
+              aria-label="Copy lyrics body to clipboard"
+              aria-live="polite"
+              title="Copy lyrics"
+              className={cn(
+                ICON_BUTTON_CLASS,
+                "disabled:cursor-not-allowed disabled:opacity-60",
+                copyState === "idle" && "text-unison-text-secondary",
+                copyState === "copied" && "text-green-500",
+                copyState === "failed" && "text-amber-500",
+              )}
+            >
+              {copyState === "copied" ? (
+                <IconCheck className="size-4" stroke={1.75} />
+              ) : copyState === "failed" ? (
+                <IconX className="size-4" stroke={1.75} />
+              ) : (
+                <IconCopy className="size-4" stroke={1.75} />
+              )}
+              <span className="sr-only">{COPY_LABEL[copyState]}</span>
+            </button>
+          </div>
           {variant ? <VariantMetadata variant={variant} /> : null}
         </div>
         <div className="space-y-4">
@@ -223,38 +253,6 @@ export function LyricsPage() {
                   Raw
                 </button>
               </fieldset>
-              <div className="flex items-center gap-2">
-                {variant ? (
-                  <button
-                    type="button"
-                    onClick={handleDownload}
-                    aria-label="Download lyrics file"
-                    className="rounded border border-unison-border px-2 py-1 text-xs text-unison-text-secondary transition-colors hover:border-unison-border-strong hover:text-unison-text"
-                  >
-                    Download
-                  </button>
-                ) : null}
-                {mode === "raw" && variant ? (
-                  <button
-                    type="button"
-                    onClick={handleCopy}
-                    disabled={!canCopy}
-                    aria-label="Copy lyrics body to clipboard"
-                    aria-live="polite"
-                    className={cn(
-                      "rounded border border-unison-border px-2 py-1 text-xs transition-colors",
-                      canCopy
-                        ? "hover:border-unison-border-strong"
-                        : "cursor-not-allowed text-unison-text-muted opacity-60",
-                      canCopy && copyState === "idle" && "text-unison-text-secondary hover:text-unison-text",
-                      canCopy && copyState === "copied" && "text-green-500",
-                      canCopy && copyState === "failed" && "text-amber-500",
-                    )}
-                  >
-                    {COPY_LABEL[copyState]}
-                  </button>
-                ) : null}
-              </div>
             </div>
             <div className="p-4">
               {variantQuery.isLoading || !variant ? (
