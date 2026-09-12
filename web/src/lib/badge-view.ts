@@ -1,4 +1,25 @@
-import type { BadgeDef, BadgeImage } from "./types"
+import type { BadgeCatalogue, BadgeDef, BadgeImage } from "./types"
+
+const IMAGE_VARIANTS: (keyof BadgeImage)[] = ["color", "mono", "silhouette"]
+
+export function collectBadgeAssetUrls(
+  catalogue: BadgeCatalogue,
+  variants: (keyof BadgeImage)[] = IMAGE_VARIANTS,
+): string[] {
+  const urls = new Set<string>()
+  for (const badge of catalogue.badges) {
+    for (const variant of variants) {
+      if (badge.image[variant]) urls.add(badge.image[variant])
+    }
+    for (const tier of badge.tiers ?? []) {
+      if (!tier.image) continue
+      for (const variant of variants) {
+        if (tier.image[variant]) urls.add(tier.image[variant])
+      }
+    }
+  }
+  return [...urls]
+}
 
 export interface BadgeGroup {
   category: string

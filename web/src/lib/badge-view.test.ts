@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
-import { groupBadgesByCategory, isRareBadge, resolveBadgeImage } from "./badge-view"
-import type { BadgeDef } from "./types"
+import { collectBadgeAssetUrls, groupBadgesByCategory, isRareBadge, resolveBadgeImage } from "./badge-view"
+import type { BadgeCatalogue, BadgeDef } from "./types"
 
 function def(key: string, category: string, extra: Partial<BadgeDef> = {}): BadgeDef {
   return {
@@ -69,6 +69,56 @@ describe("resolveBadgeImage", () => {
       expect(resolveBadgeImage(def("committee", "special"), 2, "color")).toBe(
         "/badges/committee/image.svg?variant=color",
       )
+    })
+  })
+})
+
+describe("collectBadgeAssetUrls", () => {
+  const catalogue: BadgeCatalogue = {
+    badges: [def("a", "output"), tiered],
+    display: { inlineGlyphs: 3, featuredMax: 3, rarityThreshold: 0.1, categoryOrder: [] },
+  }
+
+  it("collects every image variant for each badge", () => {
+    const urls = collectBadgeAssetUrls(catalogue)
+    expect(urls).toContain("/badges/a/image.svg?variant=color")
+    expect(urls).toContain("/badges/a/image.svg?variant=mono")
+    expect(urls).toContain("/badges/a/image.svg?variant=silhouette")
+  })
+
+  it("includes per-tier images", () => {
+    const urls = collectBadgeAssetUrls(catalogue)
+    expect(urls).toContain("/t1-color")
+    expect(urls).toContain("/t2-color")
+  })
+
+  it("collects only the requested variants when given a subset", () => {
+    const urls = collectBadgeAssetUrls(catalogue, ["color"])
+    expect(urls).toContain("/badges/a/image.svg?variant=color")
+    expect(urls).toContain("/t1-color")
+    expect(urls).not.toContain("/badges/a/image.svg?variant=mono")
+    expect(urls).not.toContain("/badges/a/image.svg?variant=silhouette")
+  })
+
+  describe("edge cases", () => {
+    it("dedupes urls shared across tiers", () => {
+      const urls = collectBadgeAssetUrls(catalogue)
+      expect(urls.filter((u) => u === "/mono")).toHaveLength(1)
+      expect(urls.filter((u) => u === "/sil")).toHaveLength(1)
+    })
+
+    it("skips tiers with no image and never emits an empty url", () => {
+      const urls = collectBadgeAssetUrls(catalogue)
+      expect(urls.every((u) => u.length > 0)).toBe(true)
+    })
+
+    it("returns an empty list for an empty catalogue", () => {
+      expect(
+        collectBadgeAssetUrls({
+          badges: [],
+          display: { inlineGlyphs: 3, featuredMax: 3, rarityThreshold: 0.1, categoryOrder: [] },
+        }),
+      ).toEqual([])
     })
   })
 })
