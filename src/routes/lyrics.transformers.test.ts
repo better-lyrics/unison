@@ -14,6 +14,7 @@ const sealMark: Mark = {
 		level: 1,
 		badgeCount: 0,
 		topBadge: null,
+		featured: [],
 	},
 	at: 1700000000,
 }
@@ -26,6 +27,7 @@ const submitterActor: MarkActor = {
 	level: 6,
 	badgeCount: 4,
 	topBadge,
+	featured: [topBadge],
 }
 
 const baseRow: LyricsRowForResponse = {
@@ -84,6 +86,7 @@ describe("toResponse", () => {
 			level: 1,
 			badgeCount: 0,
 			topBadge: null,
+			featured: [],
 		})
 	})
 
@@ -109,6 +112,7 @@ describe("toResponse", () => {
 			level: 6,
 			badgeCount: 4,
 			topBadge,
+			featured: [topBadge],
 		})
 	})
 
@@ -129,6 +133,7 @@ describe("toResponse", () => {
 			level: 1,
 			badgeCount: 0,
 			topBadge: null,
+			featured: [],
 		})
 	})
 
@@ -171,6 +176,7 @@ describe("toResponse", () => {
 			level: 1,
 			badgeCount: 0,
 			topBadge: null,
+			featured: [],
 		})
 	})
 
@@ -296,6 +302,7 @@ describe("toSearchResponse", () => {
 			level: 1,
 			badgeCount: 0,
 			topBadge: null,
+			featured: [],
 		})
 	})
 
@@ -320,6 +327,7 @@ describe("toSearchResponse", () => {
 			level: 6,
 			badgeCount: 4,
 			topBadge,
+			featured: [topBadge],
 		})
 	})
 
@@ -340,6 +348,7 @@ describe("toSearchResponse", () => {
 			level: 1,
 			badgeCount: 0,
 			topBadge: null,
+			featured: [],
 		})
 	})
 

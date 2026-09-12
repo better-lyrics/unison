@@ -34,6 +34,7 @@ export async function resolveActors(
 			level: levelForXp(xpMap.get(id) ?? 0, config.gamification.xp.levelThresholds).level,
 			badgeCount: summary?.badgeCount ?? 0,
 			topBadge: summary?.topBadge ?? null,
+			featured: summary?.featured ?? [],
 		})
 	}
 	return actors

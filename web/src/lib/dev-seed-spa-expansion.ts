@@ -20,6 +20,11 @@ const SEEDED_SUBMITTERS: VariantSubmitter[] = [
     level: 42,
     badgeCount: 5,
     topBadge: { key: "most-loved", name: "Most Loved" },
+    featured: [
+      { key: "most-loved", name: "Most Loved" },
+      { key: "prolific", name: "Prolific", tier: 2 },
+      { key: "trailblazer", name: "Trailblazer" },
+    ],
   },
   {
     keyId: "2".repeat(64),
@@ -29,6 +34,7 @@ const SEEDED_SUBMITTERS: VariantSubmitter[] = [
     level: 30,
     badgeCount: 3,
     topBadge: { key: "prolific", name: "Prolific", tier: 2 },
+    featured: [],
   },
   {
     keyId: "3".repeat(64),
@@ -38,6 +44,7 @@ const SEEDED_SUBMITTERS: VariantSubmitter[] = [
     level: 18,
     badgeCount: 2,
     topBadge: { key: "trailblazer", name: "Trailblazer" },
+    featured: [],
   },
   {
     keyId: "4".repeat(64),
@@ -47,6 +54,7 @@ const SEEDED_SUBMITTERS: VariantSubmitter[] = [
     level: 9,
     badgeCount: 1,
     topBadge: { key: "fan-favorite", name: "Fan Favorite" },
+    featured: [],
   },
   {
     keyId: "5".repeat(64),
@@ -56,6 +64,7 @@ const SEEDED_SUBMITTERS: VariantSubmitter[] = [
     level: 3,
     badgeCount: 0,
     topBadge: null,
+    featured: [],
   },
 ]
 

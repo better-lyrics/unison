@@ -105,6 +105,7 @@ export interface SubmitterInfo {
 	level: number
 	badgeCount: number
 	topBadge: BadgeRef | null
+	featured: BadgeRef[]
 }
 
 export interface MarkActor {
@@ -114,6 +115,7 @@ export interface MarkActor {
 	level: number
 	badgeCount: number
 	topBadge: BadgeRef | null
+	featured: BadgeRef[]
 }
 
 export interface Mark {

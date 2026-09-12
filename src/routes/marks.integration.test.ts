@@ -130,6 +130,7 @@ describeIntegration("seal marks (integration)", () => {
 			level: 1,
 			badgeCount: 0,
 			topBadge: null,
+			featured: [],
 		})
 		expect(marks.has(unapprovedId)).toBe(false)
 	})
@@ -210,6 +211,7 @@ describeIntegration("seal marks (integration)", () => {
 				level: 1,
 				badgeCount: 0,
 				topBadge: null,
+				featured: [],
 			})
 		}
 	})

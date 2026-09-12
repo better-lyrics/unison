@@ -118,6 +118,7 @@ export interface VariantSubmitter {
   level: number
   badgeCount: number
   topBadge: LeaderboardBadge | null
+  featured: LeaderboardBadge[]
 }
 
 export interface MarkActor {

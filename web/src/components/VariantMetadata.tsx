@@ -96,6 +96,7 @@ function SubmitterRow({ variant }: { variant: VariantFull }) {
   }
   if (!s) return null
   const gemSrc = s.tier ? badgeImage(s.tier) : null
+  const featured = s.featured ?? []
   const topBadgeSrc = s.topBadge ? badgeImage(s.topBadge.key, s.topBadge.tier) : null
   const extra = s.badgeCount - 1
 
@@ -117,10 +118,19 @@ function SubmitterRow({ variant }: { variant: VariantFull }) {
           </span>
         </Tooltip>
       </div>
-      {s.tier || topBadgeSrc ? (
+      {s.tier || featured.length > 0 || topBadgeSrc ? (
         <div className="flex flex-wrap items-center gap-2">
           {s.tier ? <TierChip tier={s.tier} gemSrc={gemSrc ?? undefined} /> : null}
-          {topBadgeSrc ? (
+          {featured.length > 0 ? (
+            <span className="inline-flex items-center gap-1.5">
+              {featured.map((b) => {
+                const img = badgeImage(b.key, b.tier)
+                return img ? (
+                  <img key={b.key} src={img} alt={b.name} title={b.name} className="size-5 object-contain" />
+                ) : null
+              })}
+            </span>
+          ) : topBadgeSrc ? (
             <span className="inline-flex items-center gap-1.5">
               <img src={topBadgeSrc} alt={s.topBadge?.name ?? ""} className="size-5" />
               {extra > 0 ? (

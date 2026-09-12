@@ -41,6 +41,7 @@ function makeSubmitter(overrides: Partial<VariantSubmitter> = {}): VariantSubmit
     level: 1,
     badgeCount: 0,
     topBadge: null,
+    featured: [],
     ...overrides,
   }
 }
@@ -150,6 +151,11 @@ describe("VariantMetadata", () => {
   it("renders the submitter tier chip when a tier is present", () => {
     renderMeta(makeVariant({ submitter: makeSubmitter({ tier: "master" }) }))
     expect(screen.getByText("Master")).toBeTruthy()
+  })
+
+  it("renders featured badge icons in the submitter row", async () => {
+    renderMeta(makeVariant({ submitter: makeSubmitter({ featured: [{ key: "prolific", name: "Prolific" }] }) }))
+    await waitFor(() => expect(screen.getByAltText("Prolific")).toBeTruthy())
   })
 
   it("omits the submitter row when absent", () => {
