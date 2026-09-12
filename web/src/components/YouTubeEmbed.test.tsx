@@ -5,10 +5,10 @@ import { YouTubeEmbed } from "./YouTubeEmbed"
 afterEach(() => cleanup())
 
 describe("YouTubeEmbed", () => {
-  it("renders a div with aspect-video sizing", () => {
+  it("renders a div with aspect-square sizing", () => {
     const { container } = render(<YouTubeEmbed playerRef={() => {}} />)
     const wrapper = container.firstElementChild as HTMLElement
-    expect(wrapper.className).toMatch(/aspect-video/)
+    expect(wrapper.className).toMatch(/aspect-square/)
     expect(wrapper.className).toMatch(/w-full/)
   })
 

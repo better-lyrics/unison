@@ -28,7 +28,7 @@ export function Tooltip({
     middleware: [offset(8), flip(), shift({ padding: 8 })],
     whileElementsMounted: autoUpdate,
   })
-  const hover = useHover(context, { move: false, delay: { open: 120, close: 0 } })
+  const hover = useHover(context, { move: false })
   const focus = useFocus(context)
   const dismiss = useDismiss(context)
   const role = useRole(context, { role: "tooltip" })
