@@ -1,5 +1,5 @@
-import { IconMusic } from "@tabler/icons-react"
 import { Link } from "react-router-dom"
+import { AlbumArt } from "@/components/AlbumArt"
 import { formatDuration, formatRank } from "@/lib/format"
 import type { LyricsSearchHit } from "@/lib/types"
 
@@ -25,7 +25,7 @@ export function SearchResultRow({ entry, rank }: SearchResultRowProps) {
           aria-hidden="true"
           className="flex size-12 shrink-0 items-center justify-center overflow-hidden rounded-md bg-unison-bg-hover"
         >
-          <IconMusic className="size-6 text-unison-text opacity-50" stroke={1.5} />
+          <AlbumArt videoId={entry.videoId} />
         </div>
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-medium text-unison-text">{entry.song}</p>
