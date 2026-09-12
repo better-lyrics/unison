@@ -133,6 +133,12 @@ export async function fetchLyricsVariant(
   return { variant }
 }
 
+export async function fetchArtwork(videoId: string): Promise<string | null> {
+  if (IS_SPA_EXPANSION_SEED) return null
+  const { artworkUrl } = await getJson<{ artworkUrl: string | null }>(`/artwork?v=${encodeURIComponent(videoId)}`)
+  return artworkUrl
+}
+
 async function unwrapMutationError(res: Response): Promise<never> {
   if (res.status === 401) throw new Error(AUTHED_FETCH_ERRORS.AUTH_REQUIRED)
   if (res.status === 429) throw new Error(AUTHED_FETCH_ERRORS.RATE_LIMITED)
