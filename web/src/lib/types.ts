@@ -113,6 +113,11 @@ export interface LyricsSearchHit {
 export interface VariantSubmitter {
   keyId: string
   reputation: number
+  displayName: string
+  tier: TierName | null
+  level: number
+  badgeCount: number
+  topBadge: LeaderboardBadge | null
 }
 
 export interface MarkActor {

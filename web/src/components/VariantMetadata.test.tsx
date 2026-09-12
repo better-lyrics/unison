@@ -94,7 +94,19 @@ describe("VariantMetadata", () => {
 
   it("renders the submitter row with a truncated keyId and link", () => {
     const keyId = "abcdef0123456789012345678901wxyz"
-    renderMeta(makeVariant({ submitter: { keyId, reputation: 1.3 } }))
+    renderMeta(
+      makeVariant({
+        submitter: {
+          keyId,
+          reputation: 1.3,
+          displayName: "Nova",
+          tier: null,
+          level: 1,
+          badgeCount: 0,
+          topBadge: null,
+        },
+      }),
+    )
     const link = screen.getByRole("link")
     expect(link.getAttribute("href")).toBe(`/curator/${keyId}`)
     expect(link.textContent).toContain("abcdef01")
