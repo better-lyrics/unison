@@ -8,7 +8,7 @@ afterEach(() => {
 
 describe("downloadTextFile", () => {
   it("clicks a transient anchor carrying the filename and body, then revokes the url", async () => {
-    const createObjectURL = vi.fn(() => "blob:mock-url")
+    const createObjectURL = vi.fn<(blob: Blob) => string>(() => "blob:mock-url")
     const revokeObjectURL = vi.fn()
     vi.stubGlobal("URL", { createObjectURL, revokeObjectURL } as unknown as typeof URL)
     let anchor: HTMLAnchorElement | undefined
@@ -25,7 +25,7 @@ describe("downloadTextFile", () => {
     expect(clickSpy).toHaveBeenCalledTimes(1)
     expect(anchor?.download).toBe("Song - Artist.lrc")
     expect(createObjectURL).toHaveBeenCalledTimes(1)
-    const blob = createObjectURL.mock.calls[0][0] as unknown as Blob
+    const blob = createObjectURL.mock.calls[0][0]
     expect(blob.type).toBe("text/plain;charset=utf-8")
     expect(await blob.text()).toBe("[00:01.00]hi")
     expect(revokeObjectURL).toHaveBeenCalledWith("blob:mock-url")
