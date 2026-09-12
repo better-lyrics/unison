@@ -232,20 +232,18 @@ describe("VariantMetadata", () => {
       expect(screen.getAllByText("Solar")).toHaveLength(1)
     })
 
-    it("shows a solid divider above the metadata while the player is active", () => {
+    it("adds a divider above the track heading while the player is active", () => {
       const { container } = renderMeta(makeVariant(), {
         playerActive: true,
         onActivatePlayer: () => {},
         playerRef: () => {},
       })
-      const meta = container.querySelector("aside")?.lastElementChild
-      expect(meta?.className).toContain("border-unison-border")
+      expect(container.querySelectorAll("div.h-px.bg-unison-border")).toHaveLength(2)
     })
 
-    it("keeps the metadata divider transparent in poster mode", () => {
+    it("shows no player divider in poster mode", () => {
       const { container } = renderMeta(makeVariant(), { onActivatePlayer: () => {}, playerRef: () => {} })
-      const meta = container.querySelector("aside")?.lastElementChild
-      expect(meta?.className).toContain("border-transparent")
+      expect(container.querySelectorAll("div.h-px.bg-unison-border")).toHaveLength(1)
     })
   })
 

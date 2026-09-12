@@ -1,5 +1,5 @@
 import { IconPlayerPlayFilled } from "@tabler/icons-react"
-import { AnimatePresence, MotionConfig, motion, type Transition, type Variants } from "motion/react"
+import { AnimatePresence, MotionConfig, motion } from "motion/react"
 import { Link } from "react-router-dom"
 import { useBadgeCatalogueOptional } from "@/components/BadgeCatalogueContext"
 import { TierChip } from "@/components/TierChip"
@@ -8,6 +8,7 @@ import { useArtwork, youtubeThumbnailFallbackUrl, youtubeThumbnailUrl } from "@/
 import { dicebearThumbsDataUri } from "@/lib/avatar"
 import { resolveBadgeImage } from "@/lib/badge-view"
 import { cn } from "@/lib/cn"
+import { LAYOUT_TRANSITION } from "@/lib/motion-variants"
 import type { Mark, VariantFull } from "@/lib/types"
 
 const SYNC_TIP: Record<string, string> = {
@@ -26,13 +27,6 @@ const SCORE_TIP =
   "Ranking score, weighted by each voter's reputation. Higher shows first. Raw net votes in parentheses."
 const VOTES_TIP = "How many people have voted on this version."
 const REP_TIP = "Submitter reputation (0 to 2). Trusted users' votes and submissions count for more."
-
-const HEADING_VARIANTS: Variants = {
-  initial: { opacity: 0, y: -8 },
-  animate: { opacity: 1, y: 0 },
-  exit: { opacity: 0, y: -8 },
-}
-const HEADING_TRANSITION: Transition = { duration: 0.22, ease: "easeOut", delay: 0.18 }
 
 function langName(code: string): string {
   try {
@@ -231,80 +225,80 @@ export function VariantMetadata({ variant, playerRef, playerActive, onActivatePl
   return (
     <aside className="overflow-hidden rounded-xl border border-unison-border bg-unison-bg-elevated">
       <Cover variant={variant} playerRef={playerRef} playerActive={playerActive} onActivatePlayer={onActivatePlayer} />
-      <div
-        className={cn(
-          "space-y-3.5 border-t p-4 transition-[padding,border-color] duration-200",
-          playerActive ? "border-unison-border pt-4" : "border-transparent pt-1.5",
-        )}
-      >
+      <div className="p-4 pt-1.5">
         <MotionConfig reducedMotion="user">
           <AnimatePresence>
             {playerActive ? (
               <motion.div
                 key="track-heading"
-                variants={HEADING_VARIANTS}
-                initial="initial"
-                animate="animate"
-                exit="exit"
-                transition={HEADING_TRANSITION}
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: "auto", opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                transition={LAYOUT_TRANSITION}
+                className="overflow-hidden"
               >
-                <TrackHeading variant={variant} />
+                <div className="h-px bg-unison-border" />
+                <div className="py-3.5">
+                  <TrackHeading variant={variant} />
+                </div>
               </motion.div>
             ) : null}
           </AnimatePresence>
         </MotionConfig>
-        {variant.hidden ? (
-          <div className="rounded-lg border border-unison-warn/40 bg-unison-warn/10 px-2.5 py-2 text-[11.5px] font-medium text-unison-warn">
-            This variant has been auto-hidden by community downvotes.
-          </div>
-        ) : null}
-        {variant.marks?.map((mark) => (
-          <MarkCallout key={`${mark.type}:${mark.at ?? mark.label}`} mark={mark} />
-        ))}
-        <div className="flex flex-wrap gap-1.5">
-          <Pill tip={SYNC_TIP[variant.syncType] ?? variant.syncType} gold={variant.syncType === "richsync"}>
-            {variant.syncType}
-          </Pill>
-          <Pill tip={FORMAT_TIP[variant.format] ?? variant.format}>{variant.format.toUpperCase()}</Pill>
-          {variant.language ? (
-            <Pill tip={`Lyrics language: ${langName(variant.language)}.`}>{variant.language.toUpperCase()}</Pill>
+        <div className="space-y-3.5">
+          {variant.hidden ? (
+            <div className="rounded-lg border border-unison-warn/40 bg-unison-warn/10 px-2.5 py-2 text-[11.5px] font-medium text-unison-warn">
+              This variant has been auto-hidden by community downvotes.
+            </div>
           ) : null}
-          <Pill tip={CONFIDENCE_TIP(variant.confidence)}>{variant.confidence}</Pill>
-        </div>
-        <div className="h-px bg-unison-border" />
-        <div className="flex items-end gap-5">
-          <Tooltip label={SCORE_TIP}>
-            <div className="cursor-default">
-              <div className="font-mono text-[21px] font-bold leading-none tabular-nums">
-                {variant.effectiveScore.toFixed(1)}
-                <span className="ml-1 text-xs font-semibold text-unison-text-muted">{`(${variant.score})`}</span>
+          {variant.marks?.map((mark) => (
+            <MarkCallout key={`${mark.type}:${mark.at ?? mark.label}`} mark={mark} />
+          ))}
+          <div className="flex flex-wrap gap-1.5">
+            <Pill tip={SYNC_TIP[variant.syncType] ?? variant.syncType} gold={variant.syncType === "richsync"}>
+              {variant.syncType}
+            </Pill>
+            <Pill tip={FORMAT_TIP[variant.format] ?? variant.format}>{variant.format.toUpperCase()}</Pill>
+            {variant.language ? (
+              <Pill tip={`Lyrics language: ${langName(variant.language)}.`}>{variant.language.toUpperCase()}</Pill>
+            ) : null}
+            <Pill tip={CONFIDENCE_TIP(variant.confidence)}>{variant.confidence}</Pill>
+          </div>
+          <div className="h-px bg-unison-border" />
+          <div className="flex items-end gap-5">
+            <Tooltip label={SCORE_TIP}>
+              <div className="cursor-default">
+                <div className="font-mono text-[21px] font-bold leading-none tabular-nums">
+                  {variant.effectiveScore.toFixed(1)}
+                  <span className="ml-1 text-xs font-semibold text-unison-text-muted">{`(${variant.score})`}</span>
+                </div>
+                <div className="mt-1 text-[11.5px] text-unison-text-muted">Score</div>
               </div>
-              <div className="mt-1 text-[11.5px] text-unison-text-muted">Score</div>
-            </div>
-          </Tooltip>
-          <div className="w-px self-stretch bg-unison-border" />
-          <Tooltip label={VOTES_TIP}>
-            <div className="cursor-default">
-              <div className="font-mono text-[21px] font-bold leading-none tabular-nums">{variant.voteCount}</div>
-              <div className="mt-1 text-[11.5px] text-unison-text-muted">Votes</div>
-            </div>
-          </Tooltip>
+            </Tooltip>
+            <div className="w-px self-stretch bg-unison-border" />
+            <Tooltip label={VOTES_TIP}>
+              <div className="cursor-default">
+                <div className="font-mono text-[21px] font-bold leading-none tabular-nums">{variant.voteCount}</div>
+                <div className="mt-1 text-[11.5px] text-unison-text-muted">Votes</div>
+              </div>
+            </Tooltip>
+          </div>
+          {variant.isrc ? (
+            <>
+              <div className="h-px bg-unison-border" />
+              <div className="flex justify-between gap-2.5 text-[11.5px] text-unison-text-muted">
+                <span>ISRC</span>
+                <span className="truncate font-mono text-unison-text-secondary">{variant.isrc}</span>
+              </div>
+            </>
+          ) : null}
+          {variant.submitter ? (
+            <>
+              <div className="h-px bg-unison-border" />
+              <SubmitterRow variant={variant} />
+            </>
+          ) : null}
         </div>
-        {variant.isrc ? (
-          <>
-            <div className="h-px bg-unison-border" />
-            <div className="flex justify-between gap-2.5 text-[11.5px] text-unison-text-muted">
-              <span>ISRC</span>
-              <span className="truncate font-mono text-unison-text-secondary">{variant.isrc}</span>
-            </div>
-          </>
-        ) : null}
-        {variant.submitter ? (
-          <>
-            <div className="h-px bg-unison-border" />
-            <SubmitterRow variant={variant} />
-          </>
-        ) : null}
       </div>
     </aside>
   )
