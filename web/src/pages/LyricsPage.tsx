@@ -1,4 +1,4 @@
-import { IconBrandYoutube } from "@tabler/icons-react"
+import { IconBrandYoutube, IconDownload } from "@tabler/icons-react"
 import { useQuery } from "@tanstack/react-query"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom"
@@ -13,6 +13,8 @@ import { YouTubeEmbed } from "@/components/YouTubeEmbed"
 import { useYouTubePlayer } from "@/hooks/useYouTubePlayer"
 import { cn } from "@/lib/cn"
 import { fetchLyricsVariant, fetchLyricsVariants } from "@/lib/api"
+import { downloadTextFile } from "@/lib/download"
+import { EXTENSION_BY_FORMAT, lyricsFilename, MIME_BY_FORMAT } from "@/lib/lyrics-download"
 
 type Mode = "synced" | "raw"
 type CopyState = "idle" | "copied" | "failed"
@@ -129,6 +131,12 @@ export function LyricsPage() {
     )
   }, [variantQuery.data, scheduleCopyReset])
 
+  const handleDownload = useCallback(() => {
+    const v = variantQuery.data?.variant
+    if (!v) return
+    downloadTextFile(lyricsFilename(v), v.lyrics, MIME_BY_FORMAT[v.format])
+  }, [variantQuery.data])
+
   if (!videoId) return <EmptyState title="No video specified" />
 
   if (variantsQuery.isLoading) return <LoadingPlaceholder rows={4} />
@@ -173,6 +181,16 @@ export function LyricsPage() {
             <IconBrandYoutube className="size-4" stroke={1.75} />
             Open on YouTube Music
           </a>
+          <button
+            type="button"
+            onClick={handleDownload}
+            disabled={!variant}
+            aria-label="Download lyrics file"
+            className="flex items-center justify-center gap-2 rounded-md border border-unison-border bg-unison-bg-elevated py-2 pr-4 pl-3 text-xs text-unison-text-secondary transition-colors hover:border-unison-border-strong hover:bg-unison-bg-hover hover:text-unison-text disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            <IconDownload className="size-4" stroke={1.75} />
+            Download {variant ? EXTENSION_BY_FORMAT[variant.format].toUpperCase() : "lyrics"}
+          </button>
           {variant ? <VariantMetadata variant={variant} /> : null}
         </div>
         <div className="space-y-4">
@@ -205,26 +223,38 @@ export function LyricsPage() {
                   Raw
                 </button>
               </fieldset>
-              {mode === "raw" && variant ? (
-                <button
-                  type="button"
-                  onClick={handleCopy}
-                  disabled={!canCopy}
-                  aria-label="Copy lyrics body to clipboard"
-                  aria-live="polite"
-                  className={cn(
-                    "rounded border border-unison-border px-2 py-1 text-xs transition-colors",
-                    canCopy
-                      ? "hover:border-unison-border-strong"
-                      : "cursor-not-allowed text-unison-text-muted opacity-60",
-                    canCopy && copyState === "idle" && "text-unison-text-secondary hover:text-unison-text",
-                    canCopy && copyState === "copied" && "text-green-500",
-                    canCopy && copyState === "failed" && "text-amber-500",
-                  )}
-                >
-                  {COPY_LABEL[copyState]}
-                </button>
-              ) : null}
+              <div className="flex items-center gap-2">
+                {variant ? (
+                  <button
+                    type="button"
+                    onClick={handleDownload}
+                    aria-label="Download lyrics file"
+                    className="rounded border border-unison-border px-2 py-1 text-xs text-unison-text-secondary transition-colors hover:border-unison-border-strong hover:text-unison-text"
+                  >
+                    Download
+                  </button>
+                ) : null}
+                {mode === "raw" && variant ? (
+                  <button
+                    type="button"
+                    onClick={handleCopy}
+                    disabled={!canCopy}
+                    aria-label="Copy lyrics body to clipboard"
+                    aria-live="polite"
+                    className={cn(
+                      "rounded border border-unison-border px-2 py-1 text-xs transition-colors",
+                      canCopy
+                        ? "hover:border-unison-border-strong"
+                        : "cursor-not-allowed text-unison-text-muted opacity-60",
+                      canCopy && copyState === "idle" && "text-unison-text-secondary hover:text-unison-text",
+                      canCopy && copyState === "copied" && "text-green-500",
+                      canCopy && copyState === "failed" && "text-amber-500",
+                    )}
+                  >
+                    {COPY_LABEL[copyState]}
+                  </button>
+                ) : null}
+              </div>
             </div>
             <div className="p-4">
               {variantQuery.isLoading || !variant ? (

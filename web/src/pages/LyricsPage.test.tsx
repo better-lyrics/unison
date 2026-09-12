@@ -48,6 +48,11 @@ vi.mock("@/lib/api", () => ({
   fetchLyricsVariant: (...args: unknown[]) => fetchVariant(...args),
 }))
 
+const downloadTextFile = vi.fn()
+vi.mock("@/lib/download", () => ({
+  downloadTextFile: (...args: unknown[]) => downloadTextFile(...args),
+}))
+
 import { LyricsPage } from "./LyricsPage"
 
 function makeSummary(overrides: Partial<VariantSummary> = {}): VariantSummary {
@@ -98,6 +103,7 @@ beforeEach(() => {
   lastLineClick = null
   fetchVariants.mockReset()
   fetchVariant.mockReset()
+  downloadTextFile.mockReset()
 })
 
 afterEach(() => {
@@ -237,6 +243,46 @@ describe("LyricsPage", () => {
     } finally {
       vi.useRealTimers()
     }
+  })
+
+  it("downloads the raw body with the native extension from the sidebar button", async () => {
+    fetchVariants.mockResolvedValue({
+      variants: [makeSummary({ id: 1, format: "lrc", song: "Song", artist: "Artist" })],
+    })
+    fetchVariant.mockResolvedValue({
+      variant: makeFull({ id: 1, format: "lrc", song: "Song", artist: "Artist", lyrics: "[00:01.00]hi" }),
+    })
+    renderAt(["/song/v1"])
+    await waitFor(() => expect(screen.getByTestId("lyrics-renderer")).toBeTruthy())
+    const buttons = screen.getAllByRole("button", { name: /download/i })
+    fireEvent.click(buttons[0])
+    expect(downloadTextFile).toHaveBeenCalledWith("Song - Artist.lrc", "[00:01.00]hi", "text/plain;charset=utf-8")
+  })
+
+  it("also downloads from the inline header button", async () => {
+    fetchVariants.mockResolvedValue({
+      variants: [makeSummary({ id: 1, format: "ttml", song: "Song", artist: "Artist" })],
+    })
+    fetchVariant.mockResolvedValue({
+      variant: makeFull({ id: 1, format: "ttml", song: "Song", artist: "Artist", lyrics: "<tt>x</tt>" }),
+    })
+    renderAt(["/song/v1"])
+    await waitFor(() => expect(screen.getByTestId("lyrics-renderer")).toBeTruthy())
+    const buttons = screen.getAllByRole("button", { name: /download/i })
+    expect(buttons.length).toBe(2)
+    fireEvent.click(buttons[1])
+    expect(downloadTextFile).toHaveBeenCalledWith("Song - Artist.ttml", "<tt>x</tt>", "application/xml;charset=utf-8")
+  })
+
+  it("disables the sidebar download until the variant body is loaded", async () => {
+    fetchVariants.mockResolvedValue({ variants: [makeSummary({ id: 1 })] })
+    fetchVariant.mockReturnValue(new Promise(() => {}))
+    renderAt(["/song/v1"])
+    await waitFor(() => expect(screen.getByRole("button", { name: /download/i })).toBeTruthy())
+    const button = screen.getByRole("button", { name: /download/i }) as HTMLButtonElement
+    expect(button.disabled).toBe(true)
+    fireEvent.click(button)
+    expect(downloadTextFile).not.toHaveBeenCalled()
   })
 
   it("renders the hidden banner when the selected variant is hidden", async () => {
