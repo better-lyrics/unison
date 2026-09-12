@@ -1,4 +1,5 @@
 import { IconPlayerPlayFilled } from "@tabler/icons-react"
+import { AnimatePresence, MotionConfig, motion, type Transition, type Variants } from "motion/react"
 import { Link } from "react-router-dom"
 import { useBadgeCatalogueOptional } from "@/components/BadgeCatalogueContext"
 import { TierChip } from "@/components/TierChip"
@@ -26,6 +27,13 @@ const SCORE_TIP =
 const VOTES_TIP = "How many people have voted on this version."
 const REP_TIP = "Submitter reputation (0 to 2). Trusted users' votes and submissions count for more."
 
+const HEADING_VARIANTS: Variants = {
+  initial: { opacity: 0, y: -8 },
+  animate: { opacity: 1, y: 0 },
+  exit: { opacity: 0, y: -8 },
+}
+const HEADING_TRANSITION: Transition = { duration: 0.22, ease: "easeOut", delay: 0.18 }
+
 function langName(code: string): string {
   try {
     return new Intl.DisplayNames(["en"], { type: "language" }).of(code) ?? code
@@ -36,6 +44,25 @@ function langName(code: string): string {
 
 function truncateKey(keyId: string): string {
   return keyId.length <= 12 ? keyId : `${keyId.slice(0, 8)}…${keyId.slice(-4)}`
+}
+
+function TrackHeading({ variant }: { variant: VariantFull }) {
+  return (
+    <div>
+      <div className="truncate text-[20px] font-bold leading-tight tracking-[-0.01em] text-unison-text">
+        {variant.song}
+      </div>
+      <div className="mt-0.5 flex min-w-0 items-baseline text-[13px]">
+        <span className="min-w-0 flex-[0_1_auto] truncate text-unison-text-secondary">{variant.artist}</span>
+        {variant.album ? (
+          <>
+            <span className="mx-1.5 shrink-0 text-unison-text-muted">·</span>
+            <span className="min-w-0 flex-[0_1_auto] truncate text-unison-text-muted">{variant.album}</span>
+          </>
+        ) : null}
+      </div>
+    </div>
+  )
 }
 
 interface CoverProps {
@@ -76,18 +103,7 @@ function Cover({ variant, playerRef, playerActive, onActivatePlayer }: CoverProp
         </span>
       ) : null}
       <div className="pointer-events-none absolute inset-x-4 bottom-3.5">
-        <div className="truncate text-[20px] font-bold leading-tight tracking-[-0.01em] text-unison-text">
-          {variant.song}
-        </div>
-        <div className="mt-0.5 flex min-w-0 items-baseline text-[13px]">
-          <span className="min-w-0 flex-[0_1_auto] truncate text-unison-text-secondary">{variant.artist}</span>
-          {variant.album ? (
-            <>
-              <span className="mx-1.5 shrink-0 text-unison-text-muted">·</span>
-              <span className="min-w-0 flex-[0_1_auto] truncate text-unison-text-muted">{variant.album}</span>
-            </>
-          ) : null}
-        </div>
+        <TrackHeading variant={variant} />
       </div>
     </>
   )
@@ -221,6 +237,22 @@ export function VariantMetadata({ variant, playerRef, playerActive, onActivatePl
           playerActive ? "border-unison-border pt-4" : "border-transparent pt-1.5",
         )}
       >
+        <MotionConfig reducedMotion="user">
+          <AnimatePresence>
+            {playerActive ? (
+              <motion.div
+                key="track-heading"
+                variants={HEADING_VARIANTS}
+                initial="initial"
+                animate="animate"
+                exit="exit"
+                transition={HEADING_TRANSITION}
+              >
+                <TrackHeading variant={variant} />
+              </motion.div>
+            ) : null}
+          </AnimatePresence>
+        </MotionConfig>
         {variant.hidden ? (
           <div className="rounded-lg border border-unison-warn/40 bg-unison-warn/10 px-2.5 py-2 text-[11.5px] font-medium text-unison-warn">
             This variant has been auto-hidden by community downvotes.

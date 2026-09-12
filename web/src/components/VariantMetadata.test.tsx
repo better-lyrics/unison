@@ -216,6 +216,22 @@ describe("VariantMetadata", () => {
       expect(screen.queryByRole("button", { name: /play/i })).toBeNull()
     })
 
+    it("shows the track heading in the metadata while the player is active", () => {
+      renderMeta(makeVariant({ song: "Solar", artist: "Sun", album: "Sky" }), {
+        playerActive: true,
+        onActivatePlayer: () => {},
+        playerRef: () => {},
+      })
+      expect(screen.getByText("Solar")).toBeTruthy()
+      expect(screen.getByText("Sun")).toBeTruthy()
+      expect(screen.getByText("Sky")).toBeTruthy()
+    })
+
+    it("shows the track heading only once in poster mode", () => {
+      renderMeta(makeVariant({ song: "Solar" }), { onActivatePlayer: () => {}, playerRef: () => {} })
+      expect(screen.getAllByText("Solar")).toHaveLength(1)
+    })
+
     it("shows a solid divider above the metadata while the player is active", () => {
       const { container } = renderMeta(makeVariant(), {
         playerActive: true,
