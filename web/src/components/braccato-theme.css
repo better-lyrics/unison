@@ -1,17 +1,134 @@
 /* Cherry-picked from the Sustain theme in the braccato repo (demo/theme-sustain.css),
    minus its webfont, its font declarations, its distance blur ramp, and its agent
-   alignment (lyrics.css already ships that). Passed to the element as a string. */
+   alignment (lyrics.css already ships that). The scroll timing, word wobble, and
+   letter wave tuning are carried over from that theme's root vars. Passed to the
+   element as a string. */
 
-/* blyrics-target-scroll-pos-ratio = 0.5; */
+/*
+blyrics-target-scroll-pos-ratio = 0.5;
+blyrics-letter-wave = true;
+*/
 
 .blyrics-container {
   --blyrics-font-weight: 600;
   --blyrics-padding: 1.25rem;
+  --blyrics-hover-scale: 1.01;
+
   --blyrics-wobble-duration: 1s;
-  --blyrics-word-wobble-transform-from: translateY(0);
-  --blyrics-word-wobble-transform-peak: translateY(-0.005em);
-  --blyrics-word-wobble-transform-settle: translateY(-0.028em);
-  --blyrics-word-wobble-transform-to: translateY(-0.0375em);
+  --blyrics-word-wobble-transform-from: scaleX(1);
+  --blyrics-word-wobble-transform-peak: translateX(0.0125em) scaleX(1.01);
+  --blyrics-word-wobble-transform-settle: translateX(0) scaleX(1);
+  --blyrics-word-wobble-transform-to: scaleX(1);
+
+  --blyrics-letter-wave-transform: translateY(-0.04em);
+  --blyrics-letter-wave-settle: translateY(-0.015em);
+  --blyrics-letter-wave-duration: 0.75s;
+  --blyrics-letter-wave-emphasis-scale: 1.09;
+
+  --blyrics-lyric-scroll-duration: 581.71ms;
+  --blyrics-lyric-scroll-timing-function: linear(
+    0 0%,
+    0.005927 1%,
+    0.022466 2%,
+    0.047872 3%,
+    0.080554 4%,
+    0.119068 5%,
+    0.162116 6%,
+    0.208536 7%,
+    0.2573 8%,
+    0.3075 9%,
+    0.358346 10%,
+    0.409157 11%,
+    0.45935 12%,
+    0.508438 13%,
+    0.556014 14%,
+    0.601751 15%,
+    0.645389 16%,
+    0.686733 17%,
+    0.72564 18%,
+    0.762019 19%,
+    0.795818 20%,
+    0.827026 21%,
+    0.855662 22%,
+    0.881772 23%,
+    0.905423 24%,
+    0.926704 25%,
+    0.945714 26%,
+    0.962568 27%,
+    0.977386 28%,
+    0.990295 29%,
+    1.001426 30%,
+    1.010911 31%,
+    1.018881 32%,
+    1.025465 33%,
+    1.030792 34%,
+    1.034982 35%,
+    1.038155 36%,
+    1.040423 37%,
+    1.041892 38%,
+    1.042662 39%,
+    1.042827 40%,
+    1.042473 41%,
+    1.04168 42%,
+    1.040522 43%,
+    1.039065 44%,
+    1.037371 45%,
+    1.035493 46%,
+    1.03348 47%,
+    1.031376 48%,
+    1.029217 49%,
+    1.027037 50%,
+    1.024864 51%,
+    1.022722 52%,
+    1.020631 53%,
+    1.018608 54%,
+    1.016667 55%,
+    1.014817 56%,
+    1.013067 57%,
+    1.011422 58%,
+    1.009887 59%,
+    1.008462 60%,
+    1.007148 61%,
+    1.005944 62%,
+    1.004847 63%,
+    1.003855 64%,
+    1.002964 65%,
+    1.002169 66%,
+    1.001466 67%,
+    1.000848 68%,
+    1.000311 69%,
+    0.999849 70%,
+    0.999457 71%,
+    0.999128 72%,
+    0.998858 73%,
+    0.99864 74%,
+    0.99847 75%,
+    0.998342 76%,
+    0.998253 77%,
+    0.998196 78%,
+    0.998169 79%,
+    0.998167 80%,
+    0.998186 81%,
+    0.998224 82%,
+    0.998276 83%,
+    0.998341 84%,
+    0.998415 85%,
+    0.998497 86%,
+    0.998584 87%,
+    0.998675 88%,
+    0.998768 89%,
+    0.998861 90%,
+    0.998954 91%,
+    0.999045 92%,
+    0.999134 93%,
+    0.99922 94%,
+    0.999303 95%,
+    0.999381 96%,
+    0.999455 97%,
+    0.999525 98%,
+    0.999589 99%,
+    0.99965 100%
+  );
 }
 
 .blyrics-container > div {
@@ -19,7 +136,7 @@
 }
 
 .blyrics-container > div:hover {
-  transform: scale(1.01);
+  transform: scale(var(--blyrics-hover-scale));
   transition: transform 0.3s ease;
 }
 
