@@ -160,7 +160,7 @@ export function LyricsPage() {
                   type="button"
                   onClick={() => setMode("synced")}
                   className={cn(
-                    "rounded px-3 py-1 text-xs font-medium transition-colors",
+                    "cursor-pointer rounded px-3 py-1 text-xs font-medium transition-colors",
                     mode === "synced"
                       ? "bg-unison-bg-hover text-unison-text"
                       : "text-unison-text-muted hover:text-unison-text",
@@ -172,7 +172,7 @@ export function LyricsPage() {
                   type="button"
                   onClick={() => setMode("raw")}
                   className={cn(
-                    "rounded px-3 py-1 text-xs font-medium transition-colors",
+                    "cursor-pointer rounded px-3 py-1 text-xs font-medium transition-colors",
                     mode === "raw"
                       ? "bg-unison-bg-hover text-unison-text"
                       : "text-unison-text-muted hover:text-unison-text",
