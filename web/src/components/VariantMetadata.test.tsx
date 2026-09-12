@@ -215,6 +215,22 @@ describe("VariantMetadata", () => {
       renderMeta(makeVariant())
       expect(screen.queryByRole("button", { name: /play/i })).toBeNull()
     })
+
+    it("shows a solid divider above the metadata while the player is active", () => {
+      const { container } = renderMeta(makeVariant(), {
+        playerActive: true,
+        onActivatePlayer: () => {},
+        playerRef: () => {},
+      })
+      const meta = container.querySelector("aside")?.lastElementChild
+      expect(meta?.className).toContain("border-unison-border")
+    })
+
+    it("keeps the metadata divider transparent in poster mode", () => {
+      const { container } = renderMeta(makeVariant(), { onActivatePlayer: () => {}, playerRef: () => {} })
+      const meta = container.querySelector("aside")?.lastElementChild
+      expect(meta?.className).toContain("border-transparent")
+    })
   })
 
   describe("tooltips", () => {

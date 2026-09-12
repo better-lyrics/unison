@@ -98,7 +98,7 @@ function Cover({ variant, playerRef, playerActive, onActivatePlayer }: CoverProp
         type="button"
         onClick={onActivatePlayer}
         aria-label={`Play ${variant.song}`}
-        className="group relative block aspect-square w-full cursor-pointer"
+        className="group relative block aspect-square w-full cursor-pointer text-left"
       >
         {poster}
       </button>
@@ -215,7 +215,12 @@ export function VariantMetadata({ variant, playerRef, playerActive, onActivatePl
   return (
     <aside className="overflow-hidden rounded-xl border border-unison-border bg-unison-bg-elevated">
       <Cover variant={variant} playerRef={playerRef} playerActive={playerActive} onActivatePlayer={onActivatePlayer} />
-      <div className="space-y-3.5 p-4 pt-1.5">
+      <div
+        className={cn(
+          "space-y-3.5 border-t p-4 transition-[padding,border-color] duration-200",
+          playerActive ? "border-unison-border pt-4" : "border-transparent pt-1.5",
+        )}
+      >
         {variant.hidden ? (
           <div className="rounded-lg border border-unison-warn/40 bg-unison-warn/10 px-2.5 py-2 text-[11.5px] font-medium text-unison-warn">
             This variant has been auto-hidden by community downvotes.
