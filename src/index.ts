@@ -6,6 +6,7 @@ import { closePool } from "@/infra/database"
 import { createEnv } from "@/infra/env"
 import { Logger, flushLogs } from "@/infra/logger"
 import { startWatchdog } from "@/infra/watchdog"
+import { backfillArtwork } from "@/jobs/backfill-artwork"
 import { backfillBadges } from "@/jobs/backfill-badges"
 import { backfillConfidence } from "@/jobs/backfill-confidence"
 import { backfillFormatDetection } from "@/jobs/backfill-format-detection"
@@ -263,6 +264,12 @@ backfillTextSearch(env)
 		if (updated > 0) log.info("text search backfill complete", { updated })
 	})
 	.catch((err) => log.error("text search backfill failed", { error: (err as Error).message }))
+
+backfillArtwork(env)
+	.then(({ seeded }) => {
+		if (seeded > 0) log.info("artwork backfill complete", { seeded })
+	})
+	.catch((err) => log.error("artwork backfill failed", { error: (err as Error).message }))
 
 backfillSyncType(env)
 	.then(({ scanned, changed }) => {
