@@ -16,7 +16,7 @@ export function RawLyricsView({ body, format }: RawLyricsViewProps) {
   const language = LANGUAGE_BY_FORMAT[format]
 
   return (
-    <div className="h-[420px] overflow-auto rounded-md">
+    <div className="h-[576px] overflow-auto rounded-md">
       <Highlight theme={themes.nightOwl} code={body} language={language}>
         {({ style, tokens, getLineProps, getTokenProps }) => (
           <pre
