@@ -9,11 +9,11 @@ importers:
   .:
     dependencies:
       '@braccato/core':
-        specifier: ^1.1.0
-        version: 1.1.0
+        specifier: ^1.6.2
+        version: 1.6.2
       '@braccato/parsers':
-        specifier: ^0.2.0
-        version: 0.2.0
+        specifier: ^0.2.1
+        version: 0.2.1
       '@dicebear/collection':
         specifier: ^9.2.2
         version: 9.4.2(@dicebear/core@9.4.2)
@@ -230,11 +230,11 @@ packages:
     cpu: [x64]
     os: [win32]
 
-  '@braccato/core@1.1.0':
-    resolution: {integrity: sha512-BBpwxZq6268HeImaJElD9dBSUcqZCgSon2tF0HlVNSCoqnIqr+FwNrkb99r20rZYCk+z6crOS4zmUw6xyxTHUg==}
+  '@braccato/core@1.6.2':
+    resolution: {integrity: sha512-uOmcUHjxyuLQNx+EIYp785Gs9tZhqsmSUj0OoA66K7xIv97fcElnyZGAhqWhFMWu87mMWVP1YsgGx/IEBafXew==}
 
-  '@braccato/parsers@0.2.0':
-    resolution: {integrity: sha512-vHdNv7t1DQnKw7tWTc/AfrGsK/nHLiihqM/xLm0gbTE+iN9WNKsupQ/jAeheQHaQQzZNCYnZicnXb5cxiXjqwg==}
+  '@braccato/parsers@0.2.1':
+    resolution: {integrity: sha512-Yzmj6KlPkGd2NXMQUSvm9NV2oZuJrGwf2xk5aOXCOazty6wgivXrOqtXQoOejAkzgiCUpnDeNFza6wd8rYHrow==}
 
   '@braccato/types@1.0.0':
     resolution: {integrity: sha512-BHrCdJ5Uuc8IYJJqKT/4ULHkkbL8lk6KtAhfrx8bh3gC/huYwLDTBtOQAQSMriu3yMhV7TSvDd8L0loB5b1oeA==}
@@ -1627,11 +1627,11 @@ snapshots:
   '@biomejs/cli-win32-x64@1.9.4':
     optional: true
 
-  '@braccato/core@1.1.0':
+  '@braccato/core@1.6.2':
     dependencies:
       '@braccato/types': 1.0.0
 
-  '@braccato/parsers@0.2.0':
+  '@braccato/parsers@0.2.1':
     dependencies:
       '@braccato/types': 1.0.0
       fast-xml-parser: 5.10.1

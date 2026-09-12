@@ -1,8 +1,25 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react"
+import { MotionGlobalConfig } from "motion/react"
 import { MemoryRouter, Route, Routes } from "react-router-dom"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import type { VariantFull, VariantSummary } from "@/lib/types"
+
+MotionGlobalConfig.skipAnimations = true
+if (typeof window.matchMedia !== "function") {
+  window.matchMedia = (query: string): MediaQueryList => ({
+    matches: false,
+    media: query,
+    onchange: null,
+    addEventListener() {},
+    removeEventListener() {},
+    addListener() {},
+    removeListener() {},
+    dispatchEvent() {
+      return false
+    },
+  })
+}
 
 const seekTo = vi.fn()
 const play = vi.fn()
@@ -46,6 +63,11 @@ const fetchVariant = vi.fn()
 vi.mock("@/lib/api", () => ({
   fetchLyricsVariants: (...args: unknown[]) => fetchVariants(...args),
   fetchLyricsVariant: (...args: unknown[]) => fetchVariant(...args),
+}))
+
+const downloadTextFile = vi.fn()
+vi.mock("@/lib/download", () => ({
+  downloadTextFile: (...args: unknown[]) => downloadTextFile(...args),
 }))
 
 import { LyricsPage } from "./LyricsPage"
@@ -98,6 +120,7 @@ beforeEach(() => {
   lastLineClick = null
   fetchVariants.mockReset()
   fetchVariant.mockReset()
+  downloadTextFile.mockReset()
 })
 
 afterEach(() => {
@@ -189,7 +212,7 @@ describe("LyricsPage", () => {
     renderAt(["/song/v1"])
     await waitFor(() => expect(screen.getByTestId("lyrics-renderer")).toBeTruthy())
     fireEvent.click(screen.getByRole("button", { name: /raw/i }))
-    fireEvent.click(screen.getByRole("button", { name: /copy/i }))
+    fireEvent.click(screen.getAllByRole("button", { name: /copy/i })[0])
     expect(writeText).toHaveBeenCalledWith("to copy")
   })
 
@@ -203,13 +226,15 @@ describe("LyricsPage", () => {
       renderAt(["/song/v1"])
       await waitFor(() => expect(screen.getByTestId("lyrics-renderer")).toBeTruthy())
       fireEvent.click(screen.getByRole("button", { name: /raw/i }))
-      fireEvent.click(screen.getByRole("button", { name: /copy lyrics body to clipboard/i }))
+      fireEvent.click(screen.getAllByRole("button", { name: /copy lyrics body to clipboard/i })[0])
       await waitFor(() =>
-        expect(screen.getByRole("button", { name: /copy lyrics body to clipboard/i }).textContent).toBe("Copied!"),
+        expect(screen.getAllByRole("button", { name: /copy lyrics body to clipboard/i })[0].textContent).toBe(
+          "Copied!",
+        ),
       )
       vi.advanceTimersByTime(1500)
       await waitFor(() =>
-        expect(screen.getByRole("button", { name: /copy lyrics body to clipboard/i }).textContent).toBe("Copy"),
+        expect(screen.getAllByRole("button", { name: /copy lyrics body to clipboard/i })[0].textContent).toBe("Copy"),
       )
     } finally {
       vi.useRealTimers()
@@ -226,17 +251,65 @@ describe("LyricsPage", () => {
       renderAt(["/song/v1"])
       await waitFor(() => expect(screen.getByTestId("lyrics-renderer")).toBeTruthy())
       fireEvent.click(screen.getByRole("button", { name: /raw/i }))
-      fireEvent.click(screen.getByRole("button", { name: /copy lyrics body to clipboard/i }))
+      fireEvent.click(screen.getAllByRole("button", { name: /copy lyrics body to clipboard/i })[0])
       await waitFor(() =>
-        expect(screen.getByRole("button", { name: /copy lyrics body to clipboard/i }).textContent).toBe("Copy failed"),
+        expect(screen.getAllByRole("button", { name: /copy lyrics body to clipboard/i })[0].textContent).toBe(
+          "Copy failed",
+        ),
       )
       vi.advanceTimersByTime(2500)
       await waitFor(() =>
-        expect(screen.getByRole("button", { name: /copy lyrics body to clipboard/i }).textContent).toBe("Copy"),
+        expect(screen.getAllByRole("button", { name: /copy lyrics body to clipboard/i })[0].textContent).toBe("Copy"),
       )
     } finally {
       vi.useRealTimers()
     }
+  })
+
+  it("downloads the raw body with the native extension from the header button", async () => {
+    fetchVariants.mockResolvedValue({
+      variants: [makeSummary({ id: 1, format: "lrc", song: "Song", artist: "Artist" })],
+    })
+    fetchVariant.mockResolvedValue({
+      variant: makeFull({ id: 1, format: "lrc", song: "Song", artist: "Artist", lyrics: "[00:01.00]hi" }),
+    })
+    renderAt(["/song/v1"])
+    await waitFor(() => expect(screen.getByTestId("lyrics-renderer")).toBeTruthy())
+    fireEvent.click(screen.getAllByRole("button", { name: /download/i })[0])
+    expect(downloadTextFile).toHaveBeenCalledWith("Song - Artist.lrc", "[00:01.00]hi", "text/plain;charset=utf-8")
+  })
+
+  it("uses the xml mime and .ttml extension for a ttml variant", async () => {
+    fetchVariants.mockResolvedValue({
+      variants: [makeSummary({ id: 1, format: "ttml", song: "Song", artist: "Artist" })],
+    })
+    fetchVariant.mockResolvedValue({
+      variant: makeFull({ id: 1, format: "ttml", song: "Song", artist: "Artist", lyrics: "<tt>x</tt>" }),
+    })
+    renderAt(["/song/v1"])
+    await waitFor(() => expect(screen.getByTestId("lyrics-renderer")).toBeTruthy())
+    fireEvent.click(screen.getAllByRole("button", { name: /download/i })[0])
+    expect(downloadTextFile).toHaveBeenCalledWith("Song - Artist.ttml", "<tt>x</tt>", "application/xml;charset=utf-8")
+  })
+
+  it("does not render the action buttons until the variant body is loaded", async () => {
+    fetchVariants.mockResolvedValue({ variants: [makeSummary({ id: 1 })] })
+    fetchVariant.mockReturnValue(new Promise(() => {}))
+    renderAt(["/song/v1"])
+    await waitFor(() => expect(screen.getByRole("button", { name: /raw/i })).toBeTruthy())
+    expect(screen.queryByRole("button", { name: /download/i })).toBeNull()
+    expect(screen.queryByRole("button", { name: /copy lyrics body to clipboard/i })).toBeNull()
+  })
+
+  it("copies from the header while still in synced mode", async () => {
+    fetchVariants.mockResolvedValue({ variants: [makeSummary({ id: 1 })] })
+    fetchVariant.mockResolvedValue({ variant: makeFull({ id: 1, lyrics: "sync copy" }) })
+    const writeText = vi.fn().mockResolvedValue(undefined)
+    vi.stubGlobal("navigator", { ...navigator, clipboard: { writeText } })
+    renderAt(["/song/v1"])
+    await waitFor(() => expect(screen.getByTestId("lyrics-renderer")).toBeTruthy())
+    fireEvent.click(screen.getAllByRole("button", { name: /copy lyrics body to clipboard/i })[0])
+    expect(writeText).toHaveBeenCalledWith("sync copy")
   })
 
   it("renders the hidden banner when the selected variant is hidden", async () => {
