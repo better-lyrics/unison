@@ -10,7 +10,6 @@ import { RawLyricsView } from "@/components/RawLyricsView"
 import { VariantList } from "@/components/VariantList"
 import { VariantMetadata } from "@/components/VariantMetadata"
 import { VoteControls } from "@/components/VoteControls"
-import { YouTubeEmbed } from "@/components/YouTubeEmbed"
 import { YouTubeMusicIcon } from "@/components/icons/YouTubeMusicIcon"
 import { useYouTubePlayer } from "@/hooks/useYouTubePlayer"
 import { cn } from "@/lib/cn"
@@ -27,6 +26,7 @@ export function LyricsPage() {
   const { videoId } = useParams<{ videoId: string }>()
   const [params, setParams] = useSearchParams()
   const [mode, setMode] = useState<Mode>("synced")
+  const [playerActive, setPlayerActive] = useState(false)
   const variantIdParam = params.get("variantId")
   const navigate = useNavigate()
   const location = useLocation()
@@ -39,7 +39,16 @@ export function LyricsPage() {
   const safeVideoId = videoId ?? ""
   const { ref, getCurrentTime, getPlaying, seekTo, play } = useYouTubePlayer(
     safeVideoId.length > 0 ? safeVideoId : null,
+    { playerVars: { autoplay: 1 } },
   )
+
+  const [playerVideoId, setPlayerVideoId] = useState(safeVideoId)
+  if (safeVideoId !== playerVideoId) {
+    setPlayerVideoId(safeVideoId)
+    setPlayerActive(false)
+  }
+
+  const activatePlayer = useCallback(() => setPlayerActive(true), [])
 
   const variantsQuery = useQuery({
     queryKey: ["lyrics", "variants", safeVideoId],
@@ -78,6 +87,7 @@ export function LyricsPage() {
   // there in silence.
   const handleLineClick = useCallback(
     (seconds: number) => {
+      setPlayerActive(true)
       seekTo(seconds)
       play()
     },
@@ -123,7 +133,14 @@ export function LyricsPage() {
       </div>
       <div className="grid gap-6 sm:grid-cols-[minmax(0,384px)_minmax(0,1fr)]">
         <div className="space-y-4">
-          <YouTubeEmbed playerRef={ref} />
+          {variant ? (
+            <VariantMetadata
+              variant={variant}
+              playerRef={ref}
+              playerActive={playerActive}
+              onActivatePlayer={activatePlayer}
+            />
+          ) : null}
           <a
             href={`https://music.youtube.com/watch?v=${safeVideoId}`}
             target="_blank"
@@ -133,7 +150,6 @@ export function LyricsPage() {
             <YouTubeMusicIcon className="size-[18px]" />
             Open on YouTube Music
           </a>
-          {variant ? <VariantMetadata variant={variant} /> : null}
         </div>
         <div className="space-y-4">
           <div className="overflow-hidden rounded-lg bg-white/[0.02]">

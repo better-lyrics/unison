@@ -1,3 +1,4 @@
+import { IconPlayerPlayFilled } from "@tabler/icons-react"
 import { Link } from "react-router-dom"
 import { useBadgeCatalogueOptional } from "@/components/BadgeCatalogueContext"
 import { TierChip } from "@/components/TierChip"
@@ -37,21 +38,44 @@ function truncateKey(keyId: string): string {
   return keyId.length <= 12 ? keyId : `${keyId.slice(0, 8)}…${keyId.slice(-4)}`
 }
 
-function Cover({ variant }: { variant: VariantFull }) {
+interface CoverProps {
+  variant: VariantFull
+  playerRef?: (node: HTMLDivElement | null) => void
+  playerActive?: boolean
+  onActivatePlayer?: () => void
+}
+
+function Cover({ variant, playerRef, playerActive, onActivatePlayer }: CoverProps) {
   const { data: art } = useArtwork(variant.videoId)
+
+  if (playerActive) {
+    return (
+      <div className="aspect-square w-full overflow-hidden bg-black">
+        <div ref={playerRef} className="size-full" />
+      </div>
+    )
+  }
+
   const src = art ?? youtubeThumbnailUrl(variant.videoId)
-  return (
-    <div className="relative w-full">
+  const poster = (
+    <>
       <img
         src={src}
         alt=""
         onError={(e) => {
           if (!art) e.currentTarget.src = youtubeThumbnailFallbackUrl(variant.videoId)
         }}
-        className="block aspect-[3/2] w-full object-cover"
+        className="block size-full object-cover"
       />
       <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,transparent_28%,rgba(19,18,23,0.82)_64%,var(--color-unison-bg-elevated)_100%)]" />
-      <div className="absolute inset-x-4 bottom-3.5">
+      {onActivatePlayer ? (
+        <span className="pointer-events-none absolute inset-0 flex items-center justify-center">
+          <span className="flex size-14 items-center justify-center rounded-full bg-black/55 text-white shadow-lg backdrop-blur-sm transition-colors group-hover:bg-black/70">
+            <IconPlayerPlayFilled className="size-6 translate-x-px" />
+          </span>
+        </span>
+      ) : null}
+      <div className="pointer-events-none absolute inset-x-4 bottom-3.5">
         <div className="truncate text-[20px] font-bold leading-tight tracking-[-0.01em] text-unison-text">
           {variant.song}
         </div>
@@ -65,8 +89,22 @@ function Cover({ variant }: { variant: VariantFull }) {
           ) : null}
         </div>
       </div>
-    </div>
+    </>
   )
+
+  if (onActivatePlayer) {
+    return (
+      <button
+        type="button"
+        onClick={onActivatePlayer}
+        aria-label={`Play ${variant.song}`}
+        className="group relative block aspect-square w-full cursor-pointer"
+      >
+        {poster}
+      </button>
+    )
+  }
+  return <div className="relative aspect-square w-full">{poster}</div>
 }
 
 function Pill({ tip, gold, children }: { tip: string; gold?: boolean; children: React.ReactNode }) {
@@ -166,10 +204,17 @@ function MarkCallout({ mark }: { mark: Mark }) {
   )
 }
 
-export function VariantMetadata({ variant }: { variant: VariantFull }) {
+interface VariantMetadataProps {
+  variant: VariantFull
+  playerRef?: (node: HTMLDivElement | null) => void
+  playerActive?: boolean
+  onActivatePlayer?: () => void
+}
+
+export function VariantMetadata({ variant, playerRef, playerActive, onActivatePlayer }: VariantMetadataProps) {
   return (
     <aside className="overflow-hidden rounded-xl border border-unison-border bg-unison-bg-elevated">
-      <Cover variant={variant} />
+      <Cover variant={variant} playerRef={playerRef} playerActive={playerActive} onActivatePlayer={onActivatePlayer} />
       <div className="space-y-3.5 p-4 pt-1.5">
         {variant.hidden ? (
           <div className="rounded-lg border border-unison-warn/40 bg-unison-warn/10 px-2.5 py-2 text-[11.5px] font-medium text-unison-warn">

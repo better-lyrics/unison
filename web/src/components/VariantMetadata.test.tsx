@@ -64,13 +64,20 @@ function makeVariant(overrides: Partial<VariantFull> = {}): VariantFull {
   }
 }
 
-function renderMeta(variant: VariantFull) {
+function renderMeta(
+  variant: VariantFull,
+  player: {
+    playerRef?: (node: HTMLDivElement | null) => void
+    playerActive?: boolean
+    onActivatePlayer?: () => void
+  } = {},
+) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   return render(
     <QueryClientProvider client={qc}>
       <BadgeCatalogueProvider>
         <MemoryRouter>
-          <VariantMetadata variant={variant} />
+          <VariantMetadata variant={variant} {...player} />
         </MemoryRouter>
       </BadgeCatalogueProvider>
     </QueryClientProvider>,
@@ -181,6 +188,32 @@ describe("VariantMetadata", () => {
         expect(cover).not.toBeNull()
       })
       expect(container.querySelector('img[src*="kJQP7kiw5Fk/maxresdefault.jpg"]')).not.toBeNull()
+    })
+  })
+
+  describe("cover player", () => {
+    it("shows a play button over the poster when the player can be activated", async () => {
+      renderMeta(makeVariant(), { onActivatePlayer: () => {}, playerRef: () => {} })
+      expect(await screen.findByRole("button", { name: /play/i })).toBeTruthy()
+    })
+
+    it("calls onActivatePlayer when the poster is clicked", async () => {
+      const onActivatePlayer = vi.fn()
+      renderMeta(makeVariant(), { onActivatePlayer, playerRef: () => {} })
+      fireEvent.click(await screen.findByRole("button", { name: /play/i }))
+      expect(onActivatePlayer).toHaveBeenCalledTimes(1)
+    })
+
+    it("mounts the player node and drops the poster button once active", () => {
+      const playerRef = vi.fn()
+      renderMeta(makeVariant(), { playerActive: true, onActivatePlayer: () => {}, playerRef })
+      expect(playerRef).toHaveBeenCalledWith(expect.any(HTMLElement))
+      expect(screen.queryByRole("button", { name: /play/i })).toBeNull()
+    })
+
+    it("renders a non-interactive poster when no activation handler is given", () => {
+      renderMeta(makeVariant())
+      expect(screen.queryByRole("button", { name: /play/i })).toBeNull()
     })
   })
 

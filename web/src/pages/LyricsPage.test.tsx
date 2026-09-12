@@ -350,6 +350,15 @@ describe("LyricsPage", () => {
     expect(controls.getAttribute("data-user-vote")).toBe("-1")
   })
 
+  it("shows the poster play button and swaps to the player when it is clicked", async () => {
+    fetchVariants.mockResolvedValue({ variants: [makeSummary({ id: 1 })] })
+    fetchVariant.mockResolvedValue({ variant: makeFull({ id: 1 }) })
+    renderAt(["/song/v1"])
+    const play = await screen.findByRole("button", { name: /play/i })
+    fireEvent.click(play)
+    await waitFor(() => expect(screen.queryByRole("button", { name: /play/i })).toBeNull())
+  })
+
   it("seeks and starts the player when the renderer fires an onLineClick", async () => {
     fetchVariants.mockResolvedValue({ variants: [makeSummary({ id: 1 })] })
     fetchVariant.mockResolvedValue({ variant: makeFull({ id: 1 }) })
