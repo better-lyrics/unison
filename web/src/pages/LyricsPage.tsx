@@ -21,7 +21,7 @@ import { lyricsFilename, MIME_BY_FORMAT } from "@/lib/lyrics-download"
 type Mode = "synced" | "raw"
 
 const HEADER_ACTION_CLASS =
-  "inline-flex items-center gap-1.5 rounded-md border border-unison-border bg-unison-bg-elevated px-2 py-1 text-xs text-unison-text-secondary transition-colors hover:border-unison-border-strong hover:bg-unison-bg-hover hover:text-unison-text"
+  "inline-flex cursor-pointer items-center gap-1.5 rounded-md border border-unison-border bg-unison-bg-elevated px-2 py-1 text-xs text-unison-text-secondary transition-colors hover:border-unison-border-strong hover:bg-unison-bg-hover hover:text-unison-text"
 
 export function LyricsPage() {
   const { videoId } = useParams<{ videoId: string }>()

@@ -1,6 +1,23 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react"
+import { MotionGlobalConfig } from "motion/react"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { CopyButton } from "./CopyButton"
+
+MotionGlobalConfig.skipAnimations = true
+if (typeof window.matchMedia !== "function") {
+  window.matchMedia = (query: string): MediaQueryList => ({
+    matches: false,
+    media: query,
+    onchange: null,
+    addEventListener() {},
+    removeEventListener() {},
+    addListener() {},
+    removeListener() {},
+    dispatchEvent() {
+      return false
+    },
+  })
+}
 
 afterEach(() => {
   cleanup()
@@ -39,6 +56,14 @@ describe("CopyButton", () => {
     await waitFor(() => expect(screen.getByRole("button").textContent).toBe("Copy failed"))
     vi.advanceTimersByTime(2500)
     await waitFor(() => expect(screen.getByRole("button").textContent).toBe("Copy"))
+  })
+
+  it("applies the liked-style treatment when copied", async () => {
+    stubClipboard()
+    render(<CopyButton text="x" />)
+    const btn = screen.getByRole("button", { name: /copy lyrics body to clipboard/i })
+    fireEvent.click(btn)
+    await waitFor(() => expect(btn.className).toContain("bg-green-500/10"))
   })
 
   describe("edge cases", () => {

@@ -1,6 +1,8 @@
 import { IconCheck, IconCopy, IconX } from "@tabler/icons-react"
+import { AnimatePresence, MotionConfig, motion } from "motion/react"
 import { useCallback, useEffect, useRef, useState } from "react"
 import { cn } from "@/lib/cn"
+import { iconSwapVariants, labelSwapVariants, LAYOUT_TRANSITION, SWAP_TRANSITION } from "@/lib/motion-variants"
 
 type CopyState = "idle" | "copied" | "failed"
 
@@ -13,6 +15,12 @@ const LABEL: Record<CopyState, string> = {
   idle: "Copy",
   copied: "Copied!",
   failed: "Copy failed",
+}
+
+const ICON: Record<CopyState, typeof IconCopy> = {
+  idle: IconCopy,
+  copied: IconCheck,
+  failed: IconX,
 }
 
 interface CopyButtonProps {
@@ -61,30 +69,62 @@ export function CopyButton({ text, className, iconClassName = "size-4", withText
     )
   }, [text, scheduleReset])
 
+  const Icon = ICON[state]
+
   return (
-    <button
-      type="button"
-      onClick={handleClick}
-      disabled={!canCopy}
-      aria-label="Copy lyrics body to clipboard"
-      aria-live="polite"
-      title="Copy lyrics"
-      className={cn(
-        className,
-        !canCopy && "cursor-not-allowed opacity-60",
-        state === "idle" && "text-unison-text-secondary",
-        state === "copied" && "text-green-500",
-        state === "failed" && "text-amber-500",
-      )}
-    >
-      {state === "copied" ? (
-        <IconCheck className={iconClassName} stroke={1.75} />
-      ) : state === "failed" ? (
-        <IconX className={iconClassName} stroke={1.75} />
-      ) : (
-        <IconCopy className={iconClassName} stroke={1.75} />
-      )}
-      <span className={withText ? undefined : "sr-only"}>{LABEL[state]}</span>
-    </button>
+    <MotionConfig reducedMotion="user">
+      <motion.button
+        layout
+        type="button"
+        onClick={handleClick}
+        disabled={!canCopy}
+        aria-label="Copy lyrics body to clipboard"
+        aria-live="polite"
+        title="Copy lyrics"
+        style={{ borderRadius: 6 }}
+        transition={{ layout: LAYOUT_TRANSITION }}
+        className={cn(
+          className,
+          "relative cursor-pointer whitespace-nowrap",
+          !canCopy && "cursor-not-allowed opacity-60",
+          state === "copied" &&
+            "border-green-500/60 bg-green-500/10 text-green-300 hover:border-green-500/60 hover:bg-green-500/10 hover:text-green-300",
+          state === "failed" &&
+            "border-amber-500/60 bg-amber-500/10 text-amber-300 hover:border-amber-500/60 hover:bg-amber-500/10 hover:text-amber-300",
+        )}
+      >
+        <AnimatePresence initial={false} mode="popLayout">
+          <motion.span
+            key={state}
+            layout
+            variants={iconSwapVariants}
+            initial="initial"
+            animate="animate"
+            exit="exit"
+            transition={SWAP_TRANSITION}
+            className="inline-flex"
+          >
+            <Icon className={iconClassName} stroke={1.75} />
+          </motion.span>
+        </AnimatePresence>
+        {withText ? (
+          <AnimatePresence initial={false} mode="popLayout">
+            <motion.span
+              key={LABEL[state]}
+              layout
+              variants={labelSwapVariants}
+              initial="initial"
+              animate="animate"
+              exit="exit"
+              transition={SWAP_TRANSITION}
+            >
+              {LABEL[state]}
+            </motion.span>
+          </AnimatePresence>
+        ) : (
+          <span className="sr-only">{LABEL[state]}</span>
+        )}
+      </motion.button>
+    </MotionConfig>
   )
 }
