@@ -225,7 +225,12 @@ export function VariantMetadata({ variant, playerRef, playerActive, onActivatePl
   return (
     <aside className="overflow-hidden rounded-xl border border-unison-border bg-unison-bg-elevated">
       <Cover variant={variant} playerRef={playerRef} playerActive={playerActive} onActivatePlayer={onActivatePlayer} />
-      <div className="p-4 pt-1.5">
+      <div
+        className={cn(
+          "border-t px-4 pt-1.5 pb-4 transition-colors duration-300",
+          playerActive ? "border-unison-border" : "border-transparent",
+        )}
+      >
         <MotionConfig reducedMotion="user">
           <AnimatePresence>
             {playerActive ? (
@@ -237,8 +242,7 @@ export function VariantMetadata({ variant, playerRef, playerActive, onActivatePl
                 transition={LAYOUT_TRANSITION}
                 className="overflow-hidden"
               >
-                <div className="h-px bg-unison-border" />
-                <div className="py-3.5">
+                <div className="pt-2.5 pb-3.5">
                   <TrackHeading variant={variant} />
                 </div>
               </motion.div>
