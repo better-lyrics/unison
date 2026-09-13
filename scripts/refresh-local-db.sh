@@ -1,14 +1,4 @@
 #!/usr/bin/env bash
-# Refresh the local dev "unison" database with a read-only copy of production.
-#
-# Runs pg_dump/pg_restore INSIDE the local Postgres container so the client
-# version matches (prod is Postgres 18). Only the "unison" database is touched;
-# other databases in the container (castle_verify, gamif_it) are left alone.
-#
-# Source of prod:   DATABASE_URL in .env.production   (dumped read-only, never written)
-# Restore target:   DATABASE_URL in .env              (must be localhost)
-#
-# Usage:  bash scripts/refresh-local-db.sh
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"

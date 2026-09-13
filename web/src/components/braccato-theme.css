@@ -1,8 +1,6 @@
 /* Cherry-picked from the Sustain theme in the braccato repo (demo/theme-sustain.css),
    minus its webfont, its font declarations, its distance blur ramp, and its agent
-   alignment (lyrics.css already ships that). The scroll timing, word wobble, and
-   letter wave tuning are carried over from that theme's root vars. Passed to the
-   element as a string. */
+   alignment (lyrics.css already ships that). Passed to the element as a string. */
 
 /*
 blyrics-target-scroll-pos-ratio = 0.5;
