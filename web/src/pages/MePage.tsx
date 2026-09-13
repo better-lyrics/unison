@@ -2,8 +2,6 @@ import { useCallback } from "react"
 import { Navigate } from "react-router-dom"
 import { useSession } from "@/auth/useSession"
 import { EmptyState } from "@/components/EmptyState"
-import { LeaderboardSection } from "@/components/LeaderboardSection"
-import { LoadingPlaceholder } from "@/components/LoadingPlaceholder"
 import { ProfileSkeleton } from "@/components/ProfileSkeleton"
 import { UserProfileView } from "@/components/UserProfileView"
 import { useAsyncData } from "@/hooks/useAsyncData"
@@ -25,11 +23,7 @@ export function MePage() {
   const session = useSession()
 
   if (session.status === "loading") {
-    return (
-      <LeaderboardSection title="Me">
-        <LoadingPlaceholder />
-      </LeaderboardSection>
-    )
+    return <ProfileSkeleton owner />
   }
 
   if (session.status !== "signed-in") {

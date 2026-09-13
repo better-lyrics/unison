@@ -1,3 +1,4 @@
+import { Bone, skeletonKeys } from "@/components/skeleton"
 import { cn } from "@/lib/cn"
 import { formatRank } from "@/lib/format"
 import type { VariantSummary } from "@/lib/types"
@@ -44,6 +45,25 @@ export function VariantList({ variants, selectedId, onSelect }: VariantListProps
           </li>
         )
       })}
+    </ul>
+  )
+}
+
+export function VariantListSkeleton({ rows = 4 }: { rows?: number }) {
+  return (
+    <ul className="space-y-2">
+      {skeletonKeys("variant-skeleton", rows).map((key) => (
+        <li key={key}>
+          <div className="flex w-full items-center gap-3 rounded-lg bg-white/[0.02] px-3 py-2">
+            <Bone className="h-3.5 w-4 shrink-0" />
+            <Bone className="h-[18px] w-24" />
+            <div className="ml-auto flex flex-col items-end gap-1">
+              <Bone className="h-4 w-8" />
+              <Bone className="h-2.5 w-12" />
+            </div>
+          </div>
+        </li>
+      ))}
     </ul>
   )
 }

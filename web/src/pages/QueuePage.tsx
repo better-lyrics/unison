@@ -1,8 +1,7 @@
 import { useInfiniteQuery } from "@tanstack/react-query"
 import { useEffect, useMemo, useRef } from "react"
 import { EmptyState } from "@/components/EmptyState"
-import { LoadingPlaceholder } from "@/components/LoadingPlaceholder"
-import { SongRow } from "@/components/SongRow"
+import { SongRow, SongRowSkeletonList } from "@/components/SongRow"
 import { fetchQueue } from "@/lib/api"
 import type { QueueEntry, SongLeaderboardEntry } from "@/lib/types"
 
@@ -57,7 +56,7 @@ export function QueuePage() {
       </header>
 
       {isLoading ? (
-        <LoadingPlaceholder />
+        <SongRowSkeletonList rows={6} />
       ) : error ? (
         <EmptyState title="Could not load the queue" hint={error.message} />
       ) : entries.length === 0 ? (

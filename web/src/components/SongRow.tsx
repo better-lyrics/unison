@@ -1,4 +1,5 @@
 import { IconMusic } from "@tabler/icons-react"
+import { Bone, skeletonKeys } from "@/components/skeleton"
 import { formatCompact, formatExact, formatRank } from "@/lib/format"
 import type { SongLeaderboardEntry } from "@/lib/types"
 
@@ -39,5 +40,34 @@ export function SongRow({ entry }: SongRowProps) {
         </div>
       </a>
     </li>
+  )
+}
+
+function SongRowSkeleton() {
+  return (
+    <li>
+      <div className="flex items-center gap-4 rounded-lg bg-white/[0.02] px-4 py-3">
+        <Bone className="h-4 w-4 shrink-0" />
+        <Bone className="size-12 shrink-0" />
+        <div className="min-w-0 flex-1 space-y-2">
+          <Bone className="h-3.5 w-2/5" />
+          <Bone className="h-3 w-1/4" />
+        </div>
+        <div className="flex flex-col items-end gap-2">
+          <Bone className="h-3.5 w-10" />
+          <Bone className="h-2.5 w-12" />
+        </div>
+      </div>
+    </li>
+  )
+}
+
+export function SongRowSkeletonList({ rows = 5 }: { rows?: number }) {
+  return (
+    <ul className="space-y-2">
+      {skeletonKeys("song-skeleton", rows).map((key) => (
+        <SongRowSkeleton key={key} />
+      ))}
+    </ul>
   )
 }

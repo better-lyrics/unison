@@ -1,4 +1,5 @@
 import { Link } from "react-router-dom"
+import { Bone, skeletonKeys } from "@/components/skeleton"
 import { SongThumbnail } from "@/components/SongThumbnail"
 import { formatDuration, formatRank } from "@/lib/format"
 import type { LyricsSearchHit } from "@/lib/types"
@@ -41,5 +42,36 @@ export function SearchResultRow({ entry, rank }: SearchResultRowProps) {
         </div>
       </Link>
     </li>
+  )
+}
+
+function SearchResultRowSkeleton() {
+  return (
+    <li>
+      <div className="flex items-center gap-4 rounded-lg bg-white/[0.02] px-4 py-3">
+        <Bone className="h-4 w-4 shrink-0" />
+        <Bone className="size-12 shrink-0" />
+        <div className="min-w-0 flex-1 space-y-1.5">
+          <Bone className="h-3.5 w-2/5" />
+          <Bone className="h-3 w-1/4" />
+          <Bone className="h-2.5 w-1/3" />
+        </div>
+        <div className="flex shrink-0 flex-col items-end gap-1">
+          <Bone className="h-[18px] w-10 rounded" />
+          <Bone className="h-5 w-8" />
+          <Bone className="h-[14px] w-12" />
+        </div>
+      </div>
+    </li>
+  )
+}
+
+export function SearchResultRowSkeletonList({ rows = 6 }: { rows?: number }) {
+  return (
+    <ul className="space-y-2">
+      {skeletonKeys("search-skeleton", rows).map((key) => (
+        <SearchResultRowSkeleton key={key} />
+      ))}
+    </ul>
   )
 }
