@@ -24,6 +24,24 @@ describe("isAlbumArtUrl", () => {
 			expect(isAlbumArtUrl("not a url")).toBe(false)
 		})
 	})
+	describe("regressions", () => {
+		it("regression: rejects a look-alike host that merely ends with googleusercontent.com", () => {
+			expect(isAlbumArtUrl("https://evilgoogleusercontent.com/x=w544-h544")).toBe(false)
+			expect(isAlbumArtUrl("https://xgoogleusercontent.com/x=w120-h120")).toBe(false)
+		})
+		it("regression: rejects googleusercontent.com as a subdomain label of another host", () => {
+			expect(isAlbumArtUrl("https://googleusercontent.com.evil.com/x=w1-h1")).toBe(false)
+		})
+		it("regression: rejects googleusercontent.com only in the path", () => {
+			expect(isAlbumArtUrl("https://evil.com/googleusercontent.com/x=w1-h1")).toBe(false)
+		})
+		it("rejects non-http(s) schemes even on the trusted host", () => {
+			expect(isAlbumArtUrl("ftp://x.googleusercontent.com/x=w1-h1")).toBe(false)
+		})
+		it("accepts a legitimate googleusercontent subdomain", () => {
+			expect(isAlbumArtUrl("https://yt3.googleusercontent.com/a=w544-h544")).toBe(true)
+		})
+	})
 })
 
 describe("normalizeArtworkUrl", () => {

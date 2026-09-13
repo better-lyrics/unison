@@ -12,7 +12,8 @@ export const artworkRoutes = (env: Env) =>
 			"/",
 			async ({ env, query, status }) => {
 				if (!query.v) return status(400, buildError(ErrorCode.MISSING_QUERY))
-				if (query.v.length !== 11) return status(400, buildError(ErrorCode.INVALID_ID))
+				if (!/^[A-Za-z0-9_-]{11}$/.test(query.v))
+					return status(400, buildError(ErrorCode.INVALID_ID))
 				const artworkUrl = await resolveArtwork(env, query.v)
 				return { success: true, data: { artworkUrl } }
 			},

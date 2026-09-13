@@ -62,5 +62,11 @@ describe("GET /artwork", () => {
 			const res = await app.handle(new Request("http://localhost/artwork?v=short"))
 			expect(res.status).toBe(400)
 		})
+
+		it("400s when v is 11 chars but has an invalid character", async () => {
+			const app = artworkRoutes(makeEnv())
+			const res = await app.handle(new Request("http://localhost/artwork?v=!!!!!!!!!!!"))
+			expect(res.status).toBe(400)
+		})
 	})
 })

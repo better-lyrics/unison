@@ -2,7 +2,15 @@ const SIZE_SUFFIX = /=w(\d+)-h(\d+)/
 
 export function isAlbumArtUrl(url: string | null | undefined): boolean {
 	if (!url || typeof url !== "string") return false
-	if (!/^https?:\/\/[^/]*googleusercontent\.com\//.test(url)) return false
+	let parsed: URL
+	try {
+		parsed = new URL(url)
+	} catch {
+		return false
+	}
+	if (parsed.protocol !== "https:" && parsed.protocol !== "http:") return false
+	const host = parsed.hostname
+	if (host !== "googleusercontent.com" && !host.endsWith(".googleusercontent.com")) return false
 	const m = url.match(SIZE_SUFFIX)
 	if (!m) return false
 	return m[1] === m[2]
