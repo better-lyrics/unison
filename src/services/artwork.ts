@@ -23,6 +23,7 @@ function maybeRefresh(env: Env, videoId: string, deps: Required<Deps>): void {
 	if (deps.random() >= config.artwork.refreshProbability) return
 	void (async () => {
 		const fresh = await deps.resolver(videoId)
+		if (!fresh) return
 		await upsertVideoArtwork(env, videoId, fresh)
 		await writeCache(env, videoId, fresh)
 	})().catch(() => {})

@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs"
 import pg from "pg"
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest"
-import { upsertVideoArtwork } from "@/db/artwork"
+import { getVideoArtwork, upsertVideoArtwork } from "@/db/artwork"
 import { D1Compat } from "@/infra/database"
 import { resolveArtwork } from "@/services/artwork"
 import type { Env } from "@/types"
@@ -102,6 +102,20 @@ describeIntegration("resolveArtwork (integration)", () => {
 			expect(served).toBe("https://old=w544-h544")
 			await vi.waitFor(() => expect(resolver).toHaveBeenCalledTimes(1))
 			await vi.waitFor(() => expect(cache.store.get("artwork:v5")).toBe("https://new=w544-h544"))
+		})
+
+		it("regression: does not clobber existing artwork when the refresh resolves null", async () => {
+			await upsertVideoArtwork(env, "v6", "https://good=w544-h544")
+			cache.store.set("artwork:v6", "https://good=w544-h544")
+			const resolver = vi.fn(async () => null)
+			const ALWAYS = () => 0
+
+			const served = await resolveArtwork(env, "v6", { resolver, random: ALWAYS })
+			expect(served).toBe("https://good=w544-h544")
+			await vi.waitFor(() => expect(resolver).toHaveBeenCalledTimes(1))
+			expect(cache.store.get("artwork:v6")).toBe("https://good=w544-h544")
+			const row = await getVideoArtwork(env, "v6")
+			expect(row?.artworkUrl).toBe("https://good=w544-h544")
 		})
 	})
 })
