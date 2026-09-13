@@ -14,6 +14,7 @@ import { backfillLanguage } from "@/jobs/backfill-language"
 import { backfillNorms } from "@/jobs/backfill-norms"
 import { backfillSyncType } from "@/jobs/backfill-synctype"
 import { backfillTextSearch } from "@/jobs/backfill-text-search"
+import { backfillVideoLinks } from "@/jobs/backfill-video-links"
 import { backfillVoteCounts } from "@/jobs/backfill-vote-counts"
 import { backfillXp } from "@/jobs/backfill-xp"
 import { cleanupFulfilledRequests } from "@/jobs/cleanup-fulfilled-requests"
@@ -264,6 +265,12 @@ backfillTextSearch(env)
 		if (updated > 0) log.info("text search backfill complete", { updated })
 	})
 	.catch((err) => log.error("text search backfill failed", { error: (err as Error).message }))
+
+backfillVideoLinks(env)
+	.then(({ linked }) => {
+		if (linked > 0) log.info("video links backfill complete", { linked })
+	})
+	.catch((err) => log.error("video links backfill failed", { error: (err as Error).message }))
 
 backfillArtwork(env)
 	.then(({ seeded }) => {

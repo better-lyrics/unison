@@ -11,6 +11,11 @@ export const config = {
 		maxVariantsPerUserPerVideo: 3,
 	},
 
+	videoLinking: {
+		maxVideosPerVariant: 20,
+		durationDeltaSeconds: 5,
+	},
+
 	moderation: {
 		reportsThreshold: 2,
 		autoHide: {
