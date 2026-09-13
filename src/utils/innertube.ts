@@ -7,7 +7,12 @@ const log = new Logger("innertube")
 let client: Promise<Innertube> | null = null
 
 function getInnertube(): Promise<Innertube> {
-	if (!client) client = Innertube.create({ retrieve_player: false })
+	if (!client) {
+		client = Innertube.create({ retrieve_player: false }).catch((err) => {
+			client = null
+			throw err
+		})
+	}
 	return client
 }
 
