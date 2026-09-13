@@ -2,6 +2,7 @@ import { IconBrandDiscordFilled, IconStarFilled } from "@tabler/icons-react"
 import { Link } from "react-router-dom"
 import { useBadgeCatalogueOptional } from "@/components/BadgeCatalogueContext"
 import { MedalRank } from "@/components/MedalRank"
+import { Bone, skeletonKeys } from "@/components/skeleton"
 import { dicebearThumbsDataUri } from "@/lib/avatar"
 import { resolveBadgeImage } from "@/lib/badge-view"
 import { cn } from "@/lib/cn"
@@ -130,5 +131,44 @@ export function CuratorRow({ entry, isSelf = false, appended = false }: CuratorR
         </div>
       </Link>
     </li>
+  )
+}
+
+function CuratorStatSkeleton({ className }: { className?: string }) {
+  return (
+    <div className={cn("flex flex-col items-end gap-1.5 text-right", className)}>
+      <Bone className="h-3.5 w-8" />
+      <Bone className="h-2.5 w-10" />
+    </div>
+  )
+}
+
+function CuratorRowSkeleton() {
+  return (
+    <li>
+      <div className="flex items-center gap-4 rounded-lg bg-white/[0.02] px-4 py-3">
+        <div className="flex w-10 shrink-0 justify-center">
+          <Bone className="size-6 rounded-full" />
+        </div>
+        <Bone className="size-12 shrink-0 rounded-full" />
+        <div className="min-w-0 flex-1 space-y-2">
+          <Bone className="h-3.5 w-1/3" />
+          <Bone className="h-2.5 w-24" />
+        </div>
+        <CuratorStatSkeleton className="hidden sm:flex" />
+        <CuratorStatSkeleton className="hidden sm:flex" />
+        <CuratorStatSkeleton />
+      </div>
+    </li>
+  )
+}
+
+export function CuratorRowSkeletonList({ rows = 6 }: { rows?: number }) {
+  return (
+    <ul className="space-y-2">
+      {skeletonKeys("curator-skeleton", rows).map((key) => (
+        <CuratorRowSkeleton key={key} />
+      ))}
+    </ul>
   )
 }

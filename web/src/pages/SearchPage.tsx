@@ -2,8 +2,7 @@ import { useQuery } from "@tanstack/react-query"
 import { useMemo } from "react"
 import { useSearchParams } from "react-router-dom"
 import { EmptyState } from "@/components/EmptyState"
-import { LoadingPlaceholder } from "@/components/LoadingPlaceholder"
-import { SearchResultRow } from "@/components/SearchResultRow"
+import { SearchResultRow, SearchResultRowSkeletonList } from "@/components/SearchResultRow"
 import { useDebouncedValue } from "@/hooks/useDebouncedValue"
 import { searchLyrics } from "@/lib/api"
 
@@ -33,7 +32,7 @@ export function SearchPage() {
   }
 
   if (isLoading) {
-    return <LoadingPlaceholder rows={6} />
+    return <SearchResultRowSkeletonList rows={6} />
   }
 
   if (error) {

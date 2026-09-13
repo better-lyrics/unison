@@ -40,6 +40,7 @@ vi.mock("@/components/LyricsRenderer", () => ({
     lastLineClick = props.onLineClick ?? null
     return <div data-testid="lyrics-renderer">{`variant:${props.variant.id}`}</div>
   },
+  LyricsContentSkeleton: () => <div data-testid="lyrics-content-skeleton" className="animate-pulse" />,
 }))
 
 vi.mock("@/components/VoteControls", () => ({

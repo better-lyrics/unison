@@ -1,8 +1,8 @@
 import { EmptyState } from "@/components/EmptyState"
-import { LoadingPlaceholder } from "@/components/LoadingPlaceholder"
 import { CountdownTimer } from "@/components/exam/CountdownTimer"
 import { QuestionView } from "@/components/exam/QuestionView"
 import { examButtonPrimary, examButtonSecondary } from "@/components/exam/exam-ui"
+import { Bone } from "@/components/skeleton"
 import { panelClass } from "@/components/ui"
 import { cn } from "@/lib/cn"
 import { type ExamAnswers, autosaveAnswer, beginExam, fetchExamSession, submitExam } from "@/lib/examApi"
@@ -139,7 +139,7 @@ export function ExamPage() {
     return <EmptyState title={copy.title} hint={copy.hint} />
   }
 
-  if (query.isLoading || !query.data) return <LoadingPlaceholder rows={5} />
+  if (query.isLoading || !query.data) return <ExamSkeleton />
 
   const { candidate, questions, timeLimitSec } = query.data
   const total = questions.length
@@ -289,6 +289,28 @@ export function ExamPage() {
           </button>
         )}
       </div>
+    </div>
+  )
+}
+
+function ExamSkeleton() {
+  return (
+    <div className={cn(panelClass, "mx-auto max-w-2xl space-y-5 p-6")}>
+      <Bone className="h-6 w-56" />
+      <div className="space-y-2">
+        <Bone className="h-4 w-full" />
+        <Bone className="h-4 w-full" />
+        <Bone className="h-4 w-4/5" />
+      </div>
+      <Bone className="h-4 w-44" />
+      <div className="space-y-2 pl-5">
+        <Bone className="h-4 w-3/4" />
+        <Bone className="h-4 w-2/3" />
+        <Bone className="h-4 w-1/2" />
+        <Bone className="h-4 w-4/5" />
+      </div>
+      <Bone className="h-4 w-24" />
+      <Bone className="h-10 w-28 rounded-lg" />
     </div>
   )
 }

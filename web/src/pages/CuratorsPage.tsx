@@ -1,10 +1,9 @@
 import { useCallback, useEffect } from "react"
 import { useSession } from "@/auth/useSession"
 import { BadgeCatalogueProvider } from "@/components/BadgeCatalogueContext"
-import { CuratorRow } from "@/components/CuratorRow"
+import { CuratorRow, CuratorRowSkeletonList } from "@/components/CuratorRow"
 import { EmptyState } from "@/components/EmptyState"
 import { LeaderboardSection } from "@/components/LeaderboardSection"
-import { LoadingPlaceholder } from "@/components/LoadingPlaceholder"
 import { useAsyncData } from "@/hooks/useAsyncData"
 import { fetchCuratorLeaderboard, fetchUserRank } from "@/lib/api"
 import type { CuratorLeaderboardEntry, UserRankResponse } from "@/lib/types"
@@ -37,7 +36,7 @@ export function CuratorsPage() {
   if (status === "loading" || (selfKeyId !== null && myRank.status === "loading")) {
     return (
       <LeaderboardSection title="Leaderboard">
-        <LoadingPlaceholder />
+        <CuratorRowSkeletonList rows={6} />
       </LeaderboardSection>
     )
   }

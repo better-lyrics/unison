@@ -3,6 +3,8 @@ import type { BraccatoLyricsElement, LineClickDetail } from "@braccato/core/elem
 import { LRCParser, type LyricParser, PlainParser, TTMLParser } from "@braccato/parsers"
 import { useEffect, useMemo, useRef } from "react"
 import braccatoTheme from "@/components/braccato-theme.css?raw"
+import { Bone } from "@/components/skeleton"
+import { cn } from "@/lib/cn"
 import type { LyricsFormat, VariantFull } from "@/lib/types"
 
 interface LyricsRendererProps {
@@ -76,4 +78,26 @@ export function LyricsRenderer({ variant, getCurrentTime, getPlaying, onLineClic
   }, [])
 
   return <braccato-lyrics ref={elementRef} className="mx-auto h-[576px] w-full max-w-3xl" />
+}
+
+const LYRIC_SKELETON_LINES = [
+  { id: "a", w: "w-3/5" },
+  { id: "b", w: "w-4/5" },
+  { id: "c", w: "w-1/2" },
+  { id: "d", w: "w-2/3" },
+  { id: "e", w: "w-3/4" },
+  { id: "f", w: "w-2/5" },
+  { id: "g", w: "w-3/5" },
+  { id: "h", w: "w-1/2" },
+  { id: "i", w: "w-11/12" },
+]
+
+export function LyricsContentSkeleton() {
+  return (
+    <div className="mx-auto flex h-[576px] w-full max-w-3xl flex-col justify-center gap-5">
+      {LYRIC_SKELETON_LINES.map(({ id, w }) => (
+        <Bone key={id} className={cn("h-5", w)} />
+      ))}
+    </div>
+  )
 }

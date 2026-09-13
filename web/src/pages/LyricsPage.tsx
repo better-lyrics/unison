@@ -4,10 +4,10 @@ import { useLocation, useNavigate, useParams, useSearchParams } from "react-rout
 import { CopyButton } from "@/components/CopyButton"
 import { DownloadButton } from "@/components/DownloadButton"
 import { EmptyState } from "@/components/EmptyState"
-import { LoadingPlaceholder } from "@/components/LoadingPlaceholder"
-import { LyricsRenderer } from "@/components/LyricsRenderer"
+import { LyricsContentSkeleton, LyricsRenderer } from "@/components/LyricsRenderer"
 import { RawLyricsView } from "@/components/RawLyricsView"
-import { VariantList } from "@/components/VariantList"
+import { Bone } from "@/components/skeleton"
+import { VariantList, VariantListSkeleton } from "@/components/VariantList"
 import { VariantMetadata } from "@/components/VariantMetadata"
 import { VoteControls } from "@/components/VoteControls"
 import { YouTubeMusicIcon } from "@/components/icons/YouTubeMusicIcon"
@@ -102,7 +102,7 @@ export function LyricsPage() {
 
   if (!videoId) return <EmptyState title="No video specified" />
 
-  if (variantsQuery.isLoading) return <LoadingPlaceholder rows={4} />
+  if (variantsQuery.isLoading) return <LyricsPageSkeleton />
   if (variantsQuery.isError) {
     const message = variantsQuery.error instanceof Error ? variantsQuery.error.message : "Unknown error"
     return <EmptyState title="Could not load lyrics" hint={message} />
@@ -195,7 +195,7 @@ export function LyricsPage() {
             </div>
             <div className="p-4">
               {variantQuery.isLoading || !variant ? (
-                <LoadingPlaceholder rows={3} />
+                <LyricsContentSkeleton />
               ) : mode === "synced" ? (
                 <LyricsRenderer
                   variant={variant}
@@ -209,6 +209,65 @@ export function LyricsPage() {
             </div>
           </div>
           <VariantList variants={variants} selectedId={selectedId ?? -1} onSelect={handleSelect} />
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function LyricsPageSkeleton() {
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <Bone className="h-4 w-12" />
+        <Bone className="h-9 w-28 rounded-lg" />
+      </div>
+      <div className="grid gap-6 sm:grid-cols-[minmax(0,384px)_minmax(0,1fr)]">
+        <div className="space-y-4">
+          <div className="overflow-hidden rounded-xl border border-unison-border bg-unison-bg-elevated">
+            <Bone className="aspect-square w-full rounded-none" />
+            <div className="space-y-3.5 px-4 pt-3 pb-4">
+              <div className="flex flex-wrap gap-1.5">
+                <Bone className="h-[26px] w-16 rounded-full" />
+                <Bone className="h-[26px] w-14 rounded-full" />
+                <Bone className="h-[26px] w-20 rounded-full" />
+              </div>
+              <div className="h-px bg-unison-border" />
+              <div className="flex items-end gap-5">
+                <div className="space-y-1.5">
+                  <Bone className="h-6 w-16" />
+                  <Bone className="h-3 w-10" />
+                </div>
+                <div className="w-px self-stretch bg-unison-border" />
+                <div className="space-y-1.5">
+                  <Bone className="h-6 w-10" />
+                  <Bone className="h-3 w-10" />
+                </div>
+              </div>
+              <div className="h-px bg-unison-border" />
+              <div className="flex items-center gap-2.5">
+                <Bone className="size-10 shrink-0 rounded-full" />
+                <div className="min-w-0 flex-1 space-y-1.5">
+                  <Bone className="h-3.5 w-24" />
+                  <Bone className="h-2.5 w-20" />
+                </div>
+                <Bone className="h-6 w-10 rounded-full" />
+              </div>
+            </div>
+          </div>
+          <Bone className="h-11 w-full rounded-[10px]" />
+        </div>
+        <div className="space-y-4">
+          <div className="overflow-hidden rounded-lg border border-unison-border bg-unison-bg-elevated">
+            <div className="flex items-center justify-between border-b border-unison-border/60 px-3 py-2">
+              <Bone className="h-8 w-32 rounded-md" />
+              <Bone className="h-7 w-36 rounded-md" />
+            </div>
+            <div className="p-4">
+              <LyricsContentSkeleton />
+            </div>
+          </div>
+          <VariantListSkeleton rows={4} />
         </div>
       </div>
     </div>

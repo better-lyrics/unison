@@ -1,5 +1,6 @@
 import { CollapsibleSection } from "@/components/CollapsibleSection"
 import { EmptyState } from "@/components/EmptyState"
+import { Bone, skeletonKeys } from "@/components/skeleton"
 import { SongThumbnail } from "@/components/SongThumbnail"
 import { useAsyncData } from "@/hooks/useAsyncData"
 import { fetchUserSubmissions } from "@/lib/api"
@@ -90,16 +91,26 @@ export function SubmissionsList({ keyId }: SubmissionsListProps) {
   }, [all, toolbar])
 
   if (firstPage.status === "loading") {
-    const rows = ["a", "b", "c"]
     return (
       <CollapsibleSection title="Submissions">
         <div className="space-y-3">
-          <div className="h-9 animate-pulse rounded-md bg-white/[0.04] motion-reduce:animate-none" />
-          <div className="space-y-px">
-            {rows.map((k) => (
-              <div key={k} className="h-14 animate-pulse rounded-md bg-white/[0.04] motion-reduce:animate-none" />
-            ))}
+          <div className="flex flex-wrap items-center gap-2">
+            <Bone className="h-9 min-w-0 flex-1" />
+            <Bone className="h-9 w-32" />
+            <Bone className="h-9 w-32" />
           </div>
+          <ul className="border-b border-unison-border">
+            {skeletonKeys("submission-skeleton", 4).map((key) => (
+              <li key={key} className="flex items-center gap-3 border-t border-unison-border px-2 py-3.5">
+                <Bone className="size-11 shrink-0" />
+                <div className="min-w-0 flex-1 space-y-1.5">
+                  <Bone className="h-3.5 w-1/2" />
+                  <Bone className="h-3 w-2/3" />
+                </div>
+                <Bone className="h-3 w-14 shrink-0" />
+              </li>
+            ))}
+          </ul>
         </div>
       </CollapsibleSection>
     )

@@ -2,8 +2,7 @@ import { Link } from "react-router-dom"
 import { useSession } from "@/auth/useSession"
 import { EmptyState } from "@/components/EmptyState"
 import { LeaderboardSection } from "@/components/LeaderboardSection"
-import { LoadingPlaceholder } from "@/components/LoadingPlaceholder"
-import { SongRow } from "@/components/SongRow"
+import { SongRow, SongRowSkeletonList } from "@/components/SongRow"
 import { useAsyncData } from "@/hooks/useAsyncData"
 import { fetchSongLeaderboard } from "@/lib/api"
 
@@ -28,10 +27,10 @@ export function SongsPage() {
     return (
       <div className="space-y-8">
         <LeaderboardSection title="Most Wanted">
-          <LoadingPlaceholder />
+          <SongRowSkeletonList rows={5} />
         </LeaderboardSection>
         <LeaderboardSection title="Needs Fixing">
-          <LoadingPlaceholder rows={3} />
+          <SongRowSkeletonList rows={3} />
         </LeaderboardSection>
       </div>
     )

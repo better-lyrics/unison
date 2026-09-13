@@ -1,5 +1,6 @@
 import { IconCheck, IconCopy, IconDownload } from "@tabler/icons-react"
 import { Fragment, type ReactNode, useState } from "react"
+import { Bone } from "@/components/skeleton"
 import { useAsyncData } from "@/hooks/useAsyncData"
 import { fetchDumpManifest } from "@/lib/api"
 import { formatExact, formatRelativeTime } from "@/lib/format"
@@ -116,17 +117,22 @@ function HighlightedBash({ code }: { code: string }) {
   )
 }
 
+function HeroDescription() {
+  return (
+    <p className="text-sm leading-relaxed text-unison-text-secondary">
+      A daily snapshot of the lyrics corpus and the request queue. No user IDs, votes, or reports. Each day's snapshot
+      lands at the same <code>latest.dump</code> URL, so a cron pointed at it stays current with no extra plumbing.
+    </p>
+  )
+}
+
 function HeroSection({ manifest }: { manifest: DumpManifest }) {
   const { lyrics, requested_songs, lyrics_requests } = manifest.row_counts
   return (
     <section className="space-y-4">
       <div className="space-y-3">
         <h2 className="text-lg font-semibold text-unison-text">Download the Unison database</h2>
-        <p className="text-sm leading-relaxed text-unison-text-secondary">
-          A daily snapshot of the lyrics corpus and the request queue. No user IDs, votes, or reports. Each day's
-          snapshot lands at the same <code>latest.dump</code> URL, so a cron pointed at it stays current with no extra
-          plumbing.
-        </p>
+        <HeroDescription />
       </div>
       <div className="flex flex-wrap items-center gap-3">
         <a
@@ -154,9 +160,12 @@ function HeroLoading() {
     <section className="space-y-4">
       <div className="space-y-3">
         <h2 className="text-lg font-semibold text-unison-text">Download the Unison database</h2>
-        <p className="text-sm leading-relaxed text-unison-text-secondary">Loading dump manifest...</p>
+        <HeroDescription />
       </div>
-      <div className="h-9 w-48 animate-pulse rounded-md bg-unison-bg-elevated" />
+      <div className="flex flex-wrap items-center gap-3">
+        <Bone className="h-9 w-48" />
+        <Bone className="h-4 w-72 max-w-full" />
+      </div>
     </section>
   )
 }
