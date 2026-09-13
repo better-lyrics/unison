@@ -321,6 +321,12 @@ export async function submitLyrics(
 		)
 		.first<{ id: number }>()
 
+	await env.DB.prepare(
+		"INSERT INTO lyrics_video_ids (lyrics_id, video_id) VALUES (?, ?) ON CONFLICT DO NOTHING"
+	)
+		.bind(result!.id, submission.videoId)
+		.run()
+
 	log.info("new lyrics submitted", {
 		videoId: submission.videoId,
 		id: result!.id,

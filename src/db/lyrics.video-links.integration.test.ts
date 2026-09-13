@@ -6,7 +6,12 @@ import type { Env, LyricsRow } from "@/types"
 import { compress } from "@/utils/compression"
 import pg from "pg"
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest"
-import { findByVideoId, findEligibleChallengers, findVariantsByVideoId } from "./lyrics"
+import {
+	findByVideoId,
+	findEligibleChallengers,
+	findVariantsByVideoId,
+	submitLyrics,
+} from "./lyrics"
 
 const { Pool } = pg
 
@@ -207,6 +212,31 @@ describeIntegration("video-id lyric lookups route through the link table (integr
 			const ids = variants.map((r) => r.id)
 			expect(ids).toEqual([b1, b2])
 			expect(new Set(ids).size).toBe(ids.length)
+		})
+	})
+
+	describe("submitLyrics link population", () => {
+		it("links a newly submitted lyric to its primary video id", async () => {
+			const { id, created } = await submitLyrics(
+				env,
+				{
+					videoId: VIDEO_C,
+					song: "Song",
+					artist: "Artist",
+					duration: 180,
+					lyrics: "line one\nline two",
+					format: "plain",
+					syncType: "plain",
+					language: "en",
+				},
+				submitter
+			)
+			expect(created).toBe(true)
+			const links = await pool.query<{ video_id: string }>(
+				"SELECT video_id FROM lyrics_video_ids WHERE lyrics_id = $1",
+				[id]
+			)
+			expect(links.rows.map((r) => r.video_id)).toEqual([VIDEO_C])
 		})
 	})
 })
