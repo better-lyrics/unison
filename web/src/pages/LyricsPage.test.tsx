@@ -317,6 +317,14 @@ describe("LyricsPage", () => {
     expect(screen.queryByRole("button", { name: /copy lyrics body to clipboard/i })).toBeNull()
   })
 
+  it("shows the song card skeleton while the variant body is loading", async () => {
+    fetchVariants.mockResolvedValue({ variants: [makeSummary({ id: 1 })] })
+    fetchVariant.mockReturnValue(new Promise(() => {}))
+    renderAt(["/song/v1"])
+    await waitFor(() => expect(screen.getByRole("button", { name: /raw/i })).toBeTruthy())
+    expect(screen.getByTestId("variant-metadata-skeleton")).toBeTruthy()
+  })
+
   it("copies from the header while still in synced mode", async () => {
     fetchVariants.mockResolvedValue({ variants: [makeSummary({ id: 1 })] })
     fetchVariant.mockResolvedValue({ variant: makeFull({ id: 1, lyrics: "sync copy" }) })
