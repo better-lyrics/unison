@@ -101,6 +101,10 @@ export function useYouTubePlayer(videoId: string | null, options?: UseYouTubePla
   // throws. The rAF sync loop polls every frame, so the getters must stay inert
   // until the player is ready or one throw kills the loop permanently.
   const readyRef = useRef(false)
+  // A line-click mounts the player, so seek/play can arrive before onReady; hold the
+  // latest request and flush it once the player is ready.
+  const pendingSeekRef = useRef<number | null>(null)
+  const pendingPlayRef = useRef(false)
   // Read at player creation only (the effect runs on videoId/node), so a caller may
   // pass a fresh options object each render without forcing a rebuild.
   const playerVarsRef = useRef(options?.playerVars)
@@ -124,7 +128,16 @@ export function useYouTubePlayer(videoId: string | null, options?: UseYouTubePla
         playerVars: { origin: win.location.origin, ...playerVarsRef.current },
         events: {
           onReady: () => {
-            if (!cancelled) readyRef.current = true
+            if (cancelled) return
+            readyRef.current = true
+            if (pendingSeekRef.current !== null) {
+              player.seekTo(pendingSeekRef.current, true)
+              pendingSeekRef.current = null
+            }
+            if (pendingPlayRef.current) {
+              player.playVideo()
+              pendingPlayRef.current = false
+            }
           },
         },
       })
@@ -135,6 +148,8 @@ export function useYouTubePlayer(videoId: string | null, options?: UseYouTubePla
     return () => {
       cancelled = true
       readyRef.current = false
+      pendingSeekRef.current = null
+      pendingPlayRef.current = false
       const player = playerRef.current
       if (player) player.destroy()
       playerRef.current = null
@@ -143,19 +158,28 @@ export function useYouTubePlayer(videoId: string | null, options?: UseYouTubePla
 
   const seekTo = useCallback((seconds: number) => {
     const player = playerRef.current
-    if (!player || !readyRef.current) return
+    if (!player || !readyRef.current) {
+      pendingSeekRef.current = seconds
+      return
+    }
     player.seekTo(seconds, true)
   }, [])
 
   const play = useCallback(() => {
     const player = playerRef.current
-    if (!player || !readyRef.current) return
+    if (!player || !readyRef.current) {
+      pendingPlayRef.current = true
+      return
+    }
     player.playVideo()
   }, [])
 
   const pause = useCallback(() => {
     const player = playerRef.current
-    if (!player || !readyRef.current) return
+    if (!player || !readyRef.current) {
+      pendingPlayRef.current = false
+      return
+    }
     player.pauseVideo()
   }, [])
 

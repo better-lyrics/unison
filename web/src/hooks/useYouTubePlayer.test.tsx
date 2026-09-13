@@ -364,6 +364,49 @@ describe("useYouTubePlayer readiness gating", () => {
     unmount()
   })
 
+  it("regression: flushes a seek requested before the player is ready once onReady fires", async () => {
+    await mountFor("abc")
+    const player = FakePlayer.instances[0]
+    expect(player.ready).toBe(false)
+    act(() => {
+      result.seekTo(8.5)
+    })
+    expect(player.seeks).toEqual([])
+    act(() => {
+      player.fireReady()
+    })
+    expect(player.seeks).toEqual([{ seconds: 8.5, allowSeekAhead: true }])
+    unmount()
+  })
+
+  it("regression: flushes a play requested before the player is ready once onReady fires", async () => {
+    await mountFor("abc")
+    const player = FakePlayer.instances[0]
+    act(() => {
+      result.play()
+    })
+    expect(player.plays).toBe(0)
+    act(() => {
+      player.fireReady()
+    })
+    expect(player.plays).toBe(1)
+    unmount()
+  })
+
+  it("applies only the most recent buffered seek when several arrive before ready", async () => {
+    await mountFor("abc")
+    const player = FakePlayer.instances[0]
+    act(() => {
+      result.seekTo(3)
+      result.seekTo(12.5)
+    })
+    act(() => {
+      player.fireReady()
+    })
+    expect(player.seeks).toEqual([{ seconds: 12.5, allowSeekAhead: true }])
+    unmount()
+  })
+
   it("starts reading real player values only once onReady fires", async () => {
     await mountFor("abc")
     const player = FakePlayer.instances[0]
