@@ -7,16 +7,66 @@ import type {
   SongsLeaderboardResponse,
   SyncType,
   VariantFull,
+  VariantSubmitter,
   VariantSummary,
 } from "./types"
 
-const SEEDED_SUBMITTERS = [
-  { keyId: "1".repeat(64), reputation: 1.8 },
-  { keyId: "2".repeat(64), reputation: 1.4 },
-  { keyId: "3".repeat(64), reputation: 1.1 },
-  { keyId: "4".repeat(64), reputation: 0.9 },
-  { keyId: "5".repeat(64), reputation: 0.6 },
-] as const
+const SEEDED_SUBMITTERS: VariantSubmitter[] = [
+  {
+    keyId: "1".repeat(64),
+    reputation: 1.8,
+    displayName: "Aurora",
+    tier: "legendary",
+    level: 42,
+    badgeCount: 5,
+    topBadge: { key: "most-loved", name: "Most Loved" },
+    featured: [
+      { key: "most-loved", name: "Most Loved" },
+      { key: "prolific", name: "Prolific", tier: 2 },
+      { key: "trailblazer", name: "Trailblazer" },
+    ],
+  },
+  {
+    keyId: "2".repeat(64),
+    reputation: 1.4,
+    displayName: "Vega",
+    tier: "grandmaster",
+    level: 30,
+    badgeCount: 3,
+    topBadge: { key: "prolific", name: "Prolific", tier: 2 },
+    featured: [],
+  },
+  {
+    keyId: "3".repeat(64),
+    reputation: 1.1,
+    displayName: "Orion",
+    tier: "master",
+    level: 18,
+    badgeCount: 2,
+    topBadge: { key: "trailblazer", name: "Trailblazer" },
+    featured: [],
+  },
+  {
+    keyId: "4".repeat(64),
+    reputation: 0.9,
+    displayName: "Lyra",
+    tier: "elite",
+    level: 9,
+    badgeCount: 1,
+    topBadge: { key: "fan-favorite", name: "Fan Favorite" },
+    featured: [],
+  },
+  {
+    keyId: "5".repeat(64),
+    reputation: 0.6,
+    displayName: "Nova",
+    tier: "lyricist",
+    level: 3,
+    badgeCount: 0,
+    topBadge: null,
+    featured: [],
+  },
+]
 
 interface VariantTemplate {
   id: number

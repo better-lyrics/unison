@@ -97,7 +97,7 @@ export function ExamClip({ clip }: { clip: ClipAssets }) {
 
   return (
     <div className="space-y-4">
-      <div className="mx-auto w-full max-w-md space-y-3">
+      <div className="mx-auto w-full max-w-xs space-y-3">
         <div className="relative">
           <YouTubeEmbed playerRef={ref} />
           {/* Swallow video clicks so play/pause always routes through our transport. */}

@@ -75,5 +75,5 @@ export function LyricsRenderer({ variant, getCurrentTime, getPlaying, onLineClic
     }
   }, [])
 
-  return <braccato-lyrics ref={elementRef} className="mx-auto h-[420px] w-full max-w-3xl" />
+  return <braccato-lyrics ref={elementRef} className="mx-auto h-[576px] w-full max-w-3xl" />
 }

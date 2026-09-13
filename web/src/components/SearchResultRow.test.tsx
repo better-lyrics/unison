@@ -1,10 +1,22 @@
-import { cleanup, render, screen } from "@testing-library/react"
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
+import { cleanup, render, screen, waitFor } from "@testing-library/react"
 import { MemoryRouter } from "react-router-dom"
-import { afterEach, describe, expect, it } from "vitest"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import type { LyricsSearchHit } from "@/lib/types"
 import { SearchResultRow } from "./SearchResultRow"
 
-afterEach(() => cleanup())
+function jsonResponse(body: unknown, status = 200): Response {
+  return new Response(JSON.stringify(body), { status })
+}
+
+beforeEach(() => {
+  vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse({ success: true, data: { artworkUrl: null } })))
+})
+
+afterEach(() => {
+  cleanup()
+  vi.unstubAllGlobals()
+})
 
 const baseHit: LyricsSearchHit = {
   id: 42,
@@ -23,12 +35,15 @@ const baseHit: LyricsSearchHit = {
 }
 
 function renderRow(entry: LyricsSearchHit, rank = 1) {
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   return render(
-    <MemoryRouter>
-      <ul>
-        <SearchResultRow entry={entry} rank={rank} />
-      </ul>
-    </MemoryRouter>,
+    <QueryClientProvider client={qc}>
+      <MemoryRouter>
+        <ul>
+          <SearchResultRow entry={entry} rank={rank} />
+        </ul>
+      </MemoryRouter>
+    </QueryClientProvider>,
   )
 }
 
@@ -94,5 +109,15 @@ describe("SearchResultRow", () => {
   it("renders the vote count next to the score", () => {
     renderRow(baseHit)
     expect(screen.getByText(/19/)).toBeTruthy()
+  })
+
+  it("renders album art in the thumbnail slot when resolved", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(jsonResponse({ success: true, data: { artworkUrl: "https://art/x=w544-h544" } })),
+    )
+    const { container } = renderRow(baseHit)
+    await waitFor(() => expect(container.querySelector("img")).not.toBeNull())
+    expect(container.querySelector("img")?.getAttribute("src")).toBe("https://art/x=w544-h544")
   })
 })

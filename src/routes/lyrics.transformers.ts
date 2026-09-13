@@ -26,6 +26,7 @@ function buildSubmitter(
 		level: actor?.level ?? 1,
 		badgeCount: actor?.badgeCount ?? 0,
 		topBadge: actor?.topBadge ?? null,
+		featured: actor?.featured ?? [],
 	}
 }
 

@@ -208,7 +208,12 @@ describe("LyricsPage", () => {
     fetchVariants.mockResolvedValue({ variants: [makeSummary({ id: 1 })] })
     fetchVariant.mockResolvedValue({ variant: makeFull({ id: 1, lyrics: "to copy" }) })
     const writeText = vi.fn().mockResolvedValue(undefined)
-    vi.stubGlobal("navigator", { ...navigator, clipboard: { writeText } })
+    vi.stubGlobal("navigator", {
+      ...navigator,
+      userAgent: navigator.userAgent ?? "",
+      platform: navigator.platform ?? "",
+      clipboard: { writeText },
+    })
     renderAt(["/song/v1"])
     await waitFor(() => expect(screen.getByTestId("lyrics-renderer")).toBeTruthy())
     fireEvent.click(screen.getByRole("button", { name: /raw/i }))
@@ -222,7 +227,12 @@ describe("LyricsPage", () => {
       fetchVariants.mockResolvedValue({ variants: [makeSummary({ id: 1 })] })
       fetchVariant.mockResolvedValue({ variant: makeFull({ id: 1, lyrics: "ok" }) })
       const writeText = vi.fn().mockResolvedValue(undefined)
-      vi.stubGlobal("navigator", { ...navigator, clipboard: { writeText } })
+      vi.stubGlobal("navigator", {
+        ...navigator,
+        userAgent: navigator.userAgent ?? "",
+        platform: navigator.platform ?? "",
+        clipboard: { writeText },
+      })
       renderAt(["/song/v1"])
       await waitFor(() => expect(screen.getByTestId("lyrics-renderer")).toBeTruthy())
       fireEvent.click(screen.getByRole("button", { name: /raw/i }))
@@ -247,7 +257,12 @@ describe("LyricsPage", () => {
       fetchVariants.mockResolvedValue({ variants: [makeSummary({ id: 1 })] })
       fetchVariant.mockResolvedValue({ variant: makeFull({ id: 1, lyrics: "ok" }) })
       const writeText = vi.fn().mockRejectedValue(new DOMException("denied", "NotAllowedError"))
-      vi.stubGlobal("navigator", { ...navigator, clipboard: { writeText } })
+      vi.stubGlobal("navigator", {
+        ...navigator,
+        userAgent: navigator.userAgent ?? "",
+        platform: navigator.platform ?? "",
+        clipboard: { writeText },
+      })
       renderAt(["/song/v1"])
       await waitFor(() => expect(screen.getByTestId("lyrics-renderer")).toBeTruthy())
       fireEvent.click(screen.getByRole("button", { name: /raw/i }))
@@ -305,7 +320,12 @@ describe("LyricsPage", () => {
     fetchVariants.mockResolvedValue({ variants: [makeSummary({ id: 1 })] })
     fetchVariant.mockResolvedValue({ variant: makeFull({ id: 1, lyrics: "sync copy" }) })
     const writeText = vi.fn().mockResolvedValue(undefined)
-    vi.stubGlobal("navigator", { ...navigator, clipboard: { writeText } })
+    vi.stubGlobal("navigator", {
+      ...navigator,
+      userAgent: navigator.userAgent ?? "",
+      platform: navigator.platform ?? "",
+      clipboard: { writeText },
+    })
     renderAt(["/song/v1"])
     await waitFor(() => expect(screen.getByTestId("lyrics-renderer")).toBeTruthy())
     fireEvent.click(screen.getAllByRole("button", { name: /copy lyrics body to clipboard/i })[0])
@@ -328,6 +348,15 @@ describe("LyricsPage", () => {
     expect(controls.getAttribute("data-video-id")).toBe("v1")
     expect(controls.getAttribute("data-score")).toBe("5")
     expect(controls.getAttribute("data-user-vote")).toBe("-1")
+  })
+
+  it("shows the poster play button and swaps to the player when it is clicked", async () => {
+    fetchVariants.mockResolvedValue({ variants: [makeSummary({ id: 1 })] })
+    fetchVariant.mockResolvedValue({ variant: makeFull({ id: 1 }) })
+    renderAt(["/song/v1"])
+    const play = await screen.findByRole("button", { name: /play/i })
+    fireEvent.click(play)
+    await waitFor(() => expect(screen.queryByRole("button", { name: /play/i })).toBeNull())
   })
 
   it("seeks and starts the player when the renderer fires an onLineClick", async () => {

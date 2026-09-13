@@ -1,4 +1,3 @@
-import { IconBrandYoutube } from "@tabler/icons-react"
 import { useQuery } from "@tanstack/react-query"
 import { useCallback, useMemo, useState } from "react"
 import { useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom"
@@ -11,7 +10,7 @@ import { RawLyricsView } from "@/components/RawLyricsView"
 import { VariantList } from "@/components/VariantList"
 import { VariantMetadata } from "@/components/VariantMetadata"
 import { VoteControls } from "@/components/VoteControls"
-import { YouTubeEmbed } from "@/components/YouTubeEmbed"
+import { YouTubeMusicIcon } from "@/components/icons/YouTubeMusicIcon"
 import { useYouTubePlayer } from "@/hooks/useYouTubePlayer"
 import { cn } from "@/lib/cn"
 import { fetchLyricsVariant, fetchLyricsVariants } from "@/lib/api"
@@ -27,6 +26,7 @@ export function LyricsPage() {
   const { videoId } = useParams<{ videoId: string }>()
   const [params, setParams] = useSearchParams()
   const [mode, setMode] = useState<Mode>("synced")
+  const [playerActive, setPlayerActive] = useState(false)
   const variantIdParam = params.get("variantId")
   const navigate = useNavigate()
   const location = useLocation()
@@ -39,7 +39,16 @@ export function LyricsPage() {
   const safeVideoId = videoId ?? ""
   const { ref, getCurrentTime, getPlaying, seekTo, play } = useYouTubePlayer(
     safeVideoId.length > 0 ? safeVideoId : null,
+    { playerVars: { autoplay: 1 } },
   )
+
+  const [playerVideoId, setPlayerVideoId] = useState(safeVideoId)
+  if (safeVideoId !== playerVideoId) {
+    setPlayerVideoId(safeVideoId)
+    setPlayerActive(false)
+  }
+
+  const activatePlayer = useCallback(() => setPlayerActive(true), [])
 
   const variantsQuery = useQuery({
     queryKey: ["lyrics", "variants", safeVideoId],
@@ -78,6 +87,7 @@ export function LyricsPage() {
   // there in silence.
   const handleLineClick = useCallback(
     (seconds: number) => {
+      setPlayerActive(true)
       seekTo(seconds)
       play()
     },
@@ -123,28 +133,34 @@ export function LyricsPage() {
       </div>
       <div className="grid gap-6 sm:grid-cols-[minmax(0,384px)_minmax(0,1fr)]">
         <div className="space-y-4">
-          <YouTubeEmbed playerRef={ref} />
+          {variant ? (
+            <VariantMetadata
+              variant={variant}
+              playerRef={ref}
+              playerActive={playerActive}
+              onActivatePlayer={activatePlayer}
+            />
+          ) : null}
           <a
             href={`https://music.youtube.com/watch?v=${safeVideoId}`}
             target="_blank"
             rel="noopener noreferrer"
-            className="flex items-center justify-center gap-2 rounded-md border border-unison-border bg-unison-bg-elevated py-2 pr-4 pl-3 text-xs text-unison-text-secondary transition-colors hover:border-unison-border-strong hover:bg-unison-bg-hover hover:text-unison-text"
+            className="flex items-center justify-center gap-2 rounded-[10px] bg-white/[0.08] px-4 py-3 text-[13px] font-semibold text-unison-text shadow-[0_1px_2px_rgba(0,0,0,0.4),inset_0_1px_0_0_rgba(255,255,255,0.07)] transition-colors hover:bg-white/[0.12] active:translate-y-px"
           >
-            <IconBrandYoutube className="size-4" stroke={1.75} />
+            <YouTubeMusicIcon className="size-[18px]" />
             Open on YouTube Music
           </a>
-          {variant ? <VariantMetadata variant={variant} /> : null}
         </div>
         <div className="space-y-4">
-          <div className="overflow-hidden rounded-lg bg-white/[0.02]">
+          <div className="overflow-hidden rounded-lg border border-unison-border bg-unison-bg-elevated">
             <div className="flex items-center justify-between border-b border-unison-border/60 px-3 py-2">
-              <fieldset className="inline-flex rounded-md bg-unison-bg p-0.5">
+              <fieldset className="inline-flex rounded-md border border-unison-border bg-unison-bg p-0.5">
                 <legend className="sr-only">Lyrics display mode</legend>
                 <button
                   type="button"
                   onClick={() => setMode("synced")}
                   className={cn(
-                    "rounded px-3 py-1 text-xs font-medium transition-colors",
+                    "cursor-pointer rounded px-3 py-1 text-xs font-medium transition-colors",
                     mode === "synced"
                       ? "bg-unison-bg-hover text-unison-text"
                       : "text-unison-text-muted hover:text-unison-text",
@@ -156,7 +172,7 @@ export function LyricsPage() {
                   type="button"
                   onClick={() => setMode("raw")}
                   className={cn(
-                    "rounded px-3 py-1 text-xs font-medium transition-colors",
+                    "cursor-pointer rounded px-3 py-1 text-xs font-medium transition-colors",
                     mode === "raw"
                       ? "bg-unison-bg-hover text-unison-text"
                       : "text-unison-text-muted hover:text-unison-text",

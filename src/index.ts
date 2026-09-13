@@ -6,6 +6,7 @@ import { closePool } from "@/infra/database"
 import { createEnv } from "@/infra/env"
 import { Logger, flushLogs } from "@/infra/logger"
 import { startWatchdog } from "@/infra/watchdog"
+import { backfillArtwork } from "@/jobs/backfill-artwork"
 import { backfillBadges } from "@/jobs/backfill-badges"
 import { backfillConfidence } from "@/jobs/backfill-confidence"
 import { backfillFormatDetection } from "@/jobs/backfill-format-detection"
@@ -20,6 +21,7 @@ import { runDumpJob } from "@/jobs/dump"
 import { updateScores } from "@/jobs/score-updater"
 import { auditThresholds } from "@/jobs/threshold-audit"
 import { adminRoutes } from "@/routes/admin"
+import { artworkRoutes } from "@/routes/artwork"
 import { authRoutes } from "@/routes/auth"
 import { badgeRoutes } from "@/routes/badges"
 import { committeeBotRoutes } from "@/routes/committee"
@@ -200,6 +202,7 @@ const app = new Elysia({ adapter: node() })
 		() => new Response(null, { status: 301, headers: { location: "/logo.svg" } })
 	)
 	.use(compatRoutes(env))
+	.use(artworkRoutes(env))
 	.use(lyricsRoutes(env))
 	.use(feedRoutes(env))
 	.use(voteRoutes(env))
@@ -261,6 +264,12 @@ backfillTextSearch(env)
 		if (updated > 0) log.info("text search backfill complete", { updated })
 	})
 	.catch((err) => log.error("text search backfill failed", { error: (err as Error).message }))
+
+backfillArtwork(env)
+	.then(({ seeded }) => {
+		if (seeded > 0) log.info("artwork backfill complete", { seeded })
+	})
+	.catch((err) => log.error("artwork backfill failed", { error: (err as Error).message }))
 
 backfillSyncType(env)
 	.then(({ scanned, changed }) => {

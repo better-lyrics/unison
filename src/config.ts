@@ -1,6 +1,12 @@
 export const COMMUNITY_KEY_ID = "cea10b57de8e060ed1a180a00c2bc717a2ab4f231d88fd33ffa6a50a04f23b6e"
 
 export const config = {
+	artwork: {
+		size: 544,
+		positiveTtlSeconds: 60 * 60 * 24 * 30,
+		negativeTtlSeconds: 60 * 60 * 24 * 7,
+		refreshProbability: 0.03,
+	},
 	submission: {
 		maxVariantsPerUserPerVideo: 3,
 	},

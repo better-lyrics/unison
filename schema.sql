@@ -415,3 +415,9 @@ CREATE TABLE IF NOT EXISTS exam_session_question (
 
 CREATE INDEX IF NOT EXISTS idx_exam_session_question_session
     ON exam_session_question(session_id);
+
+CREATE TABLE IF NOT EXISTS song_artwork (
+    video_id TEXT PRIMARY KEY,
+    artwork_url TEXT,
+    checked_at BIGINT NOT NULL DEFAULT 0
+);

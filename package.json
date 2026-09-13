@@ -5,7 +5,8 @@
   "license": "AGPL-3.0-only",
   "main": "src/index.ts",
   "scripts": {
-    "dev": "tsx watch src/index.ts",
+    "dev": "concurrently -k -n api,web -c blue,magenta \"pnpm api:dev\" \"pnpm web:dev\"",
+    "api:dev": "tsx watch --env-file=.env src/index.ts",
     "start": "tsx src/index.ts",
     "build": "pnpm -C web install --frozen-lockfile && pnpm -C web build",
     "db:migrate": "tsx src/db/migrate.ts",
@@ -43,13 +44,15 @@
     "fast-xml-parser": "^5.5.5",
     "ioredis": "^5.4.0",
     "obscenity": "^0.4.6",
-    "pg": "^8.13.0"
+    "pg": "^8.13.0",
+    "youtubei.js": "^18.0.0"
   },
   "devDependencies": {
     "@biomejs/biome": "^1.9.4",
     "@inquirer/prompts": "^8.3.0",
     "@types/node": "^22.0.0",
     "@types/pg": "^8.11.0",
+    "concurrently": "^10.0.5",
     "tsx": "^4.19.0",
     "typescript": "^5.7.2",
     "vitest": "^2.1.0"

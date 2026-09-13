@@ -1,6 +1,8 @@
 import { config } from "@/config"
+import { insertVideoArtworkIfAbsent } from "@/db/artwork"
 import { AUTO_HIDE_PREDICATE } from "@/db/predicates"
 import type { Env } from "@/types"
+import { isAlbumArtUrl, normalizeArtworkUrl } from "@/utils/artwork"
 
 export interface RequestDemand {
 	demand: number
@@ -73,6 +75,14 @@ export async function createRequest(
 	)
 		.bind(params.videoId, params.song, params.artist, params.thumbnailUrl, now, now)
 		.run()
+
+	if (isAlbumArtUrl(params.thumbnailUrl)) {
+		await insertVideoArtworkIfAbsent(
+			env,
+			params.videoId,
+			normalizeArtworkUrl(params.thumbnailUrl as string, config.artwork.size)
+		)
+	}
 
 	const inserted = await env.DB.prepare(
 		`INSERT INTO lyrics_requests

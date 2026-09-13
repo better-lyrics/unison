@@ -1,10 +1,50 @@
-import { cleanup, render, screen } from "@testing-library/react"
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react"
 import { MemoryRouter } from "react-router-dom"
-import { afterEach, describe, expect, it } from "vitest"
-import type { Mark, VariantFull } from "@/lib/types"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import { BadgeCatalogueProvider } from "@/components/BadgeCatalogueContext"
+import { clearAsyncDataCache } from "@/hooks/useAsyncData"
+import { seedBadgeCatalogue } from "@/lib/dev-seed"
+import type { BadgeCatalogue, Mark, VariantFull, VariantSubmitter } from "@/lib/types"
 import { VariantMetadata } from "./VariantMetadata"
 
-afterEach(() => cleanup())
+function jsonResponse(body: unknown, status = 200): Response {
+  return new Response(JSON.stringify(body), { status })
+}
+
+let catalogue: BadgeCatalogue
+
+beforeEach(async () => {
+  catalogue = await seedBadgeCatalogue()
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (input: RequestInfo | URL) => {
+      const url = typeof input === "string" ? input : input.toString()
+      if (url.includes("/badges")) return jsonResponse({ success: true, data: catalogue })
+      return jsonResponse({ success: true, data: { artworkUrl: null } })
+    }),
+  )
+})
+
+afterEach(() => {
+  cleanup()
+  vi.unstubAllGlobals()
+  clearAsyncDataCache()
+})
+
+function makeSubmitter(overrides: Partial<VariantSubmitter> = {}): VariantSubmitter {
+  return {
+    keyId: "abcdef0123456789012345678901wxyz",
+    reputation: 1.3,
+    displayName: "Nova",
+    tier: null,
+    level: 1,
+    badgeCount: 0,
+    topBadge: null,
+    featured: [],
+    ...overrides,
+  }
+}
 
 function makeVariant(overrides: Partial<VariantFull> = {}): VariantFull {
   return {
@@ -24,11 +64,23 @@ function makeVariant(overrides: Partial<VariantFull> = {}): VariantFull {
   }
 }
 
-function renderMeta(variant: VariantFull) {
+function renderMeta(
+  variant: VariantFull,
+  player: {
+    playerRef?: (node: HTMLDivElement | null) => void
+    playerActive?: boolean
+    onActivatePlayer?: () => void
+  } = {},
+) {
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   return render(
-    <MemoryRouter>
-      <VariantMetadata variant={variant} />
-    </MemoryRouter>,
+    <QueryClientProvider client={qc}>
+      <BadgeCatalogueProvider>
+        <MemoryRouter>
+          <VariantMetadata variant={variant} {...player} />
+        </MemoryRouter>
+      </BadgeCatalogueProvider>
+    </QueryClientProvider>,
   )
 }
 
@@ -44,29 +96,29 @@ describe("VariantMetadata", () => {
     expect(screen.getByText("Hurry Up, We're Dreaming")).toBeTruthy()
   })
 
-  it("omits the album row when album is missing", () => {
+  it("omits the album when missing", () => {
     renderMeta(makeVariant())
-    expect(screen.queryByText(/Album/i)).toBeNull()
+    expect(screen.queryByText("Hurry Up, We're Dreaming")).toBeNull()
   })
 
-  it("renders ISRC and language when present", () => {
+  it("renders ISRC and the language pill when present", () => {
     renderMeta(makeVariant({ isrc: "USRC12345678", language: "en" }))
     expect(screen.getByText("USRC12345678")).toBeTruthy()
-    expect(screen.getByText("en")).toBeTruthy()
+    expect(screen.getByText("EN")).toBeTruthy()
   })
 
-  it("omits ISRC and language rows when missing", () => {
+  it("omits the ISRC row when missing", () => {
     renderMeta(makeVariant())
-    expect(screen.queryByText(/ISRC/i)).toBeNull()
-    expect(screen.queryByText(/Language/i)).toBeNull()
+    expect(screen.queryByText("USRC12345678")).toBeNull()
+    expect(screen.queryByText("ISRC")).toBeNull()
   })
 
-  it("renders the uppercase format", () => {
+  it("renders the uppercase format pill", () => {
     renderMeta(makeVariant({ format: "lrc" }))
     expect(screen.getByText("LRC")).toBeTruthy()
   })
 
-  it("renders the sync type as-is", () => {
+  it("renders the sync type pill as-is", () => {
     renderMeta(makeVariant({ syncType: "linesync" }))
     expect(screen.getByText("linesync")).toBeTruthy()
   })
@@ -92,14 +144,25 @@ describe("VariantMetadata", () => {
     expect(screen.getByText("low")).toBeTruthy()
   })
 
-  it("renders the submitter row with a truncated keyId and link", () => {
+  it("renders the submitter row with a truncated keyId, name, rep, and link", () => {
     const keyId = "abcdef0123456789012345678901wxyz"
-    renderMeta(makeVariant({ submitter: { keyId, reputation: 1.3 } }))
+    renderMeta(makeVariant({ submitter: makeSubmitter({ keyId }) }))
     const link = screen.getByRole("link")
     expect(link.getAttribute("href")).toBe(`/curator/${keyId}`)
+    expect(link.textContent).toContain("Nova")
     expect(link.textContent).toContain("abcdef01")
     expect(link.textContent).toContain("wxyz")
     expect(screen.getByText(/1\.3/)).toBeTruthy()
+  })
+
+  it("renders the submitter tier chip when a tier is present", () => {
+    renderMeta(makeVariant({ submitter: makeSubmitter({ tier: "master" }) }))
+    expect(screen.getByText("Master")).toBeTruthy()
+  })
+
+  it("renders featured badge icons in the submitter row", async () => {
+    renderMeta(makeVariant({ submitter: makeSubmitter({ featured: [{ key: "prolific", name: "Prolific" }] }) }))
+    await waitFor(() => expect(screen.getByAltText("Prolific")).toBeTruthy())
   })
 
   it("omits the submitter row when absent", () => {
@@ -117,6 +180,84 @@ describe("VariantMetadata", () => {
     expect(screen.queryByText(/auto-hidden/i)).toBeNull()
   })
 
+  describe("cover art", () => {
+    it("falls back to the youtube thumbnail when there is no resolved artwork", async () => {
+      const { container } = renderMeta(makeVariant({ videoId: "kJQP7kiw5Fk" }))
+      await waitFor(() => {
+        const cover = container.querySelector('img[src*="ytimg.com"]')
+        expect(cover).not.toBeNull()
+      })
+      expect(container.querySelector('img[src*="kJQP7kiw5Fk/maxresdefault.jpg"]')).not.toBeNull()
+    })
+  })
+
+  describe("cover player", () => {
+    it("shows a play button over the poster when the player can be activated", async () => {
+      renderMeta(makeVariant(), { onActivatePlayer: () => {}, playerRef: () => {} })
+      expect(await screen.findByRole("button", { name: /play/i })).toBeTruthy()
+    })
+
+    it("calls onActivatePlayer when the poster is clicked", async () => {
+      const onActivatePlayer = vi.fn()
+      renderMeta(makeVariant(), { onActivatePlayer, playerRef: () => {} })
+      fireEvent.click(await screen.findByRole("button", { name: /play/i }))
+      expect(onActivatePlayer).toHaveBeenCalledTimes(1)
+    })
+
+    it("mounts the player node and drops the poster button once active", () => {
+      const playerRef = vi.fn()
+      renderMeta(makeVariant(), { playerActive: true, onActivatePlayer: () => {}, playerRef })
+      expect(playerRef).toHaveBeenCalledWith(expect.any(HTMLElement))
+      expect(screen.queryByRole("button", { name: /play/i })).toBeNull()
+    })
+
+    it("renders a non-interactive poster when no activation handler is given", () => {
+      renderMeta(makeVariant())
+      expect(screen.queryByRole("button", { name: /play/i })).toBeNull()
+    })
+
+    it("shows the track heading in the metadata while the player is active", () => {
+      renderMeta(makeVariant({ song: "Solar", artist: "Sun", album: "Sky" }), {
+        playerActive: true,
+        onActivatePlayer: () => {},
+        playerRef: () => {},
+      })
+      expect(screen.getByText("Solar")).toBeTruthy()
+      expect(screen.getByText("Sun")).toBeTruthy()
+      expect(screen.getByText("Sky")).toBeTruthy()
+    })
+
+    it("shows the track heading only once in poster mode", () => {
+      renderMeta(makeVariant({ song: "Solar" }), { onActivatePlayer: () => {}, playerRef: () => {} })
+      expect(screen.getAllByText("Solar")).toHaveLength(1)
+    })
+
+    it("shows a solid divider above the metadata while the player is active", () => {
+      const { container } = renderMeta(makeVariant(), {
+        playerActive: true,
+        onActivatePlayer: () => {},
+        playerRef: () => {},
+      })
+      const meta = container.querySelector("aside")?.lastElementChild
+      expect(meta?.className).toContain("border-unison-border")
+    })
+
+    it("keeps the metadata divider transparent in poster mode", () => {
+      const { container } = renderMeta(makeVariant(), { onActivatePlayer: () => {}, playerRef: () => {} })
+      const meta = container.querySelector("aside")?.lastElementChild
+      expect(meta?.className).toContain("border-transparent")
+    })
+  })
+
+  describe("tooltips", () => {
+    it("shows the richsync tooltip on hover", async () => {
+      renderMeta(makeVariant({ syncType: "richsync" }))
+      fireEvent.mouseEnter(screen.getByText("richsync"))
+      const tip = await screen.findByRole("tooltip")
+      expect(tip.textContent).toContain("Word-by-word synced lyrics")
+    })
+  })
+
   describe("marks", () => {
     function makeSeal(overrides: Partial<Mark> = {}): Mark {
       return {
@@ -130,8 +271,7 @@ describe("VariantMetadata", () => {
     it("renders a mark using its server-passed label and icon", () => {
       const { container } = renderMeta(makeVariant({ marks: [makeSeal()] }))
       expect(screen.getByText("Better Lyrics Council Approved (BLCA)")).toBeTruthy()
-      const img = container.querySelector("img")
-      expect(img?.getAttribute("src")).toBe("/badges/committee/image.svg")
+      expect(container.querySelector('img[src="/badges/committee/image.svg"]')).not.toBeNull()
     })
 
     it("links to the approving member's profile when `by` is present", () => {

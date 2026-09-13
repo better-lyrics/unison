@@ -16,8 +16,6 @@ import type {
   VariantSummary,
 } from "./types"
 
-const USE_SEED = import.meta.env.MODE === "development" && import.meta.env.VITE_USE_API !== "1"
-
 async function getJson<T>(path: string): Promise<T> {
   const res = await fetch(path)
   if (!res.ok) throw new Error(`HTTP ${res.status} for ${path}`)
@@ -28,43 +26,42 @@ async function getJson<T>(path: string): Promise<T> {
 
 export async function fetchSongLeaderboard(): Promise<SongsLeaderboardResponse> {
   if (IS_SPA_EXPANSION_SEED) return (await import("./dev-seed-spa-expansion")).seedSongs()
-  if (USE_SEED) return (await import("./dev-seed")).seedSongs()
   return getJson<SongsLeaderboardResponse>("/leaderboard/songs")
 }
 
 export async function fetchCuratorLeaderboard(): Promise<CuratorsLeaderboardResponse> {
-  if (USE_SEED) return (await import("./dev-seed")).seedCurators()
+  if (IS_SPA_EXPANSION_SEED) return (await import("./dev-seed")).seedCurators()
   return getJson<CuratorsLeaderboardResponse>("/leaderboard/users")
 }
 
 export async function fetchUserRank(keyId: string): Promise<UserRankResponse> {
-  if (USE_SEED) return (await import("./dev-seed")).seedUserRank(keyId)
+  if (IS_SPA_EXPANSION_SEED) return (await import("./dev-seed")).seedUserRank(keyId)
   return getJson<UserRankResponse>(`/leaderboard/users/${encodeURIComponent(keyId)}`)
 }
 
 export async function fetchUserByHandle(handle: string): Promise<{ keyId: string }> {
-  if (USE_SEED) return (await import("./dev-seed")).seedUserByHandle(handle)
+  if (IS_SPA_EXPANSION_SEED) return (await import("./dev-seed")).seedUserByHandle(handle)
   return getJson<{ keyId: string }>(`/users/by-handle/${encodeURIComponent(handle)}`)
 }
 
 export async function fetchUserSubmissions(keyId: string, cursor?: string): Promise<UserSubmissionsResponse> {
-  if (USE_SEED) return (await import("./dev-seed")).seedUserSubmissions(keyId)
+  if (IS_SPA_EXPANSION_SEED) return (await import("./dev-seed")).seedUserSubmissions(keyId)
   const params = cursor !== undefined ? `?cursor=${encodeURIComponent(cursor)}` : ""
   return getJson<UserSubmissionsResponse>(`/users/${encodeURIComponent(keyId)}/submissions${params}`)
 }
 
 export async function fetchBadgeCatalogue(): Promise<BadgeCatalogue> {
-  if (USE_SEED) return (await import("./dev-seed")).seedBadgeCatalogue()
+  if (IS_SPA_EXPANSION_SEED) return (await import("./dev-seed")).seedBadgeCatalogue()
   return getJson<BadgeCatalogue>("/badges")
 }
 
 export async function fetchUserBadges(keyId: string): Promise<UserGamification> {
-  if (USE_SEED) return (await import("./dev-seed")).seedUserBadges(keyId)
+  if (IS_SPA_EXPANSION_SEED) return (await import("./dev-seed")).seedUserBadges(keyId)
   return getJson<UserGamification>(`/users/${encodeURIComponent(keyId)}/badges`)
 }
 
 export async function putFeaturedBadges(keyId: string, featured: string[]): Promise<UserGamification> {
-  if (USE_SEED) return (await import("./dev-seed")).seedSetFeatured(keyId, featured)
+  if (IS_SPA_EXPANSION_SEED) return (await import("./dev-seed")).seedSetFeatured(keyId, featured)
   return authedFetch<UserGamification>("/users/me/featured-badges", {
     method: "PUT",
     headers: { "content-type": "application/json" },
@@ -131,6 +128,12 @@ export async function fetchLyricsVariant(
   if (IS_SPA_EXPANSION_SEED) return (await import("./dev-seed-spa-expansion")).seedLyricsVariant(id)
   const variant = await getJsonWithSignal<VariantFull>(`/lyrics/${id}`, opts.signal)
   return { variant }
+}
+
+export async function fetchArtwork(videoId: string): Promise<string | null> {
+  if (IS_SPA_EXPANSION_SEED) return null
+  const { artworkUrl } = await getJson<{ artworkUrl: string | null }>(`/artwork?v=${encodeURIComponent(videoId)}`)
+  return artworkUrl
 }
 
 async function unwrapMutationError(res: Response): Promise<never> {

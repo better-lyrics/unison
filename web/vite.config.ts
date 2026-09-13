@@ -35,7 +35,10 @@ export default defineConfig({
   server: {
     proxy: {
       "/leaderboard": "http://localhost:3000",
+      "/artwork": "http://localhost:3000",
       "/lyrics": "http://localhost:3000",
+      "/users": "http://localhost:3000",
+      "/badges": "http://localhost:3000",
       "/feed": "http://localhost:3000",
       "/requests": "http://localhost:3000",
       "/auth": "http://localhost:3000",

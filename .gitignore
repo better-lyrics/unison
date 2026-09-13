@@ -151,3 +151,5 @@ cli/
 
 # Local-only ops scripts
 scripts/local/
+
+.local-backups/

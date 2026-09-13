@@ -320,6 +320,7 @@ describe("GET /feed marks and submitter", () => {
 					level: 1,
 					badgeCount: 0,
 					topBadge: null,
+					featured: [],
 				},
 				at: 1700000000,
 			},
@@ -331,6 +332,7 @@ describe("GET /feed marks and submitter", () => {
 			level: 1,
 			badgeCount: 0,
 			topBadge: null,
+			featured: [],
 		})
 		expect(first).toMatchObject({
 			id: 1,
