@@ -64,9 +64,9 @@ async function getPrimary(env: Env, videoId: string): Promise<LyricsRow | null> 
 
 	cacheLog.debug("miss", { key: `v:${videoId}` })
 	const result = await env.DB.prepare(
-		`${LYRICS_WITH_SUBMITTER} WHERE l.video_id = ? AND l.deleted_at IS NULL AND NOT ${AUTO_HIDE_PREDICATE_JOINED} ORDER BY (CASE WHEN ${PROVEN_EXPR_JOINED} THEN 1 ELSE 0 END) DESC, ${RANKING_EXPR_VARIANT} DESC LIMIT 1`
+		`${LYRICS_WITH_SUBMITTER} WHERE (l.video_id = ? OR l.id IN (SELECT lyrics_id FROM lyrics_video_ids WHERE video_id = ?)) AND l.deleted_at IS NULL AND NOT ${AUTO_HIDE_PREDICATE_JOINED} ORDER BY (CASE WHEN ${PROVEN_EXPR_JOINED} THEN 1 ELSE 0 END) DESC, ${RANKING_EXPR_VARIANT} DESC LIMIT 1`
 	)
-		.bind(videoId)
+		.bind(videoId, videoId)
 		.first<LyricsRow>()
 
 	if (result) {
@@ -93,7 +93,7 @@ export async function findEligibleChallengers(
 	const results = await env.DB.prepare(
 		`
 		${LYRICS_WITH_SUBMITTER}
-		WHERE l.video_id = ?
+		WHERE (l.video_id = ? OR l.id IN (SELECT lyrics_id FROM lyrics_video_ids WHERE video_id = ?))
 			AND l.deleted_at IS NULL
 			AND l.id <> ?
 			AND NOT ${AUTO_HIDE_PREDICATE_JOINED}
@@ -107,6 +107,7 @@ export async function findEligibleChallengers(
 		`
 	)
 		.bind(
+			videoId,
 			videoId,
 			primary.id,
 			config.exploration.minSubmitterReputation,
@@ -173,12 +174,12 @@ export async function findVariantsByVideoId(
 	const results = await env.DB.prepare(
 		`
 		${LYRICS_WITH_SUBMITTER}
-		WHERE l.video_id = ? AND l.deleted_at IS NULL
+		WHERE (l.video_id = ? OR l.id IN (SELECT lyrics_id FROM lyrics_video_ids WHERE video_id = ?)) AND l.deleted_at IS NULL
 		ORDER BY ${RANKING_EXPR_VARIANT} DESC
 		LIMIT ?
 		`
 	)
-		.bind(videoId, limit)
+		.bind(videoId, videoId, limit)
 		.all<LyricsRow>()
 
 	for (const row of results.results) {
@@ -548,7 +549,7 @@ export async function searchByQuery(
 				1.0::DOUBLE PRECISION AS match_score,
 				1 AS tier
 			FROM lyrics
-			WHERE (video_id = ? OR isrc = ?) AND deleted_at IS NULL AND NOT ${AUTO_HIDE_PREDICATE}
+			WHERE (video_id = ? OR id IN (SELECT lyrics_id FROM lyrics_video_ids WHERE video_id = ?) OR isrc = ?) AND deleted_at IS NULL AND NOT ${AUTO_HIDE_PREDICATE}
 
 			UNION ALL
 
@@ -587,6 +588,7 @@ export async function searchByQuery(
 
 	const result = await env.DB.prepare(ranked)
 		.bind(
+			query.trim(),
 			query.trim(),
 			query.trim(),
 			normalized,

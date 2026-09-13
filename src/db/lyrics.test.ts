@@ -223,7 +223,7 @@ describe("findByVideoId", () => {
 		expect(sql).toContain("l.vote_count")
 		expect(sql).toContain("l.created_at")
 		// the WHERE clause must reference the lyrics column, not users
-		expect(sql).toMatch(/WHERE\s+l\.video_id/i)
+		expect(sql).toMatch(/l\.video_id\s*=/i)
 	})
 
 	it("returns submitter fields from the joined row", async () => {
@@ -444,6 +444,7 @@ describe("findEligibleChallengers", () => {
 
 		const params = db.calls[0].params
 		expect(params).toEqual([
+			"vidC",
 			"vidC",
 			primary.id,
 			config.exploration.minSubmitterReputation,
@@ -722,7 +723,7 @@ describe("findVariantsByVideoId", () => {
 
 		await findVariantsByVideoId(env, "vid", 7)
 
-		expect(db.calls[0].params).toEqual(["vid", 7])
+		expect(db.calls[0].params).toEqual(["vid", "vid", 7])
 	})
 })
 
