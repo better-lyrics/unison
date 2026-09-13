@@ -174,7 +174,9 @@ function SubmitterRow({ variant }: { variant: VariantFull }) {
               {featured.map((b) => {
                 const img = badgeImage(b.key, b.tier)
                 return img ? (
-                  <img key={b.key} src={img} alt={b.name} title={b.name} className="size-5 object-contain" />
+                  <Tooltip key={b.key} label={b.name}>
+                    <img src={img} alt={b.name} className="size-5 object-contain" />
+                  </Tooltip>
                 ) : null
               })}
             </span>
