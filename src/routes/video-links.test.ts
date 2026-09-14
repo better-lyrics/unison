@@ -234,6 +234,26 @@ describe("POST /lyrics/:id/suggested-videos", () => {
 		)
 		expect(res.status).toBe(403)
 	})
+
+	it("returns 429 when the rate limiter rejects, without running the suggestion", async () => {
+		vi.mocked(suggestVideosForVariant).mockClear()
+		const cache = makeMockCache()
+		seedSession(cache, "tok")
+		const env = makeEnv(makeMockDB([{ id: 42, key_id: KEY }]), cache)
+		env.RATE_LIMITER = {
+			async limit() {
+				return { success: false }
+			},
+		} as unknown as Env["RATE_LIMITER"]
+		const res = await videoLinkRoutes(env).handle(
+			new Request("http://localhost/lyrics/7/suggested-videos", {
+				method: "POST",
+				headers: { authorization: "Bearer tok" },
+			})
+		)
+		expect(res.status).toBe(429)
+		expect(vi.mocked(suggestVideosForVariant)).not.toHaveBeenCalled()
+	})
 })
 
 describe("POST /lyrics/:id/edit", () => {

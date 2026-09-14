@@ -15,6 +15,7 @@ export const config = {
 		maxVideosPerVariant: 20,
 		durationDeltaSeconds: 2,
 		suggestionCacheTtlSeconds: 60 * 60 * 6,
+		emptySuggestionCacheTtlSeconds: 60 * 30,
 	},
 
 	moderation: {
@@ -188,6 +189,10 @@ export const config = {
 		},
 		write: {
 			maxRequests: 10,
+			windowSeconds: 60,
+		},
+		suggest: {
+			maxRequests: 60,
 			windowSeconds: 60,
 		},
 	},

@@ -1,4 +1,5 @@
 import { readFileSync } from "node:fs"
+import { config } from "@/config"
 import { D1Compat } from "@/infra/database"
 import type { Env } from "@/types"
 import type { SongCandidate } from "@/utils/innertube"
@@ -139,10 +140,12 @@ describeIntegration("video suggestions (integration)", () => {
 
 		it("serves a second lookup from the cache without re-searching", async () => {
 			const store = new Map<string, string>()
+			const puts: Array<{ ttl?: number }> = []
 			const cacheEnv = envWith({
 				get: async (k: string) => store.get(k) ?? null,
-				put: async (k: string, v: string) => {
+				put: async (k: string, v: string, opts?: { expirationTtl?: number }) => {
 					store.set(k, v)
+					puts.push({ ttl: opts?.expirationTtl })
 				},
 				delete: async () => {},
 			} as unknown as Env["CACHE"])
@@ -158,6 +161,7 @@ describeIntegration("video suggestions (integration)", () => {
 			})
 
 			expect(calls).toBe(1)
+			expect(puts[0].ttl).toBe(config.videoLinking.suggestionCacheTtlSeconds)
 			expect(second.ok).toBe(true)
 			if (second.ok) expect(second.suggestions.map((s) => s.videoId)).toEqual(expectedIds)
 		})
@@ -183,34 +187,39 @@ describeIntegration("video suggestions (integration)", () => {
 			if (res.ok) expect(res.suggestions.map((s) => s.videoId)).toEqual(expectedIds)
 		})
 
-		it("regression: does not cache an empty search result, so a transient failure is retried", async () => {
+		// Empty results are now negatively cached (under a shorter ttl) so a variant whose
+		// song/artist yields zero hits cannot be used to hammer the external search on repeat.
+		it("caches an empty search result under the negative ttl and serves repeats from it", async () => {
 			const store = new Map<string, string>()
+			const puts: Array<{ ttl?: number }> = []
 			const cacheEnv = envWith({
 				get: async (k: string) => store.get(k) ?? null,
-				put: async (k: string, v: string) => {
+				put: async (k: string, v: string, opts?: { expirationTtl?: number }) => {
 					store.set(k, v)
+					puts.push({ ttl: opts?.expirationTtl })
 				},
 				delete: async (k: string) => {
 					store.delete(k)
 				},
 			} as unknown as Env["CACHE"])
 			let calls = 0
-			const flakySearch = async (): Promise<SongCandidate[]> => {
+			const emptySearch = async (): Promise<SongCandidate[]> => {
 				calls++
-				return calls === 1 ? [] : candidates
+				return []
 			}
 
-			const first = await suggestVideosForVariant(cacheEnv, lyricId, owner, { search: flakySearch })
+			const first = await suggestVideosForVariant(cacheEnv, lyricId, owner, { search: emptySearch })
 			const second = await suggestVideosForVariant(cacheEnv, lyricId, owner, {
-				search: flakySearch,
+				search: emptySearch,
 			})
 
-			expect(calls).toBe(2)
+			expect(calls).toBe(1)
 			expect(store.size).toBe(1)
+			expect(puts[0].ttl).toBe(config.videoLinking.emptySuggestionCacheTtlSeconds)
 			expect(first.ok).toBe(true)
 			if (first.ok) expect(first.suggestions).toEqual([])
 			expect(second.ok).toBe(true)
-			if (second.ok) expect(second.suggestions.map((s) => s.videoId)).toEqual(expectedIds)
+			if (second.ok) expect(second.suggestions).toEqual([])
 		})
 	})
 })

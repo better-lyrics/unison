@@ -1,3 +1,4 @@
+import { config } from "@/config"
 import { editLyrics } from "@/db/lyrics"
 import { linkVideoForOwner, listVideoLinks, unlinkVideoForOwner } from "@/db/video-links"
 import { suggestVideosForVariant } from "@/services/video-suggestions"
@@ -45,9 +46,15 @@ export const videoLinkRoutes = (env: Env) =>
 			}
 			return { success: true, data: { videos: res.videos } }
 		})
-		.post("/:id/suggested-videos", async ({ params, env, userId, status }) => {
+		.post("/:id/suggested-videos", async ({ params, env, userId, keyId, status }) => {
 			const id = Number(params.id)
 			if (Number.isNaN(id)) return status(400, buildError(ErrorCode.INVALID_ID))
+			const { success } = await env.RATE_LIMITER.limit({
+				key: `suggest:${keyId}`,
+				maxRequests: config.rateLimit.suggest.maxRequests,
+				windowSeconds: config.rateLimit.suggest.windowSeconds,
+			})
+			if (!success) return status(429, buildError(ErrorCode.RATE_LIMITED))
 			const res = await suggestVideosForVariant(env, id, userId)
 			if (!res.ok) {
 				if (res.reason === "not_owner") return status(403, buildError(ErrorCode.NOT_OWNER))

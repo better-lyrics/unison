@@ -1,5 +1,5 @@
 import { config } from "@/config"
-import { listVideoLinks } from "@/db/video-links"
+import { isWithinDurationDelta, listVideoLinks } from "@/db/video-links"
 import type { Env } from "@/types"
 import { type SongCandidate, searchSongs } from "@/utils/innertube"
 import { normalize, normalizeArtist, normalizeSong } from "@/utils/normalize"
@@ -37,11 +37,11 @@ async function cachedSearch(
 		}
 	}
 	const results = await search(`${song} ${artist}`)
-	if (results.length > 0) {
-		await env.CACHE.put(key, JSON.stringify(results), {
-			expirationTtl: config.videoLinking.suggestionCacheTtlSeconds,
-		})
-	}
+	const expirationTtl =
+		results.length > 0
+			? config.videoLinking.suggestionCacheTtlSeconds
+			: config.videoLinking.emptySuggestionCacheTtlSeconds
+	await env.CACHE.put(key, JSON.stringify(results), { expirationTtl })
 	return results
 }
 
@@ -77,8 +77,7 @@ export async function suggestVideosForVariant(
 				normAlbum !== null && c.album !== null && normalize(c.album) === normAlbum ? 1 : 0
 			const matchScore = 0.5 * titleEq + 0.3 * artistEq + 0.2 * albumEq
 			const withinDurationDelta =
-				c.durationSeconds !== null &&
-				Math.abs(c.durationSeconds - row.duration) <= config.videoLinking.durationDeltaSeconds
+				c.durationSeconds !== null && isWithinDurationDelta(c.durationSeconds, row.duration)
 			return { ...c, matchScore, withinDurationDelta }
 		})
 		.sort(

@@ -402,47 +402,59 @@ export async function editLyrics(
 		parent.vote_count === 0 &&
 		parent.committee_approved_at === null
 
-	const result = await submitLyrics(
-		env,
-		{
-			videoId: parent.video_id,
-			song: parent.song,
-			artist: parent.artist,
-			album: parent.album ?? undefined,
-			isrc: parent.isrc ?? undefined,
-			duration: parent.duration,
-			lyrics: content.lyrics,
-			format: content.format,
-			syncType: content.syncType,
-			language: content.language,
-		},
-		editorUserId,
-		supersede ? { excludeLyricId: parentId } : {}
-	)
-
-	if (!result.created) return { ok: false, reason: "cap_reached" }
-
-	await env.DB.prepare("UPDATE lyrics SET parent_id = ? WHERE id = ?")
-		.bind(parentId, result.id)
-		.run()
-
-	if (parent.submitter_id === editorUserId) {
-		await env.DB.prepare(
-			`INSERT INTO lyrics_video_ids (lyrics_id, video_id)
-			 SELECT ?, video_id FROM lyrics_video_ids WHERE lyrics_id = ?
-			 ON CONFLICT DO NOTHING`
+	const outcome = await env.DB.transaction(async (tx) => {
+		const txEnv = { ...env, DB: tx }
+		const result = await submitLyrics(
+			txEnv,
+			{
+				videoId: parent.video_id,
+				song: parent.song,
+				artist: parent.artist,
+				album: parent.album ?? undefined,
+				isrc: parent.isrc ?? undefined,
+				duration: parent.duration,
+				lyrics: content.lyrics,
+				format: content.format,
+				syncType: content.syncType,
+				language: content.language,
+			},
+			editorUserId,
+			supersede ? { excludeLyricId: parentId } : {}
 		)
-			.bind(result.id, parentId)
-			.run()
-	}
 
-	if (supersede) {
-		await softDeleteLyrics(env, parentId, editorUserId, "submitter", "superseded by a newer edit")
-	}
+		if (!result.created) return { ok: false as const, reason: "cap_reached" as const }
 
-	await invalidateCacheForLyric(env, result.id)
+		await tx.prepare("UPDATE lyrics SET parent_id = ? WHERE id = ?").bind(parentId, result.id).run()
 
-	return { ok: true, id: result.id }
+		if (parent.submitter_id === editorUserId) {
+			await tx
+				.prepare(
+					`INSERT INTO lyrics_video_ids (lyrics_id, video_id)
+				 SELECT ?, video_id FROM lyrics_video_ids WHERE lyrics_id = ?
+				 ON CONFLICT DO NOTHING`
+				)
+				.bind(result.id, parentId)
+				.run()
+		}
+
+		if (supersede) {
+			await softDeleteLyrics(
+				txEnv,
+				parentId,
+				editorUserId,
+				"submitter",
+				"superseded by a newer edit"
+			)
+		}
+
+		return { ok: true as const, id: result.id }
+	})
+
+	if (!outcome.ok) return outcome
+
+	await invalidateCacheForLyric(env, outcome.id)
+
+	return outcome
 }
 
 export async function searchBySongArtist(

@@ -28,6 +28,10 @@ export type UnlinkResult = { ok: true; videos: VideoLink[] } | { ok: false; reas
 
 const VIDEO_ID_LENGTH = 11
 
+export function isWithinDurationDelta(a: number, b: number): boolean {
+	return Math.abs(a - b) <= config.videoLinking.durationDeltaSeconds
+}
+
 async function getLinkTarget(env: Env, lyricsId: number): Promise<LinkTarget | null> {
 	return env.DB.prepare(
 		"SELECT id, submitter_id, video_id, duration, deleted_at FROM lyrics WHERE id = ?"
@@ -89,7 +93,7 @@ export async function linkVideoForOwner(
 	const getDuration = deps.getDuration ?? getVideoDurationSeconds
 	const candidateDuration = await getDuration(videoId)
 	if (candidateDuration === null) return { ok: false, reason: "unverifiable" }
-	if (Math.abs(candidateDuration - row.duration) > config.videoLinking.durationDeltaSeconds) {
+	if (!isWithinDurationDelta(candidateDuration, row.duration)) {
 		return { ok: false, reason: "duration_mismatch" }
 	}
 

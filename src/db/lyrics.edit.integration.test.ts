@@ -11,6 +11,27 @@ const { Pool } = pg
 const shouldRun = process.env.RUN_INTEGRATION === "1"
 const describeIntegration = shouldRun ? describe : describe.skip
 
+function poolThatFailsOn(realPool: pg.Pool, needle: string): pg.Pool {
+	const realConnect = realPool.connect.bind(realPool)
+	return new Proxy(realPool, {
+		get(target, prop, receiver) {
+			if (prop !== "connect") return Reflect.get(target, prop, receiver)
+			// pg's own Pool.query() connects via a callback; leave that path untouched. Only the
+			// promise form (D1Compat.transaction) gets a client whose writes we can fail on demand.
+			return (maybeCb?: unknown) => {
+				if (typeof maybeCb === "function") return realConnect(maybeCb as never)
+				return realConnect().then((client) => ({
+					query: (text: string, params?: unknown[]) => {
+						if (text.includes(needle)) return Promise.reject(new Error("injected DB failure"))
+						return params === undefined ? client.query(text) : client.query(text, params)
+					},
+					release: () => client.release(),
+				}))
+			}
+		},
+	})
+}
+
 const VIDEO = "dQw4w9WgXcQ"
 const EXTRA = "9bZkp7q19f0"
 const content = {
@@ -179,6 +200,20 @@ describeIntegration("editLyrics (integration)", () => {
 			expect(res.ok).toBe(true)
 			if (!res.ok) return
 			expect((await rowById(res.id)).vote_count).toBe(0)
+		})
+
+		it("regression: rolls back the whole edit when a mid-sequence write fails, leaving no duplicate", async () => {
+			const parent = await seedLyric()
+			const countForVideo = async (): Promise<number> =>
+				(await pool.query("SELECT COUNT(*)::INTEGER AS c FROM lyrics WHERE video_id = $1", [VIDEO]))
+					.rows[0].c
+			const before = await countForVideo()
+			const faultyEnv: Env = { ...env, DB: new D1Compat(poolThatFailsOn(pool, "deleted_by_role")) }
+
+			await expect(editLyrics(faultyEnv, parent, owner, content)).rejects.toThrow()
+
+			expect((await rowById(parent)).deleted_at).toBeNull()
+			expect(await countForVideo()).toBe(before)
 		})
 	})
 })
