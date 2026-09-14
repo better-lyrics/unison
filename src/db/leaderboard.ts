@@ -61,7 +61,7 @@ async function queryMostWanted(env: Env, limit: number): Promise<MostWantedRow[]
 		 WHERE lr.created_at > ?
 		   AND NOT EXISTS (
 		     SELECT 1 FROM lyrics
-		     WHERE lyrics.video_id = lr.video_id
+		     WHERE (lyrics.video_id = lr.video_id OR lyrics.id IN (SELECT lyrics_id FROM lyrics_video_ids WHERE video_id = lr.video_id))
 		       AND lyrics.sync_type IN ('linesync', 'richsync')
 		       AND lyrics.deleted_at IS NULL
 		       AND NOT ${AUTO_HIDE_PREDICATE}
@@ -100,7 +100,7 @@ export async function getMostWantedPage(
 	 WHERE lr.created_at > ?
 	   AND NOT EXISTS (
 	     SELECT 1 FROM lyrics
-	     WHERE lyrics.video_id = lr.video_id
+	     WHERE (lyrics.video_id = lr.video_id OR lyrics.id IN (SELECT lyrics_id FROM lyrics_video_ids WHERE video_id = lr.video_id))
 	       AND lyrics.sync_type IN ('linesync', 'richsync')
 	       AND lyrics.deleted_at IS NULL
 	       AND NOT ${AUTO_HIDE_PREDICATE}

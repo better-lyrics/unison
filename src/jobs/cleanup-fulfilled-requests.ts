@@ -15,14 +15,14 @@ export async function cleanupFulfilledRequests(env: Env): Promise<{ deleted: num
 			   SELECT lr.id FROM lyrics_requests lr
 			   WHERE EXISTS (
 			     SELECT 1 FROM lyrics l
-			     WHERE l.video_id = lr.video_id
+			     WHERE (l.video_id = lr.video_id OR l.id IN (SELECT lyrics_id FROM lyrics_video_ids WHERE video_id = lr.video_id))
 			       AND l.sync_type IN ('linesync', 'richsync')
 			       AND l.deleted_at IS NULL
 			       AND NOT ${AUTO_HIDE_PREDICATE_JOINED}
 			   )
 			   LIMIT ?
 			 )
-			 RETURNING id`,
+			 RETURNING id`
 		)
 			.bind(BATCH_SIZE)
 			.all<{ id: number }>()
