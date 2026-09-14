@@ -6,7 +6,7 @@ import {
 	awardFirstForSongXp,
 	awardPenaltyXp,
 } from "@/db/contribution-events"
-import { invalidateCache } from "@/db/lyrics"
+import { invalidateCacheForLyric } from "@/db/lyrics"
 import { AUTO_HIDE_PREDICATE, CONSENSUS_LYRICS_CTE } from "@/db/predicates"
 import { Logger } from "@/infra/logger"
 import type { Confidence, Env } from "@/types"
@@ -73,7 +73,7 @@ export async function recalculateScore(env: Env, lyricsId: number): Promise<void
 		)
 		.run()
 
-	await invalidateCache(env, row.video_id)
+	await invalidateCacheForLyric(env, lyricsId)
 
 	if (typeof row.submitter_id === "number") {
 		await awardConfidenceXp(env, row.submitter_id, lyricsId, update.confidence)
@@ -192,10 +192,7 @@ async function applyAutoHidePenalty(env: Env): Promise<void> {
 		if (rows.length === 0) return
 
 		for (const r of rows) {
-			submitterPenalty.set(
-				r.submitter_id,
-				(submitterPenalty.get(r.submitter_id) ?? 0) + penalty
-			)
+			submitterPenalty.set(r.submitter_id, (submitterPenalty.get(r.submitter_id) ?? 0) + penalty)
 			flippedIds.push(r.id)
 			await awardPenaltyXp({ ...env, DB: tx }, r.submitter_id, r.id)
 		}

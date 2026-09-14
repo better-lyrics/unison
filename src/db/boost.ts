@@ -1,7 +1,7 @@
 import { config } from "@/config"
 import { isCommittee } from "@/db/committee"
 import { getCuratorRank } from "@/db/leaderboard"
-import { invalidateCache } from "@/db/lyrics"
+import { invalidateCacheForLyric } from "@/db/lyrics"
 import type { Env } from "@/types"
 import { quotaForTier } from "@/utils/boost-quota"
 
@@ -129,7 +129,7 @@ export async function createBoost(
 	}
 
 	if (result.ok) {
-		await invalidateCache(env, lyric.video_id)
+		await invalidateCacheForLyric(env, lyricsId)
 	}
 	return result
 }
@@ -145,12 +145,7 @@ async function clearBoost(env: Env, boostId: number, lyricsId: number): Promise<
 		.bind(lyricsId)
 		.run()
 
-	const videoRow = await env.DB.prepare("SELECT video_id FROM lyrics WHERE id = ?")
-		.bind(lyricsId)
-		.first<{ video_id: string }>()
-	if (videoRow) {
-		await invalidateCache(env, videoRow.video_id)
-	}
+	await invalidateCacheForLyric(env, lyricsId)
 }
 
 export async function revokeBoost(

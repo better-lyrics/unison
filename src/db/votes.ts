@@ -1,4 +1,4 @@
-import { invalidateCache } from "@/db/lyrics"
+import { invalidateCacheForLyric } from "@/db/lyrics"
 import { Logger } from "@/infra/logger"
 import { recalculateScore } from "@/jobs/score-updater"
 import type { Env } from "@/types"
@@ -51,7 +51,7 @@ export async function castVote(
 			).bind(vote, vote, vote, lyricsId),
 		])
 
-		if (lyrics) await invalidateCache(env, lyrics.video_id)
+		await invalidateCacheForLyric(env, lyricsId)
 		await updateUserAvgVote(env, userId)
 		recalculateScore(env, lyricsId).catch((err) =>
 			log.error("background recalculation failed", { lyricsId, error: String(err) })
@@ -77,7 +77,7 @@ export async function castVote(
 		).bind(vote, vote, vote, lyricsId),
 	])
 
-	if (lyrics) await invalidateCache(env, lyrics.video_id)
+	await invalidateCacheForLyric(env, lyricsId)
 	await updateUserAvgVote(env, userId)
 	recalculateScore(env, lyricsId).catch((err) =>
 		log.error("background recalculation failed", { lyricsId, error: String(err) })
@@ -151,7 +151,7 @@ export async function removeVote(
 		).bind(vote, vote, vote, lyricsId),
 	])
 
-	await invalidateCache(env, existing.video_id)
+	await invalidateCacheForLyric(env, lyricsId)
 	await updateUserAvgVote(env, userId)
 	recalculateScore(env, lyricsId).catch((err) =>
 		log.error("background recalculation failed", { lyricsId, error: String(err) })

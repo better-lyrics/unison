@@ -10,6 +10,7 @@ import {
 	findByVideoId,
 	findEligibleChallengers,
 	findVariantsByVideoId,
+	invalidateCacheForLyric,
 	submitLyrics,
 } from "./lyrics"
 
@@ -237,6 +238,30 @@ describeIntegration("video-id lyric lookups route through the link table (integr
 				[id]
 			)
 			expect(links.rows.map((r) => r.video_id)).toEqual([VIDEO_C])
+		})
+	})
+
+	describe("cache fan-out", () => {
+		it("invalidateCacheForLyric busts every video the lyric serves", async () => {
+			await pool.query("INSERT INTO lyrics_video_ids (lyrics_id, video_id) VALUES ($1, $2)", [
+				a1,
+				VIDEO_C,
+			])
+			const deleted: string[] = []
+			const fanEnv = {
+				DB: env.DB,
+				CACHE: {
+					get: async () => null,
+					put: async () => {},
+					delete: async (key: string) => {
+						deleted.push(key)
+					},
+				},
+			} as unknown as Env
+
+			await invalidateCacheForLyric(fanEnv, a1)
+
+			expect(deleted.sort()).toEqual([`v:${VIDEO_A}`, `v:${VIDEO_C}`].sort())
 		})
 	})
 })

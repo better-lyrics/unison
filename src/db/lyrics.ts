@@ -431,6 +431,17 @@ export async function invalidateCache(env: Env, videoId: string): Promise<void> 
 	await env.CACHE.delete(`v:${videoId}`)
 }
 
+export async function invalidateCacheForLyric(env: Env, lyricsId: number): Promise<void> {
+	const rows = await env.DB.prepare(
+		`SELECT video_id FROM lyrics_video_ids WHERE lyrics_id = ?
+		 UNION
+		 SELECT video_id FROM lyrics WHERE id = ?`
+	)
+		.bind(lyricsId, lyricsId)
+		.all<{ video_id: string }>()
+	await Promise.all(rows.results.map((r) => env.CACHE.delete(`v:${r.video_id}`)))
+}
+
 export async function invalidateCacheForSubmitter(env: Env, keyId: string): Promise<void> {
 	const rows = await env.DB.prepare(
 		`SELECT DISTINCT l.video_id
@@ -443,8 +454,8 @@ export async function invalidateCacheForSubmitter(env: Env, keyId: string): Prom
 	await Promise.all(rows.results.map((r) => env.CACHE.delete(`v:${r.video_id}`)))
 }
 
-export async function invalidateCacheAfterDelete(env: Env, videoId: string): Promise<void> {
-	await env.CACHE.delete(`v:${videoId}`)
+export async function invalidateCacheAfterDelete(env: Env, lyricsId: number): Promise<void> {
+	await invalidateCacheForLyric(env, lyricsId)
 	const feedKeys = await env.CACHE.keys("feed:global:*")
 	for (const key of feedKeys) {
 		await env.CACHE.delete(key)
@@ -521,7 +532,7 @@ export async function softDeleteLyrics(
 			.run()
 	})
 
-	await invalidateCacheAfterDelete(env, row.video_id)
+	await invalidateCacheAfterDelete(env, lyricsId)
 	log.info("lyrics deleted", { lyricsId, role, actingUserId, videoId: row.video_id })
 
 	return { deleted: true }

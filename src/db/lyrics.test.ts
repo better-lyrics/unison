@@ -864,8 +864,8 @@ describe("RANKING_EXPR", () => {
 })
 
 describe("invalidateCacheAfterDelete", () => {
-	it("deletes per-video key and all feed:global:* keys, leaves others", async () => {
-		const db = createMockDB()
+	it("deletes every served-video key and all feed:global:* keys, leaves others", async () => {
+		const db = createMockDB([[{ video_id: "abc123" }]])
 		const cache = createMockCache({
 			"v:abc123": "row",
 			"feed:global:20": "feed",
@@ -874,7 +874,7 @@ describe("invalidateCacheAfterDelete", () => {
 		})
 		const env = createEnv(db, cache)
 
-		await invalidateCacheAfterDelete(env, "abc123")
+		await invalidateCacheAfterDelete(env, 42)
 
 		expect(cache.deleteCalls).toContain("v:abc123")
 		expect(cache.deleteCalls).toContain("feed:global:20")
@@ -1024,6 +1024,7 @@ describe("softDeleteLyrics", () => {
 				reputation_penalized: false,
 			},
 			null,
+			[{ video_id: "v1" }], // invalidateCacheForLyric fan-out
 		])
 		const cache = createMockCache({ "v:v1": "row", "feed:global:20": "feed" })
 		const env = createEnv(db, cache)
@@ -1559,6 +1560,7 @@ describe("submitLyrics fulfillment integration", () => {
 		const db = createMockDB([
 			{ count: 0 },
 			{ id: 555 },
+			null, // INSERT INTO lyrics_video_ids (primary link)
 			{ key_id: "k1" },
 			null,
 			null,
@@ -1589,7 +1591,14 @@ describe("submitLyrics fulfillment integration", () => {
 	})
 
 	it("skips fulfillment when a prior synced variant exists", async () => {
-		const db = createMockDB([{ count: 0 }, { id: 557 }, { key_id: "k1" }, null, { "1": 1 }])
+		const db = createMockDB([
+			{ count: 0 },
+			{ id: 557 },
+			null, // INSERT INTO lyrics_video_ids (primary link)
+			{ key_id: "k1" },
+			null,
+			{ "1": 1 },
+		])
 		const cache = createMockCache()
 		const env = createEnv(db, cache)
 

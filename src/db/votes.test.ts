@@ -124,6 +124,7 @@ describe("castVote", () => {
 		const db = createMockDB([
 			{ submitter_id: 99, video_id: "vidABC" }, // SELECT submitter_id, video_id
 			null, // SELECT existing vote (none)
+			[{ video_id: "vidABC" }], // invalidateCacheForLyric fan-out
 		])
 		const env = createEnv(db, cache)
 
@@ -138,6 +139,7 @@ describe("castVote", () => {
 		const db = createMockDB([
 			{ submitter_id: 99, video_id: "vidXYZ" }, // SELECT lyrics row
 			{ vote: 1 }, // SELECT existing vote (was upvote)
+			[{ video_id: "vidXYZ" }], // invalidateCacheForLyric fan-out
 		])
 		const env = createEnv(db, cache)
 
@@ -164,7 +166,11 @@ describe("castVote", () => {
 
 	it("invalidates cache BEFORE awaiting the (potentially failing) score recalc", async () => {
 		const cache = createMockCache()
-		const db = createMockDB([{ submitter_id: 99, video_id: "vid" }, null])
+		const db = createMockDB([
+			{ submitter_id: 99, video_id: "vid" },
+			null,
+			[{ video_id: "vid" }], // invalidateCacheForLyric fan-out
+		])
 		const env = createEnv(db, cache)
 
 		// recalc is mocked to resolve immediately, but the contract is that
@@ -223,6 +229,7 @@ describe("removeVote", () => {
 		const cache = createMockCache()
 		const db = createMockDB([
 			{ vote: 1, video_id: "vidREM" }, // SELECT vote + joined video_id
+			[{ video_id: "vidREM" }], // invalidateCacheForLyric fan-out
 		])
 		const env = createEnv(db, cache)
 
