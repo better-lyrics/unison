@@ -1,5 +1,5 @@
 import { awardRequestFilledXp } from "@/db/contribution-events"
-import { AUTO_HIDE_PREDICATE, AUTO_HIDE_PREDICATE_JOINED } from "@/db/predicates"
+import { AUTO_HIDE_PREDICATE, AUTO_HIDE_PREDICATE_JOINED, videoServesExpr } from "@/db/predicates"
 import { windowCutoff } from "@/db/requests"
 import { Logger } from "@/infra/logger"
 import type { Env } from "@/types"
@@ -19,7 +19,7 @@ interface RecordFulfillmentParams {
 
 export async function recordFulfillment(
 	env: Env,
-	params: RecordFulfillmentParams,
+	params: RecordFulfillmentParams
 ): Promise<RecordFulfillmentResult> {
 	const result = await env.DB.transaction<RecordFulfillmentResult>(async (tx) => {
 		await tx
@@ -30,14 +30,14 @@ export async function recordFulfillment(
 		const priorServable = await tx
 			.prepare(
 				`SELECT 1 FROM lyrics
-				 WHERE video_id = ?
+				 WHERE ${videoServesExpr()}
 				   AND id != ?
 				   AND sync_type IN ('linesync', 'richsync')
 				   AND deleted_at IS NULL
 				   AND NOT ${AUTO_HIDE_PREDICATE}
-				 LIMIT 1`,
+				 LIMIT 1`
 			)
-			.bind(params.videoId, params.lyricsId)
+			.bind(params.videoId, params.videoId, params.lyricsId)
 			.first()
 
 		if (priorServable !== null) {
@@ -50,7 +50,7 @@ export async function recordFulfillment(
 				 FROM lyrics_requests
 				 WHERE video_id = ?
 				   AND created_at > ?
-				   AND requester_id != ?`,
+				   AND requester_id != ?`
 			)
 			.bind(params.videoId, windowCutoff(), params.submitterKeyId)
 			.first<{ demand: number; request_count: number }>()
@@ -67,15 +67,12 @@ export async function recordFulfillment(
 				`INSERT INTO request_fulfillments
 				   (video_id, lyrics_id, submitter_id, demand_snapshot, request_count_snapshot)
 				 VALUES (?, ?, ?, ?, ?)
-				 RETURNING id`,
+				 RETURNING id`
 			)
 			.bind(params.videoId, params.lyricsId, params.submitterId, demand, requestCount)
 			.first<{ id: number }>()
 
-		await tx
-			.prepare("DELETE FROM lyrics_requests WHERE video_id = ?")
-			.bind(params.videoId)
-			.run()
+		await tx.prepare("DELETE FROM lyrics_requests WHERE video_id = ?").bind(params.videoId).run()
 
 		log.info("fulfillment recorded", {
 			videoId: params.videoId,
@@ -90,7 +87,7 @@ export async function recordFulfillment(
 
 	if (result.recorded) {
 		await awardRequestFilledXp(env, params.submitterId, result.id).catch((err) =>
-			log.warn("request-filled xp failed", { error: (err as Error).message }),
+			log.warn("request-filled xp failed", { error: (err as Error).message })
 		)
 	}
 
@@ -99,7 +96,7 @@ export async function recordFulfillment(
 
 export async function getFulfillmentByLyricsId(
 	env: Env,
-	lyricsId: number,
+	lyricsId: number
 ): Promise<{ demand: number; requestCount: number; fulfilledAt: number } | null> {
 	const row = await env.DB.prepare(
 		`SELECT f.demand_snapshot, f.request_count_snapshot, f.fulfilled_at
@@ -108,7 +105,7 @@ export async function getFulfillmentByLyricsId(
 		 WHERE f.lyrics_id = ?
 		   AND l.deleted_at IS NULL
 		   AND NOT ${AUTO_HIDE_PREDICATE_JOINED}
-		 LIMIT 1`,
+		 LIMIT 1`
 	)
 		.bind(lyricsId)
 		.first<{ demand_snapshot: number; request_count_snapshot: number; fulfilled_at: number }>()
@@ -123,7 +120,7 @@ export async function getFulfillmentByLyricsId(
 
 export async function getFulfillmentStatsBySubmitter(
 	env: Env,
-	submitterId: number,
+	submitterId: number
 ): Promise<{ fulfilledCount: number; fulfilledDemand: number }> {
 	const row = await env.DB.prepare(
 		`SELECT COUNT(*) AS count, COALESCE(SUM(f.demand_snapshot), 0) AS demand
@@ -131,7 +128,7 @@ export async function getFulfillmentStatsBySubmitter(
 		 JOIN lyrics l ON l.id = f.lyrics_id
 		 WHERE f.submitter_id = ?
 		   AND l.deleted_at IS NULL
-		   AND NOT ${AUTO_HIDE_PREDICATE_JOINED}`,
+		   AND NOT ${AUTO_HIDE_PREDICATE_JOINED}`
 	)
 		.bind(submitterId)
 		.first<{ count: number; demand: number }>()

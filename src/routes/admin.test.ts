@@ -646,7 +646,7 @@ describe("DELETE /admin/boost/:lyricsId", () => {
 	})
 
 	it("revokes an active boost and returns revoked:true", async () => {
-		const db = makeMockDB([{ id: 1 }, { video_id: "v" }])
+		const db = makeMockDB([{ id: 1 }, [{ video_id: "v" }]])
 		const app = adminRoutes(makeEnv(db, makeMockCache()))
 		const res = await app.handle(del("/admin/boost/5"))
 		expect(res.status).toBe(200)

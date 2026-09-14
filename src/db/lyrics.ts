@@ -7,6 +7,7 @@ import {
 	RANKING_EXPR,
 	RANKING_EXPR_JOINED,
 	RANKING_EXPR_VARIANT,
+	videoServesExpr,
 } from "@/db/predicates"
 import { Logger } from "@/infra/logger"
 import type { Env, LyricsRow, LyricsSearchResult, LyricsSubmission } from "@/types"
@@ -64,16 +65,16 @@ async function getPrimary(env: Env, videoId: string): Promise<LyricsRow | null> 
 
 	cacheLog.debug("miss", { key: `v:${videoId}` })
 	const result = await env.DB.prepare(
-		`${LYRICS_WITH_SUBMITTER} WHERE l.video_id = ? AND l.deleted_at IS NULL AND NOT ${AUTO_HIDE_PREDICATE_JOINED} ORDER BY (CASE WHEN ${PROVEN_EXPR_JOINED} THEN 1 ELSE 0 END) DESC, ${RANKING_EXPR_VARIANT} DESC LIMIT 1`
+		`${LYRICS_WITH_SUBMITTER} WHERE ${videoServesExpr("l.")} AND l.deleted_at IS NULL AND NOT ${AUTO_HIDE_PREDICATE_JOINED} ORDER BY (CASE WHEN ${PROVEN_EXPR_JOINED} THEN 1 ELSE 0 END) DESC, ${RANKING_EXPR_VARIANT} DESC LIMIT 1`
 	)
-		.bind(videoId)
+		.bind(videoId, videoId)
 		.first<LyricsRow>()
 
 	if (result) {
 		if (isCompressed(result.lyrics)) {
 			result.lyrics = await decompress(result.lyrics)
 		}
-		await cacheResult(env, result)
+		await cacheResult(env, result, videoId)
 		log.debug("found by videoId", { videoId, id: result.id })
 	} else {
 		log.debug("not found by videoId", { videoId })
@@ -93,7 +94,7 @@ export async function findEligibleChallengers(
 	const results = await env.DB.prepare(
 		`
 		${LYRICS_WITH_SUBMITTER}
-		WHERE l.video_id = ?
+		WHERE ${videoServesExpr("l.")}
 			AND l.deleted_at IS NULL
 			AND l.id <> ?
 			AND NOT ${AUTO_HIDE_PREDICATE_JOINED}
@@ -107,6 +108,7 @@ export async function findEligibleChallengers(
 		`
 	)
 		.bind(
+			videoId,
 			videoId,
 			primary.id,
 			config.exploration.minSubmitterReputation,
@@ -173,12 +175,12 @@ export async function findVariantsByVideoId(
 	const results = await env.DB.prepare(
 		`
 		${LYRICS_WITH_SUBMITTER}
-		WHERE l.video_id = ? AND l.deleted_at IS NULL
+		WHERE ${videoServesExpr("l.")} AND l.deleted_at IS NULL
 		ORDER BY ${RANKING_EXPR_VARIANT} DESC
 		LIMIT ?
 		`
 	)
-		.bind(videoId, limit)
+		.bind(videoId, videoId, limit)
 		.all<LyricsRow>()
 
 	for (const row of results.results) {
@@ -241,7 +243,8 @@ export async function findBySongArtist(
 export async function submitLyrics(
 	env: Env,
 	submission: LyricsSubmission,
-	submitterId: number
+	submitterId: number,
+	opts: { excludeLyricId?: number } = {}
 ): Promise<{ id: number; created: boolean }> {
 	const compressedLyrics = await compress(submission.lyrics)
 	const plainText = extractPlainText(submission.lyrics, submission.format)
@@ -250,12 +253,17 @@ export async function submitLyrics(
 	const albumNorm = submission.album ? normalize(submission.album) : null
 
 	// Check per-user-per-video variant cap
+	const excludeClause = opts.excludeLyricId != null ? " AND id != ?" : ""
+	const capParams =
+		opts.excludeLyricId != null
+			? [submission.videoId, submitterId, opts.excludeLyricId]
+			: [submission.videoId, submitterId]
 	const variantCount = await env.DB.prepare(
 		`SELECT COUNT(*)::INTEGER AS count FROM lyrics
 			WHERE video_id = ? AND submitter_id = ?
-				AND (deleted_at IS NULL OR reputation_penalized = TRUE)`
+				AND (deleted_at IS NULL OR reputation_penalized = TRUE)${excludeClause}`
 	)
-		.bind(submission.videoId, submitterId)
+		.bind(...capParams)
 		.first<{ count: number }>()
 
 	if (variantCount && variantCount.count >= config.submission.maxVariantsPerUserPerVideo) {
@@ -320,6 +328,12 @@ export async function submitLyrics(
 		)
 		.first<{ id: number }>()
 
+	await env.DB.prepare(
+		"INSERT INTO lyrics_video_ids (lyrics_id, video_id) VALUES (?, ?) ON CONFLICT DO NOTHING"
+	)
+		.bind(result!.id, submission.videoId)
+		.run()
+
 	log.info("new lyrics submitted", {
 		videoId: submission.videoId,
 		id: result!.id,
@@ -345,6 +359,102 @@ export async function submitLyrics(
 	await invalidateCache(env, submission.videoId)
 
 	return { id: result!.id, created: true }
+}
+
+export type EditResult =
+	| { ok: true; id: number }
+	| { ok: false; reason: "not_found" | "cap_reached" }
+
+export async function editLyrics(
+	env: Env,
+	parentId: number,
+	editorUserId: number,
+	content: {
+		lyrics: string
+		format: "ttml" | "lrc" | "plain"
+		syncType: "richsync" | "linesync" | "plain"
+		language?: string
+	}
+): Promise<EditResult> {
+	const parent = await env.DB.prepare(
+		`SELECT id, submitter_id, video_id, song, artist, album, isrc, duration,
+		        vote_count, committee_approved_at, deleted_at
+		 FROM lyrics WHERE id = ?`
+	)
+		.bind(parentId)
+		.first<{
+			submitter_id: number | null
+			video_id: string
+			song: string
+			artist: string
+			album: string | null
+			isrc: string | null
+			duration: number
+			vote_count: number
+			committee_approved_at: number | null
+			deleted_at: number | null
+		}>()
+
+	if (!parent || parent.deleted_at !== null) return { ok: false, reason: "not_found" }
+
+	const supersede =
+		parent.submitter_id === editorUserId &&
+		parent.vote_count === 0 &&
+		parent.committee_approved_at === null
+
+	const outcome = await env.DB.transaction(async (tx) => {
+		const txEnv = { ...env, DB: tx }
+		const result = await submitLyrics(
+			txEnv,
+			{
+				videoId: parent.video_id,
+				song: parent.song,
+				artist: parent.artist,
+				album: parent.album ?? undefined,
+				isrc: parent.isrc ?? undefined,
+				duration: parent.duration,
+				lyrics: content.lyrics,
+				format: content.format,
+				syncType: content.syncType,
+				language: content.language,
+			},
+			editorUserId,
+			supersede ? { excludeLyricId: parentId } : {}
+		)
+
+		if (!result.created) return { ok: false as const, reason: "cap_reached" as const }
+
+		await tx.prepare("UPDATE lyrics SET parent_id = ? WHERE id = ?").bind(parentId, result.id).run()
+
+		if (parent.submitter_id === editorUserId) {
+			await tx
+				.prepare(
+					`INSERT INTO lyrics_video_ids (lyrics_id, video_id)
+				 SELECT ?, video_id FROM lyrics_video_ids WHERE lyrics_id = ?
+				 ON CONFLICT DO NOTHING`
+				)
+				.bind(result.id, parentId)
+				.run()
+		}
+
+		if (supersede) {
+			await softDeleteLyrics(
+				txEnv,
+				parentId,
+				editorUserId,
+				"submitter",
+				"superseded by a newer edit"
+			)
+		}
+
+		return { ok: true as const, id: result.id }
+	})
+
+	if (!outcome.ok) return outcome
+
+	await invalidateCacheForLyric(env, outcome.id)
+
+	return outcome
 }
 
 export async function searchBySongArtist(
@@ -412,16 +522,27 @@ export async function getLyricsById(env: Env, id: number): Promise<LyricsRow | n
 	return result
 }
 
-async function cacheResult(env: Env, result: LyricsRow): Promise<void> {
+async function cacheResult(env: Env, result: LyricsRow, videoId: string): Promise<void> {
 	const cacheTtl = Number.parseInt(env.CACHE_TTL_SECONDS) || config.cache.ttlSeconds
 	const cacheData = { ...result, lyrics: await compress(result.lyrics) }
-	await env.CACHE.put(`v:${result.video_id}`, JSON.stringify(cacheData), {
+	await env.CACHE.put(`v:${videoId}`, JSON.stringify(cacheData), {
 		expirationTtl: cacheTtl,
 	})
 }
 
 export async function invalidateCache(env: Env, videoId: string): Promise<void> {
 	await env.CACHE.delete(`v:${videoId}`)
+}
+
+export async function invalidateCacheForLyric(env: Env, lyricsId: number): Promise<void> {
+	const rows = await env.DB.prepare(
+		`SELECT video_id FROM lyrics_video_ids WHERE lyrics_id = ?
+		 UNION
+		 SELECT video_id FROM lyrics WHERE id = ?`
+	)
+		.bind(lyricsId, lyricsId)
+		.all<{ video_id: string }>()
+	await Promise.all(rows.results.map((r) => env.CACHE.delete(`v:${r.video_id}`)))
 }
 
 export async function invalidateCacheForSubmitter(env: Env, keyId: string): Promise<void> {
@@ -436,8 +557,8 @@ export async function invalidateCacheForSubmitter(env: Env, keyId: string): Prom
 	await Promise.all(rows.results.map((r) => env.CACHE.delete(`v:${r.video_id}`)))
 }
 
-export async function invalidateCacheAfterDelete(env: Env, videoId: string): Promise<void> {
-	await env.CACHE.delete(`v:${videoId}`)
+export async function invalidateCacheAfterDelete(env: Env, lyricsId: number): Promise<void> {
+	await invalidateCacheForLyric(env, lyricsId)
 	const feedKeys = await env.CACHE.keys("feed:global:*")
 	for (const key of feedKeys) {
 		await env.CACHE.delete(key)
@@ -514,7 +635,7 @@ export async function softDeleteLyrics(
 			.run()
 	})
 
-	await invalidateCacheAfterDelete(env, row.video_id)
+	await invalidateCacheAfterDelete(env, lyricsId)
 	log.info("lyrics deleted", { lyricsId, role, actingUserId, videoId: row.video_id })
 
 	return { deleted: true }
@@ -548,7 +669,7 @@ export async function searchByQuery(
 				1.0::DOUBLE PRECISION AS match_score,
 				1 AS tier
 			FROM lyrics
-			WHERE (video_id = ? OR isrc = ?) AND deleted_at IS NULL AND NOT ${AUTO_HIDE_PREDICATE}
+			WHERE (${videoServesExpr()} OR isrc = ?) AND deleted_at IS NULL AND NOT ${AUTO_HIDE_PREDICATE}
 
 			UNION ALL
 
@@ -587,6 +708,7 @@ export async function searchByQuery(
 
 	const result = await env.DB.prepare(ranked)
 		.bind(
+			query.trim(),
 			query.trim(),
 			query.trim(),
 			normalized,

@@ -11,6 +11,13 @@ export const config = {
 		maxVariantsPerUserPerVideo: 3,
 	},
 
+	videoLinking: {
+		maxVideosPerVariant: 20,
+		durationDeltaSeconds: 2,
+		suggestionCacheTtlSeconds: 60 * 60 * 6,
+		emptySuggestionCacheTtlSeconds: 60 * 30,
+	},
+
 	moderation: {
 		reportsThreshold: 2,
 		autoHide: {
@@ -182,6 +189,10 @@ export const config = {
 		},
 		write: {
 			maxRequests: 10,
+			windowSeconds: 60,
+		},
+		suggest: {
+			maxRequests: 60,
 			windowSeconds: 60,
 		},
 	},

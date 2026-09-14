@@ -124,6 +124,7 @@ describe("castVote", () => {
 		const db = createMockDB([
 			{ submitter_id: 99, video_id: "vidABC" }, // SELECT submitter_id, video_id
 			null, // SELECT existing vote (none)
+			[{ video_id: "vidABC" }], // invalidateCacheForLyric fan-out
 		])
 		const env = createEnv(db, cache)
 
@@ -138,6 +139,7 @@ describe("castVote", () => {
 		const db = createMockDB([
 			{ submitter_id: 99, video_id: "vidXYZ" }, // SELECT lyrics row
 			{ vote: 1 }, // SELECT existing vote (was upvote)
+			[{ video_id: "vidXYZ" }], // invalidateCacheForLyric fan-out
 		])
 		const env = createEnv(db, cache)
 
@@ -164,7 +166,11 @@ describe("castVote", () => {
 
 	it("invalidates cache BEFORE awaiting the (potentially failing) score recalc", async () => {
 		const cache = createMockCache()
-		const db = createMockDB([{ submitter_id: 99, video_id: "vid" }, null])
+		const db = createMockDB([
+			{ submitter_id: 99, video_id: "vid" },
+			null,
+			[{ video_id: "vid" }], // invalidateCacheForLyric fan-out
+		])
 		const env = createEnv(db, cache)
 
 		// recalc is mocked to resolve immediately, but the contract is that
@@ -204,16 +210,16 @@ describe("castVote", () => {
 		expect(insertCall?.params[3]).toBe(0)
 	})
 
-	it("fetches video_id alongside submitter_id in a single round-trip", async () => {
+	it("fetches submitter_id and deleted_at in a single round-trip", async () => {
 		const cache = createMockCache()
-		const db = createMockDB([{ submitter_id: 1, video_id: "vid" }, null])
+		const db = createMockDB([{ submitter_id: 1, deleted_at: null }, null])
 		const env = createEnv(db, cache)
 
 		await castVote(env, 1, 42, 1)
 
 		const lookup = db.calls[0]
 		expect(lookup.sql).toContain("submitter_id")
-		expect(lookup.sql).toContain("video_id")
+		expect(lookup.sql).toContain("deleted_at")
 		expect(lookup.sql).toContain("FROM lyrics")
 	})
 })
@@ -223,6 +229,7 @@ describe("removeVote", () => {
 		const cache = createMockCache()
 		const db = createMockDB([
 			{ vote: 1, video_id: "vidREM" }, // SELECT vote + joined video_id
+			[{ video_id: "vidREM" }], // invalidateCacheForLyric fan-out
 		])
 		const env = createEnv(db, cache)
 
@@ -244,9 +251,9 @@ describe("removeVote", () => {
 		expect(cache.deleteCalls).toEqual([])
 	})
 
-	it("joins votes with lyrics to fetch video_id alongside the existing vote", async () => {
+	it("joins votes with lyrics and fetches the existing vote", async () => {
 		const cache = createMockCache()
-		const db = createMockDB([{ vote: 1, video_id: "vid" }])
+		const db = createMockDB([{ vote: 1 }])
 		const env = createEnv(db, cache)
 
 		await removeVote(env, 1, 42)
@@ -254,7 +261,6 @@ describe("removeVote", () => {
 		const sql = db.calls[0].sql
 		expect(sql).toMatch(/JOIN\s+lyrics/i)
 		expect(sql).toContain("v.vote")
-		expect(sql).toContain("l.video_id")
 	})
 
 	it("issues UPDATE lyrics with vote-magnitude reversal", async () => {

@@ -1,4 +1,4 @@
-import { invalidateCache } from "@/db/lyrics"
+import { invalidateCacheForLyric } from "@/db/lyrics"
 import { Logger } from "@/infra/logger"
 import { recalculateScore } from "@/jobs/score-updater"
 import type { Env } from "@/types"
@@ -12,11 +12,9 @@ export async function castVote(
 	userId: number,
 	vote: 1 | -1
 ): Promise<{ success: boolean; message: string }> {
-	const lyrics = await env.DB.prepare(
-		"SELECT submitter_id, video_id, deleted_at FROM lyrics WHERE id = ?"
-	)
+	const lyrics = await env.DB.prepare("SELECT submitter_id, deleted_at FROM lyrics WHERE id = ?")
 		.bind(lyricsId)
-		.first<{ submitter_id: number | null; video_id: string; deleted_at: number | null }>()
+		.first<{ submitter_id: number | null; deleted_at: number | null }>()
 
 	if (lyrics?.deleted_at != null) {
 		return { success: false, message: "Lyrics no longer available" }
@@ -51,7 +49,7 @@ export async function castVote(
 			).bind(vote, vote, vote, lyricsId),
 		])
 
-		if (lyrics) await invalidateCache(env, lyrics.video_id)
+		await invalidateCacheForLyric(env, lyricsId)
 		await updateUserAvgVote(env, userId)
 		recalculateScore(env, lyricsId).catch((err) =>
 			log.error("background recalculation failed", { lyricsId, error: String(err) })
@@ -77,7 +75,7 @@ export async function castVote(
 		).bind(vote, vote, vote, lyricsId),
 	])
 
-	if (lyrics) await invalidateCache(env, lyrics.video_id)
+	await invalidateCacheForLyric(env, lyricsId)
 	await updateUserAvgVote(env, userId)
 	recalculateScore(env, lyricsId).catch((err) =>
 		log.error("background recalculation failed", { lyricsId, error: String(err) })
@@ -122,13 +120,13 @@ export async function removeVote(
 	userId: number
 ): Promise<{ success: boolean; message: string }> {
 	const existing = await env.DB.prepare(
-		`SELECT v.vote, l.video_id
+		`SELECT v.vote
 		 FROM votes v
 		 JOIN lyrics l ON l.id = v.lyrics_id
 		 WHERE v.lyrics_id = ? AND v.user_id = ?`
 	)
 		.bind(lyricsId, userId)
-		.first<{ vote: number; video_id: string }>()
+		.first<{ vote: number }>()
 
 	if (!existing) {
 		return { success: false, message: "No vote to remove" }
@@ -151,7 +149,7 @@ export async function removeVote(
 		).bind(vote, vote, vote, lyricsId),
 	])
 
-	await invalidateCache(env, existing.video_id)
+	await invalidateCacheForLyric(env, lyricsId)
 	await updateUserAvgVote(env, userId)
 	recalculateScore(env, lyricsId).catch((err) =>
 		log.error("background recalculation failed", { lyricsId, error: String(err) })

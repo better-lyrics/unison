@@ -1,5 +1,3 @@
-import type { Env } from "@/types"
-import { describe, expect, it, vi } from "vitest"
 import { config } from "@/config"
 import {
 	calculateScore,
@@ -8,9 +6,11 @@ import {
 	updateReputations,
 	updateScores,
 } from "@/jobs/score-updater"
+import type { Env } from "@/types"
+import { describe, expect, it, vi } from "vitest"
 
 vi.mock("@/db/lyrics", () => ({
-	invalidateCache: vi.fn(() => Promise.resolve()),
+	invalidateCacheForLyric: vi.fn(() => Promise.resolve()),
 }))
 
 interface MockDBResult {

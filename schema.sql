@@ -144,6 +144,18 @@ DROP INDEX IF EXISTS idx_lyrics_video_submitter;
 CREATE INDEX IF NOT EXISTS idx_lyrics_video_id_ranking
     ON lyrics(video_id, effective_score DESC);
 
+-- Per-variant multi-video linking: a lyric serves its home lyrics.video_id plus every id here.
+CREATE TABLE IF NOT EXISTS lyrics_video_ids (
+    lyrics_id INTEGER NOT NULL REFERENCES lyrics(id) ON DELETE CASCADE,
+    video_id TEXT NOT NULL,
+    created_at INTEGER NOT NULL DEFAULT (EXTRACT(EPOCH FROM NOW())::INT),
+    PRIMARY KEY (lyrics_id, video_id)
+);
+CREATE INDEX IF NOT EXISTS idx_lvi_video_id ON lyrics_video_ids(video_id);
+
+-- Edit lineage: an edited variant links back to the row it was derived from.
+ALTER TABLE lyrics ADD COLUMN IF NOT EXISTS parent_id INTEGER REFERENCES lyrics(id);
+
 -- Soft delete for submissions: preserves vote/reputation signal
 ALTER TABLE lyrics ADD COLUMN IF NOT EXISTS deleted_at INTEGER;
 ALTER TABLE lyrics ADD COLUMN IF NOT EXISTS deleted_by_user_id INTEGER REFERENCES users(id);

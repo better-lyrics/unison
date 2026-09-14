@@ -41,6 +41,9 @@ const buildAutoHidePredicate = (prefix: string) => `(
 export const AUTO_HIDE_PREDICATE = buildAutoHidePredicate("")
 export const AUTO_HIDE_PREDICATE_JOINED = buildAutoHidePredicate("l.")
 
+export const videoServesExpr = (prefix = "", value = "?") =>
+	`(${prefix}video_id = ${value} OR ${prefix}id IN (SELECT lyrics_id FROM lyrics_video_ids WHERE video_id = ${value}))`
+
 const { primarySlot } = config.ranking
 
 const provenExpr = (repExpr: string, prefix: string) => `(
