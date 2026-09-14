@@ -129,8 +129,12 @@ describeIntegration("editLyrics (integration)", () => {
 		expect((await rowById(res.id)).parent_id).toBe(parent)
 	})
 
-	it("does not supersede when edited by a different user", async () => {
+	it("does not supersede when edited by a different user, and does not inherit curated links", async () => {
 		const parent = await seedLyric()
+		await pool.query("INSERT INTO lyrics_video_ids (lyrics_id, video_id) VALUES ($1,$2)", [
+			parent,
+			EXTRA,
+		])
 		const res = await editLyrics(env, parent, other, content)
 		expect(res.ok).toBe(true)
 		if (!res.ok) return
@@ -138,6 +142,8 @@ describeIntegration("editLyrics (integration)", () => {
 		const edited = await rowById(res.id)
 		expect(edited.submitter_id).toBe(other)
 		expect(edited.parent_id).toBe(parent)
+		// a non-owner edit only serves its own home video, not the owner's curated extras
+		expect(await linksFor(res.id)).toEqual([VIDEO])
 	})
 
 	describe("edge cases", () => {

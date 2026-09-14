@@ -242,7 +242,8 @@ export async function findBySongArtist(
 export async function submitLyrics(
 	env: Env,
 	submission: LyricsSubmission,
-	submitterId: number
+	submitterId: number,
+	opts: { excludeLyricId?: number } = {}
 ): Promise<{ id: number; created: boolean }> {
 	const compressedLyrics = await compress(submission.lyrics)
 	const plainText = extractPlainText(submission.lyrics, submission.format)
@@ -251,12 +252,17 @@ export async function submitLyrics(
 	const albumNorm = submission.album ? normalize(submission.album) : null
 
 	// Check per-user-per-video variant cap
+	const excludeClause = opts.excludeLyricId != null ? " AND id != ?" : ""
+	const capParams =
+		opts.excludeLyricId != null
+			? [submission.videoId, submitterId, opts.excludeLyricId]
+			: [submission.videoId, submitterId]
 	const variantCount = await env.DB.prepare(
 		`SELECT COUNT(*)::INTEGER AS count FROM lyrics
 			WHERE video_id = ? AND submitter_id = ?
-				AND (deleted_at IS NULL OR reputation_penalized = TRUE)`
+				AND (deleted_at IS NULL OR reputation_penalized = TRUE)${excludeClause}`
 	)
-		.bind(submission.videoId, submitterId)
+		.bind(...capParams)
 		.first<{ count: number }>()
 
 	if (variantCount && variantCount.count >= config.submission.maxVariantsPerUserPerVideo) {
@@ -395,10 +401,6 @@ export async function editLyrics(
 		parent.vote_count === 0 &&
 		parent.committee_approved_at === null
 
-	if (supersede) {
-		await softDeleteLyrics(env, parentId, editorUserId, "submitter", "superseded by a newer edit")
-	}
-
 	const result = await submitLyrics(
 		env,
 		{
@@ -413,7 +415,8 @@ export async function editLyrics(
 			syncType: content.syncType,
 			language: content.language,
 		},
-		editorUserId
+		editorUserId,
+		supersede ? { excludeLyricId: parentId } : {}
 	)
 
 	if (!result.created) return { ok: false, reason: "cap_reached" }
@@ -421,13 +424,21 @@ export async function editLyrics(
 	await env.DB.prepare("UPDATE lyrics SET parent_id = ? WHERE id = ?")
 		.bind(parentId, result.id)
 		.run()
-	await env.DB.prepare(
-		`INSERT INTO lyrics_video_ids (lyrics_id, video_id)
-		 SELECT ?, video_id FROM lyrics_video_ids WHERE lyrics_id = ?
-		 ON CONFLICT DO NOTHING`
-	)
-		.bind(result.id, parentId)
-		.run()
+
+	if (parent.submitter_id === editorUserId) {
+		await env.DB.prepare(
+			`INSERT INTO lyrics_video_ids (lyrics_id, video_id)
+			 SELECT ?, video_id FROM lyrics_video_ids WHERE lyrics_id = ?
+			 ON CONFLICT DO NOTHING`
+		)
+			.bind(result.id, parentId)
+			.run()
+	}
+
+	if (supersede) {
+		await softDeleteLyrics(env, parentId, editorUserId, "submitter", "superseded by a newer edit")
+	}
+
 	await invalidateCacheForLyric(env, result.id)
 
 	return { ok: true, id: result.id }
