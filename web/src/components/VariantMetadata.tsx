@@ -2,6 +2,7 @@ import { IconPlayerPlayFilled } from "@tabler/icons-react"
 import { AnimatePresence, MotionConfig, motion } from "motion/react"
 import { Link } from "react-router-dom"
 import { useBadgeCatalogueOptional } from "@/components/BadgeCatalogueContext"
+import { Bone } from "@/components/skeleton"
 import { TierChip } from "@/components/TierChip"
 import { Tooltip } from "@/components/Tooltip"
 import { useArtwork, youtubeThumbnailFallbackUrl, youtubeThumbnailUrl } from "@/lib/artwork"
@@ -212,6 +213,45 @@ function MarkCallout({ mark }: { mark: Mark }) {
           </Link>
         </span>
       ) : null}
+    </div>
+  )
+}
+
+export function VariantMetadataSkeleton() {
+  return (
+    <div
+      data-testid="variant-metadata-skeleton"
+      className="overflow-hidden rounded-xl border border-unison-border bg-unison-bg-elevated"
+    >
+      <Bone className="aspect-square w-full rounded-none" />
+      <div className="space-y-3.5 px-4 pt-3 pb-4">
+        <div className="flex flex-wrap gap-1.5">
+          <Bone className="h-[26px] w-16 rounded-full" />
+          <Bone className="h-[26px] w-14 rounded-full" />
+          <Bone className="h-[26px] w-20 rounded-full" />
+        </div>
+        <div className="h-px bg-unison-border" />
+        <div className="flex items-end gap-5">
+          <div className="space-y-1.5">
+            <Bone className="h-6 w-16" />
+            <Bone className="h-3 w-10" />
+          </div>
+          <div className="w-px self-stretch bg-unison-border" />
+          <div className="space-y-1.5">
+            <Bone className="h-6 w-10" />
+            <Bone className="h-3 w-10" />
+          </div>
+        </div>
+        <div className="h-px bg-unison-border" />
+        <div className="flex items-center gap-2.5">
+          <Bone className="size-10 shrink-0 rounded-full" />
+          <div className="min-w-0 flex-1 space-y-1.5">
+            <Bone className="h-3.5 w-24" />
+            <Bone className="h-2.5 w-20" />
+          </div>
+          <Bone className="h-6 w-10 rounded-full" />
+        </div>
+      </div>
     </div>
   )
 }
