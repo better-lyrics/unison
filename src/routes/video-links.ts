@@ -1,4 +1,5 @@
 import { linkVideoForOwner, listVideoLinks, unlinkVideoForOwner } from "@/db/video-links"
+import { suggestVideosForVariant } from "@/services/video-suggestions"
 import type { Env } from "@/types"
 import { eitherAuth } from "@/utils/either-auth"
 import { ErrorCode, buildError } from "@/utils/errors"
@@ -39,6 +40,16 @@ export const videoLinkRoutes = (env: Env) =>
 				return status(mapped.status, buildError(mapped.code))
 			}
 			return { success: true, videos: res.videos }
+		})
+		.get("/:id/suggested-videos", async ({ params, env, userId, status }) => {
+			const id = Number(params.id)
+			if (Number.isNaN(id)) return status(400, buildError(ErrorCode.INVALID_ID))
+			const res = await suggestVideosForVariant(env, id, userId)
+			if (!res.ok) {
+				if (res.reason === "not_owner") return status(403, buildError(ErrorCode.NOT_OWNER))
+				return status(404, buildError(ErrorCode.NOT_FOUND))
+			}
+			return { success: true, suggestions: res.suggestions }
 		})
 		.delete("/:id/videos/:videoId", async ({ params, env, userId, status }) => {
 			const id = Number(params.id)

@@ -6,8 +6,12 @@ vi.mock("@/db/video-links", () => ({
 	unlinkVideoForOwner: vi.fn(),
 	listVideoLinks: vi.fn(),
 }))
+vi.mock("@/services/video-suggestions", () => ({
+	suggestVideosForVariant: vi.fn(),
+}))
 
 import { linkVideoForOwner, listVideoLinks, unlinkVideoForOwner } from "@/db/video-links"
+import { suggestVideosForVariant } from "@/services/video-suggestions"
 import { videoLinkRoutes } from "./video-links"
 
 const KEY = "a".repeat(64)
@@ -169,6 +173,43 @@ describe("POST /lyrics/:id/videos", () => {
 				expect(res.status).toBe(expected)
 			})
 		}
+	})
+})
+
+describe("GET /lyrics/:id/suggested-videos", () => {
+	it("returns ranked suggestions for the owner", async () => {
+		vi.mocked(suggestVideosForVariant).mockResolvedValue({
+			ok: true,
+			suggestions: [
+				{
+					videoId: "exactmatch1",
+					title: "Song",
+					artist: "Artist",
+					album: null,
+					durationSeconds: 200,
+					matchScore: 1,
+					withinDurationDelta: true,
+				},
+			],
+		})
+		const res = await authedApp().handle(
+			new Request("http://localhost/lyrics/7/suggested-videos", {
+				headers: { authorization: "Bearer tok" },
+			})
+		)
+		expect(res.status).toBe(200)
+		const body = (await res.json()) as { suggestions: Array<{ videoId: string }> }
+		expect(body.suggestions[0].videoId).toBe("exactmatch1")
+	})
+
+	it("rejects a non-owner with 403", async () => {
+		vi.mocked(suggestVideosForVariant).mockResolvedValue({ ok: false, reason: "not_owner" })
+		const res = await authedApp().handle(
+			new Request("http://localhost/lyrics/7/suggested-videos", {
+				headers: { authorization: "Bearer tok" },
+			})
+		)
+		expect(res.status).toBe(403)
 	})
 })
 

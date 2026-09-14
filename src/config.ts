@@ -14,6 +14,7 @@ export const config = {
 	videoLinking: {
 		maxVideosPerVariant: 20,
 		durationDeltaSeconds: 5,
+		suggestionCacheTtlSeconds: 60 * 60 * 6,
 	},
 
 	moderation: {
