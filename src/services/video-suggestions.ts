@@ -33,13 +33,15 @@ async function cachedSearch(
 		try {
 			return JSON.parse(cached) as SongCandidate[]
 		} catch {
-			// fall through to a fresh search on a corrupt cache entry
+			await env.CACHE.delete(key)
 		}
 	}
 	const results = await search(`${song} ${artist}`)
-	await env.CACHE.put(key, JSON.stringify(results), {
-		expirationTtl: config.videoLinking.suggestionCacheTtlSeconds,
-	})
+	if (results.length > 0) {
+		await env.CACHE.put(key, JSON.stringify(results), {
+			expirationTtl: config.videoLinking.suggestionCacheTtlSeconds,
+		})
+	}
 	return results
 }
 

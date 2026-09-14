@@ -64,11 +64,10 @@ export async function createBoost(
 	}
 
 	const lyric = await env.DB.prepare(
-		"SELECT video_id, submitter_id, committee_approved_at FROM lyrics WHERE id = ? AND deleted_at IS NULL"
+		"SELECT submitter_id, committee_approved_at FROM lyrics WHERE id = ? AND deleted_at IS NULL"
 	)
 		.bind(lyricsId)
 		.first<{
-			video_id: string
 			submitter_id: number | string | null
 			committee_approved_at: number | null
 		}>()

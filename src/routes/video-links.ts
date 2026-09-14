@@ -31,11 +31,13 @@ export const videoLinkRoutes = (env: Env) =>
 			return { success: true, data: { videos: await listVideoLinks(env, id) } }
 		})
 		.use(eitherAuth)
-		.post("/:id/videos", async ({ params, env, userId, body, status }) => {
+		.post("/:id/videos", async ({ params, env, userId, keyId, body, status }) => {
 			const id = Number(params.id)
 			if (Number.isNaN(id)) return status(400, buildError(ErrorCode.INVALID_ID))
 			const videoId = (body as { videoId?: unknown }).videoId
 			if (typeof videoId !== "string") return status(400, buildError(ErrorCode.INVALID_ID))
+			const { success } = await env.RATE_LIMITER.limit({ key: keyId })
+			if (!success) return status(429, buildError(ErrorCode.RATE_LIMITED))
 			const res = await linkVideoForOwner(env, id, userId, videoId)
 			if (!res.ok) {
 				const mapped = LINK_ERROR[res.reason]

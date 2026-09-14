@@ -164,6 +164,21 @@ describe("POST /lyrics/:id/videos", () => {
 		expect(res.status).toBe(400)
 	})
 
+	it("returns 429 when the rate limiter rejects, without running the mutation", async () => {
+		vi.mocked(linkVideoForOwner).mockClear()
+		const cache = makeMockCache()
+		seedSession(cache, "tok")
+		const env = makeEnv(makeMockDB([{ id: 42, key_id: KEY }]), cache)
+		env.RATE_LIMITER = {
+			async limit() {
+				return { success: false }
+			},
+		} as unknown as Env["RATE_LIMITER"]
+		const res = await videoLinkRoutes(env).handle(post(7, "9bZkp7q19f0"))
+		expect(res.status).toBe(429)
+		expect(vi.mocked(linkVideoForOwner)).not.toHaveBeenCalled()
+	})
+
 	describe("error mapping", () => {
 		const cases: Array<[Awaited<ReturnType<typeof linkVideoForOwner>> & { ok: false }, number]> = [
 			[{ ok: false, reason: "not_owner" }, 403],

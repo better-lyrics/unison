@@ -182,5 +182,35 @@ describeIntegration("video suggestions (integration)", () => {
 			expect(res.ok).toBe(true)
 			if (res.ok) expect(res.suggestions.map((s) => s.videoId)).toEqual(expectedIds)
 		})
+
+		it("regression: does not cache an empty search result, so a transient failure is retried", async () => {
+			const store = new Map<string, string>()
+			const cacheEnv = envWith({
+				get: async (k: string) => store.get(k) ?? null,
+				put: async (k: string, v: string) => {
+					store.set(k, v)
+				},
+				delete: async (k: string) => {
+					store.delete(k)
+				},
+			} as unknown as Env["CACHE"])
+			let calls = 0
+			const flakySearch = async (): Promise<SongCandidate[]> => {
+				calls++
+				return calls === 1 ? [] : candidates
+			}
+
+			const first = await suggestVideosForVariant(cacheEnv, lyricId, owner, { search: flakySearch })
+			const second = await suggestVideosForVariant(cacheEnv, lyricId, owner, {
+				search: flakySearch,
+			})
+
+			expect(calls).toBe(2)
+			expect(store.size).toBe(1)
+			expect(first.ok).toBe(true)
+			if (first.ok) expect(first.suggestions).toEqual([])
+			expect(second.ok).toBe(true)
+			if (second.ok) expect(second.suggestions.map((s) => s.videoId)).toEqual(expectedIds)
+		})
 	})
 })
