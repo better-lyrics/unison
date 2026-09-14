@@ -37,6 +37,7 @@ import { requestRoutes } from "@/routes/requests"
 import { reviewQueueBotRoutes } from "@/routes/review-queue"
 import { translateRoutes } from "@/routes/translate"
 import { userRoutes } from "@/routes/users"
+import { videoLinkRoutes } from "@/routes/video-links"
 import { voteBotRoutes, voteRoutes } from "@/routes/votes"
 import { cors } from "@elysiajs/cors"
 import { cron } from "@elysiajs/cron"
@@ -207,6 +208,7 @@ const app = new Elysia({ adapter: node() })
 	.use(lyricsRoutes(env))
 	.use(feedRoutes(env))
 	.use(voteRoutes(env))
+	.use(videoLinkRoutes(env))
 	.use(voteBotRoutes(env))
 	.use(committeeBotRoutes(env))
 	.use(reviewQueueBotRoutes(env))

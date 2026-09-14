@@ -16,6 +16,10 @@ export const ErrorCode = {
 	AUTH_REQUIRED: "AUTH_REQUIRED",
 	INVALID_ID: "INVALID_ID",
 	NOT_OWNER: "NOT_OWNER",
+	LINK_CAP_REACHED: "LINK_CAP_REACHED",
+	DURATION_MISMATCH: "DURATION_MISMATCH",
+	VIDEO_UNVERIFIABLE: "VIDEO_UNVERIFIABLE",
+	CANNOT_UNLINK_PRIMARY: "CANNOT_UNLINK_PRIMARY",
 	NOT_FOUND: "NOT_FOUND",
 	MISSING_QUERY: "MISSING_QUERY",
 	INVALID_SIGNED_BODY: "INVALID_SIGNED_BODY",
@@ -117,6 +121,22 @@ const TEMPLATES: Record<ErrorCode, Template> = {
 	NOT_OWNER: {
 		error: "Not your submission",
 		hint: "You can only delete submissions you made yourself.",
+	},
+	LINK_CAP_REACHED: {
+		error: "Link limit reached",
+		hint: "This lyric already covers the maximum number of videos. Remove one before adding another.",
+	},
+	DURATION_MISMATCH: {
+		error: "Video length does not match",
+		hint: "That video's length is too different from this song, so it can't be linked.",
+	},
+	VIDEO_UNVERIFIABLE: {
+		error: "Could not verify video",
+		hint: "We couldn't read that video's details. It may be private, removed, or region-locked.",
+	},
+	CANNOT_UNLINK_PRIMARY: {
+		error: "Cannot remove the home video",
+		hint: "This is the lyric's original video and can't be unlinked.",
 	},
 	NOT_FOUND: {
 		error: "Lyrics not found",
