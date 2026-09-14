@@ -7,6 +7,7 @@ import {
 	RANKING_EXPR,
 	RANKING_EXPR_JOINED,
 	RANKING_EXPR_VARIANT,
+	videoServesExpr,
 } from "@/db/predicates"
 import { Logger } from "@/infra/logger"
 import type { Env, LyricsRow, LyricsSearchResult, LyricsSubmission } from "@/types"
@@ -64,7 +65,7 @@ async function getPrimary(env: Env, videoId: string): Promise<LyricsRow | null> 
 
 	cacheLog.debug("miss", { key: `v:${videoId}` })
 	const result = await env.DB.prepare(
-		`${LYRICS_WITH_SUBMITTER} WHERE (l.video_id = ? OR l.id IN (SELECT lyrics_id FROM lyrics_video_ids WHERE video_id = ?)) AND l.deleted_at IS NULL AND NOT ${AUTO_HIDE_PREDICATE_JOINED} ORDER BY (CASE WHEN ${PROVEN_EXPR_JOINED} THEN 1 ELSE 0 END) DESC, ${RANKING_EXPR_VARIANT} DESC LIMIT 1`
+		`${LYRICS_WITH_SUBMITTER} WHERE ${videoServesExpr("l.")} AND l.deleted_at IS NULL AND NOT ${AUTO_HIDE_PREDICATE_JOINED} ORDER BY (CASE WHEN ${PROVEN_EXPR_JOINED} THEN 1 ELSE 0 END) DESC, ${RANKING_EXPR_VARIANT} DESC LIMIT 1`
 	)
 		.bind(videoId, videoId)
 		.first<LyricsRow>()
@@ -73,7 +74,7 @@ async function getPrimary(env: Env, videoId: string): Promise<LyricsRow | null> 
 		if (isCompressed(result.lyrics)) {
 			result.lyrics = await decompress(result.lyrics)
 		}
-		await cacheResult(env, result)
+		await cacheResult(env, result, videoId)
 		log.debug("found by videoId", { videoId, id: result.id })
 	} else {
 		log.debug("not found by videoId", { videoId })
@@ -93,7 +94,7 @@ export async function findEligibleChallengers(
 	const results = await env.DB.prepare(
 		`
 		${LYRICS_WITH_SUBMITTER}
-		WHERE (l.video_id = ? OR l.id IN (SELECT lyrics_id FROM lyrics_video_ids WHERE video_id = ?))
+		WHERE ${videoServesExpr("l.")}
 			AND l.deleted_at IS NULL
 			AND l.id <> ?
 			AND NOT ${AUTO_HIDE_PREDICATE_JOINED}
@@ -174,7 +175,7 @@ export async function findVariantsByVideoId(
 	const results = await env.DB.prepare(
 		`
 		${LYRICS_WITH_SUBMITTER}
-		WHERE (l.video_id = ? OR l.id IN (SELECT lyrics_id FROM lyrics_video_ids WHERE video_id = ?)) AND l.deleted_at IS NULL
+		WHERE ${videoServesExpr("l.")} AND l.deleted_at IS NULL
 		ORDER BY ${RANKING_EXPR_VARIANT} DESC
 		LIMIT ?
 		`
@@ -509,10 +510,10 @@ export async function getLyricsById(env: Env, id: number): Promise<LyricsRow | n
 	return result
 }
 
-async function cacheResult(env: Env, result: LyricsRow): Promise<void> {
+async function cacheResult(env: Env, result: LyricsRow, videoId: string): Promise<void> {
 	const cacheTtl = Number.parseInt(env.CACHE_TTL_SECONDS) || config.cache.ttlSeconds
 	const cacheData = { ...result, lyrics: await compress(result.lyrics) }
-	await env.CACHE.put(`v:${result.video_id}`, JSON.stringify(cacheData), {
+	await env.CACHE.put(`v:${videoId}`, JSON.stringify(cacheData), {
 		expirationTtl: cacheTtl,
 	})
 }
@@ -656,7 +657,7 @@ export async function searchByQuery(
 				1.0::DOUBLE PRECISION AS match_score,
 				1 AS tier
 			FROM lyrics
-			WHERE (video_id = ? OR id IN (SELECT lyrics_id FROM lyrics_video_ids WHERE video_id = ?) OR isrc = ?) AND deleted_at IS NULL AND NOT ${AUTO_HIDE_PREDICATE}
+			WHERE (${videoServesExpr()} OR isrc = ?) AND deleted_at IS NULL AND NOT ${AUTO_HIDE_PREDICATE}
 
 			UNION ALL
 

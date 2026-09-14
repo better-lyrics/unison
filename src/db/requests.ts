@@ -1,6 +1,6 @@
 import { config } from "@/config"
 import { insertVideoArtworkIfAbsent } from "@/db/artwork"
-import { AUTO_HIDE_PREDICATE } from "@/db/predicates"
+import { AUTO_HIDE_PREDICATE, videoServesExpr } from "@/db/predicates"
 import type { Env } from "@/types"
 import { isAlbumArtUrl, normalizeArtworkUrl } from "@/utils/artwork"
 
@@ -20,7 +20,7 @@ export function windowCutoff(): number {
 async function hasServableSyncedVariant(env: Env, videoId: string): Promise<boolean> {
 	const row = await env.DB.prepare(
 		`SELECT 1 FROM lyrics
-		 WHERE (video_id = ? OR id IN (SELECT lyrics_id FROM lyrics_video_ids WHERE video_id = ?))
+		 WHERE ${videoServesExpr()}
 		   AND sync_type IN ('linesync', 'richsync')
 		   AND deleted_at IS NULL
 		   AND NOT ${AUTO_HIDE_PREDICATE}

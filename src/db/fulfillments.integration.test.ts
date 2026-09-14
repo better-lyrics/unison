@@ -1,8 +1,8 @@
 import { readFileSync } from "node:fs"
-import pg from "pg"
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest"
 import { D1Compat } from "@/infra/database"
 import type { Env } from "@/types"
+import pg from "pg"
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest"
 import { awardRequestFilledXp, getXp } from "./contribution-events"
 import { recordFulfillment } from "./fulfillments"
 
@@ -14,6 +14,8 @@ const describeIntegration = shouldRun ? describe : describe.skip
 const FILLER_KEY = "filler-key"
 const REQUESTER_KEY = "requester-key"
 const VIDEO_ID = "vidFill"
+const HOME_VIDEO = "homeFill11"
+const LINKED_VIDEO = "linkFill22"
 
 describeIntegration("recordFulfillment xp (integration)", () => {
 	const url = process.env.INTEGRATION_DATABASE_URL ?? process.env.DATABASE_URL
@@ -129,6 +131,30 @@ describeIntegration("recordFulfillment xp (integration)", () => {
 
 		expect(await requestFilledCount(submitterId)).toBe(1)
 		expect(await getXp(env, submitterId)).toBe(15)
+	})
+
+	describe("video-link resolution", () => {
+		it("treats a video served only through a link as already fulfilled", async () => {
+			const submitterId = await seedUser(FILLER_KEY)
+			const linkedLyric = await seedLyric(submitterId, HOME_VIDEO)
+			await pool.query(
+				"INSERT INTO lyrics_video_ids (lyrics_id, video_id) VALUES ($1, $2), ($1, $3)",
+				[linkedLyric, HOME_VIDEO, LINKED_VIDEO]
+			)
+			await seedDemand(LINKED_VIDEO, REQUESTER_KEY)
+			const newLyric = await seedLyric(submitterId, LINKED_VIDEO)
+
+			const result = await recordFulfillment(env, {
+				videoId: LINKED_VIDEO,
+				lyricsId: newLyric,
+				submitterId,
+				submitterKeyId: FILLER_KEY,
+			})
+
+			expect(result.recorded).toBe(false)
+			if (result.recorded) throw new Error("expected an unrecorded fulfillment")
+			expect(result.reason).toBe("already_fulfilled")
+		})
 	})
 
 	describe("edge cases", () => {

@@ -847,6 +847,19 @@ describe("searchByQuery", () => {
 		expect(results[0].submitter_reputation).toBe(1.5)
 		expect(results[0].submitter_nickname).toBe("Cat")
 	})
+
+	it("resolves a tier-1 identifier match through the video-link junction", async () => {
+		const db = createMockDB([[]])
+		const cache = createMockCache()
+		const env = createEnv(db, cache)
+
+		await searchByQuery(env, "dQw4w9WgXcQ", 10)
+
+		const sql = db.calls[0].sql
+		expect(sql).toMatch(/id IN \(SELECT lyrics_id FROM lyrics_video_ids WHERE video_id = \?\)/)
+		// tier 1 binds the trimmed query for the home video_id, the junction lookup, and isrc
+		expect(db.calls[0].params.slice(0, 3)).toEqual(["dQw4w9WgXcQ", "dQw4w9WgXcQ", "dQw4w9WgXcQ"])
+	})
 })
 
 describe("RANKING_EXPR", () => {

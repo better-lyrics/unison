@@ -1,5 +1,5 @@
 import { awardRequestFilledXp } from "@/db/contribution-events"
-import { AUTO_HIDE_PREDICATE, AUTO_HIDE_PREDICATE_JOINED } from "@/db/predicates"
+import { AUTO_HIDE_PREDICATE, AUTO_HIDE_PREDICATE_JOINED, videoServesExpr } from "@/db/predicates"
 import { windowCutoff } from "@/db/requests"
 import { Logger } from "@/infra/logger"
 import type { Env } from "@/types"
@@ -30,7 +30,7 @@ export async function recordFulfillment(
 		const priorServable = await tx
 			.prepare(
 				`SELECT 1 FROM lyrics
-				 WHERE (video_id = ? OR id IN (SELECT lyrics_id FROM lyrics_video_ids WHERE video_id = ?))
+				 WHERE ${videoServesExpr()}
 				   AND id != ?
 				   AND sync_type IN ('linesync', 'richsync')
 				   AND deleted_at IS NULL

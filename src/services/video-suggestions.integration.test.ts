@@ -129,4 +129,58 @@ describeIntegration("video suggestions (integration)", () => {
 			expect(res).toEqual({ ok: false, reason: "not_found" })
 		})
 	})
+
+	describe("cache", () => {
+		const expectedIds = ["exactmatch1", "titleonly99", "nomatch0000"]
+
+		function envWith(cache: Env["CACHE"]): Env {
+			return { DB: new D1Compat(pool), CACHE: cache } as unknown as Env
+		}
+
+		it("serves a second lookup from the cache without re-searching", async () => {
+			const store = new Map<string, string>()
+			const cacheEnv = envWith({
+				get: async (k: string) => store.get(k) ?? null,
+				put: async (k: string, v: string) => {
+					store.set(k, v)
+				},
+				delete: async () => {},
+			} as unknown as Env["CACHE"])
+			let calls = 0
+			const countingSearch = async () => {
+				calls++
+				return candidates
+			}
+
+			await suggestVideosForVariant(cacheEnv, lyricId, owner, { search: countingSearch })
+			const second = await suggestVideosForVariant(cacheEnv, lyricId, owner, {
+				search: countingSearch,
+			})
+
+			expect(calls).toBe(1)
+			expect(second.ok).toBe(true)
+			if (second.ok) expect(second.suggestions.map((s) => s.videoId)).toEqual(expectedIds)
+		})
+
+		it("regression: falls through to a fresh search on a corrupt cache entry", async () => {
+			let calls = 0
+			const countingSearch = async () => {
+				calls++
+				return candidates
+			}
+			const corruptEnv = envWith({
+				get: async () => "{not valid json",
+				put: async () => {},
+				delete: async () => {},
+			} as unknown as Env["CACHE"])
+
+			const res = await suggestVideosForVariant(corruptEnv, lyricId, owner, {
+				search: countingSearch,
+			})
+
+			expect(calls).toBe(1)
+			expect(res.ok).toBe(true)
+			if (res.ok) expect(res.suggestions.map((s) => s.videoId)).toEqual(expectedIds)
+		})
+	})
 })

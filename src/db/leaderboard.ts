@@ -1,7 +1,12 @@
 import { config } from "@/config"
 import { getBadgeSummaries } from "@/db/badge-summary"
 import { getXpForUsers } from "@/db/contribution-events"
-import { AUTO_HIDE_PREDICATE, AUTO_HIDE_PREDICATE_JOINED, RANKING_EXPR } from "@/db/predicates"
+import {
+	AUTO_HIDE_PREDICATE,
+	AUTO_HIDE_PREDICATE_JOINED,
+	RANKING_EXPR,
+	videoServesExpr,
+} from "@/db/predicates"
 import { windowCutoff } from "@/db/requests"
 import type { BadgeRef, Env } from "@/types"
 import { isLinkBlacklisted } from "@/utils/blacklist"
@@ -61,7 +66,7 @@ async function queryMostWanted(env: Env, limit: number): Promise<MostWantedRow[]
 		 WHERE lr.created_at > ?
 		   AND NOT EXISTS (
 		     SELECT 1 FROM lyrics
-		     WHERE (lyrics.video_id = lr.video_id OR lyrics.id IN (SELECT lyrics_id FROM lyrics_video_ids WHERE video_id = lr.video_id))
+		     WHERE ${videoServesExpr("lyrics.", "lr.video_id")}
 		       AND lyrics.sync_type IN ('linesync', 'richsync')
 		       AND lyrics.deleted_at IS NULL
 		       AND NOT ${AUTO_HIDE_PREDICATE}
@@ -100,7 +105,7 @@ export async function getMostWantedPage(
 	 WHERE lr.created_at > ?
 	   AND NOT EXISTS (
 	     SELECT 1 FROM lyrics
-	     WHERE (lyrics.video_id = lr.video_id OR lyrics.id IN (SELECT lyrics_id FROM lyrics_video_ids WHERE video_id = lr.video_id))
+	     WHERE ${videoServesExpr("lyrics.", "lr.video_id")}
 	       AND lyrics.sync_type IN ('linesync', 'richsync')
 	       AND lyrics.deleted_at IS NULL
 	       AND NOT ${AUTO_HIDE_PREDICATE}
