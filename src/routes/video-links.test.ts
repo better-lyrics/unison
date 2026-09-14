@@ -182,7 +182,7 @@ describe("POST /lyrics/:id/videos", () => {
 	})
 })
 
-describe("GET /lyrics/:id/suggested-videos", () => {
+describe("POST /lyrics/:id/suggested-videos", () => {
 	it("returns ranked suggestions for the owner", async () => {
 		vi.mocked(suggestVideosForVariant).mockResolvedValue({
 			ok: true,
@@ -200,6 +200,7 @@ describe("GET /lyrics/:id/suggested-videos", () => {
 		})
 		const res = await authedApp().handle(
 			new Request("http://localhost/lyrics/7/suggested-videos", {
+				method: "POST",
 				headers: { authorization: "Bearer tok" },
 			})
 		)
@@ -212,6 +213,7 @@ describe("GET /lyrics/:id/suggested-videos", () => {
 		vi.mocked(suggestVideosForVariant).mockResolvedValue({ ok: false, reason: "not_owner" })
 		const res = await authedApp().handle(
 			new Request("http://localhost/lyrics/7/suggested-videos", {
+				method: "POST",
 				headers: { authorization: "Bearer tok" },
 			})
 		)

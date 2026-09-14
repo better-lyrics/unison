@@ -43,7 +43,7 @@ export const videoLinkRoutes = (env: Env) =>
 			}
 			return { success: true, data: { videos: res.videos } }
 		})
-		.get("/:id/suggested-videos", async ({ params, env, userId, status }) => {
+		.post("/:id/suggested-videos", async ({ params, env, userId, status }) => {
 			const id = Number(params.id)
 			if (Number.isNaN(id)) return status(400, buildError(ErrorCode.INVALID_ID))
 			const res = await suggestVideosForVariant(env, id, userId)
