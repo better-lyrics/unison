@@ -93,15 +93,23 @@ export async function linkVideoForOwner(
 		return { ok: false, reason: "duration_mismatch" }
 	}
 
-	if ((await countVideoLinks(env, lyricsId)) >= config.videoLinking.maxVideosPerVariant) {
-		return { ok: false, reason: "cap_reached" }
-	}
-
-	await env.DB.prepare(
-		"INSERT INTO lyrics_video_ids (lyrics_id, video_id) VALUES (?, ?) ON CONFLICT DO NOTHING"
-	)
-		.bind(lyricsId, videoId)
-		.run()
+	const linked = await env.DB.transaction(async (tx) => {
+		await tx.prepare("SELECT id FROM lyrics WHERE id = ? FOR UPDATE").bind(lyricsId).first()
+		if (
+			(await countVideoLinks({ ...env, DB: tx }, lyricsId)) >=
+			config.videoLinking.maxVideosPerVariant
+		) {
+			return false
+		}
+		await tx
+			.prepare(
+				"INSERT INTO lyrics_video_ids (lyrics_id, video_id) VALUES (?, ?) ON CONFLICT DO NOTHING"
+			)
+			.bind(lyricsId, videoId)
+			.run()
+		return true
+	})
+	if (!linked) return { ok: false, reason: "cap_reached" }
 
 	await invalidateCacheForLyric(env, lyricsId)
 

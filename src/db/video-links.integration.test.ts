@@ -153,6 +153,25 @@ describeIntegration("video link service (integration)", () => {
 			const res = await linkVideoForOwner(env, lyricId, owner, TARGET, match)
 			expect(res).toEqual({ ok: false, reason: "cap_reached" })
 		})
+
+		it("regression: concurrent links cannot exceed the per-variant cap", async () => {
+			for (let i = 0; i < config.videoLinking.maxVideosPerVariant - 2; i++) {
+				await pool.query("INSERT INTO lyrics_video_ids (lyrics_id, video_id) VALUES ($1, $2)", [
+					lyricId,
+					`pad00000${String(i).padStart(3, "0")}`,
+				])
+			}
+			expect(await countVideoLinks(env, lyricId)).toBe(config.videoLinking.maxVideosPerVariant - 1)
+
+			const [a, b] = await Promise.all([
+				linkVideoForOwner(env, lyricId, owner, "concurrent1", match),
+				linkVideoForOwner(env, lyricId, owner, "concurrent2", match),
+			])
+
+			expect([a, b].filter((r) => r.ok).length).toBe(1)
+			expect([a, b].some((r) => !r.ok && r.reason === "cap_reached")).toBe(true)
+			expect(await countVideoLinks(env, lyricId)).toBe(config.videoLinking.maxVideosPerVariant)
+		})
 	})
 
 	describe("idempotence", () => {
