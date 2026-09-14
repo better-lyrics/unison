@@ -69,9 +69,23 @@ describeIntegration("video suggestions (integration)", () => {
 	})
 
 	beforeEach(async () => {
-		await pool.query("DELETE FROM lyrics_video_ids")
-		await pool.query("DELETE FROM lyrics")
-		await pool.query("DELETE FROM users")
+		for (const table of [
+			"lyrics_video_ids",
+			"contribution_events",
+			"boosts",
+			"badge_awards",
+			"committee_members",
+			"request_fulfillments",
+			"lyrics_requests",
+			"requested_songs",
+			"votes",
+			"reports",
+			"lyrics",
+			"users",
+			"public_keys",
+		]) {
+			await pool.query(`DELETE FROM ${table}`)
+		}
 		owner = (await pool.query("INSERT INTO users (key_id) VALUES ('k') RETURNING id")).rows[0].id
 		const r = await pool.query(
 			`INSERT INTO lyrics (video_id, song, artist, album, duration, song_norm, artist_norm, album_norm, lyrics, format, sync_type, submitter_id)

@@ -35,11 +35,23 @@ describeIntegration("demand routes through the video link junction (integration)
 	})
 
 	beforeEach(async () => {
-		await pool.query("DELETE FROM lyrics_video_ids")
-		await pool.query("DELETE FROM lyrics_requests")
-		await pool.query("DELETE FROM requested_songs")
-		await pool.query("DELETE FROM lyrics")
-		await pool.query("DELETE FROM users")
+		for (const table of [
+			"lyrics_video_ids",
+			"contribution_events",
+			"boosts",
+			"badge_awards",
+			"committee_members",
+			"request_fulfillments",
+			"lyrics_requests",
+			"requested_songs",
+			"votes",
+			"reports",
+			"lyrics",
+			"users",
+			"public_keys",
+		]) {
+			await pool.query(`DELETE FROM ${table}`)
+		}
 	})
 
 	async function seedSyncedLyricLinkedTo(homeId: string, linkedId: string): Promise<void> {

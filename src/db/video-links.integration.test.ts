@@ -43,6 +43,26 @@ describeIntegration("video link service (integration)", () => {
 		await pool.end()
 	})
 
+	async function wipe() {
+		for (const table of [
+			"lyrics_video_ids",
+			"contribution_events",
+			"boosts",
+			"badge_awards",
+			"committee_members",
+			"request_fulfillments",
+			"lyrics_requests",
+			"requested_songs",
+			"votes",
+			"reports",
+			"lyrics",
+			"users",
+			"public_keys",
+		]) {
+			await pool.query(`DELETE FROM ${table}`)
+		}
+	}
+
 	async function seedUser(keyId: string): Promise<number> {
 		const r = await pool.query("INSERT INTO users (key_id) VALUES ($1) RETURNING id", [keyId])
 		return r.rows[0].id
@@ -63,9 +83,7 @@ describeIntegration("video link service (integration)", () => {
 	}
 
 	beforeEach(async () => {
-		await pool.query("DELETE FROM lyrics_video_ids")
-		await pool.query("DELETE FROM lyrics")
-		await pool.query("DELETE FROM users")
+		await wipe()
 		owner = await seedUser("key-owner")
 		stranger = await seedUser("key-stranger")
 		lyricId = await seedLyric(PRIMARY, owner)
