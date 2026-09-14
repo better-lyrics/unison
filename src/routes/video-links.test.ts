@@ -121,10 +121,12 @@ describe("GET /lyrics/:id/videos (public)", () => {
 		expect(res.status).toBe(200)
 		expect(await res.json()).toEqual({
 			success: true,
-			videos: [
-				{ videoId: "dQw4w9WgXcQ", isPrimary: true },
-				{ videoId: "9bZkp7q19f0", isPrimary: false },
-			],
+			data: {
+				videos: [
+					{ videoId: "dQw4w9WgXcQ", isPrimary: true },
+					{ videoId: "9bZkp7q19f0", isPrimary: false },
+				],
+			},
 		})
 	})
 })
@@ -139,7 +141,7 @@ describe("POST /lyrics/:id/videos", () => {
 		expect(res.status).toBe(200)
 		expect(await res.json()).toEqual({
 			success: true,
-			videos: [{ videoId: "9bZkp7q19f0", isPrimary: false }],
+			data: { videos: [{ videoId: "9bZkp7q19f0", isPrimary: false }] },
 		})
 	})
 
@@ -202,8 +204,8 @@ describe("GET /lyrics/:id/suggested-videos", () => {
 			})
 		)
 		expect(res.status).toBe(200)
-		const body = (await res.json()) as { suggestions: Array<{ videoId: string }> }
-		expect(body.suggestions[0].videoId).toBe("exactmatch1")
+		const body = (await res.json()) as { data: { suggestions: Array<{ videoId: string }> } }
+		expect(body.data.suggestions[0].videoId).toBe("exactmatch1")
 	})
 
 	it("rejects a non-owner with 403", async () => {
@@ -229,7 +231,7 @@ describe("POST /lyrics/:id/edit", () => {
 		vi.mocked(editLyrics).mockResolvedValue({ ok: true, id: 100 })
 		const res = await authedApp().handle(editReq(7, { lyrics: "line a\nline b", format: "plain" }))
 		expect(res.status).toBe(201)
-		expect(await res.json()).toEqual({ success: true, id: 100, created: true })
+		expect(await res.json()).toEqual({ success: true, data: { id: 100, created: true } })
 	})
 
 	it("rejects a missing lyrics body with 400", async () => {

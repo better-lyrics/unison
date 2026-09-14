@@ -28,7 +28,7 @@ export const videoLinkRoutes = (env: Env) =>
 		.get("/:id/videos", async ({ params, env, status }) => {
 			const id = Number(params.id)
 			if (Number.isNaN(id)) return status(400, buildError(ErrorCode.INVALID_ID))
-			return { success: true, videos: await listVideoLinks(env, id) }
+			return { success: true, data: { videos: await listVideoLinks(env, id) } }
 		})
 		.use(eitherAuth)
 		.post("/:id/videos", async ({ params, env, userId, body, status }) => {
@@ -41,7 +41,7 @@ export const videoLinkRoutes = (env: Env) =>
 				const mapped = LINK_ERROR[res.reason]
 				return status(mapped.status, buildError(mapped.code))
 			}
-			return { success: true, videos: res.videos }
+			return { success: true, data: { videos: res.videos } }
 		})
 		.get("/:id/suggested-videos", async ({ params, env, userId, status }) => {
 			const id = Number(params.id)
@@ -51,7 +51,7 @@ export const videoLinkRoutes = (env: Env) =>
 				if (res.reason === "not_owner") return status(403, buildError(ErrorCode.NOT_OWNER))
 				return status(404, buildError(ErrorCode.NOT_FOUND))
 			}
-			return { success: true, suggestions: res.suggestions }
+			return { success: true, data: { suggestions: res.suggestions } }
 		})
 		.post("/:id/edit", async ({ params, env, userId, keyId, body, status }) => {
 			const id = Number(params.id)
@@ -89,7 +89,7 @@ export const videoLinkRoutes = (env: Env) =>
 				}
 				return status(404, buildError(ErrorCode.NOT_FOUND))
 			}
-			return status(201, { success: true, id: res.id, created: true })
+			return status(201, { success: true, data: { id: res.id, created: true } })
 		})
 		.delete("/:id/videos/:videoId", async ({ params, env, userId, status }) => {
 			const id = Number(params.id)
@@ -99,5 +99,5 @@ export const videoLinkRoutes = (env: Env) =>
 				const mapped = UNLINK_ERROR[res.reason]
 				return status(mapped.status, buildError(mapped.code))
 			}
-			return { success: true, videos: res.videos }
+			return { success: true, data: { videos: res.videos } }
 		})
