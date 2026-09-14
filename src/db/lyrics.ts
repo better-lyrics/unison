@@ -354,6 +354,85 @@ export async function submitLyrics(
 	return { id: result!.id, created: true }
 }
 
+export type EditResult =
+	| { ok: true; id: number }
+	| { ok: false; reason: "not_found" | "cap_reached" }
+
+export async function editLyrics(
+	env: Env,
+	parentId: number,
+	editorUserId: number,
+	content: {
+		lyrics: string
+		format: "ttml" | "lrc" | "plain"
+		syncType: "richsync" | "linesync" | "plain"
+		language?: string
+	}
+): Promise<EditResult> {
+	const parent = await env.DB.prepare(
+		`SELECT id, submitter_id, video_id, song, artist, album, isrc, duration,
+		        vote_count, committee_approved_at, deleted_at
+		 FROM lyrics WHERE id = ?`
+	)
+		.bind(parentId)
+		.first<{
+			submitter_id: number | null
+			video_id: string
+			song: string
+			artist: string
+			album: string | null
+			isrc: string | null
+			duration: number
+			vote_count: number
+			committee_approved_at: number | null
+			deleted_at: number | null
+		}>()
+
+	if (!parent || parent.deleted_at !== null) return { ok: false, reason: "not_found" }
+
+	const supersede =
+		parent.submitter_id === editorUserId &&
+		parent.vote_count === 0 &&
+		parent.committee_approved_at === null
+
+	if (supersede) {
+		await softDeleteLyrics(env, parentId, editorUserId, "submitter", "superseded by a newer edit")
+	}
+
+	const result = await submitLyrics(
+		env,
+		{
+			videoId: parent.video_id,
+			song: parent.song,
+			artist: parent.artist,
+			album: parent.album ?? undefined,
+			isrc: parent.isrc ?? undefined,
+			duration: parent.duration,
+			lyrics: content.lyrics,
+			format: content.format,
+			syncType: content.syncType,
+			language: content.language,
+		},
+		editorUserId
+	)
+
+	if (!result.created) return { ok: false, reason: "cap_reached" }
+
+	await env.DB.prepare("UPDATE lyrics SET parent_id = ? WHERE id = ?")
+		.bind(parentId, result.id)
+		.run()
+	await env.DB.prepare(
+		`INSERT INTO lyrics_video_ids (lyrics_id, video_id)
+		 SELECT ?, video_id FROM lyrics_video_ids WHERE lyrics_id = ?
+		 ON CONFLICT DO NOTHING`
+	)
+		.bind(result.id, parentId)
+		.run()
+	await invalidateCacheForLyric(env, result.id)
+
+	return { ok: true, id: result.id }
+}
+
 export async function searchBySongArtist(
 	env: Env,
 	song: string,

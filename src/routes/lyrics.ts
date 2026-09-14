@@ -22,13 +22,7 @@ import { signedRequest } from "@/utils/auth"
 import { ErrorCode, buildError } from "@/utils/errors"
 import { readRateLimit } from "@/utils/read-rate-limit"
 import { getSession } from "@/utils/session"
-import {
-	detectFormat,
-	detectPrettyPrintedTtml,
-	detectSyncType,
-	hasDegenerateWordTiming,
-	validateTtmlStructure,
-} from "@/utils/validation"
+import { validateLyricContent } from "@/utils/validate-lyrics"
 import { Elysia, t } from "elysia"
 
 const log = new Logger("app")
@@ -42,19 +36,6 @@ function parseDuration(raw: string | undefined): number | undefined {
 		return undefined
 	}
 	return rounded
-}
-
-function prettyPrintHint(
-	reason: "inter-span-newline" | "span-trailing-whitespace" | "span-leading-whitespace"
-): string {
-	switch (reason) {
-		case "inter-span-newline":
-			return "The TTML file has line breaks between word tags, which throws off the word-by-word timing. Try re-exporting without auto-formatting."
-		case "span-trailing-whitespace":
-			return "Some words in the TTML have extra spaces tacked onto the end, which throws off the highlighting. Try re-exporting from a clean source."
-		case "span-leading-whitespace":
-			return "Some words in the TTML start with extra spaces, which throws off the highlighting. Try re-exporting from a clean source."
-	}
 }
 
 export const lyricsRoutes = (env: Env) =>
@@ -412,9 +393,6 @@ export const lyricsRoutes = (env: Env) =>
 			if ((p.artist as string).length > config.validation.artist.maxLength) {
 				return status(400, buildError(ErrorCode.ARTIST_TOO_LONG))
 			}
-			if ((p.lyrics as string).length > config.validation.ttml.maxSizeBytes) {
-				return status(400, buildError(ErrorCode.PAYLOAD_TOO_LARGE))
-			}
 			if (
 				(p.duration as number) < config.validation.duration.min ||
 				(p.duration as number) > config.validation.duration.max
@@ -422,68 +400,15 @@ export const lyricsRoutes = (env: Env) =>
 				return status(400, buildError(ErrorCode.INVALID_DURATION))
 			}
 
-			const claimedFormat = p.format as "ttml" | "lrc" | "plain"
-			const lyricsContent = p.lyrics as string
-
-			if (claimedFormat === "ttml" && !validateTtmlStructure(lyricsContent)) {
-				log.warn("rejecting malformed ttml claim", {
-					keyId,
-					videoId: p.videoId as string,
-				})
-				return status(400, buildError(ErrorCode.TTML_MALFORMED))
-			}
-
-			const format = detectFormat(lyricsContent)
-
-			if (claimedFormat !== format) {
-				log.warn("format mismatch, overriding with detected", {
-					keyId,
-					videoId: p.videoId as string,
-					claimed: claimedFormat,
-					detected: format,
-				})
-			}
-
-			if (format === "ttml") {
-				const prettyCheck = detectPrettyPrintedTtml(lyricsContent)
-				if (!prettyCheck.ok) {
-					log.warn("rejecting pretty-printed ttml", {
-						keyId,
-						videoId: p.videoId as string,
-						reason: prettyCheck.reason,
-					})
-					return status(
-						400,
-						buildError(ErrorCode.TTML_FORMATTED, {
-							hint: prettyPrintHint(prettyCheck.reason),
-						})
-					)
-				}
-
-				if (hasDegenerateWordTiming(lyricsContent, format)) {
-					log.warn("rejecting zero-duration word timing", {
-						keyId,
-						videoId: p.videoId as string,
-					})
-					return status(400, buildError(ErrorCode.TTML_ZERO_DURATION_WORDS))
-				}
-			}
-
-			const detectedSyncType = detectSyncType(lyricsContent, format)
-
-			const claimedSyncType =
-				typeof p.syncType === "string" && ["richsync", "linesync", "plain"].includes(p.syncType)
-					? (p.syncType as "richsync" | "linesync" | "plain")
-					: undefined
-
-			if (claimedSyncType && claimedSyncType !== detectedSyncType) {
-				log.warn("syncType mismatch, overriding with detected", {
-					keyId,
-					videoId: p.videoId as string,
-					format,
-					claimed: claimedSyncType,
-					detected: detectedSyncType,
-				})
+			const validated = validateLyricContent(
+				p.lyrics as string,
+				p.format as "ttml" | "lrc" | "plain"
+			)
+			if (!validated.ok) {
+				return status(
+					400,
+					buildError(validated.code, validated.hint ? { hint: validated.hint } : undefined)
+				)
 			}
 
 			const submission: LyricsSubmission = {
@@ -494,9 +419,9 @@ export const lyricsRoutes = (env: Env) =>
 				isrc: typeof p.isrc === "string" ? p.isrc : undefined,
 				duration: p.duration as number,
 				lyrics: p.lyrics as string,
-				format,
+				format: validated.format,
 				language: typeof p.language === "string" ? p.language : undefined,
-				syncType: detectedSyncType,
+				syncType: validated.syncType,
 			}
 
 			const result = await submitLyrics(env, submission, userId)
