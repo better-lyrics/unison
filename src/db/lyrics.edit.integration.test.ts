@@ -93,13 +93,24 @@ describeIntegration("editLyrics (integration)", () => {
 	})
 
 	async function seedLyric(
-		opts: { videoId?: string; voteCount?: number; committeeApprovedAt?: number } = {}
+		opts: {
+			videoId?: string
+			voteCount?: number
+			committeeApprovedAt?: number
+			effectiveScore?: number
+		} = {}
 	): Promise<number> {
 		const videoId = opts.videoId ?? VIDEO
 		const r = await pool.query(
-			`INSERT INTO lyrics (video_id, song, artist, duration, song_norm, artist_norm, lyrics, format, sync_type, submitter_id, vote_count, committee_approved_at)
-			 VALUES ($1,'Song','Artist',180,'song','artist','old','plain','plain',$2,$3,$4) RETURNING id`,
-			[videoId, owner, opts.voteCount ?? 0, opts.committeeApprovedAt ?? null]
+			`INSERT INTO lyrics (video_id, song, artist, duration, song_norm, artist_norm, lyrics, format, sync_type, submitter_id, vote_count, committee_approved_at, effective_score)
+			 VALUES ($1,'Song','Artist',180,'song','artist','old','plain','plain',$2,$3,$4,$5) RETURNING id`,
+			[
+				videoId,
+				owner,
+				opts.voteCount ?? 0,
+				opts.committeeApprovedAt ?? null,
+				opts.effectiveScore ?? 0,
+			]
 		)
 		const id = r.rows[0].id
 		await pool.query("INSERT INTO lyrics_video_ids (lyrics_id, video_id) VALUES ($1,$2)", [
@@ -119,6 +130,8 @@ describeIntegration("editLyrics (integration)", () => {
 	const countForVideo = async (videoId: string): Promise<number> =>
 		(await pool.query("SELECT COUNT(*)::INTEGER AS c FROM lyrics WHERE video_id = $1", [videoId]))
 			.rows[0].c
+	const reputationOf = async (userId: number): Promise<number> =>
+		(await pool.query("SELECT reputation FROM users WHERE id = $1", [userId])).rows[0].reputation
 	const linksFor = async (id: number): Promise<string[]> =>
 		(
 			await pool.query(
@@ -201,6 +214,15 @@ describeIntegration("editLyrics (integration)", () => {
 			}
 			const res = await editLyrics(env, parent, owner, content)
 			expect(res.ok).toBe(true)
+		})
+
+		it("regression: superseding a downvoted parent by edit does not penalize the owner", async () => {
+			const parent = await seedLyric({ voteCount: 3, effectiveScore: -2 })
+			const before = await reputationOf(owner)
+			const res = await editLyrics(env, parent, owner, content)
+			expect(res.ok).toBe(true)
+			expect((await rowById(parent)).deleted_at).not.toBeNull()
+			expect(await reputationOf(owner)).toBe(before)
 		})
 
 		it("invariant: the edited variant carries no votes from the parent", async () => {

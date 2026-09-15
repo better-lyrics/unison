@@ -438,7 +438,8 @@ export async function editLyrics(
 				parentId,
 				editorUserId,
 				"submitter",
-				"superseded by a newer edit"
+				"superseded by a newer edit",
+				false
 			)
 		}
 
@@ -569,7 +570,8 @@ export async function softDeleteLyrics(
 	lyricsId: number,
 	actingUserId: number,
 	role: "submitter" | "admin",
-	reason: string | null = null
+	reason: string | null = null,
+	penalise = true
 ): Promise<SoftDeleteResult> {
 	const row = await env.DB.prepare(
 		`SELECT id, video_id, submitter_id, deleted_at,
@@ -594,6 +596,7 @@ export async function softDeleteLyrics(
 	}
 
 	const shouldPenalise =
+		penalise &&
 		!row.reputation_penalized &&
 		(role === "admin" || (role === "submitter" && row.vote_count >= 2 && row.effective_score < 0))
 
