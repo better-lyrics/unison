@@ -2,13 +2,20 @@ import type { SongCandidate } from "@/utils/innertube"
 import { describe, expect, it } from "vitest"
 import { buildSuggestions } from "./video-suggestions"
 
-const META = { song: "Blinding Lights", artist: "The Weeknd", album: "After Hours", duration: 200 }
+const META = {
+	song: "Blinding Lights",
+	artist: "The Weeknd",
+	album: "After Hours",
+	duration: 200,
+	videoId: "homevideo000",
+}
 
 function candidate(over: Partial<SongCandidate> & Pick<SongCandidate, "videoId">): SongCandidate {
 	return {
 		title: "Blinding Lights",
 		artist: "The Weeknd",
 		artists: ["The Weeknd"],
+		artistChannelIds: [],
 		album: "After Hours",
 		durationSeconds: 200,
 		videoType: "song",
@@ -41,17 +48,17 @@ describe("buildSuggestions", () => {
 		expect(out.map((s) => s.videoId)).toEqual(["weaksong", "strongvideo"])
 	})
 
-	it("orders by match score, then duration guardrail, within a video type", () => {
+	it("orders by match score within a video type and drops candidates outside the duration gate", () => {
 		const out = buildSuggestions(
 			[
-				candidate({ videoId: "titleonly", album: null, durationSeconds: 999 }),
+				candidate({ videoId: "faroff", album: null, durationSeconds: 999 }),
 				candidate({ videoId: "exact" }),
 				candidate({ videoId: "titleonly_near", album: null, durationSeconds: 201 }),
 			],
 			META,
 			new Set()
 		)
-		expect(out.map((s) => s.videoId)).toEqual(["exact", "titleonly_near", "titleonly"])
+		expect(out.map((s) => s.videoId)).toEqual(["exact", "titleonly_near"])
 	})
 
 	describe("artist filter", () => {
@@ -104,11 +111,110 @@ describe("buildSuggestions", () => {
 		})
 	})
 
+	describe("artist channel id matching", () => {
+		it("matches by shared channel id and drops a same-named artist with a different id", () => {
+			const out = buildSuggestions(
+				[
+					candidate({ videoId: "anchor00000", artistChannelIds: ["UCweeknd"] }),
+					candidate({ videoId: "sameid", artistChannelIds: ["UCweeknd"] }),
+					candidate({ videoId: "diffid", artistChannelIds: ["UCimpostor"] }),
+				],
+				{ ...META, videoId: "anchor00000" },
+				new Set()
+			)
+			expect(out.map((s) => s.videoId)).toEqual(["sameid"])
+		})
+
+		it("keeps a comma-in-name artist by channel id without fragmenting the name", () => {
+			const out = buildSuggestions(
+				[
+					candidate({
+						videoId: "anchorT0000",
+						artist: "Tyler, the Creator",
+						artists: ["Tyler, the Creator"],
+						artistChannelIds: ["UCtyler"],
+					}),
+					candidate({
+						videoId: "tylertrack",
+						artist: "Tyler, the Creator",
+						artists: ["Tyler, the Creator"],
+						artistChannelIds: ["UCtyler"],
+					}),
+					candidate({
+						videoId: "fragment000",
+						artist: "the Creator",
+						artists: ["the Creator"],
+						artistChannelIds: ["UCsomeoneelse"],
+					}),
+				],
+				{
+					song: "Yonkers",
+					artist: "Tyler, the Creator",
+					album: null,
+					duration: 200,
+					videoId: "anchorT0000",
+				},
+				new Set()
+			)
+			expect(out.map((s) => s.videoId)).toEqual(["tylertrack"])
+		})
+
+		it("keeps a composite-credit candidate that shares one artist id", () => {
+			const out = buildSuggestions(
+				[
+					candidate({ videoId: "anchorW0000", artistChannelIds: ["UCweeknd"] }),
+					candidate({
+						videoId: "collab",
+						artist: "The Weeknd",
+						artists: ["The Weeknd", "Drake", "Future"],
+						artistChannelIds: ["UCweeknd", "UCdrake", "UCfuture"],
+					}),
+				],
+				{ ...META, videoId: "anchorW0000" },
+				new Set()
+			)
+			expect(out.map((s) => s.videoId)).toEqual(["collab"])
+		})
+
+		it("resolves the reference artist from the best exact match when the variant video is absent", () => {
+			const out = buildSuggestions(
+				[
+					candidate({ videoId: "exactref", artistChannelIds: ["UCweeknd"] }),
+					candidate({ videoId: "diffid", artistChannelIds: ["UCimpostor"] }),
+				],
+				{ ...META, videoId: "notpresent0" },
+				new Set()
+			)
+			expect(out.map((s) => s.videoId)).toEqual(["exactref"])
+		})
+
+		it("falls back to name matching when neither side has channel ids", () => {
+			const out = buildSuggestions(
+				[
+					candidate({ videoId: "weeknd" }),
+					candidate({ videoId: "ana", artist: "Anastasia", artists: ["Anastasia"] }),
+				],
+				{ ...META, videoId: "notpresent0" },
+				new Set()
+			)
+			expect(out.map((s) => s.videoId)).toEqual(["weeknd"])
+		})
+	})
+
 	it("excludes already-linked videos", () => {
 		const out = buildSuggestions(
 			[candidate({ videoId: "linked" }), candidate({ videoId: "fresh" })],
 			META,
 			new Set(["linked"])
+		)
+		expect(out.map((s) => s.videoId)).toEqual(["fresh"])
+	})
+
+	it("excludes the variant's own video", () => {
+		const out = buildSuggestions(
+			[candidate({ videoId: "self0000000" }), candidate({ videoId: "fresh" })],
+			{ ...META, videoId: "self0000000" },
+			new Set()
 		)
 		expect(out.map((s) => s.videoId)).toEqual(["fresh"])
 	})
@@ -127,13 +233,29 @@ describe("buildSuggestions", () => {
 			expect(out.map((s) => s.videoId)).toEqual(["any"])
 		})
 
-		it("flags a null duration as outside the guardrail", () => {
-			const [s] = buildSuggestions(
+		it("drops a candidate with unknown duration (fails the duration gate)", () => {
+			const out = buildSuggestions(
 				[candidate({ videoId: "nodur", durationSeconds: null })],
 				META,
 				new Set()
 			)
-			expect(s.withinDurationDelta).toBe(false)
+			expect(out).toEqual([])
+		})
+
+		it("regression: does not keep a substring-only artist match", () => {
+			const out = buildSuggestions(
+				[
+					candidate({
+						videoId: "ana",
+						title: "Chandelier",
+						artist: "Anastasia",
+						artists: ["Anastasia"],
+					}),
+				],
+				{ song: "Chandelier", artist: "Sia", album: null, duration: 200, videoId: "notpresent0" },
+				new Set()
+			)
+			expect(out).toEqual([])
 		})
 
 		it("falls back to the primary artist when the artists list is empty", () => {

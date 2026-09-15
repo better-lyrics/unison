@@ -94,7 +94,7 @@ describe("getVideoDurationSeconds", () => {
 })
 
 describe("searchSongs", () => {
-	it("maps song and video shelves, tags the video type, and drops items without a video id", async () => {
+	it("maps song and video shelves, tags the video type, captures artist channel ids, and drops items without a video id", async () => {
 		create.mockResolvedValue({
 			music: {
 				search: async () => ({
@@ -103,7 +103,7 @@ describe("searchSongs", () => {
 							{
 								id: "vid1",
 								title: "Song One",
-								artists: [{ name: "Artist A" }, { name: "Artist B" }],
+								artists: [{ name: "Artist A", channel_id: "UCartistA" }, { name: "Artist B" }],
 								album: { name: "Album X" },
 								duration: { seconds: 200 },
 							},
@@ -116,7 +116,7 @@ describe("searchSongs", () => {
 							{
 								id: "clip1",
 								title: "Song One (Official Video)",
-								authors: [{ name: "Artist A" }],
+								authors: [{ name: "Artist A", channel_id: "UCartistA" }],
 								duration: { seconds: 210 },
 							},
 						],
@@ -131,6 +131,7 @@ describe("searchSongs", () => {
 				title: "Song One",
 				artist: "Artist A",
 				artists: ["Artist A", "Artist B"],
+				artistChannelIds: ["UCartistA"],
 				album: "Album X",
 				durationSeconds: 200,
 				videoType: "song",
@@ -140,6 +141,7 @@ describe("searchSongs", () => {
 				title: "Sparse",
 				artist: "",
 				artists: [],
+				artistChannelIds: [],
 				album: null,
 				durationSeconds: null,
 				videoType: "song",
@@ -149,6 +151,7 @@ describe("searchSongs", () => {
 				title: "Song One (Official Video)",
 				artist: "Artist A",
 				artists: ["Artist A"],
+				artistChannelIds: ["UCartistA"],
 				album: null,
 				durationSeconds: 210,
 				videoType: "video",

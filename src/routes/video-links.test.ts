@@ -207,6 +207,7 @@ describe("POST /lyrics/:id/suggested-videos", () => {
 					title: "Song",
 					artist: "Artist",
 					artists: ["Artist"],
+					artistChannelIds: ["UCartist"],
 					album: null,
 					durationSeconds: 200,
 					videoType: "song",
