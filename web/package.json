@@ -14,7 +14,7 @@
     "format": "biome format --write ./src"
   },
   "dependencies": {
-    "@braccato/core": "^1.6.2",
+    "@braccato/core": "^1.6.3",
     "@braccato/parsers": "^0.2.1",
     "@dicebear/collection": "^9.2.2",
     "@dicebear/core": "^9.2.2",
