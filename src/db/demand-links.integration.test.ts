@@ -3,7 +3,7 @@ import { D1Compat } from "@/infra/database"
 import type { Env } from "@/types"
 import pg from "pg"
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest"
-import { getMostWantedPage } from "./leaderboard"
+import { getMostWantedPage, getSongLeaderboard } from "./leaderboard"
 import { createRequest } from "./requests"
 
 const { Pool } = pg
@@ -103,5 +103,47 @@ describeIntegration("demand routes through the video link junction (integration)
 
 		const after = await getMostWantedPage(env, null, 50)
 		expect(after.items.map((i) => i.videoId)).not.toContain(LINKED)
+	})
+
+	describe("getSongLeaderboard (home page most-wanted)", () => {
+		it("excludes a video already served through its primary upload", async () => {
+			await createRequest(env, {
+				videoId: HOME,
+				song: "Song",
+				artist: "Artist",
+				thumbnailUrl: null,
+				requesterId: "requester-1",
+				requesterType: "extension",
+				weight: 1,
+			})
+
+			const before = await getSongLeaderboard(env, 50)
+			expect(before.mostWanted.map((r) => r.videoId)).toContain(HOME)
+
+			await seedSyncedLyricLinkedTo(HOME, LINKED)
+
+			const after = await getSongLeaderboard(env, 50)
+			expect(after.mostWanted.map((r) => r.videoId)).not.toContain(HOME)
+		})
+
+		it("excludes a video served only through a link", async () => {
+			await createRequest(env, {
+				videoId: LINKED,
+				song: "Song",
+				artist: "Artist",
+				thumbnailUrl: null,
+				requesterId: "requester-1",
+				requesterType: "extension",
+				weight: 1,
+			})
+
+			const before = await getSongLeaderboard(env, 50)
+			expect(before.mostWanted.map((r) => r.videoId)).toContain(LINKED)
+
+			await seedSyncedLyricLinkedTo(HOME, LINKED)
+
+			const after = await getSongLeaderboard(env, 50)
+			expect(after.mostWanted.map((r) => r.videoId)).not.toContain(LINKED)
+		})
 	})
 })
