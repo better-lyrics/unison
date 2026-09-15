@@ -363,7 +363,7 @@ export async function submitLyrics(
 
 export type EditResult =
 	| { ok: true; id: number }
-	| { ok: false; reason: "not_found" | "cap_reached" }
+	| { ok: false; reason: "not_found" | "not_owner" | "cap_reached" }
 
 export async function editLyrics(
 	env: Env,
@@ -378,7 +378,7 @@ export async function editLyrics(
 ): Promise<EditResult> {
 	const parent = await env.DB.prepare(
 		`SELECT id, submitter_id, video_id, song, artist, album, isrc, duration,
-		        vote_count, committee_approved_at, deleted_at
+		        committee_approved_at, deleted_at
 		 FROM lyrics WHERE id = ?`
 	)
 		.bind(parentId)
@@ -390,17 +390,14 @@ export async function editLyrics(
 			album: string | null
 			isrc: string | null
 			duration: number
-			vote_count: number
 			committee_approved_at: number | null
 			deleted_at: number | null
 		}>()
 
 	if (!parent || parent.deleted_at !== null) return { ok: false, reason: "not_found" }
+	if (parent.submitter_id !== editorUserId) return { ok: false, reason: "not_owner" }
 
-	const supersede =
-		parent.submitter_id === editorUserId &&
-		parent.vote_count === 0 &&
-		parent.committee_approved_at === null
+	const supersede = parent.committee_approved_at === null
 
 	const outcome = await env.DB.transaction(async (tx) => {
 		const txEnv = { ...env, DB: tx }
@@ -426,16 +423,14 @@ export async function editLyrics(
 
 		await tx.prepare("UPDATE lyrics SET parent_id = ? WHERE id = ?").bind(parentId, result.id).run()
 
-		if (parent.submitter_id === editorUserId) {
-			await tx
-				.prepare(
-					`INSERT INTO lyrics_video_ids (lyrics_id, video_id)
-				 SELECT ?, video_id FROM lyrics_video_ids WHERE lyrics_id = ?
-				 ON CONFLICT DO NOTHING`
-				)
-				.bind(result.id, parentId)
-				.run()
-		}
+		await tx
+			.prepare(
+				`INSERT INTO lyrics_video_ids (lyrics_id, video_id)
+			 SELECT ?, video_id FROM lyrics_video_ids WHERE lyrics_id = ?
+			 ON CONFLICT DO NOTHING`
+			)
+			.bind(result.id, parentId)
+			.run()
 
 		if (supersede) {
 			await softDeleteLyrics(
