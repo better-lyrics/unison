@@ -96,6 +96,9 @@ export const videoLinkRoutes = (env: Env) =>
 				if (res.reason === "cap_reached") {
 					return status(409, buildError(ErrorCode.VARIANT_CAP_REACHED))
 				}
+				if (res.reason === "not_owner") {
+					return status(403, buildError(ErrorCode.NOT_OWNER))
+				}
 				return status(404, buildError(ErrorCode.NOT_FOUND))
 			}
 			return status(201, { success: true, data: { id: res.id, created: true } })

@@ -286,6 +286,12 @@ describe("POST /lyrics/:id/edit", () => {
 		expect(res.status).toBe(404)
 	})
 
+	it("rejects an edit from a non-owner with 403", async () => {
+		vi.mocked(editLyrics).mockResolvedValue({ ok: false, reason: "not_owner" })
+		const res = await authedApp().handle(editReq(7, { lyrics: "line a\nline b", format: "plain" }))
+		expect(res.status).toBe(403)
+	})
+
 	it("maps cap_reached to 409", async () => {
 		vi.mocked(editLyrics).mockResolvedValue({ ok: false, reason: "cap_reached" })
 		const res = await authedApp().handle(editReq(7, { lyrics: "line a\nline b", format: "plain" }))

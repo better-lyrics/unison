@@ -92,12 +92,25 @@ describeIntegration("editLyrics (integration)", () => {
 			.id
 	})
 
-	async function seedLyric(opts: { videoId?: string; voteCount?: number } = {}): Promise<number> {
+	async function seedLyric(
+		opts: {
+			videoId?: string
+			voteCount?: number
+			committeeApprovedAt?: number
+			effectiveScore?: number
+		} = {}
+	): Promise<number> {
 		const videoId = opts.videoId ?? VIDEO
 		const r = await pool.query(
-			`INSERT INTO lyrics (video_id, song, artist, duration, song_norm, artist_norm, lyrics, format, sync_type, submitter_id, vote_count)
-			 VALUES ($1,'Song','Artist',180,'song','artist','old','plain','plain',$2,$3) RETURNING id`,
-			[videoId, owner, opts.voteCount ?? 0]
+			`INSERT INTO lyrics (video_id, song, artist, duration, song_norm, artist_norm, lyrics, format, sync_type, submitter_id, vote_count, committee_approved_at, effective_score)
+			 VALUES ($1,'Song','Artist',180,'song','artist','old','plain','plain',$2,$3,$4,$5) RETURNING id`,
+			[
+				videoId,
+				owner,
+				opts.voteCount ?? 0,
+				opts.committeeApprovedAt ?? null,
+				opts.effectiveScore ?? 0,
+			]
 		)
 		const id = r.rows[0].id
 		await pool.query("INSERT INTO lyrics_video_ids (lyrics_id, video_id) VALUES ($1,$2)", [
@@ -114,6 +127,11 @@ describeIntegration("editLyrics (integration)", () => {
 				[id]
 			)
 		).rows[0]
+	const countForVideo = async (videoId: string): Promise<number> =>
+		(await pool.query("SELECT COUNT(*)::INTEGER AS c FROM lyrics WHERE video_id = $1", [videoId]))
+			.rows[0].c
+	const reputationOf = async (userId: number): Promise<number> =>
+		(await pool.query("SELECT reputation FROM users WHERE id = $1", [userId])).rows[0].reputation
 	const linksFor = async (id: number): Promise<string[]> =>
 		(
 			await pool.query(
@@ -141,30 +159,34 @@ describeIntegration("editLyrics (integration)", () => {
 		expect(await linksFor(res.id)).toEqual([EXTRA, VIDEO].sort())
 	})
 
-	it("keeps a parent that has votes and lets the edit compete", async () => {
+	it("supersedes a voted non-approved parent and takes its place at zero votes", async () => {
 		const parent = await seedLyric({ voteCount: 5 })
 		const res = await editLyrics(env, parent, owner, content)
 		expect(res.ok).toBe(true)
 		if (!res.ok) return
+		expect((await rowById(parent)).deleted_at).not.toBeNull()
+		const edited = await rowById(res.id)
+		expect(edited.parent_id).toBe(parent)
+		expect(edited.vote_count).toBe(0)
+	})
+
+	it("never supersedes a committee-approved parent; the edit competes as a separate variant", async () => {
+		const parent = await seedLyric({ voteCount: 5, committeeApprovedAt: 1_700_000_000 })
+		const res = await editLyrics(env, parent, owner, content)
+		expect(res.ok).toBe(true)
+		if (!res.ok) return
+		expect(res.id).not.toBe(parent)
 		expect((await rowById(parent)).deleted_at).toBeNull()
 		expect((await rowById(res.id)).parent_id).toBe(parent)
 	})
 
-	it("does not supersede when edited by a different user, and does not inherit curated links", async () => {
+	it("rejects an edit from a non-owner without touching the parent or creating a variant", async () => {
 		const parent = await seedLyric()
-		await pool.query("INSERT INTO lyrics_video_ids (lyrics_id, video_id) VALUES ($1,$2)", [
-			parent,
-			EXTRA,
-		])
+		const before = await countForVideo(VIDEO)
 		const res = await editLyrics(env, parent, other, content)
-		expect(res.ok).toBe(true)
-		if (!res.ok) return
+		expect(res).toEqual({ ok: false, reason: "not_owner" })
 		expect((await rowById(parent)).deleted_at).toBeNull()
-		const edited = await rowById(res.id)
-		expect(edited.submitter_id).toBe(other)
-		expect(edited.parent_id).toBe(parent)
-		// a non-owner edit only serves its own home video, not the owner's curated extras
-		expect(await linksFor(res.id)).toEqual([VIDEO])
+		expect(await countForVideo(VIDEO)).toBe(before)
 	})
 
 	describe("edge cases", () => {
@@ -194,6 +216,15 @@ describeIntegration("editLyrics (integration)", () => {
 			expect(res.ok).toBe(true)
 		})
 
+		it("regression: superseding a downvoted parent by edit does not penalize the owner", async () => {
+			const parent = await seedLyric({ voteCount: 3, effectiveScore: -2 })
+			const before = await reputationOf(owner)
+			const res = await editLyrics(env, parent, owner, content)
+			expect(res.ok).toBe(true)
+			expect((await rowById(parent)).deleted_at).not.toBeNull()
+			expect(await reputationOf(owner)).toBe(before)
+		})
+
 		it("invariant: the edited variant carries no votes from the parent", async () => {
 			const parent = await seedLyric({ voteCount: 9 })
 			const res = await editLyrics(env, parent, owner, content)
@@ -204,16 +235,13 @@ describeIntegration("editLyrics (integration)", () => {
 
 		it("regression: rolls back the whole edit when a mid-sequence write fails, leaving no duplicate", async () => {
 			const parent = await seedLyric()
-			const countForVideo = async (): Promise<number> =>
-				(await pool.query("SELECT COUNT(*)::INTEGER AS c FROM lyrics WHERE video_id = $1", [VIDEO]))
-					.rows[0].c
-			const before = await countForVideo()
+			const before = await countForVideo(VIDEO)
 			const faultyEnv: Env = { ...env, DB: new D1Compat(poolThatFailsOn(pool, "deleted_by_role")) }
 
 			await expect(editLyrics(faultyEnv, parent, owner, content)).rejects.toThrow()
 
 			expect((await rowById(parent)).deleted_at).toBeNull()
-			expect(await countForVideo()).toBe(before)
+			expect(await countForVideo(VIDEO)).toBe(before)
 		})
 	})
 })
