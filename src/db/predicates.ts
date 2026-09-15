@@ -44,6 +44,31 @@ export const AUTO_HIDE_PREDICATE_JOINED = buildAutoHidePredicate("l.")
 export const videoServesExpr = (prefix = "", value = "?") =>
 	`(${prefix}video_id = ${value} OR ${prefix}id IN (SELECT lyrics_id FROM lyrics_video_ids WHERE video_id = ${value}))`
 
+const servableSyncedVariant = `l.sync_type IN ('linesync', 'richsync')
+		AND l.deleted_at IS NULL
+		AND NOT ${AUTO_HIDE_PREDICATE_JOINED}`
+
+const servesByPrimaryVideo = (videoIdExpr: string) => `EXISTS (
+	SELECT 1 FROM lyrics l
+	WHERE l.video_id = ${videoIdExpr}
+		AND ${servableSyncedVariant}
+)`
+
+const servesByLinkedVideo = (videoIdExpr: string) => `EXISTS (
+	SELECT 1 FROM lyrics l
+	JOIN lyrics_video_ids lvi ON lvi.lyrics_id = l.id
+	WHERE lvi.video_id = ${videoIdExpr}
+		AND ${servableSyncedVariant}
+)`
+
+// Split branches (not `video_id = v OR id IN (subquery)`) so a correlated (NOT) EXISTS stays an
+// indexed anti-join instead of collapsing into a per-row sequential scan.
+export const servableSyncedVariantServes = (videoIdExpr: string) =>
+	`(${servesByPrimaryVideo(videoIdExpr)} OR ${servesByLinkedVideo(videoIdExpr)})`
+
+export const noServableSyncedVariantServes = (videoIdExpr: string) =>
+	`(NOT ${servesByPrimaryVideo(videoIdExpr)} AND NOT ${servesByLinkedVideo(videoIdExpr)})`
+
 const { primarySlot } = config.ranking
 
 const provenExpr = (repExpr: string, prefix: string) => `(

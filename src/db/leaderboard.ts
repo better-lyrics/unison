@@ -4,8 +4,8 @@ import { getXpForUsers } from "@/db/contribution-events"
 import {
 	AUTO_HIDE_PREDICATE,
 	AUTO_HIDE_PREDICATE_JOINED,
+	noServableSyncedVariantServes,
 	RANKING_EXPR,
-	videoServesExpr,
 } from "@/db/predicates"
 import { windowCutoff } from "@/db/requests"
 import type { BadgeRef, Env } from "@/types"
@@ -64,13 +64,7 @@ async function queryMostWanted(env: Env, limit: number): Promise<MostWantedRow[]
 		 FROM lyrics_requests lr
 		 JOIN requested_songs rs ON rs.video_id = lr.video_id
 		 WHERE lr.created_at > ?
-		   AND NOT EXISTS (
-		     SELECT 1 FROM lyrics
-		     WHERE ${videoServesExpr("lyrics.", "lr.video_id")}
-		       AND lyrics.sync_type IN ('linesync', 'richsync')
-		       AND lyrics.deleted_at IS NULL
-		       AND NOT ${AUTO_HIDE_PREDICATE}
-		   )
+		   AND ${noServableSyncedVariantServes("lr.video_id")}
 		 GROUP BY rs.video_id, rs.song, rs.artist, rs.thumbnail_url
 		 ORDER BY demand DESC, rs.video_id ASC
 		 LIMIT ?`
@@ -103,13 +97,7 @@ export async function getMostWantedPage(
 	 FROM lyrics_requests lr
 	 JOIN requested_songs rs ON rs.video_id = lr.video_id
 	 WHERE lr.created_at > ?
-	   AND NOT EXISTS (
-	     SELECT 1 FROM lyrics
-	     WHERE ${videoServesExpr("lyrics.", "lr.video_id")}
-	       AND lyrics.sync_type IN ('linesync', 'richsync')
-	       AND lyrics.deleted_at IS NULL
-	       AND NOT ${AUTO_HIDE_PREDICATE}
-	   )
+	   AND ${noServableSyncedVariantServes("lr.video_id")}
 	 GROUP BY rs.video_id, rs.song, rs.artist, rs.thumbnail_url
 	 ${havingClause}
 	 ORDER BY demand DESC, rs.video_id ASC
