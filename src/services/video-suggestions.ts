@@ -4,7 +4,7 @@ import type { Env } from "@/types"
 import { type SongCandidate, searchSongs } from "@/utils/innertube"
 import { normalize, normalizeArtist, normalizeSong } from "@/utils/normalize"
 
-export type Suggestion = SongCandidate & { matchScore: number; withinDurationDelta: boolean }
+export type Suggestion = SongCandidate & { matchScore: number }
 
 const VIDEO_TYPE_RANK: Record<SongCandidate["videoType"], number> = { song: 0, video: 1 }
 
@@ -53,9 +53,7 @@ export function buildSuggestions(
 			const albumEq =
 				normAlbum !== null && c.album !== null && normalize(c.album) === normAlbum ? 1 : 0
 			const matchScore = 0.5 * titleEq + 0.3 * artistEq + 0.2 * albumEq
-			const withinDurationDelta =
-				c.durationSeconds !== null && isWithinDurationDelta(c.durationSeconds, meta.duration)
-			return { ...c, matchScore, withinDurationDelta }
+			return { ...c, matchScore }
 		})
 		.sort(
 			(a, b) =>

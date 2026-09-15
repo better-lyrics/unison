@@ -24,10 +24,9 @@ function candidate(over: Partial<SongCandidate> & Pick<SongCandidate, "videoId">
 }
 
 describe("buildSuggestions", () => {
-	it("scores an exact match and flags the duration guardrail", () => {
+	it("scores an exact match", () => {
 		const [s] = buildSuggestions([candidate({ videoId: "atv1" })], META, new Set())
 		expect(s.matchScore).toBeCloseTo(1)
-		expect(s.withinDurationDelta).toBe(true)
 		expect(s.videoType).toBe("song")
 	})
 

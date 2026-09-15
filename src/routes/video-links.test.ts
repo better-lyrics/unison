@@ -212,7 +212,6 @@ describe("POST /lyrics/:id/suggested-videos", () => {
 					durationSeconds: 200,
 					videoType: "song",
 					matchScore: 1,
-					withinDurationDelta: true,
 				},
 			],
 		})

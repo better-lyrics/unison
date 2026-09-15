@@ -134,7 +134,6 @@ describeIntegration("video suggestions (integration)", () => {
 		expect(ids).toEqual(["exactmatch1", "videoclip01"])
 		const exact = res.suggestions[0]
 		expect(exact.matchScore).toBeCloseTo(1)
-		expect(exact.withinDurationDelta).toBe(true)
 		expect(exact.videoType).toBe("song")
 		expect(res.suggestions.find((s) => s.videoId === "videoclip01")?.videoType).toBe("video")
 	})
