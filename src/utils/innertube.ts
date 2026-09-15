@@ -47,25 +47,43 @@ export type SongCandidate = {
 	videoId: string
 	title: string
 	artist: string
+	artists: string[]
+	artistChannelIds: string[]
 	album: string | null
 	durationSeconds: number | null
+	videoType: "song" | "video"
 }
 
 export async function searchSongs(query: string): Promise<SongCandidate[]> {
 	try {
 		const yt = await getInnertube()
-		const res = await yt.music.search(query, { type: "song" })
-		const items = res.songs?.contents ?? []
+		const res = await yt.music.search(query, { type: "all" })
+		const shelves = [
+			{ items: res.songs?.contents ?? [], videoType: "song" as const },
+			{ items: res.videos?.contents ?? [], videoType: "video" as const },
+		]
 		const candidates: SongCandidate[] = []
-		for (const it of items) {
-			if (typeof it.id !== "string") continue
-			candidates.push({
-				videoId: it.id,
-				title: it.title ?? "",
-				artist: it.artists?.[0]?.name ?? "",
-				album: it.album?.name ?? null,
-				durationSeconds: it.duration?.seconds ?? null,
-			})
+		for (const { items, videoType } of shelves) {
+			for (const it of items) {
+				if (typeof it.id !== "string") continue
+				const credits = it.artists ?? it.authors ?? []
+				const artists = credits
+					.map((a) => a.name)
+					.filter((n): n is string => typeof n === "string" && n.length > 0)
+				const artistChannelIds = credits
+					.map((a) => a.channel_id)
+					.filter((id): id is string => typeof id === "string" && id.length > 0)
+				candidates.push({
+					videoId: it.id,
+					title: it.title ?? "",
+					artist: artists[0] ?? "",
+					artists,
+					artistChannelIds,
+					album: it.album?.name ?? null,
+					durationSeconds: it.duration?.seconds ?? null,
+					videoType,
+				})
+			}
 		}
 		return candidates
 	} catch (err) {

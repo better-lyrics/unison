@@ -94,7 +94,7 @@ describe("getVideoDurationSeconds", () => {
 })
 
 describe("searchSongs", () => {
-	it("maps song results and drops items without a video id", async () => {
+	it("maps song and video shelves, tags the video type, captures artist channel ids, and drops items without a video id", async () => {
 		create.mockResolvedValue({
 			music: {
 				search: async () => ({
@@ -103,12 +103,22 @@ describe("searchSongs", () => {
 							{
 								id: "vid1",
 								title: "Song One",
-								artists: [{ name: "Artist A" }],
+								artists: [{ name: "Artist A", channel_id: "UCartistA" }, { name: "Artist B" }],
 								album: { name: "Album X" },
 								duration: { seconds: 200 },
 							},
 							{ title: "No Id", artists: [{ name: "B" }] },
 							{ id: "vid3", title: "Sparse" },
+						],
+					},
+					videos: {
+						contents: [
+							{
+								id: "clip1",
+								title: "Song One (Official Video)",
+								authors: [{ name: "Artist A", channel_id: "UCartistA" }],
+								duration: { seconds: 210 },
+							},
 						],
 					},
 				}),
@@ -120,15 +130,37 @@ describe("searchSongs", () => {
 				videoId: "vid1",
 				title: "Song One",
 				artist: "Artist A",
+				artists: ["Artist A", "Artist B"],
+				artistChannelIds: ["UCartistA"],
 				album: "Album X",
 				durationSeconds: 200,
+				videoType: "song",
 			},
-			{ videoId: "vid3", title: "Sparse", artist: "", album: null, durationSeconds: null },
+			{
+				videoId: "vid3",
+				title: "Sparse",
+				artist: "",
+				artists: [],
+				artistChannelIds: [],
+				album: null,
+				durationSeconds: null,
+				videoType: "song",
+			},
+			{
+				videoId: "clip1",
+				title: "Song One (Official Video)",
+				artist: "Artist A",
+				artists: ["Artist A"],
+				artistChannelIds: ["UCartistA"],
+				album: null,
+				durationSeconds: 210,
+				videoType: "video",
+			},
 		])
 	})
 
 	describe("edge cases", () => {
-		it("returns an empty array when there are no song results", async () => {
+		it("returns an empty array when there are no results in either shelf", async () => {
 			create.mockResolvedValue({ music: { search: async () => ({}) } })
 			const { searchSongs } = await import("./innertube")
 			expect(await searchSongs("nothing")).toEqual([])

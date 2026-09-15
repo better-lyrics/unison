@@ -20,29 +20,51 @@ const candidates: SongCandidate[] = [
 		videoId: LINKED,
 		title: "Blinding Lights",
 		artist: "The Weeknd",
+		artists: ["The Weeknd"],
+		artistChannelIds: ["UCweeknd"],
 		album: "After Hours",
 		durationSeconds: 200,
+		videoType: "song",
 	},
 	{
 		videoId: "exactmatch1",
 		title: "Blinding Lights",
 		artist: "The Weeknd",
+		artists: ["The Weeknd"],
+		artistChannelIds: ["UCweeknd"],
 		album: "After Hours",
 		durationSeconds: 200,
+		videoType: "song",
 	},
 	{
-		videoId: "titleonly99",
+		videoId: "videoclip01",
+		title: "Blinding Lights",
+		artist: "The Weeknd",
+		artists: ["The Weeknd"],
+		artistChannelIds: ["UCweeknd"],
+		album: null,
+		durationSeconds: 201,
+		videoType: "video",
+	},
+	{
+		videoId: "otherartist",
 		title: "Blinding Lights",
 		artist: "Someone Else",
+		artists: ["Someone Else"],
+		artistChannelIds: ["UCsomeoneelse"],
 		album: null,
 		durationSeconds: 400,
+		videoType: "song",
 	},
 	{
 		videoId: "nomatch0000",
 		title: "Other Song",
 		artist: "Nobody",
+		artists: ["Nobody"],
+		artistChannelIds: ["UCnobody"],
 		album: null,
 		durationSeconds: 200,
+		videoType: "song",
 	},
 ]
 const search = async () => candidates
@@ -101,20 +123,19 @@ describeIntegration("video suggestions (integration)", () => {
 		])
 	})
 
-	it("ranks matches, flags the duration guardrail, and excludes already-linked videos", async () => {
+	it("filters to the same artist, ranks song above video, and excludes already-linked videos", async () => {
 		const res = await suggestVideosForVariant(env, lyricId, owner, { search })
 		expect(res.ok).toBe(true)
 		if (!res.ok) return
 		const ids = res.suggestions.map((s) => s.videoId)
 		expect(ids).not.toContain(HOME)
 		expect(ids).not.toContain(LINKED)
-		expect(ids).toEqual(["exactmatch1", "titleonly99", "nomatch0000"])
+		// otherartist / nomatch0000 are dropped by the artist filter; the song ranks above the video.
+		expect(ids).toEqual(["exactmatch1", "videoclip01"])
 		const exact = res.suggestions[0]
 		expect(exact.matchScore).toBeCloseTo(1)
-		expect(exact.withinDurationDelta).toBe(true)
-		expect(res.suggestions.find((s) => s.videoId === "titleonly99")?.withinDurationDelta).toBe(
-			false
-		)
+		expect(exact.videoType).toBe("song")
+		expect(res.suggestions.find((s) => s.videoId === "videoclip01")?.videoType).toBe("video")
 	})
 
 	describe("ownership", () => {
@@ -132,7 +153,7 @@ describeIntegration("video suggestions (integration)", () => {
 	})
 
 	describe("cache", () => {
-		const expectedIds = ["exactmatch1", "titleonly99", "nomatch0000"]
+		const expectedIds = ["exactmatch1", "videoclip01"]
 
 		function envWith(cache: Env["CACHE"]): Env {
 			return { DB: new D1Compat(pool), CACHE: cache } as unknown as Env

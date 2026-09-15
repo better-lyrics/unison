@@ -206,10 +206,12 @@ describe("POST /lyrics/:id/suggested-videos", () => {
 					videoId: "exactmatch1",
 					title: "Song",
 					artist: "Artist",
+					artists: ["Artist"],
+					artistChannelIds: ["UCartist"],
 					album: null,
 					durationSeconds: 200,
+					videoType: "song",
 					matchScore: 1,
-					withinDurationDelta: true,
 				},
 			],
 		})
