@@ -1,6 +1,6 @@
-import { IconCommand } from "@tabler/icons-react"
 import { formatKey } from "@/lib/format-key"
 import { isMac as platformIsMac } from "@/lib/platform"
+import { IconCommand } from "@tabler/icons-react"
 
 interface KbdProps {
   keys: string[]

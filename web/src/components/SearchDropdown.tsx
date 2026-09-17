@@ -1,6 +1,6 @@
 import { Kbd } from "@/components/Kbd"
-import { Bone, skeletonKeys } from "@/components/skeleton"
 import { SongThumbnail } from "@/components/SongThumbnail"
+import { Bone, skeletonKeys } from "@/components/skeleton"
 import { cn } from "@/lib/cn"
 import type { LyricsSearchHit } from "@/lib/types"
 
