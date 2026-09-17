@@ -150,6 +150,7 @@ export function SearchBar({ compact = false }: SearchBarProps) {
     }
     if (e.key === "Escape") {
       if (open) {
+        e.preventDefault()
         setOpen(false)
         return
       }
