@@ -126,7 +126,7 @@ export function SignInControl() {
   if (!session.extensionAvailable) {
     if (/firefox/i.test(navigator.userAgent)) {
       return (
-        <Tooltip label="Signing in with Better Lyrics needs the page to talk directly to the extension, which Firefox hasn't implemented yet (and may never). Sign in from Chrome or Edge instead.">
+        <Tooltip label="Signing in with Better Lyrics needs the page to talk directly to the extension via the externally_connectable API, which Firefox hasn't implemented yet (and may never). Sign in from Chrome or Edge instead.">
           <button
             type="button"
             data-state="firefox-signin"
