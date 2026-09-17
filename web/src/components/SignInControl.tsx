@@ -1,4 +1,5 @@
 import { useSession } from "@/auth/useSession";
+import { Tooltip } from "@/components/Tooltip";
 import { dicebearThumbsDataUri } from "@/lib/avatar";
 import { IconCheck, IconCopy, IconLogout, IconUser } from "@tabler/icons-react";
 import { useEffect, useRef, useState } from "react";
@@ -123,6 +124,19 @@ export function SignInControl() {
   }
 
   if (!session.extensionAvailable) {
+    if (/firefox/i.test(navigator.userAgent)) {
+      return (
+        <Tooltip label="Signing in with Better Lyrics needs the page to talk directly to the extension, which Firefox hasn't implemented yet (and may never). Sign in from Chrome or Edge instead.">
+          <button
+            type="button"
+            data-state="firefox-signin"
+            className="max-w-full cursor-default truncate text-sm text-unison-text-muted"
+          >
+            Firefox sign-in unavailable
+          </button>
+        </Tooltip>
+      );
+    }
     return (
       <a
         href="https://betterlyrics.org"

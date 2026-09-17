@@ -123,6 +123,20 @@ describe("SignInControl", () => {
     expect(link.getAttribute("href")).toBe("https://betterlyrics.org")
   })
 
+  it("shows a Firefox sign-in-unavailable chip instead of the install link on Firefox", async () => {
+    const uaSpy = vi
+      .spyOn(Object.getPrototypeOf(navigator), "userAgent", "get")
+      .mockReturnValue("Mozilla/5.0 (X11; Linux x86_64; rv:128.0) Gecko/20100101 Firefox/128.0")
+    try {
+      const { container } = renderControl()
+      await waitFor(() => expect(container.querySelector('[data-state="firefox-signin"]')).toBeTruthy())
+      expect(screen.getByText(/firefox sign-in unavailable/i)).toBeTruthy()
+      expect(screen.queryByRole("link", { name: /get better lyrics/i })).toBeNull()
+    } finally {
+      uaSpy.mockRestore()
+    }
+  })
+
   it("shows the sign-in button when the extension is available", async () => {
     stubChromePort(() => ({ ok: true }))
     renderControl()
