@@ -19,6 +19,41 @@ function resolveImageFilename(def: BadgeDef, variant?: string, tier?: string): s
 	return `${def.key}_${level}.svg`
 }
 
+// The silhouette is a solid fill of each badge's exact shape. Used as an alpha mask, it lets
+// us paint a shape-following background of any color behind the art (no rectangle, no edge clip).
+const silhouetteImageCache = new Map<string, string | null>()
+
+function silhouetteMaskImage(key: string): string | null {
+	const cached = silhouetteImageCache.get(key)
+	if (cached !== undefined) return cached
+	let image: string | null = null
+	try {
+		const svg = readFileSync(join(ASSETS_DIR, `${key}_silhouette.svg`), "utf-8")
+		const match = svg.match(/<image\b[^>]*?\/>/s)
+		image = match ? match[0].replace(/\s+xlink:href="[^"]*"/g, "") : null
+	} catch {
+		image = null
+	}
+	silhouetteImageCache.set(key, image)
+	return image
+}
+
+// null means "no background": return the raw transparent art.
+function resolveBackground(bg?: string): string | null {
+	if (bg === "none") return null
+	if (!bg || bg === "black") return "#000000"
+	if (bg === "white") return "#ffffff"
+	if (/^#[0-9a-fA-F]{3,8}$/.test(bg)) return bg
+	return "#000000"
+}
+
+function bakeBackground(art: string, key: string, color: string): string {
+	const image = silhouetteMaskImage(key)
+	if (!image) return art
+	const layer = `<mask id="unison-badge-bg" mask-type="alpha" style="mask-type:alpha">${image}</mask><rect width="100%" height="100%" fill="${color}" mask="url(#unison-badge-bg)"/>`
+	return art.replace(/(<svg\b[^>]*>)/, `$1${layer}`)
+}
+
 export const badgeRoutes = (env: Env) =>
 	new Elysia({ prefix: "/badges" })
 		.decorate("env", env)
@@ -52,6 +87,10 @@ export const badgeRoutes = (env: Env) =>
 				} catch {
 					return status(404, buildError(ErrorCode.NOT_FOUND))
 				}
+				if (query.variant !== "silhouette") {
+					const bg = resolveBackground(query.bg)
+					if (bg) svg = bakeBackground(svg, def.key, bg)
+				}
 				return new Response(svg, {
 					headers: {
 						"content-type": "image/svg+xml; charset=utf-8",
@@ -64,6 +103,7 @@ export const badgeRoutes = (env: Env) =>
 				query: t.Object({
 					variant: t.Optional(t.String()),
 					tier: t.Optional(t.String()),
+					bg: t.Optional(t.String()),
 					v: t.Optional(t.String()),
 				}),
 			}

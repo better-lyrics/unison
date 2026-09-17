@@ -9,8 +9,9 @@ type CatalogueState =
   | { status: "success"; data: BadgeCatalogue; error: undefined }
   | { status: "error"; data: undefined; error: Error }
 
-// Color is preloaded app-wide; these glyphs only appear on badge pages, so they load lazily here.
-const GLYPH_VARIANTS: (keyof BadgeImage)[] = ["mono", "silhouette"]
+// Color is preloaded app-wide; the mono (locked) glyph only appears on badge pages, so it loads
+// lazily here. The background is baked into color/mono server-side, so the silhouette is never fetched.
+const GLYPH_VARIANTS: (keyof BadgeImage)[] = ["mono"]
 
 const BadgeCatalogueContext = createContext<CatalogueState | null>(null)
 
