@@ -1,3 +1,4 @@
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react"
 import { MemoryRouter, useLocation, useSearchParams } from "react-router-dom"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
@@ -27,47 +28,58 @@ function ExternalQSetter({ value }: { value: string }) {
   )
 }
 
+function createTestClient(): QueryClient {
+  return new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0, staleTime: 0 } } })
+}
+
 function renderBar(initialEntries: string[] = ["/"], extraProps: Partial<{ compact: boolean }> = {}) {
   return render(
     <MemoryRouter initialEntries={initialEntries}>
-      <SearchBar {...extraProps} />
-      <LocationProbe />
+      <QueryClientProvider client={createTestClient()}>
+        <SearchBar {...extraProps} />
+        <LocationProbe />
+      </QueryClientProvider>
     </MemoryRouter>,
   )
 }
 
 beforeEach(() => {
   vi.useFakeTimers()
+  vi.stubGlobal(
+    "fetch",
+    vi.fn().mockResolvedValue(new Response(JSON.stringify({ success: true, data: [] }), { status: 200 })),
+  )
 })
 
 afterEach(() => {
   vi.useRealTimers()
+  vi.unstubAllGlobals()
   cleanup()
 })
 
 describe("SearchBar", () => {
   it("renders an empty searchbox when not on /search", () => {
     renderBar(["/"])
-    const input = screen.getByRole("searchbox", { name: /search lyrics/i }) as HTMLInputElement
+    const input = screen.getByRole("combobox", { name: /search lyrics/i }) as HTMLInputElement
     expect(input.value).toBe("")
   })
 
   it("pre-fills the value from the q query param when on /search", () => {
     renderBar(["/search?q=midnight"])
-    const input = screen.getByRole("searchbox", { name: /search lyrics/i }) as HTMLInputElement
+    const input = screen.getByRole("combobox", { name: /search lyrics/i }) as HTMLInputElement
     expect(input.value).toBe("midnight")
   })
 
   it("uses type=search and an accessible label", () => {
     renderBar(["/"])
-    const input = screen.getByRole("searchbox", { name: /search lyrics/i }) as HTMLInputElement
+    const input = screen.getByRole("combobox", { name: /search lyrics/i }) as HTMLInputElement
     expect(input.getAttribute("type")).toBe("search")
     expect(input.getAttribute("aria-label")).toBe("Search lyrics")
   })
 
   it("does not change the URL when typing on a non-/search route", () => {
     renderBar(["/"])
-    const input = screen.getByRole("searchbox", { name: /search lyrics/i })
+    const input = screen.getByRole("combobox", { name: /search lyrics/i })
     act(() => {
       fireEvent.change(input, { target: { value: "love" } })
     })
@@ -81,7 +93,7 @@ describe("SearchBar", () => {
 
   it("updates the URL q param after the 200ms debounce when on /search", () => {
     renderBar(["/search?q=old"])
-    const input = screen.getByRole("searchbox", { name: /search lyrics/i })
+    const input = screen.getByRole("combobox", { name: /search lyrics/i })
     act(() => {
       fireEvent.change(input, { target: { value: "midnight" } })
     })
@@ -100,7 +112,7 @@ describe("SearchBar", () => {
 
   it("navigates to /search?q=... when Enter is pressed with a non-empty value", () => {
     renderBar(["/"])
-    const input = screen.getByRole("searchbox", { name: /search lyrics/i })
+    const input = screen.getByRole("combobox", { name: /search lyrics/i })
     act(() => {
       fireEvent.change(input, { target: { value: "neon" } })
     })
@@ -114,7 +126,7 @@ describe("SearchBar", () => {
 
   it("does not navigate when Enter is pressed with an empty value", () => {
     renderBar(["/"])
-    const input = screen.getByRole("searchbox", { name: /search lyrics/i })
+    const input = screen.getByRole("combobox", { name: /search lyrics/i })
     act(() => {
       fireEvent.keyDown(input, { key: "Enter" })
     })
@@ -124,7 +136,7 @@ describe("SearchBar", () => {
 
   it("does not navigate when Enter is pressed with fewer than 2 characters", () => {
     renderBar(["/"])
-    const input = screen.getByRole("searchbox", { name: /search lyrics/i })
+    const input = screen.getByRole("combobox", { name: /search lyrics/i })
     act(() => {
       fireEvent.change(input, { target: { value: "a" } })
     })
@@ -135,11 +147,20 @@ describe("SearchBar", () => {
     expect(probe.getAttribute("data-pathname")).toBe("/")
   })
 
-  it("clears the value and blurs the input on Escape", () => {
+  it("closes the dropdown on the first Escape, then clears and blurs on the second", () => {
     renderBar(["/search?q=foo"])
-    const input = screen.getByRole("searchbox", { name: /search lyrics/i }) as HTMLInputElement
-    input.focus()
+    const input = screen.getByRole("combobox", { name: /search lyrics/i }) as HTMLInputElement
+    act(() => {
+      input.focus()
+    })
     expect(document.activeElement).toBe(input)
+
+    act(() => {
+      fireEvent.keyDown(input, { key: "Escape" })
+    })
+    expect(input.value).toBe("foo")
+    expect(document.activeElement).toBe(input)
+
     act(() => {
       fireEvent.keyDown(input, { key: "Escape" })
     })
@@ -149,7 +170,7 @@ describe("SearchBar", () => {
 
   it("encodes special characters in the q param when navigating on Enter", () => {
     renderBar(["/"])
-    const input = screen.getByRole("searchbox", { name: /search lyrics/i })
+    const input = screen.getByRole("combobox", { name: /search lyrics/i })
     act(() => {
       fireEvent.change(input, { target: { value: "rock & roll" } })
     })
@@ -162,12 +183,12 @@ describe("SearchBar", () => {
 
   it("expands the bar from icon-only when compact and the toggle is clicked", () => {
     renderBar(["/"], { compact: true })
-    expect(screen.queryByRole("searchbox", { name: /search lyrics/i })).toBeNull()
+    expect(screen.queryByRole("combobox", { name: /search lyrics/i })).toBeNull()
     const toggle = screen.getByRole("button", { name: /open search/i })
     act(() => {
       toggle.click()
     })
-    expect(screen.getByRole("searchbox", { name: /search lyrics/i })).toBeTruthy()
+    expect(screen.getByRole("combobox", { name: /search lyrics/i })).toBeTruthy()
   })
 
   it("keeps the close button visible after typing in the compact, expanded bar", () => {
@@ -175,7 +196,7 @@ describe("SearchBar", () => {
     act(() => {
       screen.getByRole("button", { name: /open search/i }).click()
     })
-    const input = screen.getByRole("searchbox", { name: /search lyrics/i })
+    const input = screen.getByRole("combobox", { name: /search lyrics/i })
     act(() => {
       fireEvent.change(input, { target: { value: "neon" } })
     })
@@ -187,7 +208,7 @@ describe("SearchBar", () => {
     act(() => {
       screen.getByRole("button", { name: /open search/i }).click()
     })
-    const input = screen.getByRole("searchbox", { name: /search lyrics/i }) as HTMLInputElement
+    const input = screen.getByRole("combobox", { name: /search lyrics/i }) as HTMLInputElement
     act(() => {
       fireEvent.change(input, { target: { value: "neon" } })
     })
@@ -197,25 +218,27 @@ describe("SearchBar", () => {
       screen.getByRole("button", { name: /close search/i }).click()
     })
 
-    expect(screen.queryByRole("searchbox", { name: /search lyrics/i })).toBeNull()
+    expect(screen.queryByRole("combobox", { name: /search lyrics/i })).toBeNull()
     expect(screen.getByRole("button", { name: /open search/i })).toBeTruthy()
 
     act(() => {
       screen.getByRole("button", { name: /open search/i }).click()
     })
-    const reopened = screen.getByRole("searchbox", { name: /search lyrics/i }) as HTMLInputElement
+    const reopened = screen.getByRole("combobox", { name: /search lyrics/i }) as HTMLInputElement
     expect(reopened.value).toBe("")
   })
 
   it("reflects external q changes back into the input when on /search", () => {
     render(
       <MemoryRouter initialEntries={["/search?q=neon"]}>
-        <SearchBar />
-        <ExternalQSetter value="summer" />
-        <LocationProbe />
+        <QueryClientProvider client={createTestClient()}>
+          <SearchBar />
+          <ExternalQSetter value="summer" />
+          <LocationProbe />
+        </QueryClientProvider>
       </MemoryRouter>,
     )
-    const input = screen.getByRole("searchbox", { name: /search lyrics/i }) as HTMLInputElement
+    const input = screen.getByRole("combobox", { name: /search lyrics/i }) as HTMLInputElement
     expect(input.value).toBe("neon")
 
     act(() => {
@@ -228,12 +251,14 @@ describe("SearchBar", () => {
   it("does not stomp the URL back to the previous q when the URL changes externally", () => {
     render(
       <MemoryRouter initialEntries={["/search?q=neon"]}>
-        <SearchBar />
-        <ExternalQSetter value="summer" />
-        <LocationProbe />
+        <QueryClientProvider client={createTestClient()}>
+          <SearchBar />
+          <ExternalQSetter value="summer" />
+          <LocationProbe />
+        </QueryClientProvider>
       </MemoryRouter>,
     )
-    const input = screen.getByRole("searchbox", { name: /search lyrics/i }) as HTMLInputElement
+    const input = screen.getByRole("combobox", { name: /search lyrics/i }) as HTMLInputElement
     expect(input.value).toBe("neon")
 
     act(() => {
@@ -258,12 +283,14 @@ describe("SearchBar", () => {
   it("pushes the typed query to the URL after an external URL change", () => {
     render(
       <MemoryRouter initialEntries={["/search?q=neon"]}>
-        <SearchBar />
-        <ExternalQSetter value="summer" />
-        <LocationProbe />
+        <QueryClientProvider client={createTestClient()}>
+          <SearchBar />
+          <ExternalQSetter value="summer" />
+          <LocationProbe />
+        </QueryClientProvider>
       </MemoryRouter>,
     )
-    const input = screen.getByRole("searchbox", { name: /search lyrics/i }) as HTMLInputElement
+    const input = screen.getByRole("combobox", { name: /search lyrics/i }) as HTMLInputElement
 
     act(() => {
       screen.getByTestId("set-q").click()
