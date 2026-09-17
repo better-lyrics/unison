@@ -126,6 +126,10 @@ select {
   padding-right: 2rem;
 }
 
+.searchbar-input::-webkit-search-cancel-button {
+  margin-left: 4px;
+}
+
 .unison-shimmer-text {
   background: linear-gradient(
       110deg,
