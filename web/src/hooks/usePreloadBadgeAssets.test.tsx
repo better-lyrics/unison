@@ -45,4 +45,10 @@ describe("usePreloadBadgeAssets", () => {
     renderHook(() => usePreloadBadgeAssets(undefined, ["color"], "high"))
     expect(preload).not.toHaveBeenCalled()
   })
+
+  it("applies the url transform before preloading", () => {
+    renderHook(() => usePreloadBadgeAssets(catalogue, ["color"], "low", (url) => `${url}&bg=none`))
+    expect(preload).toHaveBeenCalledWith("/a-color.svg&bg=none", { as: "image", fetchPriority: "low" })
+    expect(preload).not.toHaveBeenCalledWith("/a-color.svg", expect.anything())
+  })
 })

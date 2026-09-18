@@ -87,7 +87,7 @@ export const badgeRoutes = (env: Env) =>
 				} catch {
 					return status(404, buildError(ErrorCode.NOT_FOUND))
 				}
-				if (query.variant !== "silhouette") {
+				if (query.variant !== "silhouette" && def.category !== "tier") {
 					const bg = resolveBackground(query.bg)
 					if (bg) svg = bakeBackground(svg, def.key, bg)
 				}

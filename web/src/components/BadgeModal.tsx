@@ -1,4 +1,4 @@
-import { resolveBadgeImage } from "@/lib/badge-view"
+import { resolveBadgeImage, transparentBadgeUrl } from "@/lib/badge-view"
 import { cn } from "@/lib/cn"
 import type { BadgeDef, UserBadge } from "@/lib/types"
 import { IconX } from "@tabler/icons-react"
@@ -132,7 +132,7 @@ export function BadgeModal({ selection, closing, onRequestClose, onExited }: Bad
   const earned = userBadge?.earned ?? false
   const tier = userBadge?.tier
   const src = resolveBadgeImage(def, tier, earned ? "color" : "mono")
-  const glowSrc = `${src}&bg=none`
+  const glowSrc = transparentBadgeUrl(src)
   const currentTier = earned ? (tier ?? def.tiers?.length ?? 0) : 0
   const metric = metricNode(selection)
 

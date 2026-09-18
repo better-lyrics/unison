@@ -7,11 +7,12 @@ export function usePreloadBadgeAssets(
   catalogue: BadgeCatalogue | undefined,
   variants: (keyof BadgeImage)[],
   fetchPriority: "high" | "low" | "auto",
+  mapUrl?: (url: string) => string,
 ): void {
   useEffect(() => {
     if (!catalogue) return
     for (const url of collectBadgeAssetUrls(catalogue, variants)) {
-      preload(url, { as: "image", fetchPriority })
+      preload(mapUrl ? mapUrl(url) : url, { as: "image", fetchPriority })
     }
-  }, [catalogue, variants, fetchPriority])
+  }, [catalogue, variants, fetchPriority, mapUrl])
 }

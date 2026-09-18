@@ -1,8 +1,14 @@
 import { clearAsyncDataCache } from "@/hooks/useAsyncData"
 import type { BadgeCatalogue } from "@/lib/types"
 import { cleanup, render, screen, waitFor } from "@testing-library/react"
+import { preload } from "react-dom"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { BadgeCatalogueProvider, useBadgeCatalogue } from "./BadgeCatalogueContext"
+
+vi.mock("react-dom", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("react-dom")>()),
+  preload: vi.fn(),
+}))
 
 const catalogue: BadgeCatalogue = {
   badges: [
@@ -43,6 +49,7 @@ function Consumer() {
 beforeEach(() => {
   clearAsyncDataCache()
   vi.unstubAllGlobals()
+  vi.mocked(preload).mockClear()
 })
 
 afterEach(() => {
@@ -61,6 +68,19 @@ describe("BadgeCatalogueContext", () => {
     )
     await waitFor(() => expect(screen.getByTestId("count").textContent).toBe("1"))
     expect(screen.getByTestId("featured-max").textContent).toBe("5")
+  })
+
+  it("preloads the modal glow (bg=none) for color and mono at low priority", async () => {
+    stubCatalogueFetch()
+    render(
+      <BadgeCatalogueProvider>
+        <Consumer />
+      </BadgeCatalogueProvider>,
+    )
+    await waitFor(() => expect(screen.getByTestId("count").textContent).toBe("1"))
+    expect(preload).toHaveBeenCalledWith("/c&bg=none", { as: "image", fetchPriority: "low" })
+    expect(preload).toHaveBeenCalledWith("/m&bg=none", { as: "image", fetchPriority: "low" })
+    expect(preload).not.toHaveBeenCalledWith("/s&bg=none", expect.anything())
   })
 
   it("fetches the catalogue once even with multiple consumers", async () => {

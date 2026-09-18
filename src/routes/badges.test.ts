@@ -230,7 +230,7 @@ describe("GET /badges/:key/image.svg", () => {
 	describe("baked background", () => {
 		it("bakes a shape-following black background into color art by default", async () => {
 			const app = badgeRoutes(makeEnv())
-			const body = await bodyOf(app, "http://localhost/badges/lyricist/image.svg?variant=color")
+			const body = await bodyOf(app, "http://localhost/badges/most-loved/image.svg?variant=color")
 			expect(body).toContain('mask-type="alpha"')
 			expect(body).toContain('fill="#000000"')
 			expect(body).toContain("<mask")
@@ -239,39 +239,51 @@ describe("GET /badges/:key/image.svg", () => {
 
 		it("bakes the background behind the art, not over it", async () => {
 			const app = badgeRoutes(makeEnv())
-			const body = await bodyOf(app, "http://localhost/badges/lyricist/image.svg?variant=color")
+			const body = await bodyOf(app, "http://localhost/badges/most-loved/image.svg?variant=color")
 			expect(body.indexOf("<rect")).toBeLessThan(body.indexOf("<path"))
 		})
 
 		it("bakes the mono (locked) variant too", async () => {
 			const app = badgeRoutes(makeEnv())
-			const body = await bodyOf(app, "http://localhost/badges/lyricist/image.svg?variant=mono")
+			const body = await bodyOf(app, "http://localhost/badges/most-loved/image.svg?variant=mono")
 			expect(body).toContain('fill="#000000"')
 			expect(body).toContain('mask-type="alpha"')
 		})
 
 		it("never bakes the silhouette variant", async () => {
 			const app = badgeRoutes(makeEnv())
-			const body = await bodyOf(app, "http://localhost/badges/lyricist/image.svg?variant=silhouette")
+			const body = await bodyOf(
+				app,
+				"http://localhost/badges/most-loved/image.svg?variant=silhouette"
+			)
 			expect(body).not.toContain("unison-badge-bg")
 			expect(body).not.toContain('fill="#000000"')
 		})
 
 		it("returns the raw transparent art when bg=none", async () => {
 			const app = badgeRoutes(makeEnv())
-			const body = await bodyOf(app, "http://localhost/badges/lyricist/image.svg?variant=color&bg=none")
+			const body = await bodyOf(
+				app,
+				"http://localhost/badges/most-loved/image.svg?variant=color&bg=none"
+			)
 			expect(body).not.toContain("unison-badge-bg")
 		})
 
 		it("bakes white when bg=white", async () => {
 			const app = badgeRoutes(makeEnv())
-			const body = await bodyOf(app, "http://localhost/badges/lyricist/image.svg?variant=color&bg=white")
+			const body = await bodyOf(
+				app,
+				"http://localhost/badges/most-loved/image.svg?variant=color&bg=white"
+			)
 			expect(body).toContain('fill="#ffffff"')
 		})
 
 		it("bakes an arbitrary hex color", async () => {
 			const app = badgeRoutes(makeEnv())
-			const body = await bodyOf(app, "http://localhost/badges/lyricist/image.svg?variant=color&bg=%23112233")
+			const body = await bodyOf(
+				app,
+				"http://localhost/badges/most-loved/image.svg?variant=color&bg=%23112233"
+			)
 			expect(body).toContain('fill="#112233"')
 		})
 
@@ -279,7 +291,7 @@ describe("GET /badges/:key/image.svg", () => {
 			const app = badgeRoutes(makeEnv())
 			const body = await bodyOf(
 				app,
-				`http://localhost/badges/lyricist/image.svg?variant=color&bg=${encodeURIComponent('red" onload="x')}`
+				`http://localhost/badges/most-loved/image.svg?variant=color&bg=${encodeURIComponent('red" onload="x')}`
 			)
 			expect(body).toContain('fill="#000000"')
 			expect(body).not.toContain("onload")
@@ -287,9 +299,44 @@ describe("GET /badges/:key/image.svg", () => {
 
 		it("does not declare an undefined xlink namespace in the baked output", async () => {
 			const app = badgeRoutes(makeEnv())
-			const body = await bodyOf(app, "http://localhost/badges/lyricist/image.svg?variant=color")
+			const body = await bodyOf(app, "http://localhost/badges/most-loved/image.svg?variant=color")
 			const injected = body.slice(body.indexOf("<mask"), body.indexOf("</mask>"))
 			expect(injected).not.toContain("xlink:href")
+		})
+	})
+
+	describe("tier badges are exempt from the baked background", () => {
+		const tierKeys = TIER_BADGES.map((b) => b.key)
+
+		it("never bakes a background into a tier badge", async () => {
+			const app = badgeRoutes(makeEnv())
+			for (const key of tierKeys) {
+				const body = await bodyOf(app, `http://localhost/badges/${key}/image.svg?variant=color`)
+				expect(body).not.toContain("unison-badge-bg")
+			}
+		})
+
+		it("ignores an explicit bg on a tier badge", async () => {
+			const app = badgeRoutes(makeEnv())
+			for (const key of tierKeys) {
+				const raw = await bodyOf(
+					app,
+					`http://localhost/badges/${key}/image.svg?variant=color&bg=none`
+				)
+				for (const bg of ["black", "white", "%23112233"]) {
+					const got = await bodyOf(
+						app,
+						`http://localhost/badges/${key}/image.svg?variant=color&bg=${bg}`
+					)
+					expect(got).toBe(raw)
+				}
+			}
+		})
+
+		it("still bakes a background into a non-tier medal", async () => {
+			const app = badgeRoutes(makeEnv())
+			const body = await bodyOf(app, "http://localhost/badges/most-loved/image.svg?variant=color")
+			expect(body).toContain("unison-badge-bg")
 		})
 	})
 

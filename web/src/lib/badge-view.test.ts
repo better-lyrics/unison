@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest"
-import { collectBadgeAssetUrls, groupBadgesByCategory, isRareBadge, resolveBadgeImage } from "./badge-view"
+import {
+  collectBadgeAssetUrls,
+  groupBadgesByCategory,
+  isRareBadge,
+  resolveBadgeImage,
+  transparentBadgeUrl,
+} from "./badge-view"
 import type { BadgeCatalogue, BadgeDef } from "./types"
 
 function def(key: string, category: string, extra: Partial<BadgeDef> = {}): BadgeDef {
@@ -120,6 +126,18 @@ describe("collectBadgeAssetUrls", () => {
         }),
       ).toEqual([])
     })
+  })
+})
+
+describe("transparentBadgeUrl", () => {
+  it("appends bg=none to a resolved variant url", () => {
+    expect(transparentBadgeUrl("/badges/a/image.svg?variant=color")).toBe("/badges/a/image.svg?variant=color&bg=none")
+  })
+
+  it("appends to a tiered variant url that already carries a tier param", () => {
+    expect(transparentBadgeUrl("/badges/a/image.svg?variant=color&tier=2")).toBe(
+      "/badges/a/image.svg?variant=color&tier=2&bg=none",
+    )
   })
 })
 
