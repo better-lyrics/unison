@@ -53,6 +53,10 @@ export function isRareBadge(badge: BadgeDef, rarityThreshold: number): boolean {
   return badge.rarity !== undefined && badge.rarity < rarityThreshold
 }
 
+export function transparentBadgeUrl(url: string): string {
+  return `${url}&bg=none`
+}
+
 export function resolveBadgeImage(badge: BadgeDef, tier: number | undefined, variant: keyof BadgeImage): string {
   if (tier !== undefined && badge.tiers && badge.tiers.length > 0) {
     const tierImage = badge.tiers[tier - 1]?.image
