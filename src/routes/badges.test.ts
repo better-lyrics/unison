@@ -227,6 +227,72 @@ describe("GET /badges/:key/image.svg", () => {
 		}
 	})
 
+	describe("baked background", () => {
+		it("bakes a shape-following black background into color art by default", async () => {
+			const app = badgeRoutes(makeEnv())
+			const body = await bodyOf(app, "http://localhost/badges/lyricist/image.svg?variant=color")
+			expect(body).toContain('mask-type="alpha"')
+			expect(body).toContain('fill="#000000"')
+			expect(body).toContain("<mask")
+			expect(body).toContain("<rect")
+		})
+
+		it("bakes the background behind the art, not over it", async () => {
+			const app = badgeRoutes(makeEnv())
+			const body = await bodyOf(app, "http://localhost/badges/lyricist/image.svg?variant=color")
+			expect(body.indexOf("<rect")).toBeLessThan(body.indexOf("<path"))
+		})
+
+		it("bakes the mono (locked) variant too", async () => {
+			const app = badgeRoutes(makeEnv())
+			const body = await bodyOf(app, "http://localhost/badges/lyricist/image.svg?variant=mono")
+			expect(body).toContain('fill="#000000"')
+			expect(body).toContain('mask-type="alpha"')
+		})
+
+		it("never bakes the silhouette variant", async () => {
+			const app = badgeRoutes(makeEnv())
+			const body = await bodyOf(app, "http://localhost/badges/lyricist/image.svg?variant=silhouette")
+			expect(body).not.toContain("unison-badge-bg")
+			expect(body).not.toContain('fill="#000000"')
+		})
+
+		it("returns the raw transparent art when bg=none", async () => {
+			const app = badgeRoutes(makeEnv())
+			const body = await bodyOf(app, "http://localhost/badges/lyricist/image.svg?variant=color&bg=none")
+			expect(body).not.toContain("unison-badge-bg")
+		})
+
+		it("bakes white when bg=white", async () => {
+			const app = badgeRoutes(makeEnv())
+			const body = await bodyOf(app, "http://localhost/badges/lyricist/image.svg?variant=color&bg=white")
+			expect(body).toContain('fill="#ffffff"')
+		})
+
+		it("bakes an arbitrary hex color", async () => {
+			const app = badgeRoutes(makeEnv())
+			const body = await bodyOf(app, "http://localhost/badges/lyricist/image.svg?variant=color&bg=%23112233")
+			expect(body).toContain('fill="#112233"')
+		})
+
+		it("falls back to black and never injects an unsafe bg value", async () => {
+			const app = badgeRoutes(makeEnv())
+			const body = await bodyOf(
+				app,
+				`http://localhost/badges/lyricist/image.svg?variant=color&bg=${encodeURIComponent('red" onload="x')}`
+			)
+			expect(body).toContain('fill="#000000"')
+			expect(body).not.toContain("onload")
+		})
+
+		it("does not declare an undefined xlink namespace in the baked output", async () => {
+			const app = badgeRoutes(makeEnv())
+			const body = await bodyOf(app, "http://localhost/badges/lyricist/image.svg?variant=color")
+			const injected = body.slice(body.indexOf("<mask"), body.indexOf("</mask>"))
+			expect(injected).not.toContain("xlink:href")
+		})
+	})
+
 	it("returns 404 for an unknown key", async () => {
 		const app = badgeRoutes(makeEnv())
 		const res = await app.handle(new Request("http://localhost/badges/nope/image.svg"))

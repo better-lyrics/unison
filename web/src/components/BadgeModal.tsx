@@ -132,7 +132,7 @@ export function BadgeModal({ selection, closing, onRequestClose, onExited }: Bad
   const earned = userBadge?.earned ?? false
   const tier = userBadge?.tier
   const src = resolveBadgeImage(def, tier, earned ? "color" : "mono")
-  const silhouette = resolveBadgeImage(def, tier, "silhouette")
+  const glowSrc = `${src}&bg=none`
   const currentTier = earned ? (tier ?? def.tiers?.length ?? 0) : 0
   const metric = metricNode(selection)
 
@@ -204,7 +204,7 @@ export function BadgeModal({ selection, closing, onRequestClose, onExited }: Bad
         <div className="relative px-6 pt-10 pb-3 text-center">
           <div className="relative mx-auto mb-4 grid size-[120px] place-items-center">
             <img
-              src={src}
+              src={glowSrc}
               alt=""
               aria-hidden="true"
               draggable={false}
@@ -212,13 +212,6 @@ export function BadgeModal({ selection, closing, onRequestClose, onExited }: Bad
                 "bm-glow absolute top-[-28%] left-1/2 size-[92px] -translate-x-1/2 -translate-y-1/2 scale-x-[4] scale-y-[1.5] blur-[24px]",
                 earned ? "opacity-40" : "opacity-20",
               )}
-            />
-            <img
-              src={silhouette}
-              alt=""
-              aria-hidden="true"
-              draggable={false}
-              className="absolute top-1/2 left-1/2 size-[104px] -translate-x-1/2 -translate-y-1/2 select-none"
             />
             <img
               src={src}
