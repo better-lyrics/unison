@@ -215,15 +215,15 @@ export async function findBySongArtist(
 		params.push(duration, config.matching.durationTolerance)
 	}
 
+	const albumPref = album ? "(CASE WHEN l.album_norm = ? THEN 1 ELSE 0 END) DESC, " : ""
 	if (album) {
-		conditions.push("l.album = ?")
-		params.push(album.trim())
+		params.push(normalize(album))
 	}
 
 	const query = `
 		${LYRICS_WITH_SUBMITTER}
 		WHERE ${conditions.join(" AND ")}
-		ORDER BY (CASE WHEN ${PROVEN_EXPR_JOINED} THEN 1 ELSE 0 END) DESC, ${RANKING_EXPR_JOINED} DESC
+		ORDER BY ${albumPref}(CASE WHEN ${PROVEN_EXPR_JOINED} THEN 1 ELSE 0 END) DESC, ${RANKING_EXPR_JOINED} DESC
 		LIMIT 1
 	`
 
@@ -477,9 +477,9 @@ export async function searchBySongArtist(
 		params.push(duration, config.matching.durationTolerance)
 	}
 
+	const albumPref = album ? "(CASE WHEN l.album_norm = ? THEN 1 ELSE 0 END) DESC, " : ""
 	if (album) {
-		conditions.push("l.album = ?")
-		params.push(album.trim())
+		params.push(normalize(album))
 	}
 
 	params.push(limit)
@@ -488,7 +488,7 @@ export async function searchBySongArtist(
 		`
 		${LYRICS_WITH_SUBMITTER}
 		WHERE ${conditions.join(" AND ")}
-		ORDER BY ${RANKING_EXPR_JOINED} DESC
+		ORDER BY ${albumPref}${RANKING_EXPR_JOINED} DESC
 		LIMIT ?
 		`
 	)
