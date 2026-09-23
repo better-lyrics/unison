@@ -1,4 +1,5 @@
 import { config } from "@/config"
+import { disabledJevGate } from "@/services/jev-gate"
 import type { B2Config, Env } from "@/types"
 import { KVCompat, getRedis } from "./cache"
 import { D1Compat, getPool } from "./database"
@@ -99,5 +100,6 @@ export function createEnv(): Env {
 		EXAM_DEV_ENABLED: readExamDevEnabled(),
 		EXAM_BASE_URL: process.env.EXAM_BASE_URL || "",
 		RAILWAY_PUBLIC_DOMAIN: process.env.RAILWAY_PUBLIC_DOMAIN || "",
+		JEV: disabledJevGate,
 	}
 }

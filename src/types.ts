@@ -1,6 +1,7 @@
 import type { KVCompat } from "@/infra/cache"
 import type { D1Compat } from "@/infra/database"
 import type { RedisRateLimiter } from "@/infra/rate-limiter"
+import type { JevGate } from "@/services/jev-gate"
 import type { TierName } from "@/utils/tiers"
 
 export interface B2Config {
@@ -26,6 +27,7 @@ export interface Env {
 	EXAM_DEV_ENABLED?: boolean
 	EXAM_BASE_URL?: string
 	RAILWAY_PUBLIC_DOMAIN?: string
+	JEV?: JevGate
 }
 
 export interface RateLimiter {
