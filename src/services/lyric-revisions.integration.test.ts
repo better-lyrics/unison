@@ -419,6 +419,29 @@ describeIntegration("lyric revisions pipeline (integration)", () => {
 			expect(card?.diffPreview).toContain("[translation es L1]")
 		})
 
+		it("diffs a head-only translation edit as body gaps and a head word row", async () => {
+			const revision = await saveTtml(
+				retranslated((line, index) => (index === 1 ? "Que salvó a un alma como yo" : line))
+			)
+			const diff = await diffRevisions(db.env, ttmlLyric, revision.id, null)
+			expect(diff?.rows[0]).toEqual({ kind: "gap", count: 16 })
+			expect(diff?.rows.filter((row) => row.kind !== "gap" && !("head" in row))).toEqual([])
+			expect(diff?.rows.filter((row) => row.kind === "word")).toEqual([
+				{
+					kind: "word",
+					lineNo: 3,
+					startMs: null,
+					head: { kind: "translation", lang: "es", line: 2 },
+					parts: [
+						["=", "Que salvó a un "],
+						["-", "desdichado"],
+						["+", "alma"],
+						["=", " como yo"],
+					],
+				},
+			])
+		})
+
 		describe("edge cases", () => {
 			it("counts a whitespace-only head change as 0 drift and skips Jev", async () => {
 				const { calls, env } = recordingGate(true)

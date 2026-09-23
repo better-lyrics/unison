@@ -41,7 +41,7 @@ import type {
 import { decompressIfNeeded } from "@/utils/compression"
 import { detectLanguage } from "@/utils/detect-language"
 import { ErrorCode, buildError } from "@/utils/errors"
-import { type LyricLine, extractComparableLines, extractLines } from "@/utils/extract-text"
+import { type LyricLine, extractComparableLines } from "@/utils/extract-text"
 import { sha256Hex } from "@/utils/hash"
 import { normalizeIsrc } from "@/utils/isrc"
 import { buildDiffRows, diffPreview, renderLinesForDiff, unifiedDiff } from "@/utils/lyric-diff"
@@ -112,13 +112,9 @@ const NOT_SAVABLE: GateOutcome = { goesLive: false, reason: null }
 const LANGUAGE_HINT = "Pick a language from the list."
 const ISRC_HINT = "An ISRC looks like USRC17607839."
 
-async function revisionLines(
-	stored: string,
-	format: LyricsFormat,
-	read: typeof extractLines = extractComparableLines
-): Promise<LyricLine[]> {
+async function revisionLines(stored: string, format: LyricsFormat): Promise<LyricLine[]> {
 	try {
-		return read(await decompressIfNeeded(stored), format)
+		return extractComparableLines(await decompressIfNeeded(stored), format)
 	} catch (err) {
 		log.warn("stored revision content could not be parsed", { error: (err as Error).message })
 		return []
@@ -244,7 +240,7 @@ async function assess(
 	const isrc = resolveIsrc(input.isrc, live.isrc, revert)
 
 	const comparable = validated.ok ? extractComparableLines(input.lyrics, validated.format) : null
-	const lines = comparable?.filter((line) => line.key === undefined) ?? null
+	const lines = comparable?.filter((line) => line.head === undefined) ?? null
 	const checks: FieldCheck[] = [
 		validated.ok
 			? {
@@ -547,8 +543,8 @@ export async function diffRevisions(
 	if (!base) return { rows: [], againstRevNo: null }
 	return {
 		rows: buildDiffRows(
-			await revisionLines(base.lyrics, base.format, extractLines),
-			await revisionLines(target.lyrics, target.format, extractLines)
+			await revisionLines(base.lyrics, base.format),
+			await revisionLines(target.lyrics, target.format)
 		),
 		againstRevNo: base.rev_no,
 	}

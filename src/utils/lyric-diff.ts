@@ -1,5 +1,5 @@
 import { config } from "@/config"
-import type { DiffPart, DiffRow } from "@/types"
+import type { DiffPart, DiffRow, HeadTextRef } from "@/types"
 import type { LyricLine } from "@/utils/extract-text"
 import { createTwoFilesPatch, diffArrays } from "diff"
 
@@ -14,6 +14,8 @@ function wordParts(before: string, after: string): DiffPart[] {
 	})
 }
 
+const headOf = (line: LyricLine): { head?: HeadTextRef } => (line.head ? { head: line.head } : {})
+
 function keptRow(before: LyricLine, after: LyricLine, lineNo: number): DiffRow {
 	if (before.startMs !== null && after.startMs !== null && before.startMs !== after.startMs) {
 		return {
@@ -24,7 +26,7 @@ function keptRow(before: LyricLine, after: LyricLine, lineNo: number): DiffRow {
 			text: after.text,
 		}
 	}
-	return { kind: "same", lineNo, startMs: after.startMs, text: after.text }
+	return { kind: "same", lineNo, startMs: after.startMs, text: after.text, ...headOf(after) }
 }
 
 function collapseUnchanged(rows: DiffRow[], context: number): DiffRow[] {
@@ -50,7 +52,7 @@ function collapseUnchanged(rows: DiffRow[], context: number): DiffRow[] {
 	return out
 }
 
-export function buildDiffRows(before: LyricLine[], after: LyricLine[]): DiffRow[] {
+function sectionRows(before: LyricLine[], after: LyricLine[]): DiffRow[] {
 	const changes = diffArrays(
 		before.map((line) => line.text),
 		after.map((line) => line.text)
@@ -74,15 +76,33 @@ export function buildDiffRows(before: LyricLine[], after: LyricLine[]): DiffRow[
 			for (let k = 0; k < paired; k++) {
 				const line = after[j + k]
 				const parts = wordParts(before[i + k].text, line.text)
-				rows.push({ kind: "word", lineNo: j + k + 1, startMs: line.startMs, parts })
+				rows.push({
+					kind: "word",
+					lineNo: j + k + 1,
+					startMs: line.startMs,
+					parts,
+					...headOf(line),
+				})
 			}
 			for (let k = paired; k < change.count; k++) {
 				const line = before[i + k]
-				rows.push({ kind: "del", lineNo: i + k + 1, startMs: line.startMs, text: line.text })
+				rows.push({
+					kind: "del",
+					lineNo: i + k + 1,
+					startMs: line.startMs,
+					text: line.text,
+					...headOf(line),
+				})
 			}
 			for (let k = paired; k < added; k++) {
 				const line = after[j + k]
-				rows.push({ kind: "add", lineNo: j + k + 1, startMs: line.startMs, text: line.text })
+				rows.push({
+					kind: "add",
+					lineNo: j + k + 1,
+					startMs: line.startMs,
+					text: line.text,
+					...headOf(line),
+				})
 			}
 			i += change.count
 			j += added
@@ -90,13 +110,29 @@ export function buildDiffRows(before: LyricLine[], after: LyricLine[]): DiffRow[
 		} else {
 			for (let k = 0; k < change.count; k++) {
 				const line = after[j + k]
-				rows.push({ kind: "add", lineNo: j + k + 1, startMs: line.startMs, text: line.text })
+				rows.push({
+					kind: "add",
+					lineNo: j + k + 1,
+					startMs: line.startMs,
+					text: line.text,
+					...headOf(line),
+				})
 			}
 			j += change.count
 			c++
 		}
 	}
-	return collapseUnchanged(rows, config.revisions.diffContextLines)
+	return rows
+}
+
+export function buildDiffRows(before: LyricLine[], after: LyricLine[]): DiffRow[] {
+	const isHead = (line: LyricLine) => line.head !== undefined
+	const isBody = (line: LyricLine) => line.head === undefined
+	const context = config.revisions.diffContextLines
+	const body = collapseUnchanged(sectionRows(before.filter(isBody), after.filter(isBody)), context)
+	const head = sectionRows(before.filter(isHead), after.filter(isHead))
+	if (head.every((row) => row.kind === "same")) return body
+	return [...body, ...collapseUnchanged(head, context)]
 }
 
 function stamp(ms: number | null): string {
@@ -109,7 +145,11 @@ function stamp(ms: number | null): string {
 }
 
 export function renderLinesForDiff(lines: LyricLine[]): string {
-	const label = (line: LyricLine) => (line.key ? `[${line.key}] ` : "")
+	const label = ({ head }: LyricLine) => {
+		if (!head) return ""
+		const where = head.line === null ? [] : [`L${head.line}`]
+		return `[${[head.kind, head.lang ?? [], where].flat().join(" ")}] `
+	}
 	return lines.map((line) => `${stamp(line.startMs)}${label(line)}${line.text}\n`).join("")
 }
 

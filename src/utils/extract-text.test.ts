@@ -330,26 +330,44 @@ describe("extractLines", () => {
 
 const ROMAJI_TTML = `<tt xmlns="http://www.w3.org/ns/ttml" xmlns:ttm="http://www.w3.org/ns/ttml#metadata" xml:lang="ja"><head><metadata><ttm:agent type="person" xml:id="v1"><ttm:name type="full">Aimer</ttm:name></ttm:agent><iTunesMetadata xmlns="http://music.apple.com/lyric-ttml-internal"><transliterations><transliteration xml:lang="ja-Latn"><text for="L1"><span begin="1.000" end="1.500">kimi</span> <span begin="1.500" end="2.000">no</span> <span begin="2.000" end="2.600">koe</span></text></transliteration></transliterations></iTunesMetadata></metadata></head><body><div><p begin="1.000" end="2.600" itunes:key="L1" xmlns:itunes="http://music.apple.com/lyric-ttml-internal">君の声</p></div></body></tt>`
 
+const CREDIT = { kind: "credit", lang: null, line: null }
+
 describe("extractComparableLines", () => {
 	it("puts TTML head text after the body lines, keyed and untimed", () => {
 		const ttml = withTranslation(fixture("amazing-grace.ttml"), "es", AMAZING_GRACE_SPANISH)
 		const lines = extractComparableLines(ttml, "ttml")
 		expect(lines.slice(0, 16)).toEqual(extractLines(ttml, "ttml"))
 		expect(lines.slice(16)).toEqual([
-			{ key: "songwriter", text: "John Newton", startMs: null },
+			{ head: CREDIT, text: "John Newton", startMs: null },
 			...AMAZING_GRACE_SPANISH.map((text, index) => ({
-				key: `translation es L${index + 1}`,
+				head: { kind: "translation", lang: "es", line: index + 1 },
 				text,
 				startMs: null,
 			})),
 		])
 	})
 
+	it("points a translation at the body line whose key it names, not at its own position", () => {
+		const ttml = fixture("amazing-grace.ttml").replace(
+			"</iTunesMetadata>",
+			'<translations><translation xml:lang="es"><text for="L3">Una vez estuve perdido</text></translation></translations></iTunesMetadata>'
+		)
+		expect(extractComparableLines(ttml, "ttml").at(-1)).toEqual({
+			head: { kind: "translation", lang: "es", line: 3 },
+			text: "Una vez estuve perdido",
+			startMs: null,
+		})
+	})
+
 	it("reads timed transliteration spans as one line of text", () => {
 		expect(extractComparableLines(ROMAJI_TTML, "ttml")).toEqual([
 			{ text: "君の声", startMs: 1000 },
-			{ key: "agent v1 name", text: "Aimer", startMs: null },
-			{ key: "transliteration ja-Latn L1", text: "kimi no koe", startMs: null },
+			{ head: CREDIT, text: "Aimer", startMs: null },
+			{
+				head: { kind: "transliteration", lang: "ja-Latn", line: 1 },
+				text: "kimi no koe",
+				startMs: null,
+			},
 		])
 	})
 
@@ -368,7 +386,7 @@ describe("extractComparableLines", () => {
 		it("collapses whitespace inside head text", () => {
 			const ttml = withTranslation(fixture("amazing-grace.ttml"), "es", ["  Sublime\n\tgracia  "])
 			expect(extractComparableLines(ttml, "ttml").at(-1)).toEqual({
-				key: "translation es L1",
+				head: { kind: "translation", lang: "es", line: 1 },
 				text: "Sublime gracia",
 				startMs: null,
 			})
@@ -377,8 +395,21 @@ describe("extractComparableLines", () => {
 		it("skips head elements that hold no text", () => {
 			const ttml = withTranslation(fixture("amazing-grace.ttml"), "es", ["", "  "])
 			expect(extractComparableLines(ttml, "ttml").slice(16)).toEqual([
-				{ key: "songwriter", text: "John Newton", startMs: null },
+				{ head: CREDIT, text: "John Newton", startMs: null },
 			])
+		})
+
+		it("leaves line null for a translation whose key names no body line", () => {
+			const ttml = withTranslation(
+				fixture("amazing-grace.ttml"),
+				"es",
+				AMAZING_GRACE_SPANISH
+			).replace('for="L16"', 'for="L99"')
+			expect(extractComparableLines(ttml, "ttml").at(-1)?.head).toEqual({
+				kind: "translation",
+				lang: "es",
+				line: null,
+			})
 		})
 
 		it("reads a TTML file with no head as its body lines", () => {
@@ -389,6 +420,14 @@ describe("extractComparableLines", () => {
 	})
 
 	describe("invariants", () => {
+		it("gives credits no language and no line", () => {
+			const credits = extractComparableLines(ROMAJI_TTML, "ttml").filter(
+				(line) => line.head?.kind === "credit"
+			)
+			expect(credits).toHaveLength(1)
+			for (const line of credits) expect(line.head).toEqual(CREDIT)
+		})
+
 		it("ignores timing attributes on head spans", () => {
 			const shifted = ROMAJI_TTML.replace('begin="1.500"', 'begin="1.900"')
 			expect(extractComparableLines(shifted, "ttml")).toEqual(

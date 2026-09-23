@@ -1,4 +1,4 @@
-import type { LyricsFormat } from "@/types"
+import type { HeadTextRef, LyricsFormat } from "@/types"
 import { parseLrc } from "@/utils/lrc"
 import { parseTtmlTime } from "@/utils/ttml-timing"
 import {
@@ -11,7 +11,7 @@ import { XMLParser } from "fast-xml-parser"
 export interface LyricLine {
 	text: string
 	startMs: number | null
-	key?: string
+	head?: HeadTextRef
 }
 
 const parser = new XMLParser({
@@ -78,10 +78,18 @@ function firstTimedDescendant(nodes: unknown[]): number | null {
 	return null
 }
 
+interface HeadText {
+	text: string
+	kind: HeadTextRef["kind"]
+	lang: string | null
+	forKey: string | null
+}
+
 interface ParsedTtml {
 	lines: LyricLine[]
+	lineByKey: Map<string, number>
 	texts: string[]
-	head: LyricLine[]
+	head: HeadText[]
 }
 
 function collectParagraphs(nodes: unknown[], out: ParsedTtml): void {
@@ -94,6 +102,8 @@ function collectParagraphs(nodes: unknown[], out: ParsedTtml): void {
 			if (text) {
 				out.lines.push({ text, startMs: beginMs(el) ?? firstTimedDescendant(el.p) })
 				out.texts.push(text)
+				const key = (el[":@"] as ParsedNode | undefined)?.["@_key"]
+				if (typeof key === "string") out.lineByKey.set(key, out.lines.length)
 			}
 		}
 
@@ -139,24 +149,30 @@ function hasOwnText(nodes: unknown[]): boolean {
 	})
 }
 
-// Keys a head text by the attributes that tell its siblings apart, e.g. "translation es L3".
-function headTextKey(path: Array<{ name: string; attrs: ParsedNode }>): string {
-	const parts: string[] = []
-	for (const { name, attrs } of path) {
-		const labels = [attrs["@_lang"], attrs["@_id"]].filter((v) => typeof v === "string")
-		if (labels.length > 0) parts.push(name, ...(labels as string[]))
+function lineTextKind(name: string): "translation" | "transliteration" | null {
+	return name === "translation" || name === "transliteration" ? name : null
+}
+
+function headText(text: string, path: Array<{ name: string; attrs: ParsedNode }>): HeadText {
+	for (let index = path.length - 1; index >= 0; index--) {
+		const kind = lineTextKind(path[index].name)
+		if (kind === null) continue
+		const lang = path[index].attrs["@_lang"]
+		const forKey = path[path.length - 1].attrs["@_for"]
+		return {
+			text,
+			kind,
+			lang: typeof lang === "string" ? lang : null,
+			forKey: typeof forKey === "string" ? forKey : null,
+		}
 	}
-	const unit = path[path.length - 1]
-	const forKey = unit.attrs["@_for"]
-	if (typeof forKey === "string") parts.push(forKey)
-	else if (!parts.includes(unit.name)) parts.push(unit.name)
-	return parts.join(" ")
+	return { text, kind: "credit", lang: null, forKey: null }
 }
 
 function collectHeadText(
 	nodes: unknown[],
 	path: Array<{ name: string; attrs: ParsedNode }>,
-	out: LyricLine[]
+	out: HeadText[]
 ): void {
 	for (const node of nodes) {
 		if (typeof node !== "object" || node === null) continue
@@ -168,7 +184,7 @@ function collectHeadText(
 			const here = [...path, { name, attrs }]
 			if (name === HEAD_TEXT_ELEMENT || hasOwnText(children)) {
 				const text = concatText(children).replace(/\s+/g, " ").trim()
-				if (text) out.push({ key: headTextKey(here), text, startMs: null })
+				if (text) out.push(headText(text, here))
 			} else {
 				collectHeadText(children, here, out)
 			}
@@ -178,7 +194,7 @@ function collectHeadText(
 
 function parseTtml(ttml: string): ParsedTtml {
 	const parsed = parser.parse(ttml) as unknown[]
-	const out: ParsedTtml = { lines: [], texts: [], head: [] }
+	const out: ParsedTtml = { lines: [], lineByKey: new Map(), texts: [], head: [] }
 
 	for (const root of parsed) {
 		if (typeof root !== "object" || root === null) continue
@@ -239,5 +255,9 @@ export function extractLines(lyrics: string, format: LyricsFormat): LyricLine[] 
 export function extractComparableLines(lyrics: string, format: LyricsFormat): LyricLine[] {
 	if (format !== "ttml") return extractLines(lyrics, format)
 	const parsed = parseTtml(lyrics)
-	return [...parsed.lines, ...parsed.head]
+	const head = parsed.head.map(({ text, kind, lang, forKey }): LyricLine => {
+		const line = forKey === null ? null : (parsed.lineByKey.get(forKey) ?? null)
+		return { text, startMs: null, head: { kind, lang, line } }
+	})
+	return [...parsed.lines, ...head]
 }

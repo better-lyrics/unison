@@ -13,7 +13,12 @@ import {
 	seedUser,
 	wipeRevisionData,
 } from "@/test/integration-harness"
-import { readRevisionFixture, swapWords } from "@/test/lyric-fixtures"
+import {
+	AMAZING_GRACE_SPANISH,
+	readRevisionFixture,
+	swapWords,
+	withTranslation,
+} from "@/test/lyric-fixtures"
 import type {
 	Env,
 	LyricsResponse,
@@ -52,6 +57,7 @@ const buildApp = (env: Env) =>
 describeIntegration("revision routes (integration)", () => {
 	let db: IntegrationDb
 	let lyricId: number
+	let owner: number
 
 	beforeAll(async () => {
 		db = await openIntegrationDb()
@@ -63,7 +69,7 @@ describeIntegration("revision routes (integration)", () => {
 
 	beforeEach(async () => {
 		await wipeRevisionData(db)
-		const owner = await seedUser(db, OWNER_KEY)
+		owner = await seedUser(db, OWNER_KEY)
 		lyricId = await seedLyric(db, owner, { lyrics: LRC, format: "lrc" })
 		seedSession(db, "owner-token", OWNER_KEY)
 	})
@@ -136,6 +142,37 @@ describeIntegration("revision routes (integration)", () => {
 			const diff = await call<RevisionDiff>("GET", `/lyrics/${lyricId}/revisions/${latest.id}/diff`)
 			expect(diff.json.data.againstRevNo).toBe(1)
 			expect(diff.json.data.rows[0]).toMatchObject({ kind: "word", lineNo: 1 })
+		})
+
+		it("returns head rows after the body rows for a head-only translation edit", async () => {
+			const ttml = withTranslation(
+				readRevisionFixture("amazing-grace.ttml"),
+				"es",
+				AMAZING_GRACE_SPANISH
+			)
+			const ttmlLyric = await seedLyric(db, owner, {
+				lyrics: ttml,
+				format: "ttml",
+				videoId: "ttmlspanish",
+			})
+			const edited = ttml.replace("Que salvó a un desdichado", "Que salvó a un alma")
+			const saved = await call<Saved>("POST", `/lyrics/${ttmlLyric}/revisions`, {
+				token: "owner-token",
+				body: { lyrics: edited, format: "ttml" },
+			})
+			expect(saved.status).toBe(200)
+			const diff = await call<RevisionDiff>(
+				"GET",
+				`/lyrics/${ttmlLyric}/revisions/${saved.json.data.revision.id}/diff`
+			)
+			expect(diff.status).toBe(200)
+			const { rows } = diff.json.data
+			expect(rows[0]).toEqual({ kind: "gap", count: 16 })
+			expect(rows.find((row) => row.kind === "word")).toMatchObject({
+				lineNo: 3,
+				startMs: null,
+				head: { kind: "translation", lang: "es", line: 2 },
+			})
 		})
 
 		it("reverts and withdraws through the owner routes", async () => {

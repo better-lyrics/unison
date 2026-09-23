@@ -301,11 +301,17 @@ export interface PreviewResult {
 
 export type DiffPart = ["=" | "+" | "-", string]
 
+export interface HeadTextRef {
+	kind: "translation" | "transliteration" | "credit"
+	lang: string | null
+	line: number | null
+}
+
 export type DiffRow =
-	| { kind: "same"; lineNo: number; startMs: number | null; text: string }
-	| { kind: "add"; lineNo: number; startMs: number | null; text: string }
-	| { kind: "del"; lineNo: number; startMs: number | null; text: string }
-	| { kind: "word"; lineNo: number; startMs: number | null; parts: DiffPart[] }
+	| { kind: "same"; lineNo: number; startMs: number | null; text: string; head?: HeadTextRef }
+	| { kind: "add"; lineNo: number; startMs: number | null; text: string; head?: HeadTextRef }
+	| { kind: "del"; lineNo: number; startMs: number | null; text: string; head?: HeadTextRef }
+	| { kind: "word"; lineNo: number; startMs: number | null; parts: DiffPart[]; head?: HeadTextRef }
 	| { kind: "timing"; lineNo: number; startMs: number; deltaMs: number; text: string }
 	| { kind: "gap"; count: number }
 
