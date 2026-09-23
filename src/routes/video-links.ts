@@ -1,11 +1,9 @@
 import { config } from "@/config"
-import { editLyrics } from "@/db/lyrics"
 import { linkVideoForOwner, listVideoLinks, unlinkVideoForOwner } from "@/db/video-links"
 import { suggestVideosForVariant } from "@/services/video-suggestions"
 import type { Env } from "@/types"
 import { eitherAuth } from "@/utils/either-auth"
 import { ErrorCode, buildError } from "@/utils/errors"
-import { validateLyricContent } from "@/utils/validate-lyrics"
 import { Elysia } from "elysia"
 
 const LINK_ERROR = {
@@ -61,47 +59,6 @@ export const videoLinkRoutes = (env: Env) =>
 				return status(404, buildError(ErrorCode.NOT_FOUND))
 			}
 			return { success: true, data: { suggestions: res.suggestions } }
-		})
-		.post("/:id/edit", async ({ params, env, userId, keyId, body, status }) => {
-			const id = Number(params.id)
-			if (Number.isNaN(id)) return status(400, buildError(ErrorCode.INVALID_ID))
-
-			const { success } = await env.RATE_LIMITER.limit({ key: keyId })
-			if (!success) return status(429, buildError(ErrorCode.RATE_LIMITED))
-
-			const b = body as { lyrics?: unknown; format?: unknown; language?: unknown }
-			if (typeof b.lyrics !== "string" || !b.lyrics) {
-				return status(400, buildError(ErrorCode.INVALID_PAYLOAD))
-			}
-			const claimedFormat =
-				typeof b.format === "string" && ["ttml", "lrc", "plain"].includes(b.format)
-					? (b.format as "ttml" | "lrc" | "plain")
-					: "plain"
-
-			const validated = validateLyricContent(b.lyrics, claimedFormat)
-			if (!validated.ok) {
-				return status(
-					400,
-					buildError(validated.code, validated.hint ? { hint: validated.hint } : undefined)
-				)
-			}
-
-			const res = await editLyrics(env, id, userId, {
-				lyrics: b.lyrics,
-				format: validated.format,
-				syncType: validated.syncType,
-				language: typeof b.language === "string" ? b.language : undefined,
-			})
-			if (!res.ok) {
-				if (res.reason === "cap_reached") {
-					return status(409, buildError(ErrorCode.VARIANT_CAP_REACHED))
-				}
-				if (res.reason === "not_owner") {
-					return status(403, buildError(ErrorCode.NOT_OWNER))
-				}
-				return status(404, buildError(ErrorCode.NOT_FOUND))
-			}
-			return status(201, { success: true, data: { id: res.id, created: true } })
 		})
 		.delete("/:id/videos/:videoId", async ({ params, env, userId, status }) => {
 			const id = Number(params.id)

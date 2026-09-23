@@ -243,8 +243,7 @@ export async function findBySongArtist(
 export async function submitLyrics(
 	env: Env,
 	submission: LyricsSubmission,
-	submitterId: number,
-	opts: { excludeLyricId?: number } = {}
+	submitterId: number
 ): Promise<{ id: number; created: boolean }> {
 	const compressedLyrics = await compress(submission.lyrics)
 	const plainText = extractPlainText(submission.lyrics, submission.format)
@@ -253,17 +252,12 @@ export async function submitLyrics(
 	const albumNorm = submission.album ? normalize(submission.album) : null
 
 	// Check per-user-per-video variant cap
-	const excludeClause = opts.excludeLyricId != null ? " AND id != ?" : ""
-	const capParams =
-		opts.excludeLyricId != null
-			? [submission.videoId, submitterId, opts.excludeLyricId]
-			: [submission.videoId, submitterId]
 	const variantCount = await env.DB.prepare(
 		`SELECT COUNT(*)::INTEGER AS count FROM lyrics
 			WHERE video_id = ? AND submitter_id = ?
-				AND (deleted_at IS NULL OR reputation_penalized = TRUE)${excludeClause}`
+				AND (deleted_at IS NULL OR reputation_penalized = TRUE)`
 	)
-		.bind(...capParams)
+		.bind(submission.videoId, submitterId)
 		.first<{ count: number }>()
 
 	if (variantCount && variantCount.count >= config.submission.maxVariantsPerUserPerVideo) {
@@ -359,98 +353,6 @@ export async function submitLyrics(
 	await invalidateCache(env, submission.videoId)
 
 	return { id: result!.id, created: true }
-}
-
-export type EditResult =
-	| { ok: true; id: number }
-	| { ok: false; reason: "not_found" | "not_owner" | "cap_reached" }
-
-export async function editLyrics(
-	env: Env,
-	parentId: number,
-	editorUserId: number,
-	content: {
-		lyrics: string
-		format: "ttml" | "lrc" | "plain"
-		syncType: "richsync" | "linesync" | "plain"
-		language?: string
-	}
-): Promise<EditResult> {
-	const parent = await env.DB.prepare(
-		`SELECT id, submitter_id, video_id, song, artist, album, isrc, duration,
-		        committee_approved_at, deleted_at
-		 FROM lyrics WHERE id = ?`
-	)
-		.bind(parentId)
-		.first<{
-			submitter_id: number | null
-			video_id: string
-			song: string
-			artist: string
-			album: string | null
-			isrc: string | null
-			duration: number
-			committee_approved_at: number | null
-			deleted_at: number | null
-		}>()
-
-	if (!parent || parent.deleted_at !== null) return { ok: false, reason: "not_found" }
-	if (parent.submitter_id !== editorUserId) return { ok: false, reason: "not_owner" }
-
-	const supersede = parent.committee_approved_at === null
-
-	const outcome = await env.DB.transaction(async (tx) => {
-		const txEnv = { ...env, DB: tx }
-		const result = await submitLyrics(
-			txEnv,
-			{
-				videoId: parent.video_id,
-				song: parent.song,
-				artist: parent.artist,
-				album: parent.album ?? undefined,
-				isrc: parent.isrc ?? undefined,
-				duration: parent.duration,
-				lyrics: content.lyrics,
-				format: content.format,
-				syncType: content.syncType,
-				language: content.language,
-			},
-			editorUserId,
-			supersede ? { excludeLyricId: parentId } : {}
-		)
-
-		if (!result.created) return { ok: false as const, reason: "cap_reached" as const }
-
-		await tx.prepare("UPDATE lyrics SET parent_id = ? WHERE id = ?").bind(parentId, result.id).run()
-
-		await tx
-			.prepare(
-				`INSERT INTO lyrics_video_ids (lyrics_id, video_id)
-			 SELECT ?, video_id FROM lyrics_video_ids WHERE lyrics_id = ?
-			 ON CONFLICT DO NOTHING`
-			)
-			.bind(result.id, parentId)
-			.run()
-
-		if (supersede) {
-			await softDeleteLyrics(
-				txEnv,
-				parentId,
-				editorUserId,
-				"submitter",
-				"superseded by a newer edit",
-				false
-			)
-		}
-
-		return { ok: true as const, id: result.id }
-	})
-
-	if (!outcome.ok) return outcome
-
-	await invalidateCacheForLyric(env, outcome.id)
-
-	return outcome
 }
 
 export async function searchBySongArtist(
@@ -570,8 +472,7 @@ export async function softDeleteLyrics(
 	lyricsId: number,
 	actingUserId: number,
 	role: "submitter" | "admin",
-	reason: string | null = null,
-	penalise = true
+	reason: string | null = null
 ): Promise<SoftDeleteResult> {
 	const row = await env.DB.prepare(
 		`SELECT id, video_id, submitter_id, deleted_at,
@@ -596,7 +497,6 @@ export async function softDeleteLyrics(
 	}
 
 	const shouldPenalise =
-		penalise &&
 		!row.reputation_penalized &&
 		(role === "admin" || (role === "submitter" && row.vote_count >= 2 && row.effective_score < 0))
 
