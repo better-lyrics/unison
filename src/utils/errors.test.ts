@@ -21,6 +21,12 @@ describe("buildError", () => {
 		}
 	})
 
+	it("defines the lyric revision codes", () => {
+		expect(buildError(ErrorCode.NO_CHANGES).code).toBe("NO_CHANGES")
+		expect(buildError(ErrorCode.ALREADY_DECIDED).code).toBe("ALREADY_DECIDED")
+		expect(buildError(ErrorCode.STALE).code).toBe("STALE")
+	})
+
 	it("allows overriding the hint when context-specific guidance is useful", () => {
 		const result = buildError(ErrorCode.MISSING_QUERY, {
 			hint: "Provide 'q' for fuzzy search, or both 'song' and 'artist' for exact match.",
