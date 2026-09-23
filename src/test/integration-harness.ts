@@ -70,6 +70,7 @@ export async function openIntegrationDb(): Promise<IntegrationDb> {
 }
 
 export async function wipeRevisionData(db: IntegrationDb): Promise<void> {
+	await db.pool.query("DELETE FROM badge_awards")
 	await db.pool.query("DELETE FROM rejections")
 	await db.pool.query("DELETE FROM boosts")
 	await db.pool.query("DELETE FROM committee_members")
