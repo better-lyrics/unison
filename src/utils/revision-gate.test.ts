@@ -34,12 +34,15 @@ describe("decideOutcome", () => {
 	})
 
 	describe("invariants", () => {
-		it("applies the first matching rule: sealed, flagged, text, timing", () => {
+		it("applies the first matching rule: sealed, text, timing, flagged", () => {
 			const all = { sealed: true, jevFlagged: true, textDrift: 1, timingDrift: 1 }
 			expect(decideOutcome(all).reason).toBe("sealed")
-			expect(decideOutcome({ ...all, sealed: false }).reason).toBe("flagged")
-			expect(decideOutcome({ ...all, sealed: false, jevFlagged: false }).reason).toBe(
-				"large_text_drift"
+			expect(decideOutcome({ ...all, sealed: false }).reason).toBe("large_text_drift")
+			expect(decideOutcome({ ...all, sealed: false, textDrift: 0 }).reason).toBe(
+				"large_timing_drift"
+			)
+			expect(decideOutcome({ ...all, sealed: false, textDrift: 0, timingDrift: 0 }).reason).toBe(
+				"flagged"
 			)
 		})
 
