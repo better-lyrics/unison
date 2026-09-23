@@ -4,6 +4,7 @@ import { videoLinkRoutes } from "@/routes/video-links"
 import {
 	BOT_SECRET,
 	type IntegrationDb,
+	InterleavedDb,
 	describeIntegration,
 	openIntegrationDb,
 	seedCouncilMember,
@@ -297,6 +298,28 @@ describeIntegration("revision routes (integration)", () => {
 			})
 			expect([status, json.code]).toEqual([429, "RATE_LIMITED"])
 			expect(json.hint).toBe("Too many checks at once. Wait a moment and keep typing.")
+		})
+
+		it("returns 409 STALE when the lyric keeps changing while saving", async () => {
+			const sealed = () =>
+				db.pool.query("UPDATE lyrics SET committee_approved_at = 1700000000 WHERE id = $1", [
+					lyricId,
+				])
+			const unsealed = () =>
+				db.pool.query("UPDATE lyrics SET committee_approved_at = NULL WHERE id = $1", [lyricId])
+			await sealed()
+			const env = {
+				...db.env,
+				DB: new InterleavedDb(db.pool, { before: unsealed, after: sealed }),
+				JEV: { check: async () => ({ flagged: false, probability: 0.1 }) },
+			}
+			const { status, json } = await call("POST", `/lyrics/${lyricId}/revisions`, {
+				token: "owner-token",
+				body: { lyrics: swapWords(LRC, 1), format: "lrc", language: "en" },
+				env,
+			})
+			expect([status, json.code]).toEqual([409, "STALE"])
+			expect(json.hint).toBe("This lyric changed while saving. Try again.")
 		})
 
 		it("rejects a non-numeric id", async () => {

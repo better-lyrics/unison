@@ -1,6 +1,7 @@
 import type { JevCheckInput, JevGate } from "@/services/jev-gate"
 import {
 	type IntegrationDb,
+	InterleavedDb,
 	describeIntegration,
 	openIntegrationDb,
 	seedCouncilMember,
@@ -236,6 +237,72 @@ describeIntegration("lyric revisions pipeline (integration)", () => {
 				})
 				expect((await save(lrc(swapWords(LRC, 1)), env)).status).toBe("live")
 				await expectInvariants()
+			})
+		})
+
+		describe("state changes between the unlocked and locked passes", () => {
+			const seal = () =>
+				db.pool.query(
+					"UPDATE lyrics SET committee_approved_at = 1700000000, committee_approved_by = $2 WHERE id = $1",
+					[lyricId, owner]
+				)
+			const unseal = () =>
+				db.pool.query(
+					"UPDATE lyrics SET committee_approved_at = NULL, committee_approved_by = NULL WHERE id = $1",
+					[lyricId]
+				)
+			const once = (fn: () => Promise<unknown>) => {
+				let done = false
+				return async () => {
+					if (done) return
+					done = true
+					await fn()
+				}
+			}
+
+			it("regression: asks Jev before an edit goes live when the lyric is unsealed mid-save", async () => {
+				await seal()
+				const { calls, env } = recordingGate(async () => ({ flagged: true, probability: 0.91 }))
+				const interleaved = new InterleavedDb(db.pool, { before: once(unseal) })
+				const revision = await save(lrc(swapWords(LRC, 1)), { ...env, DB: interleaved })
+				expect(calls).toHaveLength(1)
+				expect(revision).toMatchObject({ status: "pending", pendingReason: "flagged" })
+				await expectInvariants()
+			})
+
+			it("regression: asks Jev before an edit goes live when an approve moves the anchor mid-save", async () => {
+				const council = await seedCouncilMember(db, "c".repeat(64))
+				const pending = await save(lrc(swapWords(LRC, 15)))
+				const { calls, env } = recordingGate(async () => ({ flagged: false, probability: 0.1 }))
+				const interleaved = new InterleavedDb(db.pool, {
+					before: once(async () => {
+						await approveRevision(db.env, lyricId, pending.id, council)
+					}),
+				})
+				const revision = await save(lrc(swapWords(LRC, 16)), { ...env, DB: interleaved })
+				expect(calls).toHaveLength(1)
+				expect(revision).toMatchObject({ status: "live", textDrift: expect.closeTo(1 / 98, 5) })
+				await expectInvariants()
+			})
+
+			it("gives up with stale when the state keeps changing under the save", async () => {
+				await seal()
+				const { calls, env } = recordingGate(async () => ({ flagged: false, probability: 0.1 }))
+				const interleaved = new InterleavedDb(db.pool, { before: unseal, after: seal })
+				expect(
+					await saveRevision({ ...env, DB: interleaved }, lyricId, owner, lrc(swapWords(LRC, 1)))
+				).toEqual({ ok: false, reason: "stale" })
+				expect(interleaved.transactions).toBe(3)
+				expect(calls).toHaveLength(0)
+				expect(await statuses()).toEqual([{ rev_no: 1, status: "live" }])
+			})
+
+			it("trusts the unlocked pass when Jev is disabled", async () => {
+				await seal()
+				const interleaved = new InterleavedDb(db.pool, { before: once(unseal) })
+				const revision = await save(lrc(swapWords(LRC, 1)), { ...db.env, DB: interleaved })
+				expect(revision.status).toBe("live")
+				expect(interleaved.transactions).toBe(1)
 			})
 		})
 

@@ -69,6 +69,33 @@ export async function openIntegrationDb(): Promise<IntegrationDb> {
 	return { pool, cache, env }
 }
 
+export interface TransactionHooks {
+	before?: () => Promise<unknown>
+	after?: () => Promise<unknown>
+}
+
+// Changes state between a save's unlocked pass and its locked transaction.
+export class InterleavedDb extends D1Compat {
+	transactions = 0
+
+	constructor(
+		pool: pg.Pool,
+		private readonly hooks: TransactionHooks
+	) {
+		super(pool)
+	}
+
+	override async transaction<T>(fn: (tx: D1Compat) => Promise<T>): Promise<T> {
+		this.transactions++
+		await this.hooks.before?.()
+		try {
+			return await super.transaction(fn)
+		} finally {
+			await this.hooks.after?.()
+		}
+	}
+}
+
 export async function wipeRevisionData(db: IntegrationDb): Promise<void> {
 	await db.pool.query("DELETE FROM badge_awards")
 	await db.pool.query("DELETE FROM rejections")

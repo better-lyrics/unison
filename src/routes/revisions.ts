@@ -23,6 +23,7 @@ import { Elysia, t } from "elysia"
 
 const EDIT_NOT_OWNER_HINT = "You can only edit lyrics you submitted yourself."
 const PREVIEW_THROTTLE_HINT = "Too many checks at once. Wait a moment and keep typing."
+const SAVE_STALE_HINT = "This lyric changed while saving. Try again."
 const DAILY_LIMIT_HINT =
 	"You've reached today's edit limit for this lyric or your account. Try again tomorrow."
 
@@ -56,6 +57,8 @@ function saveFailure(result: Exclude<SaveResult, { ok: true }>): Failure {
 			return { status: 429, body: buildError(ErrorCode.RATE_LIMITED, { hint: DAILY_LIMIT_HINT }) }
 		case "no_changes":
 			return { status: 409, body: buildError(ErrorCode.NO_CHANGES) }
+		case "stale":
+			return { status: 409, body: buildError(ErrorCode.STALE, { hint: SAVE_STALE_HINT }) }
 		case "invalid":
 			return {
 				status: 400,

@@ -27,6 +27,7 @@ export const config = {
 		jevModel: "jev-latest",
 		jevFlagThreshold: 0.8,
 		jevTimeoutMs: 3000,
+		staleSaveRetries: 2,
 		languages: new Set<string>([
 			"en",
 			"es",

@@ -90,7 +90,7 @@ type AccessFailure = { ok: false; reason: "not_found" | "not_owner" }
 export type SaveResult =
 	| { ok: true; revision: RevisionSummary }
 	| AccessFailure
-	| { ok: false; reason: "rate_limited" | "no_changes" }
+	| { ok: false; reason: "rate_limited" | "no_changes" | "stale" }
 	| { ok: false; reason: "invalid"; code: ErrorCode; hint?: string }
 
 export type DecisionResult =
@@ -98,7 +98,15 @@ export type DecisionResult =
 	| { ok: false; reason: "not_committee" | "not_found" | "already_decided" | "stale" }
 
 const NO_DRIFT: DriftResult = { text: 0, timing: 0, timingOffsetMs: 0 }
-const NOT_CHECKED: JevVerdict = { flagged: false, probability: null }
+type JevStep =
+	| { state: "disabled" }
+	| { state: "skipped" }
+	| { state: "checked"; verdict: JevVerdict }
+
+const JEV_DISABLED: JevStep = { state: "disabled" }
+const JEV_SKIPPED: JevStep = { state: "skipped" }
+
+class UncheckedLiveEdit extends Error {}
 const NOT_SAVABLE: GateOutcome = { goesLive: false, reason: null }
 const LANGUAGE_HINT = "Pick a language from the list."
 const ISRC_HINT = "An ISRC looks like USRC17607839."
@@ -213,7 +221,7 @@ async function assess(
 	input: RevisionInput,
 	lock: boolean,
 	revert: RevertSource | null,
-	jev: JevVerdict
+	jev: JevStep
 ): Promise<{ ok: true; assessment: Assessment } | AccessFailure> {
 	const initial = await loadLyricState(db, lyricsId, lock)
 	if (!initial || initial.deleted_at !== null) return { ok: false, reason: "not_found" }
@@ -290,7 +298,7 @@ async function assess(
 	const drift = measureDrift(anchorLines, comparable)
 	const outcome = decideOutcome({
 		sealed: lyric.committee_approved_at !== null,
-		jevFlagged: jev.flagged,
+		jevFlagged: jev.state === "checked" && jev.verdict.flagged,
 		textDrift: drift.text,
 		timingDrift: drift.timing,
 	})
@@ -304,7 +312,7 @@ async function assess(
 			candidate,
 			noChanges,
 			drift,
-			jevProbability: jev.probability,
+			jevProbability: jev.state === "checked" ? jev.verdict.probability : null,
 			outcome,
 			rateLimit,
 			anchorLines,
@@ -319,7 +327,7 @@ export async function previewRevision(
 	userId: number,
 	input: RevisionInput
 ): Promise<{ ok: true; preview: PreviewResult } | AccessFailure> {
-	const result = await assess(env.DB, lyricsId, userId, input, false, null, NOT_CHECKED)
+	const result = await assess(env.DB, lyricsId, userId, input, false, null, JEV_SKIPPED)
 	if (!result.ok) return result
 	const a = result.assessment
 	return {
@@ -343,6 +351,13 @@ export async function previewRevision(
 const hasRoom = (limit: RevisionRateLimit): boolean =>
 	limit.lyricRemaining > 0 && limit.userRemaining > 0
 
+const needsJev = (a: Assessment): boolean =>
+	a.candidate !== null &&
+	!a.noChanges &&
+	a.outcome.goesLive &&
+	hasRoom(a.rateLimit) &&
+	renderLinesForDiff(a.anchorLines) !== renderLinesForDiff(a.candidateLines)
+
 // Runs before the row lock so a slow TypeSafe call never holds it.
 async function checkWithJev(
 	env: Env,
@@ -350,24 +365,19 @@ async function checkWithJev(
 	userId: number,
 	input: RevisionInput,
 	revert: RevertSource | null
-): Promise<JevVerdict> {
+): Promise<JevStep> {
 	const gate = env.JEV ?? disabledJevGate
-	if (gate === disabledJevGate) return NOT_CHECKED
-	const result = await assess(env.DB, lyricsId, userId, input, false, revert, NOT_CHECKED)
-	if (!result.ok) return NOT_CHECKED
+	if (gate === disabledJevGate) return JEV_DISABLED
+	const result = await assess(env.DB, lyricsId, userId, input, false, revert, JEV_SKIPPED)
+	if (!result.ok || !needsJev(result.assessment)) return JEV_SKIPPED
 	const a = result.assessment
-	if (a.noChanges || !a.candidate || !a.outcome.goesLive || !hasRoom(a.rateLimit)) {
-		return NOT_CHECKED
-	}
-	if (renderLinesForDiff(a.anchorLines) === renderLinesForDiff(a.candidateLines)) {
-		return NOT_CHECKED
-	}
-	return runJevStep(gate, {
+	const verdict = await runJevStep(gate, {
 		lyricsId,
 		song: a.lyric.song,
 		artist: a.lyric.artist,
 		diff: unifiedDiff(a.anchorLines, a.candidateLines, { before: "anchor", after: "edit" }),
 	})
+	return { state: "checked", verdict }
 }
 
 async function commitRevision(
@@ -377,7 +387,26 @@ async function commitRevision(
 	input: RevisionInput,
 	revert: RevertSource | null
 ): Promise<SaveResult> {
-	const jev = await checkWithJev(env, lyricsId, userId, input, revert)
+	for (let attempt = 0; ; attempt++) {
+		const jev = await checkWithJev(env, lyricsId, userId, input, revert)
+		try {
+			return await commitAssessed(env, lyricsId, userId, input, revert, jev)
+		} catch (err) {
+			if (!(err instanceof UncheckedLiveEdit)) throw err
+			if (attempt >= config.revisions.staleSaveRetries) return { ok: false, reason: "stale" }
+			log.info("lyric changed while saving, checking the edit again", { lyricsId, attempt })
+		}
+	}
+}
+
+async function commitAssessed(
+	env: Env,
+	lyricsId: number,
+	userId: number,
+	input: RevisionInput,
+	revert: RevertSource | null,
+	jev: JevStep
+): Promise<SaveResult> {
 	const result = await env.DB.transaction(async (tx): Promise<SaveResult> => {
 		const assessed = await assess(tx, lyricsId, userId, input, true, revert, jev)
 		if (!assessed.ok) return assessed
@@ -394,6 +423,7 @@ async function commitRevision(
 			}
 		}
 		if (a.noChanges) return { ok: false, reason: "no_changes" }
+		if (jev.state === "skipped" && needsJev(a)) throw new UncheckedLiveEdit()
 
 		await supersedePending(tx, lyricsId)
 		if (a.outcome.goesLive) await retireLiveRevision(tx, lyricsId)
