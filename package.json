@@ -39,6 +39,7 @@
     "@elysiajs/cors": "^1.3.3",
     "@elysiajs/cron": "^1.3.3",
     "@elysiajs/node": "^1.3.3",
+    "diff": "^9.0.0",
     "eld": "^2.1.0",
     "elysia": "^1.3.3",
     "fast-xml-parser": "^5.5.5",
