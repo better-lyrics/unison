@@ -111,6 +111,8 @@ Chrome and Chromium-based browsers only. Firefox does not implement `externally_
 
 ## API
 
+[docs.betterlyrics.org/unison](https://docs.betterlyrics.org/unison) has a guide to reading lyrics and translating them, with examples in several languages. Submitting, voting and reporting are only documented below.
+
 ### Get lyrics
 
 ```
