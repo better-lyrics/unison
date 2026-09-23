@@ -1,5 +1,5 @@
 import { config } from "@/config"
-import { disabledJevGate } from "@/services/jev-gate"
+import { type JevGate, createTypesafeJevGate, disabledJevGate } from "@/services/jev-gate"
 import type { B2Config, Env } from "@/types"
 import { KVCompat, getRedis } from "./cache"
 import { D1Compat, getPool } from "./database"
@@ -66,6 +66,11 @@ function readDiscordOAuthConfig(): Env["DISCORD_OAUTH"] {
 	return { clientId, clientSecret, redirectUri }
 }
 
+export function readJevGate(): JevGate {
+	const apiKey = process.env.TYPESAFE_API_KEY?.trim()
+	return apiKey ? createTypesafeJevGate({ apiKey }) : disabledJevGate
+}
+
 export function createEnv(): Env {
 	const databaseUrl = process.env.DATABASE_URL
 	if (!databaseUrl) throw new Error("DATABASE_URL is required")
@@ -100,6 +105,6 @@ export function createEnv(): Env {
 		EXAM_DEV_ENABLED: readExamDevEnabled(),
 		EXAM_BASE_URL: process.env.EXAM_BASE_URL || "",
 		RAILWAY_PUBLIC_DOMAIN: process.env.RAILWAY_PUBLIC_DOMAIN || "",
-		JEV: disabledJevGate,
+		JEV: readJevGate(),
 	}
 }

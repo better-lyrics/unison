@@ -23,6 +23,10 @@ export const config = {
 		diffPreviewLines: 6,
 		pendingQueueLimit: 50,
 		preview: { maxRequests: 60, windowSeconds: 60 },
+		jevEndpoint: "https://api.typesafe.ai/v1/systemone",
+		jevModel: "jev-latest",
+		jevFlagThreshold: 0.8,
+		jevTimeoutMs: 3000,
 		languages: new Set<string>([
 			"en",
 			"es",
