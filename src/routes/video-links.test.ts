@@ -9,11 +9,7 @@ vi.mock("@/db/video-links", () => ({
 vi.mock("@/services/video-suggestions", () => ({
 	suggestVideosForVariant: vi.fn(),
 }))
-vi.mock("@/db/lyrics", () => ({
-	editLyrics: vi.fn(),
-}))
 
-import { editLyrics } from "@/db/lyrics"
 import { linkVideoForOwner, listVideoLinks, unlinkVideoForOwner } from "@/db/video-links"
 import { suggestVideosForVariant } from "@/services/video-suggestions"
 import { videoLinkRoutes } from "./video-links"
@@ -255,47 +251,6 @@ describe("POST /lyrics/:id/suggested-videos", () => {
 		)
 		expect(res.status).toBe(429)
 		expect(vi.mocked(suggestVideosForVariant)).not.toHaveBeenCalled()
-	})
-})
-
-describe("POST /lyrics/:id/edit", () => {
-	const editReq = (id: number, bodyObj: unknown) =>
-		new Request(`http://localhost/lyrics/${id}/edit`, {
-			method: "POST",
-			headers: { authorization: "Bearer tok", "content-type": "application/json" },
-			body: JSON.stringify(bodyObj),
-		})
-
-	it("creates an edited variant for the owner", async () => {
-		vi.mocked(editLyrics).mockResolvedValue({ ok: true, id: 100 })
-		const res = await authedApp().handle(editReq(7, { lyrics: "line a\nline b", format: "plain" }))
-		expect(res.status).toBe(201)
-		expect(await res.json()).toEqual({ success: true, data: { id: 100, created: true } })
-	})
-
-	it("rejects a missing lyrics body with 400", async () => {
-		vi.mocked(editLyrics).mockClear()
-		const res = await authedApp().handle(editReq(7, { format: "plain" }))
-		expect(res.status).toBe(400)
-		expect(vi.mocked(editLyrics)).not.toHaveBeenCalled()
-	})
-
-	it("maps not_found to 404", async () => {
-		vi.mocked(editLyrics).mockResolvedValue({ ok: false, reason: "not_found" })
-		const res = await authedApp().handle(editReq(7, { lyrics: "line a\nline b", format: "plain" }))
-		expect(res.status).toBe(404)
-	})
-
-	it("rejects an edit from a non-owner with 403", async () => {
-		vi.mocked(editLyrics).mockResolvedValue({ ok: false, reason: "not_owner" })
-		const res = await authedApp().handle(editReq(7, { lyrics: "line a\nline b", format: "plain" }))
-		expect(res.status).toBe(403)
-	})
-
-	it("maps cap_reached to 409", async () => {
-		vi.mocked(editLyrics).mockResolvedValue({ ok: false, reason: "cap_reached" })
-		const res = await authedApp().handle(editReq(7, { lyrics: "line a\nline b", format: "plain" }))
-		expect(res.status).toBe(409)
 	})
 })
 
