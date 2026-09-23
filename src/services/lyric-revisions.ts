@@ -13,6 +13,7 @@ import {
 	listPendingRevisionRows,
 	listRevisionSummaries,
 	loadLyricState,
+	lockRevisionAuthor,
 	recordReview,
 	retireLiveRevision,
 	revisionAuthor,
@@ -408,6 +409,7 @@ async function commitAssessed(
 	jev: JevStep
 ): Promise<SaveResult> {
 	const result = await env.DB.transaction(async (tx): Promise<SaveResult> => {
+		await lockRevisionAuthor(tx, userId)
 		const assessed = await assess(tx, lyricsId, userId, input, true, revert, jev)
 		if (!assessed.ok) return assessed
 		const a = assessed.assessment

@@ -612,6 +612,35 @@ describeIntegration("lyric revisions pipeline (integration)", () => {
 			})
 		})
 
+		it("regression: concurrent saves on several lyrics stop at exactly twenty for the user", async () => {
+			const history = await seedLyric(db, owner, { lyrics: LRC, format: "lrc", videoId: "history" })
+			await insertHistory(history, owner, 5, now())
+			for (let i = 0; i < 3; i++) {
+				const other = await seedLyric(db, owner, {
+					lyrics: LRC,
+					format: "lrc",
+					videoId: `full${i}`,
+				})
+				await insertHistory(other, owner, i < 2 ? 5 : 4, now())
+			}
+			const targets = [lyricId]
+			for (let i = 0; i < 4; i++) {
+				targets.push(
+					await seedLyric(db, owner, { lyrics: LRC, format: "lrc", videoId: `race${i}` })
+				)
+			}
+			const results = await Promise.all(
+				targets.map((id) => saveRevision(db.env, id, owner, lrc(swapWords(LRC, 1))))
+			)
+			expect(results.filter((r) => r.ok)).toHaveLength(1)
+			expect(results.filter((r) => !r.ok && r.reason === "rate_limited")).toHaveLength(4)
+			const { rows } = await db.pool.query(
+				"SELECT count(*)::int AS n FROM lyric_revisions WHERE author_id = $1 AND rev_no > 1",
+				[owner]
+			)
+			expect(rows[0].n).toBe(20)
+		})
+
 		it("counts a rolling window, so older revisions free up the slot", async () => {
 			await insertHistory(lyricId, owner, 5, now() - 24 * 60 * 60 - 1)
 			expect((await saveRevision(db.env, lyricId, owner, lrc(swapWords(LRC, 1)))).ok).toBe(true)

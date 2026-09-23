@@ -188,6 +188,14 @@ export async function getPreviouslyLiveRow(
 		.first<RevisionRow>()
 }
 
+// Serializes one author's saves across lyrics so the per-user daily limit holds.
+export async function lockRevisionAuthor(tx: D1Compat, authorId: number): Promise<void> {
+	await tx
+		.prepare("SELECT pg_advisory_xact_lock(hashtext(?))")
+		.bind(`lyric-revisions:author:${authorId}`)
+		.run()
+}
+
 export async function countRecentRevisions(
 	db: D1Compat,
 	lyricsId: number,
