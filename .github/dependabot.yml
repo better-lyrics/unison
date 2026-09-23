@@ -1,0 +1,12 @@
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: "/web"
+    schedule:
+      interval: daily
+    allow:
+      - dependency-name: "@braccato/*"
+    groups:
+      braccato:
+        patterns: ["@braccato/*"]
+        update-types: [minor, patch]
