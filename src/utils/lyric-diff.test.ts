@@ -146,7 +146,15 @@ describe("buildDiffRows with TTML head text", () => {
 			},
 			expect.objectContaining({ kind: "word" }),
 		])
-		expect(rows.at(-1)).toEqual({ kind: "gap", count: 12 })
+		expect(rows.at(-1)).toEqual({ kind: "gap", count: 12, section: "head" })
+	})
+
+	it("marks head gaps before and after the first changed head row", () => {
+		const rows = buildDiffRows(ttmlLines(SPANISH_TTML), ttmlLines(retranslate(10, "Es la gracia")))
+		const head = rows.slice(1)
+		expect(head[0]).toEqual({ kind: "gap", count: 9, section: "head" })
+		expect(head[3]).toMatchObject({ kind: "word", lineNo: 12 })
+		expect(head.at(-1)).toEqual({ kind: "gap", count: 3, section: "head" })
 	})
 
 	it("shows an added transliteration block as head add rows", () => {
@@ -221,6 +229,19 @@ describe("buildDiffRows with TTML head text", () => {
 	})
 
 	describe("regressions", () => {
+		it("regression: body gaps never carry a section", () => {
+			const after = retranslate(10, "Es la gracia").replace("dangers", "perils")
+			const rows = buildDiffRows(ttmlLines(SPANISH_TTML), ttmlLines(after))
+			const firstHead = rows.findIndex((row) => "head" in row || "section" in row)
+			const bodyGaps = rows.slice(0, firstHead).filter((row) => row.kind === "gap")
+			expect(bodyGaps.length).toBeGreaterThan(0)
+			for (const gap of bodyGaps) expect(gap).not.toHaveProperty("section")
+			expect(buildDiffRows(base(), edit(base(), 8, { text: "x" }))[0]).toEqual({
+				kind: "gap",
+				count: 6,
+			})
+		})
+
 		it("regression: body rows are the same as a body-only diff", () => {
 			const after = retranslate(1, "Que salvó a un alma como yo")
 				.replace("sweet", "soft")
@@ -234,9 +255,11 @@ describe("buildDiffRows with TTML head text", () => {
 				extractLines(after, "ttml")
 			)
 			expect(rows.slice(0, bodyOnly.length)).toEqual(bodyOnly)
-			expect(rows.slice(bodyOnly.length).every((row) => row.kind === "gap" || "head" in row)).toBe(
-				true
-			)
+			expect(
+				rows
+					.slice(bodyOnly.length)
+					.every((row) => (row.kind === "gap" ? row.section === "head" : "head" in row))
+			).toBe(true)
 		})
 	})
 

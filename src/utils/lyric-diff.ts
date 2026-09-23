@@ -29,7 +29,9 @@ function keptRow(before: LyricLine, after: LyricLine, lineNo: number): DiffRow {
 	return { kind: "same", lineNo, startMs: after.startMs, text: after.text, ...headOf(after) }
 }
 
-function collapseUnchanged(rows: DiffRow[], context: number): DiffRow[] {
+function collapseUnchanged(rows: DiffRow[], context: number, section?: "head"): DiffRow[] {
+	const gap = (count: number): DiffRow =>
+		section ? { kind: "gap", count, section } : { kind: "gap", count }
 	const changed = rows.map((row) => row.kind !== "same")
 	const nearChange = (index: number): boolean => {
 		for (let d = -context; d <= context; d++) {
@@ -41,14 +43,14 @@ function collapseUnchanged(rows: DiffRow[], context: number): DiffRow[] {
 	let hidden = 0
 	for (let index = 0; index < rows.length; index++) {
 		if (nearChange(index)) {
-			if (hidden > 0) out.push({ kind: "gap", count: hidden })
+			if (hidden > 0) out.push(gap(hidden))
 			hidden = 0
 			out.push(rows[index])
 		} else {
 			hidden++
 		}
 	}
-	if (hidden > 0) out.push({ kind: "gap", count: hidden })
+	if (hidden > 0) out.push(gap(hidden))
 	return out
 }
 
@@ -132,7 +134,7 @@ export function buildDiffRows(before: LyricLine[], after: LyricLine[]): DiffRow[
 	const body = collapseUnchanged(sectionRows(before.filter(isBody), after.filter(isBody)), context)
 	const head = sectionRows(before.filter(isHead), after.filter(isHead))
 	if (head.every((row) => row.kind === "same")) return body
-	return [...body, ...collapseUnchanged(head, context)]
+	return [...body, ...collapseUnchanged(head, context, "head")]
 }
 
 function stamp(ms: number | null): string {
