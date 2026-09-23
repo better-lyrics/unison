@@ -68,3 +68,7 @@ export function isCompressed(data: string): boolean {
 		return false
 	}
 }
+
+export async function decompressIfNeeded(data: string): Promise<string> {
+	return isCompressed(data) ? decompress(data) : data
+}
