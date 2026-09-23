@@ -36,6 +36,7 @@ import { lyricsRoutes } from "@/routes/lyrics"
 import { migrationRoutes } from "@/routes/migrations"
 import { requestRoutes } from "@/routes/requests"
 import { reviewQueueBotRoutes } from "@/routes/review-queue"
+import { revisionBotRoutes, revisionRoutes } from "@/routes/revisions"
 import { translateRoutes } from "@/routes/translate"
 import { userRoutes } from "@/routes/users"
 import { videoLinkRoutes } from "@/routes/video-links"
@@ -210,9 +211,11 @@ const app = new Elysia({ adapter: node() })
 	.use(feedRoutes(env))
 	.use(voteRoutes(env))
 	.use(videoLinkRoutes(env))
+	.use(revisionRoutes(env))
 	.use(voteBotRoutes(env))
 	.use(committeeBotRoutes(env))
 	.use(reviewQueueBotRoutes(env))
+	.use(revisionBotRoutes(env))
 	.use(examRoutes(env))
 	.use(requestRoutes(env))
 	.use(leaderboardRoutes(env))
