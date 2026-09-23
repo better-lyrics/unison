@@ -58,7 +58,7 @@ export async function backfillLanguage(env: Env): Promise<{ scanned: number; upd
 					       language_detector_version = ?,
 					       language_source = 'detector',
 					       language_detection_attempted_at = NOW()
-					   WHERE id = ?
+					   WHERE id = ? AND COALESCE(language_source, 'detector') <> 'submitter'
 					   RETURNING current_revision_id, language
 					 )
 					 UPDATE lyric_revisions r

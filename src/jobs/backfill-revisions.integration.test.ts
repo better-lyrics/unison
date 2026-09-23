@@ -1,3 +1,4 @@
+import { D1Compat } from "@/infra/database"
 import { backfillFormatDetection } from "@/jobs/backfill-format-detection"
 import { backfillLanguage } from "@/jobs/backfill-language"
 import { backfillSyncType } from "@/jobs/backfill-synctype"
@@ -10,6 +11,7 @@ import {
 	wipeRevisionData,
 } from "@/test/integration-harness"
 import { readRevisionFixture } from "@/test/lyric-fixtures"
+import type { Env } from "@/types"
 import { compress } from "@/utils/compression"
 import { sha256Hex } from "@/utils/hash"
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest"
@@ -71,6 +73,58 @@ describeIntegration("backfillRevisions (integration)", () => {
 			const good = await insertLegacyLyric(db, owner, { lyrics: await compress(LRC) })
 			expect(await backfillRevisions(db.env)).toEqual({ created: 1, failed: 1 })
 			expect(await liveRevision(good)).toBeDefined()
+		})
+	})
+
+	describe("regressions", () => {
+		it("regression: the language backfill never overwrites a language the owner set after its read", async () => {
+			const owner = await seedUser(db, "a".repeat(64))
+			const id = await insertLegacyLyric(db, owner, {
+				lyrics: await compress(PLAIN),
+				format: "plain",
+				syncType: "plain",
+				language: null,
+			})
+			await backfillRevisions(db.env)
+			const ownerSetsFrench = () =>
+				db.pool.query(
+					`WITH updated AS (
+						UPDATE lyrics SET language = 'fr', language_source = 'submitter'
+						WHERE id = $1 RETURNING current_revision_id
+					)
+					UPDATE lyric_revisions r SET language = 'fr' FROM updated
+					WHERE r.id = updated.current_revision_id`,
+					[id]
+				)
+
+			class OwnerEditsAfterRead extends D1Compat {
+				private fired = false
+
+				override prepare(sql: string) {
+					const statement = super.prepare(sql)
+					if (this.fired || !/^\s*SELECT id, lyrics, format FROM lyrics/.test(sql)) {
+						return statement
+					}
+					const read = statement.all.bind(statement)
+					statement.all = async <T>() => {
+						const rows = await read<T>()
+						this.fired = true
+						await ownerSetsFrench()
+						return rows
+					}
+					return statement
+				}
+			}
+
+			const env: Env = { ...db.env, DB: new OwnerEditsAfterRead(db.pool) }
+			await backfillLanguage(env)
+
+			const { rows } = await db.pool.query(
+				"SELECT language, language_source FROM lyrics WHERE id = $1",
+				[id]
+			)
+			expect(rows[0]).toEqual({ language: "fr", language_source: "submitter" })
+			expect((await liveRevision(id)).language).toBe("fr")
 		})
 	})
 
