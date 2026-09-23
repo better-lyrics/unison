@@ -57,5 +57,9 @@ export default defineConfig({
     // Vitest stubs every .css import to "" unless it is opted in, and that swallows the braccato
     // theme, which is a string handed to the element rather than a stylesheet the page loads.
     css: { include: [/braccato-theme\.css/] },
+    // useYouTubePlayer injects the YouTube iframe API script; loading it for real makes tests depend on the network.
+    environmentOptions: {
+      happyDOM: { settings: { disableJavaScriptFileLoading: true, handleDisabledFileLoadingAsSuccess: true } },
+    },
   },
 })
