@@ -153,9 +153,6 @@ CREATE TABLE IF NOT EXISTS lyrics_video_ids (
 );
 CREATE INDEX IF NOT EXISTS idx_lvi_video_id ON lyrics_video_ids(video_id);
 
--- Edit lineage: an edited variant links back to the row it was derived from.
-ALTER TABLE lyrics ADD COLUMN IF NOT EXISTS parent_id INTEGER REFERENCES lyrics(id);
-
 -- Soft delete for submissions: preserves vote/reputation signal
 ALTER TABLE lyrics ADD COLUMN IF NOT EXISTS deleted_at INTEGER;
 ALTER TABLE lyrics ADD COLUMN IF NOT EXISTS deleted_by_user_id INTEGER REFERENCES users(id);
@@ -433,3 +430,51 @@ CREATE TABLE IF NOT EXISTS song_artwork (
     artwork_url TEXT,
     checked_at BIGINT NOT NULL DEFAULT 0
 );
+
+-- ---- lyric revisions ----
+-- Edit history. The lyrics content columns cache the live revision.
+
+CREATE TABLE IF NOT EXISTS lyric_revisions (
+    id SERIAL PRIMARY KEY,
+    lyrics_id INTEGER NOT NULL REFERENCES lyrics(id) ON DELETE CASCADE,
+    rev_no INTEGER NOT NULL,
+    lyrics TEXT NOT NULL,
+    format TEXT NOT NULL CHECK (format IN ('ttml', 'lrc', 'plain')),
+    sync_type TEXT NOT NULL CHECK (sync_type IN ('richsync', 'linesync', 'plain')),
+    language TEXT,
+    isrc TEXT,
+    content_hash TEXT NOT NULL,
+    author_id INTEGER REFERENCES users(id),
+    status TEXT NOT NULL
+        CHECK (status IN ('live', 'past', 'pending', 'superseded', 'rejected', 'withdrawn')),
+    pending_reason TEXT
+        CHECK (pending_reason IN ('sealed', 'flagged', 'large_text_drift', 'large_timing_drift')),
+    text_drift DOUBLE PRECISION NOT NULL DEFAULT 0,
+    timing_drift DOUBLE PRECISION NOT NULL DEFAULT 0,
+    jev_probability DOUBLE PRECISION,
+    reverts_revision_id INTEGER REFERENCES lyric_revisions(id),
+    reviewed_by INTEGER REFERENCES users(id),
+    reviewed_at INTEGER,
+    review_note TEXT,
+    created_at INTEGER NOT NULL DEFAULT (EXTRACT(EPOCH FROM NOW())::INTEGER),
+    UNIQUE (lyrics_id, rev_no)
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_lyric_revisions_one_live
+    ON lyric_revisions(lyrics_id) WHERE status = 'live';
+CREATE UNIQUE INDEX IF NOT EXISTS idx_lyric_revisions_one_pending
+    ON lyric_revisions(lyrics_id) WHERE status = 'pending';
+CREATE INDEX IF NOT EXISTS idx_lyric_revisions_author_created
+    ON lyric_revisions(author_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_lyric_revisions_pending_created
+    ON lyric_revisions(created_at) WHERE status = 'pending';
+
+ALTER TABLE lyrics ADD COLUMN IF NOT EXISTS current_revision_id INTEGER
+    REFERENCES lyric_revisions(id) DEFERRABLE INITIALLY DEFERRED;
+ALTER TABLE lyrics ADD COLUMN IF NOT EXISTS anchor_revision_id INTEGER
+    REFERENCES lyric_revisions(id) DEFERRABLE INITIALLY DEFERRED;
+CREATE INDEX IF NOT EXISTS idx_lyrics_without_revision
+    ON lyrics(id) WHERE current_revision_id IS NULL;
+
+-- Edit-as-variant lineage, replaced by lyric_revisions. Prod had no rows using it.
+ALTER TABLE lyrics DROP COLUMN IF EXISTS parent_id;
