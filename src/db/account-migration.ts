@@ -24,6 +24,7 @@ export interface MigrationSnapshot {
 	request_fulfillments: unknown[]
 	discord_links: unknown[]
 	lyrics_requests: unknown[]
+	lyric_revisions?: unknown[]
 }
 
 export interface MigrationResult {
@@ -193,6 +194,11 @@ export async function runMigration(
 			lyrics_requests: await all(tx, "SELECT * FROM lyrics_requests WHERE requester_id = ANY(?)", [
 				keys,
 			]),
+			lyric_revisions: await all(
+				tx,
+				"SELECT id, author_id, reviewed_by FROM lyric_revisions WHERE author_id = ANY(?) OR reviewed_by = ANY(?)",
+				[ids, ids]
+			),
 		}
 
 		const votesRows = snapshot.votes as { user_id: number; lyrics_id: number }[]
@@ -256,6 +262,14 @@ export async function runMigration(
 				.run()
 			await tx
 				.prepare("UPDATE request_fulfillments SET submitter_id = ? WHERE submitter_id = ?")
+				.bind(oldId, newId)
+				.run()
+			await tx
+				.prepare("UPDATE lyric_revisions SET author_id = ? WHERE author_id = ?")
+				.bind(oldId, newId)
+				.run()
+			await tx
+				.prepare("UPDATE lyric_revisions SET reviewed_by = ? WHERE reviewed_by = ?")
 				.bind(oldId, newId)
 				.run()
 		}
@@ -503,6 +517,11 @@ interface SnapFulfillment {
 	id: number
 	submitter_id: number | null
 }
+interface SnapRevision {
+	id: number
+	author_id: number | null
+	reviewed_by: number | null
+}
 interface SnapRequest {
 	id: number
 	video_id: string
@@ -538,6 +557,8 @@ export async function restoreFromSnapshot(
 			(snap.request_fulfillments as SnapFulfillment[]).map((f) => f.id)
 		)
 		const snapRequestIds = new Set((snap.lyrics_requests as SnapRequest[]).map((r) => r.id))
+		const snapRevisions = snap.lyric_revisions as SnapRevision[] | undefined
+		const snapRevisionIds = new Set(snapRevisions?.map((r) => r.id))
 		const currentVotes = await all<{ id: number }>(
 			tx,
 			"SELECT id FROM votes WHERE user_id = ANY(?)",
@@ -563,12 +584,20 @@ export async function restoreFromSnapshot(
 			"SELECT id FROM lyrics_requests WHERE requester_id = ANY(?)",
 			[[oldKey, newKey]]
 		)
+		const currentRevisions = snapRevisions
+			? await all<{ id: number }>(
+					tx,
+					"SELECT id FROM lyric_revisions WHERE author_id = ANY(?) OR reviewed_by = ANY(?)",
+					[ids, ids]
+				)
+			: []
 		if (
 			currentVotes.some((v) => !snapVoteIds.has(v.id)) ||
 			currentReports.some((r) => !snapReportIds.has(r.id)) ||
 			currentLyrics.some((l) => !snapLyricsIds.has(l.id)) ||
 			currentFulfillments.some((f) => !snapFulfillmentIds.has(f.id)) ||
-			currentRequests.some((r) => !snapRequestIds.has(r.id))
+			currentRequests.some((r) => !snapRequestIds.has(r.id)) ||
+			currentRevisions.some((r) => !snapRevisionIds.has(r.id))
 		) {
 			return { error: "HAS_INTERIM_ACTIVITY" } as const
 		}
@@ -640,6 +669,13 @@ export async function restoreFromSnapshot(
 			await tx
 				.prepare("UPDATE lyrics SET submitter_id = ?, deleted_by_user_id = ? WHERE id = ?")
 				.bind(l.submitter_id, l.deleted_by_user_id, l.id)
+				.run()
+		}
+
+		for (const r of snapRevisions ?? []) {
+			await tx
+				.prepare("UPDATE lyric_revisions SET author_id = ?, reviewed_by = ? WHERE id = ?")
+				.bind(r.author_id, r.reviewed_by, r.id)
 				.run()
 		}
 
