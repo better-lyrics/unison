@@ -38,7 +38,7 @@ export async function runJevStep(gate: JevGate, input: JevCheckInput): Promise<J
 }
 
 const DIFF_LEGEND =
-	"`diff` is a unified diff of a lyric edit. Lines starting with - were removed, lines starting with + were added, and each line may start with a [mm:ss.cc] timestamp."
+	"`diff` is a unified diff of a lyric edit. Lines starting with - were removed, lines starting with + were added, and each line may start with a [mm:ss.cc] timestamp. A line labelled like [translation es L3] is text from the file header, here the Spanish translation of lyric line 3."
 
 const SIGNALS = {
 	offensive_insertion: {

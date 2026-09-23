@@ -1,5 +1,10 @@
-import { readRevisionFixture, shiftLrc } from "@/test/lyric-fixtures"
-import { type LyricLine, extractLines } from "@/utils/extract-text"
+import {
+	AMAZING_GRACE_SPANISH,
+	readRevisionFixture,
+	shiftLrc,
+	withTranslation,
+} from "@/test/lyric-fixtures"
+import { type LyricLine, extractComparableLines, extractLines } from "@/utils/extract-text"
 import { driftTtml, shiftTtml } from "@/utils/ttml-timing"
 import { describe, expect, it } from "vitest"
 import { measureDrift, normalizeLineText, textDrift, timingDrift, wordTokens } from "./lyric-drift"
@@ -254,5 +259,65 @@ describe("normalizeLineText and wordTokens", () => {
 			"how",
 			"sweet",
 		])
+	})
+})
+
+describe("measureDrift over TTML head text", () => {
+	const translated = (lines: string[]) =>
+		extractComparableLines(withTranslation(TTML, "es", lines), "ttml")
+	const retranslate = (count: number) =>
+		AMAZING_GRACE_SPANISH.map((line, index) => (index < count ? `${line} otra vez` : line))
+
+	it("counts a head-only translation change as text drift", () => {
+		const drift = measureDrift(translated(AMAZING_GRACE_SPANISH), translated(retranslate(1)))
+		expect(drift.text).toBeGreaterThan(0)
+		expect(drift.timing).toBe(0)
+	})
+
+	it("scales with how much head text changed", () => {
+		const anchor = translated(AMAZING_GRACE_SPANISH)
+		const small = measureDrift(anchor, translated(retranslate(1))).text
+		const large = measureDrift(anchor, translated(retranslate(8))).text
+		expect(large).toBeGreaterThan(small * 4)
+	})
+
+	it("puts a full head replacement over the text limit", () => {
+		const replaced = AMAZING_GRACE_SPANISH.map((_, index) => `Línea traducida número ${index}`)
+		const drift = measureDrift(translated(AMAZING_GRACE_SPANISH), translated(replaced))
+		expect(drift.text).toBeGreaterThan(0.15)
+	})
+
+	describe("edge cases", () => {
+		it("is 0 for an identical head", () => {
+			expect(
+				measureDrift(translated(AMAZING_GRACE_SPANISH), translated(AMAZING_GRACE_SPANISH))
+			).toEqual({ text: 0, timing: 0, timingOffsetMs: 0 })
+		})
+
+		it("is 0 when head text only changes whitespace", () => {
+			const spaced = AMAZING_GRACE_SPANISH.map((line) => `  ${line.replace(/ /g, "\n  ")} `)
+			expect(measureDrift(translated(AMAZING_GRACE_SPANISH), translated(spaced)).text).toBe(0)
+		})
+
+		it("is 0 when only the timing tags of head spans move", () => {
+			const romaji = (begin: string) =>
+				`<tt xmlns="http://www.w3.org/ns/ttml" xml:lang="ja"><head><metadata><iTunesMetadata xmlns="http://music.apple.com/lyric-ttml-internal"><transliterations><transliteration xml:lang="ja-Latn"><text for="L1"><span begin="${begin}" end="2.000">kimi</span> <span begin="2.000" end="2.600">no koe</span></text></transliteration></transliterations></iTunesMetadata></metadata></head><body><div><p begin="1.000" end="2.600">君の声</p></div></body></tt>`
+			const drift = measureDrift(
+				extractComparableLines(romaji("1.000"), "ttml"),
+				extractComparableLines(romaji("1.400"), "ttml")
+			)
+			expect(drift).toEqual({ text: 0, timing: 0, timingOffsetMs: 0 })
+		})
+	})
+
+	describe("invariants", () => {
+		it("leaves timing drift to the body lines", () => {
+			const anchor = translated(AMAZING_GRACE_SPANISH)
+			const shifted = extractComparableLines(
+				withTranslation(shiftTtml(TTML, 3), "es", AMAZING_GRACE_SPANISH),
+				"ttml"
+			)
+			expect(measureDrift(anchor, shifted)).toEqual({ text: 0, timing: 0, timingOffsetMs: 3000 })
+		})
 	})
 })

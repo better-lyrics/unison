@@ -44,3 +44,30 @@ export function shiftLrc(lrc: string, deltaForLine: (index: number) => number): 
 		}
 	)
 }
+
+export const AMAZING_GRACE_SPANISH = [
+	"¡Sublime gracia! Qué dulce el sonido",
+	"Que salvó a un desdichado como yo",
+	"Una vez estuve perdido, pero ahora me encontré",
+	"Estaba ciego, pero ahora veo",
+	"Fue la gracia la que enseñó a mi corazón a temer",
+	"Y la gracia alivió mis temores",
+	"Qué preciosa me pareció esa gracia",
+	"La hora en que creí por primera vez",
+	"A través de muchos peligros, trabajos y trampas",
+	"Ya he llegado",
+	"Es la gracia la que me ha traído a salvo hasta aquí",
+	"Y la gracia me llevará a casa",
+	"El Señor me ha prometido el bien",
+	"Su palabra asegura mi esperanza",
+	"Él será mi escudo y mi porción",
+	"Mientras dure la vida",
+]
+
+export function withTranslation(ttml: string, lang: string, lines: string[]): string {
+	const texts = lines.map((text, index) => `<text for="L${index + 1}">${text}</text>`).join("")
+	return ttml.replace(
+		"</iTunesMetadata>",
+		`<translations><translation type="replacement" xml:lang="${lang}">${texts}</translation></translations></iTunesMetadata>`
+	)
+}

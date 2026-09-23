@@ -99,6 +99,15 @@ describe("unifiedDiff and diffPreview", () => {
 		)
 	})
 
+	it("labels TTML head text with its key so a translation lines up with its line", () => {
+		const before = [{ key: "translation es L2", text: "Que salvó a un desdichado", startMs: null }]
+		const after = [{ key: "translation es L2", text: "Que salvó a un alma", startMs: null }]
+		expect(renderLinesForDiff(after)).toBe("[translation es L2] Que salvó a un alma\n")
+		expect(diffPreview(unifiedDiff(before, after, { before: "a", after: "b" }))).toBe(
+			"-[translation es L2] Que salvó a un desdichado\n+[translation es L2] Que salvó a un alma"
+		)
+	})
+
 	it("produces a unified diff whose preview lists only changed lines", () => {
 		const after = edit(base(), 1, { text: "That saved a soul like me!" })
 		const full = unifiedDiff(base(), after, { before: "rev 1", after: "rev 2" })

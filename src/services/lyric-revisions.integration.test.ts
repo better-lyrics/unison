@@ -8,7 +8,13 @@ import {
 	seedUser,
 	wipeRevisionData,
 } from "@/test/integration-harness"
-import { readRevisionFixture, shiftLrc, swapWords } from "@/test/lyric-fixtures"
+import {
+	AMAZING_GRACE_SPANISH,
+	readRevisionFixture,
+	shiftLrc,
+	swapWords,
+	withTranslation,
+} from "@/test/lyric-fixtures"
 import type { Env } from "@/types"
 import { decompress } from "@/utils/compression"
 import { sha256Hex } from "@/utils/hash"
@@ -273,6 +279,87 @@ describeIntegration("lyric revisions pipeline (integration)", () => {
 					ok: false,
 					reason: "no_changes",
 				})
+				expect(calls).toHaveLength(0)
+			})
+		})
+	})
+
+	describe("ttml head text", () => {
+		const SPANISH_TTML = withTranslation(TTML, "es", AMAZING_GRACE_SPANISH)
+		const retranslated = (edit: (line: string, index: number) => string) =>
+			withTranslation(TTML, "es", AMAZING_GRACE_SPANISH.map(edit))
+		let ttmlLyric: number
+
+		beforeEach(async () => {
+			ttmlLyric = await seedLyric(db, owner, {
+				lyrics: SPANISH_TTML,
+				format: "ttml",
+				videoId: "ttmlspanish",
+			})
+		})
+
+		function recordingGate(flagged: boolean) {
+			const calls: JevCheckInput[] = []
+			const gate: JevGate = {
+				check: async (input) => {
+					calls.push(input)
+					return { flagged, probability: flagged ? 0.9 : 0.1 }
+				},
+			}
+			return { calls, env: { ...db.env, JEV: gate } }
+		}
+
+		const saveTtml = async (lyrics: string, env: Env = db.env) => {
+			const result = await saveRevision(env, ttmlLyric, owner, { lyrics, format: "ttml" })
+			if (!result.ok) throw new Error(`save failed: ${result.reason}`)
+			return result.revision
+		}
+
+		it("measures a head-only translation change as text drift and asks Jev about it", async () => {
+			const { calls, env } = recordingGate(false)
+			const revision = await saveTtml(
+				retranslated((line, index) => (index === 1 ? "Que salvó a un alma como yo" : line)),
+				env
+			)
+			expect(revision.status).toBe("live")
+			expect(revision.textDrift).toBeGreaterThan(0)
+			expect(revision.timingDrift).toBe(0)
+			expect(calls).toHaveLength(1)
+			expect(calls[0].diff).toContain("-[translation es L2] Que salvó a un desdichado como yo")
+			expect(calls[0].diff).toContain("+[translation es L2] Que salvó a un alma como yo")
+		})
+
+		it("holds a head-only translation change Jev flags", async () => {
+			const { env } = recordingGate(true)
+			const revision = await saveTtml(
+				retranslated((line, index) => (index === 1 ? "Visita mi-tienda.example" : line)),
+				env
+			)
+			expect(revision).toMatchObject({ status: "pending", pendingReason: "flagged" })
+		})
+
+		it("holds a large head replacement for its text drift", async () => {
+			const revision = await saveTtml(retranslated((_, index) => `Línea traducida ${index}`))
+			expect(revision).toMatchObject({ status: "pending", pendingReason: "large_text_drift" })
+			expect(revision.textDrift).toBeGreaterThan(0.15)
+		})
+
+		it("shows head changes in the council card diff", async () => {
+			const pending = await saveTtml(retranslated((_, index) => `Línea traducida ${index}`))
+			const card = (await listPendingCards(db.env)).find((c) => c.revisionId === pending.id)
+			expect(card?.diffFull).toContain("-[translation es L1] ¡Sublime gracia! Qué dulce el sonido")
+			expect(card?.diffFull).toContain("+[translation es L1] Línea traducida 0")
+			expect(card?.diffPreview).toContain("[translation es L1]")
+		})
+
+		describe("edge cases", () => {
+			it("counts a whitespace-only head change as 0 drift and skips Jev", async () => {
+				const { calls, env } = recordingGate(true)
+				const revision = await saveTtml(
+					retranslated((line) => `  ${line}\n`),
+					env
+				)
+				expect(revision).toMatchObject({ status: "live", textDrift: 0, timingDrift: 0 })
 				expect(calls).toHaveLength(0)
 			})
 		})

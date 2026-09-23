@@ -109,7 +109,8 @@ function stamp(ms: number | null): string {
 }
 
 export function renderLinesForDiff(lines: LyricLine[]): string {
-	return lines.map((line) => `${stamp(line.startMs)}${line.text}\n`).join("")
+	const label = (line: LyricLine) => (line.key ? `[${line.key}] ` : "")
+	return lines.map((line) => `${stamp(line.startMs)}${label(line)}${line.text}\n`).join("")
 }
 
 export function unifiedDiff(

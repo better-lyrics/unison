@@ -40,7 +40,7 @@ import type {
 import { decompressIfNeeded } from "@/utils/compression"
 import { detectLanguage } from "@/utils/detect-language"
 import { ErrorCode, buildError } from "@/utils/errors"
-import { type LyricLine, extractLines } from "@/utils/extract-text"
+import { type LyricLine, extractComparableLines, extractLines } from "@/utils/extract-text"
 import { sha256Hex } from "@/utils/hash"
 import { normalizeIsrc } from "@/utils/isrc"
 import { buildDiffRows, diffPreview, renderLinesForDiff, unifiedDiff } from "@/utils/lyric-diff"
@@ -103,9 +103,13 @@ const NOT_SAVABLE: GateOutcome = { goesLive: false, reason: null }
 const LANGUAGE_HINT = "Pick a language from the list."
 const ISRC_HINT = "An ISRC looks like USRC17607839."
 
-async function revisionLines(stored: string, format: LyricsFormat): Promise<LyricLine[]> {
+async function revisionLines(
+	stored: string,
+	format: LyricsFormat,
+	read: typeof extractLines = extractComparableLines
+): Promise<LyricLine[]> {
 	try {
-		return extractLines(await decompressIfNeeded(stored), format)
+		return read(await decompressIfNeeded(stored), format)
 	} catch (err) {
 		log.warn("stored revision content could not be parsed", { error: (err as Error).message })
 		return []
@@ -230,7 +234,8 @@ async function assess(
 	const language = resolveLanguage(input.language, live.language, revert)
 	const isrc = resolveIsrc(input.isrc, live.isrc, revert)
 
-	const lines = validated.ok ? extractLines(input.lyrics, validated.format) : null
+	const comparable = validated.ok ? extractComparableLines(input.lyrics, validated.format) : null
+	const lines = comparable?.filter((line) => line.key === undefined) ?? null
 	const checks: FieldCheck[] = [
 		validated.ok
 			? {
@@ -250,7 +255,7 @@ async function assess(
 
 	const failure = firstFailure(validated, language, isrc)
 
-	if (!validated.ok || !lines || failure) {
+	if (!validated.ok || !lines || !comparable || failure) {
 		return {
 			ok: true,
 			assessment: {
@@ -282,7 +287,7 @@ async function assess(
 		candidate.isrc === live.isrc
 
 	const anchorLines = await revisionLines(anchor.lyrics, anchor.format)
-	const drift = measureDrift(anchorLines, lines)
+	const drift = measureDrift(anchorLines, comparable)
 	const outcome = decideOutcome({
 		sealed: lyric.committee_approved_at !== null,
 		jevFlagged: jev.flagged,
@@ -303,7 +308,7 @@ async function assess(
 			outcome,
 			rateLimit,
 			anchorLines,
-			candidateLines: lines,
+			candidateLines: comparable,
 		},
 	}
 }
@@ -510,8 +515,8 @@ export async function diffRevisions(
 	if (!base) return { rows: [], againstRevNo: null }
 	return {
 		rows: buildDiffRows(
-			await revisionLines(base.lyrics, base.format),
-			await revisionLines(target.lyrics, target.format)
+			await revisionLines(base.lyrics, base.format, extractLines),
+			await revisionLines(target.lyrics, target.format, extractLines)
 		),
 		againstRevNo: base.rev_no,
 	}
