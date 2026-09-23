@@ -1,5 +1,7 @@
 import { config } from "@/config"
 import { Logger } from "@/infra/logger"
+import type { LyricLine } from "@/utils/extract-text"
+import { renderLinesForDiff } from "@/utils/lyric-diff"
 
 const log = new Logger("jev")
 
@@ -8,6 +10,7 @@ export interface JevCheckInput {
 	song: string
 	artist: string
 	diff: string
+	lyrics: string
 }
 
 export interface JevVerdict {
@@ -37,24 +40,89 @@ export async function runJevStep(gate: JevGate, input: JevCheckInput): Promise<J
 	}
 }
 
-const DIFF_LEGEND =
-	"`diff` is a unified diff of a lyric edit. Lines starting with - were removed, lines starting with + were added, and each line may start with a [mm:ss.cc] timestamp. A line labelled like [translation es L3] is text from the file header, here the Spanish translation of lyric line 3."
+const EARLIER_OMITTED = "[... earlier lines omitted ...]\n"
+const LATER_OMITTED = "[... later lines omitted ...]\n"
+
+function changedRegion(current: string[], edited: string[]): { first: number; last: number } {
+	let first = 0
+	while (first < current.length && first < edited.length && current[first] === edited[first]) {
+		first++
+	}
+	let fromEnd = 0
+	while (
+		fromEnd < current.length - first &&
+		fromEnd < edited.length - first &&
+		current[current.length - 1 - fromEnd] === edited[edited.length - 1 - fromEnd]
+	) {
+		fromEnd++
+	}
+	const clamp = (i: number) => Math.min(Math.max(i, 0), current.length - 1)
+	return { first: clamp(first), last: clamp(Math.max(first, current.length - 1 - fromEnd)) }
+}
+
+export function jevLyricContext(
+	current: LyricLine[],
+	edited: LyricLine[],
+	maxChars: number = config.revisions.jevLyricContextChars
+): string {
+	const rows = current.map((line) => renderLinesForDiff([line]))
+	const whole = rows.join("")
+	if (whole.length <= maxChars) return whole
+
+	const { first, last } = changedRegion(
+		rows,
+		edited.map((line) => renderLinesForDiff([line]))
+	)
+	let budget = maxChars - EARLIER_OMITTED.length - LATER_OMITTED.length
+	let lo = first
+	let hi = first - 1
+	const take = (i: number) => {
+		if (i < 0 || i >= rows.length || rows[i].length > budget) return false
+		budget -= rows[i].length
+		return true
+	}
+	while (hi < last && take(hi + 1)) hi++
+	if (hi === last) {
+		let grew = true
+		while (grew) {
+			grew = false
+			if (take(hi + 1)) {
+				hi++
+				grew = true
+			}
+			if (take(lo - 1)) {
+				lo--
+				grew = true
+			}
+		}
+	}
+	return [
+		lo > 0 ? EARLIER_OMITTED : "",
+		...rows.slice(lo, hi + 1),
+		hi < rows.length - 1 ? LATER_OMITTED : "",
+	].join("")
+}
+
+const LEGEND =
+	"`lyrics` is the current text of `song` by `artist` before this edit, one lyric line per row, and `diff` is a unified diff of the edit against it. Lines starting with - in `diff` were removed and lines starting with + were added. Any row may start with a [mm:ss.cc] timestamp. A row labelled like [translation es L3] is text from the file header, here the Spanish translation of lyric line 3. When a song is long, `lyrics` shows only the part around the edit and marks the omitted parts."
+
+const MASKING =
+	'Replacing a masked or censored word (letters hidden by asterisks or dashes, "[bleep]", or partial masking like f*** or sh*t) with the full word, or masking a full word the other way, is a legitimate correction.'
 
 const SIGNALS = {
 	offensive_insertion: {
 		type: "noul",
 		instructions:
-			"Do the added lines in `diff` insert offensive, hateful, harassing, or sexually explicit text that is not part of the lyrics of `song` by `artist`?",
+			"Judged against the full `lyrics`, do the added lines in `diff` insert hateful, harassing, or sexually explicit text that clearly does not fit the rest of this song, meaning its tone, subject, and vocabulary?",
 		criteria: {
-			true: "The edit adds slurs, hate, harassment, or explicit content that the song itself does not contain.",
-			false:
-				"The edit adds no such text, or the words were already present in the removed lines because the song contains them.",
+			true: "The edit adds a slur or harassment aimed at real people or groups that is not already in `lyrics` in full or masked form, even if the song is explicit, or it adds hateful or sexually explicit text to lyrics whose tone, subject, and vocabulary give no reason for it.",
+			false: `The added text fits the song. Explicit or profane language consistent with the existing \`lyrics\` is legitimate, including a misheard word corrected to a profane one that suits the song. ${MASKING}`,
 		},
 	},
 	unrelated_content: {
 		type: "noul",
 		instructions:
-			"Do the added lines in `diff` insert content unrelated to `song` by `artist`, such as spam, links, advertisements, self-promotion, or lyrics from a different song?",
+			"Judged against the full `lyrics`, do the added lines in `diff` insert content unrelated to `song` by `artist`, such as spam, links, advertisements, self-promotion, or lyrics from a different song?",
 		criteria: {
 			true: "The edit adds text that does not belong in these lyrics: spam, a URL, an ad, a shout-out, or another song's lyrics.",
 			false: "Everything the edit adds plausibly belongs to the lyrics of this song.",
@@ -63,17 +131,16 @@ const SIGNALS = {
 	deliberate_corruption: {
 		type: "noul",
 		instructions:
-			"Does `diff` deliberately corrupt the lyrics with garbled words, keyboard mashing, nonsense substitutions, or joke rewrites?",
+			"Judged against the full `lyrics`, does `diff` deliberately corrupt the lyrics with garbled words, keyboard mashing, nonsense substitutions, or joke rewrites?",
 		criteria: {
 			true: "The edit makes the lyrics wrong on purpose, replacing real words with nonsense, gibberish, or jokes.",
-			false:
-				"The edit looks like a good-faith correction: fixing typos, misheard words, punctuation, capitalization, line breaks, or timing.",
+			false: `The edit looks like a good-faith correction: fixing typos, misheard words, slang or dialect spellings that match \`lyrics\`, punctuation, capitalization, line breaks, or timing. ${MASKING}`,
 		},
 	},
 	section_removal: {
 		type: "noul",
 		instructions:
-			"Does `diff` remove large sung sections of the lyrics, such as whole verses or choruses, without replacing them?",
+			"Judged against the full `lyrics`, does `diff` remove large sung sections, such as whole verses or choruses, without replacing them?",
 		criteria: {
 			true: "Several consecutive sung lines are deleted and nothing equivalent is added in their place.",
 			false:
@@ -112,8 +179,9 @@ export function createTypesafeJevGate(options: TypesafeJevOptions): JevGate {
 					state: {
 						song: input.song,
 						artist: input.artist,
+						lyrics: input.lyrics,
 						diff: input.diff,
-						diff_legend: DIFF_LEGEND,
+						legend: LEGEND,
 					},
 					model: config.revisions.jevModel,
 					questions: SIGNALS,

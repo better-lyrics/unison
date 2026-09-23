@@ -25,7 +25,7 @@ import {
 import { invalidateCacheForLyric } from "@/db/lyrics"
 import type { D1Compat } from "@/infra/database"
 import { Logger } from "@/infra/logger"
-import { type JevVerdict, disabledJevGate, runJevStep } from "@/services/jev-gate"
+import { type JevVerdict, disabledJevGate, jevLyricContext, runJevStep } from "@/services/jev-gate"
 import type {
 	Env,
 	FieldCheck,
@@ -373,6 +373,7 @@ async function checkWithJev(
 		song: a.lyric.song,
 		artist: a.lyric.artist,
 		diff: unifiedDiff(a.anchorLines, a.candidateLines, { before: "anchor", after: "edit" }),
+		lyrics: jevLyricContext(a.anchorLines, a.candidateLines),
 	})
 	return { state: "checked", verdict }
 }

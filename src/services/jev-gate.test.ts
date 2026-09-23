@@ -1,11 +1,45 @@
+import { config } from "@/config"
+import { AMAZING_GRACE_SPANISH, readRevisionFixture, withTranslation } from "@/test/lyric-fixtures"
+import { type LyricLine, extractComparableLines } from "@/utils/extract-text"
+import { renderLinesForDiff } from "@/utils/lyric-diff"
 import { describe, expect, it } from "vitest"
-import { type JevGate, createTypesafeJevGate, disabledJevGate, runJevStep } from "./jev-gate"
+import {
+	type JevGate,
+	createTypesafeJevGate,
+	disabledJevGate,
+	jevLyricContext,
+	runJevStep,
+} from "./jev-gate"
+
+const LRC = readRevisionFixture("amazing-grace.lrc")
+const SPANISH_TTML = withTranslation(
+	readRevisionFixture("amazing-grace.ttml"),
+	"es",
+	AMAZING_GRACE_SPANISH
+)
+const lrcLines = () => extractComparableLines(LRC, "lrc")
+const ttmlLines = () => extractComparableLines(SPANISH_TTML, "ttml")
+
+function edit(lines: LyricLine[], index: number, text: string): LyricLine[] {
+	return lines.map((line, i) => (i === index ? { ...line, text } : line))
+}
+
+function longSong(verses: number): LyricLine[] {
+	return Array.from({ length: verses }, (_, v) =>
+		lrcLines().map((line) => ({
+			...line,
+			startMs: line.startMs === null ? null : line.startMs + v * 120_000,
+			text: `${line.text} (verse ${v + 1})`,
+		}))
+	).flat()
+}
 
 const input = {
 	lyricsId: 7,
 	song: "Amazing Grace",
 	artist: "Traditional",
 	diff: "-[00:12.00] Amazing grace! How sweet the sound\n+[00:12.00] Amazing grace! How soft the sound",
+	lyrics: renderLinesForDiff(lrcLines()),
 }
 
 describe("runJevStep", () => {
@@ -34,7 +68,7 @@ interface CapturedRequest {
 	url: string
 	init: RequestInit
 	body: {
-		state: { song: string; artist: string; diff: string }
+		state: { song: string; artist: string; diff: string; lyrics: string; legend: string }
 		model: string
 		questions: Record<string, { type: string; instructions: unknown; criteria?: unknown }>
 	}
@@ -151,6 +185,53 @@ describe("createTypesafeJevGate", () => {
 		})
 	})
 
+	it("sends the full lyrics as state and explains every field in the legend", async () => {
+		const { requests, fetchImpl } = fakeTypesafe(answering([0, 0, 0, 0]))
+		await createTypesafeJevGate({ apiKey: "k", fetch: fetchImpl }).check(input)
+		const { state } = requests[0].body
+		expect(state.lyrics).toBe(input.lyrics)
+		expect(state.lyrics).toContain("Amazing grace! How sweet the sound")
+		for (const field of ["`lyrics`", "`diff`", "[translation es L3]"]) {
+			expect(state.legend).toContain(field)
+		}
+	})
+
+	it("judges offensive insertions by fit with the song, not by explicitness", async () => {
+		const { requests, fetchImpl } = fakeTypesafe(answering([0, 0, 0, 0]))
+		await createTypesafeJevGate({ apiKey: "k", fetch: fetchImpl }).check(input)
+		const question = requests[0].body.questions.offensive_insertion
+		const text = JSON.stringify(question)
+		expect(String(question.instructions)).toContain("`lyrics`")
+		expect(String(question.instructions)).toMatch(/does not fit/)
+		expect(text).toMatch(/tone, subject/)
+		expect(text).toMatch(/[Ee]xplicit or profane language consistent with the existing/)
+		for (const mask of ["asterisks", "dashes", "[bleep]", "f***", "sh*t"]) {
+			expect(text).toContain(mask)
+		}
+		expect(text).toMatch(/masking a full word/)
+		expect(text).toMatch(/real people or groups/)
+	})
+
+	it("judges every signal against the full lyrics", async () => {
+		const { requests, fetchImpl } = fakeTypesafe(answering([0, 0, 0, 0]))
+		await createTypesafeJevGate({ apiKey: "k", fetch: fetchImpl }).check(input)
+		for (const question of Object.values(requests[0].body.questions)) {
+			expect(String(question.instructions)).toContain("`lyrics`")
+		}
+	})
+
+	describe("regressions", () => {
+		it("regression: still sends the diff, song, and artist beside the lyrics", async () => {
+			const { requests, fetchImpl } = fakeTypesafe(answering([0, 0, 0, 0]))
+			await createTypesafeJevGate({ apiKey: "k", fetch: fetchImpl }).check(input)
+			expect(requests[0].body.state).toMatchObject({
+				song: input.song,
+				artist: input.artist,
+				diff: input.diff,
+			})
+		})
+	})
+
 	describe("invariants", () => {
 		it("asks only yes or no questions, each with both criteria", async () => {
 			const { requests, fetchImpl } = fakeTypesafe(answering([0, 0, 0, 0]))
@@ -159,6 +240,116 @@ describe("createTypesafeJevGate", () => {
 				expect(question.type).toBe("noul")
 				expect(question.criteria).toEqual({ true: expect.any(String), false: expect.any(String) })
 			}
+		})
+	})
+})
+
+describe("jevLyricContext", () => {
+	it("returns the whole lyric, body then labelled head, when it fits", () => {
+		const live = ttmlLines()
+		const context = jevLyricContext(live, edit(live, 2, "Changed"))
+		expect(context).toBe(renderLinesForDiff(live))
+		expect(context).toContain("[translation es L3] ")
+		expect(context.indexOf("[translation es")).toBeGreaterThan(
+			context.indexOf("Amazing grace! How sweet the sound")
+		)
+	})
+
+	it("shows the current text of a changed line, not the edited text", () => {
+		const live = lrcLines()
+		const context = jevLyricContext(live, edit(live, 3, "Something else entirely"))
+		expect(context).toContain(live[3].text)
+		expect(context).not.toContain("Something else entirely")
+	})
+
+	it("trims a long lyric around the changed region and marks both cuts", () => {
+		const live = longSong(20)
+		const changed = Math.floor(live.length / 2)
+		const context = jevLyricContext(live, edit(live, changed, "x"), 2000)
+		expect(context.length).toBeLessThanOrEqual(2000)
+		expect(context).toContain(renderLinesForDiff([live[changed]]))
+		expect(context).toContain(renderLinesForDiff(live.slice(changed - 5, changed + 6)))
+		expect(context.startsWith("[... earlier lines omitted ...]\n")).toBe(true)
+		expect(context.endsWith("[... later lines omitted ...]\n")).toBe(true)
+	})
+
+	it("defaults to the configured cap", () => {
+		const live = longSong(200)
+		expect(renderLinesForDiff(live).length).toBeGreaterThan(config.revisions.jevLyricContextChars)
+		const context = jevLyricContext(live, edit(live, 10, "x"))
+		expect(context.length).toBeLessThanOrEqual(config.revisions.jevLyricContextChars)
+		expect(context.length).toBeGreaterThan(config.revisions.jevLyricContextChars * 0.9)
+	})
+
+	describe("edge cases", () => {
+		it("keeps the start of the lyric uncut when the change is on the first line", () => {
+			const live = longSong(20)
+			const context = jevLyricContext(live, edit(live, 0, "x"), 2000)
+			expect(context.startsWith(renderLinesForDiff(live.slice(0, 3)))).toBe(true)
+			expect(context.endsWith("[... later lines omitted ...]\n")).toBe(true)
+		})
+
+		it("keeps the end of the lyric uncut when lines are appended", () => {
+			const live = longSong(20)
+			const context = jevLyricContext(live, [...live, { text: "Encore", startMs: null }], 2000)
+			expect(context.endsWith(renderLinesForDiff(live.slice(-3)))).toBe(true)
+			expect(context.startsWith("[... earlier lines omitted ...]\n")).toBe(true)
+		})
+
+		it("centres on a changed head line", () => {
+			const live = [...longSong(20), ...ttmlLines().filter((line) => line.head)]
+			const headIndex = live.findIndex((line) => line.head?.line === 3)
+			const context = jevLyricContext(live, edit(live, headIndex, "Otra cosa"), 2000)
+			expect(context).toContain("[translation es L3] ")
+			expect(context.length).toBeLessThanOrEqual(2000)
+		})
+
+		it("starts at the first changed line when the changed region alone exceeds the cap", () => {
+			const live = longSong(20)
+			const edited = live.map((line) => ({ ...line, text: `${line.text}!` }))
+			const context = jevLyricContext(live, edited, 2000)
+			expect(context.startsWith(renderLinesForDiff(live.slice(0, 3)))).toBe(true)
+			expect(context.length).toBeLessThanOrEqual(2000)
+		})
+
+		it("returns an empty context for an empty lyric", () => {
+			expect(jevLyricContext([], [{ text: "New", startMs: null }])).toBe("")
+		})
+
+		it("keeps unicode lines intact", () => {
+			const live = [{ text: "愛してる 🎵", startMs: 1000 }, ...lrcLines()]
+			expect(jevLyricContext(live, edit(live, 1, "x"))).toContain("愛してる 🎵")
+		})
+	})
+
+	describe("invariants", () => {
+		it("never cuts a line in half", () => {
+			const live = longSong(20)
+			const rendered = new Set(live.map((line) => renderLinesForDiff([line])))
+			const context = jevLyricContext(live, edit(live, 40, "x"), 1500)
+			for (const row of context.split("\n").slice(0, -1)) {
+				if (row.startsWith("[... ")) continue
+				expect(rendered.has(`${row}\n`)).toBe(true)
+			}
+		})
+
+		it("keeps lines in their original order", () => {
+			const live = longSong(20)
+			const context = jevLyricContext(live, edit(live, 40, "x"), 1500)
+			const kept = context.split("\n").filter((row) => row && !row.startsWith("[... "))
+			const positions = kept.map((row) =>
+				live.findIndex((line) => renderLinesForDiff([line]) === `${row}\n`)
+			)
+			expect(positions).toEqual([...positions].sort((a, b) => a - b))
+			expect(positions.at(-1)! - positions[0]).toBe(positions.length - 1)
+		})
+
+		it("does not mutate its inputs", () => {
+			const live = lrcLines()
+			const edited = edit(live, 1, "x")
+			const snapshot = JSON.stringify([live, edited])
+			jevLyricContext(live, edited, 200)
+			expect(JSON.stringify([live, edited])).toBe(snapshot)
 		})
 	})
 })

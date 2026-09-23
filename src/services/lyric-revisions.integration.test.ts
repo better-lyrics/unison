@@ -394,6 +394,9 @@ describeIntegration("lyric revisions pipeline (integration)", () => {
 			expect(calls).toHaveLength(1)
 			expect(calls[0].diff).toContain("-[translation es L2] Que salvó a un desdichado como yo")
 			expect(calls[0].diff).toContain("+[translation es L2] Que salvó a un alma como yo")
+			expect(calls[0].lyrics).toContain("Amazing grace! How sweet the sound")
+			expect(calls[0].lyrics).toContain("[translation es L2] Que salvó a un desdichado como yo")
+			expect(calls[0].lyrics).not.toContain("Que salvó a un alma como yo")
 		})
 
 		it("holds a head-only translation change Jev flags", async () => {
