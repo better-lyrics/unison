@@ -15,7 +15,7 @@
   },
   "dependencies": {
     "@braccato/core": "^1.10.0",
-    "@braccato/parsers": "^0.2.1",
+    "@braccato/parsers": "^0.2.3",
     "@dicebear/collection": "^9.2.2",
     "@dicebear/core": "^9.2.2",
     "@floating-ui/react": "^0.27.20",
