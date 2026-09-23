@@ -57,6 +57,9 @@ export const ErrorCode = {
 	BOOST_ALREADY_ACTIVE: "BOOST_ALREADY_ACTIVE",
 	BOOST_NOT_OWNER: "BOOST_NOT_OWNER",
 	REJECT_ALREADY_ACTIVE: "REJECT_ALREADY_ACTIVE",
+	NO_CHANGES: "NO_CHANGES",
+	ALREADY_DECIDED: "ALREADY_DECIDED",
+	STALE: "STALE",
 	EXAM_TOKEN_INVALID: "EXAM_TOKEN_INVALID",
 	EXAM_TOKEN_EXPIRED: "EXAM_TOKEN_EXPIRED",
 	EXAM_ALREADY_SUBMITTED: "EXAM_ALREADY_SUBMITTED",
@@ -285,6 +288,18 @@ const TEMPLATES: Record<ErrorCode, Template> = {
 	REJECT_ALREADY_ACTIVE: {
 		error: "Already rejected",
 		hint: "This lyric already has an active council rejection.",
+	},
+	NO_CHANGES: {
+		error: "No changes",
+		hint: "This matches the live version. Change the lyrics, language, or ISRC before saving.",
+	},
+	ALREADY_DECIDED: {
+		error: "Already decided",
+		hint: "Another council member already approved or rejected this revision.",
+	},
+	STALE: {
+		error: "Revision out of date",
+		hint: "The owner replaced or withdrew this revision. Refresh the queue.",
 	},
 	EXAM_TOKEN_INVALID: {
 		error: "Invalid exam link",

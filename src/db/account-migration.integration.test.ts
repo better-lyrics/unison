@@ -3,6 +3,7 @@ import pg from "pg"
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest"
 import { D1Compat } from "@/infra/database"
 import type { Env } from "@/types"
+import { ensureBaseRevision } from "./lyric-revisions"
 import {
 	computeMigrationPlan,
 	createPreviewAudit,
@@ -510,5 +511,91 @@ describeIntegration("account migration (integration)", () => {
 		expect(
 			await num("SELECT count(*)::int n FROM lyrics_requests WHERE requester_id = $1", [NEW_KEY])
 		).toBe(1)
+	})
+
+	describe("lyric revisions", () => {
+		async function seedIdentities(): Promise<{ oldId: number; newId: number }> {
+			await pool.query("INSERT INTO public_keys (key_id, public_key) VALUES ($1, 'x'), ($2, 'y')", [
+				OLD_KEY,
+				NEW_KEY,
+			])
+			const oldUser = await one<{ id: number }>(
+				"INSERT INTO users (key_id) VALUES ($1) RETURNING id",
+				[OLD_KEY]
+			)
+			const newUser = await one<{ id: number }>(
+				"INSERT INTO users (key_id) VALUES ($1) RETURNING id",
+				[NEW_KEY]
+			)
+			return { oldId: oldUser.id, newId: newUser.id }
+		}
+
+		async function migrate(sessionId: string): Promise<number> {
+			const plan = await computeMigrationPlan(env, OLD_KEY, NEW_KEY)
+			if ("error" in plan) throw new Error(plan.error)
+			const auditId = await createPreviewAudit(env, {
+				sessionId,
+				discordId: "disc-1",
+				oldKey: OLD_KEY,
+				newKey: NEW_KEY,
+				counts: plan.counts,
+			})
+			const result = await runMigration(env, {
+				oldKey: OLD_KEY,
+				newKey: NEW_KEY,
+				migrationId: auditId,
+			})
+			if ("error" in result) throw new Error(result.error)
+			return auditId
+		}
+
+		const revisionOf = (lyricsId: number) =>
+			one<{ author_id: number | null; reviewed_by: number | null }>(
+				"SELECT author_id, reviewed_by FROM lyric_revisions WHERE lyrics_id = $1 AND rev_no = 1",
+				[lyricsId]
+			)
+
+		it("regression: merging an identity that authored or reviewed revisions carries them to the survivor", async () => {
+			const { oldId, newId } = await seedIdentities()
+			const authored = await insertLyric(newId, "vidRevA")
+			const reviewed = await insertLyric(oldId, "vidRevB")
+			await ensureBaseRevision(env.DB, authored)
+			await ensureBaseRevision(env.DB, reviewed)
+			await pool.query("UPDATE lyric_revisions SET reviewed_by = $1 WHERE lyrics_id = $2", [
+				newId,
+				reviewed,
+			])
+
+			await migrate("sess-revisions")
+
+			expect(await revisionOf(authored)).toEqual({ author_id: oldId, reviewed_by: null })
+			expect(await revisionOf(reviewed)).toEqual({ author_id: oldId, reviewed_by: oldId })
+			expect(await num("SELECT count(*)::int n FROM users WHERE id = $1", [newId])).toBe(0)
+		})
+
+		it("restores revision authorship on undo", async () => {
+			const { oldId, newId } = await seedIdentities()
+			const authored = await insertLyric(newId, "vidRevA")
+			await ensureBaseRevision(env.DB, authored)
+
+			const auditId = await migrate("sess-revisions-undo")
+			expect(await restoreFromSnapshot(env, auditId)).toEqual({ restored: true })
+
+			expect(await revisionOf(authored)).toEqual({ author_id: newId, reviewed_by: null })
+			expect(await num("SELECT count(*)::int n FROM users WHERE id = $1", [oldId])).toBe(1)
+		})
+
+		it("refuses to restore over a revision saved after commit", async () => {
+			await seedIdentities()
+			const auditId = await migrate("sess-revisions-interim")
+			const survivor = (
+				await one<{ id: number }>("SELECT id FROM users WHERE key_id = $1", [NEW_KEY])
+			).id
+			const lyric = await insertLyric(survivor, "vidRevC")
+			await ensureBaseRevision(env.DB, lyric)
+			await pool.query("UPDATE lyrics SET submitter_id = NULL WHERE id = $1", [lyric])
+
+			expect(await restoreFromSnapshot(env, auditId)).toEqual({ error: "HAS_INTERIM_ACTIVITY" })
+		})
 	})
 })

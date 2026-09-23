@@ -1,6 +1,7 @@
 import type { KVCompat } from "@/infra/cache"
 import type { D1Compat } from "@/infra/database"
 import type { RedisRateLimiter } from "@/infra/rate-limiter"
+import type { JevGate } from "@/services/jev-gate"
 import type { TierName } from "@/utils/tiers"
 
 export interface B2Config {
@@ -26,6 +27,7 @@ export interface Env {
 	EXAM_DEV_ENABLED?: boolean
 	EXAM_BASE_URL?: string
 	RAILWAY_PUBLIC_DOMAIN?: string
+	JEV?: JevGate
 }
 
 export interface RateLimiter {
@@ -37,6 +39,9 @@ export interface RateLimiter {
 }
 
 export type LyricsFormat = "ttml" | "lrc" | "plain"
+
+export type SyncType = "richsync" | "linesync" | "plain"
+
 export type Confidence = "low" | "medium" | "high"
 
 export interface User {
@@ -228,4 +233,121 @@ export interface ApiResponse<T = unknown> {
 	success: boolean
 	data?: T
 	error?: string
+}
+
+export type RevisionStatus = "live" | "past" | "pending" | "superseded" | "rejected" | "withdrawn"
+export type PendingReason = "sealed" | "flagged" | "large_text_drift" | "large_timing_drift"
+
+export interface RevisionAuthor {
+	displayName: string
+}
+
+export interface RevisionSummary {
+	id: number
+	revNo: number
+	status: RevisionStatus
+	pendingReason: PendingReason | null
+	isAnchor: boolean
+	textDrift: number
+	timingDrift: number
+	revertsRevNo: number | null
+	author: RevisionAuthor | null
+	reviewNote: string | null
+	createdAt: number
+	reviewedAt: number | null
+}
+
+export interface RevisionDetail extends RevisionSummary {
+	lyrics: string
+	format: LyricsFormat
+	language: string | null
+	isrc: string | null
+}
+
+export type CheckStatus = "ok" | "warn" | "bad"
+
+export interface FieldCheck {
+	field: "lyrics" | "language" | "isrc"
+	status: CheckStatus
+	message: string
+	line?: number
+}
+
+export interface GateOutcome {
+	goesLive: boolean
+	reason: PendingReason | null
+}
+
+export interface RevisionRateLimit {
+	lyricRemaining: number
+	lyricLimit: number
+	userRemaining: number
+	userLimit: number
+}
+
+export interface PreviewResult {
+	checks: FieldCheck[]
+	drift: {
+		text: number
+		timing: number
+		timingOffsetMs: number
+		textLimit: number
+		timingLimit: number
+	}
+	outcome: GateOutcome
+	noChanges: boolean
+	rateLimit: RevisionRateLimit
+}
+
+export type DiffPart = ["=" | "+" | "-", string]
+
+export interface HeadTextRef {
+	kind: "translation" | "transliteration" | "credit"
+	lang: string | null
+	line: number | null
+}
+
+export type DiffRow =
+	| { kind: "same"; lineNo: number; startMs: number | null; text: string; head?: HeadTextRef }
+	| { kind: "add"; lineNo: number; startMs: number | null; text: string; head?: HeadTextRef }
+	| { kind: "del"; lineNo: number; startMs: number | null; text: string; head?: HeadTextRef }
+	| { kind: "word"; lineNo: number; startMs: number | null; parts: DiffPart[]; head?: HeadTextRef }
+	| { kind: "timing"; lineNo: number; startMs: number; deltaMs: number; text: string }
+	| { kind: "gap"; count: number; section?: "head" }
+
+export interface RevisionDiff {
+	rows: DiffRow[]
+	againstRevNo: number | null
+}
+
+export interface PendingRevisionCard {
+	lyricsId: number
+	revisionId: number
+	revNo: number
+	liveRevNo: number
+	videoId: string
+	song: string
+	artist: string
+	format: LyricsFormat
+	pendingReason: PendingReason
+	jevProbability: number | null
+	textDrift: number
+	timingDrift: number
+	author: RevisionAuthor | null
+	createdAt: number
+	diffPreview: string
+	diffFull: string
+}
+
+export interface RevisionBar {
+	revNo: number
+	count: number
+	pending: {
+		revNo: number
+		pendingReason: PendingReason
+		textDrift: number
+		timingDrift: number
+	} | null
+	lastRejected: { revNo: number; reviewNote: string | null } | null
+	updatedAt: number
 }

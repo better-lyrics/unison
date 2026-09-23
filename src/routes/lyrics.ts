@@ -2,6 +2,7 @@ import { config } from "@/config"
 import { getMySubmissions } from "@/db/feed"
 import { parseFeedFilters } from "@/db/feed-filters"
 import { getFulfillmentByLyricsId } from "@/db/fulfillments"
+import { getRevisionBar } from "@/db/lyric-revisions"
 import {
 	findBySongArtist,
 	findByVideoId,
@@ -337,9 +338,10 @@ export const lyricsRoutes = (env: Env) =>
 					return status(404, buildError(ErrorCode.NOT_FOUND))
 				}
 
-				const [userVote, fulfilled] = await Promise.all([
+				const [userVote, fulfilled, revision] = await Promise.all([
 					lyricsUserId ? getUserVote(env, result.id, lyricsUserId) : Promise.resolve(null),
 					getFulfillmentByLyricsId(env, result.id),
+					getRevisionBar(env.DB, result),
 				])
 				const marks = await buildSealMarks(env, [result])
 				const actors = await resolveActors(
@@ -356,6 +358,7 @@ export const lyricsRoutes = (env: Env) =>
 							result.submitter_id != null ? actors.get(result.submitter_id) : undefined
 						),
 						userVote,
+						revision,
 					},
 				}
 			},

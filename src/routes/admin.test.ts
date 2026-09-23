@@ -324,6 +324,7 @@ describe("POST /admin/migrations/:id/commit", () => {
 			[], // fulfillments snapshot
 			[], // discord snapshot
 			[], // requests snapshot
+			[], // lyric_revisions snapshot
 			{ n: 0 }, // request collisions
 			[], // invalidateCacheForSubmitter: distinct video_ids
 			{

@@ -185,6 +185,7 @@ function mergeSeed(): unknown[] {
 			{ requester_id: "oldkey", requester_type: "extension", video_id: "vidA" },
 			{ requester_id: "newkey", requester_type: "extension", video_id: "vidA" },
 		], // requests snapshot
+		[{ id: 30, author_id: 2, reviewed_by: null }], // lyric_revisions snapshot
 		{ n: 1 }, // vote collisions
 		{ n: 0 }, // report collisions
 		{ n: 1 }, // request collisions
@@ -220,6 +221,7 @@ describe("runMigration (merge case)", () => {
 		expect(Object.keys(result.snapshot).sort()).toEqual(
 			[
 				"discord_links",
+				"lyric_revisions",
 				"lyrics",
 				"lyrics_requests",
 				"reports",

@@ -12,6 +12,7 @@ import { backfillConfidence } from "@/jobs/backfill-confidence"
 import { backfillFormatDetection } from "@/jobs/backfill-format-detection"
 import { backfillLanguage } from "@/jobs/backfill-language"
 import { backfillNorms } from "@/jobs/backfill-norms"
+import { backfillRevisions } from "@/jobs/backfill-revisions"
 import { backfillSyncType } from "@/jobs/backfill-synctype"
 import { backfillTextSearch } from "@/jobs/backfill-text-search"
 import { backfillVideoLinks } from "@/jobs/backfill-video-links"
@@ -35,6 +36,7 @@ import { lyricsRoutes } from "@/routes/lyrics"
 import { migrationRoutes } from "@/routes/migrations"
 import { requestRoutes } from "@/routes/requests"
 import { reviewQueueBotRoutes } from "@/routes/review-queue"
+import { revisionBotRoutes, revisionRoutes } from "@/routes/revisions"
 import { translateRoutes } from "@/routes/translate"
 import { userRoutes } from "@/routes/users"
 import { videoLinkRoutes } from "@/routes/video-links"
@@ -209,9 +211,11 @@ const app = new Elysia({ adapter: node() })
 	.use(feedRoutes(env))
 	.use(voteRoutes(env))
 	.use(videoLinkRoutes(env))
+	.use(revisionRoutes(env))
 	.use(voteBotRoutes(env))
 	.use(committeeBotRoutes(env))
 	.use(reviewQueueBotRoutes(env))
+	.use(revisionBotRoutes(env))
 	.use(examRoutes(env))
 	.use(requestRoutes(env))
 	.use(leaderboardRoutes(env))
@@ -267,6 +271,12 @@ backfillTextSearch(env)
 		if (updated > 0) log.info("text search backfill complete", { updated })
 	})
 	.catch((err) => log.error("text search backfill failed", { error: (err as Error).message }))
+
+backfillRevisions(env)
+	.then(({ created, failed }) => {
+		if (created + failed > 0) log.info("revision backfill complete", { created, failed })
+	})
+	.catch((err) => log.error("revision backfill failed", { error: (err as Error).message }))
 
 backfillVideoLinks(env)
 	.then(({ linked }) => {

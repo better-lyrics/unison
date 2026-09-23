@@ -1,5 +1,10 @@
+import {
+	AMAZING_GRACE_SPANISH,
+	readRevisionFixture as fixture,
+	withTranslation,
+} from "@/test/lyric-fixtures"
 import { describe, expect, it } from "vitest"
-import { extractPlainText } from "./extract-text"
+import { extractComparableLines, extractLines, extractPlainText } from "./extract-text"
 
 describe("extractPlainText", () => {
 	describe("plain format", () => {
@@ -256,6 +261,178 @@ describe("extractPlainText", () => {
 
 			const result = extractPlainText(ttml, "ttml")
 			expect(result).toBe("")
+		})
+	})
+})
+
+describe("extractLines", () => {
+	it("reads TTML lines with their begin times", () => {
+		const lines = extractLines(fixture("amazing-grace.ttml"), "ttml")
+		expect(lines).toHaveLength(16)
+		expect(lines[0]).toEqual({ text: "Amazing grace! How sweet the sound", startMs: 12000 })
+		expect(lines[15]).toEqual({ text: "As long as life endures.", startMs: 75000 })
+	})
+
+	it("reads LRC lines with their times and skips metadata tags", () => {
+		const lines = extractLines(fixture("amazing-grace.lrc"), "lrc")
+		expect(lines).toHaveLength(16)
+		expect(lines[4]).toEqual({ text: "'Twas grace that taught my heart to fear,", startMs: 29000 })
+	})
+
+	it("reads plain lines without times and skips blank lines", () => {
+		const lines = extractLines(fixture("amazing-grace.txt"), "plain")
+		expect(lines).toHaveLength(16)
+		expect(lines.every((line) => line.startMs === null)).toBe(true)
+	})
+
+	describe("edge cases", () => {
+		it("strips enhanced LRC word tags from the text", () => {
+			const lrc = "[00:12.00]<00:12.00>Amazing <00:12.60>grace"
+			expect(extractLines(lrc, "lrc")).toEqual([{ text: "Amazing grace", startMs: 12000 }])
+		})
+
+		it("falls back to the first timed span when a TTML line has no begin", () => {
+			const ttml =
+				'<tt xmlns="http://www.w3.org/ns/ttml"><body><div><p><span begin="1:02.500" end="1:03.000">Hi</span></p></div></body></tt>'
+			expect(extractLines(ttml, "ttml")).toEqual([{ text: "Hi", startMs: 62500 }])
+		})
+
+		it("reads TTML offset times with a unit", () => {
+			const ttml =
+				'<tt xmlns="http://www.w3.org/ns/ttml"><body><div><p begin="12.5s" end="14s">Hi</p></div></body></tt>'
+			expect(extractLines(ttml, "ttml")).toEqual([{ text: "Hi", startMs: 12500 }])
+		})
+
+		it("returns no lines for empty input", () => {
+			expect(extractLines("", "plain")).toEqual([])
+			expect(extractLines("", "lrc")).toEqual([])
+		})
+
+		it("handles CRLF plain text", () => {
+			expect(extractLines("one\r\ntwo\r\n", "plain")).toEqual([
+				{ text: "one", startMs: null },
+				{ text: "two", startMs: null },
+			])
+		})
+	})
+
+	describe("invariants", () => {
+		it("joins to the same TTML search text extractPlainText produced before", () => {
+			const ttml = fixture("amazing-grace.ttml")
+			expect(extractPlainText(ttml, "ttml")).toBe(
+				`John Newton ${extractLines(ttml, "ttml")
+					.map((line) => line.text)
+					.join(" ")}`
+			)
+		})
+	})
+})
+
+const ROMAJI_TTML = `<tt xmlns="http://www.w3.org/ns/ttml" xmlns:ttm="http://www.w3.org/ns/ttml#metadata" xml:lang="ja"><head><metadata><ttm:agent type="person" xml:id="v1"><ttm:name type="full">Aimer</ttm:name></ttm:agent><iTunesMetadata xmlns="http://music.apple.com/lyric-ttml-internal"><transliterations><transliteration xml:lang="ja-Latn"><text for="L1"><span begin="1.000" end="1.500">kimi</span> <span begin="1.500" end="2.000">no</span> <span begin="2.000" end="2.600">koe</span></text></transliteration></transliterations></iTunesMetadata></metadata></head><body><div><p begin="1.000" end="2.600" itunes:key="L1" xmlns:itunes="http://music.apple.com/lyric-ttml-internal">君の声</p></div></body></tt>`
+
+const CREDIT = { kind: "credit", lang: null, line: null }
+
+describe("extractComparableLines", () => {
+	it("puts TTML head text after the body lines, keyed and untimed", () => {
+		const ttml = withTranslation(fixture("amazing-grace.ttml"), "es", AMAZING_GRACE_SPANISH)
+		const lines = extractComparableLines(ttml, "ttml")
+		expect(lines.slice(0, 16)).toEqual(extractLines(ttml, "ttml"))
+		expect(lines.slice(16)).toEqual([
+			{ head: CREDIT, text: "John Newton", startMs: null },
+			...AMAZING_GRACE_SPANISH.map((text, index) => ({
+				head: { kind: "translation", lang: "es", line: index + 1 },
+				text,
+				startMs: null,
+			})),
+		])
+	})
+
+	it("points a translation at the body line whose key it names, not at its own position", () => {
+		const ttml = fixture("amazing-grace.ttml").replace(
+			"</iTunesMetadata>",
+			'<translations><translation xml:lang="es"><text for="L3">Una vez estuve perdido</text></translation></translations></iTunesMetadata>'
+		)
+		expect(extractComparableLines(ttml, "ttml").at(-1)).toEqual({
+			head: { kind: "translation", lang: "es", line: 3 },
+			text: "Una vez estuve perdido",
+			startMs: null,
+		})
+	})
+
+	it("reads timed transliteration spans as one line of text", () => {
+		expect(extractComparableLines(ROMAJI_TTML, "ttml")).toEqual([
+			{ text: "君の声", startMs: 1000 },
+			{ head: CREDIT, text: "Aimer", startMs: null },
+			{
+				head: { kind: "transliteration", lang: "ja-Latn", line: 1 },
+				text: "kimi no koe",
+				startMs: null,
+			},
+		])
+	})
+
+	it("reads LRC and plain text exactly like extractLines", () => {
+		for (const [name, format] of [
+			["amazing-grace.lrc", "lrc"],
+			["amazing-grace.txt", "plain"],
+		] as const) {
+			expect(extractComparableLines(fixture(name), format)).toEqual(
+				extractLines(fixture(name), format)
+			)
+		}
+	})
+
+	describe("edge cases", () => {
+		it("collapses whitespace inside head text", () => {
+			const ttml = withTranslation(fixture("amazing-grace.ttml"), "es", ["  Sublime\n\tgracia  "])
+			expect(extractComparableLines(ttml, "ttml").at(-1)).toEqual({
+				head: { kind: "translation", lang: "es", line: 1 },
+				text: "Sublime gracia",
+				startMs: null,
+			})
+		})
+
+		it("skips head elements that hold no text", () => {
+			const ttml = withTranslation(fixture("amazing-grace.ttml"), "es", ["", "  "])
+			expect(extractComparableLines(ttml, "ttml").slice(16)).toEqual([
+				{ head: CREDIT, text: "John Newton", startMs: null },
+			])
+		})
+
+		it("leaves line null for a translation whose key names no body line", () => {
+			const ttml = withTranslation(
+				fixture("amazing-grace.ttml"),
+				"es",
+				AMAZING_GRACE_SPANISH
+			).replace('for="L16"', 'for="L99"')
+			expect(extractComparableLines(ttml, "ttml").at(-1)?.head).toEqual({
+				kind: "translation",
+				lang: "es",
+				line: null,
+			})
+		})
+
+		it("reads a TTML file with no head as its body lines", () => {
+			const ttml =
+				'<tt xmlns="http://www.w3.org/ns/ttml"><body><div><p begin="1s">Hi</p></div></body></tt>'
+			expect(extractComparableLines(ttml, "ttml")).toEqual([{ text: "Hi", startMs: 1000 }])
+		})
+	})
+
+	describe("invariants", () => {
+		it("gives credits no language and no line", () => {
+			const credits = extractComparableLines(ROMAJI_TTML, "ttml").filter(
+				(line) => line.head?.kind === "credit"
+			)
+			expect(credits).toHaveLength(1)
+			for (const line of credits) expect(line.head).toEqual(CREDIT)
+		})
+
+		it("ignores timing attributes on head spans", () => {
+			const shifted = ROMAJI_TTML.replace('begin="1.500"', 'begin="1.900"')
+			expect(extractComparableLines(shifted, "ttml")).toEqual(
+				extractComparableLines(ROMAJI_TTML, "ttml")
+			)
 		})
 	})
 })

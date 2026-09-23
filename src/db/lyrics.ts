@@ -21,6 +21,7 @@ import {
 	selectArm,
 } from "@/utils/exploration"
 import { extractPlainText } from "@/utils/extract-text"
+import { sha256Hex } from "@/utils/hash"
 import { normalize, normalizeArtist, normalizeSong } from "@/utils/normalize"
 
 const log = new Logger("db")
@@ -289,16 +290,34 @@ export async function submitLyrics(
 
 	const result = await env.DB.prepare(
 		`
-		INSERT INTO lyrics (
-			video_id, song, artist, album, isrc,
-			duration, song_norm, artist_norm, album_norm,
-			lyrics, format, language, sync_type, submitter_id,
-			lyrics_text_search,
-			language_source, language_detector_version, language_detection_attempted_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, to_tsvector('simple', ?), ?, ?, ${
-			languageDetectionAttemptedAt === "NOW" ? "NOW()" : "NULL"
-		})
-		RETURNING id
+		WITH ids AS (
+			SELECT nextval(pg_get_serial_sequence('lyrics', 'id'))::INTEGER AS lyric_id,
+				nextval(pg_get_serial_sequence('lyric_revisions', 'id'))::INTEGER AS revision_id
+		),
+		inserted AS (
+			INSERT INTO lyrics (
+				video_id, song, artist, album, isrc,
+				duration, song_norm, artist_norm, album_norm,
+				lyrics, format, language, sync_type, submitter_id,
+				lyrics_text_search,
+				language_source, language_detector_version, language_detection_attempted_at,
+				id, current_revision_id, anchor_revision_id
+			)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, to_tsvector('simple', ?), ?, ?, ${
+				languageDetectionAttemptedAt === "NOW" ? "NOW()" : "NULL"
+			}, (SELECT lyric_id FROM ids), (SELECT revision_id FROM ids), (SELECT revision_id FROM ids))
+			RETURNING id, lyrics, format, sync_type, language, isrc, submitter_id, created_at
+		),
+		base_revision AS (
+			INSERT INTO lyric_revisions
+				(id, lyrics_id, rev_no, lyrics, format, sync_type, language, isrc, content_hash,
+				 author_id, status, created_at)
+			SELECT ids.revision_id, inserted.id, 1, inserted.lyrics, inserted.format,
+				inserted.sync_type, inserted.language, inserted.isrc, ?, inserted.submitter_id,
+				'live', inserted.created_at
+			FROM ids, inserted
+		)
+		SELECT id FROM inserted
 		`
 	)
 		.bind(
@@ -318,7 +337,8 @@ export async function submitLyrics(
 			submitterId,
 			plainText,
 			languageSource,
-			languageDetectorVersion
+			languageDetectorVersion,
+			sha256Hex(submission.lyrics)
 		)
 		.first<{ id: number }>()
 

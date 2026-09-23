@@ -52,12 +52,18 @@ export async function backfillLanguage(env: Env): Promise<{ scanned: number; upd
 			const stampVersion = result.ready ? DETECTOR_VERSION : null
 			try {
 				await env.DB.prepare(
-					`UPDATE lyrics
-					 SET language = ?,
-					     language_detector_version = ?,
-					     language_source = 'detector',
-					     language_detection_attempted_at = NOW()
-					 WHERE id = ?`
+					`WITH updated AS (
+					   UPDATE lyrics
+					   SET language = ?,
+					       language_detector_version = ?,
+					       language_source = 'detector',
+					       language_detection_attempted_at = NOW()
+					   WHERE id = ? AND COALESCE(language_source, 'detector') <> 'submitter'
+					   RETURNING current_revision_id, language
+					 )
+					 UPDATE lyric_revisions r
+					 SET language = updated.language
+					 FROM updated WHERE r.id = updated.current_revision_id`
 				)
 					.bind(result.language, stampVersion, row.id)
 					.run()

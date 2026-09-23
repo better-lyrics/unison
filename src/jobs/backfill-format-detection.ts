@@ -52,13 +52,19 @@ export async function backfillFormatDetection(
 				const plainText = extractPlainText(content, detectedFormat)
 
 				await env.DB.prepare(
-					`UPDATE lyrics
-					 SET format = ?,
-					     sync_type = ?,
-					     lyrics_text_search = to_tsvector('simple', ?),
-					     updated_at = EXTRACT(EPOCH FROM NOW())::INTEGER
-					 WHERE id = ?
-					   AND (format != ? OR sync_type != ?)`
+					`WITH updated AS (
+					   UPDATE lyrics
+					   SET format = ?,
+					       sync_type = ?,
+					       lyrics_text_search = to_tsvector('simple', ?),
+					       updated_at = EXTRACT(EPOCH FROM NOW())::INTEGER
+					   WHERE id = ?
+					     AND (format != ? OR sync_type != ?)
+					   RETURNING current_revision_id, format, sync_type
+					 )
+					 UPDATE lyric_revisions r
+					 SET format = updated.format, sync_type = updated.sync_type
+					 FROM updated WHERE r.id = updated.current_revision_id`
 				)
 					.bind(
 						detectedFormat,
