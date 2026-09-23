@@ -82,7 +82,6 @@ interface ParsedTtml {
 	texts: string[]
 }
 
-// Each <p> within body becomes one line; texts keeps document order for search indexing
 function collectParagraphs(nodes: unknown[], out: ParsedTtml): void {
 	for (const node of nodes) {
 		if (typeof node !== "object" || node === null) continue

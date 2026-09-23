@@ -131,7 +131,6 @@ export async function seedLyric(
 
 let legacySeq = 0
 
-// A lyric row as it existed before revisions: no current or anchor revision.
 export async function insertLegacyLyric(
 	db: IntegrationDb,
 	submitterId: number,
