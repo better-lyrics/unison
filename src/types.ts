@@ -229,3 +229,114 @@ export interface ApiResponse<T = unknown> {
 	data?: T
 	error?: string
 }
+
+export type RevisionStatus = "live" | "past" | "pending" | "superseded" | "rejected" | "withdrawn"
+export type PendingReason = "sealed" | "flagged" | "large_text_drift" | "large_timing_drift"
+
+export interface RevisionAuthor {
+	displayName: string
+}
+
+export interface RevisionSummary {
+	id: number
+	revNo: number
+	status: RevisionStatus
+	pendingReason: PendingReason | null
+	isAnchor: boolean
+	textDrift: number
+	timingDrift: number
+	revertsRevNo: number | null
+	author: RevisionAuthor | null
+	reviewNote: string | null
+	createdAt: number
+	reviewedAt: number | null
+}
+
+export interface RevisionDetail extends RevisionSummary {
+	lyrics: string
+	format: LyricsFormat
+	language: string | null
+	isrc: string | null
+}
+
+export type CheckStatus = "ok" | "warn" | "bad"
+
+export interface FieldCheck {
+	field: "lyrics" | "language" | "isrc"
+	status: CheckStatus
+	message: string
+	line?: number
+}
+
+export interface GateOutcome {
+	goesLive: boolean
+	reason: PendingReason | null
+}
+
+export interface RevisionRateLimit {
+	lyricRemaining: number
+	lyricLimit: number
+	userRemaining: number
+	userLimit: number
+}
+
+export interface PreviewResult {
+	checks: FieldCheck[]
+	drift: {
+		text: number
+		timing: number
+		timingOffsetMs: number
+		textLimit: number
+		timingLimit: number
+	}
+	outcome: GateOutcome
+	noChanges: boolean
+	rateLimit: RevisionRateLimit
+}
+
+export type DiffPart = ["=" | "+" | "-", string]
+
+export type DiffRow =
+	| { kind: "same"; lineNo: number; startMs: number | null; text: string }
+	| { kind: "add"; lineNo: number; startMs: number | null; text: string }
+	| { kind: "del"; lineNo: number; startMs: number | null; text: string }
+	| { kind: "word"; lineNo: number; startMs: number | null; parts: DiffPart[] }
+	| { kind: "timing"; lineNo: number; startMs: number; deltaMs: number; text: string }
+	| { kind: "gap"; count: number }
+
+export interface RevisionDiff {
+	rows: DiffRow[]
+	againstRevNo: number | null
+}
+
+export interface PendingRevisionCard {
+	lyricsId: number
+	revisionId: number
+	revNo: number
+	liveRevNo: number
+	videoId: string
+	song: string
+	artist: string
+	format: LyricsFormat
+	pendingReason: PendingReason
+	jevProbability: number | null
+	textDrift: number
+	timingDrift: number
+	author: RevisionAuthor | null
+	createdAt: number
+	diffPreview: string
+	diffFull: string
+}
+
+export interface RevisionBar {
+	revNo: number
+	count: number
+	pending: {
+		revNo: number
+		pendingReason: PendingReason
+		textDrift: number
+		timingDrift: number
+	} | null
+	lastRejected: { revNo: number; reviewNote: string | null } | null
+	updatedAt: number
+}
