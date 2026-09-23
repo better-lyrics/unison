@@ -222,8 +222,9 @@ describe("findByVideoId", () => {
 		expect(sql).toContain("l.effective_score")
 		expect(sql).toContain("l.vote_count")
 		expect(sql).toContain("l.created_at")
-		// the WHERE clause must reference the lyrics column, not users
-		expect(sql).toMatch(/l\.video_id\s*=/i)
+		// the WHERE clause must reference the lyrics columns, not users; the video match is an
+		// indexed IN over aliased lyrics/link subqueries rather than a bare l.video_id comparison
+		expect(sql).toMatch(/l\.id IN \(SELECT home\.id FROM lyrics home WHERE home\.video_id = \?/)
 	})
 
 	it("returns submitter fields from the joined row", async () => {
@@ -856,7 +857,9 @@ describe("searchByQuery", () => {
 		await searchByQuery(env, "dQw4w9WgXcQ", 10)
 
 		const sql = db.calls[0].sql
-		expect(sql).toMatch(/id IN \(SELECT lyrics_id FROM lyrics_video_ids WHERE video_id = \?\)/)
+		expect(sql).toMatch(
+			/SELECT link\.lyrics_id FROM lyrics_video_ids link WHERE link\.video_id = \?/
+		)
 		// tier 1 binds the trimmed query for the home video_id, the junction lookup, and isrc
 		expect(db.calls[0].params.slice(0, 3)).toEqual(["dQw4w9WgXcQ", "dQw4w9WgXcQ", "dQw4w9WgXcQ"])
 	})
