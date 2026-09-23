@@ -35,6 +35,7 @@ interface Envelope<T> {
 	success: boolean
 	data: T
 	code?: string
+	hint?: string
 }
 
 type Saved = { revision: RevisionSummary }
@@ -186,6 +187,28 @@ describeIntegration("revision routes (integration)", () => {
 		})
 	})
 
+	it("shows a pending save, a withdraw, and a council decision on the detail right away", async () => {
+		await seedCouncilMember(db, COUNCIL_KEY)
+		expect((await lyricDetail()).json.data.revision.pending).toBeNull()
+
+		await saveAsOwner(swapWords(LRC, 15))
+		expect((await lyricDetail()).json.data.revision.pending).toMatchObject({ revNo: 2 })
+
+		await call("DELETE", `/lyrics/${lyricId}/revisions/pending`, { token: "owner-token", body: {} })
+		expect((await lyricDetail()).json.data.revision.pending).toBeNull()
+
+		const pending = (await saveAsOwner(swapWords(LRC, 16))).json.data.revision
+		expect((await lyricDetail()).json.data.revision.pending).toMatchObject({ revNo: 3 })
+
+		await call("POST", `/lyrics/${lyricId}/revisions/${pending.id}/approve/bot`, {
+			token: BOT_SECRET,
+			body: { keyId: COUNCIL_KEY },
+		})
+		const approved = (await lyricDetail()).json.data
+		expect(approved.revision).toMatchObject({ revNo: 3, count: 3, pending: null })
+		expect(approved.lyrics).toBe(swapWords(LRC, 16))
+	})
+
 	it("keeps an absent language and ISRC and clears one sent as null", async () => {
 		const liveMetadata = async () =>
 			(await db.pool.query("SELECT language, isrc FROM lyrics WHERE id = $1", [lyricId])).rows[0]
@@ -258,6 +281,7 @@ describeIntegration("revision routes (integration)", () => {
 			for (let i = 1; i <= 5; i++) await saveAsOwner(swapWords(LRC, i))
 			const { status, json } = await saveAsOwner(swapWords(LRC, 6))
 			expect([status, json.code]).toEqual([429, "RATE_LIMITED"])
+			expect(json.hint).toMatch(/edit limit/)
 		})
 
 		it("throttles previews with the request limiter", async () => {
@@ -266,12 +290,13 @@ describeIntegration("revision routes (integration)", () => {
 					return { success: false }
 				},
 			}
-			const { status } = await call("POST", `/lyrics/${lyricId}/revisions/preview`, {
+			const { status, json } = await call("POST", `/lyrics/${lyricId}/revisions/preview`, {
 				token: "owner-token",
 				body: { lyrics: swapWords(LRC, 1), format: "lrc", language: "en" },
 				env: { ...db.env, RATE_LIMITER: refusing } as unknown as Env,
 			})
-			expect(status).toBe(429)
+			expect([status, json.code]).toEqual([429, "RATE_LIMITED"])
+			expect(json.hint).toBe("Too many checks at once. Wait a moment and keep typing.")
 		})
 
 		it("rejects a non-numeric id", async () => {

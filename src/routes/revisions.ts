@@ -22,6 +22,7 @@ import { ErrorCode, type SubmissionErrorBody, buildError } from "@/utils/errors"
 import { Elysia, t } from "elysia"
 
 const EDIT_NOT_OWNER_HINT = "You can only edit lyrics you submitted yourself."
+const PREVIEW_THROTTLE_HINT = "Too many checks at once. Wait a moment and keep typing."
 const DAILY_LIMIT_HINT =
 	"You've reached today's edit limit for this lyric or your account. Try again tomorrow."
 
@@ -115,7 +116,9 @@ export const revisionRoutes = (env: Env) =>
 				maxRequests: config.revisions.preview.maxRequests,
 				windowSeconds: config.revisions.preview.windowSeconds,
 			})
-			if (!success) return status(429, buildError(ErrorCode.RATE_LIMITED))
+			if (!success) {
+				return status(429, buildError(ErrorCode.RATE_LIMITED, { hint: PREVIEW_THROTTLE_HINT }))
+			}
 			const input = parseRevisionBody(body)
 			if (!input) return status(400, buildError(ErrorCode.INVALID_PAYLOAD))
 			const result = await previewRevision(env, id, userId, input)
