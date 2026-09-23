@@ -6,13 +6,12 @@ import type {
 	RevisionBar,
 	RevisionStatus,
 	RevisionSummary,
+	SyncType,
 } from "@/types"
 import { compress, decompressIfNeeded, isCompressed } from "@/utils/compression"
 import { extractPlainText } from "@/utils/extract-text"
 import { sha256Hex } from "@/utils/hash"
 import { generatePetName } from "@/utils/petname"
-
-export type SyncType = "richsync" | "linesync" | "plain"
 
 export interface RevisionRow {
 	id: number
@@ -39,11 +38,9 @@ export interface RevisionRow {
 
 export interface LyricRevisionState {
 	id: number
-	video_id: string
 	song: string
 	artist: string
 	submitter_id: number | null
-	created_at: number
 	deleted_at: number | null
 	committee_approved_at: number | null
 	current_revision_id: number | null
@@ -94,7 +91,7 @@ export async function loadLyricState(
 ): Promise<LyricRevisionState | null> {
 	return db
 		.prepare(
-			`SELECT id, video_id, song, artist, submitter_id, created_at, deleted_at,
+			`SELECT id, song, artist, submitter_id, deleted_at,
 				committee_approved_at, current_revision_id, anchor_revision_id
 			FROM lyrics WHERE id = ?${lock ? " FOR UPDATE" : ""}`
 		)

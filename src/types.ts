@@ -39,6 +39,9 @@ export interface RateLimiter {
 }
 
 export type LyricsFormat = "ttml" | "lrc" | "plain"
+
+export type SyncType = "richsync" | "linesync" | "plain"
+
 export type Confidence = "low" | "medium" | "high"
 
 export interface User {
