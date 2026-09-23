@@ -12,6 +12,7 @@ import { backfillConfidence } from "@/jobs/backfill-confidence"
 import { backfillFormatDetection } from "@/jobs/backfill-format-detection"
 import { backfillLanguage } from "@/jobs/backfill-language"
 import { backfillNorms } from "@/jobs/backfill-norms"
+import { backfillRevisions } from "@/jobs/backfill-revisions"
 import { backfillSyncType } from "@/jobs/backfill-synctype"
 import { backfillTextSearch } from "@/jobs/backfill-text-search"
 import { backfillVideoLinks } from "@/jobs/backfill-video-links"
@@ -267,6 +268,12 @@ backfillTextSearch(env)
 		if (updated > 0) log.info("text search backfill complete", { updated })
 	})
 	.catch((err) => log.error("text search backfill failed", { error: (err as Error).message }))
+
+backfillRevisions(env)
+	.then(({ created, failed }) => {
+		if (created + failed > 0) log.info("revision backfill complete", { created, failed })
+	})
+	.catch((err) => log.error("revision backfill failed", { error: (err as Error).message }))
 
 backfillVideoLinks(env)
 	.then(({ linked }) => {

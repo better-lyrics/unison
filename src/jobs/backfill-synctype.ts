@@ -46,8 +46,14 @@ export async function backfillSyncType(env: Env): Promise<{ scanned: number; cha
 				if (detected === row.sync_type) continue
 
 				await env.DB.prepare(
-					`UPDATE lyrics SET sync_type = ?, updated_at = EXTRACT(EPOCH FROM NOW())::INTEGER
-					 WHERE id = ? AND sync_type = ?`
+					`WITH updated AS (
+					   UPDATE lyrics SET sync_type = ?, updated_at = EXTRACT(EPOCH FROM NOW())::INTEGER
+					   WHERE id = ? AND sync_type = ?
+					   RETURNING current_revision_id, sync_type
+					 )
+					 UPDATE lyric_revisions r
+					 SET sync_type = updated.sync_type
+					 FROM updated WHERE r.id = updated.current_revision_id`
 				)
 					.bind(detected, row.id, row.sync_type)
 					.run()
