@@ -41,8 +41,9 @@ const buildAutoHidePredicate = (prefix: string) => `(
 export const AUTO_HIDE_PREDICATE = buildAutoHidePredicate("")
 export const AUTO_HIDE_PREDICATE_JOINED = buildAutoHidePredicate("l.")
 
+// One IN over a UNION ALL (not `video_id = v OR id IN (...)`) so both branches stay index scans.
 export const videoServesExpr = (prefix = "", value = "?") =>
-	`(${prefix}video_id = ${value} OR ${prefix}id IN (SELECT lyrics_id FROM lyrics_video_ids WHERE video_id = ${value}))`
+	`${prefix}id IN (SELECT home.id FROM lyrics home WHERE home.video_id = ${value} UNION ALL SELECT link.lyrics_id FROM lyrics_video_ids link WHERE link.video_id = ${value})`
 
 const servableSyncedVariant = `l.sync_type IN ('linesync', 'richsync')
 		AND l.deleted_at IS NULL
