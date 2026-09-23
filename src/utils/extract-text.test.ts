@@ -1,5 +1,6 @@
+import { readRevisionFixture as fixture } from "@/test/lyric-fixtures"
 import { describe, expect, it } from "vitest"
-import { extractPlainText } from "./extract-text"
+import { extractLines, extractPlainText } from "./extract-text"
 
 describe("extractPlainText", () => {
 	describe("plain format", () => {
@@ -256,6 +257,69 @@ describe("extractPlainText", () => {
 
 			const result = extractPlainText(ttml, "ttml")
 			expect(result).toBe("")
+		})
+	})
+})
+
+describe("extractLines", () => {
+	it("reads TTML lines with their begin times", () => {
+		const lines = extractLines(fixture("amazing-grace.ttml"), "ttml")
+		expect(lines).toHaveLength(16)
+		expect(lines[0]).toEqual({ text: "Amazing grace! How sweet the sound", startMs: 12000 })
+		expect(lines[15]).toEqual({ text: "As long as life endures.", startMs: 75000 })
+	})
+
+	it("reads LRC lines with their times and skips metadata tags", () => {
+		const lines = extractLines(fixture("amazing-grace.lrc"), "lrc")
+		expect(lines).toHaveLength(16)
+		expect(lines[4]).toEqual({ text: "'Twas grace that taught my heart to fear,", startMs: 29000 })
+	})
+
+	it("reads plain lines without times and skips blank lines", () => {
+		const lines = extractLines(fixture("amazing-grace.txt"), "plain")
+		expect(lines).toHaveLength(16)
+		expect(lines.every((line) => line.startMs === null)).toBe(true)
+	})
+
+	describe("edge cases", () => {
+		it("strips enhanced LRC word tags from the text", () => {
+			const lrc = "[00:12.00]<00:12.00>Amazing <00:12.60>grace"
+			expect(extractLines(lrc, "lrc")).toEqual([{ text: "Amazing grace", startMs: 12000 }])
+		})
+
+		it("falls back to the first timed span when a TTML line has no begin", () => {
+			const ttml =
+				'<tt xmlns="http://www.w3.org/ns/ttml"><body><div><p><span begin="1:02.500" end="1:03.000">Hi</span></p></div></body></tt>'
+			expect(extractLines(ttml, "ttml")).toEqual([{ text: "Hi", startMs: 62500 }])
+		})
+
+		it("reads TTML offset times with a unit", () => {
+			const ttml =
+				'<tt xmlns="http://www.w3.org/ns/ttml"><body><div><p begin="12.5s" end="14s">Hi</p></div></body></tt>'
+			expect(extractLines(ttml, "ttml")).toEqual([{ text: "Hi", startMs: 12500 }])
+		})
+
+		it("returns no lines for empty input", () => {
+			expect(extractLines("", "plain")).toEqual([])
+			expect(extractLines("", "lrc")).toEqual([])
+		})
+
+		it("handles CRLF plain text", () => {
+			expect(extractLines("one\r\ntwo\r\n", "plain")).toEqual([
+				{ text: "one", startMs: null },
+				{ text: "two", startMs: null },
+			])
+		})
+	})
+
+	describe("invariants", () => {
+		it("joins to the same TTML search text extractPlainText produced before", () => {
+			const ttml = fixture("amazing-grace.ttml")
+			expect(extractPlainText(ttml, "ttml")).toBe(
+				`John Newton ${extractLines(ttml, "ttml")
+					.map((line) => line.text)
+					.join(" ")}`
+			)
 		})
 	})
 })
