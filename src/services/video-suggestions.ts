@@ -83,7 +83,7 @@ async function cachedSearch(
 	artist: string,
 	search: (query: string) => Promise<SongCandidate[]>
 ): Promise<SongCandidate[]> {
-	const key = `songsearch:v3:${normalizeSong(song)}|${normalizeArtist(artist)}`
+	const key = `songsearch:v4:${normalizeSong(song)}|${normalizeArtist(artist)}`
 	const cached = await env.CACHE.get(key)
 	if (cached) {
 		try {

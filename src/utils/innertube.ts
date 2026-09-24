@@ -54,40 +54,62 @@ export type SongCandidate = {
 	videoType: "song" | "video"
 }
 
-export async function searchSongs(query: string): Promise<SongCandidate[]> {
+type MusicSearchItem = {
+	id?: string
+	title?: string
+	artists?: { name?: string; channel_id?: string }[]
+	authors?: { name?: string; channel_id?: string }[]
+	album?: { name?: string }
+	duration?: { seconds?: number }
+}
+
+function toCandidate(
+	it: MusicSearchItem,
+	videoType: SongCandidate["videoType"]
+): SongCandidate | null {
+	if (typeof it.id !== "string") return null
+	const credits = it.artists ?? it.authors ?? []
+	const artists = credits
+		.map((a) => a.name)
+		.filter((n): n is string => typeof n === "string" && n.length > 0)
+	const artistChannelIds = credits
+		.map((a) => a.channel_id)
+		.filter((id): id is string => typeof id === "string" && id.length > 0)
+	return {
+		videoId: it.id,
+		title: it.title ?? "",
+		artist: artists[0] ?? "",
+		artists,
+		artistChannelIds,
+		album: it.album?.name ?? null,
+		durationSeconds: it.duration?.seconds ?? null,
+		videoType,
+	}
+}
+
+// The unfiltered search no longer groups results into Songs and Videos shelves, so each filter is queried on its own.
+async function searchShelf(
+	query: string,
+	videoType: SongCandidate["videoType"]
+): Promise<SongCandidate[]> {
 	try {
 		const yt = await getInnertube()
-		const res = await yt.music.search(query, { type: "all" })
-		const shelves = [
-			{ items: res.songs?.contents ?? [], videoType: "song" as const },
-			{ items: res.videos?.contents ?? [], videoType: "video" as const },
-		]
-		const candidates: SongCandidate[] = []
-		for (const { items, videoType } of shelves) {
-			for (const it of items) {
-				if (typeof it.id !== "string") continue
-				const credits = it.artists ?? it.authors ?? []
-				const artists = credits
-					.map((a) => a.name)
-					.filter((n): n is string => typeof n === "string" && n.length > 0)
-				const artistChannelIds = credits
-					.map((a) => a.channel_id)
-					.filter((id): id is string => typeof id === "string" && id.length > 0)
-				candidates.push({
-					videoId: it.id,
-					title: it.title ?? "",
-					artist: artists[0] ?? "",
-					artists,
-					artistChannelIds,
-					album: it.album?.name ?? null,
-					durationSeconds: it.duration?.seconds ?? null,
-					videoType,
-				})
-			}
-		}
-		return candidates
+		const res = await yt.music.search(query, { type: videoType })
+		const shelf = videoType === "song" ? res.songs : res.videos
+		const items = shelf?.contents ?? []
+		return items
+			.map((it) => toCandidate(it, videoType))
+			.filter((c): c is SongCandidate => c !== null)
 	} catch (err) {
-		log.warn("innertube song search failed", { query, error: (err as Error).message })
+		log.warn("innertube song search failed", { query, videoType, error: (err as Error).message })
 		return []
 	}
+}
+
+export async function searchSongs(query: string): Promise<SongCandidate[]> {
+	const [songs, videos] = await Promise.all([
+		searchShelf(query, "song"),
+		searchShelf(query, "video"),
+	])
+	return [...songs, ...videos]
 }

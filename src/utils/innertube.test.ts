@@ -97,30 +97,39 @@ describe("searchSongs", () => {
 	it("maps song and video shelves, tags the video type, captures artist channel ids, and drops items without a video id", async () => {
 		create.mockResolvedValue({
 			music: {
-				search: async () => ({
-					songs: {
-						contents: [
-							{
-								id: "vid1",
-								title: "Song One",
-								artists: [{ name: "Artist A", channel_id: "UCartistA" }, { name: "Artist B" }],
-								album: { name: "Album X" },
-								duration: { seconds: 200 },
-							},
-							{ title: "No Id", artists: [{ name: "B" }] },
-							{ id: "vid3", title: "Sparse" },
-						],
-					},
-					videos: {
-						contents: [
-							{
-								id: "clip1",
-								title: "Song One (Official Video)",
-								authors: [{ name: "Artist A", channel_id: "UCartistA" }],
-								duration: { seconds: 210 },
-							},
-						],
-					},
+				search: async (_query: string, { type }: { type: string }) => ({
+					songs:
+						type !== "song"
+							? undefined
+							: {
+									contents: [
+										{
+											id: "vid1",
+											title: "Song One",
+											artists: [
+												{ name: "Artist A", channel_id: "UCartistA" },
+												{ name: "Artist B" },
+											],
+											album: { name: "Album X" },
+											duration: { seconds: 200 },
+										},
+										{ title: "No Id", artists: [{ name: "B" }] },
+										{ id: "vid3", title: "Sparse" },
+									],
+								},
+					videos:
+						type !== "video"
+							? undefined
+							: {
+									contents: [
+										{
+											id: "clip1",
+											title: "Song One (Official Video)",
+											authors: [{ name: "Artist A", channel_id: "UCartistA" }],
+											duration: { seconds: 210 },
+										},
+									],
+								},
 				}),
 			},
 		})
@@ -164,6 +173,41 @@ describe("searchSongs", () => {
 			create.mockResolvedValue({ music: { search: async () => ({}) } })
 			const { searchSongs } = await import("./innertube")
 			expect(await searchSongs("nothing")).toEqual([])
+		})
+
+		it("regression: searches the song and video filters separately, since the unfiltered layout has no Songs or Videos shelf", async () => {
+			const search = vi.fn(async (_query: string, { type }: { type: string }) =>
+				type === "all"
+					? { contents: [{ type: "ItemSection" }] }
+					: type === "song"
+						? {
+								songs: {
+									contents: [{ id: "vid1", title: "Song One", duration: { seconds: 200 } }],
+								},
+							}
+						: { videos: { contents: [{ id: "clip1", title: "Clip", duration: { seconds: 210 } }] } }
+			)
+			create.mockResolvedValue({ music: { search } })
+			const { searchSongs } = await import("./innertube")
+			const results = await searchSongs("song one")
+			expect(results.map((c) => [c.videoId, c.videoType])).toEqual([
+				["vid1", "song"],
+				["clip1", "video"],
+			])
+			expect(search.mock.calls.map(([, opts]) => opts.type).sort()).toEqual(["song", "video"])
+		})
+
+		it("keeps the songs when only the video search fails", async () => {
+			create.mockResolvedValue({
+				music: {
+					search: async (_query: string, { type }: { type: string }) => {
+						if (type === "video") throw new Error("rate limited")
+						return { songs: { contents: [{ id: "vid1", title: "Song One" }] } }
+					},
+				},
+			})
+			const { searchSongs } = await import("./innertube")
+			expect((await searchSongs("song one")).map((c) => c.videoId)).toEqual(["vid1"])
 		})
 
 		it("returns an empty array (fail-closed) when the search throws", async () => {
