@@ -27,6 +27,7 @@ export const config = {
 		jevModel: "jev-latest",
 		jevFlagThreshold: 0.8,
 		jevTimeoutMs: 3000,
+		jevLyricContextChars: 12_000, // ~3k tokens of lyrics for Jev; longer songs are trimmed around the edit
 		staleSaveRetries: 2,
 		languages: new Set<string>([
 			"en",
