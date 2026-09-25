@@ -9,10 +9,13 @@ export function youtubeThumbnailFallbackUrl(videoId: string): string {
   return `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`
 }
 
-export function useArtwork(videoId: string, opts: { enabled?: boolean } = {}): UseQueryResult<string | null> {
+export function useArtwork(
+  videoId: string,
+  opts: { enabled?: boolean; size?: number } = {},
+): UseQueryResult<string | null> {
   return useQuery({
-    queryKey: ["artwork", videoId],
-    queryFn: () => fetchArtwork(videoId),
+    queryKey: ["artwork", videoId, opts.size ?? null],
+    queryFn: () => fetchArtwork(videoId, opts.size),
     enabled: (opts.enabled ?? true) && videoId.length > 0,
     staleTime: 1000 * 60 * 60,
     gcTime: 1000 * 60 * 60,

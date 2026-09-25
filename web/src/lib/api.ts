@@ -146,9 +146,12 @@ export async function fetchLyricsVariant(
   return { variant }
 }
 
-export async function fetchArtwork(videoId: string): Promise<string | null> {
+export async function fetchArtwork(videoId: string, size?: number): Promise<string | null> {
   if (IS_SPA_EXPANSION_SEED) return null
-  const { artworkUrl } = await getJson<{ artworkUrl: string | null }>(`/artwork?v=${encodeURIComponent(videoId)}`)
+  const sized = size !== undefined ? `&size=${size}` : ""
+  const { artworkUrl } = await getJson<{ artworkUrl: string | null }>(
+    `/artwork?v=${encodeURIComponent(videoId)}${sized}`,
+  )
   return artworkUrl
 }
 
