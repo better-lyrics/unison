@@ -324,7 +324,7 @@ describe("GET /links/discord/callback", () => {
 			expect(res.status).toBe(302)
 			expect(res.headers.get("location")).toContain("/link?status=linked")
 			const upd = db.calls.find((c) => c.sql.includes("UPDATE discord_links"))
-			expect(upd?.params).toEqual([NEW_HASH, KEY, "same-id"])
+			expect(upd?.params).toEqual(["Alice", NEW_HASH, KEY, "same-id"])
 		})
 
 		it("relinks through delete and insert when the Discord account differs", async () => {
@@ -341,6 +341,20 @@ describe("GET /links/discord/callback", () => {
 			expect(db.calls.some((c) => c.sql.includes("DELETE FROM discord_links"))).toBe(true)
 			const insert = db.calls.find((c) => c.sql.includes("INSERT INTO discord_links"))
 			expect(insert?.params).toEqual(["new-id", KEY, "Bob", BOB_HASH, expect.any(Number)])
+		})
+
+		it("regression: a same-account re-consent picks up a renamed Discord account", async () => {
+			const cache = makeMockCache({ "link_state:st-rn": KEY })
+			const db = makeMockDB([existingLink("same-id", NEW_HASH), null])
+			const app = linkRoutes(
+				makeEnv(db, cache),
+				discordFetch({ id: "same-id", username: "alice", global_name: "Alicia", avatar: NEW_HASH })
+			)
+
+			await callback(app, "st-rn")
+
+			const upd = db.calls.find((c) => c.sql.includes("UPDATE discord_links"))
+			expect(upd?.params[0]).toBe("Alicia")
 		})
 
 		describe("invariants", () => {
@@ -370,7 +384,7 @@ describe("GET /links/discord/callback", () => {
 				await callback(app, "st-clr")
 
 				const upd = db.calls.find((c) => c.sql.includes("UPDATE discord_links"))
-				expect(upd?.params).toEqual([null, KEY, "same-id"])
+				expect(upd?.params).toEqual(["alice", null, KEY, "same-id"])
 			})
 		})
 	})

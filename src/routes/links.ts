@@ -4,8 +4,8 @@ import {
 	getByKeyId,
 	linkDiscord,
 	listLinks,
+	refreshDiscordProfile,
 	unlinkByKeyId,
-	updateDiscordAvatar,
 } from "@/db/discordLinks"
 import { Logger } from "@/infra/logger"
 import type { Env } from "@/types"
@@ -141,12 +141,13 @@ export const linkRoutes = (env: Env, fetchImpl: typeof fetch = fetch) =>
 
 				const existing = await getByKeyId(env, keyId)
 				if (existing?.discord_id === identity.id) {
-					await updateDiscordAvatar(env, {
+					await refreshDiscordProfile(env, {
 						keyId,
 						discordId: identity.id,
+						discordUsername: identity.displayName,
 						discordAvatar: identity.avatar,
 					})
-					log.info("discord avatar refreshed", { keyId, discordId: identity.id })
+					log.info("discord profile refreshed", { keyId, discordId: identity.id })
 					return redirectToLinkPage("linked", identity.displayName)
 				}
 

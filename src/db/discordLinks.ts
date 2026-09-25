@@ -41,14 +41,19 @@ export async function linkDiscord(
 	])
 }
 
-export async function updateDiscordAvatar(
+export async function refreshDiscordProfile(
 	env: Env,
-	params: { keyId: string; discordId: string; discordAvatar: string | null }
+	params: {
+		keyId: string
+		discordId: string
+		discordUsername: string | null
+		discordAvatar: string | null
+	}
 ): Promise<void> {
 	await env.DB.prepare(
-		"UPDATE discord_links SET discord_avatar = ? WHERE key_id = ? AND discord_id = ?"
+		"UPDATE discord_links SET discord_username = ?, discord_avatar = ? WHERE key_id = ? AND discord_id = ?"
 	)
-		.bind(params.discordAvatar, params.keyId, params.discordId)
+		.bind(params.discordUsername, params.discordAvatar, params.keyId, params.discordId)
 		.run()
 }
 

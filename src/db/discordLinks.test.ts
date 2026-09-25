@@ -6,7 +6,7 @@ import {
 	linkDiscord,
 	listLinks,
 	unlinkByKeyId,
-	updateDiscordAvatar,
+	refreshDiscordProfile,
 } from "./discordLinks"
 
 interface DBCall {
@@ -135,25 +135,31 @@ describe("discordLinks", () => {
 		})
 	})
 
-	describe("updateDiscordAvatar", () => {
-		it("updates only the avatar column, scoped to key and discord id", async () => {
+	describe("refreshDiscordProfile", () => {
+		it("rewrites the username and avatar in place, scoped to key and discord id", async () => {
 			const db = makeMockDB([null])
-			await updateDiscordAvatar(makeEnv(db), {
+			await refreshDiscordProfile(makeEnv(db), {
 				keyId: KEY,
 				discordId: "d6",
+				discordUsername: "Alicia",
 				discordAvatar: "fresh-hash",
 			})
 			expect(db.calls).toHaveLength(1)
 			const upd = db.calls[0]
-			expect(upd.sql).toContain("UPDATE discord_links SET discord_avatar = ?")
+			expect(upd.sql).toContain("UPDATE discord_links SET discord_username = ?, discord_avatar = ?")
 			expect(upd.sql).toContain("WHERE key_id = ? AND discord_id = ?")
-			expect(upd.params).toEqual(["fresh-hash", KEY, "d6"])
+			expect(upd.params).toEqual(["Alicia", "fresh-hash", KEY, "d6"])
 		})
 
 		describe("invariants", () => {
 			it("never deletes, inserts or touches linked_at", async () => {
 				const db = makeMockDB([null])
-				await updateDiscordAvatar(makeEnv(db), { keyId: KEY, discordId: "d6", discordAvatar: "h" })
+				await refreshDiscordProfile(makeEnv(db), {
+					keyId: KEY,
+					discordId: "d6",
+					discordUsername: "Alicia",
+					discordAvatar: "h",
+				})
 				for (const c of db.calls) {
 					expect(c.sql).not.toMatch(/DELETE|INSERT|linked_at/)
 				}
@@ -163,8 +169,13 @@ describe("discordLinks", () => {
 		describe("edge cases", () => {
 			it("clears the stored hash when the user removed their Discord avatar", async () => {
 				const db = makeMockDB([null])
-				await updateDiscordAvatar(makeEnv(db), { keyId: KEY, discordId: "d6", discordAvatar: null })
-				expect(db.calls[0].params).toEqual([null, KEY, "d6"])
+				await refreshDiscordProfile(makeEnv(db), {
+					keyId: KEY,
+					discordId: "d6",
+					discordUsername: "Alicia",
+					discordAvatar: null,
+				})
+				expect(db.calls[0].params).toEqual(["Alicia", null, KEY, "d6"])
 			})
 		})
 	})
