@@ -160,6 +160,7 @@ describe("AvatarPicker", () => {
       stubServer({ link: { linked: true, discordAvatarUrl: null } })
       renderPicker()
       expect(await screen.findByRole("button", { name: /use my discord photo/i })).toBeTruthy()
+      expect(screen.getByText(/without a custom photo keep the generated one/i)).toBeTruthy()
       expect(screen.queryByRole("button", { name: "Discord photo" })).toBeNull()
     })
 

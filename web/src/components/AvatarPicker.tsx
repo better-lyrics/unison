@@ -98,10 +98,20 @@ export function AvatarPicker({ discord }: { discord: DiscordLink }) {
         ) : null}
       </div>
       {discord.status === "linked" && !discord.discordAvatarUrl ? (
-        <button type="button" onClick={discord.connect} disabled={discord.connecting} className={secondaryButtonClass}>
-          <IconBrandDiscordFilled className="size-4" />
-          {discord.connecting ? "Connecting..." : "Use my Discord photo"}
-        </button>
+        <>
+          <p className="text-xs text-unison-text-muted">
+            Reconnect Discord once to use your Discord photo. Accounts without a custom photo keep the generated one.
+          </p>
+          <button
+            type="button"
+            onClick={discord.connect}
+            disabled={discord.connecting}
+            className={secondaryButtonClass}
+          >
+            <IconBrandDiscordFilled className="size-4" />
+            {discord.connecting ? "Connecting..." : "Use my Discord photo"}
+          </button>
+        </>
       ) : null}
       {catalogue.status === "error" ? (
         <p className="text-xs text-unison-text-muted">Preset pictures could not be loaded.</p>
