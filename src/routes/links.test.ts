@@ -236,7 +236,7 @@ describe("GET /links/discord/callback", () => {
 		expect(loc).toContain("/link?status=linked")
 		expect(loc).toContain("name=Alice")
 		const insert = db.calls.find((c) => c.sql.includes("INSERT INTO discord_links"))
-		expect(insert?.params).toEqual(["d-1", KEY, "Alice", expect.any(Number)])
+		expect(insert?.params).toEqual(["d-1", KEY, "Alice", null, expect.any(Number)])
 		// state is single-use
 		expect(cache.store.has("link_state:st-1")).toBe(false)
 	})

@@ -1,18 +1,22 @@
-import { Elysia, t } from "elysia"
 import { config } from "@/config"
 import { computeMigrationPlan, createPreviewAudit } from "@/db/account-migration"
 import { getByKeyId, linkDiscord, listLinks, unlinkByKeyId } from "@/db/discordLinks"
 import { Logger } from "@/infra/logger"
 import type { Env } from "@/types"
-import { eitherAuth } from "@/utils/either-auth"
 import { signedRequest } from "@/utils/auth"
 import { isLinkBlacklisted } from "@/utils/blacklist"
 import { isAuthorizedBot } from "@/utils/bot-auth"
 import type { DiscordIdentity } from "@/utils/discord-oauth"
 import { buildAuthorizeUrl, exchangeCodeForUser } from "@/utils/discord-oauth"
+import { eitherAuth } from "@/utils/either-auth"
 import { ErrorCode, buildError } from "@/utils/errors"
-import { getActiveSessionForDiscord, type MigrationSession, saveSession } from "@/utils/migration-session"
+import {
+	type MigrationSession,
+	getActiveSessionForDiscord,
+	saveSession,
+} from "@/utils/migration-session"
 import { generateSessionToken } from "@/utils/session"
+import { Elysia, t } from "elysia"
 
 const log = new Logger("links")
 
@@ -132,6 +136,7 @@ export const linkRoutes = (env: Env, fetchImpl: typeof fetch = fetch) =>
 					discordId: identity.id,
 					keyId,
 					discordUsername: identity.displayName,
+					discordAvatar: identity.avatar,
 				})
 				log.info("account linked", { keyId, discordId: identity.id })
 				return redirectToLinkPage("linked", identity.displayName)
