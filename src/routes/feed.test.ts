@@ -321,6 +321,7 @@ describe("GET /feed marks and submitter", () => {
 					badgeCount: 0,
 					topBadge: null,
 					featured: [],
+					avatarUrl: null,
 				},
 				at: 1700000000,
 			},
@@ -333,6 +334,7 @@ describe("GET /feed marks and submitter", () => {
 			badgeCount: 0,
 			topBadge: null,
 			featured: [],
+			avatarUrl: null,
 		})
 		expect(first).toMatchObject({
 			id: 1,

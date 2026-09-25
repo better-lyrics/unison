@@ -4,6 +4,7 @@ export interface DiscordLink {
 	discord_id: string
 	key_id: string
 	discord_username: string | null
+	discord_avatar: string | null
 	linked_at: number
 }
 
@@ -21,7 +22,12 @@ export async function getByKeyId(env: Env, keyId: string): Promise<DiscordLink |
 
 export async function linkDiscord(
 	env: Env,
-	params: { discordId: string; keyId: string; discordUsername: string | null }
+	params: {
+		discordId: string
+		keyId: string
+		discordUsername: string | null
+		discordAvatar: string | null
+	}
 ): Promise<void> {
 	const now = Math.floor(Date.now() / 1000)
 	await env.DB.batch([
@@ -30,9 +36,25 @@ export async function linkDiscord(
 			params.discordId
 		),
 		env.DB.prepare(
-			"INSERT INTO discord_links (discord_id, key_id, discord_username, linked_at) VALUES (?, ?, ?, ?)"
-		).bind(params.discordId, params.keyId, params.discordUsername, now),
+			"INSERT INTO discord_links (discord_id, key_id, discord_username, discord_avatar, linked_at) VALUES (?, ?, ?, ?, ?)"
+		).bind(params.discordId, params.keyId, params.discordUsername, params.discordAvatar, now),
 	])
+}
+
+export async function refreshDiscordProfile(
+	env: Env,
+	params: {
+		keyId: string
+		discordId: string
+		discordUsername: string | null
+		discordAvatar: string | null
+	}
+): Promise<void> {
+	await env.DB.prepare(
+		"UPDATE discord_links SET discord_username = ?, discord_avatar = ? WHERE key_id = ? AND discord_id = ?"
+	)
+		.bind(params.discordUsername, params.discordAvatar, params.keyId, params.discordId)
+		.run()
 }
 
 export async function unlinkByKeyId(env: Env, keyId: string): Promise<void> {

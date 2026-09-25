@@ -1,6 +1,6 @@
 import { useSession } from "@/auth/useSession";
 import { Tooltip } from "@/components/Tooltip";
-import { dicebearThumbsDataUri } from "@/lib/avatar";
+import { UserAvatar } from "@/components/UserAvatar";
 import { IconCheck, IconCopy, IconLogout, IconUser } from "@tabler/icons-react";
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
@@ -57,9 +57,9 @@ export function SignInControl() {
           aria-label={identity.displayName}
           className="flex cursor-pointer items-center gap-2 rounded-full p-1 pr-3 transition-colors hover:bg-unison-bg-hover"
         >
-          <img
-            src={dicebearThumbsDataUri(identity.keyId)}
-            alt=""
+          <UserAvatar
+            avatarUrl={identity.avatarUrl}
+            keyId={identity.keyId}
             className="size-7 rounded-full border border-unison-border bg-unison-bg-hover"
           />
           <span className="hidden text-sm font-medium text-unison-text sm:inline">

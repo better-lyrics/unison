@@ -111,6 +111,7 @@ export interface SubmitterInfo {
 	badgeCount: number
 	topBadge: BadgeRef | null
 	featured: BadgeRef[]
+	avatarUrl: string | null
 }
 
 export interface MarkActor {
@@ -121,6 +122,7 @@ export interface MarkActor {
 	badgeCount: number
 	topBadge: BadgeRef | null
 	featured: BadgeRef[]
+	avatarUrl: string | null
 }
 
 export interface Mark {

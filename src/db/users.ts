@@ -1,6 +1,7 @@
 import { invalidateCuratorLeaderboardCache } from "@/db/leaderboard"
 import { invalidateCacheForSubmitter } from "@/db/lyrics"
 import type { Env, User } from "@/types"
+import { avatarUrlFor } from "@/utils/avatar-url"
 import { generatePetName } from "@/utils/petname"
 
 export async function getOrCreateUser(env: Env, keyId: string): Promise<User> {
@@ -38,17 +39,38 @@ export async function updateUserReputation(env: Env, userId: number, delta: numb
 export interface UserIdentity {
 	displayName: string
 	handle: string | null
+	avatarUrl: string | null
 }
 
 // The handle is the lowercased nickname (a unique, indexed generated column). Users
 // without a nickname have no reversible handle, so it is null and they keep /curator/:keyId.
 export async function resolveIdentity(env: Env, keyId: string): Promise<UserIdentity> {
-	const row = await env.DB.prepare("SELECT nickname, nickname_lower FROM users WHERE key_id = ?")
+	const row = await env.DB.prepare(
+		`SELECT u.nickname, u.nickname_lower, u.avatar_type, u.avatar_ref, dl.discord_id, dl.discord_avatar
+		 FROM users u
+		 LEFT JOIN discord_links dl ON dl.key_id = u.key_id
+		 WHERE u.key_id = ?`
+	)
 		.bind(keyId)
-		.first<{ nickname: string | null; nickname_lower: string | null }>()
+		.first<{
+			nickname: string | null
+			nickname_lower: string | null
+			avatar_type: string | null
+			avatar_ref: string | null
+			discord_id: string | null
+			discord_avatar: string | null
+		}>()
 	return {
 		displayName: row?.nickname ?? generatePetName(keyId),
 		handle: row?.nickname_lower ?? null,
+		avatarUrl: row
+			? avatarUrlFor({
+					avatarType: row.avatar_type,
+					avatarRef: row.avatar_ref,
+					discordId: row.discord_id,
+					discordAvatar: row.discord_avatar,
+				})
+			: null,
 	}
 }
 
@@ -92,6 +114,35 @@ export async function clearNickname(env: Env, keyId: string): Promise<void> {
 		.bind(now, keyId)
 		.run()
 	await invalidateCacheForSubmitter(env, keyId)
+	await invalidateCuratorLeaderboardCache(env)
+}
+
+export async function resolveAvatarUrl(env: Env, keyId: string): Promise<string | null> {
+	return (await resolveIdentity(env, keyId)).avatarUrl
+}
+
+export async function setAvatarChoice(
+	env: Env,
+	keyId: string,
+	type: "discord" | "preset",
+	ref: string | null
+): Promise<void> {
+	const now = Math.floor(Date.now() / 1000)
+	await env.DB.prepare(
+		"UPDATE users SET avatar_type = ?, avatar_ref = ?, avatar_updated_at = ? WHERE key_id = ?"
+	)
+		.bind(type, ref, now, keyId)
+		.run()
+	await invalidateCuratorLeaderboardCache(env)
+}
+
+export async function clearAvatarChoice(env: Env, keyId: string): Promise<void> {
+	const now = Math.floor(Date.now() / 1000)
+	await env.DB.prepare(
+		"UPDATE users SET avatar_type = NULL, avatar_ref = NULL, avatar_updated_at = ? WHERE key_id = ?"
+	)
+		.bind(now, keyId)
+		.run()
 	await invalidateCuratorLeaderboardCache(env)
 }
 

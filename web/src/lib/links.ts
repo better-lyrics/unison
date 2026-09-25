@@ -29,6 +29,7 @@ export interface LinkStatus {
   linked: boolean
   discordId: string | null
   discordUsername: string | null
+  discordAvatarUrl?: string | null
 }
 
 export async function startDiscordLink(signedBody: SignedBody): Promise<{ authorizeUrl: string }> {

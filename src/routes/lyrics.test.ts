@@ -611,6 +611,7 @@ describe("GET /lyrics/mine", () => {
 					badgeCount: 0,
 					topBadge: null,
 					featured: [],
+					avatarUrl: null,
 				},
 				at: 1700000000,
 			},

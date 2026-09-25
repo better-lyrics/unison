@@ -1,14 +1,19 @@
-import { Elysia } from "elysia"
 import { config } from "@/config"
-import { clearNickname, resolveDisplayName, setNickname } from "@/db/users"
+import { clearNickname, resolveIdentity, setNickname } from "@/db/users"
 import type { Env } from "@/types"
 import { signedRequest } from "@/utils/auth"
 import { eitherAuth } from "@/utils/either-auth"
 import { isProfane } from "@/utils/profanity"
 import { readRateLimit } from "@/utils/read-rate-limit"
 import { createSession, deleteSession, getSession } from "@/utils/session"
+import { Elysia } from "elysia"
 
 const CHALLENGE_PREFIX = "challenge:"
+
+async function sessionIdentity(env: Env, keyId: string) {
+	const { displayName, avatarUrl } = await resolveIdentity(env, keyId)
+	return { keyId, displayName, avatarUrl }
+}
 
 function generateNonce(): string {
 	const bytes = new Uint8Array(24)
@@ -54,8 +59,7 @@ export const authRoutes = (env: Env) =>
 			return {
 				success: true,
 				data: {
-					keyId: record.keyId,
-					displayName: await resolveDisplayName(env, record.keyId),
+					...(await sessionIdentity(env, record.keyId)),
 					expiresAt: record.expiresAt,
 				},
 			}
@@ -131,7 +135,7 @@ export const authRoutes = (env: Env) =>
 
 					return {
 						success: true,
-						data: { keyId, displayName: await resolveDisplayName(env, keyId) },
+						data: await sessionIdentity(env, keyId),
 					}
 				})
 				.delete("/nickname", async ({ env, keyId, set }) => {
@@ -147,13 +151,13 @@ export const authRoutes = (env: Env) =>
 					await clearNickname(env, keyId)
 					return {
 						success: true,
-						data: { keyId, displayName: await resolveDisplayName(env, keyId) },
+						data: await sessionIdentity(env, keyId),
 					}
 				})
 				.post("/nickname/me", async ({ env, keyId }) => {
 					return {
 						success: true,
-						data: { keyId, displayName: await resolveDisplayName(env, keyId) },
+						data: await sessionIdentity(env, keyId),
 					}
 				})
 		)
@@ -186,8 +190,7 @@ export const authRoutes = (env: Env) =>
 						data: {
 							sessionToken: session.token,
 							expiresAt: session.expiresAt,
-							keyId,
-							displayName: await resolveDisplayName(env, keyId),
+							...(await sessionIdentity(env, keyId)),
 						},
 					}
 				})

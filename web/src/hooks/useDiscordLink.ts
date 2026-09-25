@@ -8,16 +8,18 @@ type Status = "loading" | "linked" | "unlinked"
 export interface DiscordLink {
   status: Status
   username: string | null
+  discordAvatarUrl: string | null
   connecting: boolean
   working: boolean
   error: string | null
   connect: () => Promise<void>
-  disconnect: () => Promise<void>
+  disconnect: () => Promise<boolean>
 }
 
 export function useDiscordLink({ enabled = true }: { enabled?: boolean } = {}): DiscordLink {
   const [status, setStatus] = useState<Status>(enabled ? "loading" : "unlinked")
   const [username, setUsername] = useState<string | null>(null)
+  const [discordAvatarUrl, setDiscordAvatarUrl] = useState<string | null>(null)
   const [connecting, setConnecting] = useState(false)
   const [working, setWorking] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -35,6 +37,7 @@ export function useDiscordLink({ enabled = true }: { enabled?: boolean } = {}): 
         if (cancelled) return
         setStatus(s.linked ? "linked" : "unlinked")
         setUsername(s.linked ? s.discordUsername : null)
+        setDiscordAvatarUrl(s.linked ? (s.discordAvatarUrl ?? null) : null)
       })
       .catch(() => {
         if (!cancelled) setStatus("unlinked")
@@ -65,19 +68,22 @@ export function useDiscordLink({ enabled = true }: { enabled?: boolean } = {}): 
 
   const disconnect = useCallback(async () => {
     const stored = loadStoredSession()
-    if (!stored) return
+    if (!stored) return false
     setWorking(true)
     setError(null)
     try {
       await unlinkDiscord(stored.sessionToken)
       setStatus("unlinked")
       setUsername(null)
+      setDiscordAvatarUrl(null)
+      return true
     } catch {
       setError("We could not disconnect just now. Please try again.")
+      return false
     } finally {
       setWorking(false)
     }
   }, [])
 
-  return { status, username, connecting, working, error, connect, disconnect }
+  return { status, username, discordAvatarUrl, connecting, working, error, connect, disconnect }
 }

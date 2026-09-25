@@ -13,6 +13,7 @@ const ownerSession = {
   identity: { keyId, displayName: "Aurora Wynter", expiresAt: Math.floor(Date.now() / 1000) + 1000 },
   signOut: () => {},
   updateDisplayName: () => {},
+  updateAvatarUrl: () => {},
 } as const
 
 function ok(data: unknown): Promise<Response> {

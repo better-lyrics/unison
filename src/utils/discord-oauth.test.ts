@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest"
 import { DiscordOAuthError, buildAuthorizeUrl, exchangeCodeForUser } from "./discord-oauth"
 
+const HASH = "8342729096ea3675442027381ff50dfe"
+
 const CFG = {
 	clientId: "client-123",
 	clientSecret: "secret-xyz",
@@ -64,6 +66,7 @@ describe("exchangeCodeForUser", () => {
 			id: "discord-999",
 			username: "alice",
 			displayName: "Alice In Wonderland",
+			avatar: null,
 		})
 		expect(tokenBody).toContain("grant_type=authorization_code")
 		expect(tokenBody).toContain("code=code-1")
@@ -77,6 +80,42 @@ describe("exchangeCodeForUser", () => {
 		})
 		const user = await exchangeCodeForUser(CFG, "code-2", fetchImpl)
 		expect(user.displayName).toBe("bob")
+	})
+
+	it("captures the avatar hash from the user payload", async () => {
+		const fetchImpl = fakeFetch({
+			token: () => ok({ access_token: "tok" }),
+			user: () => ok({ id: "d3", username: "carol", global_name: "Carol", avatar: HASH }),
+		})
+		const user = await exchangeCodeForUser(CFG, "code-3", fetchImpl)
+		expect(user.avatar).toBe(HASH)
+	})
+
+	it("keeps an animated avatar hash verbatim", async () => {
+		const fetchImpl = fakeFetch({
+			token: () => ok({ access_token: "tok" }),
+			user: () => ok({ id: "d5", username: "erin", global_name: null, avatar: `a_${HASH}` }),
+		})
+		const user = await exchangeCodeForUser(CFG, "code-5", fetchImpl)
+		expect(user.avatar).toBe(`a_${HASH}`)
+	})
+
+	it("drops an avatar value that is not a Discord image hash", async () => {
+		const fetchImpl = fakeFetch({
+			token: () => ok({ access_token: "tok" }),
+			user: () => ok({ id: "d6", username: "mal", avatar: "../../evil?x=" }),
+		})
+		const user = await exchangeCodeForUser(CFG, "code-6", fetchImpl)
+		expect(user.avatar).toBeNull()
+	})
+
+	it("returns a null avatar when the user has no custom avatar", async () => {
+		const fetchImpl = fakeFetch({
+			token: () => ok({ access_token: "tok" }),
+			user: () => ok({ id: "d4", username: "dave", global_name: null, avatar: null }),
+		})
+		const user = await exchangeCodeForUser(CFG, "code-4", fetchImpl)
+		expect(user.avatar).toBeNull()
 	})
 
 	describe("error paths", () => {

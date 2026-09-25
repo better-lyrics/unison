@@ -318,6 +318,23 @@ export async function runMigration(
 				.run()
 		}
 
+		const snapAvatars = snapshot.users as SnapUser[]
+		const oldAvatar = snapAvatars.find((u) => u.key_id === oldKey)
+		const newAvatar = snapAvatars.find((u) => u.key_id === newKey)
+		if (!oldAvatar?.avatar_type && newAvatar?.avatar_type) {
+			await tx
+				.prepare(
+					"UPDATE users SET avatar_type = ?, avatar_ref = ?, avatar_updated_at = ? WHERE id = ?"
+				)
+				.bind(
+					newAvatar.avatar_type,
+					newAvatar.avatar_ref ?? null,
+					newAvatar.avatar_updated_at ?? null,
+					oldId
+				)
+				.run()
+		}
+
 		if (newId !== null) {
 			const snapReps = snapshot.users as { key_id: string; reputation: number }[]
 			const oldRep =
@@ -485,11 +502,15 @@ interface SnapUser {
 	created_at: number
 	nickname: string | null
 	nickname_updated_at: number | null
+	avatar_type?: string | null
+	avatar_ref?: string | null
+	avatar_updated_at?: number | null
 }
 interface SnapDiscord {
 	discord_id: string
 	key_id: string
 	discord_username: string | null
+	discord_avatar?: string | null
 	linked_at: number
 }
 interface SnapVote {
@@ -604,7 +625,7 @@ export async function restoreFromSnapshot(
 
 		await tx
 			.prepare(
-				"UPDATE users SET key_id = ?, reputation = ?, vote_count = ?, avg_vote = ?, nickname = ?, nickname_updated_at = ? WHERE id = ?"
+				"UPDATE users SET key_id = ?, reputation = ?, vote_count = ?, avg_vote = ?, nickname = ?, nickname_updated_at = ?, avatar_type = ?, avatar_ref = ?, avatar_updated_at = ? WHERE id = ?"
 			)
 			.bind(
 				oldSnap.key_id,
@@ -613,6 +634,9 @@ export async function restoreFromSnapshot(
 				oldSnap.avg_vote,
 				oldSnap.nickname,
 				oldSnap.nickname_updated_at,
+				oldSnap.avatar_type ?? null,
+				oldSnap.avatar_ref ?? null,
+				oldSnap.avatar_updated_at ?? null,
 				oldSnap.id
 			)
 			.run()
@@ -620,7 +644,7 @@ export async function restoreFromSnapshot(
 		if (newSnap) {
 			await tx
 				.prepare(
-					"INSERT INTO users (id, key_id, reputation, vote_count, avg_vote, created_at, nickname, nickname_updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
+					"INSERT INTO users (id, key_id, reputation, vote_count, avg_vote, created_at, nickname, nickname_updated_at, avatar_type, avatar_ref, avatar_updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
 				)
 				.bind(
 					newSnap.id,
@@ -630,7 +654,10 @@ export async function restoreFromSnapshot(
 					newSnap.avg_vote,
 					newSnap.created_at,
 					newSnap.nickname,
-					newSnap.nickname_updated_at
+					newSnap.nickname_updated_at,
+					newSnap.avatar_type ?? null,
+					newSnap.avatar_ref ?? null,
+					newSnap.avatar_updated_at ?? null
 				)
 				.run()
 		}
@@ -639,9 +666,9 @@ export async function restoreFromSnapshot(
 		for (const d of snap.discord_links as SnapDiscord[]) {
 			await tx
 				.prepare(
-					"INSERT INTO discord_links (discord_id, key_id, discord_username, linked_at) VALUES (?, ?, ?, ?)"
+					"INSERT INTO discord_links (discord_id, key_id, discord_username, discord_avatar, linked_at) VALUES (?, ?, ?, ?, ?)"
 				)
-				.bind(d.discord_id, d.key_id, d.discord_username, d.linked_at)
+				.bind(d.discord_id, d.key_id, d.discord_username, d.discord_avatar ?? null, d.linked_at)
 				.run()
 		}
 

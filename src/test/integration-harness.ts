@@ -23,6 +23,11 @@ export function makeMemoryCache() {
 		async delete(key: string) {
 			store.delete(key)
 		},
+		async getDel(key: string) {
+			const value = store.get(key) ?? null
+			store.delete(key)
+			return value
+		},
 		async keys(pattern: string) {
 			const prefix = pattern.replace(/\*$/, "")
 			return [...store.keys()].filter((key) => key.startsWith(prefix))

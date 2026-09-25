@@ -1,5 +1,7 @@
 import { toHandle } from "./handle"
 import type {
+  AvatarCatalogue,
+  AvatarChoice,
   BadgeCatalogue,
   BadgeDef,
   BadgeImage,
@@ -562,6 +564,30 @@ const SEED_CATALOGUE: BadgeCatalogue = {
     rarityThreshold: 0.1,
     categoryOrder: ["tier", "output", "craft", "coverage", "curation", "acclaim", "consistency", "special"],
   },
+}
+
+const SEED_AVATAR_BASE = "https://cdn.betterlyrics.org/avatars/"
+const SEED_AVATARS: AvatarCatalogue = {
+  presets: ["alien-cat", "gamer-cat", "melon-dog", "sad-shrek"].map((id) => ({
+    id,
+    label: id
+      .split("-")
+      .map((w) => w[0].toUpperCase() + w.slice(1))
+      .join(" "),
+    url: `${SEED_AVATAR_BASE}${id}.webp`,
+  })),
+  display: { cdnBase: SEED_AVATAR_BASE },
+}
+
+export async function seedAvatarCatalogue(): Promise<AvatarCatalogue> {
+  await delay()
+  return SEED_AVATARS
+}
+
+export async function seedSetAvatar(choice: AvatarChoice): Promise<{ avatarUrl: string | null }> {
+  await delay()
+  if (choice.type !== "preset") return { avatarUrl: null }
+  return { avatarUrl: SEED_AVATARS.presets.find((p) => p.id === choice.ref)?.url ?? null }
 }
 
 export async function seedBadgeCatalogue(): Promise<BadgeCatalogue> {

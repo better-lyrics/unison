@@ -15,6 +15,7 @@ const sealMark: Mark = {
 		badgeCount: 0,
 		topBadge: null,
 		featured: [],
+		avatarUrl: null,
 	},
 	at: 1700000000,
 }
@@ -28,6 +29,7 @@ const submitterActor: MarkActor = {
 	badgeCount: 4,
 	topBadge,
 	featured: [topBadge],
+	avatarUrl: "https://cdn.betterlyrics.org/avatars/alien-cat.webp",
 }
 
 const baseRow: LyricsRowForResponse = {
@@ -87,6 +89,7 @@ describe("toResponse", () => {
 			badgeCount: 0,
 			topBadge: null,
 			featured: [],
+			avatarUrl: null,
 		})
 	})
 
@@ -113,6 +116,7 @@ describe("toResponse", () => {
 			badgeCount: 4,
 			topBadge,
 			featured: [topBadge],
+			avatarUrl: "https://cdn.betterlyrics.org/avatars/alien-cat.webp",
 		})
 	})
 
@@ -134,6 +138,7 @@ describe("toResponse", () => {
 			badgeCount: 0,
 			topBadge: null,
 			featured: [],
+			avatarUrl: null,
 		})
 	})
 
@@ -177,6 +182,7 @@ describe("toResponse", () => {
 			badgeCount: 0,
 			topBadge: null,
 			featured: [],
+			avatarUrl: null,
 		})
 	})
 
@@ -303,6 +309,7 @@ describe("toSearchResponse", () => {
 			badgeCount: 0,
 			topBadge: null,
 			featured: [],
+			avatarUrl: null,
 		})
 	})
 
@@ -328,6 +335,7 @@ describe("toSearchResponse", () => {
 			badgeCount: 4,
 			topBadge,
 			featured: [topBadge],
+			avatarUrl: "https://cdn.betterlyrics.org/avatars/alien-cat.webp",
 		})
 	})
 
@@ -349,6 +357,7 @@ describe("toSearchResponse", () => {
 			badgeCount: 0,
 			topBadge: null,
 			featured: [],
+			avatarUrl: null,
 		})
 	})
 

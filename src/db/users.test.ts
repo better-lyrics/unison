@@ -1,7 +1,18 @@
-import { describe, expect, it } from "vitest"
+import { config } from "@/config"
 import type { Env } from "@/types"
 import { generatePetName } from "@/utils/petname"
-import { clearNickname, resolveDisplayName, resolveIdentity, resolveKeyIdByHandle, setNickname } from "./users"
+import { describe, expect, it } from "vitest"
+import { AVATAR_PRESETS } from "./avatar-presets"
+import {
+	clearAvatarChoice,
+	clearNickname,
+	resolveAvatarUrl,
+	resolveDisplayName,
+	resolveIdentity,
+	resolveKeyIdByHandle,
+	setAvatarChoice,
+	setNickname,
+} from "./users"
 
 interface DBCall {
 	sql: string
@@ -27,10 +38,7 @@ function makeMockDB(queue: unknown[] = []) {
 						async run(): Promise<void> {
 							calls.push({ sql, params: args })
 							const next = queue.shift()
-							if (
-								next instanceof Error ||
-								(next && typeof next === "object" && "code" in next)
-							) {
+							if (next instanceof Error || (next && typeof next === "object" && "code" in next)) {
 								throw next
 							}
 						},
@@ -69,10 +77,7 @@ function makeRecordingCache() {
 	return { cache, deleteCalls }
 }
 
-function makeEnv(
-	db: ReturnType<typeof makeMockDB>,
-	cache: object = makeMockCache()
-): Env {
+function makeEnv(db: ReturnType<typeof makeMockDB>, cache: object = makeMockCache()): Env {
 	const limiter = {
 		async limit() {
 			return { success: true }
@@ -97,7 +102,7 @@ describe("resolveDisplayName", () => {
 		const env = makeEnv(db)
 		const result = await resolveDisplayName(env, "k1")
 		expect(result).toBe("Alex")
-		expect(db.calls[0].sql).toBe("SELECT nickname, nickname_lower FROM users WHERE key_id = ?")
+		expect(db.calls).toHaveLength(1)
 		expect(db.calls[0].params).toEqual(["k1"])
 	})
 
@@ -125,7 +130,18 @@ describe("resolveIdentity", () => {
 		const db = makeMockDB([{ nickname: "Brook", nickname_lower: "brook" }])
 		const env = makeEnv(db)
 		const identity = await resolveIdentity(env, "k1")
-		expect(identity).toEqual({ displayName: "Brook", handle: "brook" })
+		expect(identity).toEqual({ displayName: "Brook", handle: "brook", avatarUrl: null })
+	})
+
+	it("carries the chosen avatar from the same single query", async () => {
+		const preset = AVATAR_PRESETS[0]
+		const db = makeMockDB([
+			{ nickname: "Brook", nickname_lower: "brook", avatar_type: "preset", avatar_ref: preset.id },
+		])
+		const identity = await resolveIdentity(makeEnv(db), "k1")
+		expect(identity.avatarUrl).toBe(config.avatar.cdnBase + preset.file)
+		expect(db.calls).toHaveLength(1)
+		expect(db.calls[0].sql).toMatch(/LEFT JOIN discord_links/)
 	})
 
 	it("returns a petname displayName and null handle when no nickname is set", async () => {
@@ -144,6 +160,7 @@ describe("resolveIdentity", () => {
 		const identity = await resolveIdentity(env, keyId)
 		expect(identity.displayName).toBe(generatePetName(keyId))
 		expect(identity.handle).toBeNull()
+		expect(identity.avatarUrl).toBeNull()
 	})
 })
 
@@ -341,5 +358,103 @@ describe("nickname mutations invalidate the per-video lyrics cache", () => {
 		await clearNickname(env, "k1")
 
 		expect(deleteCalls).toContain("leaderboard:users")
+	})
+})
+
+describe("resolveAvatarUrl", () => {
+	const preset = AVATAR_PRESETS[0]
+	const row = (over: Record<string, string | null>) => ({
+		avatar_type: null,
+		avatar_ref: null,
+		discord_id: null,
+		discord_avatar: null,
+		...over,
+	})
+
+	it("returns the preset url when the user picked a preset", async () => {
+		const db = makeMockDB([row({ avatar_type: "preset", avatar_ref: preset.id })])
+		expect(await resolveAvatarUrl(makeEnv(db), "k1")).toBe(config.avatar.cdnBase + preset.file)
+	})
+
+	it("returns the discord url when the user picked discord and a hash is stored", async () => {
+		const db = makeMockDB([
+			row({ avatar_type: "discord", avatar_ref: "d1", discord_id: "d1", discord_avatar: "h1" }),
+		])
+		expect(await resolveAvatarUrl(makeEnv(db), "k1")).toBe(
+			"https://cdn.discordapp.com/avatars/d1/h1.png?size=128"
+		)
+	})
+
+	it("reads the choice and the linked hash in one joined query by key", async () => {
+		const db = makeMockDB([null])
+		await resolveAvatarUrl(makeEnv(db), "k1")
+		expect(db.calls).toHaveLength(1)
+		expect(db.calls[0].sql).toMatch(/LEFT JOIN discord_links/)
+		expect(db.calls[0].params).toEqual(["k1"])
+	})
+
+	describe("edge cases", () => {
+		it("returns null when there is no user row", async () => {
+			const db = makeMockDB([null])
+			expect(await resolveAvatarUrl(makeEnv(db), "k1")).toBeNull()
+		})
+		it("returns null for a user with no choice", async () => {
+			const db = makeMockDB([row({ discord_id: "d1", discord_avatar: "h1" })])
+			expect(await resolveAvatarUrl(makeEnv(db), "k1")).toBeNull()
+		})
+		it("returns null when discord was picked but the account is now unlinked", async () => {
+			const db = makeMockDB([row({ avatar_type: "discord", avatar_ref: "d1" })])
+			expect(await resolveAvatarUrl(makeEnv(db), "k1")).toBeNull()
+		})
+	})
+})
+
+describe("setAvatarChoice", () => {
+	it("writes avatar_type, avatar_ref and avatar_updated_at for the key", async () => {
+		const preset = AVATAR_PRESETS[0]
+		const db = makeMockDB([null, []])
+		const before = Math.floor(Date.now() / 1000)
+		await setAvatarChoice(makeEnv(db), "k1", "preset", preset.id)
+		expect(db.calls[0].sql).toBe(
+			"UPDATE users SET avatar_type = ?, avatar_ref = ?, avatar_updated_at = ? WHERE key_id = ?"
+		)
+		expect(db.calls[0].params).toEqual(["preset", preset.id, expect.any(Number), "k1"])
+		expect(db.calls[0].params[2]).toBeGreaterThanOrEqual(before)
+	})
+
+	it("stores a null ref for a discord pick", async () => {
+		const db = makeMockDB([null, []])
+		await setAvatarChoice(makeEnv(db), "k1", "discord", null)
+		expect(db.calls[0].params.slice(0, 2)).toEqual(["discord", null])
+	})
+})
+
+describe("clearAvatarChoice", () => {
+	it("nulls both avatar columns and stamps avatar_updated_at", async () => {
+		const db = makeMockDB([null, []])
+		await clearAvatarChoice(makeEnv(db), "k1")
+		expect(db.calls[0].sql).toBe(
+			"UPDATE users SET avatar_type = NULL, avatar_ref = NULL, avatar_updated_at = ? WHERE key_id = ?"
+		)
+		expect(db.calls[0].params).toEqual([expect.any(Number), "k1"])
+	})
+})
+
+describe("avatar mutations invalidate only the curator board", () => {
+	it("setAvatarChoice evicts the curator leaderboard without scanning the user's lyrics", async () => {
+		const db = makeMockDB([null])
+		const { cache, deleteCalls } = makeRecordingCache()
+		await setAvatarChoice(makeEnv(db, cache), "k1", "preset", AVATAR_PRESETS[0].id)
+		expect(deleteCalls).toContain("leaderboard:users")
+		expect(deleteCalls.some((k) => k.startsWith("v:"))).toBe(false)
+		expect(db.calls).toHaveLength(1)
+	})
+
+	it("clearAvatarChoice evicts the curator leaderboard without scanning the user's lyrics", async () => {
+		const db = makeMockDB([null])
+		const { cache, deleteCalls } = makeRecordingCache()
+		await clearAvatarChoice(makeEnv(db, cache), "k1")
+		expect(deleteCalls).toContain("leaderboard:users")
+		expect(db.calls).toHaveLength(1)
 	})
 })

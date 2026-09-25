@@ -33,6 +33,9 @@ export const ErrorCode = {
 	REPORT_DETAILS_TOO_LONG: "REPORT_DETAILS_TOO_LONG",
 	INVALID_CURSOR: "INVALID_CURSOR",
 	INVALID_FEATURED_BADGES: "INVALID_FEATURED_BADGES",
+	UNKNOWN_AVATAR_PRESET: "UNKNOWN_AVATAR_PRESET",
+	INVALID_AVATAR_TYPE: "INVALID_AVATAR_TYPE",
+	DISCORD_AVATAR_UNAVAILABLE: "DISCORD_AVATAR_UNAVAILABLE",
 	LINK_BLACKLISTED: "LINK_BLACKLISTED",
 	LINKING_DISABLED: "LINKING_DISABLED",
 	NOT_LINKED: "NOT_LINKED",
@@ -192,6 +195,18 @@ const TEMPLATES: Record<ErrorCode, Template> = {
 	INVALID_FEATURED_BADGES: {
 		error: "Invalid featured badges",
 		hint: "That selection isn't valid. Pick badges you've earned, up to the featured limit.",
+	},
+	UNKNOWN_AVATAR_PRESET: {
+		error: "Unknown avatar",
+		hint: "That picture isn't in the avatar catalogue. Pick one from GET /avatars.",
+	},
+	INVALID_AVATAR_TYPE: {
+		error: "Invalid avatar type",
+		hint: "Choose a preset, your Discord photo, or the generated default.",
+	},
+	DISCORD_AVATAR_UNAVAILABLE: {
+		error: "Discord photo unavailable",
+		hint: "Link Discord and approve it once more so Unison can use your Discord photo.",
 	},
 	LINK_BLACKLISTED: {
 		error: "Account cannot be linked",

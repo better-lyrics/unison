@@ -1,5 +1,7 @@
-import { describe, expect, it } from "vitest"
+import { config } from "@/config"
+import { AVATAR_PRESETS } from "@/db/avatar-presets"
 import type { Env } from "@/types"
+import { describe, expect, it } from "vitest"
 import { leaderboardRoutes } from "./leaderboard"
 
 interface DBCall {
@@ -509,6 +511,66 @@ describe("GET /leaderboard/users/:keyId", () => {
 		expect(res.status).toBe(200)
 		const json = (await res.json()) as { data: { displayName?: string } }
 		expect(json.data.displayName).toBe("Brook")
+	})
+})
+
+describe("GET /leaderboard/users/:keyId avatarUrl", () => {
+	const preset = AVATAR_PRESETS[0]
+	const presetUrl = config.avatar.cdnBase + preset.file
+
+	async function profile(keyId: string, queue: unknown[]) {
+		const app = leaderboardRoutes(makeEnv(makeMockDB(queue)))
+		const res = await app.handle(new Request(`http://localhost/leaderboard/users/${keyId}`))
+		expect(res.status).toBe(200)
+		return ((await res.json()) as { data: { ranked: boolean; avatarUrl?: string | null } }).data
+	}
+
+	it("returns the chosen preset for an unranked user", async () => {
+		const data = await profile("f".repeat(64), [
+			{ last_vote_at: null }, // getLastVoteAt
+			null, // getByKeyId
+			[], // getCuratorLeaderboard
+			{ nickname: null, avatar_type: "preset", avatar_ref: preset.id }, // resolveIdentity
+		])
+		expect(data.ranked).toBe(false)
+		expect(data.avatarUrl).toBe(presetUrl)
+	})
+
+	it("returns null for an unranked user with no choice", async () => {
+		const data = await profile("f".repeat(64), [
+			{ last_vote_at: null },
+			null,
+			[],
+			{ nickname: null },
+		])
+		expect(data.ranked).toBe(false)
+		expect(data.avatarUrl).toBeNull()
+	})
+
+	it("a ranked curator reports the current pick, not a stale board row", async () => {
+		const keyId = "a".repeat(64)
+		const data = await profile(keyId, [
+			{ last_vote_at: 1700000123 }, // getLastVoteAt
+			null, // getByKeyId
+			[
+				{
+					user_id: 7,
+					key_id: keyId,
+					reputation: 1.2,
+					score: 5,
+					submission_count: 2,
+					total_upvotes: 8,
+					avatar_type: null,
+					avatar_ref: null,
+				},
+			], // getCuratorLeaderboard
+			[], // getXpForUsers
+			[], // getBadgeSummaries awards
+			[], // getBadgeSummaries featured
+			{ nickname: null, avatar_type: "preset", avatar_ref: preset.id }, // resolveIdentity
+		])
+		expect(data.ranked).toBe(true)
+		expect(data.avatarUrl).toBe(presetUrl)
 	})
 })
 

@@ -6,7 +6,7 @@ import { Bone } from "@/components/skeleton"
 import { TierChip } from "@/components/TierChip"
 import { Tooltip } from "@/components/Tooltip"
 import { useArtwork, youtubeThumbnailFallbackUrl, youtubeThumbnailUrl } from "@/lib/artwork"
-import { dicebearThumbsDataUri } from "@/lib/avatar"
+import { UserAvatar } from "@/components/UserAvatar"
 import { resolveBadgeImage } from "@/lib/badge-view"
 import { cn } from "@/lib/cn"
 import { LAYOUT_TRANSITION } from "@/lib/motion-variants"
@@ -152,9 +152,9 @@ function SubmitterRow({ variant }: { variant: VariantFull }) {
   return (
     <Link to={`/curator/${s.keyId}`} className="flex cursor-pointer flex-col gap-2.5">
       <div className="flex items-center gap-2.5">
-        <img
-          src={dicebearThumbsDataUri(s.keyId)}
-          alt=""
+        <UserAvatar
+          avatarUrl={s.avatarUrl}
+          keyId={s.keyId}
           className="size-10 shrink-0 rounded-full border border-unison-border bg-unison-bg-hover"
         />
         <div className="min-w-0 flex-1">

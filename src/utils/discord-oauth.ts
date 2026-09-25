@@ -1,5 +1,6 @@
 const DISCORD_API = "https://discord.com/api/v10"
 const DISCORD_AUTHORIZE = "https://discord.com/oauth2/authorize"
+const DISCORD_AVATAR_HASH = /^(a_)?[0-9a-f]{32}$/
 
 export interface DiscordOAuthConfig {
 	clientId: string
@@ -11,6 +12,7 @@ export interface DiscordIdentity {
 	id: string
 	username: string
 	displayName: string
+	avatar: string | null
 }
 
 export class DiscordOAuthError extends Error {
@@ -66,8 +68,14 @@ export async function exchangeCodeForUser(
 		id?: string
 		username?: string
 		global_name?: string | null
+		avatar?: string | null
 	} | null
 	if (!user?.id || !user.username) throw new DiscordOAuthError("invalid_user")
 
-	return { id: user.id, username: user.username, displayName: user.global_name || user.username }
+	return {
+		id: user.id,
+		username: user.username,
+		displayName: user.global_name || user.username,
+		avatar: user.avatar && DISCORD_AVATAR_HASH.test(user.avatar) ? user.avatar : null,
+	}
 }

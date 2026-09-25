@@ -3,7 +3,7 @@ import { Link } from "react-router-dom"
 import { useBadgeCatalogueOptional } from "@/components/BadgeCatalogueContext"
 import { MedalRank } from "@/components/MedalRank"
 import { Bone, skeletonKeys } from "@/components/skeleton"
-import { dicebearThumbsDataUri } from "@/lib/avatar"
+import { UserAvatar } from "@/components/UserAvatar"
 import { resolveBadgeImage } from "@/lib/badge-view"
 import { cn } from "@/lib/cn"
 import { formatCompact, formatExact } from "@/lib/format"
@@ -16,7 +16,6 @@ interface CuratorRowProps {
 }
 
 export function CuratorRow({ entry, isSelf = false, appended = false }: CuratorRowProps) {
-  const avatar = dicebearThumbsDataUri(entry.keyId)
   const href = isSelf ? "/me" : `/curator/${entry.keyId}`
 
   const catalogue = useBadgeCatalogueOptional()
@@ -54,9 +53,9 @@ export function CuratorRow({ entry, isSelf = false, appended = false }: CuratorR
           <MedalRank rank={entry.rank} size="sm" />
         )}
         <span className="relative size-12 shrink-0">
-          <img
-            src={avatar}
-            alt=""
+          <UserAvatar
+            avatarUrl={entry.avatarUrl}
+            keyId={entry.keyId}
             className="block size-12 rounded-full border border-unison-border bg-unison-bg-hover"
             loading="lazy"
           />

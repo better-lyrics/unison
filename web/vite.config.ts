@@ -39,6 +39,7 @@ export default defineConfig({
       "/lyrics": "http://localhost:3000",
       "/users": "http://localhost:3000",
       "/badges": "http://localhost:3000",
+      "/avatars": "http://localhost:3000",
       "/feed": "http://localhost:3000",
       "/requests": "http://localhost:3000",
       "/auth": "http://localhost:3000",

@@ -1,18 +1,29 @@
-import { Elysia, t } from "elysia"
 import { config } from "@/config"
 import { computeMigrationPlan, createPreviewAudit } from "@/db/account-migration"
-import { getByKeyId, linkDiscord, listLinks, unlinkByKeyId } from "@/db/discordLinks"
+import {
+	getByKeyId,
+	linkDiscord,
+	listLinks,
+	refreshDiscordProfile,
+	unlinkByKeyId,
+} from "@/db/discordLinks"
 import { Logger } from "@/infra/logger"
 import type { Env } from "@/types"
-import { eitherAuth } from "@/utils/either-auth"
 import { signedRequest } from "@/utils/auth"
 import { isLinkBlacklisted } from "@/utils/blacklist"
 import { isAuthorizedBot } from "@/utils/bot-auth"
 import type { DiscordIdentity } from "@/utils/discord-oauth"
 import { buildAuthorizeUrl, exchangeCodeForUser } from "@/utils/discord-oauth"
+import { discordAvatarUrl } from "@/utils/avatar-url"
+import { eitherAuth } from "@/utils/either-auth"
 import { ErrorCode, buildError } from "@/utils/errors"
-import { getActiveSessionForDiscord, type MigrationSession, saveSession } from "@/utils/migration-session"
+import {
+	type MigrationSession,
+	getActiveSessionForDiscord,
+	saveSession,
+} from "@/utils/migration-session"
 import { generateSessionToken } from "@/utils/session"
+import { Elysia, t } from "elysia"
 
 const log = new Logger("links")
 
@@ -128,10 +139,23 @@ export const linkRoutes = (env: Env, fetchImpl: typeof fetch = fetch) =>
 					return attachMigrationProof(env, migration, keyId, identity)
 				}
 
+				const existing = await getByKeyId(env, keyId)
+				if (existing?.discord_id === identity.id) {
+					await refreshDiscordProfile(env, {
+						keyId,
+						discordId: identity.id,
+						discordUsername: identity.displayName,
+						discordAvatar: identity.avatar,
+					})
+					log.info("discord profile refreshed", { keyId, discordId: identity.id })
+					return redirectToLinkPage("linked", identity.displayName)
+				}
+
 				await linkDiscord(env, {
 					discordId: identity.id,
 					keyId,
 					discordUsername: identity.displayName,
+					discordAvatar: identity.avatar,
 				})
 				log.info("account linked", { keyId, discordId: identity.id })
 				return redirectToLinkPage("linked", identity.displayName)
@@ -160,6 +184,9 @@ export const linkRoutes = (env: Env, fetchImpl: typeof fetch = fetch) =>
 					linked: link !== null,
 					discordId: link?.discord_id ?? null,
 					discordUsername: link?.discord_username ?? null,
+					discordAvatarUrl: link?.discord_avatar
+						? discordAvatarUrl(link.discord_id, link.discord_avatar)
+						: null,
 				},
 			})
 		})

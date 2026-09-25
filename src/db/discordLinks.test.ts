@@ -1,6 +1,13 @@
-import { describe, expect, it, vi } from "vitest"
 import type { Env } from "@/types"
-import { getByDiscordId, getByKeyId, linkDiscord, listLinks, unlinkByKeyId } from "./discordLinks"
+import { describe, expect, it, vi } from "vitest"
+import {
+	getByDiscordId,
+	getByKeyId,
+	linkDiscord,
+	listLinks,
+	unlinkByKeyId,
+	refreshDiscordProfile,
+} from "./discordLinks"
 
 interface DBCall {
 	sql: string
@@ -56,6 +63,7 @@ describe("discordLinks", () => {
 				discordId: "discord-1",
 				keyId: KEY,
 				discordUsername: "alice",
+				discordAvatar: null,
 			})
 
 			const del = db.calls.find((c) => c.sql.includes("DELETE FROM discord_links"))
@@ -63,12 +71,17 @@ describe("discordLinks", () => {
 			expect(del?.params).toEqual([KEY, "discord-1"])
 
 			const insert = db.calls.find((c) => c.sql.includes("INSERT INTO discord_links"))
-			expect(insert?.params).toEqual(["discord-1", KEY, "alice", expect.any(Number)])
+			expect(insert?.params).toEqual(["discord-1", KEY, "alice", null, expect.any(Number)])
 		})
 
 		it("stores a null username when none is provided", async () => {
 			const db = makeMockDB([null, null])
-			await linkDiscord(makeEnv(db), { discordId: "d2", keyId: KEY, discordUsername: null })
+			await linkDiscord(makeEnv(db), {
+				discordId: "d2",
+				keyId: KEY,
+				discordUsername: null,
+				discordAvatar: null,
+			})
 			const insert = db.calls.find((c) => c.sql.includes("INSERT INTO discord_links"))
 			expect(insert?.params[2]).toBeNull()
 		})
@@ -80,6 +93,7 @@ describe("discordLinks", () => {
 				discordId: "discord-1",
 				keyId: KEY,
 				discordUsername: "alice",
+				discordAvatar: null,
 			})
 
 			expect(spy).toHaveBeenCalledOnce()
@@ -95,9 +109,74 @@ describe("discordLinks", () => {
 			}
 
 			await expect(
-				linkDiscord(makeEnv(db), { discordId: "discord-1", keyId: KEY, discordUsername: "alice" })
+				linkDiscord(makeEnv(db), {
+					discordId: "discord-1",
+					keyId: KEY,
+					discordUsername: "alice",
+					discordAvatar: null,
+				})
 			).rejects.toThrow()
 			expect(db.calls).toEqual([])
+		})
+	})
+
+	describe("linkDiscord avatar", () => {
+		it("stores the avatar hash on insert", async () => {
+			const db = makeMockDB([null, null])
+			await linkDiscord(makeEnv(db), {
+				discordId: "d5",
+				keyId: KEY,
+				discordUsername: "erin",
+				discordAvatar: "hash-erin",
+			})
+			const insert = db.calls.find((c) => c.sql.includes("INSERT INTO discord_links"))
+			expect(insert?.sql).toContain("discord_avatar")
+			expect(insert?.params).toEqual(["d5", KEY, "erin", "hash-erin", expect.any(Number)])
+		})
+	})
+
+	describe("refreshDiscordProfile", () => {
+		it("rewrites the username and avatar in place, scoped to key and discord id", async () => {
+			const db = makeMockDB([null])
+			await refreshDiscordProfile(makeEnv(db), {
+				keyId: KEY,
+				discordId: "d6",
+				discordUsername: "Alicia",
+				discordAvatar: "fresh-hash",
+			})
+			expect(db.calls).toHaveLength(1)
+			const upd = db.calls[0]
+			expect(upd.sql).toContain("UPDATE discord_links SET discord_username = ?, discord_avatar = ?")
+			expect(upd.sql).toContain("WHERE key_id = ? AND discord_id = ?")
+			expect(upd.params).toEqual(["Alicia", "fresh-hash", KEY, "d6"])
+		})
+
+		describe("invariants", () => {
+			it("never deletes, inserts or touches linked_at", async () => {
+				const db = makeMockDB([null])
+				await refreshDiscordProfile(makeEnv(db), {
+					keyId: KEY,
+					discordId: "d6",
+					discordUsername: "Alicia",
+					discordAvatar: "h",
+				})
+				for (const c of db.calls) {
+					expect(c.sql).not.toMatch(/DELETE|INSERT|linked_at/)
+				}
+			})
+		})
+
+		describe("edge cases", () => {
+			it("clears the stored hash when the user removed their Discord avatar", async () => {
+				const db = makeMockDB([null])
+				await refreshDiscordProfile(makeEnv(db), {
+					keyId: KEY,
+					discordId: "d6",
+					discordUsername: "Alicia",
+					discordAvatar: null,
+				})
+				expect(db.calls[0].params).toEqual(["Alicia", null, KEY, "d6"])
+			})
 		})
 	})
 
