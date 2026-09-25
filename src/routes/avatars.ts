@@ -1,11 +1,14 @@
 import { config } from "@/config"
 import { AVATAR_PRESETS, findPreset } from "@/db/avatar-presets"
 import { getByKeyId } from "@/db/discordLinks"
+import { hasSubmissionForVideo } from "@/db/profile"
 import { clearAvatarChoice, resolveAvatarUrl, setAvatarChoice } from "@/db/users"
+import { resolveArtwork } from "@/services/artwork"
 import type { Env } from "@/types"
 import { eitherAuth } from "@/utils/either-auth"
 import { ErrorCode, buildError } from "@/utils/errors"
 import { readRateLimit } from "@/utils/read-rate-limit"
+import { isVideoId } from "@/utils/video-id"
 import { Elysia } from "elysia"
 
 export const avatarRoutes = (env: Env) =>
@@ -22,7 +25,10 @@ export const avatarRoutes = (env: Env) =>
 						label: p.label,
 						url: config.avatar.cdnBase + p.file,
 					})),
-					display: { cdnBase: config.avatar.cdnBase },
+					display: {
+						cdnBase: config.avatar.cdnBase,
+						artworkSize: config.avatar.artworkSize,
+					},
 				},
 			}
 		})
@@ -52,6 +58,17 @@ export const avatarRoutes = (env: Env) =>
 							return status(409, buildError(ErrorCode.DISCORD_AVATAR_UNAVAILABLE))
 						}
 						await setAvatarChoice(env, keyId, "discord", link.discord_id)
+					} else if (type === "song") {
+						if (!isVideoId(ref)) {
+							return status(400, buildError(ErrorCode.INVALID_AVATAR_TYPE))
+						}
+						if (!(await hasSubmissionForVideo(env, keyId, ref))) {
+							return status(403, buildError(ErrorCode.SONG_NOT_SUBMITTED))
+						}
+						if (!(await resolveArtwork(env, ref))) {
+							return status(409, buildError(ErrorCode.SONG_ARTWORK_UNAVAILABLE))
+						}
+						await setAvatarChoice(env, keyId, "song", ref)
 					} else {
 						return status(400, buildError(ErrorCode.INVALID_AVATAR_TYPE))
 					}

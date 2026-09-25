@@ -1,7 +1,7 @@
+import { AVATAR_COLUMNS, AVATAR_JOINS, type AvatarRow, avatarUrlForRow } from "@/db/avatar-join"
 import { invalidateCuratorLeaderboardCache } from "@/db/leaderboard"
 import { invalidateCacheForSubmitter } from "@/db/lyrics"
 import type { Env, User } from "@/types"
-import { avatarUrlFor } from "@/utils/avatar-url"
 import { generatePetName } from "@/utils/petname"
 
 export async function getOrCreateUser(env: Env, keyId: string): Promise<User> {
@@ -46,31 +46,17 @@ export interface UserIdentity {
 // without a nickname have no reversible handle, so it is null and they keep /curator/:keyId.
 export async function resolveIdentity(env: Env, keyId: string): Promise<UserIdentity> {
 	const row = await env.DB.prepare(
-		`SELECT u.nickname, u.nickname_lower, u.avatar_type, u.avatar_ref, dl.discord_id, dl.discord_avatar
+		`SELECT u.nickname, u.nickname_lower, ${AVATAR_COLUMNS}
 		 FROM users u
-		 LEFT JOIN discord_links dl ON dl.key_id = u.key_id
+		 ${AVATAR_JOINS}
 		 WHERE u.key_id = ?`
 	)
 		.bind(keyId)
-		.first<{
-			nickname: string | null
-			nickname_lower: string | null
-			avatar_type: string | null
-			avatar_ref: string | null
-			discord_id: string | null
-			discord_avatar: string | null
-		}>()
+		.first<AvatarRow & { nickname: string | null; nickname_lower: string | null }>()
 	return {
 		displayName: row?.nickname ?? generatePetName(keyId),
 		handle: row?.nickname_lower ?? null,
-		avatarUrl: row
-			? avatarUrlFor({
-					avatarType: row.avatar_type,
-					avatarRef: row.avatar_ref,
-					discordId: row.discord_id,
-					discordAvatar: row.discord_avatar,
-				})
-			: null,
+		avatarUrl: row ? avatarUrlForRow(row) : null,
 	}
 }
 
@@ -124,7 +110,7 @@ export async function resolveAvatarUrl(env: Env, keyId: string): Promise<string 
 export async function setAvatarChoice(
 	env: Env,
 	keyId: string,
-	type: "discord" | "preset",
+	type: "discord" | "preset" | "song",
 	ref: string | null
 ): Promise<void> {
 	const now = Math.floor(Date.now() / 1000)

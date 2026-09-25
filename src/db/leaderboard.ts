@@ -1,4 +1,5 @@
 import { config } from "@/config"
+import { AVATAR_COLUMNS, AVATAR_JOINS, type AvatarRow, avatarUrlForRow } from "@/db/avatar-join"
 import { getBadgeSummaries } from "@/db/badge-summary"
 import { getXpForUsers } from "@/db/contribution-events"
 import {
@@ -9,7 +10,6 @@ import {
 } from "@/db/predicates"
 import { windowCutoff } from "@/db/requests"
 import type { BadgeRef, Env } from "@/types"
-import { avatarUrlFor } from "@/utils/avatar-url"
 import { isLinkBlacklisted } from "@/utils/blacklist"
 import { type TierName, tierForRank } from "@/utils/tiers"
 import { levelForXp } from "@/utils/xp"
@@ -234,7 +234,7 @@ export interface CuratorLeaderboardRow {
 	avatarUrl: string | null
 }
 
-interface CuratorRow {
+interface CuratorRow extends AvatarRow {
 	user_id: number
 	key_id: string
 	reputation: number
@@ -244,11 +244,7 @@ interface CuratorRow {
 	fulfilled_count: number
 	fulfilled_demand: number
 	nickname: string | null
-	avatar_type: string | null
-	avatar_ref: string | null
 	discord_linked: boolean
-	discord_id: string | null
-	discord_avatar: string | null
 	total_count: number
 }
 
@@ -267,12 +263,11 @@ export async function getCuratorLeaderboard(
 	}
 
 	const res = await env.DB.prepare(
-		`SELECT u.id AS user_id, u.key_id, u.reputation, u.nickname, u.avatar_type, u.avatar_ref,
+		`SELECT u.id AS user_id, u.key_id, u.reputation, u.nickname, ${AVATAR_COLUMNS},
 		        agg.score, agg.submission_count, agg.total_upvotes,
 		        COALESCE(ff.fulfilled_count, 0) AS fulfilled_count,
 		        COALESCE(ff.fulfilled_demand, 0) AS fulfilled_demand,
 		        (dl.key_id IS NOT NULL) AS discord_linked,
-		        dl.discord_id, dl.discord_avatar,
 		        COUNT(*) OVER () AS total_count
 		 FROM (
 		   SELECT submitter_id,
@@ -295,7 +290,7 @@ export async function getCuratorLeaderboard(
 		   WHERE l.deleted_at IS NULL AND NOT ${AUTO_HIDE_PREDICATE_JOINED}
 		   GROUP BY f.submitter_id
 		 ) ff ON ff.submitter_id = u.id
-		 LEFT JOIN discord_links dl ON dl.key_id = u.key_id
+		 ${AVATAR_JOINS}
 		 ORDER BY agg.score DESC, u.key_id ASC
 		 LIMIT ?`
 	)
@@ -340,12 +335,7 @@ export async function getCuratorLeaderboard(
 			badgeCount: summary?.badgeCount ?? 0,
 			topBadge: summary?.topBadge ?? null,
 			featured: summary?.featured ?? [],
-			avatarUrl: avatarUrlFor({
-				avatarType: r.avatar_type,
-				avatarRef: r.avatar_ref,
-				discordId: r.discord_id,
-				discordAvatar: r.discord_avatar,
-			}),
+			avatarUrl: avatarUrlForRow(r),
 		}
 	})
 

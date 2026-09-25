@@ -275,7 +275,11 @@ export interface AvatarPreset {
 
 export interface AvatarCatalogue {
   presets: AvatarPreset[]
-  display: { cdnBase: string }
+  display: { cdnBase: string; artworkSize: number }
 }
 
-export type AvatarChoice = { type: "preset"; ref: string } | { type: "discord" } | { type: "default" }
+export type AvatarChoice =
+  | { type: "preset"; ref: string }
+  | { type: "song"; ref: string }
+  | { type: "discord" }
+  | { type: "default" }

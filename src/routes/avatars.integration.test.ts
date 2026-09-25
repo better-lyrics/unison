@@ -5,10 +5,12 @@ import {
 	type IntegrationDb,
 	describeIntegration,
 	openIntegrationDb,
+	seedLyric,
 	seedSession,
 	seedUser,
 	wipeRevisionData,
 } from "@/test/integration-harness"
+import { readRevisionFixture } from "@/test/lyric-fixtures"
 import type { Env } from "@/types"
 import { canonicalJson, hashPublicKey } from "@/utils/crypto"
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest"
@@ -17,6 +19,10 @@ import { avatarRoutes } from "./avatars"
 const KEY = "a".repeat(64)
 const TOKEN = "avatar-session-token"
 const PRESET = AVATAR_PRESETS[0]
+const SONG = "dQw4w9WgXcQ"
+const STORED_ART = "https://yt3.googleusercontent.com/abc=w544-h544-l90-rj"
+const SIZED_ART = `https://yt3.googleusercontent.com/abc=w${config.avatar.artworkSize}-h${config.avatar.artworkSize}-l90-rj`
+const LRC = readRevisionFixture("amazing-grace.lrc")
 
 interface PutResult {
 	status: number
@@ -25,6 +31,7 @@ interface PutResult {
 
 describeIntegration("PUT /avatars/me (integration)", () => {
 	let db: IntegrationDb
+	let userId: number
 
 	beforeAll(async () => {
 		db = await openIntegrationDb()
@@ -36,8 +43,9 @@ describeIntegration("PUT /avatars/me (integration)", () => {
 
 	beforeEach(async () => {
 		await db.pool.query("DELETE FROM discord_links")
+		await db.pool.query("DELETE FROM song_artwork")
 		await wipeRevisionData(db)
-		await seedUser(db, KEY)
+		userId = await seedUser(db, KEY)
 		seedSession(db, TOKEN, KEY)
 	})
 
@@ -146,6 +154,106 @@ describeIntegration("PUT /avatars/me (integration)", () => {
 		expect(status).toBe(200)
 		expect(body.data?.avatarUrl).toBe(config.avatar.cdnBase + PRESET.file)
 		expect((await choiceOf(keyId)).avatar_ref).toBe(PRESET.id)
+	})
+
+	async function submitSong(submitterId: number, videoId = SONG): Promise<number> {
+		return seedLyric(db, submitterId, { lyrics: LRC, format: "lrc", videoId })
+	}
+
+	async function storeArt(videoId = SONG, url: string | null = STORED_ART) {
+		await db.pool.query(
+			"INSERT INTO song_artwork (video_id, artwork_url, checked_at) VALUES ($1, $2, $3)",
+			[videoId, url, Math.floor(Date.now() / 1000)]
+		)
+	}
+
+	describe("song cover", () => {
+		it("sets a submitted song and returns its cover at the avatar size", async () => {
+			await submitSong(userId)
+			await storeArt()
+			const { status, body } = await put({ type: "song", ref: SONG })
+			expect(status).toBe(200)
+			expect(body.data?.avatarUrl).toBe(SIZED_ART)
+			const choice = await choiceOf(KEY)
+			expect(choice.avatar_type).toBe("song")
+			expect(choice.avatar_ref).toBe(SONG)
+		})
+
+		it("evicts the curator leaderboard cache on a song pick", async () => {
+			await submitSong(userId)
+			await storeArt()
+			db.cache.store.set("leaderboard:users", "[]")
+			await put({ type: "song", ref: SONG })
+			expect(db.cache.store.has("leaderboard:users")).toBe(false)
+		})
+
+		it("follows a refreshed cover without a new pick", async () => {
+			await submitSong(userId)
+			await storeArt()
+			await put({ type: "song", ref: SONG })
+			await db.pool.query("UPDATE song_artwork SET artwork_url = $1 WHERE video_id = $2", [
+				"https://yt3.googleusercontent.com/new=w544-h544-l90-rj",
+				SONG,
+			])
+			const size = config.avatar.artworkSize
+			expect(await resolveAvatarUrl(db.env, KEY)).toBe(
+				`https://yt3.googleusercontent.com/new=w${size}-h${size}-l90-rj`
+			)
+		})
+
+		it("keeps the pick when the submission is deleted later", async () => {
+			const lyricId = await submitSong(userId)
+			await storeArt()
+			await put({ type: "song", ref: SONG })
+			await db.pool.query(
+				"UPDATE lyrics SET deleted_at = 1, deleted_by_user_id = $1, deleted_by_role = 'submitter' WHERE id = $2",
+				[userId, lyricId]
+			)
+			expect(await resolveAvatarUrl(db.env, KEY)).toBe(SIZED_ART)
+		})
+
+		describe("error paths", () => {
+			it("rejects a song someone else submitted with 403 and keeps the prior choice", async () => {
+				const other = await seedUser(db, "b".repeat(64))
+				await submitSong(other)
+				await storeArt()
+				await put({ type: "preset", ref: PRESET.id })
+				const { status, body } = await put({ type: "song", ref: SONG })
+				expect(status).toBe(403)
+				expect(body.code).toBe("SONG_NOT_SUBMITTED")
+				expect((await choiceOf(KEY)).avatar_ref).toBe(PRESET.id)
+			})
+
+			it("rejects a song whose submission was deleted with 403", async () => {
+				const lyricId = await submitSong(userId)
+				await storeArt()
+				await db.pool.query(
+					"UPDATE lyrics SET deleted_at = 1, deleted_by_user_id = $1, deleted_by_role = 'submitter' WHERE id = $2",
+					[userId, lyricId]
+				)
+				const { status, body } = await put({ type: "song", ref: SONG })
+				expect(status).toBe(403)
+				expect(body.code).toBe("SONG_NOT_SUBMITTED")
+			})
+
+			it("rejects a submitted song without a cover with 409", async () => {
+				await submitSong(userId)
+				db.cache.store.set(`artwork:v2:${SONG}`, "__none__")
+				const { status, body } = await put({ type: "song", ref: SONG })
+				expect(status).toBe(409)
+				expect(body.code).toBe("SONG_ARTWORK_UNAVAILABLE")
+				expect((await choiceOf(KEY)).avatar_type).toBeNull()
+			})
+
+			it.each([["short"], [42], [undefined], [" dQw4w9WgXc"], ["dQw4w9WgXcQ/"]])(
+				"rejects a malformed song ref %j with 400",
+				async (ref) => {
+					const { status, body } = await put({ type: "song", ref })
+					expect(status).toBe(400)
+					expect(body.code).toBe("INVALID_AVATAR_TYPE")
+				}
+			)
+		})
 	})
 
 	describe("error paths", () => {

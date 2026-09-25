@@ -576,7 +576,7 @@ const SEED_AVATARS: AvatarCatalogue = {
       .join(" "),
     url: `${SEED_AVATAR_BASE}${id}.webp`,
   })),
-  display: { cdnBase: SEED_AVATAR_BASE },
+  display: { cdnBase: SEED_AVATAR_BASE, artworkSize: 256 },
 }
 
 export async function seedAvatarCatalogue(): Promise<AvatarCatalogue> {

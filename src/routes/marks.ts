@@ -1,9 +1,9 @@
 import { config } from "@/config"
+import { AVATAR_COLUMNS, AVATAR_JOINS, type AvatarRow, avatarUrlForRow } from "@/db/avatar-join"
 import { getBadgeSummaries } from "@/db/badge-summary"
 import { getXpForUsers } from "@/db/contribution-events"
 import { getCuratorTierMap } from "@/db/leaderboard"
 import type { Env, Mark, MarkActor } from "@/types"
-import { avatarUrlFor } from "@/utils/avatar-url"
 import { generatePetName } from "@/utils/petname"
 import { levelForXp } from "@/utils/xp"
 
@@ -17,21 +17,13 @@ export async function resolveActors(
 	const placeholders = ids.map(() => "?").join(", ")
 	const [{ results }, tierMap, xpMap, summaries] = await Promise.all([
 		env.DB.prepare(
-			`SELECT u.id, u.key_id, u.nickname, u.avatar_type, u.avatar_ref, dl.discord_id, dl.discord_avatar
+			`SELECT u.id, u.key_id, u.nickname, ${AVATAR_COLUMNS}
 			 FROM users u
-			 LEFT JOIN discord_links dl ON dl.key_id = u.key_id
+			 ${AVATAR_JOINS}
 			 WHERE u.id IN (${placeholders})`
 		)
 			.bind(...ids)
-			.all<{
-				id: number | string
-				key_id: string
-				nickname: string | null
-				avatar_type: string | null
-				avatar_ref: string | null
-				discord_id: string | null
-				discord_avatar: string | null
-			}>(),
+			.all<AvatarRow & { id: number | string; key_id: string; nickname: string | null }>(),
 		getCuratorTierMap(env),
 		getXpForUsers(env, ids),
 		getBadgeSummaries(env, ids),
@@ -49,12 +41,7 @@ export async function resolveActors(
 			badgeCount: summary?.badgeCount ?? 0,
 			topBadge: summary?.topBadge ?? null,
 			featured: summary?.featured ?? [],
-			avatarUrl: avatarUrlFor({
-				avatarType: user.avatar_type,
-				avatarRef: user.avatar_ref,
-				discordId: user.discord_id,
-				discordAvatar: user.discord_avatar,
-			}),
+			avatarUrl: avatarUrlForRow(user),
 		})
 	}
 	return actors

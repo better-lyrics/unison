@@ -60,6 +60,7 @@ describeIntegration("curator leaderboard (integration)", () => {
 		await pool.query("DELETE FROM discord_links")
 		await pool.query("DELETE FROM users")
 		await pool.query("DELETE FROM public_keys")
+		await pool.query("DELETE FROM song_artwork")
 	}
 
 	async function insertLyric(
@@ -307,6 +308,32 @@ describeIntegration("curator leaderboard (integration)", () => {
 			const row = rows.find((r) => r.keyId === curator.keyId)
 			expect(row?.discordLinked).toBe(true)
 			expect(row?.avatarUrl).toBeNull()
+		})
+
+		it("resolves a song pick to its cover at the avatar size", async () => {
+			const [songCurator, artlessCurator] = await seedPopulation()
+			await pool.query(
+				"UPDATE users SET avatar_type = 'song', avatar_ref = 'dQw4w9WgXcQ' WHERE id = $1",
+				[songCurator.id]
+			)
+			await pool.query(
+				"UPDATE users SET avatar_type = 'song', avatar_ref = 'kJQP7kiw5Fk' WHERE id = $1",
+				[artlessCurator.id]
+			)
+			await pool.query(
+				"INSERT INTO song_artwork (video_id, artwork_url, checked_at) VALUES ('dQw4w9WgXcQ', $1, 0)",
+				["https://yt3.googleusercontent.com/abc=w544-h544-l90-rj"]
+			)
+
+			const rows = await getCuratorLeaderboard(env, SCAN)
+			const byKey = new Map(rows.map((r) => [r.keyId, r]))
+			const size = config.avatar.artworkSize
+
+			expect(byKey.get(songCurator.keyId)?.avatarUrl).toBe(
+				`https://yt3.googleusercontent.com/abc=w${size}-h${size}-l90-rj`
+			)
+			expect(byKey.get(artlessCurator.keyId)?.avatarUrl).toBeNull()
+			expect(rows).toHaveLength(new Set(rows.map((r) => r.keyId)).size)
 		})
 	})
 

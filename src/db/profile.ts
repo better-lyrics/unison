@@ -94,3 +94,19 @@ export async function getSubmissionsByUser(
 		hidden: Boolean(r.hidden),
 	}))
 }
+
+export async function hasSubmissionForVideo(
+	env: Env,
+	keyId: string,
+	videoId: string
+): Promise<boolean> {
+	const row = await env.DB.prepare(
+		`SELECT 1 AS found FROM lyrics l
+		 JOIN users u ON u.id = l.submitter_id
+		 WHERE u.key_id = ? AND l.video_id = ? AND l.deleted_at IS NULL
+		 LIMIT 1`
+	)
+		.bind(keyId, videoId)
+		.first()
+	return row !== null
+}
