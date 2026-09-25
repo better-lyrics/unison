@@ -27,6 +27,7 @@ function buildSubmitter(
 		badgeCount: actor?.badgeCount ?? 0,
 		topBadge: actor?.topBadge ?? null,
 		featured: actor?.featured ?? [],
+		avatarUrl: actor?.avatarUrl ?? null,
 	}
 }
 

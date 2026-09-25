@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs"
 import { config } from "@/config"
+import { AVATAR_PRESETS } from "@/db/avatar-presets"
 import { getCuratorTierMap } from "@/db/leaderboard"
 import { D1Compat } from "@/infra/database"
 import type { Env } from "@/types"
@@ -57,6 +58,7 @@ describeIntegration("seal marks (integration)", () => {
 		await pool.query("DELETE FROM votes")
 		await pool.query("DELETE FROM reports")
 		await pool.query("DELETE FROM lyrics")
+		await pool.query("DELETE FROM discord_links")
 		await pool.query("DELETE FROM users")
 		await pool.query("DELETE FROM public_keys")
 	}
@@ -131,6 +133,7 @@ describeIntegration("seal marks (integration)", () => {
 			badgeCount: 0,
 			topBadge: null,
 			featured: [],
+			avatarUrl: null,
 		})
 		expect(marks.has(unapprovedId)).toBe(false)
 	})
@@ -212,8 +215,45 @@ describeIntegration("seal marks (integration)", () => {
 				badgeCount: 0,
 				topBadge: null,
 				featured: [],
+				avatarUrl: null,
 			})
 		}
+	})
+
+	describe("avatarUrl", () => {
+		it("resolves a preset pick, a discord pick and no pick in one batch", async () => {
+			const preset = AVATAR_PRESETS[0]
+			const presetUser = await newUser("Preset Pat")
+			const discordUser = await newUser("Discord Dee")
+			const plainUser = await newUser("Plain Pim")
+			await pool.query("UPDATE users SET avatar_type = 'preset', avatar_ref = $1 WHERE id = $2", [
+				preset.id,
+				presetUser,
+			])
+			await pool.query("UPDATE users SET avatar_type = 'discord' WHERE id = $1", [discordUser])
+			const discordKey = (
+				await one<{ key_id: string }>("SELECT key_id FROM users WHERE id = $1", [discordUser])
+			).key_id
+			await pool.query(
+				"INSERT INTO discord_links (discord_id, key_id, discord_avatar) VALUES ('99887766', $1, 'a_anim')",
+				[discordKey]
+			)
+
+			const actors = await resolveActors(env, [presetUser, discordUser, plainUser])
+
+			expect(actors.get(presetUser)?.avatarUrl).toBe(config.avatar.cdnBase + preset.file)
+			expect(actors.get(discordUser)?.avatarUrl).toBe(
+				"https://cdn.discordapp.com/avatars/99887766/a_anim.gif?size=128"
+			)
+			expect(actors.get(plainUser)?.avatarUrl).toBeNull()
+		})
+
+		it("falls back to null for a discord pick whose account was unlinked", async () => {
+			const user = await newUser("Gone Gus")
+			await pool.query("UPDATE users SET avatar_type = 'discord' WHERE id = $1", [user])
+			const actors = await resolveActors(env, [user])
+			expect(actors.get(user)?.avatarUrl).toBeNull()
+		})
 	})
 })
 
