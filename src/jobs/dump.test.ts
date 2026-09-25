@@ -270,6 +270,7 @@ describe("runPgDump", () => {
 				"--no-owner",
 				"--no-privileges",
 				"--schema=public_dump",
+				"--extension=pg_trgm",
 				"-f",
 				"/tmp/out.dump",
 				"postgres://user:pw@host:5432/db",
