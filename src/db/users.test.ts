@@ -102,7 +102,7 @@ describe("resolveDisplayName", () => {
 		const env = makeEnv(db)
 		const result = await resolveDisplayName(env, "k1")
 		expect(result).toBe("Alex")
-		expect(db.calls[0].sql).toBe("SELECT nickname, nickname_lower FROM users WHERE key_id = ?")
+		expect(db.calls).toHaveLength(1)
 		expect(db.calls[0].params).toEqual(["k1"])
 	})
 
@@ -130,7 +130,18 @@ describe("resolveIdentity", () => {
 		const db = makeMockDB([{ nickname: "Brook", nickname_lower: "brook" }])
 		const env = makeEnv(db)
 		const identity = await resolveIdentity(env, "k1")
-		expect(identity).toEqual({ displayName: "Brook", handle: "brook" })
+		expect(identity).toEqual({ displayName: "Brook", handle: "brook", avatarUrl: null })
+	})
+
+	it("carries the chosen avatar from the same single query", async () => {
+		const preset = AVATAR_PRESETS[0]
+		const db = makeMockDB([
+			{ nickname: "Brook", nickname_lower: "brook", avatar_type: "preset", avatar_ref: preset.id },
+		])
+		const identity = await resolveIdentity(makeEnv(db), "k1")
+		expect(identity.avatarUrl).toBe(config.avatar.cdnBase + preset.file)
+		expect(db.calls).toHaveLength(1)
+		expect(db.calls[0].sql).toMatch(/LEFT JOIN discord_links/)
 	})
 
 	it("returns a petname displayName and null handle when no nickname is set", async () => {
@@ -149,6 +160,7 @@ describe("resolveIdentity", () => {
 		const identity = await resolveIdentity(env, keyId)
 		expect(identity.displayName).toBe(generatePetName(keyId))
 		expect(identity.handle).toBeNull()
+		expect(identity.avatarUrl).toBeNull()
 	})
 })
 

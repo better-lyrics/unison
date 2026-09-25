@@ -39,17 +39,38 @@ export async function updateUserReputation(env: Env, userId: number, delta: numb
 export interface UserIdentity {
 	displayName: string
 	handle: string | null
+	avatarUrl: string | null
 }
 
 // The handle is the lowercased nickname (a unique, indexed generated column). Users
 // without a nickname have no reversible handle, so it is null and they keep /curator/:keyId.
 export async function resolveIdentity(env: Env, keyId: string): Promise<UserIdentity> {
-	const row = await env.DB.prepare("SELECT nickname, nickname_lower FROM users WHERE key_id = ?")
+	const row = await env.DB.prepare(
+		`SELECT u.nickname, u.nickname_lower, u.avatar_type, u.avatar_ref, dl.discord_id, dl.discord_avatar
+		 FROM users u
+		 LEFT JOIN discord_links dl ON dl.key_id = u.key_id
+		 WHERE u.key_id = ?`
+	)
 		.bind(keyId)
-		.first<{ nickname: string | null; nickname_lower: string | null }>()
+		.first<{
+			nickname: string | null
+			nickname_lower: string | null
+			avatar_type: string | null
+			avatar_ref: string | null
+			discord_id: string | null
+			discord_avatar: string | null
+		}>()
 	return {
 		displayName: row?.nickname ?? generatePetName(keyId),
 		handle: row?.nickname_lower ?? null,
+		avatarUrl: row
+			? avatarUrlFor({
+					avatarType: row.avatar_type,
+					avatarRef: row.avatar_ref,
+					discordId: row.discord_id,
+					discordAvatar: row.discord_avatar,
+				})
+			: null,
 	}
 }
 
@@ -95,26 +116,7 @@ export async function clearNickname(env: Env, keyId: string): Promise<void> {
 }
 
 export async function resolveAvatarUrl(env: Env, keyId: string): Promise<string | null> {
-	const row = await env.DB.prepare(
-		`SELECT u.avatar_type, u.avatar_ref, dl.discord_id, dl.discord_avatar
-		 FROM users u
-		 LEFT JOIN discord_links dl ON dl.key_id = u.key_id
-		 WHERE u.key_id = ?`
-	)
-		.bind(keyId)
-		.first<{
-			avatar_type: string | null
-			avatar_ref: string | null
-			discord_id: string | null
-			discord_avatar: string | null
-		}>()
-	if (!row) return null
-	return avatarUrlFor({
-		avatarType: row.avatar_type,
-		avatarRef: row.avatar_ref,
-		discordId: row.discord_id,
-		discordAvatar: row.discord_avatar,
-	})
+	return (await resolveIdentity(env, keyId)).avatarUrl
 }
 
 export async function setAvatarChoice(

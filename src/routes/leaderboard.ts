@@ -10,7 +10,7 @@ import {
 	getSongRank,
 } from "@/db/leaderboard"
 import { getLastVoteAt } from "@/db/profile"
-import { resolveAvatarUrl, resolveIdentity } from "@/db/users"
+import { resolveIdentity } from "@/db/users"
 import type { Env } from "@/types"
 import { ErrorCode, buildError } from "@/utils/errors"
 import { generatePetName } from "@/utils/petname"
@@ -148,7 +148,7 @@ export const leaderboardRoutes = (env: Env) =>
 					getLastVoteAt(env, params.keyId),
 					getByKeyId(env, params.keyId),
 				])
-				const { displayName, handle } = await resolveIdentity(env, params.keyId)
+				const { displayName, handle, avatarUrl } = await resolveIdentity(env, params.keyId)
 				const discordLinked = link !== null
 				if (row) {
 					const { nickname: _nickname, ...rest } = row
@@ -161,6 +161,7 @@ export const leaderboardRoutes = (env: Env) =>
 							handle,
 							lastVoteAt,
 							discordLinked,
+							avatarUrl,
 						},
 					}
 				}
@@ -173,7 +174,7 @@ export const leaderboardRoutes = (env: Env) =>
 						handle,
 						lastVoteAt,
 						discordLinked,
-						avatarUrl: await resolveAvatarUrl(env, params.keyId),
+						avatarUrl,
 					},
 				}
 			},

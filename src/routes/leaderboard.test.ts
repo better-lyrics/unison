@@ -530,8 +530,7 @@ describe("GET /leaderboard/users/:keyId avatarUrl", () => {
 			{ last_vote_at: null }, // getLastVoteAt
 			null, // getByKeyId
 			[], // getCuratorLeaderboard
-			{ nickname: null }, // resolveIdentity
-			{ avatar_type: "preset", avatar_ref: preset.id, discord_id: null, discord_avatar: null }, // resolveAvatarUrl
+			{ nickname: null, avatar_type: "preset", avatar_ref: preset.id }, // resolveIdentity
 		])
 		expect(data.ranked).toBe(false)
 		expect(data.avatarUrl).toBe(presetUrl)
@@ -548,7 +547,7 @@ describe("GET /leaderboard/users/:keyId avatarUrl", () => {
 		expect(data.avatarUrl).toBeNull()
 	})
 
-	it("regression: a ranked curator keeps the board row's avatarUrl", async () => {
+	it("a ranked curator reports the current pick, not a stale board row", async () => {
 		const keyId = "a".repeat(64)
 		const data = await profile(keyId, [
 			{ last_vote_at: 1700000123 }, // getLastVoteAt
@@ -561,14 +560,14 @@ describe("GET /leaderboard/users/:keyId avatarUrl", () => {
 					score: 5,
 					submission_count: 2,
 					total_upvotes: 8,
-					avatar_type: "preset",
-					avatar_ref: preset.id,
+					avatar_type: null,
+					avatar_ref: null,
 				},
 			], // getCuratorLeaderboard
 			[], // getXpForUsers
 			[], // getBadgeSummaries awards
 			[], // getBadgeSummaries featured
-			{ nickname: null }, // resolveIdentity
+			{ nickname: null, avatar_type: "preset", avatar_ref: preset.id }, // resolveIdentity
 		])
 		expect(data.ranked).toBe(true)
 		expect(data.avatarUrl).toBe(presetUrl)
