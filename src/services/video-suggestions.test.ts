@@ -19,6 +19,7 @@ function candidate(over: Partial<SongCandidate> & Pick<SongCandidate, "videoId">
 		album: "After Hours",
 		durationSeconds: 200,
 		videoType: "song",
+		artworkUrl: null,
 		...over,
 	}
 }

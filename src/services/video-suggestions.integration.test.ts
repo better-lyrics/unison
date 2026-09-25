@@ -25,6 +25,7 @@ const candidates: SongCandidate[] = [
 		album: "After Hours",
 		durationSeconds: 200,
 		videoType: "song",
+		artworkUrl: null,
 	},
 	{
 		videoId: "exactmatch1",
@@ -35,6 +36,7 @@ const candidates: SongCandidate[] = [
 		album: "After Hours",
 		durationSeconds: 200,
 		videoType: "song",
+		artworkUrl: null,
 	},
 	{
 		videoId: "videoclip01",
@@ -45,6 +47,7 @@ const candidates: SongCandidate[] = [
 		album: null,
 		durationSeconds: 201,
 		videoType: "video",
+		artworkUrl: null,
 	},
 	{
 		videoId: "otherartist",
@@ -55,6 +58,7 @@ const candidates: SongCandidate[] = [
 		album: null,
 		durationSeconds: 400,
 		videoType: "song",
+		artworkUrl: null,
 	},
 	{
 		videoId: "nomatch0000",
@@ -65,6 +69,7 @@ const candidates: SongCandidate[] = [
 		album: null,
 		durationSeconds: 200,
 		videoType: "song",
+		artworkUrl: null,
 	},
 ]
 const search = async () => candidates

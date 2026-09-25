@@ -1,5 +1,6 @@
 import { config } from "@/config"
 import { invalidateCache, invalidateCacheForLyric } from "@/db/lyrics"
+import { type SongSearch, findSongCandidate } from "@/services/song-search"
 import type { Env } from "@/types"
 import { getVideoDurationSeconds } from "@/utils/innertube"
 
@@ -9,6 +10,8 @@ type LinkTarget = {
 	id: number
 	submitter_id: number | null
 	video_id: string
+	song: string
+	artist: string
 	duration: number
 	deleted_at: number | null
 }
@@ -34,7 +37,7 @@ export function isWithinDurationDelta(a: number, b: number): boolean {
 
 async function getLinkTarget(env: Env, lyricsId: number): Promise<LinkTarget | null> {
 	return env.DB.prepare(
-		"SELECT id, submitter_id, video_id, duration, deleted_at FROM lyrics WHERE id = ?"
+		"SELECT id, submitter_id, video_id, song, artist, duration, deleted_at FROM lyrics WHERE id = ?"
 	)
 		.bind(lyricsId)
 		.first<LinkTarget>()
@@ -71,7 +74,10 @@ async function isLinked(env: Env, lyricsId: number, videoId: string): Promise<bo
 	return row !== null
 }
 
-type LinkDeps = { getDuration?: (videoId: string) => Promise<number | null> }
+type LinkDeps = {
+	search?: SongSearch
+	getDuration?: (videoId: string) => Promise<number | null>
+}
 
 export async function linkVideoForOwner(
 	env: Env,
@@ -90,8 +96,9 @@ export async function linkVideoForOwner(
 		return { ok: true, videos: await listVideoLinks(env, lyricsId) }
 	}
 
-	const getDuration = deps.getDuration ?? getVideoDurationSeconds
-	const candidateDuration = await getDuration(videoId)
+	const hit = await findSongCandidate(env, row, videoId, deps.search)
+	const candidateDuration =
+		hit?.durationSeconds ?? (await (deps.getDuration ?? getVideoDurationSeconds)(videoId))
 	if (candidateDuration === null) return { ok: false, reason: "unverifiable" }
 	if (!isWithinDurationDelta(candidateDuration, row.duration)) {
 		return { ok: false, reason: "duration_mismatch" }

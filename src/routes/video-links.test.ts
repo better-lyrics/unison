@@ -207,6 +207,7 @@ describe("POST /lyrics/:id/suggested-videos", () => {
 					album: null,
 					durationSeconds: 200,
 					videoType: "song",
+					artworkUrl: null,
 					matchScore: 1,
 				},
 			],

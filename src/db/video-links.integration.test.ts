@@ -2,8 +2,9 @@ import { readFileSync } from "node:fs"
 import { config } from "@/config"
 import { D1Compat } from "@/infra/database"
 import type { Env } from "@/types"
+import type { SongCandidate } from "@/utils/innertube"
 import pg from "pg"
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest"
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest"
 import {
 	countVideoLinks,
 	linkVideoForOwner,
@@ -18,7 +19,22 @@ const describeIntegration = shouldRun ? describe : describe.skip
 
 const PRIMARY = "dQw4w9WgXcQ"
 const TARGET = "9bZkp7q19f0"
-const match = { getDuration: async () => 180 }
+const noResults = async (): Promise<SongCandidate[]> => []
+const match = { search: noResults, getDuration: async () => 180 }
+
+function searchHit(videoId: string, durationSeconds: number | null): SongCandidate {
+	return {
+		videoId,
+		title: "Song",
+		artist: "Artist",
+		artists: ["Artist"],
+		artistChannelIds: ["UCartist"],
+		album: null,
+		durationSeconds,
+		videoType: "song",
+		artworkUrl: null,
+	}
+}
 
 describeIntegration("video link service (integration)", () => {
 	const url = process.env.INTEGRATION_DATABASE_URL ?? process.env.DATABASE_URL
@@ -123,6 +139,7 @@ describeIntegration("video link service (integration)", () => {
 
 		it("rejects an unverifiable video (duration unavailable)", async () => {
 			const res = await linkVideoForOwner(env, lyricId, owner, TARGET, {
+				search: noResults,
 				getDuration: async () => null,
 			})
 			expect(res).toEqual({ ok: false, reason: "unverifiable" })
@@ -130,6 +147,7 @@ describeIntegration("video link service (integration)", () => {
 
 		it("rejects a duration mismatch beyond the delta", async () => {
 			const res = await linkVideoForOwner(env, lyricId, owner, TARGET, {
+				search: noResults,
 				getDuration: async () => 180 + config.videoLinking.durationDeltaSeconds + 1,
 			})
 			expect(res).toEqual({ ok: false, reason: "duration_mismatch" })
@@ -137,6 +155,7 @@ describeIntegration("video link service (integration)", () => {
 
 		it("accepts a duration exactly at the delta boundary", async () => {
 			const res = await linkVideoForOwner(env, lyricId, owner, TARGET, {
+				search: noResults,
 				getDuration: async () => 180 + config.videoLinking.durationDeltaSeconds,
 			})
 			expect(res.ok).toBe(true)
@@ -171,6 +190,71 @@ describeIntegration("video link service (integration)", () => {
 			expect([a, b].filter((r) => r.ok).length).toBe(1)
 			expect([a, b].some((r) => !r.ok && r.reason === "cap_reached")).toBe(true)
 			expect(await countVideoLinks(env, lyricId)).toBe(config.videoLinking.maxVideosPerVariant)
+		})
+	})
+
+	describe("duration source", () => {
+		it("takes the duration from a search by the lyric's song and artist", async () => {
+			const search = vi.fn(async () => [searchHit(TARGET, 181)])
+			const getDuration = vi.fn(async () => null)
+			const res = await linkVideoForOwner(env, lyricId, owner, TARGET, { search, getDuration })
+			expect(res.ok).toBe(true)
+			expect(search).toHaveBeenCalledWith("Song Artist")
+			expect(getDuration).not.toHaveBeenCalled()
+		})
+
+		it("rejects a search hit whose duration is outside the delta", async () => {
+			const res = await linkVideoForOwner(env, lyricId, owner, TARGET, {
+				search: async () => [searchHit(TARGET, 180 + config.videoLinking.durationDeltaSeconds + 1)],
+				getDuration: async () => 180,
+			})
+			expect(res).toEqual({ ok: false, reason: "duration_mismatch" })
+		})
+
+		it("falls back to the basic info lookup for a pasted id the search did not return", async () => {
+			const getDuration = vi.fn(async () => 180)
+			const res = await linkVideoForOwner(env, lyricId, owner, TARGET, {
+				search: async () => [searchHit("fHI8X4OXluQ", 180)],
+				getDuration,
+			})
+			expect(res.ok).toBe(true)
+			expect(getDuration).toHaveBeenCalledWith(TARGET)
+		})
+
+		it("falls back to the basic info lookup when the search hit has no duration", async () => {
+			const res = await linkVideoForOwner(env, lyricId, owner, TARGET, {
+				search: async () => [searchHit(TARGET, null)],
+				getDuration: async () => 180,
+			})
+			expect(res.ok).toBe(true)
+		})
+
+		it("stays unverifiable when neither the search nor the fallback has a duration", async () => {
+			const res = await linkVideoForOwner(env, lyricId, owner, TARGET, {
+				search: async () => [searchHit(TARGET, null)],
+				getDuration: async () => null,
+			})
+			expect(res).toEqual({ ok: false, reason: "unverifiable" })
+		})
+
+		it("does not search at all for a no-op link of the primary", async () => {
+			const search = vi.fn(noResults)
+			await linkVideoForOwner(env, lyricId, owner, PRIMARY, {
+				search,
+				getDuration: async () => 180,
+			})
+			expect(search).not.toHaveBeenCalled()
+		})
+	})
+
+	describe("regressions", () => {
+		it("regression: links from the search duration when the player endpoint is LOGIN_REQUIRED", async () => {
+			const res = await linkVideoForOwner(env, lyricId, owner, TARGET, {
+				search: async () => [searchHit(TARGET, 180)],
+				getDuration: async () => null,
+			})
+			expect(res.ok).toBe(true)
+			if (res.ok) expect(res.videos.map((v) => v.videoId)).toContain(TARGET)
 		})
 	})
 

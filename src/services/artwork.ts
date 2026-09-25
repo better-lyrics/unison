@@ -1,15 +1,18 @@
 import { config } from "@/config"
-import { getVideoArtwork, upsertVideoArtwork } from "@/db/artwork"
+import { findSongForVideo, getVideoArtwork, upsertVideoArtwork } from "@/db/artwork"
+import { type SongSearch, findSongCandidate } from "@/services/song-search"
 import type { Env } from "@/types"
-import { getSquareArtworkUrl } from "@/utils/innertube"
 
 const NEGATIVE = "__none__"
 const key = (videoId: string) => `artwork:${videoId}`
 
 interface Deps {
 	resolver?: (videoId: string) => Promise<string | null>
+	search?: SongSearch
 	random?: () => number
 }
+
+type Resolved = { resolver: NonNullable<Deps["resolver"]>; random: () => number }
 
 function ttl(url: string | null): number {
 	return url ? config.artwork.positiveTtlSeconds : config.artwork.negativeTtlSeconds
@@ -19,7 +22,7 @@ async function writeCache(env: Env, videoId: string, url: string | null): Promis
 	await env.CACHE.put(key(videoId), url ?? NEGATIVE, { expirationTtl: ttl(url) })
 }
 
-function maybeRefresh(env: Env, videoId: string, deps: Required<Deps>): void {
+function maybeRefresh(env: Env, videoId: string, deps: Resolved): void {
 	if (deps.random() >= config.artwork.refreshProbability) return
 	void (async () => {
 		const fresh = await deps.resolver(videoId)
@@ -29,13 +32,24 @@ function maybeRefresh(env: Env, videoId: string, deps: Required<Deps>): void {
 	})().catch(() => {})
 }
 
+async function searchArtwork(
+	env: Env,
+	videoId: string,
+	search: SongSearch | undefined
+): Promise<string | null> {
+	const song = await findSongForVideo(env, videoId)
+	if (!song) return null
+	const hit = await findSongCandidate(env, song, videoId, search)
+	return hit?.artworkUrl ?? null
+}
+
 export async function resolveArtwork(
 	env: Env,
 	videoId: string,
 	deps: Deps = {}
 ): Promise<string | null> {
-	const d: Required<Deps> = {
-		resolver: deps.resolver ?? getSquareArtworkUrl,
+	const d: Resolved = {
+		resolver: deps.resolver ?? ((id) => searchArtwork(env, id, deps.search)),
 		random: deps.random ?? Math.random,
 	}
 

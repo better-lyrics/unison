@@ -3,12 +3,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 const { create } = vi.hoisted(() => ({ create: vi.fn() }))
 vi.mock("youtubei.js", () => ({ Innertube: { create } }))
 
-function fakeClient() {
+function basicInfoClient(duration: number | undefined) {
 	return {
+		getBasicInfo: vi.fn(async () => ({ basic_info: { duration } })),
 		music: {
-			getInfo: async () => ({
-				basic_info: { thumbnail: [{ url: "https://art=w1-h1", width: 100, height: 100 }] },
-			}),
+			getInfo: async () => {
+				throw new Error("music.getInfo must not be called")
+			},
 		},
 	}
 }
@@ -22,70 +23,72 @@ afterEach(() => {
 	vi.resetModules()
 })
 
-describe("getSquareArtworkUrl", () => {
-	it("resolves the largest square thumbnail rewritten to the requested size", async () => {
-		create.mockResolvedValue(fakeClient())
-		const { getSquareArtworkUrl } = await import("./innertube")
-		expect(await getSquareArtworkUrl("vid", 600)).toBe("https://art=w600-h600")
-	})
-
-	it("memoizes the client across calls when creation succeeds", async () => {
-		create.mockResolvedValue(fakeClient())
-		const { getSquareArtworkUrl } = await import("./innertube")
-		await getSquareArtworkUrl("vid", 600)
-		await getSquareArtworkUrl("vid2", 600)
-		expect(create).toHaveBeenCalledTimes(1)
-	})
-
-	describe("error paths", () => {
-		it("returns null when the client resolves but the lookup fails", async () => {
-			create.mockResolvedValue({
-				music: {
-					getInfo: async () => {
-						throw new Error("not found")
-					},
-				},
-			})
-			const { getSquareArtworkUrl } = await import("./innertube")
-			expect(await getSquareArtworkUrl("vid", 600)).toBeNull()
-		})
-
-		it("regression: retries client creation after a failed first init instead of caching the rejection", async () => {
-			create.mockRejectedValueOnce(new Error("network blip"))
-			create.mockResolvedValueOnce(fakeClient())
-			const { getSquareArtworkUrl } = await import("./innertube")
-			expect(await getSquareArtworkUrl("vid", 600)).toBeNull()
-			expect(await getSquareArtworkUrl("vid", 600)).toBe("https://art=w600-h600")
-			expect(create).toHaveBeenCalledTimes(2)
-		})
-	})
-})
-
 describe("getVideoDurationSeconds", () => {
 	it("returns the basic_info duration in seconds", async () => {
-		create.mockResolvedValue({
-			music: { getInfo: async () => ({ basic_info: { duration: 213 } }) },
-		})
+		create.mockResolvedValue(basicInfoClient(213))
 		const { getVideoDurationSeconds } = await import("./innertube")
 		expect(await getVideoDurationSeconds("vid")).toBe(213)
 	})
 
+	it("asks the player for basic info through the pinned client", async () => {
+		const client = basicInfoClient(213)
+		create.mockResolvedValue(client)
+		const { BASIC_INFO_CLIENT, getVideoDurationSeconds } = await import("./innertube")
+		await getVideoDurationSeconds("dQw4w9WgXcQ")
+		expect(BASIC_INFO_CLIENT).toBe("ANDROID_VR")
+		expect(client.getBasicInfo).toHaveBeenCalledWith("dQw4w9WgXcQ", { client: "ANDROID_VR" })
+	})
+
+	it("memoizes the client across calls when creation succeeds", async () => {
+		create.mockResolvedValue(basicInfoClient(213))
+		const { getVideoDurationSeconds } = await import("./innertube")
+		await getVideoDurationSeconds("vid")
+		await getVideoDurationSeconds("vid2")
+		expect(create).toHaveBeenCalledTimes(1)
+	})
+
 	describe("edge cases", () => {
 		it("returns null when duration is absent", async () => {
+			create.mockResolvedValue(basicInfoClient(undefined))
+			const { getVideoDurationSeconds } = await import("./innertube")
+			expect(await getVideoDurationSeconds("vid")).toBeNull()
+		})
+	})
+
+	describe("error paths", () => {
+		it("returns null (fail-closed) when the lookup throws", async () => {
 			create.mockResolvedValue({
-				music: { getInfo: async () => ({ basic_info: {} }) },
+				getBasicInfo: async () => {
+					throw new Error("private video")
+				},
 			})
 			const { getVideoDurationSeconds } = await import("./innertube")
 			expect(await getVideoDurationSeconds("vid")).toBeNull()
 		})
 
-		it("returns null (fail-closed) when the lookup throws", async () => {
+		it("regression: retries client creation after a failed first init instead of caching the rejection", async () => {
+			create.mockRejectedValueOnce(new Error("network blip"))
+			create.mockResolvedValueOnce(basicInfoClient(213))
+			const { getVideoDurationSeconds } = await import("./innertube")
+			expect(await getVideoDurationSeconds("vid")).toBeNull()
+			expect(await getVideoDurationSeconds("vid")).toBe(213)
+			expect(create).toHaveBeenCalledTimes(2)
+		})
+	})
+
+	describe("regressions", () => {
+		it("regression: never goes through music.getInfo, whose YTMUSIC player call is LOGIN_REQUIRED from datacenter IPs", async () => {
+			create.mockResolvedValue(basicInfoClient(213))
+			const { getVideoDurationSeconds } = await import("./innertube")
+			expect(await getVideoDurationSeconds("vid")).toBe(213)
+		})
+
+		it("regression: a LOGIN_REQUIRED player response without video details yields null, not a throw", async () => {
 			create.mockResolvedValue({
-				music: {
-					getInfo: async () => {
-						throw new Error("private video")
-					},
-				},
+				getBasicInfo: async () => ({
+					basic_info: {},
+					playability_status: { status: "LOGIN_REQUIRED" },
+				}),
 			})
 			const { getVideoDurationSeconds } = await import("./innertube")
 			expect(await getVideoDurationSeconds("vid")).toBeNull()
@@ -94,7 +97,7 @@ describe("getVideoDurationSeconds", () => {
 })
 
 describe("searchSongs", () => {
-	it("maps song and video shelves, tags the video type, captures artist channel ids, and drops items without a video id", async () => {
+	it("maps song and video shelves, keeps square album art only, tags the video type, captures artist channel ids, and drops items without a video id", async () => {
 		create.mockResolvedValue({
 			music: {
 				search: async (_query: string, { type }: { type: string }) => ({
@@ -112,6 +115,18 @@ describe("searchSongs", () => {
 											],
 											album: { name: "Album X" },
 											duration: { seconds: 200 },
+											thumbnails: [
+												{
+													url: "https://lh3.googleusercontent.com/albumx=w60-h60-l90-rj",
+													width: 60,
+													height: 60,
+												},
+												{
+													url: "https://lh3.googleusercontent.com/albumx=w120-h120-l90-rj",
+													width: 120,
+													height: 120,
+												},
+											],
 										},
 										{ title: "No Id", artists: [{ name: "B" }] },
 										{ id: "vid3", title: "Sparse" },
@@ -127,6 +142,13 @@ describe("searchSongs", () => {
 											title: "Song One (Official Video)",
 											authors: [{ name: "Artist A", channel_id: "UCartistA" }],
 											duration: { seconds: 210 },
+											thumbnails: [
+												{
+													url: "https://i.ytimg.com/vi/clip1/hqdefault.jpg",
+													width: 480,
+													height: 270,
+												},
+											],
 										},
 									],
 								},
@@ -144,6 +166,7 @@ describe("searchSongs", () => {
 				album: "Album X",
 				durationSeconds: 200,
 				videoType: "song",
+				artworkUrl: "https://lh3.googleusercontent.com/albumx=w544-h544-l90-rj",
 			},
 			{
 				videoId: "vid3",
@@ -154,6 +177,7 @@ describe("searchSongs", () => {
 				album: null,
 				durationSeconds: null,
 				videoType: "song",
+				artworkUrl: null,
 			},
 			{
 				videoId: "clip1",
@@ -164,6 +188,7 @@ describe("searchSongs", () => {
 				album: null,
 				durationSeconds: 210,
 				videoType: "video",
+				artworkUrl: null,
 			},
 		])
 	})
