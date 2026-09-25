@@ -92,7 +92,7 @@ describeIntegration("resolveArtwork (integration)", () => {
 		const url = await resolveArtwork(env, "v1", { resolver, random: NEVER })
 		expect(url).toBe("https://art/x=w544-h544")
 		expect(resolver).toHaveBeenCalledTimes(1)
-		expect(cache.store.get("artwork:v1")).toBe("https://art/x=w544-h544")
+		expect(cache.store.get("artwork:v2:v1")).toBe("https://art/x=w544-h544")
 
 		const again = await resolveArtwork(env, "v1", { resolver, random: NEVER })
 		expect(again).toBe("https://art/x=w544-h544")
@@ -106,7 +106,7 @@ describeIntegration("resolveArtwork (integration)", () => {
 			"https://art/db=w544-h544"
 		)
 		expect(resolver).not.toHaveBeenCalled()
-		expect(cache.store.get("artwork:v2")).toBe("https://art/db=w544-h544")
+		expect(cache.store.get("artwork:v2:v2")).toBe("https://art/db=w544-h544")
 	})
 
 	describe("edge cases", () => {
@@ -115,11 +115,39 @@ describeIntegration("resolveArtwork (integration)", () => {
 			expect(await resolveArtwork(env, "v3", { resolver, random: NEVER })).toBeNull()
 			expect(await resolveArtwork(env, "v3", { resolver, random: NEVER })).toBeNull()
 			expect(resolver).toHaveBeenCalledTimes(1)
-			expect(cache.store.get("artwork:v3")).toBe("__none__")
+			expect(cache.store.get("artwork:v2:v3")).toBe("__none__")
+		})
+
+		it("regression: re-resolves a stored empty result instead of serving it", async () => {
+			await upsertVideoArtwork(env, "v7", null)
+			const resolver = vi.fn(async () => "https://art/retry=w544-h544")
+			expect(await resolveArtwork(env, "v7", { resolver, random: NEVER })).toBe(
+				"https://art/retry=w544-h544"
+			)
+			expect(resolver).toHaveBeenCalledTimes(1)
+			expect((await getVideoArtwork(env, "v7"))?.artworkUrl).toBe("https://art/retry=w544-h544")
+			expect(cache.store.get("artwork:v2:v7")).toBe("https://art/retry=w544-h544")
+		})
+
+		it("keeps a stored empty result negative-cached when the retry also finds nothing", async () => {
+			await upsertVideoArtwork(env, "v8", null)
+			const resolver = vi.fn(async () => null)
+			expect(await resolveArtwork(env, "v8", { resolver, random: NEVER })).toBeNull()
+			expect(await resolveArtwork(env, "v8", { resolver, random: NEVER })).toBeNull()
+			expect(resolver).toHaveBeenCalledTimes(1)
+			expect(cache.store.get("artwork:v2:v8")).toBe("__none__")
+		})
+
+		it("regression: ignores negative entries cached under the previous key", async () => {
+			cache.store.set("artwork:v9", "__none__")
+			const resolver = vi.fn(async () => "https://art/fresh=w544-h544")
+			expect(await resolveArtwork(env, "v9", { resolver, random: NEVER })).toBe(
+				"https://art/fresh=w544-h544"
+			)
 		})
 
 		it("serves a negative Redis hit as null", async () => {
-			cache.store.set("artwork:v4", "__none__")
+			cache.store.set("artwork:v2:v4", "__none__")
 			const resolver = vi.fn(async () => "https://should-not-be-called")
 			expect(await resolveArtwork(env, "v4", { resolver, random: NEVER })).toBeNull()
 			expect(resolver).not.toHaveBeenCalled()
@@ -129,26 +157,26 @@ describeIntegration("resolveArtwork (integration)", () => {
 	describe("probabilistic refresh", () => {
 		it("re-resolves and updates cache + DB when random triggers", async () => {
 			await upsertVideoArtwork(env, "v5", "https://old=w544-h544")
-			cache.store.set("artwork:v5", "https://old=w544-h544")
+			cache.store.set("artwork:v2:v5", "https://old=w544-h544")
 			const resolver = vi.fn(async () => "https://new=w544-h544")
 			const ALWAYS = () => 0
 
 			const served = await resolveArtwork(env, "v5", { resolver, random: ALWAYS })
 			expect(served).toBe("https://old=w544-h544")
 			await vi.waitFor(() => expect(resolver).toHaveBeenCalledTimes(1))
-			await vi.waitFor(() => expect(cache.store.get("artwork:v5")).toBe("https://new=w544-h544"))
+			await vi.waitFor(() => expect(cache.store.get("artwork:v2:v5")).toBe("https://new=w544-h544"))
 		})
 
 		it("regression: does not clobber existing artwork when the refresh resolves null", async () => {
 			await upsertVideoArtwork(env, "v6", "https://good=w544-h544")
-			cache.store.set("artwork:v6", "https://good=w544-h544")
+			cache.store.set("artwork:v2:v6", "https://good=w544-h544")
 			const resolver = vi.fn(async () => null)
 			const ALWAYS = () => 0
 
 			const served = await resolveArtwork(env, "v6", { resolver, random: ALWAYS })
 			expect(served).toBe("https://good=w544-h544")
 			await vi.waitFor(() => expect(resolver).toHaveBeenCalledTimes(1))
-			expect(cache.store.get("artwork:v6")).toBe("https://good=w544-h544")
+			expect(cache.store.get("artwork:v2:v6")).toBe("https://good=w544-h544")
 			const row = await getVideoArtwork(env, "v6")
 			expect(row?.artworkUrl).toBe("https://good=w544-h544")
 		})

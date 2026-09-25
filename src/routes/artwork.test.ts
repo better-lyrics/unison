@@ -31,7 +31,7 @@ function makeEnv(): Env {
 describe("GET /artwork", () => {
 	it("returns the resolved artwork url from cache", async () => {
 		const env = makeEnv()
-		await env.CACHE.put("artwork:dQw4w9WgXcQ", "https://art/x=w544-h544")
+		await env.CACHE.put("artwork:v2:dQw4w9WgXcQ", "https://art/x=w544-h544")
 		const app = artworkRoutes(env)
 		const res = await app.handle(new Request("http://localhost/artwork?v=dQw4w9WgXcQ"))
 		expect(res.status).toBe(200)
@@ -43,7 +43,7 @@ describe("GET /artwork", () => {
 
 	it("returns a null artworkUrl on a negative cache hit", async () => {
 		const env = makeEnv()
-		await env.CACHE.put("artwork:dQw4w9WgXcQ", "__none__")
+		await env.CACHE.put("artwork:v2:dQw4w9WgXcQ", "__none__")
 		const app = artworkRoutes(env)
 		const res = await app.handle(new Request("http://localhost/artwork?v=dQw4w9WgXcQ"))
 		expect(res.status).toBe(200)
