@@ -128,6 +128,12 @@ UPDATE lyrics SET album_norm = LOWER(TRIM(album)) WHERE album IS NOT NULL AND al
 CREATE INDEX IF NOT EXISTS idx_lyrics_song_norm_trgm ON lyrics USING GIN (song_norm gin_trgm_ops);
 CREATE INDEX IF NOT EXISTS idx_lyrics_artist_norm_trgm ON lyrics USING GIN (artist_norm gin_trgm_ops);
 CREATE INDEX IF NOT EXISTS idx_lyrics_album_norm_trgm ON lyrics USING GIN (album_norm gin_trgm_ops);
+CREATE INDEX IF NOT EXISTS idx_lyrics_song_artist_norm_trgm ON lyrics USING GIN ((song_norm || ' ' || artist_norm) gin_trgm_ops);
+-- Vote updates are rarely HOT, so a pending list would grow between vacuums and every search scans it.
+ALTER INDEX idx_lyrics_song_norm_trgm SET (fastupdate = off);
+ALTER INDEX idx_lyrics_artist_norm_trgm SET (fastupdate = off);
+ALTER INDEX idx_lyrics_album_norm_trgm SET (fastupdate = off);
+ALTER INDEX idx_lyrics_song_artist_norm_trgm SET (fastupdate = off);
 
 -- Full-text search on lyrics content
 ALTER TABLE lyrics ADD COLUMN IF NOT EXISTS lyrics_text_search tsvector;

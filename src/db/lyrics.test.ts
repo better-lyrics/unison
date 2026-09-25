@@ -761,8 +761,28 @@ describe("getLyricsById", () => {
 })
 
 describe("searchByQuery", () => {
+	// The first statement pins pg_trgm.similarity_threshold; the search itself comes next.
+	const searchCall = (db: MockDB) => {
+		const call = db.calls.find((c) => c.sql.includes("DISTINCT ON (id)"))
+		if (!call) throw new Error("search statement was not issued")
+		return call
+	}
+
+	it("pins the trigram threshold inside the search transaction", async () => {
+		const db = createMockDB([null, []])
+		const cache = createMockCache()
+		const env = createEnv(db, cache)
+
+		await searchByQuery(env, "hello world", 10)
+
+		expect(db.transactionCount).toBe(1)
+		expect(db.calls[0].sql).toContain("set_config('pg_trgm.similarity_threshold', ?, true)")
+		expect(db.calls[0].params).toEqual([String(config.search.similarityThreshold)])
+		expect(db.calls.indexOf(searchCall(db))).toBe(1)
+	})
+
 	it("does not table-prefix columns (no JOIN, so unqualified ranking expression must work)", async () => {
-		const db = createMockDB([[]])
+		const db = createMockDB([null, []])
 		const cache = createMockCache()
 		const env = createEnv(db, cache)
 
@@ -771,8 +791,8 @@ describe("searchByQuery", () => {
 		// searchByQuery composes its own subquery; it must not pull in `l.` prefixes
 		// from the JOINed ranking variant or the outer ORDER BY would reference
 		// undefined aliases.
-		expect(db.calls[0].sql).not.toContain("l.effective_score")
-		expect(db.calls[0].sql).not.toContain("l.sync_type")
+		expect(searchCall(db).sql).not.toContain("l.effective_score")
+		expect(searchCall(db).sql).not.toContain("l.sync_type")
 	})
 
 	it("returns empty array for queries below minQueryLength without hitting DB", async () => {
@@ -807,7 +827,7 @@ describe("searchByQuery", () => {
 			match_score: 0.9,
 			tier: 1,
 		}
-		const db = createMockDB([[searchHit]])
+		const db = createMockDB([null, [searchHit]])
 		const cache = createMockCache()
 		const env = createEnv(db, cache)
 
@@ -838,7 +858,7 @@ describe("searchByQuery", () => {
 			tier: 1,
 		}
 		const userRow = { id: 99, key_id: "beef".repeat(16), reputation: 1.5, nickname: "Cat" }
-		const db = createMockDB([[searchHit], [userRow]])
+		const db = createMockDB([null, [searchHit], [userRow]])
 		const cache = createMockCache()
 		const env = createEnv(db, cache)
 
@@ -850,18 +870,18 @@ describe("searchByQuery", () => {
 	})
 
 	it("resolves a tier-1 identifier match through the video-link junction", async () => {
-		const db = createMockDB([[]])
+		const db = createMockDB([null, []])
 		const cache = createMockCache()
 		const env = createEnv(db, cache)
 
 		await searchByQuery(env, "dQw4w9WgXcQ", 10)
 
-		const sql = db.calls[0].sql
+		const sql = searchCall(db).sql
 		expect(sql).toMatch(
 			/SELECT link\.lyrics_id FROM lyrics_video_ids link WHERE link\.video_id = \?/
 		)
 		// tier 1 binds the trimmed query for the home video_id, the junction lookup, and isrc
-		expect(db.calls[0].params.slice(0, 3)).toEqual(["dQw4w9WgXcQ", "dQw4w9WgXcQ", "dQw4w9WgXcQ"])
+		expect(searchCall(db).params.slice(0, 3)).toEqual(["dQw4w9WgXcQ", "dQw4w9WgXcQ", "dQw4w9WgXcQ"])
 	})
 })
 
