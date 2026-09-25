@@ -4,7 +4,7 @@ import { type SongSearch, findSongCandidate } from "@/services/song-search"
 import type { Env } from "@/types"
 
 const NEGATIVE = "__none__"
-const key = (videoId: string) => `artwork:${videoId}`
+const key = (videoId: string) => `artwork:v2:${videoId}`
 
 interface Deps {
 	resolver?: (videoId: string) => Promise<string | null>
@@ -60,7 +60,7 @@ export async function resolveArtwork(
 	}
 
 	const dbRow = await getVideoArtwork(env, videoId)
-	if (dbRow) {
+	if (dbRow?.artworkUrl) {
 		await writeCache(env, videoId, dbRow.artworkUrl)
 		maybeRefresh(env, videoId, d)
 		return dbRow.artworkUrl
