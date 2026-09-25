@@ -25,7 +25,10 @@ export const avatarRoutes = (env: Env) =>
 						label: p.label,
 						url: config.avatar.cdnBase + p.file,
 					})),
-					display: { cdnBase: config.avatar.cdnBase },
+					display: {
+						cdnBase: config.avatar.cdnBase,
+						artworkSize: config.avatar.artworkSize,
+					},
 				},
 			}
 		})

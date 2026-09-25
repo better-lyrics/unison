@@ -27,7 +27,7 @@ interface CatalogueBody {
 	success: boolean
 	data: {
 		presets: { id: string; label: string; url: string }[]
-		display: { cdnBase: string }
+		display: { cdnBase: string; artworkSize: number }
 	}
 }
 
@@ -41,7 +41,10 @@ describe("GET /avatars", () => {
 		const { res, body } = await getCatalogue()
 		expect(res.status).toBe(200)
 		expect(body.success).toBe(true)
-		expect(body.data.display).toEqual({ cdnBase: config.avatar.cdnBase })
+		expect(body.data.display).toEqual({
+			cdnBase: config.avatar.cdnBase,
+			artworkSize: config.avatar.artworkSize,
+		})
 		expect(body.data.presets).toEqual(
 			AVATAR_PRESETS.map((p) => ({
 				id: p.id,

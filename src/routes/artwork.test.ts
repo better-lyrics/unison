@@ -50,6 +50,54 @@ describe("GET /artwork", () => {
 		expect(await res.json()).toEqual({ success: true, data: { artworkUrl: null } })
 	})
 
+	describe("size", () => {
+		const STORED = "https://yt3.googleusercontent.com/abc=w544-h544-l90-rj"
+
+		async function get(query: string) {
+			const env = makeEnv()
+			await env.CACHE.put("artwork:v2:dQw4w9WgXcQ", STORED)
+			const res = await artworkRoutes(env).handle(
+				new Request(`http://localhost/artwork?v=dQw4w9WgXcQ${query}`)
+			)
+			return {
+				status: res.status,
+				body: (await res.json()) as { data?: { artworkUrl: string | null } },
+			}
+		}
+
+		it("resizes the cover when a size is given", async () => {
+			const { status, body } = await get("&size=256")
+			expect(status).toBe(200)
+			expect(body.data?.artworkUrl).toBe("https://yt3.googleusercontent.com/abc=w256-h256-l90-rj")
+		})
+
+		it("returns the stored url unchanged without a size", async () => {
+			const { body } = await get("")
+			expect(body.data?.artworkUrl).toBe(STORED)
+		})
+
+		it("accepts the bounds 32 and 1024", async () => {
+			expect((await get("&size=32")).body.data?.artworkUrl).toContain("=w32-h32-")
+			expect((await get("&size=1024")).body.data?.artworkUrl).toContain("=w1024-h1024-")
+		})
+
+		it("keeps a missing cover null when a size is given", async () => {
+			const env = makeEnv()
+			await env.CACHE.put("artwork:v2:dQw4w9WgXcQ", "__none__")
+			const res = await artworkRoutes(env).handle(
+				new Request("http://localhost/artwork?v=dQw4w9WgXcQ&size=256")
+			)
+			expect(await res.json()).toEqual({ success: true, data: { artworkUrl: null } })
+		})
+
+		it.each([["31"], ["1025"], ["0"], ["-5"], ["abc"], ["25.5"]])(
+			"rejects an out of range or malformed size %s",
+			async (size) => {
+				expect((await get(`&size=${size}`)).status).toBe(422)
+			}
+		)
+	})
+
 	describe("validation", () => {
 		it("400s when v is missing", async () => {
 			const app = artworkRoutes(makeEnv())
