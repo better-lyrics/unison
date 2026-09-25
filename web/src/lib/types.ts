@@ -266,3 +266,16 @@ export interface DumpManifest {
   attribution_text: string
   enterprise_contact: string
 }
+
+export interface AvatarPreset {
+  id: string
+  label: string
+  url: string
+}
+
+export interface AvatarCatalogue {
+  presets: AvatarPreset[]
+  display: { cdnBase: string }
+}
+
+export type AvatarChoice = { type: "preset"; ref: string } | { type: "discord" } | { type: "default" }

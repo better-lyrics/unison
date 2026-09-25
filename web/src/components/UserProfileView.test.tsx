@@ -213,6 +213,24 @@ describe("UserProfileView", () => {
     await waitFor(() => expect(screen.getByText(/no submissions yet/i)).toBeTruthy())
   })
 
+  it("shows the curator's chosen avatar in the header", async () => {
+    const avatarUrl = "https://cdn.betterlyrics.org/avatars/alien-cat.webp"
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockImplementation((url: string) => {
+        if (url === `/leaderboard/users/${keyId}`) {
+          return ok({ ranked: false, keyId, displayName: "PictureUser", lastVoteAt: null, avatarUrl })
+        }
+        if (url === `/users/${keyId}/submissions`) return ok({ submissions: [] })
+        return Promise.reject(new Error(`unexpected url ${url}`))
+      }),
+    )
+
+    const { container } = renderView()
+    await waitFor(() => expect(screen.getByText("PictureUser")).toBeTruthy())
+    expect(container.querySelector("img")?.getAttribute("src")).toBe(avatarUrl)
+  })
+
   it("regression: shares the /curator link (not a displayName slug) when the curator has no handle", async () => {
     const writeText = vi.fn().mockResolvedValue(undefined)
     vi.stubGlobal("navigator", { ...navigator, clipboard: { writeText } })

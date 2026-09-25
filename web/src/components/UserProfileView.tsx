@@ -190,6 +190,8 @@ export function UserProfileView({ keyId }: UserProfileViewProps) {
 
   const session = useOptionalSession()
   const isOwner = session?.status === "signed-in" && session.identity.keyId === keyId
+  const ownAvatarUrl =
+    session?.status === "signed-in" && session.identity.keyId === keyId ? session.identity.avatarUrl : undefined
 
   const [override, setOverride] = useState<UserGamification | null>(null)
   const onGamificationChange = useCallback((updated: UserGamification) => {
@@ -197,6 +199,9 @@ export function UserProfileView({ keyId }: UserProfileViewProps) {
     setAsyncData(`user:badges:${updated.keyId}`, updated)
   }, [])
 
+  const fetchedRank = rank.status === "success" ? rank.data : null
+  const shownRank =
+    fetchedRank && ownAvatarUrl !== undefined ? { ...fetchedRank, avatarUrl: ownAvatarUrl } : fetchedRank
   const fetched = gamification.status === "success" ? gamification.data : null
   const gam = override?.keyId === keyId ? override : fetched
   const gamSettled = override?.keyId === keyId || gamification.status !== "loading"
@@ -206,7 +211,7 @@ export function UserProfileView({ keyId }: UserProfileViewProps) {
       <BadgeModalProvider>
         <ProfileGate
           keyId={keyId}
-          rank={rank.status === "success" ? rank.data : null}
+          rank={shownRank}
           rankError={rank.status === "error" ? rank.error : null}
           rankLoading={rank.status === "loading"}
           gamification={gam}

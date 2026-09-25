@@ -1,3 +1,4 @@
+import { AvatarPicker } from "@/components/AvatarPicker"
 import { DiscordSection } from "@/components/DiscordSection"
 import { LeaderboardSection } from "@/components/LeaderboardSection"
 import { NicknameEditor } from "@/components/NicknameEditor"
@@ -6,6 +7,9 @@ import { NicknameEditor } from "@/components/NicknameEditor"
 export function OwnerControls() {
   return (
     <>
+      <LeaderboardSection title="Profile picture" subtitle="Pick how you appear across Unison.">
+        <AvatarPicker />
+      </LeaderboardSection>
       <LeaderboardSection title="Nickname" subtitle="How you appear across Unison.">
         <NicknameEditor />
       </LeaderboardSection>

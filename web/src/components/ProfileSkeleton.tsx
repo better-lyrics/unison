@@ -48,6 +48,7 @@ function OwnerBlockSkeleton() {
           </div>
         </div>
       </div>
+      <ControlSectionSkeleton card="h-[254px]" />
       <ControlSectionSkeleton card="h-[168px]" />
       <ControlSectionSkeleton card="h-[124px]" />
     </div>

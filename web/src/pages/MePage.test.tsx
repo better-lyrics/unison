@@ -262,3 +262,34 @@ describe("MePage", () => {
     await waitFor(() => expect(screen.getByTestId("handle-probe").textContent).toBe("brightvivaceroll"))
   })
 })
+
+describe("MePage avatar", () => {
+  it("shows the signed-in avatar in the owner's header even when the profile payload is stale", async () => {
+    const picked = "https://cdn.betterlyrics.org/avatars/gamer-cat.webp"
+    saveStoredSession(valid)
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockImplementation((url: string) => {
+        const ok = (data: unknown) =>
+          Promise.resolve(new Response(JSON.stringify({ success: true, data }), { status: 200 }))
+        if (url === "/auth/me") {
+          return ok({ keyId: ownKeyId, displayName: valid.displayName, expiresAt: valid.expiresAt, avatarUrl: picked })
+        }
+        if (url === `/leaderboard/users/${ownKeyId}`) {
+          return ok({
+            ranked: false,
+            keyId: ownKeyId,
+            displayName: valid.displayName,
+            lastVoteAt: null,
+            avatarUrl: null,
+          })
+        }
+        if (url === `/users/${ownKeyId}/submissions`) return ok({ submissions: [] })
+        return Promise.reject(new Error(`unexpected url ${url}`))
+      }),
+    )
+    const { container } = renderPage()
+    await screen.findByTestId("nickname-editor")
+    expect(container.querySelector("img")?.getAttribute("src")).toBe(picked)
+  })
+})

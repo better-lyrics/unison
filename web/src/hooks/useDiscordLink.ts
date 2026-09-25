@@ -8,6 +8,7 @@ type Status = "loading" | "linked" | "unlinked"
 export interface DiscordLink {
   status: Status
   username: string | null
+  discordAvatarUrl: string | null
   connecting: boolean
   working: boolean
   error: string | null
@@ -18,6 +19,7 @@ export interface DiscordLink {
 export function useDiscordLink({ enabled = true }: { enabled?: boolean } = {}): DiscordLink {
   const [status, setStatus] = useState<Status>(enabled ? "loading" : "unlinked")
   const [username, setUsername] = useState<string | null>(null)
+  const [discordAvatarUrl, setDiscordAvatarUrl] = useState<string | null>(null)
   const [connecting, setConnecting] = useState(false)
   const [working, setWorking] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -35,6 +37,7 @@ export function useDiscordLink({ enabled = true }: { enabled?: boolean } = {}): 
         if (cancelled) return
         setStatus(s.linked ? "linked" : "unlinked")
         setUsername(s.linked ? s.discordUsername : null)
+        setDiscordAvatarUrl(s.linked ? (s.discordAvatarUrl ?? null) : null)
       })
       .catch(() => {
         if (!cancelled) setStatus("unlinked")
@@ -72,6 +75,7 @@ export function useDiscordLink({ enabled = true }: { enabled?: boolean } = {}): 
       await unlinkDiscord(stored.sessionToken)
       setStatus("unlinked")
       setUsername(null)
+      setDiscordAvatarUrl(null)
     } catch {
       setError("We could not disconnect just now. Please try again.")
     } finally {
@@ -79,5 +83,5 @@ export function useDiscordLink({ enabled = true }: { enabled?: boolean } = {}): 
     }
   }, [])
 
-  return { status, username, connecting, working, error, connect, disconnect }
+  return { status, username, discordAvatarUrl, connecting, working, error, connect, disconnect }
 }

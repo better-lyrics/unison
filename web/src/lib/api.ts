@@ -3,6 +3,8 @@ import { AUTHED_FETCH_ERRORS, authedFetch } from "./authedFetch"
 import { IS_SPA_EXPANSION_SEED } from "./seed-flag"
 import type {
   ApiEnvelope,
+  AvatarCatalogue,
+  AvatarChoice,
   BadgeCatalogue,
   CuratorsLeaderboardResponse,
   DumpManifest,
@@ -53,6 +55,20 @@ export async function fetchUserSubmissions(keyId: string, cursor?: string): Prom
 export async function fetchBadgeCatalogue(): Promise<BadgeCatalogue> {
   if (IS_SPA_EXPANSION_SEED) return (await import("./dev-seed")).seedBadgeCatalogue()
   return getJson<BadgeCatalogue>("/badges")
+}
+
+export async function fetchAvatarCatalogue(): Promise<AvatarCatalogue> {
+  if (IS_SPA_EXPANSION_SEED) return (await import("./dev-seed")).seedAvatarCatalogue()
+  return getJson<AvatarCatalogue>("/avatars")
+}
+
+export async function putAvatar(choice: AvatarChoice): Promise<{ avatarUrl: string | null }> {
+  if (IS_SPA_EXPANSION_SEED) return (await import("./dev-seed")).seedSetAvatar(choice)
+  return authedFetch<{ avatarUrl: string | null }>("/avatars/me", {
+    method: "PUT",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(choice),
+  })
 }
 
 export async function fetchUserBadges(keyId: string): Promise<UserGamification> {
