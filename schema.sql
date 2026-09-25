@@ -28,6 +28,11 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS nickname_updated_at INTEGER;
 CREATE UNIQUE INDEX IF NOT EXISTS idx_users_nickname_lower
     ON users(nickname_lower) WHERE nickname_lower IS NOT NULL;
 
+-- Profile picture choice (NULL avatar_type = generated default)
+ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_type TEXT;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_ref TEXT;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_updated_at INTEGER;
+
 -- Discord account links (Discord user <-> Better Lyrics key)
 CREATE TABLE IF NOT EXISTS discord_links (
     discord_id TEXT PRIMARY KEY,
@@ -35,6 +40,8 @@ CREATE TABLE IF NOT EXISTS discord_links (
     discord_username TEXT,
     linked_at INTEGER NOT NULL DEFAULT (EXTRACT(EPOCH FROM NOW())::INTEGER)
 );
+
+ALTER TABLE discord_links ADD COLUMN IF NOT EXISTS discord_avatar TEXT;
 
 CREATE INDEX IF NOT EXISTS idx_discord_links_key_id ON discord_links(key_id);
 
