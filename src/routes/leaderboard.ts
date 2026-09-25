@@ -1,21 +1,21 @@
-import { Elysia, t } from "elysia"
 import { config } from "@/config"
+import { getByKeyId } from "@/db/discordLinks"
 import {
 	CURATOR_LEADERBOARD_CACHE_KEY,
+	type MostWantedCursor,
 	getCuratorLeaderboard,
 	getCuratorRank,
 	getMostWantedPage,
 	getSongLeaderboard,
 	getSongRank,
-	type MostWantedCursor,
 } from "@/db/leaderboard"
-import { getByKeyId } from "@/db/discordLinks"
 import { getLastVoteAt } from "@/db/profile"
-import { resolveIdentity } from "@/db/users"
+import { resolveAvatarUrl, resolveIdentity } from "@/db/users"
 import type { Env } from "@/types"
-import { buildError, ErrorCode } from "@/utils/errors"
+import { ErrorCode, buildError } from "@/utils/errors"
 import { generatePetName } from "@/utils/petname"
 import { readRateLimit } from "@/utils/read-rate-limit"
+import { Elysia, t } from "elysia"
 
 const SONGS_CACHE_KEY = "leaderboard:songs"
 const QUEUE_FIRST_PAGE_CACHE_KEY_PREFIX = "leaderboard:songs:queue:first"
@@ -69,8 +69,7 @@ export const leaderboardRoutes = (env: Env) =>
 						return status(400, buildError(ErrorCode.INVALID_CURSOR))
 					}
 					const cursor = decoded === "empty" ? null : decoded
-					const cacheKey =
-						cursor === null ? `${QUEUE_FIRST_PAGE_CACHE_KEY_PREFIX}:${limit}` : null
+					const cacheKey = cursor === null ? `${QUEUE_FIRST_PAGE_CACHE_KEY_PREFIX}:${limit}` : null
 					if (cacheKey) {
 						const cached = await env.CACHE.get(cacheKey)
 						if (cached) {
@@ -174,6 +173,7 @@ export const leaderboardRoutes = (env: Env) =>
 						handle,
 						lastVoteAt,
 						discordLinked,
+						avatarUrl: await resolveAvatarUrl(env, params.keyId),
 					},
 				}
 			},
