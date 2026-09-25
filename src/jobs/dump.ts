@@ -24,6 +24,8 @@ export function runPgDump(opts: RunPgDumpOptions): Promise<void> {
 		"--no-owner",
 		"--no-privileges",
 		"--schema=public_dump",
+		// The dump's trigram indexes need pg_trgm, which --schema would otherwise leave out.
+		"--extension=pg_trgm",
 		"-f",
 		opts.outPath,
 		opts.databaseUrl,

@@ -7,6 +7,7 @@ import {
 	RANKING_EXPR,
 	RANKING_EXPR_JOINED,
 	RANKING_EXPR_VARIANT,
+	fuzzyMatch,
 	videoServesExpr,
 } from "@/db/predicates"
 import { Logger } from "@/infra/logger"
@@ -577,6 +578,7 @@ export async function searchByQuery(
 	}
 
 	const threshold = config.search.similarityThreshold
+	const fuzzy = fuzzyMatch(normalized, threshold)
 
 	// Tier 1: exact identifier match (video_id or isrc)
 	// Tier 2: trigram similarity on song_norm, artist_norm, album_norm, and combined fields
@@ -602,10 +604,7 @@ export async function searchByQuery(
 			FROM lyrics
 			WHERE deleted_at IS NULL
 				AND NOT ${AUTO_HIDE_PREDICATE}
-				AND (similarity(song_norm, ?) > ?
-					OR similarity(artist_norm, ?) > ?
-					OR (album_norm IS NOT NULL AND similarity(album_norm, ?) > ?)
-					OR similarity(song_norm || ' ' || artist_norm, ?) > ?)
+				AND ${fuzzy.sql}
 
 			UNION ALL
 
@@ -624,28 +623,28 @@ export async function searchByQuery(
 		LIMIT ?
 	`
 
-	const result = await env.DB.prepare(ranked)
-		.bind(
-			query.trim(),
-			query.trim(),
-			query.trim(),
-			normalized,
-			normalized,
-			normalized,
-			normalized,
-			normalized,
-			threshold,
-			normalized,
-			threshold,
-			normalized,
-			threshold,
-			normalized,
-			threshold,
-			query.trim(),
-			query.trim(),
-			limit
-		)
-		.all<LyricsSearchResult>()
+	const result = await env.DB.transaction(async (tx) => {
+		await tx
+			.prepare("SELECT set_config('pg_trgm.similarity_threshold', ?, true)")
+			.bind(String(threshold))
+			.run()
+		return tx
+			.prepare(ranked)
+			.bind(
+				query.trim(),
+				query.trim(),
+				query.trim(),
+				normalized,
+				normalized,
+				normalized,
+				normalized,
+				...fuzzy.params,
+				query.trim(),
+				query.trim(),
+				limit
+			)
+			.all<LyricsSearchResult>()
+	})
 
 	await attachSubmitters(env, result.results)
 	return result.results

@@ -268,13 +268,20 @@ describeIntegration("exam data access (integration)", () => {
 	})
 
 	describe("resolveCandidateName", () => {
-		afterEach(async () => {
-			await pool.query("DELETE FROM discord_links")
-			await pool.query("DELETE FROM users")
-		})
+		// Suite-unique keys and scoped cleanup: other suites leave users their lyrics still reference.
+		const LINKED_KEY = KEY("7")
+		const UNLINKED_KEY = KEY("8")
+		const removeCandidates = async () => {
+			await pool.query("DELETE FROM discord_links WHERE key_id = ANY($1)", [
+				[LINKED_KEY, UNLINKED_KEY],
+			])
+			await pool.query("DELETE FROM users WHERE key_id = ANY($1)", [[LINKED_KEY, UNLINKED_KEY]])
+		}
+		beforeEach(removeCandidates)
+		afterEach(removeCandidates)
 
 		it("prefers the Discord username over the Better Lyrics nickname", async () => {
-			const key = KEY("c")
+			const key = LINKED_KEY
 			await pool.query("INSERT INTO users (key_id, nickname) VALUES ($1, $2)", [key, "BLName"])
 			await pool.query(
 				"INSERT INTO discord_links (discord_id, key_id, discord_username) VALUES ($1, $2, $3)",
@@ -284,7 +291,7 @@ describeIntegration("exam data access (integration)", () => {
 		})
 
 		it("falls back to the Better Lyrics nickname when there is no Discord link", async () => {
-			const key = KEY("d")
+			const key = UNLINKED_KEY
 			await pool.query("INSERT INTO users (key_id, nickname) VALUES ($1, $2)", [key, "BLName"])
 			expect(await resolveCandidateName(env, key)).toBe("BLName")
 		})

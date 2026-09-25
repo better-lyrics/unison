@@ -45,6 +45,30 @@ export const AUTO_HIDE_PREDICATE_JOINED = buildAutoHidePredicate("l.")
 export const videoServesExpr = (prefix = "", value = "?") =>
 	`${prefix}id IN (SELECT home.id FROM lyrics home WHERE home.video_id = ${value} UNION ALL SELECT link.lyrics_id FROM lyrics_video_ids link WHERE link.video_id = ${value})`
 
+// `%` lets the trigram indexes find candidates; the similarity checks keep the exact cutoff.
+// `%` reads pg_trgm.similarity_threshold, so callers must set it to `threshold` first.
+export const fuzzyMatch = (normalized: string, threshold: number) => ({
+	sql: `(song_norm % ? OR artist_norm % ? OR album_norm % ? OR (song_norm || ' ' || artist_norm) % ?)
+				AND (similarity(song_norm, ?) > ?
+					OR similarity(artist_norm, ?) > ?
+					OR (album_norm IS NOT NULL AND similarity(album_norm, ?) > ?)
+					OR similarity(song_norm || ' ' || artist_norm, ?) > ?)`,
+	params: [
+		normalized,
+		normalized,
+		normalized,
+		normalized,
+		normalized,
+		threshold,
+		normalized,
+		threshold,
+		normalized,
+		threshold,
+		normalized,
+		threshold,
+	],
+})
+
 const servableSyncedVariant = `l.sync_type IN ('linesync', 'richsync')
 		AND l.deleted_at IS NULL
 		AND NOT ${AUTO_HIDE_PREDICATE_JOINED}`
