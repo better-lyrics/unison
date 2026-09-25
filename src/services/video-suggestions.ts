@@ -67,6 +67,33 @@ export type SuggestResult =
 
 type Deps = { search?: SongSearch }
 
+export type SongForSuggestions = {
+	song: string
+	artist: string
+	album?: string | null
+	duration: number
+	videoId?: string
+}
+
+export async function suggestVideosForSong(
+	env: Env,
+	meta: SongForSuggestions,
+	deps: Deps = {}
+): Promise<Suggestion[]> {
+	const candidates = await cachedSongSearch(env, meta, deps.search)
+	return buildSuggestions(
+		candidates,
+		{
+			song: meta.song,
+			artist: meta.artist,
+			album: meta.album ?? null,
+			duration: meta.duration,
+			videoId: meta.videoId ?? "",
+		},
+		new Set()
+	)
+}
+
 type VariantRow = {
 	submitter_id: number | null
 	video_id: string

@@ -8,10 +8,13 @@ vi.mock("@/db/video-links", () => ({
 }))
 vi.mock("@/services/video-suggestions", () => ({
 	suggestVideosForVariant: vi.fn(),
+	suggestVideosForSong: vi.fn(),
 }))
 
+import { config } from "@/config"
 import { linkVideoForOwner, listVideoLinks, unlinkVideoForOwner } from "@/db/video-links"
-import { suggestVideosForVariant } from "@/services/video-suggestions"
+import { suggestVideosForSong, suggestVideosForVariant } from "@/services/video-suggestions"
+import { canonicalJson, hashPublicKey } from "@/utils/crypto"
 import { videoLinkRoutes } from "./video-links"
 
 const KEY = "a".repeat(64)
@@ -252,6 +255,174 @@ describe("POST /lyrics/:id/suggested-videos", () => {
 		)
 		expect(res.status).toBe(429)
 		expect(vi.mocked(suggestVideosForVariant)).not.toHaveBeenCalled()
+	})
+})
+
+describe("POST /lyrics/suggested-videos", () => {
+	const SUGGESTION = {
+		videoId: "4NRXx6U8ABQ",
+		title: "Blinding Lights",
+		artist: "The Weeknd",
+		artists: ["The Weeknd"],
+		artistChannelIds: ["UCweeknd"],
+		album: null,
+		durationSeconds: 201,
+		videoType: "video" as const,
+		artworkUrl: null,
+		matchScore: 0.8,
+	}
+	const VALID = {
+		song: "Blinding Lights",
+		artist: "The Weeknd",
+		album: "After Hours",
+		duration: 200,
+		videoId: "fHI8X4OXluQ",
+	}
+
+	const suggestFor = (body: unknown, app = authedApp()) =>
+		app.handle(
+			new Request("http://localhost/lyrics/suggested-videos", {
+				method: "POST",
+				headers: { authorization: "Bearer tok", "content-type": "application/json" },
+				body: JSON.stringify(body),
+			})
+		)
+
+	it("returns suggestions for a song that has not been submitted yet", async () => {
+		vi.mocked(suggestVideosForSong).mockReset().mockResolvedValue([SUGGESTION])
+		const res = await suggestFor(VALID)
+		expect(res.status).toBe(200)
+		expect(await res.json()).toEqual({ success: true, data: { suggestions: [SUGGESTION] } })
+		expect(vi.mocked(suggestVideosForSong)).toHaveBeenCalledWith(expect.anything(), VALID)
+	})
+
+	it("accepts a request without album or videoId", async () => {
+		vi.mocked(suggestVideosForSong).mockReset().mockResolvedValue([])
+		const res = await suggestFor({ song: "Blinding Lights", artist: "The Weeknd", duration: 200 })
+		expect(res.status).toBe(200)
+		expect(await res.json()).toEqual({ success: true, data: { suggestions: [] } })
+		expect(vi.mocked(suggestVideosForSong)).toHaveBeenCalledWith(expect.anything(), {
+			song: "Blinding Lights",
+			artist: "The Weeknd",
+			album: null,
+			duration: 200,
+			videoId: undefined,
+		})
+	})
+
+	it("accepts a signed request and reads the song from the payload", async () => {
+		vi.mocked(suggestVideosForSong).mockReset().mockResolvedValue([SUGGESTION])
+		const kp = await crypto.subtle.generateKey({ name: "ECDSA", namedCurve: "P-256" }, true, [
+			"sign",
+			"verify",
+		])
+		const publicJwk = (await crypto.subtle.exportKey("jwk", kp.publicKey)) as JsonWebKey
+		const keyId = await hashPublicKey(publicJwk)
+		const payload = { timestamp: Date.now(), nonce: "n".repeat(32), keyId, ...VALID }
+		const sig = await crypto.subtle.sign(
+			{ name: "ECDSA", hash: "SHA-256" },
+			kp.privateKey,
+			new TextEncoder().encode(canonicalJson(payload))
+		)
+		const signature = btoa(String.fromCharCode(...new Uint8Array(sig)))
+		const db = makeMockDB([
+			{ key_id: keyId, public_key: JSON.stringify(publicJwk), created_at: 0 },
+			{ id: 42, key_id: keyId },
+		])
+		const res = await videoLinkRoutes(makeEnv(db, makeMockCache())).handle(
+			new Request("http://localhost/lyrics/suggested-videos", {
+				method: "POST",
+				headers: { "content-type": "application/json" },
+				body: JSON.stringify({ payload, signature }),
+			})
+		)
+		expect(res.status).toBe(200)
+		expect(vi.mocked(suggestVideosForSong)).toHaveBeenCalledWith(expect.anything(), VALID)
+	})
+
+	it("rate limits per key on the suggest bucket, like the owner route", async () => {
+		vi.mocked(suggestVideosForSong).mockReset().mockResolvedValue([])
+		const cache = makeMockCache()
+		seedSession(cache, "tok")
+		const env = makeEnv(makeMockDB([{ id: 42, key_id: KEY }]), cache)
+		const limit = vi.fn(async () => ({ success: false }))
+		env.RATE_LIMITER = { limit } as unknown as Env["RATE_LIMITER"]
+		const res = await suggestFor(VALID, videoLinkRoutes(env))
+		expect(res.status).toBe(429)
+		expect(limit).toHaveBeenCalledWith({
+			key: `suggest:${KEY}`,
+			maxRequests: config.rateLimit.suggest.maxRequests,
+			windowSeconds: config.rateLimit.suggest.windowSeconds,
+		})
+		expect(vi.mocked(suggestVideosForSong)).not.toHaveBeenCalled()
+	})
+
+	it("requires auth", async () => {
+		vi.mocked(suggestVideosForSong).mockReset()
+		const res = await videoLinkRoutes(makeEnv(makeMockDB([]), makeMockCache())).handle(
+			new Request("http://localhost/lyrics/suggested-videos", { method: "POST" })
+		)
+		expect(res.status).toBe(401)
+		expect(vi.mocked(suggestVideosForSong)).not.toHaveBeenCalled()
+	})
+
+	describe("routing", () => {
+		it("does not fall through to the owner route for a lyric id", async () => {
+			vi.mocked(suggestVideosForVariant).mockClear()
+			vi.mocked(suggestVideosForSong).mockReset().mockResolvedValue([])
+			const res = await suggestFor(VALID)
+			expect(res.status).toBe(200)
+			expect(vi.mocked(suggestVideosForVariant)).not.toHaveBeenCalled()
+		})
+	})
+
+	describe("validation", () => {
+		const invalid: Array<[string, unknown]> = [
+			["a missing song", { ...VALID, song: undefined }],
+			["an empty song", { ...VALID, song: "" }],
+			["a whitespace-only song", { ...VALID, song: "   " }],
+			["a non-string song", { ...VALID, song: 42 }],
+			["a missing artist", { ...VALID, artist: undefined }],
+			["an empty artist", { ...VALID, artist: "" }],
+			[
+				"a song over the length cap",
+				{ ...VALID, song: "x".repeat(config.validation.song.maxLength + 1) },
+			],
+			[
+				"an artist over the length cap",
+				{ ...VALID, artist: "x".repeat(config.validation.artist.maxLength + 1) },
+			],
+			["a non-string album", { ...VALID, album: 7 }],
+			["a missing duration", { ...VALID, duration: undefined }],
+			["a string duration", { ...VALID, duration: "200" }],
+			["a duration below the minimum", { ...VALID, duration: config.validation.duration.min - 1 }],
+			["a duration above the maximum", { ...VALID, duration: config.validation.duration.max + 1 }],
+			["a short videoId", { ...VALID, videoId: "fHI8X4OXlu" }],
+			["a long videoId", { ...VALID, videoId: "fHI8X4OXluQQ" }],
+			["a non-string videoId", { ...VALID, videoId: 12345678901 }],
+		]
+		for (const [label, body] of invalid) {
+			it(`rejects ${label} with 400 INVALID_PAYLOAD`, async () => {
+				vi.mocked(suggestVideosForSong).mockReset()
+				const res = await suggestFor(body)
+				expect(res.status).toBe(400)
+				expect(((await res.json()) as { code: string }).code).toBe("INVALID_PAYLOAD")
+				expect(vi.mocked(suggestVideosForSong)).not.toHaveBeenCalled()
+			})
+		}
+
+		it("accepts the duration bounds themselves", async () => {
+			vi.mocked(suggestVideosForSong).mockReset().mockResolvedValue([])
+			for (const duration of [config.validation.duration.min, config.validation.duration.max]) {
+				expect((await suggestFor({ ...VALID, duration })).status).toBe(200)
+			}
+		})
+
+		it("accepts unicode song and artist names", async () => {
+			vi.mocked(suggestVideosForSong).mockReset().mockResolvedValue([])
+			const res = await suggestFor({ ...VALID, song: "夜に駆ける", artist: "YOASOBI" })
+			expect(res.status).toBe(200)
+		})
 	})
 })
 
