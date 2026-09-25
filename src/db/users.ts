@@ -110,7 +110,7 @@ export async function resolveAvatarUrl(env: Env, keyId: string): Promise<string 
 export async function setAvatarChoice(
 	env: Env,
 	keyId: string,
-	type: "discord" | "preset",
+	type: "discord" | "preset" | "song",
 	ref: string | null
 ): Promise<void> {
 	const now = Math.floor(Date.now() / 1000)

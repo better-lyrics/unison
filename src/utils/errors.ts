@@ -36,6 +36,8 @@ export const ErrorCode = {
 	UNKNOWN_AVATAR_PRESET: "UNKNOWN_AVATAR_PRESET",
 	INVALID_AVATAR_TYPE: "INVALID_AVATAR_TYPE",
 	DISCORD_AVATAR_UNAVAILABLE: "DISCORD_AVATAR_UNAVAILABLE",
+	SONG_NOT_SUBMITTED: "SONG_NOT_SUBMITTED",
+	SONG_ARTWORK_UNAVAILABLE: "SONG_ARTWORK_UNAVAILABLE",
 	LINK_BLACKLISTED: "LINK_BLACKLISTED",
 	LINKING_DISABLED: "LINKING_DISABLED",
 	NOT_LINKED: "NOT_LINKED",
@@ -202,11 +204,19 @@ const TEMPLATES: Record<ErrorCode, Template> = {
 	},
 	INVALID_AVATAR_TYPE: {
 		error: "Invalid avatar type",
-		hint: "Choose a preset, your Discord photo, or the generated default.",
+		hint: "Choose a preset, your Discord photo, a song you submitted, or the generated default.",
 	},
 	DISCORD_AVATAR_UNAVAILABLE: {
 		error: "Discord photo unavailable",
 		hint: "Link Discord and approve it once more so Unison can use your Discord photo.",
+	},
+	SONG_NOT_SUBMITTED: {
+		error: "Song not submitted by you",
+		hint: "You can only use the cover of a song you submitted lyrics for.",
+	},
+	SONG_ARTWORK_UNAVAILABLE: {
+		error: "Song cover unavailable",
+		hint: "This song has no cover art yet. Pick another song or picture.",
 	},
 	LINK_BLACKLISTED: {
 		error: "Account cannot be linked",

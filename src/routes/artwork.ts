@@ -3,6 +3,7 @@ import { resolveArtwork } from "@/services/artwork"
 import type { Env } from "@/types"
 import { ErrorCode, buildError } from "@/utils/errors"
 import { readRateLimit } from "@/utils/read-rate-limit"
+import { isVideoId } from "@/utils/video-id"
 
 export const artworkRoutes = (env: Env) =>
 	new Elysia({ prefix: "/artwork" })
@@ -12,8 +13,7 @@ export const artworkRoutes = (env: Env) =>
 			"/",
 			async ({ env, query, status }) => {
 				if (!query.v) return status(400, buildError(ErrorCode.MISSING_QUERY))
-				if (!/^[A-Za-z0-9_-]{11}$/.test(query.v))
-					return status(400, buildError(ErrorCode.INVALID_ID))
+				if (!isVideoId(query.v)) return status(400, buildError(ErrorCode.INVALID_ID))
 				const artworkUrl = await resolveArtwork(env, query.v)
 				return { success: true, data: { artworkUrl } }
 			},
