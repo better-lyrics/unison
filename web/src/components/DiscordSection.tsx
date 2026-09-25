@@ -1,7 +1,7 @@
 import { IconBrandDiscordFilled, IconLoader2 } from "@tabler/icons-react"
 import { discordButtonClass, secondaryButtonClass } from "@/components/discord-ui"
 import { editableCardClass } from "@/components/ui"
-import { useDiscordLink } from "@/hooks/useDiscordLink"
+import type { DiscordLink } from "@/hooks/useDiscordLink"
 
 export interface DiscordSectionModel {
   status: "loading" | "linked" | "unlinked"
@@ -54,8 +54,7 @@ export function DiscordSectionView({ model }: { model: DiscordSectionModel }) {
   )
 }
 
-export function DiscordSection() {
-  const link = useDiscordLink()
+export function DiscordSection({ link }: { link: DiscordLink }) {
   return (
     <DiscordSectionView
       model={{

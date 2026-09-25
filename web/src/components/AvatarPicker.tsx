@@ -5,7 +5,7 @@ import { secondaryButtonClass } from "@/components/discord-ui"
 import { Tooltip } from "@/components/Tooltip"
 import { editableCardClass } from "@/components/ui"
 import { useAsyncData } from "@/hooks/useAsyncData"
-import { useDiscordLink } from "@/hooks/useDiscordLink"
+import type { DiscordLink } from "@/hooks/useDiscordLink"
 import { fetchAvatarCatalogue, putAvatar } from "@/lib/api"
 import { dicebearThumbsDataUri } from "@/lib/avatar"
 import type { AvatarChoice } from "@/lib/types"
@@ -18,10 +18,9 @@ interface AvatarOption {
   choice: AvatarChoice
 }
 
-export function AvatarPicker() {
+export function AvatarPicker({ discord }: { discord: DiscordLink }) {
   const session = useSession()
   const catalogue = useAsyncData(fetchAvatarCatalogue, "avatars:catalogue")
-  const discord = useDiscordLink()
   const [saving, setSaving] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 

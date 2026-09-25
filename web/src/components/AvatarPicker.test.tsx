@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { AuthProvider } from "@/auth/AuthProvider"
 import { useSession } from "@/auth/useSession"
 import { clearAsyncDataCache } from "@/hooks/useAsyncData"
+import { useDiscordLink } from "@/hooks/useDiscordLink"
 import { saveStoredSession } from "@/lib/auth"
 import { AvatarPicker } from "./AvatarPicker"
 
@@ -82,11 +83,15 @@ function HeaderProbe() {
   )
 }
 
+function PickerWithLink() {
+  return <AvatarPicker discord={useDiscordLink()} />
+}
+
 function renderPicker() {
   return render(
     <AuthProvider>
       <HeaderProbe />
-      <AvatarPicker />
+      <PickerWithLink />
     </AuthProvider>,
   )
 }

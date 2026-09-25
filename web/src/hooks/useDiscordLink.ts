@@ -13,7 +13,7 @@ export interface DiscordLink {
   working: boolean
   error: string | null
   connect: () => Promise<void>
-  disconnect: () => Promise<void>
+  disconnect: () => Promise<boolean>
 }
 
 export function useDiscordLink({ enabled = true }: { enabled?: boolean } = {}): DiscordLink {
@@ -68,7 +68,7 @@ export function useDiscordLink({ enabled = true }: { enabled?: boolean } = {}): 
 
   const disconnect = useCallback(async () => {
     const stored = loadStoredSession()
-    if (!stored) return
+    if (!stored) return false
     setWorking(true)
     setError(null)
     try {
@@ -76,8 +76,10 @@ export function useDiscordLink({ enabled = true }: { enabled?: boolean } = {}): 
       setStatus("unlinked")
       setUsername(null)
       setDiscordAvatarUrl(null)
+      return true
     } catch {
       setError("We could not disconnect just now. Please try again.")
+      return false
     } finally {
       setWorking(false)
     }
