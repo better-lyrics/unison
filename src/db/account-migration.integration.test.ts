@@ -370,6 +370,87 @@ describeIntegration("account migration (integration)", () => {
 		)
 	})
 
+	describe("avatars", () => {
+		async function migrate(sessionId: string): Promise<number> {
+			const plan = await computeMigrationPlan(env, OLD_KEY, NEW_KEY)
+			if ("error" in plan) throw new Error(plan.error)
+			const auditId = await createPreviewAudit(env, {
+				sessionId,
+				discordId: "disc-1",
+				oldKey: OLD_KEY,
+				newKey: NEW_KEY,
+				counts: plan.counts,
+			})
+			const result = await runMigration(env, {
+				oldKey: OLD_KEY,
+				newKey: NEW_KEY,
+				migrationId: auditId,
+			})
+			if ("error" in result) throw new Error(result.error)
+			return auditId
+		}
+
+		const avatarOf = (id: number) =>
+			one<{ avatar_type: string | null; avatar_ref: string | null }>(
+				"SELECT avatar_type, avatar_ref FROM users WHERE id = $1",
+				[id]
+			)
+
+		it("carries the new key's pick when the old key has none, and restore reverts every avatar field", async () => {
+			await pool.query("INSERT INTO public_keys (key_id, public_key) VALUES ($1, 'x'), ($2, 'y')", [
+				OLD_KEY,
+				NEW_KEY,
+			])
+			const oldUser = await one<{ id: number }>(
+				"INSERT INTO users (key_id) VALUES ($1) RETURNING id",
+				[OLD_KEY]
+			)
+			const newUser = await one<{ id: number }>(
+				"INSERT INTO users (key_id, avatar_type, avatar_ref, avatar_updated_at) VALUES ($1, 'preset', 'alien-cat', 5) RETURNING id",
+				[NEW_KEY]
+			)
+			await pool.query(
+				"INSERT INTO discord_links (discord_id, key_id, discord_username, discord_avatar) VALUES ('disc-1', $1, 'alice', 'hash-1')",
+				[OLD_KEY]
+			)
+
+			const auditId = await migrate("sess-avatar-1")
+
+			expect(await avatarOf(oldUser.id)).toEqual({ avatar_type: "preset", avatar_ref: "alien-cat" })
+			const moved = await one<{ key_id: string; discord_avatar: string }>(
+				"SELECT key_id, discord_avatar FROM discord_links WHERE discord_id = 'disc-1'"
+			)
+			expect(moved).toEqual({ key_id: NEW_KEY, discord_avatar: "hash-1" })
+
+			expect(await restoreFromSnapshot(env, auditId)).toEqual({ restored: true })
+			expect(await avatarOf(oldUser.id)).toEqual({ avatar_type: null, avatar_ref: null })
+			expect(await avatarOf(newUser.id)).toEqual({ avatar_type: "preset", avatar_ref: "alien-cat" })
+			const restoredLink = await one<{ key_id: string; discord_avatar: string }>(
+				"SELECT key_id, discord_avatar FROM discord_links WHERE discord_id = 'disc-1'"
+			)
+			expect(restoredLink).toEqual({ key_id: OLD_KEY, discord_avatar: "hash-1" })
+		})
+
+		it("keeps the old key's pick when both keys have one", async () => {
+			await pool.query("INSERT INTO public_keys (key_id, public_key) VALUES ($1, 'x'), ($2, 'y')", [
+				OLD_KEY,
+				NEW_KEY,
+			])
+			const oldUser = await one<{ id: number }>(
+				"INSERT INTO users (key_id, avatar_type, avatar_ref) VALUES ($1, 'preset', 'gamer-cat') RETURNING id",
+				[OLD_KEY]
+			)
+			await pool.query(
+				"INSERT INTO users (key_id, avatar_type, avatar_ref) VALUES ($1, 'preset', 'alien-cat')",
+				[NEW_KEY]
+			)
+
+			await migrate("sess-avatar-2")
+
+			expect(await avatarOf(oldUser.id)).toEqual({ avatar_type: "preset", avatar_ref: "gamer-cat" })
+		})
+	})
+
 	it("markAuditFailed does not clobber an already-committed audit row", async () => {
 		await pool.query("INSERT INTO public_keys (key_id, public_key) VALUES ($1, 'x'), ($2, 'y')", [
 			OLD_KEY,
