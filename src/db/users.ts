@@ -1,6 +1,7 @@
 import { invalidateCuratorLeaderboardCache } from "@/db/leaderboard"
 import { invalidateCacheForSubmitter } from "@/db/lyrics"
 import type { Env, User } from "@/types"
+import { avatarUrlFor } from "@/utils/avatar-url"
 import { generatePetName } from "@/utils/petname"
 
 export async function getOrCreateUser(env: Env, keyId: string): Promise<User> {
@@ -81,8 +82,7 @@ export async function setNickname(
 		}
 		throw err
 	}
-	await invalidateCacheForSubmitter(env, keyId)
-	await invalidateCuratorLeaderboardCache(env)
+	await invalidateIdentityCaches(env, keyId)
 	return { ok: true }
 }
 
@@ -91,6 +91,58 @@ export async function clearNickname(env: Env, keyId: string): Promise<void> {
 	await env.DB.prepare("UPDATE users SET nickname = NULL, nickname_updated_at = ? WHERE key_id = ?")
 		.bind(now, keyId)
 		.run()
+	await invalidateIdentityCaches(env, keyId)
+}
+
+export async function resolveAvatarUrl(env: Env, keyId: string): Promise<string | null> {
+	const row = await env.DB.prepare(
+		`SELECT u.avatar_type, u.avatar_ref, dl.discord_id, dl.discord_avatar
+		 FROM users u
+		 LEFT JOIN discord_links dl ON dl.key_id = u.key_id
+		 WHERE u.key_id = ?`
+	)
+		.bind(keyId)
+		.first<{
+			avatar_type: string | null
+			avatar_ref: string | null
+			discord_id: string | null
+			discord_avatar: string | null
+		}>()
+	if (!row) return null
+	return avatarUrlFor({
+		avatarType: row.avatar_type,
+		avatarRef: row.avatar_ref,
+		discordId: row.discord_id,
+		discordAvatar: row.discord_avatar,
+	})
+}
+
+export async function setAvatarChoice(
+	env: Env,
+	keyId: string,
+	type: "discord" | "preset",
+	ref: string | null
+): Promise<void> {
+	const now = Math.floor(Date.now() / 1000)
+	await env.DB.prepare(
+		"UPDATE users SET avatar_type = ?, avatar_ref = ?, avatar_updated_at = ? WHERE key_id = ?"
+	)
+		.bind(type, ref, now, keyId)
+		.run()
+	await invalidateIdentityCaches(env, keyId)
+}
+
+export async function clearAvatarChoice(env: Env, keyId: string): Promise<void> {
+	const now = Math.floor(Date.now() / 1000)
+	await env.DB.prepare(
+		"UPDATE users SET avatar_type = NULL, avatar_ref = NULL, avatar_updated_at = ? WHERE key_id = ?"
+	)
+		.bind(now, keyId)
+		.run()
+	await invalidateIdentityCaches(env, keyId)
+}
+
+async function invalidateIdentityCaches(env: Env, keyId: string): Promise<void> {
 	await invalidateCacheForSubmitter(env, keyId)
 	await invalidateCuratorLeaderboardCache(env)
 }
