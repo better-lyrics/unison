@@ -23,10 +23,13 @@ export function AvatarPicker({ discord }: { discord: DiscordLink }) {
   const catalogue = useAsyncData(fetchAvatarCatalogue, "avatars:catalogue")
   const [saving, setSaving] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [brokenSrcs, setBrokenSrcs] = useState<ReadonlySet<string>>(new Set())
 
   if (session.status !== "signed-in") return null
   const { identity, updateAvatarUrl } = session
   const current = identity.avatarUrl ?? null
+  const discordPhoto =
+    discord.discordAvatarUrl && !brokenSrcs.has(discord.discordAvatarUrl) ? discord.discordAvatarUrl : null
 
   const options: AvatarOption[] = [
     {
@@ -36,25 +39,27 @@ export function AvatarPicker({ discord }: { discord: DiscordLink }) {
       url: null,
       choice: { type: "default" },
     },
-    ...(discord.discordAvatarUrl
+    ...(discordPhoto
       ? [
           {
             key: "discord",
             label: "Discord photo",
-            src: discord.discordAvatarUrl,
-            url: discord.discordAvatarUrl,
+            src: discordPhoto,
+            url: discordPhoto,
             choice: { type: "discord" } as const,
           },
         ]
       : []),
     ...(catalogue.status === "success"
-      ? catalogue.data.presets.map((p) => ({
-          key: p.id,
-          label: p.label,
-          src: p.url,
-          url: p.url,
-          choice: { type: "preset", ref: p.id } as const,
-        }))
+      ? catalogue.data.presets
+          .filter((p) => !brokenSrcs.has(p.url))
+          .map((p) => ({
+            key: p.id,
+            label: p.label,
+            src: p.url,
+            url: p.url,
+            choice: { type: "preset", ref: p.id } as const,
+          }))
       : []),
   ]
 
@@ -84,7 +89,12 @@ export function AvatarPicker({ discord }: { discord: DiscordLink }) {
               onClick={() => pick(option)}
               className="relative size-12 shrink-0 cursor-pointer rounded-full transition-transform active:scale-[0.96] disabled:cursor-wait aria-pressed:ring-2 aria-pressed:ring-unison-text aria-pressed:ring-offset-2 aria-pressed:ring-offset-unison-bg"
             >
-              <img src={option.src} alt="" className="size-full rounded-full bg-unison-bg-hover object-cover" />
+              <img
+                src={option.src}
+                alt=""
+                className="size-full rounded-full bg-unison-bg-hover object-cover"
+                onError={() => setBrokenSrcs((prev) => new Set(prev).add(option.src))}
+              />
               {saving === option.key ? (
                 <span className="absolute inset-0 flex items-center justify-center rounded-full bg-black/50">
                   <IconLoader2 className="size-5 animate-spin text-white" stroke={1.5} />
@@ -97,7 +107,7 @@ export function AvatarPicker({ discord }: { discord: DiscordLink }) {
           <IconLoader2 className="size-5 animate-spin self-center text-unison-text-muted" stroke={1.5} />
         ) : null}
       </div>
-      {discord.status === "linked" && !discord.discordAvatarUrl ? (
+      {discord.status === "linked" && !discordPhoto ? (
         <>
           <p className="text-xs text-unison-text-muted">
             Reconnect Discord once to use your Discord photo. Accounts without a custom photo keep the generated one.

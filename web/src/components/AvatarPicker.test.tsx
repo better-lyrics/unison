@@ -1,4 +1,4 @@
-import { act, cleanup, render, screen, waitFor } from "@testing-library/react"
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { AuthProvider } from "@/auth/AuthProvider"
 import { useSession } from "@/auth/useSession"
@@ -170,6 +170,26 @@ describe("AvatarPicker", () => {
       await screen.findByRole("button", { name: "Alien Cat" })
       expect(screen.queryByRole("button", { name: "Discord photo" })).toBeNull()
       expect(screen.queryByRole("button", { name: /use my discord photo/i })).toBeNull()
+    })
+  })
+
+  describe("broken images", () => {
+    it("hides a preset whose image fails to load", async () => {
+      stubServer()
+      renderPicker()
+      const alien = await screen.findByRole("button", { name: "Alien Cat" })
+      fireEvent.error(alien.querySelector("img") as HTMLImageElement)
+      expect(screen.queryByRole("button", { name: "Alien Cat" })).toBeNull()
+      expect(screen.getByRole("button", { name: "Gamer Cat" })).toBeTruthy()
+    })
+
+    it("offers a reconnect when the stored Discord photo no longer loads", async () => {
+      stubServer({ link: { linked: true, discordAvatarUrl: DISCORD } })
+      renderPicker()
+      const discord = await screen.findByRole("button", { name: "Discord photo" })
+      fireEvent.error(discord.querySelector("img") as HTMLImageElement)
+      expect(screen.queryByRole("button", { name: "Discord photo" })).toBeNull()
+      expect(screen.getByRole("button", { name: /use my discord photo/i })).toBeTruthy()
     })
   })
 
