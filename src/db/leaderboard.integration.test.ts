@@ -277,9 +277,10 @@ describeIntegration("curator leaderboard (integration)", () => {
 				preset.id,
 				presetCurator.id,
 			])
-			await pool.query("UPDATE users SET avatar_type = 'discord' WHERE id = $1", [
-				discordCurator.id,
-			])
+			await pool.query(
+				"UPDATE users SET avatar_type = 'discord', avatar_ref = '5550001' WHERE id = $1",
+				[discordCurator.id]
+			)
 			await pool.query(
 				"INSERT INTO discord_links (discord_id, key_id, discord_avatar) VALUES ('5550001', $1, 'h42')",
 				[discordCurator.keyId]

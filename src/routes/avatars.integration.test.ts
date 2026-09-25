@@ -1,5 +1,6 @@
 import { config } from "@/config"
 import { AVATAR_PRESETS } from "@/db/avatar-presets"
+import { resolveAvatarUrl } from "@/db/users"
 import {
 	type IntegrationDb,
 	describeIntegration,
@@ -87,6 +88,20 @@ describeIntegration("PUT /avatars/me (integration)", () => {
 			"https://cdn.discordapp.com/avatars/123456789012345678/abc123.png?size=128"
 		)
 		expect((await choiceOf(KEY)).avatar_type).toBe("discord")
+	})
+
+	it("regression: a discord pick does not follow the key to a different Discord account", async () => {
+		await linkDiscord("abc123")
+		await put({ type: "discord" })
+		expect((await choiceOf(KEY)).avatar_ref).toBe("123456789012345678")
+
+		await db.pool.query("DELETE FROM discord_links WHERE key_id = $1", [KEY])
+		await db.pool.query(
+			"INSERT INTO discord_links (discord_id, key_id, discord_username, discord_avatar) VALUES ('222222222222222222', $1, 'bob', 'bobhash')",
+			[KEY]
+		)
+
+		expect(await resolveAvatarUrl(db.env, KEY)).toBeNull()
 	})
 
 	it("clears the choice back to the generated default", async () => {

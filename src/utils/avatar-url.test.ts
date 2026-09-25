@@ -43,7 +43,7 @@ describe("avatarUrlFor", () => {
 		expect(
 			avatarUrlFor({
 				avatarType: "discord",
-				avatarRef: null,
+				avatarRef: DISCORD_ID,
 				discordId: DISCORD_ID,
 				discordAvatar: "abc123",
 			})
@@ -65,7 +65,7 @@ describe("avatarUrlFor", () => {
 			expect(
 				avatarUrlFor({
 					avatarType: "discord",
-					avatarRef: null,
+					avatarRef: DISCORD_ID,
 					discordId: null,
 					discordAvatar: null,
 				})
@@ -75,7 +75,7 @@ describe("avatarUrlFor", () => {
 			expect(
 				avatarUrlFor({
 					avatarType: "discord",
-					avatarRef: null,
+					avatarRef: DISCORD_ID,
 					discordId: DISCORD_ID,
 					discordAvatar: null,
 				})
@@ -98,6 +98,29 @@ describe("avatarUrlFor", () => {
 					avatarRef: "x",
 					discordId: DISCORD_ID,
 					discordAvatar: "abc",
+				})
+			).toBeNull()
+		})
+	})
+
+	describe("regressions", () => {
+		it("regression: a discord pick never shows a different linked account's photo", () => {
+			expect(
+				avatarUrlFor({
+					avatarType: "discord",
+					avatarRef: DISCORD_ID,
+					discordId: "999999999999999999",
+					discordAvatar: "other",
+				})
+			).toBeNull()
+		})
+		it("regression: a discord pick without the chosen account id falls to default", () => {
+			expect(
+				avatarUrlFor({
+					avatarType: "discord",
+					avatarRef: null,
+					discordId: DISCORD_ID,
+					discordAvatar: "abc123",
 				})
 			).toBeNull()
 		})

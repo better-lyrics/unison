@@ -21,7 +21,8 @@ export function avatarUrlFor(choice: AvatarChoice): string | null {
 		return preset ? config.avatar.cdnBase + preset.file : null
 	}
 	if (choice.avatarType === "discord") {
-		if (!choice.discordId || !choice.discordAvatar) return null
+		if (!choice.discordId || !choice.discordAvatar || choice.avatarRef !== choice.discordId)
+			return null
 		return discordAvatarUrl(choice.discordId, choice.discordAvatar)
 	}
 	return null

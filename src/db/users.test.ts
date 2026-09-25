@@ -377,7 +377,9 @@ describe("resolveAvatarUrl", () => {
 	})
 
 	it("returns the discord url when the user picked discord and a hash is stored", async () => {
-		const db = makeMockDB([row({ avatar_type: "discord", discord_id: "d1", discord_avatar: "h1" })])
+		const db = makeMockDB([
+			row({ avatar_type: "discord", avatar_ref: "d1", discord_id: "d1", discord_avatar: "h1" }),
+		])
 		expect(await resolveAvatarUrl(makeEnv(db), "k1")).toBe(
 			"https://cdn.discordapp.com/avatars/d1/h1.png?size=128"
 		)
@@ -401,7 +403,7 @@ describe("resolveAvatarUrl", () => {
 			expect(await resolveAvatarUrl(makeEnv(db), "k1")).toBeNull()
 		})
 		it("returns null when discord was picked but the account is now unlinked", async () => {
-			const db = makeMockDB([row({ avatar_type: "discord" })])
+			const db = makeMockDB([row({ avatar_type: "discord", avatar_ref: "d1" })])
 			expect(await resolveAvatarUrl(makeEnv(db), "k1")).toBeNull()
 		})
 	})

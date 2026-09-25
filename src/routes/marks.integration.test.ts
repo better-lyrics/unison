@@ -230,7 +230,10 @@ describeIntegration("seal marks (integration)", () => {
 				preset.id,
 				presetUser,
 			])
-			await pool.query("UPDATE users SET avatar_type = 'discord' WHERE id = $1", [discordUser])
+			await pool.query(
+				"UPDATE users SET avatar_type = 'discord', avatar_ref = '99887766' WHERE id = $1",
+				[discordUser]
+			)
 			const discordKey = (
 				await one<{ key_id: string }>("SELECT key_id FROM users WHERE id = $1", [discordUser])
 			).key_id
@@ -250,7 +253,10 @@ describeIntegration("seal marks (integration)", () => {
 
 		it("falls back to null for a discord pick whose account was unlinked", async () => {
 			const user = await newUser("Gone Gus")
-			await pool.query("UPDATE users SET avatar_type = 'discord' WHERE id = $1", [user])
+			await pool.query(
+				"UPDATE users SET avatar_type = 'discord', avatar_ref = '99887766' WHERE id = $1",
+				[user]
+			)
 			const actors = await resolveActors(env, [user])
 			expect(actors.get(user)?.avatarUrl).toBeNull()
 		})

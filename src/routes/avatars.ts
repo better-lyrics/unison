@@ -51,7 +51,7 @@ export const avatarRoutes = (env: Env) =>
 						if (!link?.discord_avatar) {
 							return status(409, buildError(ErrorCode.DISCORD_AVATAR_UNAVAILABLE))
 						}
-						await setAvatarChoice(env, keyId, "discord", null)
+						await setAvatarChoice(env, keyId, "discord", link.discord_id)
 					} else {
 						return status(400, buildError(ErrorCode.INVALID_AVATAR_TYPE))
 					}
