@@ -64,6 +64,7 @@ describe("exchangeCodeForUser", () => {
 			id: "discord-999",
 			username: "alice",
 			displayName: "Alice In Wonderland",
+			avatar: null,
 		})
 		expect(tokenBody).toContain("grant_type=authorization_code")
 		expect(tokenBody).toContain("code=code-1")
@@ -77,6 +78,33 @@ describe("exchangeCodeForUser", () => {
 		})
 		const user = await exchangeCodeForUser(CFG, "code-2", fetchImpl)
 		expect(user.displayName).toBe("bob")
+	})
+
+	it("captures the avatar hash from the user payload", async () => {
+		const fetchImpl = fakeFetch({
+			token: () => ok({ access_token: "tok" }),
+			user: () => ok({ id: "d3", username: "carol", global_name: "Carol", avatar: "hash123" }),
+		})
+		const user = await exchangeCodeForUser(CFG, "code-3", fetchImpl)
+		expect(user.avatar).toBe("hash123")
+	})
+
+	it("keeps an animated avatar hash verbatim", async () => {
+		const fetchImpl = fakeFetch({
+			token: () => ok({ access_token: "tok" }),
+			user: () => ok({ id: "d5", username: "erin", global_name: null, avatar: "a_1f2e3d" }),
+		})
+		const user = await exchangeCodeForUser(CFG, "code-5", fetchImpl)
+		expect(user.avatar).toBe("a_1f2e3d")
+	})
+
+	it("returns a null avatar when the user has no custom avatar", async () => {
+		const fetchImpl = fakeFetch({
+			token: () => ok({ access_token: "tok" }),
+			user: () => ok({ id: "d4", username: "dave", global_name: null, avatar: null }),
+		})
+		const user = await exchangeCodeForUser(CFG, "code-4", fetchImpl)
+		expect(user.avatar).toBeNull()
 	})
 
 	describe("error paths", () => {

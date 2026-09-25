@@ -11,6 +11,7 @@ export interface DiscordIdentity {
 	id: string
 	username: string
 	displayName: string
+	avatar: string | null
 }
 
 export class DiscordOAuthError extends Error {
@@ -66,8 +67,14 @@ export async function exchangeCodeForUser(
 		id?: string
 		username?: string
 		global_name?: string | null
+		avatar?: string | null
 	} | null
 	if (!user?.id || !user.username) throw new DiscordOAuthError("invalid_user")
 
-	return { id: user.id, username: user.username, displayName: user.global_name || user.username }
+	return {
+		id: user.id,
+		username: user.username,
+		displayName: user.global_name || user.username,
+		avatar: user.avatar ?? null,
+	}
 }
