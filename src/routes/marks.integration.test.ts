@@ -260,6 +260,32 @@ describeIntegration("seal marks (integration)", () => {
 			const actors = await resolveActors(env, [user])
 			expect(actors.get(user)?.avatarUrl).toBeNull()
 		})
+
+		it("resolves a song pick to its cover and null when the song has no cover", async () => {
+			await pool.query("DELETE FROM song_artwork")
+			const songUser = await newUser("Song Sam")
+			const artlessUser = await newUser("Artless Ari")
+			await pool.query(
+				"UPDATE users SET avatar_type = 'song', avatar_ref = 'dQw4w9WgXcQ' WHERE id = $1",
+				[songUser]
+			)
+			await pool.query(
+				"UPDATE users SET avatar_type = 'song', avatar_ref = 'kJQP7kiw5Fk' WHERE id = $1",
+				[artlessUser]
+			)
+			await pool.query(
+				"INSERT INTO song_artwork (video_id, artwork_url, checked_at) VALUES ('dQw4w9WgXcQ', $1, 0)",
+				["https://yt3.googleusercontent.com/abc=w544-h544-l90-rj"]
+			)
+
+			const actors = await resolveActors(env, [songUser, artlessUser])
+			const size = config.avatar.artworkSize
+
+			expect(actors.get(songUser)?.avatarUrl).toBe(
+				`https://yt3.googleusercontent.com/abc=w${size}-h${size}-l90-rj`
+			)
+			expect(actors.get(artlessUser)?.avatarUrl).toBeNull()
+		})
 	})
 })
 

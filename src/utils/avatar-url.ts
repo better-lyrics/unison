@@ -1,5 +1,6 @@
 import { config } from "@/config"
 import { findPreset } from "@/db/avatar-presets"
+import { normalizeArtworkUrl } from "@/utils/artwork"
 
 const DISCORD_CDN = "https://cdn.discordapp.com/avatars"
 
@@ -13,6 +14,7 @@ export interface AvatarChoice {
 	avatarRef: string | null
 	discordId: string | null
 	discordAvatar: string | null
+	artworkUrl: string | null
 }
 
 export function avatarUrlFor(choice: AvatarChoice): string | null {
@@ -24,6 +26,11 @@ export function avatarUrlFor(choice: AvatarChoice): string | null {
 		if (!choice.discordId || !choice.discordAvatar || choice.avatarRef !== choice.discordId)
 			return null
 		return discordAvatarUrl(choice.discordId, choice.discordAvatar)
+	}
+	if (choice.avatarType === "song") {
+		return choice.artworkUrl
+			? normalizeArtworkUrl(choice.artworkUrl, config.avatar.artworkSize)
+			: null
 	}
 	return null
 }

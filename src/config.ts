@@ -110,6 +110,7 @@ export const config = {
 
 	avatar: {
 		cdnBase: "https://cdn.betterlyrics.org/avatars/",
+		artworkSize: 256,
 		write: { maxRequests: 20, windowSeconds: 3600 },
 	},
 

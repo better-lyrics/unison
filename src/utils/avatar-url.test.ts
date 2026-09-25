@@ -24,7 +24,13 @@ describe("avatarUrlFor", () => {
 
 	it("returns null for the generated default (null type)", () => {
 		expect(
-			avatarUrlFor({ avatarType: null, avatarRef: null, discordId: null, discordAvatar: null })
+			avatarUrlFor({
+				avatarType: null,
+				avatarRef: null,
+				discordId: null,
+				discordAvatar: null,
+				artworkUrl: null,
+			})
 		).toBeNull()
 	})
 
@@ -35,6 +41,7 @@ describe("avatarUrlFor", () => {
 				avatarRef: preset.id,
 				discordId: null,
 				discordAvatar: null,
+				artworkUrl: null,
 			})
 		).toBe(config.avatar.cdnBase + preset.file)
 	})
@@ -46,6 +53,7 @@ describe("avatarUrlFor", () => {
 				avatarRef: DISCORD_ID,
 				discordId: DISCORD_ID,
 				discordAvatar: "abc123",
+				artworkUrl: null,
 			})
 		).toBe(discordAvatarUrl(DISCORD_ID, "abc123"))
 	})
@@ -58,6 +66,7 @@ describe("avatarUrlFor", () => {
 					avatarRef: "gone",
 					discordId: null,
 					discordAvatar: null,
+					artworkUrl: null,
 				})
 			).toBeNull()
 		})
@@ -68,6 +77,7 @@ describe("avatarUrlFor", () => {
 					avatarRef: DISCORD_ID,
 					discordId: null,
 					discordAvatar: null,
+					artworkUrl: null,
 				})
 			).toBeNull()
 		})
@@ -78,6 +88,7 @@ describe("avatarUrlFor", () => {
 					avatarRef: DISCORD_ID,
 					discordId: DISCORD_ID,
 					discordAvatar: null,
+					artworkUrl: null,
 				})
 			).toBeNull()
 		})
@@ -88,6 +99,7 @@ describe("avatarUrlFor", () => {
 					avatarRef: null,
 					discordId: null,
 					discordAvatar: null,
+					artworkUrl: null,
 				})
 			).toBeNull()
 		})
@@ -98,8 +110,43 @@ describe("avatarUrlFor", () => {
 					avatarRef: "x",
 					discordId: DISCORD_ID,
 					discordAvatar: "abc",
+					artworkUrl: null,
 				})
 			).toBeNull()
+		})
+	})
+
+	describe("song cover", () => {
+		const ART = "https://yt3.googleusercontent.com/abc=w544-h544-l90-rj"
+		const song = (artworkUrl: string | null, avatarRef = "dQw4w9WgXcQ") =>
+			avatarUrlFor({
+				avatarType: "song",
+				avatarRef,
+				discordId: null,
+				discordAvatar: null,
+				artworkUrl,
+			})
+
+		it("returns the cover resized to the avatar size", () => {
+			const size = config.avatar.artworkSize
+			expect(song(ART)).toBe(`https://yt3.googleusercontent.com/abc=w${size}-h${size}-l90-rj`)
+		})
+		it("falls to default when the song has no cover", () => {
+			expect(song(null)).toBeNull()
+		})
+		it("never resolves a preset id stored as a song ref", () => {
+			expect(song(null, preset.id)).toBeNull()
+		})
+		it("a preset pick ignores a joined cover", () => {
+			expect(
+				avatarUrlFor({
+					avatarType: "preset",
+					avatarRef: preset.id,
+					discordId: null,
+					discordAvatar: null,
+					artworkUrl: ART,
+				})
+			).toBe(config.avatar.cdnBase + preset.file)
 		})
 	})
 
@@ -111,6 +158,7 @@ describe("avatarUrlFor", () => {
 					avatarRef: DISCORD_ID,
 					discordId: "999999999999999999",
 					discordAvatar: "other",
+					artworkUrl: null,
 				})
 			).toBeNull()
 		})
@@ -121,6 +169,7 @@ describe("avatarUrlFor", () => {
 					avatarRef: null,
 					discordId: DISCORD_ID,
 					discordAvatar: "abc123",
+					artworkUrl: null,
 				})
 			).toBeNull()
 		})
@@ -134,10 +183,14 @@ describe("avatarUrlFor", () => {
 					avatarRef: p.id,
 					discordId: null,
 					discordAvatar: null,
+					artworkUrl: null,
 				})
 				expect(url).toBe(`${config.avatar.cdnBase}${p.file}`)
 				expect(() => new URL(url ?? "")).not.toThrow()
 			}
+		})
+		it("the avatar cover size is 256", () => {
+			expect(config.avatar.artworkSize).toBe(256)
 		})
 		it("a preset pick ignores any discord data", () => {
 			expect(
@@ -146,6 +199,7 @@ describe("avatarUrlFor", () => {
 					avatarRef: preset.id,
 					discordId: DISCORD_ID,
 					discordAvatar: "abc",
+					artworkUrl: null,
 				})
 			).toBe(config.avatar.cdnBase + preset.file)
 		})
