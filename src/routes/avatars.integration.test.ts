@@ -8,6 +8,7 @@ import {
 	seedUser,
 	wipeRevisionData,
 } from "@/test/integration-harness"
+import type { Env } from "@/types"
 import { canonicalJson, hashPublicKey } from "@/utils/crypto"
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest"
 import { avatarRoutes } from "./avatars"
@@ -150,20 +151,20 @@ describeIntegration("PUT /avatars/me (integration)", () => {
 			await put({ type: "preset", ref: PRESET.id })
 			const { status, body } = await put({ type: "preset", ref: "not-a-preset" })
 			expect(status).toBe(400)
-			expect(body.error).toBe("UNKNOWN_PRESET")
+			expect(body.code).toBe("UNKNOWN_AVATAR_PRESET")
 			expect((await choiceOf(KEY)).avatar_ref).toBe(PRESET.id)
 		})
 
 		it("rejects a preset with no ref with 400", async () => {
 			const { status, body } = await put({ type: "preset" })
 			expect(status).toBe(400)
-			expect(body.error).toBe("UNKNOWN_PRESET")
+			expect(body.code).toBe("UNKNOWN_AVATAR_PRESET")
 		})
 
 		it("rejects discord with 409 when no account is linked", async () => {
 			const { status, body } = await put({ type: "discord" })
 			expect(status).toBe(409)
-			expect(body.error).toBe("DISCORD_AVATAR_UNAVAILABLE")
+			expect(body.code).toBe("DISCORD_AVATAR_UNAVAILABLE")
 			expect((await choiceOf(KEY)).avatar_type).toBeNull()
 		})
 
@@ -171,19 +172,35 @@ describeIntegration("PUT /avatars/me (integration)", () => {
 			await linkDiscord(null)
 			const { status, body } = await put({ type: "discord" })
 			expect(status).toBe(409)
-			expect(body.error).toBe("DISCORD_AVATAR_UNAVAILABLE")
+			expect(body.code).toBe("DISCORD_AVATAR_UNAVAILABLE")
 		})
 
 		it("rejects an unknown type with 400", async () => {
 			const { status, body } = await put({ type: "upload", ref: "https://example.com/x.png" })
 			expect(status).toBe(400)
-			expect(body.error).toBe("INVALID_TYPE")
+			expect(body.code).toBe("INVALID_AVATAR_TYPE")
+		})
+
+		it("rate limits with the shared error envelope", async () => {
+			const blocked = { limit: async () => ({ success: false }) } as unknown as Env["RATE_LIMITER"]
+			const limited: Env = { ...db.env, RATE_LIMITER: blocked }
+			const res = await avatarRoutes(limited).handle(
+				new Request("http://localhost/avatars/me", {
+					method: "PUT",
+					headers: { "content-type": "application/json", authorization: `Bearer ${TOKEN}` },
+					body: JSON.stringify({ type: "default" }),
+				})
+			)
+			expect(res.status).toBe(429)
+			const body = (await res.json()) as PutResult["body"] & { hint?: string }
+			expect(body.code).toBe("RATE_LIMITED")
+			expect(body.hint?.length).toBeGreaterThan(0)
 		})
 
 		it("rejects a non-string ref with 400", async () => {
 			const { status, body } = await put({ type: "preset", ref: 42 })
 			expect(status).toBe(400)
-			expect(body.error).toBe("UNKNOWN_PRESET")
+			expect(body.code).toBe("UNKNOWN_AVATAR_PRESET")
 		})
 	})
 })

@@ -4,6 +4,7 @@ import { getByKeyId } from "@/db/discordLinks"
 import { clearAvatarChoice, resolveAvatarUrl, setAvatarChoice } from "@/db/users"
 import type { Env } from "@/types"
 import { eitherAuth } from "@/utils/either-auth"
+import { ErrorCode, buildError } from "@/utils/errors"
 import { readRateLimit } from "@/utils/read-rate-limit"
 import { Elysia } from "elysia"
 
@@ -29,36 +30,30 @@ export const avatarRoutes = (env: Env) =>
 			new Elysia()
 				.decorate("env", env)
 				.use(eitherAuth)
-				.put("/me", async ({ env, keyId, body, set }) => {
+				.put("/me", async ({ env, keyId, body, status }) => {
 					const { success } = await env.RATE_LIMITER.limit({
 						key: `avatar_write:${keyId}`,
 						maxRequests: config.avatar.write.maxRequests,
 						windowSeconds: config.avatar.write.windowSeconds,
 					})
-					if (!success) {
-						set.status = 429
-						return { success: false, error: "RATE_LIMITED" }
-					}
+					if (!success) return status(429, buildError(ErrorCode.RATE_LIMITED))
 
 					const { type, ref } = body as { type?: unknown; ref?: unknown }
 					if (type === "default") {
 						await clearAvatarChoice(env, keyId)
 					} else if (type === "preset") {
 						if (typeof ref !== "string" || !findPreset(ref)) {
-							set.status = 400
-							return { success: false, error: "UNKNOWN_PRESET" }
+							return status(400, buildError(ErrorCode.UNKNOWN_AVATAR_PRESET))
 						}
 						await setAvatarChoice(env, keyId, "preset", ref)
 					} else if (type === "discord") {
 						const link = await getByKeyId(env, keyId)
 						if (!link?.discord_avatar) {
-							set.status = 409
-							return { success: false, error: "DISCORD_AVATAR_UNAVAILABLE" }
+							return status(409, buildError(ErrorCode.DISCORD_AVATAR_UNAVAILABLE))
 						}
 						await setAvatarChoice(env, keyId, "discord", null)
 					} else {
-						set.status = 400
-						return { success: false, error: "INVALID_TYPE" }
+						return status(400, buildError(ErrorCode.INVALID_AVATAR_TYPE))
 					}
 
 					return { success: true, data: { avatarUrl: await resolveAvatarUrl(env, keyId) } }
