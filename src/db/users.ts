@@ -103,7 +103,8 @@ export async function setNickname(
 		}
 		throw err
 	}
-	await invalidateIdentityCaches(env, keyId)
+	await invalidateCacheForSubmitter(env, keyId)
+	await invalidateCuratorLeaderboardCache(env)
 	return { ok: true }
 }
 
@@ -112,7 +113,8 @@ export async function clearNickname(env: Env, keyId: string): Promise<void> {
 	await env.DB.prepare("UPDATE users SET nickname = NULL, nickname_updated_at = ? WHERE key_id = ?")
 		.bind(now, keyId)
 		.run()
-	await invalidateIdentityCaches(env, keyId)
+	await invalidateCacheForSubmitter(env, keyId)
+	await invalidateCuratorLeaderboardCache(env)
 }
 
 export async function resolveAvatarUrl(env: Env, keyId: string): Promise<string | null> {
@@ -131,7 +133,7 @@ export async function setAvatarChoice(
 	)
 		.bind(type, ref, now, keyId)
 		.run()
-	await invalidateIdentityCaches(env, keyId)
+	await invalidateCuratorLeaderboardCache(env)
 }
 
 export async function clearAvatarChoice(env: Env, keyId: string): Promise<void> {
@@ -141,11 +143,6 @@ export async function clearAvatarChoice(env: Env, keyId: string): Promise<void> 
 	)
 		.bind(now, keyId)
 		.run()
-	await invalidateIdentityCaches(env, keyId)
-}
-
-async function invalidateIdentityCaches(env: Env, keyId: string): Promise<void> {
-	await invalidateCacheForSubmitter(env, keyId)
 	await invalidateCuratorLeaderboardCache(env)
 }
 

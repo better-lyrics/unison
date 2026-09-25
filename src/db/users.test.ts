@@ -440,20 +440,21 @@ describe("clearAvatarChoice", () => {
 	})
 })
 
-describe("avatar mutations invalidate identity caches", () => {
-	it("setAvatarChoice evicts the user's lyrics entries and the curator leaderboard", async () => {
-		const db = makeMockDB([null, [{ video_id: "vA" }]])
+describe("avatar mutations invalidate only the curator board", () => {
+	it("setAvatarChoice evicts the curator leaderboard without scanning the user's lyrics", async () => {
+		const db = makeMockDB([null])
 		const { cache, deleteCalls } = makeRecordingCache()
 		await setAvatarChoice(makeEnv(db, cache), "k1", "preset", AVATAR_PRESETS[0].id)
-		expect(deleteCalls).toContain("v:vA")
 		expect(deleteCalls).toContain("leaderboard:users")
+		expect(deleteCalls.some((k) => k.startsWith("v:"))).toBe(false)
+		expect(db.calls).toHaveLength(1)
 	})
 
-	it("clearAvatarChoice evicts the user's lyrics entries and the curator leaderboard", async () => {
-		const db = makeMockDB([null, [{ video_id: "vB" }]])
+	it("clearAvatarChoice evicts the curator leaderboard without scanning the user's lyrics", async () => {
+		const db = makeMockDB([null])
 		const { cache, deleteCalls } = makeRecordingCache()
 		await clearAvatarChoice(makeEnv(db, cache), "k1")
-		expect(deleteCalls).toContain("v:vB")
 		expect(deleteCalls).toContain("leaderboard:users")
+		expect(db.calls).toHaveLength(1)
 	})
 })
