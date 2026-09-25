@@ -1,6 +1,6 @@
 import type { ExamSessionData } from "@/lib/examApi"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
-import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react"
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react"
 import { MemoryRouter, Route, Routes } from "react-router-dom"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
@@ -102,6 +102,25 @@ describe("ExamPage", () => {
       expect(img?.getAttribute("src")).toMatch(
         /^https:\/\/cdn\.betterlyrics\.org\/(dog-butterfly\.gif|nothing-ever-happens\.gif|wilson\.jpeg)$/,
       )
+    })
+  })
+
+  describe("council rules", () => {
+    it("states the seal rules on the intro before the exam starts", async () => {
+      fetchExamSession.mockResolvedValue(session())
+      renderExam()
+
+      const rules = await screen.findByRole("region", { name: "Council rules" })
+      expect(within(rules).getByText(/never seal on request/i)).toBeTruthy()
+      expect(within(rules).getByText(/popularity and upvotes don't earn a seal/i)).toBeTruthy()
+    })
+
+    it("no longer shows the rules once the exam has begun", async () => {
+      fetchExamSession.mockResolvedValue(session())
+      renderExam()
+
+      fireEvent.click(await screen.findByRole("button", { name: "Begin" }))
+      expect(screen.queryByRole("region", { name: "Council rules" })).toBeNull()
     })
   })
 

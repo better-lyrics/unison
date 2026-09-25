@@ -172,6 +172,15 @@ export function ExamPage() {
           <em className="font-medium text-unison-text">exceptional</em>, not just pretty good, so when in doubt, do not
           seal.
         </p>
+        <section aria-labelledby="exam-council-rules" className={cn(panelClass, "space-y-2 p-4")}>
+          <h2 id="exam-council-rules" className="text-sm font-semibold text-unison-text">
+            Council rules
+          </h2>
+          <ul className="list-disc space-y-1.5 pl-5 text-sm text-unison-text-secondary">
+            <li>Seals are earned in the queue. Never seal on request, even for a friend or a newcomer.</li>
+            <li>Popularity and upvotes don't earn a seal. Only the sync does.</li>
+          </ul>
+        </section>
         <p className="text-sm">
           <a
             href="https://composer.betterlyrics.org/guides/lyric-best-practices"
