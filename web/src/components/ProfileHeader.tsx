@@ -4,7 +4,7 @@ import { useBadgeModal } from "@/components/BadgeModalContext"
 import { OdometerNumber } from "@/components/OdometerNumber"
 import { TierChip } from "@/components/TierChip"
 import { isRareBadge, resolveBadgeImage } from "@/lib/badge-view"
-import { resolveAvatar } from "@/lib/avatar"
+import { UserAvatar } from "@/components/UserAvatar"
 import { cn } from "@/lib/cn"
 import { levelProgress } from "@/lib/level"
 import type { BadgeCatalogue, UserGamification, UserRankResponse } from "@/lib/types"
@@ -149,9 +149,9 @@ export function ProfileHeader({ keyId, rank, gamification, catalogue }: ProfileH
             />
           ) : null}
         </svg>
-        <img
-          src={resolveAvatar({ avatarUrl: rank.avatarUrl, keyId })}
-          alt=""
+        <UserAvatar
+          avatarUrl={rank.avatarUrl}
+          keyId={keyId}
           className="absolute top-2 left-2 block size-[76px] rounded-full bg-unison-bg-elevated"
         />
         {rank.discordLinked ? (
