@@ -1,7 +1,7 @@
-import { describe, expect, it } from "vitest"
 import { COMMUNITY_KEY_ID } from "@/config"
-import { canonicalJson, hashPublicKey } from "@/utils/crypto"
 import type { Env } from "@/types"
+import { canonicalJson, hashPublicKey } from "@/utils/crypto"
+import { describe, expect, it } from "vitest"
 import { linkRoutes, linkStartRoutes } from "./links"
 
 interface DBCall {
@@ -131,6 +131,7 @@ function discordFetch(user: {
 	id: string
 	username: string
 	global_name?: string | null
+	avatar?: string | null
 }): typeof fetch {
 	return (async (input: string | URL | Request) => {
 		const url = String(input)
@@ -292,6 +293,85 @@ describe("GET /links/discord/callback", () => {
 		expect(res.status).toBe(302)
 		expect(res.headers.get("location")).toContain("status=error")
 	})
+
+	describe("avatar backfill on re-consent", () => {
+		const existingLink = (discordId: string, avatar: string | null) => ({
+			discord_id: discordId,
+			key_id: KEY,
+			discord_username: "Alice",
+			discord_avatar: avatar,
+			linked_at: 1_700_000_000,
+		})
+		const callback = (app: ReturnType<typeof linkRoutes>, state: string) =>
+			app.handle(
+				new Request(`http://localhost/links/discord/callback?code=c&state=${state}`, {
+					redirect: "manual",
+				})
+			)
+
+		it("updates the hash in place for the same linked account", async () => {
+			const cache = makeMockCache({ "link_state:st-bf": KEY })
+			const db = makeMockDB([existingLink("same-id", null), null])
+			const app = linkRoutes(
+				makeEnv(db, cache),
+				discordFetch({ id: "same-id", username: "alice", global_name: "Alice", avatar: "new-hash" })
+			)
+
+			const res = await callback(app, "st-bf")
+
+			expect(res.status).toBe(302)
+			expect(res.headers.get("location")).toContain("/link?status=linked")
+			const upd = db.calls.find((c) => c.sql.includes("UPDATE discord_links"))
+			expect(upd?.params).toEqual(["new-hash", KEY, "same-id"])
+		})
+
+		it("relinks through delete and insert when the Discord account differs", async () => {
+			const cache = makeMockCache({ "link_state:st-rl": KEY })
+			const db = makeMockDB([existingLink("old-id", "old-hash"), null])
+			const app = linkRoutes(
+				makeEnv(db, cache),
+				discordFetch({ id: "new-id", username: "bob", global_name: "Bob", avatar: "bob-hash" })
+			)
+
+			await callback(app, "st-rl")
+
+			expect(db.calls.some((c) => c.sql.includes("UPDATE discord_links"))).toBe(false)
+			expect(db.calls.some((c) => c.sql.includes("DELETE FROM discord_links"))).toBe(true)
+			const insert = db.calls.find((c) => c.sql.includes("INSERT INTO discord_links"))
+			expect(insert?.params).toEqual(["new-id", KEY, "Bob", "bob-hash", expect.any(Number)])
+		})
+
+		describe("invariants", () => {
+			it("a same-account re-consent never deletes or reinserts the link", async () => {
+				const cache = makeMockCache({ "link_state:st-inv": KEY })
+				const db = makeMockDB([existingLink("same-id", "old-hash"), null])
+				const app = linkRoutes(
+					makeEnv(db, cache),
+					discordFetch({ id: "same-id", username: "alice", avatar: "fresh" })
+				)
+
+				await callback(app, "st-inv")
+
+				for (const c of db.calls) expect(c.sql).not.toMatch(/DELETE|INSERT|linked_at/)
+			})
+		})
+
+		describe("edge cases", () => {
+			it("clears the stored hash when the user no longer has a Discord avatar", async () => {
+				const cache = makeMockCache({ "link_state:st-clr": KEY })
+				const db = makeMockDB([existingLink("same-id", "old-hash"), null])
+				const app = linkRoutes(
+					makeEnv(db, cache),
+					discordFetch({ id: "same-id", username: "alice", avatar: null })
+				)
+
+				await callback(app, "st-clr")
+
+				const upd = db.calls.find((c) => c.sql.includes("UPDATE discord_links"))
+				expect(upd?.params).toEqual([null, KEY, "same-id"])
+			})
+		})
+	})
 })
 
 describe("GET /links/discord/callback - migration attach", () => {
@@ -336,7 +416,9 @@ describe("GET /links/discord/callback - migration attach", () => {
 		)
 
 		const res = await app.handle(
-			new Request("http://localhost/links/discord/callback?code=c&state=st-m", { redirect: "manual" })
+			new Request("http://localhost/links/discord/callback?code=c&state=st-m", {
+				redirect: "manual",
+			})
 		)
 		expect(res.status).toBe(302)
 		expect(res.headers.get("location")).toContain("/migrate?status=ready")
@@ -365,7 +447,9 @@ describe("GET /links/discord/callback - migration attach", () => {
 		const app = linkRoutes(makeEnv(db, cache), discordFetch({ id: "d-1", username: "a" }))
 
 		const res = await app.handle(
-			new Request("http://localhost/links/discord/callback?code=c&state=st-s", { redirect: "manual" })
+			new Request("http://localhost/links/discord/callback?code=c&state=st-s", {
+				redirect: "manual",
+			})
 		)
 		expect(res.status).toBe(302)
 		expect(res.headers.get("location")).toContain("/migrate?status=same_key")
@@ -385,7 +469,9 @@ describe("GET /links/discord/callback - migration attach", () => {
 		)
 
 		const res = await app.handle(
-			new Request("http://localhost/links/discord/callback?code=c&state=st-n", { redirect: "manual" })
+			new Request("http://localhost/links/discord/callback?code=c&state=st-n", {
+				redirect: "manual",
+			})
 		)
 		expect(res.status).toBe(302)
 		expect(res.headers.get("location")).toContain("/link?status=linked")

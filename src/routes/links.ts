@@ -1,6 +1,12 @@
 import { config } from "@/config"
 import { computeMigrationPlan, createPreviewAudit } from "@/db/account-migration"
-import { getByKeyId, linkDiscord, listLinks, unlinkByKeyId } from "@/db/discordLinks"
+import {
+	getByKeyId,
+	linkDiscord,
+	listLinks,
+	unlinkByKeyId,
+	updateDiscordAvatar,
+} from "@/db/discordLinks"
 import { Logger } from "@/infra/logger"
 import type { Env } from "@/types"
 import { signedRequest } from "@/utils/auth"
@@ -130,6 +136,17 @@ export const linkRoutes = (env: Env, fetchImpl: typeof fetch = fetch) =>
 				const migration = await getActiveSessionForDiscord(env, identity.id)
 				if (migration) {
 					return attachMigrationProof(env, migration, keyId, identity)
+				}
+
+				const existing = await getByKeyId(env, keyId)
+				if (existing?.discord_id === identity.id) {
+					await updateDiscordAvatar(env, {
+						keyId,
+						discordId: identity.id,
+						discordAvatar: identity.avatar,
+					})
+					log.info("discord avatar refreshed", { keyId, discordId: identity.id })
+					return redirectToLinkPage("linked", identity.displayName)
 				}
 
 				await linkDiscord(env, {
