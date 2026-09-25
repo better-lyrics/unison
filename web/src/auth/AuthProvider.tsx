@@ -20,6 +20,7 @@ type SessionState =
       identity: Identity
       signOut: () => void
       updateDisplayName: (displayName: string) => void
+      updateAvatarUrl: (avatarUrl: string | null) => void
     }
   | {
       status: "error"
@@ -106,6 +107,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
           keyId: session.keyId,
           displayName: session.displayName,
           expiresAt: session.expiresAt,
+          avatarUrl: session.avatarUrl,
         },
       })
     } catch (err) {
@@ -132,6 +134,15 @@ export function AuthProvider({ children }: AuthProviderProps) {
     })
   }, [])
 
+  const updateAvatarUrl = useCallback((avatarUrl: string | null) => {
+    setPhase((prev) => {
+      if (prev.kind !== "signed-in") return prev
+      const stored = loadStoredSession()
+      if (stored) saveStoredSession({ ...stored, avatarUrl })
+      return { kind: "signed-in", identity: { ...prev.identity, avatarUrl } }
+    })
+  }, [])
+
   let state: SessionState
   if (phase.kind === "loading" || extensionAvailable === null) {
     state = { status: "loading", extensionAvailable: extensionAvailable ?? false }
@@ -142,6 +153,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       identity: phase.identity,
       signOut,
       updateDisplayName,
+      updateAvatarUrl,
     }
   else if (phase.kind === "error")
     state = { status: "error", extensionAvailable, signingIn, error: phase.error, signIn }

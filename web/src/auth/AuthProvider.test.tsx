@@ -11,6 +11,8 @@ const valid: StoredSession = {
   expiresAt: Math.floor(Date.now() / 1000) + 1000,
 }
 
+const PICKED = "https://cdn.betterlyrics.org/avatars/alien-cat.webp"
+
 function Probe() {
   const session = useSession()
   return (
@@ -21,6 +23,7 @@ function Probe() {
         <span data-testid="signing-in">{String(session.signingIn)}</span>
       ) : null}
       {session.status === "signed-in" ? <span data-testid="name">{session.identity.displayName}</span> : null}
+      {session.status === "signed-in" ? <span data-testid="avatar">{session.identity.avatarUrl ?? "none"}</span> : null}
       {session.status === "error" ? <span data-testid="error">{session.error.message}</span> : null}
       {session.status === "signed-out" || session.status === "error" ? (
         <button type="button" onClick={() => session.signIn()}>
@@ -34,6 +37,9 @@ function Probe() {
           </button>
           <button type="button" onClick={() => session.updateDisplayName("Renamed")}>
             rename
+          </button>
+          <button type="button" onClick={() => session.updateAvatarUrl(PICKED)}>
+            pick-avatar
           </button>
         </>
       ) : null}
@@ -227,6 +233,34 @@ describe("AuthProvider signIn flow", () => {
     expect(screen.getByTestId("name").textContent).toBe(valid.displayName)
   })
 
+  it("carries the session avatar into the signed-in identity", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ success: true, data: { nonce: "n1", expiresAt: 1 } }), { status: 200 }),
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ success: true, data: { ...valid, avatarUrl: PICKED } }), { status: 200 }),
+      )
+    vi.stubGlobal("fetch", fetchMock)
+    stubChromePort((msg) => {
+      if (msg.type === "bl-auth-request") {
+        return { ok: true, signedBody: { payload: {}, signature: "", publicKey: {} } }
+      }
+      return { ok: true }
+    })
+    render(
+      <AuthProvider>
+        <Probe />
+      </AuthProvider>,
+    )
+    await waitFor(() => expect(screen.getByText("sign-in")).toBeTruthy())
+    await act(async () => {
+      screen.getByText("sign-in").click()
+    })
+    await waitFor(() => expect(screen.getByTestId("avatar").textContent).toBe(PICKED))
+  })
+
   it("lands in error state on cancel", async () => {
     const fetchMock = vi
       .fn()
@@ -343,6 +377,34 @@ describe("AuthProvider signOut", () => {
     await waitFor(() => expect(screen.getByTestId("name").textContent).toBe("Renamed"))
     const stored = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? "{}") as { displayName: string }
     expect(stored.displayName).toBe("Renamed")
+  })
+
+  it("updateAvatarUrl swaps the rendered avatar and persists to storage", async () => {
+    saveStoredSession(valid)
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            success: true,
+            data: { keyId: valid.keyId, displayName: valid.displayName, expiresAt: valid.expiresAt, avatarUrl: null },
+          }),
+          { status: 200 },
+        ),
+      ),
+    )
+    render(
+      <AuthProvider>
+        <Probe />
+      </AuthProvider>,
+    )
+    await waitFor(() => expect(screen.getByTestId("avatar").textContent).toBe("none"))
+    await act(async () => {
+      screen.getByText("pick-avatar").click()
+    })
+    await waitFor(() => expect(screen.getByTestId("avatar").textContent).toBe(PICKED))
+    const stored = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? "{}") as { avatarUrl?: string }
+    expect(stored.avatarUrl).toBe(PICKED)
   })
 
   it("still signs the user out locally when the revoke fetch fails", async () => {

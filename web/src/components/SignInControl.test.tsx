@@ -3,6 +3,7 @@ import { MemoryRouter } from "react-router-dom"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { AuthProvider } from "@/auth/AuthProvider"
 import { clearAsyncDataCache } from "@/hooks/useAsyncData"
+import { dicebearThumbsDataUri } from "@/lib/avatar"
 import { saveStoredSession, type StoredSession } from "@/lib/auth"
 import { SignInControl } from "./SignInControl"
 
@@ -79,14 +80,14 @@ function stubChromePortDeferred(): { resolveAll: (response: unknown) => void } {
   }
 }
 
-function stubSessionFetch() {
+function stubSessionFetch(extra: Record<string, unknown> = {}) {
   vi.stubGlobal(
     "fetch",
     vi.fn().mockResolvedValue(
       new Response(
         JSON.stringify({
           success: true,
-          data: { keyId: valid.keyId, displayName: valid.displayName, expiresAt: valid.expiresAt },
+          data: { keyId: valid.keyId, displayName: valid.displayName, expiresAt: valid.expiresAt, ...extra },
         }),
         { status: 200 },
       ),
@@ -152,13 +153,32 @@ describe("SignInControl", () => {
     expect(screen.queryByRole("menu")).toBeNull()
   })
 
+  it("shows the chosen avatar in the identity chip", async () => {
+    const avatarUrl = "https://cdn.betterlyrics.org/avatars/alien-cat.webp"
+    saveStoredSession(valid)
+    stubSessionFetch({ avatarUrl })
+    const { container } = renderControl()
+    await waitFor(() => expect(screen.getByText(valid.displayName)).toBeTruthy())
+    expect(container.querySelector('[data-state="signed-in"] img')?.getAttribute("src")).toBe(avatarUrl)
+  })
+
+  it("falls back to the generated avatar when none is chosen", async () => {
+    saveStoredSession(valid)
+    stubSessionFetch({ avatarUrl: null })
+    const { container } = renderControl()
+    await waitFor(() => expect(screen.getByText(valid.displayName)).toBeTruthy())
+    expect(container.querySelector('[data-state="signed-in"] img')?.getAttribute("src")).toBe(
+      dicebearThumbsDataUri(valid.keyId),
+    )
+  })
+
   it("renders the sign-in button in error state when extension is available", async () => {
     saveStoredSession(valid)
     vi.stubGlobal(
       "fetch",
-      vi.fn().mockResolvedValue(
-        new Response(JSON.stringify({ success: false, error: "INVALID_TOKEN" }), { status: 401 }),
-      ),
+      vi
+        .fn()
+        .mockResolvedValue(new Response(JSON.stringify({ success: false, error: "INVALID_TOKEN" }), { status: 401 })),
     )
     stubChromePort(() => ({ ok: true }))
     renderControl()

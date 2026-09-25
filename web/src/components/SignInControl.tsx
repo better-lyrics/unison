@@ -1,6 +1,6 @@
 import { useSession } from "@/auth/useSession";
 import { Tooltip } from "@/components/Tooltip";
-import { dicebearThumbsDataUri } from "@/lib/avatar";
+import { resolveAvatar } from "@/lib/avatar";
 import { IconCheck, IconCopy, IconLogout, IconUser } from "@tabler/icons-react";
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
@@ -58,7 +58,7 @@ export function SignInControl() {
           className="flex cursor-pointer items-center gap-2 rounded-full p-1 pr-3 transition-colors hover:bg-unison-bg-hover"
         >
           <img
-            src={dicebearThumbsDataUri(identity.keyId)}
+            src={resolveAvatar(identity)}
             alt=""
             className="size-7 rounded-full border border-unison-border bg-unison-bg-hover"
           />

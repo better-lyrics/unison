@@ -10,6 +10,7 @@ export interface Identity {
   keyId: string
   displayName: string
   expiresAt: number
+  avatarUrl?: string | null
 }
 
 export interface SignedBody {
@@ -96,7 +97,12 @@ export async function postSession(signedBody: SignedBody): Promise<StoredSession
 export async function fetchMe(token: string): Promise<Identity> {
   if (IS_SPA_EXPANSION_SEED) {
     const session = getSeedSession()
-    return { keyId: session.keyId, displayName: session.displayName, expiresAt: session.expiresAt }
+    return {
+      keyId: session.keyId,
+      displayName: session.displayName,
+      expiresAt: session.expiresAt,
+      avatarUrl: session.avatarUrl,
+    }
   }
   const res = await fetch("/auth/me", {
     headers: { authorization: `Bearer ${token}` },

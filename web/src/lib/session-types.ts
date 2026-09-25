@@ -3,4 +3,5 @@ export interface StoredSession {
   keyId: string
   displayName: string
   expiresAt: number
+  avatarUrl?: string | null
 }
