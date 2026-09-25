@@ -4,7 +4,7 @@ import { useBadgeModal } from "@/components/BadgeModalContext"
 import { OdometerNumber } from "@/components/OdometerNumber"
 import { TierChip } from "@/components/TierChip"
 import { isRareBadge, resolveBadgeImage } from "@/lib/badge-view"
-import { dicebearThumbsDataUri } from "@/lib/avatar"
+import { resolveAvatar } from "@/lib/avatar"
 import { cn } from "@/lib/cn"
 import { levelProgress } from "@/lib/level"
 import type { BadgeCatalogue, UserGamification, UserRankResponse } from "@/lib/types"
@@ -150,7 +150,7 @@ export function ProfileHeader({ keyId, rank, gamification, catalogue }: ProfileH
           ) : null}
         </svg>
         <img
-          src={dicebearThumbsDataUri(keyId)}
+          src={resolveAvatar({ avatarUrl: rank.avatarUrl, keyId })}
           alt=""
           className="absolute top-2 left-2 block size-[76px] rounded-full bg-unison-bg-elevated"
         />

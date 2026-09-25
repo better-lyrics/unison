@@ -33,6 +33,7 @@ export interface CuratorLeaderboardEntry {
   topBadge?: LeaderboardBadge | null
   featured?: LeaderboardBadge[]
   badgeCount?: number
+  avatarUrl?: string | null
 }
 
 export interface SongsLeaderboardResponse {
@@ -53,6 +54,7 @@ export interface UserStats {
   community?: boolean
   lastVoteAt: number | null
   discordLinked: boolean
+  avatarUrl?: string | null
 }
 
 export interface RankedUserStats extends UserStats {
@@ -119,6 +121,7 @@ export interface VariantSubmitter {
   badgeCount: number
   topBadge: LeaderboardBadge | null
   featured: LeaderboardBadge[]
+  avatarUrl?: string | null
 }
 
 export interface MarkActor {
@@ -128,6 +131,7 @@ export interface MarkActor {
   level: number
   badgeCount: number
   topBadge: LeaderboardBadge | null
+  avatarUrl?: string | null
 }
 
 export interface Mark {

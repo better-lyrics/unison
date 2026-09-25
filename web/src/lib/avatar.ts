@@ -11,3 +11,7 @@ export function dicebearThumbsDataUri(seed: string): string {
   cache.set(seed, uri)
   return uri
 }
+
+export function resolveAvatar({ avatarUrl, keyId }: { avatarUrl?: string | null; keyId: string }): string {
+  return avatarUrl || dicebearThumbsDataUri(keyId)
+}
