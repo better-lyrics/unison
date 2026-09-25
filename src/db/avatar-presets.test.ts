@@ -25,4 +25,28 @@ describe("avatar presets", () => {
 			expect(findPreset("does-not-exist")).toBeUndefined()
 		})
 	})
+
+	describe("edge cases", () => {
+		it("does not match an empty id", () => {
+			expect(findPreset("")).toBeUndefined()
+		})
+		it("matches ids exactly, not case-insensitively or trimmed", () => {
+			const { id } = AVATAR_PRESETS[0]
+			expect(findPreset(id.toUpperCase())).toBeUndefined()
+			expect(findPreset(` ${id} `)).toBeUndefined()
+		})
+	})
+
+	describe("invariants", () => {
+		it("finds every catalogued preset by its own id", () => {
+			for (const p of AVATAR_PRESETS) expect(findPreset(p.id)).toBe(p)
+		})
+		it("has unique files so no two presets share an image", () => {
+			const files = AVATAR_PRESETS.map((p) => p.file)
+			expect(new Set(files).size).toBe(files.length)
+		})
+		it("uses url-safe file names", () => {
+			for (const p of AVATAR_PRESETS) expect(p.file).toMatch(/^[a-z0-9-]+\.(webp|png|gif)$/)
+		})
+	})
 })
