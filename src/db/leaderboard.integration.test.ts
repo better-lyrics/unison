@@ -1,10 +1,11 @@
 import { readFileSync } from "node:fs"
-import pg from "pg"
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest"
 import { COMMUNITY_KEY_ID, config } from "@/config"
+import { AVATAR_PRESETS } from "@/db/avatar-presets"
 import { D1Compat } from "@/infra/database"
 import type { Env } from "@/types"
 import { levelForXp } from "@/utils/xp"
+import pg from "pg"
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest"
 import { getXpForUsers } from "./contribution-events"
 import { getCuratorLeaderboard, getCuratorRank } from "./leaderboard"
 
@@ -222,6 +223,7 @@ describeIntegration("curator leaderboard (integration)", () => {
 					"badgeCount",
 					"topBadge",
 					"featured",
+					"avatarUrl",
 				].sort()
 			)
 
@@ -264,6 +266,46 @@ describeIntegration("curator leaderboard (integration)", () => {
 				name: "Verified Contributor",
 				tier: 3,
 			})
+		})
+	})
+
+	describe("avatarUrl", () => {
+		it("resolves each curator's chosen picture and null for the default", async () => {
+			const [presetCurator, discordCurator, plainCurator] = await seedPopulation()
+			const preset = AVATAR_PRESETS[0]
+			await pool.query("UPDATE users SET avatar_type = 'preset', avatar_ref = $1 WHERE id = $2", [
+				preset.id,
+				presetCurator.id,
+			])
+			await pool.query("UPDATE users SET avatar_type = 'discord' WHERE id = $1", [
+				discordCurator.id,
+			])
+			await pool.query(
+				"INSERT INTO discord_links (discord_id, key_id, discord_avatar) VALUES ('5550001', $1, 'h42')",
+				[discordCurator.keyId]
+			)
+
+			const rows = await getCuratorLeaderboard(env, SCAN)
+			const byKey = new Map(rows.map((r) => [r.keyId, r]))
+
+			expect(byKey.get(presetCurator.keyId)?.avatarUrl).toBe(config.avatar.cdnBase + preset.file)
+			expect(byKey.get(discordCurator.keyId)?.avatarUrl).toBe(
+				"https://cdn.discordapp.com/avatars/5550001/h42.png?size=128"
+			)
+			expect(byKey.get(discordCurator.keyId)?.discordLinked).toBe(true)
+			expect(byKey.get(plainCurator.keyId)?.avatarUrl).toBeNull()
+		})
+
+		it("keeps a linked curator on the default until they pick the Discord photo", async () => {
+			const [curator] = await seedPopulation()
+			await pool.query(
+				"INSERT INTO discord_links (discord_id, key_id, discord_avatar) VALUES ('5550002', $1, 'h43')",
+				[curator.keyId]
+			)
+			const rows = await getCuratorLeaderboard(env, SCAN)
+			const row = rows.find((r) => r.keyId === curator.keyId)
+			expect(row?.discordLinked).toBe(true)
+			expect(row?.avatarUrl).toBeNull()
 		})
 	})
 
