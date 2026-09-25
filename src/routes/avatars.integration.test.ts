@@ -6,6 +6,7 @@ import {
 	openIntegrationDb,
 	seedSession,
 	seedUser,
+	wipeRevisionData,
 } from "@/test/integration-harness"
 import { canonicalJson, hashPublicKey } from "@/utils/crypto"
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest"
@@ -33,8 +34,7 @@ describeIntegration("PUT /avatars/me (integration)", () => {
 
 	beforeEach(async () => {
 		await db.pool.query("DELETE FROM discord_links")
-		await db.pool.query("DELETE FROM users")
-		db.cache.store.clear()
+		await wipeRevisionData(db)
 		await seedUser(db, KEY)
 		seedSession(db, TOKEN, KEY)
 	})
