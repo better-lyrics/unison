@@ -295,6 +295,8 @@ describe("GET /links/discord/callback", () => {
 	})
 
 	describe("avatar backfill on re-consent", () => {
+		const NEW_HASH = "0f1e2d3c4b5a69788796a5b4c3d2e1f0"
+		const BOB_HASH = "a_1234567890abcdef1234567890abcdef"
 		const existingLink = (discordId: string, avatar: string | null) => ({
 			discord_id: discordId,
 			key_id: KEY,
@@ -314,7 +316,7 @@ describe("GET /links/discord/callback", () => {
 			const db = makeMockDB([existingLink("same-id", null), null])
 			const app = linkRoutes(
 				makeEnv(db, cache),
-				discordFetch({ id: "same-id", username: "alice", global_name: "Alice", avatar: "new-hash" })
+				discordFetch({ id: "same-id", username: "alice", global_name: "Alice", avatar: NEW_HASH })
 			)
 
 			const res = await callback(app, "st-bf")
@@ -322,7 +324,7 @@ describe("GET /links/discord/callback", () => {
 			expect(res.status).toBe(302)
 			expect(res.headers.get("location")).toContain("/link?status=linked")
 			const upd = db.calls.find((c) => c.sql.includes("UPDATE discord_links"))
-			expect(upd?.params).toEqual(["new-hash", KEY, "same-id"])
+			expect(upd?.params).toEqual([NEW_HASH, KEY, "same-id"])
 		})
 
 		it("relinks through delete and insert when the Discord account differs", async () => {
@@ -330,7 +332,7 @@ describe("GET /links/discord/callback", () => {
 			const db = makeMockDB([existingLink("old-id", "old-hash"), null])
 			const app = linkRoutes(
 				makeEnv(db, cache),
-				discordFetch({ id: "new-id", username: "bob", global_name: "Bob", avatar: "bob-hash" })
+				discordFetch({ id: "new-id", username: "bob", global_name: "Bob", avatar: BOB_HASH })
 			)
 
 			await callback(app, "st-rl")
@@ -338,7 +340,7 @@ describe("GET /links/discord/callback", () => {
 			expect(db.calls.some((c) => c.sql.includes("UPDATE discord_links"))).toBe(false)
 			expect(db.calls.some((c) => c.sql.includes("DELETE FROM discord_links"))).toBe(true)
 			const insert = db.calls.find((c) => c.sql.includes("INSERT INTO discord_links"))
-			expect(insert?.params).toEqual(["new-id", KEY, "Bob", "bob-hash", expect.any(Number)])
+			expect(insert?.params).toEqual(["new-id", KEY, "Bob", BOB_HASH, expect.any(Number)])
 		})
 
 		describe("invariants", () => {
@@ -347,7 +349,7 @@ describe("GET /links/discord/callback", () => {
 				const db = makeMockDB([existingLink("same-id", "old-hash"), null])
 				const app = linkRoutes(
 					makeEnv(db, cache),
-					discordFetch({ id: "same-id", username: "alice", avatar: "fresh" })
+					discordFetch({ id: "same-id", username: "alice", avatar: NEW_HASH })
 				)
 
 				await callback(app, "st-inv")

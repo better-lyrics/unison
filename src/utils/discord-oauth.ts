@@ -1,5 +1,6 @@
 const DISCORD_API = "https://discord.com/api/v10"
 const DISCORD_AUTHORIZE = "https://discord.com/oauth2/authorize"
+const DISCORD_AVATAR_HASH = /^(a_)?[0-9a-f]{32}$/
 
 export interface DiscordOAuthConfig {
 	clientId: string
@@ -75,6 +76,6 @@ export async function exchangeCodeForUser(
 		id: user.id,
 		username: user.username,
 		displayName: user.global_name || user.username,
-		avatar: user.avatar ?? null,
+		avatar: user.avatar && DISCORD_AVATAR_HASH.test(user.avatar) ? user.avatar : null,
 	}
 }
