@@ -1,6 +1,8 @@
+import { makeMemoryCache } from "@/test/integration-harness"
+import type { Env } from "@/types"
 import type { SongCandidate } from "@/utils/innertube"
-import { describe, expect, it } from "vitest"
-import { buildSuggestions } from "./video-suggestions"
+import { describe, expect, it, vi } from "vitest"
+import { buildSuggestions, suggestVideosForSong } from "./video-suggestions"
 
 const META = {
 	song: "Blinding Lights",
@@ -308,6 +310,95 @@ describe("buildSuggestions", () => {
 			const firstVideo = out.findIndex((s) => s.videoType === "video")
 			const lastSong = out.map((s) => s.videoType).lastIndexOf("song")
 			expect(lastSong).toBeLessThan(firstVideo)
+		})
+	})
+})
+
+describe("suggestVideosForSong", () => {
+	const env = () => ({ CACHE: makeMemoryCache() }) as unknown as Env
+	const SONG = { song: "Blinding Lights", artist: "The Weeknd", duration: 200 }
+
+	it("suggests same-song videos for a lyric that has not been submitted yet", async () => {
+		const search = vi.fn(async () => [
+			candidate({ videoId: "fHI8X4OXluQ" }),
+			candidate({ videoId: "4NRXx6U8ABQ", videoType: "video", album: null }),
+		])
+		const out = await suggestVideosForSong(env(), { ...SONG, album: "After Hours" }, { search })
+		expect(out.map((s) => s.videoId)).toEqual(["fHI8X4OXluQ", "4NRXx6U8ABQ"])
+		expect(out[0].matchScore).toBeCloseTo(1)
+		expect(search).toHaveBeenCalledWith("Blinding Lights The Weeknd")
+	})
+
+	it("excludes the video the lyric is being submitted for", async () => {
+		const search = async () => [
+			candidate({ videoId: "fHI8X4OXluQ" }),
+			candidate({ videoId: "4NRXx6U8ABQ", videoType: "video" }),
+		]
+		const out = await suggestVideosForSong(env(), { ...SONG, videoId: "fHI8X4OXluQ" }, { search })
+		expect(out.map((s) => s.videoId)).toEqual(["4NRXx6U8ABQ"])
+	})
+
+	describe("edge cases", () => {
+		it("scores without an album when none is given", async () => {
+			const out = await suggestVideosForSong(env(), SONG, {
+				search: async () => [candidate({ videoId: "fHI8X4OXluQ" })],
+			})
+			expect(out[0].matchScore).toBeCloseTo(0.8)
+		})
+
+		it("treats a null album like a missing one", async () => {
+			const out = await suggestVideosForSong(
+				env(),
+				{ ...SONG, album: null },
+				{
+					search: async () => [candidate({ videoId: "fHI8X4OXluQ" })],
+				}
+			)
+			expect(out[0].matchScore).toBeCloseTo(0.8)
+		})
+
+		it("returns [] when the search finds nothing", async () => {
+			expect(await suggestVideosForSong(env(), SONG, { search: async () => [] })).toEqual([])
+		})
+
+		it("applies the duration gate against the given duration", async () => {
+			const out = await suggestVideosForSong(env(), SONG, {
+				search: async () => [
+					candidate({ videoId: "fHI8X4OXluQ", durationSeconds: 202 }),
+					candidate({ videoId: "4NRXx6U8ABQ", durationSeconds: 203 }),
+				],
+			})
+			expect(out.map((s) => s.videoId)).toEqual(["fHI8X4OXluQ"])
+		})
+	})
+
+	describe("invariants", () => {
+		it("filters exactly like buildSuggestions with nothing linked", async () => {
+			const candidates = [
+				candidate({ videoId: "fHI8X4OXluQ" }),
+				candidate({ videoId: "other000000", artist: "Someone", artists: ["Someone"] }),
+				candidate({ videoId: "4NRXx6U8ABQ", videoType: "video", durationSeconds: 199 }),
+			]
+			const out = await suggestVideosForSong(
+				env(),
+				{ ...SONG, album: "After Hours", videoId: "dQw4w9WgXcQ" },
+				{ search: async () => candidates }
+			)
+			expect(out).toEqual(
+				buildSuggestions(
+					candidates,
+					{ ...SONG, album: "After Hours", videoId: "dQw4w9WgXcQ" },
+					new Set()
+				)
+			)
+		})
+
+		it("shares the cached search with the owner route and link verification", async () => {
+			const e = env()
+			const search = vi.fn(async () => [candidate({ videoId: "fHI8X4OXluQ" })])
+			await suggestVideosForSong(e, SONG, { search })
+			await suggestVideosForSong(e, { ...SONG, videoId: "fHI8X4OXluQ" }, { search })
+			expect(search).toHaveBeenCalledTimes(1)
 		})
 	})
 })
