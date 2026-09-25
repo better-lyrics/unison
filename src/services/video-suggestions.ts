@@ -1,7 +1,7 @@
-import { config } from "@/config"
 import { isWithinDurationDelta, listVideoLinks } from "@/db/video-links"
+import { type SongSearch, cachedSongSearch } from "@/services/song-search"
 import type { Env } from "@/types"
-import { type SongCandidate, searchSongs } from "@/utils/innertube"
+import type { SongCandidate } from "@/utils/innertube"
 import { normalize, normalizeArtist, normalizeSong } from "@/utils/normalize"
 
 export type Suggestion = SongCandidate & { matchScore: number }
@@ -65,7 +65,7 @@ export type SuggestResult =
 	| { ok: true; suggestions: Suggestion[] }
 	| { ok: false; reason: "not_found" | "not_owner" }
 
-type Deps = { search?: (query: string) => Promise<SongCandidate[]> }
+type Deps = { search?: SongSearch }
 
 type VariantRow = {
 	submitter_id: number | null
@@ -75,30 +75,6 @@ type VariantRow = {
 	album: string | null
 	duration: number
 	deleted_at: number | null
-}
-
-async function cachedSearch(
-	env: Env,
-	song: string,
-	artist: string,
-	search: (query: string) => Promise<SongCandidate[]>
-): Promise<SongCandidate[]> {
-	const key = `songsearch:v4:${normalizeSong(song)}|${normalizeArtist(artist)}`
-	const cached = await env.CACHE.get(key)
-	if (cached) {
-		try {
-			return JSON.parse(cached) as SongCandidate[]
-		} catch {
-			await env.CACHE.delete(key)
-		}
-	}
-	const results = await search(`${song} ${artist}`)
-	const expirationTtl =
-		results.length > 0
-			? config.videoLinking.suggestionCacheTtlSeconds
-			: config.videoLinking.emptySuggestionCacheTtlSeconds
-	await env.CACHE.put(key, JSON.stringify(results), { expirationTtl })
-	return results
 }
 
 export async function suggestVideosForVariant(
@@ -116,8 +92,7 @@ export async function suggestVideosForVariant(
 	if (!row || row.deleted_at !== null) return { ok: false, reason: "not_found" }
 	if (row.submitter_id !== userId) return { ok: false, reason: "not_owner" }
 
-	const search = deps.search ?? searchSongs
-	const candidates = await cachedSearch(env, row.song, row.artist, search)
+	const candidates = await cachedSongSearch(env, row, deps.search)
 	const linked = new Set((await listVideoLinks(env, lyricsId)).map((v) => v.videoId))
 
 	const suggestions = buildSuggestions(

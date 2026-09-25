@@ -16,25 +16,12 @@ function getInnertube(): Promise<Innertube> {
 	return client
 }
 
-export async function getSquareArtworkUrl(
-	videoId: string,
-	size: number = config.artwork.size
-): Promise<string | null> {
-	try {
-		const yt = await getInnertube()
-		const info = await yt.music.getInfo(videoId)
-		const thumbs = info.basic_info.thumbnail ?? []
-		return pickSquareArtwork(thumbs, size)
-	} catch (err) {
-		log.warn("innertube artwork resolve failed", { videoId, error: (err as Error).message })
-		return null
-	}
-}
+export const BASIC_INFO_CLIENT = "ANDROID_VR"
 
 export async function getVideoDurationSeconds(videoId: string): Promise<number | null> {
 	try {
 		const yt = await getInnertube()
-		const info = await yt.music.getInfo(videoId)
+		const info = await yt.getBasicInfo(videoId, { client: BASIC_INFO_CLIENT })
 		const duration = info.basic_info?.duration
 		return typeof duration === "number" ? duration : null
 	} catch (err) {
@@ -52,6 +39,7 @@ export type SongCandidate = {
 	album: string | null
 	durationSeconds: number | null
 	videoType: "song" | "video"
+	artworkUrl: string | null
 }
 
 type MusicSearchItem = {
@@ -61,6 +49,7 @@ type MusicSearchItem = {
 	authors?: { name?: string; channel_id?: string }[]
 	album?: { name?: string }
 	duration?: { seconds?: number }
+	thumbnails?: { url: string; width: number; height: number }[]
 }
 
 function toCandidate(
@@ -84,6 +73,7 @@ function toCandidate(
 		album: it.album?.name ?? null,
 		durationSeconds: it.duration?.seconds ?? null,
 		videoType,
+		artworkUrl: pickSquareArtwork(it.thumbnails ?? [], config.artwork.size),
 	}
 }
 
