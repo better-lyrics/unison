@@ -14,6 +14,7 @@ import { isLinkBlacklisted } from "@/utils/blacklist"
 import { isAuthorizedBot } from "@/utils/bot-auth"
 import type { DiscordIdentity } from "@/utils/discord-oauth"
 import { buildAuthorizeUrl, exchangeCodeForUser } from "@/utils/discord-oauth"
+import { discordAvatarUrl } from "@/utils/avatar-url"
 import { eitherAuth } from "@/utils/either-auth"
 import { ErrorCode, buildError } from "@/utils/errors"
 import {
@@ -182,6 +183,9 @@ export const linkRoutes = (env: Env, fetchImpl: typeof fetch = fetch) =>
 					linked: link !== null,
 					discordId: link?.discord_id ?? null,
 					discordUsername: link?.discord_username ?? null,
+					discordAvatarUrl: link?.discord_avatar
+						? discordAvatarUrl(link.discord_id, link.discord_avatar)
+						: null,
 				},
 			})
 		})

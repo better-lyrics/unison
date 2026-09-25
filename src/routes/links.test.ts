@@ -544,8 +544,27 @@ describe("GET /links/me and DELETE /links/discord", () => {
 		expect(res.status).toBe(200)
 		expect(await res.json()).toEqual({
 			success: true,
-			data: { linked: true, discordId: "d-1", discordUsername: "alice" },
+			data: { linked: true, discordId: "d-1", discordUsername: "alice", discordAvatarUrl: null },
 		})
+	})
+
+	it("exposes the stored Discord photo url so the picker can offer it", async () => {
+		const db = makeMockDB([
+			{ id: 7, key_id: KEY },
+			{
+				discord_id: "d-1",
+				key_id: KEY,
+				discord_username: "alice",
+				discord_avatar: "a_x1",
+				linked_at: 1,
+			},
+		])
+		const app = linkRoutes(sessionEnv(db))
+		const res = await app.handle(
+			new Request("http://localhost/links/me", { headers: { authorization: `Bearer ${TOKEN}` } })
+		)
+		const { data } = (await res.json()) as { data: { discordAvatarUrl: string | null } }
+		expect(data.discordAvatarUrl).toBe("https://cdn.discordapp.com/avatars/d-1/a_x1.gif?size=128")
 	})
 
 	it("reports not-linked when there is no link", async () => {
@@ -558,7 +577,11 @@ describe("GET /links/me and DELETE /links/discord", () => {
 			new Request("http://localhost/links/me", { headers: { authorization: `Bearer ${TOKEN}` } })
 		)
 		expect(res.status).toBe(200)
-		expect(((await res.json()) as { data: { linked: boolean } }).data.linked).toBe(false)
+		const { data } = (await res.json()) as {
+			data: { linked: boolean; discordAvatarUrl: string | null }
+		}
+		expect(data.linked).toBe(false)
+		expect(data.discordAvatarUrl).toBeNull()
 	})
 
 	it("unlinks the signed-in user", async () => {
