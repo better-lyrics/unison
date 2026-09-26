@@ -1,5 +1,8 @@
 import { STORAGE_KEY, type StoredSession, saveStoredSession } from "@/lib/auth"
 import { BL_EDGE_EXTENSION_ID, BL_EXTENSION_ID } from "@/lib/extension"
+import { IDENTITY_FILE_ERRORS } from "@/lib/identity-file"
+import { identityFile, makeIdentityExport } from "@/test/identity-fixture"
+import { verifySignature } from "../../../src/utils/crypto"
 import { act, cleanup, render, screen, waitFor } from "@testing-library/react"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { AuthProvider } from "./AuthProvider"
@@ -13,6 +16,8 @@ const valid: StoredSession = {
 }
 
 const PICKED = "https://cdn.betterlyrics.org/avatars/alien-cat.webp"
+
+let fileToUpload: File | null = null
 
 function Probe() {
   const session = useSession()
@@ -30,6 +35,11 @@ function Probe() {
       {session.status === "signed-out" || session.status === "error" ? (
         <button type="button" onClick={() => session.signIn()}>
           sign-in
+        </button>
+      ) : null}
+      {session.status === "signed-out" || session.status === "error" ? (
+        <button type="button" onClick={() => fileToUpload && session.signInWithFile(fileToUpload)}>
+          sign-in-file
         </button>
       ) : null}
       {session.status === "signed-in" ? (
@@ -53,11 +63,13 @@ beforeEach(() => {
   localStorage.clear()
   vi.restoreAllMocks()
   vi.unstubAllGlobals()
+  fileToUpload = null
 })
 afterEach(() => {
   cleanup()
   localStorage.clear()
   vi.unstubAllGlobals()
+  fileToUpload = null
 })
 
 describe("AuthProvider initial state", () => {
@@ -646,5 +658,120 @@ describe("AuthProvider signingIn flag", () => {
     })
     await waitFor(() => expect(screen.getByTestId("status").textContent).toBe("signed-in"))
     expect(deferred.authConnectCount()).toBe(1)
+  })
+})
+
+function challengeResponse() {
+  return new Response(JSON.stringify({ success: true, data: { nonce: "nonce-0123456789abcdef", expiresAt: 1 } }))
+}
+
+function renderProbe() {
+  return render(
+    <AuthProvider>
+      <Probe />
+    </AuthProvider>,
+  )
+}
+
+async function clickSignInWithFile() {
+  await waitFor(() => expect(screen.getByText("sign-in-file")).toBeTruthy())
+  await act(async () => {
+    screen.getByText("sign-in-file").click()
+  })
+}
+
+describe("AuthProvider signInWithFile", () => {
+  it("signs the challenge with the file and lands in signed-in", async () => {
+    const exported = await makeIdentityExport()
+    fileToUpload = identityFile(exported)
+    const posted: unknown[] = []
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string, init?: RequestInit) => {
+        if (url === "/auth/challenge") return challengeResponse()
+        if (url === "/auth/session") {
+          posted.push(JSON.parse(String(init?.body)))
+          return new Response(
+            JSON.stringify({ success: true, data: { ...valid, keyId: exported.keyId, sessionToken: "file-tok" } }),
+          )
+        }
+        return new Response(null, { status: 404 })
+      }),
+    )
+    renderProbe()
+    await clickSignInWithFile()
+    await waitFor(() => expect(screen.getByTestId("status").textContent).toBe("signed-in"))
+    const body = posted[0] as { payload: { nonce: string; keyId: string }; signature: string; publicKey: JsonWebKey }
+    expect(body.payload.nonce).toBe("nonce-0123456789abcdef")
+    expect(body.payload.keyId).toBe(exported.keyId)
+    expect(await verifySignature(body.payload, body.signature, body.publicKey)).toBe(true)
+  })
+
+  it("works without any extension installed", async () => {
+    const exported = await makeIdentityExport()
+    fileToUpload = identityFile(exported)
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) =>
+        url === "/auth/challenge"
+          ? challengeResponse()
+          : new Response(JSON.stringify({ success: true, data: { ...valid, keyId: exported.keyId } })),
+      ),
+    )
+    renderProbe()
+    await waitFor(() => expect(screen.getByTestId("ext").textContent).toBe("false"))
+    await clickSignInWithFile()
+    await waitFor(() => expect(screen.getByTestId("status").textContent).toBe("signed-in"))
+  })
+
+  it("keeps only the session token in storage, never the key", async () => {
+    const exported = await makeIdentityExport()
+    fileToUpload = identityFile(exported)
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) =>
+        url === "/auth/challenge"
+          ? challengeResponse()
+          : new Response(JSON.stringify({ success: true, data: { ...valid, keyId: exported.keyId } })),
+      ),
+    )
+    renderProbe()
+    await clickSignInWithFile()
+    await waitFor(() => expect(screen.getByTestId("status").textContent).toBe("signed-in"))
+    const everything = Object.keys(localStorage)
+      .map((k) => localStorage.getItem(k) ?? "")
+      .join("")
+    expect(everything).toContain(valid.sessionToken)
+    expect(everything).not.toContain(exported.privateKey.d as string)
+  })
+
+  it("moves to the error state with the file message and never posts a session for a bad file", async () => {
+    fileToUpload = identityFile("not json")
+    const fetchMock = vi.fn(async (url: string) =>
+      url === "/auth/challenge" ? challengeResponse() : new Response(null, { status: 500 }),
+    )
+    vi.stubGlobal("fetch", fetchMock)
+    renderProbe()
+    await clickSignInWithFile()
+    await waitFor(() => expect(screen.getByTestId("status").textContent).toBe("error"))
+    expect(screen.getByTestId("error").textContent).toBe(IDENTITY_FILE_ERRORS.notIdentity)
+    expect(screen.getByTestId("signing-in").textContent).toBe("false")
+    expect(fetchMock.mock.calls.map((c) => c[0])).not.toContain("/auth/session")
+  })
+
+  it("surfaces the server error when the session is refused", async () => {
+    const exported = await makeIdentityExport()
+    fileToUpload = identityFile(exported)
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) =>
+        url === "/auth/challenge"
+          ? challengeResponse()
+          : new Response(JSON.stringify({ success: false, error: "CHALLENGE_INVALID" }), { status: 401 }),
+      ),
+    )
+    renderProbe()
+    await clickSignInWithFile()
+    await waitFor(() => expect(screen.getByTestId("error").textContent).toBe("CHALLENGE_INVALID"))
   })
 })

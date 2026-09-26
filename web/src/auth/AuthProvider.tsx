@@ -6,9 +6,11 @@ import {
   loadStoredSession,
   postSession,
   revokeSession,
+  type SignedBody,
   saveStoredSession,
 } from "@/lib/auth"
 import { findBetterLyrics, signInWithBetterLyrics } from "@/lib/extension"
+import { signInWithIdentityFile } from "@/lib/identity-file"
 import { type ReactNode, createContext, useCallback, useContext, useEffect, useRef, useState } from "react"
 
 type SessionState =
@@ -19,6 +21,7 @@ type SessionState =
       extensionId: string | null
       signingIn: boolean
       signIn: () => Promise<void>
+      signInWithFile: (file: File) => Promise<void>
     }
   | {
       status: "signed-in"
@@ -36,6 +39,7 @@ type SessionState =
       signingIn: boolean
       error: Error
       signIn: () => Promise<void>
+      signInWithFile: (file: File) => Promise<void>
     }
 
 const Ctx = createContext<SessionState | null>(null)
@@ -99,14 +103,13 @@ export function AuthProvider({ children }: AuthProviderProps) {
     }
   }, [])
 
-  const signIn = useCallback(async () => {
+  const completeSignIn = useCallback(async (sign: (nonce: string) => Promise<SignedBody>) => {
     if (signInLock.current) return
     signInLock.current = true
     setSigningIn(true)
     try {
       const { nonce } = await fetchChallenge()
-      if (!extensionId) throw new Error("Better Lyrics extension not detected")
-      const signedBody = await signInWithBetterLyrics(nonce, extensionId)
+      const signedBody = await sign(nonce)
       const session = await postSession(signedBody)
       saveStoredSession(session)
       setPhase({
@@ -124,7 +127,21 @@ export function AuthProvider({ children }: AuthProviderProps) {
       signInLock.current = false
       setSigningIn(false)
     }
-  }, [extensionId])
+  }, [])
+
+  const signIn = useCallback(
+    () =>
+      completeSignIn((nonce) => {
+        if (!extensionId) throw new Error("Better Lyrics extension not detected")
+        return signInWithBetterLyrics(nonce, extensionId)
+      }),
+    [completeSignIn, extensionId],
+  )
+
+  const signInWithFile = useCallback(
+    (file: File) => completeSignIn((nonce) => signInWithIdentityFile(file, nonce)),
+    [completeSignIn],
+  )
 
   const signOut = useCallback(() => {
     const stored = loadStoredSession()
@@ -165,8 +182,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
         updateDisplayName,
         updateAvatarUrl,
       }
-    else if (phase.kind === "error") state = { status: "error", ...extension, signingIn, error: phase.error, signIn }
-    else state = { status: "signed-out", ...extension, signingIn, signIn }
+    else if (phase.kind === "error")
+      state = { status: "error", ...extension, signingIn, error: phase.error, signIn, signInWithFile }
+    else state = { status: "signed-out", ...extension, signingIn, signIn, signInWithFile }
   }
 
   return <Ctx.Provider value={state}>{children}</Ctx.Provider>
