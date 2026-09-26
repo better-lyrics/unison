@@ -213,6 +213,38 @@ describe("POST /exam/bot/start", () => {
 		expect(vi.mocked(startSession)).not.toHaveBeenCalled()
 	})
 
+	it("resumes the winning session when a simultaneous start already opened one", async () => {
+		vi.mocked(isAuthorizedBot).mockReturnValue(true)
+		vi.mocked(getUserByKeyId).mockResolvedValue(user)
+		vi.mocked(examDb.getLatestSessionByKeyId)
+			.mockResolvedValueOnce(null)
+			.mockResolvedValueOnce({ ...okSession } as never)
+		vi.mocked(startSession).mockRejectedValueOnce(
+			Object.assign(new Error("duplicate key"), { code: "23505" })
+		)
+		const res = await post(botApp(), "/exam/bot/start", { keyId: KEY, discordId: "d1" })
+		const body = (await res.json()) as { data: { status: string; examUrl: string } }
+		expect(res.status).toBe(200)
+		expect(body.data.status).toBe("eligible")
+		expect(body.data.examUrl).toMatch(/^https:\/\/unison\.test\/exam\?t=/)
+		expect(vi.mocked(examDb.reissueToken)).toHaveBeenCalledWith(
+			expect.anything(),
+			okSession.id,
+			expect.any(String),
+			expect.any(Number)
+		)
+	})
+
+	it("still fails loudly on a start error that is not a lost race", async () => {
+		vi.mocked(isAuthorizedBot).mockReturnValue(true)
+		vi.mocked(getUserByKeyId).mockResolvedValue(user)
+		vi.mocked(examDb.getLatestSessionByKeyId).mockResolvedValue(null)
+		vi.mocked(startSession).mockRejectedValueOnce(new Error("connection reset"))
+		const res = await post(botApp(), "/exam/bot/start", { keyId: KEY, discordId: "d1" })
+		expect(res.status).toBe(500)
+		expect(vi.mocked(examDb.reissueToken)).not.toHaveBeenCalled()
+	})
+
 	it.each(["approved", "pending_review"] as const)(
 		"never offers a retake for a %s attempt, however old",
 		async (state) => {

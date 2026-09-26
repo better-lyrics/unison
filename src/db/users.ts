@@ -1,6 +1,7 @@
 import { AVATAR_COLUMNS, AVATAR_JOINS, type AvatarRow, avatarUrlForRow } from "@/db/avatar-join"
 import { invalidateCuratorLeaderboardCache } from "@/db/leaderboard"
 import { invalidateCacheForSubmitter } from "@/db/lyrics"
+import { isUniqueViolation } from "@/infra/database"
 import type { Env, User } from "@/types"
 import { generatePetName } from "@/utils/petname"
 
@@ -84,7 +85,7 @@ export async function setNickname(
 			.bind(nickname, now, keyId)
 			.run()
 	} catch (err) {
-		if ((err as { code?: string }).code === "23505") {
+		if (isUniqueViolation(err)) {
 			return { ok: false, reason: "TAKEN" }
 		}
 		throw err

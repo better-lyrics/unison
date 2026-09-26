@@ -268,6 +268,88 @@ describeIntegration("exam data access (integration)", () => {
 		expect(stored?.decidedByDiscordId).toBe("admin1")
 	})
 
+	describe("superseded attempts", () => {
+		async function failedAttempt(tokenHash: string, submittedAt: number) {
+			const session = await startSession(
+				env,
+				{ keyId: KEY("a"), discordId: "d1", tokenHash, seed: 1, expiresAt: SOON, isDev: false },
+				[1]
+			)
+			await recordGrade(env, session.id, {
+				state: "failed",
+				score: 1,
+				maxScore: 3,
+				cutoff: 2.55,
+				submittedAt,
+				perQuestion: [{ questionId: 1, awardedPoints: 1, maxPoints: 3 }],
+			})
+			return session
+		}
+
+		it("lists only the newest attempt per account as an applicant", async () => {
+			await seedBank()
+			await failedAttempt("h1", 100)
+			const retake = await failedAttempt("h2", 200)
+			expect((await listApplicants(env, true)).map((a) => a.applicantId)).toEqual([retake.id])
+		})
+
+		it("refuses a decision on an attempt a retake has replaced", async () => {
+			await seedBank()
+			const first = await failedAttempt("h1", 100)
+			const retake = await failedAttempt("h2", 200)
+			expect(await recordDecision(env, first.id, "approve", "admin1")).toBe(false)
+			expect(await recordDecision(env, retake.id, "approve", "admin1")).toBe(true)
+			expect((await getLatestSessionByKeyId(env, KEY("a")))?.state).toBe("approved")
+		})
+
+		it("regression: cannot approve an old attempt while its retake is in progress", async () => {
+			await seedBank()
+			const first = await failedAttempt("h1", 100)
+			await startSession(
+				env,
+				{
+					keyId: KEY("a"),
+					discordId: "d1",
+					tokenHash: "h2",
+					seed: 2,
+					expiresAt: SOON,
+					isDev: false,
+				},
+				[2]
+			)
+			expect(await recordDecision(env, first.id, "approve", "admin1")).toBe(false)
+			expect(await listApplicants(env, true)).toHaveLength(0)
+		})
+
+		it("keeps every attempt in the user's report history", async () => {
+			await seedBank()
+			const first = await failedAttempt("h1", 100)
+			const retake = await failedAttempt("h2", 200)
+			expect((await listApplicantReports(env, "d1")).map((r) => r.applicantId)).toEqual([
+				retake.id,
+				first.id,
+			])
+		})
+
+		it("does not let another account's newer attempt supersede this one", async () => {
+			await seedBank()
+			const mine = await failedAttempt("h1", 100)
+			await startSession(
+				env,
+				{
+					keyId: KEY("b"),
+					discordId: "d2",
+					tokenHash: "h2",
+					seed: 2,
+					expiresAt: SOON,
+					isDev: false,
+				},
+				[2]
+			)
+			expect(await recordDecision(env, mine.id, "approve", "admin1")).toBe(true)
+		})
+	})
+
 	describe("listApplicantReports", () => {
 		async function gradedSession(
 			key: string,

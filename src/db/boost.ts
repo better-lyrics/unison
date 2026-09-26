@@ -2,6 +2,7 @@ import { config } from "@/config"
 import { isCommittee } from "@/db/committee"
 import { getCuratorRank } from "@/db/leaderboard"
 import { invalidateCacheForLyric } from "@/db/lyrics"
+import { isUniqueViolation } from "@/infra/database"
 import type { Env } from "@/types"
 import { quotaForTier } from "@/utils/boost-quota"
 
@@ -121,7 +122,7 @@ export async function createBoost(
 			}
 		})
 	} catch (err) {
-		if ((err as { code?: string }).code === "23505") {
+		if (isUniqueViolation(err)) {
 			return { ok: false, reason: "already_boosted" }
 		}
 		throw err

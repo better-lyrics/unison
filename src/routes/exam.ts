@@ -2,8 +2,8 @@ import { config } from "@/config"
 import {
 	type ExamQuestionInput,
 	type ResolveExamResult,
-	getSessionById,
 	getLatestSessionByKeyId,
+	getSessionById,
 	getSessionQuestion,
 	getSessionQuestions,
 	listApplicantReports,
@@ -20,6 +20,7 @@ import {
 	upsertQuestions,
 } from "@/db/exam"
 import { getUserByKeyId } from "@/db/users"
+import { isUniqueViolation } from "@/infra/database"
 import type { Env } from "@/types"
 import { isAuthorizedAdmin } from "@/utils/admin-auth"
 import { isAuthorizedBot } from "@/utils/bot-auth"
@@ -99,6 +100,16 @@ async function mintSession(
 	return { session, token, expiresAt }
 }
 
+async function resumeSession(env: Env, sessionId: number) {
+	const token = generateExamToken()
+	const expiresAt = Math.floor(Date.now() / 1000) + config.exam.tokenTtlSec
+	await reissueToken(env, sessionId, await hashExamToken(token), expiresAt)
+	return {
+		success: true as const,
+		data: { status: "eligible" as const, examUrl: examUrl(env, token), expiresAt },
+	}
+}
+
 const answerKeySchema = t.Object({
 	parts: t.Array(
 		t.Object({
@@ -139,16 +150,8 @@ export const examRoutes = (env: Env) =>
 
 				const existing = await getLatestSessionByKeyId(env, body.keyId)
 				if (existing) {
+					if (existing.state === "in_progress") return resumeSession(env, existing.id)
 					const now = Math.floor(Date.now() / 1000)
-					if (existing.state === "in_progress") {
-						const token = generateExamToken()
-						const expiresAt = now + config.exam.tokenTtlSec
-						await reissueToken(env, existing.id, await hashExamToken(token), expiresAt)
-						return {
-							success: true,
-							data: { status: "eligible", examUrl: examUrl(env, token), expiresAt },
-						}
-					}
 					const retakeAt = retakeAvailableAt(existing, config.exam.retakeCooldownSec)
 					if (retakeAt === null || now < retakeAt) {
 						return {
@@ -166,15 +169,22 @@ export const examRoutes = (env: Env) =>
 					}
 				}
 
-				const { token, expiresAt } = await mintSession(env, {
-					keyId: body.keyId,
-					discordId: body.discordId,
-					seed: randomSeed(),
-					isDev: false,
-				})
-				return {
-					success: true,
-					data: { status: "eligible", examUrl: examUrl(env, token), expiresAt },
+				try {
+					const { token, expiresAt } = await mintSession(env, {
+						keyId: body.keyId,
+						discordId: body.discordId,
+						seed: randomSeed(),
+						isDev: false,
+					})
+					return {
+						success: true,
+						data: { status: "eligible", examUrl: examUrl(env, token), expiresAt },
+					}
+				} catch (err) {
+					if (!isUniqueViolation(err)) throw err
+					const winner = await getLatestSessionByKeyId(env, body.keyId)
+					if (winner?.state !== "in_progress") throw err
+					return resumeSession(env, winner.id)
 				}
 			},
 			{ body: t.Object({ keyId: t.String(), discordId: t.String() }) }

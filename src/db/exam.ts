@@ -72,6 +72,12 @@ function toSession(row: ExamSessionRow): ExamSession {
 const SESSION_COLS =
 	"id, key_id, discord_id, state, token_hash, score, max_score, cutoff, seed, is_dev, started_at, exam_started_at, expires_at, submitted_at, decided_at, decided_by_discord_id"
 
+// A retake supersedes earlier attempts, so only the newest one can be reviewed or decided.
+const IS_LATEST_ATTEMPT = `NOT EXISTS (
+	SELECT 1 FROM exam_session newer
+	WHERE newer.key_id = exam_session.key_id AND newer.is_dev = FALSE AND newer.id > exam_session.id
+)`
+
 // ---- bank ----
 
 export interface DrawableBankQuestion {
@@ -456,7 +462,9 @@ export interface Applicant {
 export async function listApplicants(env: Env, includeBelowCutoff: boolean): Promise<Applicant[]> {
 	const states = includeBelowCutoff ? ["pending_review", "failed"] : ["pending_review"]
 	const res = await env.DB.prepare(
-		`SELECT ${SESSION_COLS} FROM exam_session WHERE state = ANY(?) ORDER BY score DESC NULLS LAST`
+		`SELECT ${SESSION_COLS} FROM exam_session
+		WHERE state = ANY(?) AND ${IS_LATEST_ATTEMPT}
+		ORDER BY score DESC NULLS LAST`
 	)
 		.bind(states)
 		.all<ExamSessionRow>()
@@ -543,7 +551,7 @@ export async function recordDecision(
 	const row = await env.DB.prepare(
 		`UPDATE exam_session
 		SET state = ?, decided_at = ?, decided_by_discord_id = ?
-		WHERE id = ? AND state IN ('pending_review', 'failed')
+		WHERE id = ? AND state IN ('pending_review', 'failed') AND ${IS_LATEST_ATTEMPT}
 		RETURNING id`
 	)
 		.bind(state, now, deciderDiscordId, applicantId)
