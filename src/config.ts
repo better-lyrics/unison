@@ -111,7 +111,15 @@ export const config = {
 
 	avatar: {
 		cdnBase: "https://cdn.betterlyrics.org/avatars/",
+		cdnKeyPrefix: "avatars/",
 		artworkSize: 256,
+		maxInputBytes: 8 * 1024 * 1024,
+		maxOutputBytes: 512 * 1024,
+		webp: {
+			effort: 6,
+			animated: { quality: 65, steps: [65, 50, 40] },
+			static: { quality: 80, steps: [80, 70, 60] },
+		},
 		write: { maxRequests: 20, windowSeconds: 3600 },
 	},
 

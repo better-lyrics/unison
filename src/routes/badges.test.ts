@@ -33,6 +33,7 @@ function makeEnv(): Env {
 		DUMP_PUBLIC_BASE_URL: "",
 		DUMP_DATABASE_URL: null,
 		B2: null,
+		CDN: null,
 	}
 }
 

@@ -68,6 +68,7 @@ describeIntegration("user badges and featured routes (integration)", () => {
 			DUMP_PUBLIC_BASE_URL: "",
 			DUMP_DATABASE_URL: null,
 			B2: null,
+			CDN: null,
 		} as unknown as Env
 	})
 

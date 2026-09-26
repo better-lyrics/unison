@@ -62,6 +62,7 @@ function makeEnv(cache: ReturnType<typeof makeMockCache>): Env & {
 		DUMP_PUBLIC_BASE_URL: "",
 		DUMP_DATABASE_URL: null,
 		B2: null,
+		CDN: null,
 		cache,
 	}
 }
@@ -124,6 +125,7 @@ function makeEnvFull(
 		DUMP_PUBLIC_BASE_URL: "",
 		DUMP_DATABASE_URL: null,
 		B2: null,
+		CDN: null,
 		cache,
 	}
 }
@@ -704,6 +706,7 @@ describe("POST /auth/nickname/check", () => {
 			DUMP_PUBLIC_BASE_URL: "",
 			DUMP_DATABASE_URL: null,
 			B2: null,
+			CDN: null,
 			cache,
 		}
 		const app = authRoutes(env)
@@ -1065,6 +1068,7 @@ describe("PUT /auth/nickname", () => {
 			DUMP_PUBLIC_BASE_URL: "",
 			DUMP_DATABASE_URL: null,
 			B2: null,
+			CDN: null,
 			cache,
 		}
 		const app = authRoutes(env)
@@ -1231,6 +1235,7 @@ describe("DELETE /auth/nickname", () => {
 			DUMP_PUBLIC_BASE_URL: "",
 			DUMP_DATABASE_URL: null,
 			B2: null,
+			CDN: null,
 			cache,
 		}
 		const app = authRoutes(env)

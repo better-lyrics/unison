@@ -14,6 +14,14 @@ describe("createStorage", () => {
 		expect(createStorage(null)).toBeNull()
 	})
 
+	it("defaults region to us-east-1 and honors an override", async () => {
+		const def = createStorage(cfg)
+		const over = createStorage({ ...cfg, region: "auto" })
+		if (!def || !over) throw new Error("storage should not be null")
+		expect(await def.__client.config.region()).toBe("us-east-1")
+		expect(await over.__client.config.region()).toBe("auto")
+	})
+
 	it("putObject sends a PutObjectCommand with bucket, key, body, and content type", async () => {
 		const sendMock = vi.fn().mockResolvedValue({})
 		const storage = createStorage(cfg)

@@ -5,6 +5,7 @@ import { KVCompat, getRedis } from "./cache"
 import { D1Compat, getPool } from "./database"
 import { Logger } from "./logger"
 import { RedisRateLimiter } from "./rate-limiter"
+import { createStorage } from "./storage"
 
 const log = new Logger("env")
 const BOOL_ENV_TRUTHY = new Set(["true", "1", "yes"])
@@ -56,6 +57,17 @@ function readB2Config(): B2Config | null {
 	return { keyId, applicationKey, bucket, endpoint }
 }
 
+function readR2Config(): B2Config | null {
+	const keyId = process.env.R2_ACCESS_KEY_ID
+	const applicationKey = process.env.R2_SECRET_ACCESS_KEY
+	const bucket = process.env.R2_BUCKET
+	const endpoint = process.env.R2_ENDPOINT
+
+	if (!keyId || !applicationKey || !bucket || !endpoint) return null
+
+	return { keyId, applicationKey, bucket, endpoint, region: "auto" }
+}
+
 function readDiscordOAuthConfig(): Env["DISCORD_OAUTH"] {
 	const clientId = process.env.DISCORD_CLIENT_ID
 	const clientSecret = process.env.DISCORD_CLIENT_SECRET
@@ -99,6 +111,7 @@ export function createEnv(): Env {
 		DUMP_PUBLIC_BASE_URL: process.env.DUMP_PUBLIC_BASE_URL || "",
 		DUMP_DATABASE_URL: process.env.DUMP_DATABASE_URL || null,
 		B2: readB2Config(),
+		CDN: createStorage(readR2Config()),
 		BUTLER_BOT_SECRET: process.env.BUTLER_BOT_SECRET || null,
 		ADMIN_SECRET: process.env.ADMIN_SECRET || null,
 		DISCORD_OAUTH: readDiscordOAuthConfig(),

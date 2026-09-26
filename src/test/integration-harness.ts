@@ -69,6 +69,7 @@ export async function openIntegrationDb(): Promise<IntegrationDb> {
 		DUMP_PUBLIC_BASE_URL: "",
 		DUMP_DATABASE_URL: null,
 		B2: null,
+		CDN: null,
 		BUTLER_BOT_SECRET: BOT_SECRET,
 	} as unknown as Env
 	return { pool, cache, env }
