@@ -3,10 +3,12 @@ import { extname, resolve, sep } from "node:path"
 import { config } from "@/config"
 import { closeRedis } from "@/infra/cache"
 import { closePool } from "@/infra/database"
+import { listPresetsFromDb, setCatalogue } from "@/db/avatar-presets"
 import { createEnv } from "@/infra/env"
 import { Logger, flushLogs } from "@/infra/logger"
 import { startWatchdog } from "@/infra/watchdog"
 import { backfillArtwork } from "@/jobs/backfill-artwork"
+import { backfillAvatarPresets } from "@/jobs/backfill-avatar-presets"
 import { backfillBadges } from "@/jobs/backfill-badges"
 import { backfillConfidence } from "@/jobs/backfill-confidence"
 import { backfillFormatDetection } from "@/jobs/backfill-format-detection"
@@ -291,6 +293,19 @@ backfillArtwork(env)
 		if (seeded > 0) log.info("artwork backfill complete", { seeded })
 	})
 	.catch((err) => log.error("artwork backfill failed", { error: (err as Error).message }))
+
+backfillAvatarPresets(env)
+	.then(({ seeded }) => {
+		if (seeded > 0) log.info("avatar preset backfill complete", { seeded })
+	})
+	.catch((err) => log.error("avatar preset backfill failed", { error: (err as Error).message }))
+	.finally(async () => {
+		try {
+			setCatalogue(await listPresetsFromDb(env))
+		} catch (err) {
+			log.error("avatar catalogue load failed", { error: (err as Error).message })
+		}
+	})
 
 backfillSyncType(env)
 	.then(({ scanned, changed }) => {
