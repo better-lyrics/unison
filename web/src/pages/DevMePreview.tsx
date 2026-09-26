@@ -12,6 +12,7 @@ const curator = SEED_CURATORS[0]
 const fakeSession = {
   status: "signed-in",
   extensionAvailable: true,
+  extensionId: "effdbpeggelllpfkjppbokhmmiinhlmg",
   identity: {
     keyId: curator.keyId,
     displayName: curator.displayName,
@@ -25,6 +26,7 @@ const fakeSession = {
 const baseSection: Omit<DiscordSectionModel, "status"> = {
   username: "aurora#1234",
   connecting: false,
+  canConnect: true,
   working: false,
   error: null,
   onConnect: () => {},
@@ -33,6 +35,7 @@ const baseSection: Omit<DiscordSectionModel, "status"> = {
 
 const sectionStates: { label: string; model: DiscordSectionModel }[] = [
   { label: "unlinked", model: { ...baseSection, status: "unlinked", username: null } },
+  { label: "unlinked (no extension)", model: { ...baseSection, status: "unlinked", username: null, canConnect: false } },
   { label: "linked", model: { ...baseSection, status: "linked" } },
   { label: "linked (working)", model: { ...baseSection, status: "linked", working: true } },
   { label: "error", model: { ...baseSection, status: "linked", error: "We could not disconnect just now." } },

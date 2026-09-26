@@ -1,5 +1,21 @@
+import type { ReactElement } from "react"
+import { Tooltip } from "@/components/Tooltip"
+
 export const discordButtonClass =
   "inline-flex cursor-pointer items-center justify-center gap-2 rounded-md bg-[#5865f2] py-2.5 pr-5 pl-4 text-sm font-semibold text-white transition-colors hover:bg-[#4752c4] disabled:cursor-not-allowed disabled:opacity-60"
 
 export const secondaryButtonClass =
   "inline-flex cursor-pointer items-center justify-center gap-2 rounded-md bg-white/[0.08] px-4 py-2.5 text-sm font-medium text-unison-text transition-colors hover:bg-white/[0.12] disabled:cursor-not-allowed disabled:opacity-60"
+
+export const DISCORD_NEEDS_EXTENSION =
+  "Linking Discord needs the Better Lyrics extension in Chrome or Edge. Firefox doesn't support it yet."
+
+export function DiscordConnectLock({
+  locked,
+  children,
+}: {
+  locked: boolean
+  children: ReactElement<Record<string, unknown>>
+}) {
+  return locked ? <Tooltip label={DISCORD_NEEDS_EXTENSION}>{children}</Tooltip> : children
+}

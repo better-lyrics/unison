@@ -6,17 +6,27 @@ import {
   loadStoredSession,
   postSession,
   revokeSession,
+  type SignedBody,
   saveStoredSession,
 } from "@/lib/auth"
-import { detectBetterLyrics, signInWithBetterLyrics } from "@/lib/extension"
+import { findBetterLyrics, signInWithBetterLyrics } from "@/lib/extension"
+import { signInWithIdentityFile } from "@/lib/identity-file"
 import { type ReactNode, createContext, useCallback, useContext, useEffect, useRef, useState } from "react"
 
 type SessionState =
-  | { status: "loading"; extensionAvailable: boolean }
-  | { status: "signed-out"; extensionAvailable: boolean; signingIn: boolean; signIn: () => Promise<void> }
+  | { status: "loading"; extensionAvailable: boolean; extensionId: string | null }
+  | {
+      status: "signed-out"
+      extensionAvailable: boolean
+      extensionId: string | null
+      signingIn: boolean
+      signIn: () => Promise<void>
+      signInWithFile: (file: File) => Promise<void>
+    }
   | {
       status: "signed-in"
       extensionAvailable: boolean
+      extensionId: string | null
       identity: Identity
       signOut: () => void
       updateDisplayName: (displayName: string) => void
@@ -25,9 +35,11 @@ type SessionState =
   | {
       status: "error"
       extensionAvailable: boolean
+      extensionId: string | null
       signingIn: boolean
       error: Error
       signIn: () => Promise<void>
+      signInWithFile: (file: File) => Promise<void>
     }
 
 const Ctx = createContext<SessionState | null>(null)
@@ -54,14 +66,13 @@ interface AuthProviderProps {
 export function AuthProvider({ children }: AuthProviderProps) {
   const [phase, setPhase] = useState<Phase>({ kind: "loading" })
   const [signingIn, setSigningIn] = useState(false)
-  const [extensionAvailable, setExtensionAvailable] = useState<boolean | null>(null)
+  const [extensionId, setExtensionId] = useState<string | null | undefined>(undefined)
   const signInLock = useRef(false)
 
   useEffect(() => {
     let cancelled = false
-    detectBetterLyrics().then((v) => {
-      if (cancelled) return
-      setExtensionAvailable(v === "available")
+    findBetterLyrics().then((id) => {
+      if (!cancelled) setExtensionId(id)
     })
     return () => {
       cancelled = true
@@ -92,13 +103,13 @@ export function AuthProvider({ children }: AuthProviderProps) {
     }
   }, [])
 
-  const signIn = useCallback(async () => {
+  const completeSignIn = useCallback(async (sign: (nonce: string) => Promise<SignedBody>) => {
     if (signInLock.current) return
     signInLock.current = true
     setSigningIn(true)
     try {
       const { nonce } = await fetchChallenge()
-      const signedBody = await signInWithBetterLyrics(nonce)
+      const signedBody = await sign(nonce)
       const session = await postSession(signedBody)
       saveStoredSession(session)
       setPhase({
@@ -117,6 +128,20 @@ export function AuthProvider({ children }: AuthProviderProps) {
       setSigningIn(false)
     }
   }, [])
+
+  const signIn = useCallback(
+    () =>
+      completeSignIn((nonce) => {
+        if (!extensionId) throw new Error("Better Lyrics extension not detected")
+        return signInWithBetterLyrics(nonce, extensionId)
+      }),
+    [completeSignIn, extensionId],
+  )
+
+  const signInWithFile = useCallback(
+    (file: File) => completeSignIn((nonce) => signInWithIdentityFile(file, nonce)),
+    [completeSignIn],
+  )
 
   const signOut = useCallback(() => {
     const stored = loadStoredSession()
@@ -144,20 +169,23 @@ export function AuthProvider({ children }: AuthProviderProps) {
   }, [])
 
   let state: SessionState
-  if (phase.kind === "loading" || extensionAvailable === null) {
-    state = { status: "loading", extensionAvailable: extensionAvailable ?? false }
-  } else if (phase.kind === "signed-in")
-    state = {
-      status: "signed-in",
-      extensionAvailable,
-      identity: phase.identity,
-      signOut,
-      updateDisplayName,
-      updateAvatarUrl,
-    }
-  else if (phase.kind === "error")
-    state = { status: "error", extensionAvailable, signingIn, error: phase.error, signIn }
-  else state = { status: "signed-out", extensionAvailable, signingIn, signIn }
+  if (phase.kind === "loading" || extensionId === undefined) {
+    state = { status: "loading", extensionAvailable: false, extensionId: null }
+  } else {
+    const extension = { extensionAvailable: extensionId !== null, extensionId }
+    if (phase.kind === "signed-in")
+      state = {
+        status: "signed-in",
+        ...extension,
+        identity: phase.identity,
+        signOut,
+        updateDisplayName,
+        updateAvatarUrl,
+      }
+    else if (phase.kind === "error")
+      state = { status: "error", ...extension, signingIn, error: phase.error, signIn, signInWithFile }
+    else state = { status: "signed-out", ...extension, signingIn, signIn, signInWithFile }
+  }
 
   return <Ctx.Provider value={state}>{children}</Ctx.Provider>
 }

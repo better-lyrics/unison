@@ -5,6 +5,8 @@ import { AuthProvider } from "@/auth/AuthProvider"
 import { clearAsyncDataCache } from "@/hooks/useAsyncData"
 import { dicebearThumbsDataUri } from "@/lib/avatar"
 import { saveStoredSession, type StoredSession } from "@/lib/auth"
+import { IDENTITY_FILE_ERRORS } from "@/lib/identity-file"
+import { identityFile, makeIdentityExport } from "@/test/identity-fixture"
 import { SignInControl } from "./SignInControl"
 
 const valid: StoredSession = {
@@ -116,32 +118,117 @@ afterEach(() => {
 })
 
 describe("SignInControl", () => {
-  it("shows a Get Better Lyrics link when the extension is not available", async () => {
-    const { container } = renderControl()
-    await waitFor(() => expect(container.querySelector('[data-state="no-extension"]')).toBeTruthy())
-    expect(screen.queryByRole("button", { name: /sign in/i })).toBeNull()
-    const link = screen.getByRole("link", { name: /get better lyrics/i })
-    expect(link.getAttribute("href")).toBe("https://betterlyrics.org")
-  })
+  async function openSignInMenu() {
+    const button = await screen.findByRole("button", { name: "Sign in" })
+    await act(async () => {
+      button.click()
+    })
+    return button
+  }
 
-  it("shows a Firefox sign-in-unavailable chip instead of the install link on Firefox", async () => {
-    const uaSpy = vi
-      .spyOn(Object.getPrototypeOf(navigator), "userAgent", "get")
-      .mockReturnValue("Mozilla/5.0 (X11; Linux x86_64; rv:128.0) Gecko/20100101 Firefox/128.0")
-    try {
+  async function uploadIdentity(file: File) {
+    const input = screen.getByLabelText("Identity file") as HTMLInputElement
+    await act(async () => {
+      fireEvent.change(input, { target: { files: [file] } })
+    })
+  }
+
+  function stubFileSignIn(keyId: string) {
+    const fetchMock = vi.fn(async (url: string) =>
+      url === "/auth/challenge"
+        ? new Response(JSON.stringify({ success: true, data: { nonce: "nonce-0123456789abcdef", expiresAt: 1 } }))
+        : new Response(JSON.stringify({ success: true, data: { ...valid, keyId } })),
+    )
+    vi.stubGlobal("fetch", fetchMock)
+    return fetchMock
+  }
+
+  describe("without the extension", () => {
+    it("shows a Sign in menu button instead of the extension button", async () => {
       const { container } = renderControl()
-      await waitFor(() => expect(container.querySelector('[data-state="firefox-signin"]')).toBeTruthy())
-      expect(screen.getByText(/firefox sign-in unavailable/i)).toBeTruthy()
-      expect(screen.queryByRole("link", { name: /get better lyrics/i })).toBeNull()
-    } finally {
-      uaSpy.mockRestore()
-    }
+      await waitFor(() => expect(container.querySelector('[data-state="no-extension"]')).toBeTruthy())
+      expect(screen.getByRole("button", { name: "Sign in" }).getAttribute("aria-haspopup")).toBe("menu")
+      expect(screen.queryByRole("button", { name: /sign in with better lyrics/i })).toBeNull()
+      expect(screen.queryByRole("menu")).toBeNull()
+    })
+
+    it("opens a menu with the upload, the export steps and the install link", async () => {
+      renderControl()
+      await openSignInMenu()
+      expect(screen.getByRole("menuitem", { name: /upload identity file/i })).toBeTruthy()
+      expect(
+        screen.getByText(
+          "Export it in Better Lyrics options → Identity → Export Key. Only upload it on this site, it is the key to your account.",
+        ),
+      ).toBeTruthy()
+      const link = screen.getByRole("menuitem", { name: /get better lyrics/i })
+      expect(link.getAttribute("href")).toBe("https://betterlyrics.org")
+      expect((screen.getByLabelText("Identity file") as HTMLInputElement).accept).toBe(".json,application/json")
+    })
+
+    it("signs in with an uploaded identity file and shows the account chip", async () => {
+      const exported = await makeIdentityExport()
+      stubFileSignIn(exported.keyId)
+      renderControl()
+      await openSignInMenu()
+      await uploadIdentity(identityFile(exported))
+      expect(await screen.findByRole("button", { name: valid.displayName })).toBeTruthy()
+      expect(screen.queryByRole("menu")).toBeNull()
+    })
+
+    it("keeps the menu open and shows the error for a bad file", async () => {
+      stubFileSignIn("k".repeat(64))
+      renderControl()
+      await openSignInMenu()
+      await uploadIdentity(identityFile("not json"))
+      expect(await screen.findByRole("alert")).toBeTruthy()
+      expect(screen.getByRole("alert").textContent).toBe(IDENTITY_FILE_ERRORS.notIdentity)
+      expect(screen.getByRole("menu")).toBeTruthy()
+    })
+
+    it("lets the same file be picked again after a failure", async () => {
+      stubFileSignIn("k".repeat(64))
+      renderControl()
+      await openSignInMenu()
+      await uploadIdentity(identityFile("not json"))
+      await screen.findByRole("alert")
+      expect((screen.getByLabelText("Identity file") as HTMLInputElement).value).toBe("")
+    })
+
+    it("closes the menu on Escape", async () => {
+      renderControl()
+      await openSignInMenu()
+      await act(async () => {
+        fireEvent.keyDown(document, { key: "Escape" })
+      })
+      await waitFor(() => expect(screen.queryByRole("menu")).toBeNull())
+    })
+
+    it("closes the menu on an outside click", async () => {
+      renderControl()
+      await openSignInMenu()
+      await act(async () => {
+        fireEvent.mouseDown(document.body)
+      })
+      await waitFor(() => expect(screen.queryByRole("menu")).toBeNull())
+    })
+
+    it("regression: does not reopen the account menu after signing in from the file menu", async () => {
+      const exported = await makeIdentityExport()
+      stubFileSignIn(exported.keyId)
+      renderControl()
+      await openSignInMenu()
+      await uploadIdentity(identityFile(exported))
+      const chip = await screen.findByRole("button", { name: valid.displayName })
+      expect(chip.getAttribute("aria-expanded")).toBe("false")
+    })
   })
 
   it("shows the sign-in button when the extension is available", async () => {
     stubChromePort(() => ({ ok: true }))
     renderControl()
-    await waitFor(() => expect(screen.getByRole("button", { name: /sign in/i })).toBeTruthy())
+    await waitFor(() => expect(screen.getByRole("button", { name: /sign in with better lyrics/i })).toBeTruthy())
+    expect(screen.queryByLabelText("Identity file")).toBeNull()
   })
 
   it("renders the identity chip with display name when signed in", async () => {

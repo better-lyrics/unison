@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react"
+import { useOptionalSession } from "@/auth/useSession"
 import { fetchChallenge, loadStoredSession } from "@/lib/auth"
 import { signInWithBetterLyrics } from "@/lib/extension"
 import { fetchLinkStatus, startDiscordLink, unlinkDiscord } from "@/lib/links"
@@ -12,11 +13,13 @@ export interface DiscordLink {
   connecting: boolean
   working: boolean
   error: string | null
+  canConnect: boolean
   connect: () => Promise<void>
   disconnect: () => Promise<boolean>
 }
 
 export function useDiscordLink({ enabled = true }: { enabled?: boolean } = {}): DiscordLink {
+  const extensionId = useOptionalSession()?.extensionId ?? null
   const [status, setStatus] = useState<Status>(enabled ? "loading" : "unlinked")
   const [username, setUsername] = useState<string | null>(null)
   const [discordAvatarUrl, setDiscordAvatarUrl] = useState<string | null>(null)
@@ -52,7 +55,8 @@ export function useDiscordLink({ enabled = true }: { enabled?: boolean } = {}): 
     setError(null)
     try {
       const { nonce } = await fetchChallenge()
-      const signedBody = await signInWithBetterLyrics(nonce)
+      if (!extensionId) throw new Error("Better Lyrics extension not detected")
+      const signedBody = await signInWithBetterLyrics(nonce, extensionId)
       const { authorizeUrl } = await startDiscordLink(signedBody)
       window.location.assign(authorizeUrl)
     } catch (err) {
@@ -64,7 +68,7 @@ export function useDiscordLink({ enabled = true }: { enabled?: boolean } = {}): 
       )
       setConnecting(false)
     }
-  }, [])
+  }, [extensionId])
 
   const disconnect = useCallback(async () => {
     const stored = loadStoredSession()
@@ -85,5 +89,15 @@ export function useDiscordLink({ enabled = true }: { enabled?: boolean } = {}): 
     }
   }, [])
 
-  return { status, username, discordAvatarUrl, connecting, working, error, connect, disconnect }
+  return {
+    status,
+    username,
+    discordAvatarUrl,
+    connecting,
+    working,
+    error,
+    canConnect: extensionId !== null,
+    connect,
+    disconnect,
+  }
 }
