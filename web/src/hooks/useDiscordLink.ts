@@ -13,6 +13,7 @@ export interface DiscordLink {
   connecting: boolean
   working: boolean
   error: string | null
+  canConnect: boolean
   connect: () => Promise<void>
   disconnect: () => Promise<boolean>
 }
@@ -88,5 +89,15 @@ export function useDiscordLink({ enabled = true }: { enabled?: boolean } = {}): 
     }
   }, [])
 
-  return { status, username, discordAvatarUrl, connecting, working, error, connect, disconnect }
+  return {
+    status,
+    username,
+    discordAvatarUrl,
+    connecting,
+    working,
+    error,
+    canConnect: extensionId !== null,
+    connect,
+    disconnect,
+  }
 }

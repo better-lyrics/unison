@@ -36,6 +36,7 @@ const linkStates: { label: string; model: LinkViewModel }[] = [
 const baseSection: Omit<DiscordSectionModel, "status"> = {
   username: "user#1234",
   connecting: false,
+  canConnect: true,
   working: false,
   error: null,
   onConnect: noop,

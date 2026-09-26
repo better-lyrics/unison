@@ -213,6 +213,34 @@ describe("AvatarPicker", () => {
       expect(screen.queryByRole("button", { name: "Discord photo" })).toBeNull()
     })
 
+    it("locks the Discord photo reconnect when the extension is missing", async () => {
+      stubServer({ link: { linked: true, discordAvatarUrl: null } })
+      renderPicker()
+      const button = await screen.findByRole("button", { name: /use my discord photo/i })
+      expect(button.getAttribute("aria-disabled")).toBe("true")
+    })
+
+    it("allows the Discord photo reconnect when the extension is found", async () => {
+      vi.stubGlobal("chrome", {
+        runtime: {
+          connect: (_id: string, info: { name: string }) => ({
+            name: info.name,
+            onMessage: { addListener: () => {} },
+            onDisconnect: { addListener: (l: () => void) => queueMicrotask(l) },
+            postMessage: () => {},
+            disconnect: () => {},
+          }),
+        },
+      })
+      stubServer({ link: { linked: true, discordAvatarUrl: null } })
+      renderPicker()
+      await waitFor(() =>
+        expect(screen.getByRole("button", { name: /use my discord photo/i }).getAttribute("aria-disabled")).toBe(
+          "false",
+        ),
+      )
+    })
+
     it("offers nothing Discord-related when the account is not linked", async () => {
       stubServer()
       renderPicker()

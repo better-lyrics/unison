@@ -1,7 +1,7 @@
 import { IconBrandDiscordFilled, IconLoader2 } from "@tabler/icons-react"
 import { useCallback, useState } from "react"
 import { useSession } from "@/auth/useSession"
-import { secondaryButtonClass } from "@/components/discord-ui"
+import { DiscordConnectLock, secondaryButtonClass } from "@/components/discord-ui"
 import { Tooltip } from "@/components/Tooltip"
 import { editableCardClass } from "@/components/ui"
 import { useAsyncData } from "@/hooks/useAsyncData"
@@ -183,15 +183,18 @@ export function AvatarPicker({ discord }: { discord: DiscordLink }) {
           <p className="text-xs text-unison-text-muted">
             Reconnect Discord once to use your Discord photo. Accounts without a custom photo keep the generated one.
           </p>
-          <button
-            type="button"
-            onClick={discord.connect}
-            disabled={discord.connecting}
-            className={secondaryButtonClass}
-          >
-            <IconBrandDiscordFilled className="size-4" />
-            {discord.connecting ? "Connecting..." : "Use my Discord photo"}
-          </button>
+          <DiscordConnectLock locked={!discord.canConnect}>
+            <button
+              type="button"
+              onClick={discord.canConnect ? discord.connect : undefined}
+              disabled={discord.connecting}
+              aria-disabled={!discord.canConnect}
+              className={`${secondaryButtonClass} aria-disabled:cursor-not-allowed aria-disabled:opacity-60`}
+            >
+              <IconBrandDiscordFilled className="size-4" />
+              {discord.connecting ? "Connecting..." : "Use my Discord photo"}
+            </button>
+          </DiscordConnectLock>
         </>
       ) : null}
       {catalogue.status === "error" ? (
