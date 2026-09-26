@@ -444,6 +444,14 @@ CREATE TABLE IF NOT EXISTS song_artwork (
     checked_at BIGINT NOT NULL DEFAULT 0
 );
 
+CREATE TABLE IF NOT EXISTS avatar_presets (
+    id TEXT PRIMARY KEY,
+    label TEXT NOT NULL,
+    file TEXT NOT NULL UNIQUE,
+    created_by TEXT,
+    created_at BIGINT NOT NULL DEFAULT 0
+);
+
 -- ---- lyric revisions ----
 -- Edit history. The lyrics content columns cache the live revision.
 

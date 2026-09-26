@@ -1,5 +1,11 @@
-import { describe, expect, it } from "vitest"
-import { AVATAR_PRESETS, findPreset } from "./avatar-presets"
+import { afterEach, describe, expect, it } from "vitest"
+import {
+	AVATAR_PRESETS,
+	addToCatalogue,
+	findPreset,
+	getPresets,
+	setCatalogue,
+} from "./avatar-presets"
 
 describe("avatar presets", () => {
 	it("exposes at least one preset with stable id, label and file", () => {
@@ -47,6 +53,28 @@ describe("avatar presets", () => {
 		})
 		it("uses url-safe file names", () => {
 			for (const p of AVATAR_PRESETS) expect(p.file).toMatch(/^[a-z0-9-]+\.(webp|png|gif)$/)
+		})
+	})
+
+	describe("catalogue", () => {
+		afterEach(() => setCatalogue([...AVATAR_PRESETS]))
+
+		it("defaults to the seed presets", () => {
+			expect(getPresets()).toEqual(AVATAR_PRESETS)
+		})
+
+		it("addToCatalogue makes a new preset findable", () => {
+			const preset = { id: "new-cat", label: "New Cat", file: "new-cat.webp" }
+			addToCatalogue(preset)
+			expect(findPreset("new-cat")).toEqual(preset)
+			expect(getPresets()).toContainEqual(preset)
+		})
+
+		it("setCatalogue replaces the catalogue", () => {
+			const only = [{ id: "solo", label: "Solo", file: "solo.webp" }]
+			setCatalogue(only)
+			expect(getPresets()).toEqual(only)
+			expect(findPreset(AVATAR_PRESETS[0].id)).toBeUndefined()
 		})
 	})
 })

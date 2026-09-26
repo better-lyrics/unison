@@ -1,5 +1,5 @@
 import { config } from "@/config"
-import { AVATAR_PRESETS, findPreset } from "@/db/avatar-presets"
+import { findPreset, getPresets } from "@/db/avatar-presets"
 import { getByKeyId } from "@/db/discordLinks"
 import { hasSubmissionForVideo } from "@/db/profile"
 import { clearAvatarChoice, resolveAvatarUrl, setAvatarChoice } from "@/db/users"
@@ -20,7 +20,7 @@ export const avatarRoutes = (env: Env) =>
 			return {
 				success: true,
 				data: {
-					presets: AVATAR_PRESETS.map((p) => ({
+					presets: getPresets().map((p) => ({
 						id: p.id,
 						label: p.label,
 						url: config.avatar.cdnBase + p.file,

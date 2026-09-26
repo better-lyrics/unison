@@ -1,3 +1,5 @@
+import type { Env } from "@/types"
+
 export interface AvatarPreset {
 	id: string
 	label: string
@@ -48,6 +50,42 @@ export const AVATAR_PRESETS: AvatarPreset[] = [
 	{ id: "yawning-tabby", label: "Yawning Tabby", file: "yawning-tabby.webp" },
 ]
 
+let catalogue: AvatarPreset[] = [...AVATAR_PRESETS]
+
+export function getPresets(): AvatarPreset[] {
+	return catalogue
+}
+
+export function setCatalogue(presets: AvatarPreset[]): void {
+	catalogue = presets
+}
+
+export function addToCatalogue(preset: AvatarPreset): void {
+	catalogue = [...catalogue, preset]
+}
+
 export function findPreset(id: string): AvatarPreset | undefined {
-	return AVATAR_PRESETS.find((p) => p.id === id)
+	return catalogue.find((p) => p.id === id)
+}
+
+export async function insertPreset(
+	env: Env,
+	preset: { id: string; label: string; file: string; createdBy?: string | null }
+): Promise<"inserted" | "exists"> {
+	const { results } = await env.DB.prepare(
+		`INSERT INTO avatar_presets (id, label, file, created_by, created_at)
+		 VALUES (?, ?, ?, ?, ?)
+		 ON CONFLICT (id) DO NOTHING
+		 RETURNING id`
+	)
+		.bind(preset.id, preset.label, preset.file, preset.createdBy ?? null, Date.now())
+		.all<{ id: string }>()
+	return results.length > 0 ? "inserted" : "exists"
+}
+
+export async function listPresetsFromDb(env: Env): Promise<AvatarPreset[]> {
+	const { results } = await env.DB.prepare(
+		"SELECT id, label, file FROM avatar_presets ORDER BY id"
+	).all<AvatarPreset>()
+	return results
 }
