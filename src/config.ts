@@ -118,6 +118,8 @@ export const config = {
 		maxInputPixels: 50_000_000,
 		maxPages: 300,
 		catalogueRefreshMs: 5 * 60 * 1000,
+		catalogueCacheSeconds: 60,
+		reservationTtlMs: 10 * 60 * 1000,
 		webp: {
 			effort: 6,
 			animated: { steps: [65, 50, 40] },

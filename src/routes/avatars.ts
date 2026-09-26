@@ -1,14 +1,16 @@
 import { config } from "@/config"
 import {
-	addToCatalogue,
 	deletePreset,
 	findPreset,
 	getPresets,
-	insertPreset,
+	publishPreset,
+	refreshCatalogue,
+	reservePreset,
 } from "@/db/avatar-presets"
 import { getByKeyId } from "@/db/discordLinks"
 import { hasSubmissionForVideo } from "@/db/profile"
 import { clearAvatarChoice, resolveAvatarUrl, setAvatarChoice } from "@/db/users"
+import { Logger } from "@/infra/logger"
 import { resolveArtwork } from "@/services/artwork"
 import { AvatarImageError, formatAvatar } from "@/services/avatar-image"
 import type { Env } from "@/types"
@@ -19,12 +21,14 @@ import { readRateLimit } from "@/utils/read-rate-limit"
 import { isVideoId } from "@/utils/video-id"
 import { Elysia, t } from "elysia"
 
+const log = new Logger("avatars")
+
 export const avatarRoutes = (env: Env) =>
 	new Elysia({ prefix: "/avatars" })
 		.decorate("env", env)
 		.use(readRateLimit)
 		.get("/", ({ set }) => {
-			set.headers["cache-control"] = "public, max-age=3600"
+			set.headers["cache-control"] = `public, max-age=${config.avatar.catalogueCacheSeconds}`
 			return {
 				success: true,
 				data: {
@@ -49,6 +53,8 @@ export const avatarRoutes = (env: Env) =>
 				if (!env.CDN) return status(503, buildError(ErrorCode.CDN_UNAVAILABLE))
 
 				const { id, label, createdBy, mime, dataBase64 } = body
+				if (findPreset(id)) return status(409, buildError(ErrorCode.AVATAR_PRESET_EXISTS))
+
 				const input = Buffer.from(dataBase64, "base64")
 				if (input.length === 0) return status(422, buildError(ErrorCode.AVATAR_IMAGE_INVALID))
 
@@ -63,23 +69,29 @@ export const avatarRoutes = (env: Env) =>
 				}
 
 				const file = `${id}.webp`
-				// Reserve the id in the db before the CDN write, so a duplicate never overwrites a live
-				// avatar and a failed upload leaves no row behind.
+				// Reserve before the CDN write so a duplicate id can never overwrite a live avatar.
 				if (
-					(await insertPreset(env, { id, label, file, createdBy: createdBy ?? null })) === "exists"
+					(await reservePreset(env, { id, label, file, createdBy: createdBy ?? null })) === "exists"
 				) {
 					return status(409, buildError(ErrorCode.AVATAR_PRESET_EXISTS))
 				}
 
-				const key = config.avatar.cdnKeyPrefix + file
 				try {
-					await env.CDN.putObject(key, webp, "image/webp")
+					await env.CDN.putObject(config.avatar.cdnKeyPrefix + file, webp, "image/webp")
 				} catch (err) {
-					await deletePreset(env, id).catch(() => {})
+					await deletePreset(env, id).catch((rollbackErr) =>
+						log.error("avatar reservation rollback failed", {
+							id,
+							error: (rollbackErr as Error).message,
+						})
+					)
 					throw err
 				}
 
-				addToCatalogue({ id, label, file })
+				await publishPreset(env, id)
+				await refreshCatalogue(env).catch((err) =>
+					log.error("avatar catalogue refresh failed", { error: (err as Error).message })
+				)
 				return status(200, {
 					success: true,
 					data: { id, label, url: config.avatar.cdnBase + file },

@@ -1,5 +1,12 @@
 import { readFileSync } from "node:fs"
-import { insertPreset, listPresetsFromDb } from "@/db/avatar-presets"
+import { config } from "@/config"
+import {
+	deletePreset,
+	insertPreset,
+	listPublishedPresets,
+	publishPreset,
+	reservePreset,
+} from "@/db/avatar-presets"
 import { D1Compat } from "@/infra/database"
 import type { Env } from "@/types"
 import pg from "pg"
@@ -35,22 +42,67 @@ describeIntegration("avatar presets (integration)", () => {
 		expect(await insertPreset(env, { id: "el-gato", label: "El Gato", file: "el-gato.webp" })).toBe(
 			"inserted"
 		)
-		const rows = await listPresetsFromDb(env)
+		const rows = await listPublishedPresets(env)
 		expect(rows).toEqual([{ id: "el-gato", label: "El Gato", file: "el-gato.webp" }])
 	})
 
 	it("returns exists on a duplicate id without overwriting", async () => {
 		await insertPreset(env, { id: "dup", label: "First", file: "dup.webp" })
 		expect(await insertPreset(env, { id: "dup", label: "Second", file: "dup.webp" })).toBe("exists")
-		const rows = await listPresetsFromDb(env)
+		const rows = await listPublishedPresets(env)
 		expect(rows).toEqual([{ id: "dup", label: "First", file: "dup.webp" }])
 	})
 
 	it("stores created_by and orders by id", async () => {
 		await insertPreset(env, { id: "zebra", label: "Zebra", file: "zebra.webp", createdBy: "k1" })
 		await insertPreset(env, { id: "apple", label: "Apple", file: "apple.webp" })
-		const rows = await listPresetsFromDb(env)
+		const rows = await listPublishedPresets(env)
 		expect(rows.map((r) => r.id)).toEqual(["apple", "zebra"])
+	})
+
+	describe("reservation", () => {
+		const SKY = { id: "sky-cat", label: "Sky Cat", file: "sky-cat.webp" }
+
+		it("hides a reserved preset until it is published", async () => {
+			expect(await reservePreset(env, SKY)).toBe("reserved")
+			expect(await listPublishedPresets(env)).toEqual([])
+			await publishPreset(env, SKY.id)
+			expect(await listPublishedPresets(env)).toEqual([SKY])
+		})
+
+		it("refuses an id that is already published", async () => {
+			await insertPreset(env, SKY)
+			expect(await reservePreset(env, { ...SKY, label: "Other" })).toBe("exists")
+			expect(await listPublishedPresets(env)).toEqual([SKY])
+		})
+
+		it("refuses an id with a fresh reservation in flight", async () => {
+			await reservePreset(env, SKY)
+			expect(await reservePreset(env, SKY)).toBe("exists")
+		})
+
+		it("frees the id after the reservation is deleted", async () => {
+			await reservePreset(env, SKY)
+			await deletePreset(env, SKY.id)
+			expect(await reservePreset(env, SKY)).toBe("reserved")
+		})
+
+		describe("regressions", () => {
+			it("regression: reclaims a stale reservation whose upload never finished", async () => {
+				const past = Date.now() - config.avatar.reservationTtlMs - 1000
+				await reservePreset(env, { ...SKY, label: "Stuck" }, past)
+				expect(await reservePreset(env, SKY)).toBe("reserved")
+				await publishPreset(env, SKY.id)
+				expect(await listPublishedPresets(env)).toEqual([SKY])
+			})
+
+			it("regression: never reclaims a published preset, however old", async () => {
+				const past = Date.now() - config.avatar.reservationTtlMs - 1000
+				await insertPreset(env, SKY, past)
+				expect(await reservePreset(env, { ...SKY, label: "Hijack" })).toBe("exists")
+				expect(await listPublishedPresets(env)).toEqual([SKY])
+			})
+		})
 	})
 
 	describe("invariants", () => {

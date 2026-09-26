@@ -1,7 +1,7 @@
 import { existsSync, readFileSync, statSync } from "node:fs"
 import { extname, resolve, sep } from "node:path"
 import { config } from "@/config"
-import { listPresetsFromDb, setCatalogue } from "@/db/avatar-presets"
+import { refreshCatalogue } from "@/db/avatar-presets"
 import { closeRedis } from "@/infra/cache"
 import { closePool } from "@/infra/database"
 import { createEnv } from "@/infra/env"
@@ -299,20 +299,17 @@ backfillAvatarPresets(env)
 		if (seeded > 0) log.info("avatar preset backfill complete", { seeded })
 	})
 	.catch((err) => log.error("avatar preset backfill failed", { error: (err as Error).message }))
-	.finally(async () => {
-		try {
-			setCatalogue(await listPresetsFromDb(env))
-		} catch (err) {
+	.finally(() =>
+		refreshCatalogue(env).catch((err) =>
 			log.error("avatar catalogue load failed", { error: (err as Error).message })
-		}
-	})
+		)
+	)
 
-// Other replicas only mutate their own in-memory catalogue on the POST they serve, so refresh
-// from the DB on an interval to bound cross-instance staleness of newly published presets.
+// A publish only refreshes the replica that served it, so every replica polls for the others.
 setInterval(() => {
-	listPresetsFromDb(env)
-		.then(setCatalogue)
-		.catch((err) => log.error("avatar catalogue refresh failed", { error: (err as Error).message }))
+	refreshCatalogue(env).catch((err) =>
+		log.error("avatar catalogue refresh failed", { error: (err as Error).message })
+	)
 }, config.avatar.catalogueRefreshMs).unref()
 
 backfillSyncType(env)

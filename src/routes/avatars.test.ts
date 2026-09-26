@@ -104,6 +104,13 @@ describe("GET /avatars", () => {
 	})
 
 	describe("invariants", () => {
+		it("regression: caches for no longer than the catalogue refresh interval", async () => {
+			const { res } = await getCatalogue()
+			const maxAge = Number(/max-age=(\d+)/.exec(res.headers.get("cache-control") ?? "")?.[1])
+			expect(maxAge).toBeGreaterThan(0)
+			expect(maxAge * 1000).toBeLessThanOrEqual(config.avatar.catalogueRefreshMs)
+		})
+
 		it("never exposes the internal file name as a field", async () => {
 			const { body } = await getCatalogue()
 			for (const p of body.data.presets)

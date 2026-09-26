@@ -1,5 +1,5 @@
 import { readFileSync } from "node:fs"
-import { AVATAR_PRESETS, insertPreset, listPresetsFromDb } from "@/db/avatar-presets"
+import { AVATAR_PRESETS, insertPreset, listPublishedPresets } from "@/db/avatar-presets"
 import { D1Compat } from "@/infra/database"
 import { backfillAvatarPresets } from "@/jobs/backfill-avatar-presets"
 import type { Env } from "@/types"
@@ -35,7 +35,7 @@ describeIntegration("backfill avatar presets (integration)", () => {
 	it("seeds every built-in preset on an empty table", async () => {
 		const { seeded } = await backfillAvatarPresets(env)
 		expect(seeded).toBe(AVATAR_PRESETS.length)
-		expect((await listPresetsFromDb(env)).length).toBe(AVATAR_PRESETS.length)
+		expect((await listPublishedPresets(env)).length).toBe(AVATAR_PRESETS.length)
 	})
 
 	it("is idempotent", async () => {
@@ -47,6 +47,6 @@ describeIntegration("backfill avatar presets (integration)", () => {
 	it("preserves a preset added out of band", async () => {
 		await insertPreset(env, { id: "community-1", label: "Community 1", file: "community-1.webp" })
 		await backfillAvatarPresets(env)
-		expect((await listPresetsFromDb(env)).some((p) => p.id === "community-1")).toBe(true)
+		expect((await listPublishedPresets(env)).some((p) => p.id === "community-1")).toBe(true)
 	})
 })

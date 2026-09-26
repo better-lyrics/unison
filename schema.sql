@@ -451,6 +451,7 @@ CREATE TABLE IF NOT EXISTS avatar_presets (
     created_by TEXT,
     created_at BIGINT NOT NULL DEFAULT 0
 );
+ALTER TABLE avatar_presets ADD COLUMN IF NOT EXISTS published_at BIGINT;
 
 -- ---- lyric revisions ----
 -- Edit history. The lyrics content columns cache the live revision.

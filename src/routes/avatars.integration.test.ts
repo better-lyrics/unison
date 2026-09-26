@@ -1,5 +1,11 @@
 import { config } from "@/config"
-import { AVATAR_PRESETS, insertPreset, setCatalogue } from "@/db/avatar-presets"
+import {
+	AVATAR_PRESETS,
+	findPreset,
+	insertPreset,
+	listPublishedPresets,
+	refreshCatalogue,
+} from "@/db/avatar-presets"
 import { resolveAvatarUrl } from "@/db/users"
 import {
 	BOT_SECRET,
@@ -399,8 +405,54 @@ describeIntegration("POST /avatars/presets (integration)", () => {
 		await db.pool.query("DELETE FROM avatar_presets")
 	})
 
-	afterEach(() => {
-		setCatalogue([...AVATAR_PRESETS])
+	afterEach(async () => {
+		await db.pool.query("DELETE FROM avatar_presets")
+		await refreshCatalogue(db.env)
+	})
+
+	it("makes the published preset pickable on this instance", async () => {
+		const cdn = makeCdn()
+		const env: Env = { ...db.env, CDN: cdn.storage }
+		await post(env, { id: "sky-cat", label: "Sky Cat", mime: "image/png", dataBase64: pngBase64 })
+		expect(findPreset("sky-cat")).toEqual({ id: "sky-cat", label: "Sky Cat", file: "sky-cat.webp" })
+	})
+
+	describe("regressions", () => {
+		it("regression: the reserved row is not published before the CDN write finishes", async () => {
+			let publishedDuringUpload: string[] | null = null
+			const probingCdn = {
+				async putObject() {
+					publishedDuringUpload = (await listPublishedPresets(db.env)).map((p) => p.id)
+				},
+				async listObjects() {
+					return []
+				},
+				async deleteObject() {},
+			} as unknown as NonNullable<Env["CDN"]>
+			const { status } = await post(
+				{ ...db.env, CDN: probingCdn },
+				{ id: "sky-cat", label: "Sky Cat", mime: "image/png", dataBase64: pngBase64 }
+			)
+			expect(status).toBe(200)
+			expect(publishedDuringUpload).toEqual([])
+			expect((await listPublishedPresets(db.env)).map((p) => p.id)).toEqual(["sky-cat"])
+		})
+
+		it("regression: refuses a built-in id with 409 even when the seed row is missing", async () => {
+			const cdn = makeCdn()
+			const env: Env = { ...db.env, CDN: cdn.storage }
+			const { status, body } = await post(env, {
+				id: AVATAR_PRESETS[0].id,
+				label: "Hijack",
+				mime: "image/png",
+				dataBase64: pngBase64,
+			})
+			expect(status).toBe(409)
+			expect(body.code).toBe("AVATAR_PRESET_EXISTS")
+			expect(cdn.puts).toHaveLength(0)
+			const { rows } = await db.pool.query("SELECT id FROM avatar_presets")
+			expect(rows).toHaveLength(0)
+		})
 	})
 
 	it("formats, uploads, stores, and returns the CDN url", async () => {
