@@ -377,6 +377,7 @@ export const config = {
 		overSealPenaltyRatio: 2.0,
 		timeLimitSec: 25 * 60,
 		tokenTtlSec: 24 * 60 * 60,
+		retakeCooldownSec: 183 * 24 * 60 * 60,
 		// Draw shape and presentation order; a repeated category interleaves clips (see drawQuestions).
 		draw: [
 			{ category: "seal-or-not", count: 1 },

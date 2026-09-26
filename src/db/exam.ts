@@ -189,9 +189,14 @@ export async function startSession(
 	})
 }
 
-export async function getSessionByKeyId(env: Env, keyId: string): Promise<ExamSession | null> {
+export async function getLatestSessionByKeyId(
+	env: Env,
+	keyId: string
+): Promise<ExamSession | null> {
 	const row = await env.DB.prepare(
-		`SELECT ${SESSION_COLS} FROM exam_session WHERE key_id = ? AND is_dev = FALSE`
+		`SELECT ${SESSION_COLS} FROM exam_session
+		WHERE key_id = ? AND is_dev = FALSE
+		ORDER BY id DESC LIMIT 1`
 	)
 		.bind(keyId)
 		.first<ExamSessionRow>()

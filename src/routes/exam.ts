@@ -3,7 +3,7 @@ import {
 	type ExamQuestionInput,
 	type ResolveExamResult,
 	getSessionById,
-	getSessionByKeyId,
+	getLatestSessionByKeyId,
 	getSessionQuestion,
 	getSessionQuestions,
 	listApplicantReports,
@@ -27,6 +27,7 @@ import { ErrorCode, buildError } from "@/utils/errors"
 import { toClientQuestion } from "@/utils/exam-client"
 import { type DrawSlot, drawQuestions } from "@/utils/exam-draw"
 import { gradeExam, toGradeableItems } from "@/utils/exam-grading"
+import { retakeAvailableAt } from "@/utils/exam-retake"
 import { isScenarioTerminated } from "@/utils/exam-scenario"
 import { generateExamToken, hashExamToken } from "@/utils/exam-token"
 import { Elysia, t } from "elysia"
@@ -136,27 +137,32 @@ export const examRoutes = (env: Env) =>
 				const user = await getUserByKeyId(env, body.keyId)
 				if (!user) return status(404, buildError(ErrorCode.NOT_FOUND))
 
-				const existing = await getSessionByKeyId(env, body.keyId)
+				const existing = await getLatestSessionByKeyId(env, body.keyId)
 				if (existing) {
+					const now = Math.floor(Date.now() / 1000)
 					if (existing.state === "in_progress") {
 						const token = generateExamToken()
-						const expiresAt = Math.floor(Date.now() / 1000) + config.exam.tokenTtlSec
+						const expiresAt = now + config.exam.tokenTtlSec
 						await reissueToken(env, existing.id, await hashExamToken(token), expiresAt)
 						return {
 							success: true,
 							data: { status: "eligible", examUrl: examUrl(env, token), expiresAt },
 						}
 					}
-					return {
-						success: true,
-						data: {
-							status: "already_attempted",
-							attempt: {
-								state: existing.state,
-								score: existing.score ?? undefined,
-								submittedAt: existing.submittedAt ?? undefined,
+					const retakeAt = retakeAvailableAt(existing, config.exam.retakeCooldownSec)
+					if (retakeAt === null || now < retakeAt) {
+						return {
+							success: true,
+							data: {
+								status: "already_attempted",
+								attempt: {
+									state: existing.state,
+									score: existing.score ?? undefined,
+									submittedAt: existing.submittedAt ?? undefined,
+									retakeAt: retakeAt ?? undefined,
+								},
 							},
-						},
+						}
 					}
 				}
 

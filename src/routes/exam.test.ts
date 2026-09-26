@@ -1,3 +1,4 @@
+import { config } from "@/config"
 import * as examDb from "@/db/exam"
 import { getUserByKeyId, resolveDisplayName } from "@/db/users"
 import type { Env } from "@/types"
@@ -11,7 +12,7 @@ vi.mock("@/utils/bot-auth", () => ({ isAuthorizedBot: vi.fn() }))
 vi.mock("@/utils/admin-auth", () => ({ isAuthorizedAdmin: vi.fn() }))
 vi.mock("@/db/users", () => ({ getUserByKeyId: vi.fn(), resolveDisplayName: vi.fn() }))
 vi.mock("@/db/exam", () => ({
-	getSessionByKeyId: vi.fn(),
+	getLatestSessionByKeyId: vi.fn(),
 	getSessionById: vi.fn(),
 	getSessionQuestion: vi.fn(),
 	getSessionQuestions: vi.fn(),
@@ -30,7 +31,9 @@ vi.mock("@/db/exam", () => ({
 }))
 
 const KEY = "k".repeat(64)
-const SOON = Math.floor(Date.now() / 1000) + 3600
+const NOW = Math.floor(Date.now() / 1000)
+const SOON = NOW + 3600
+const COOLDOWN = config.exam.retakeCooldownSec
 const user = { id: 7, key_id: KEY } as unknown as Awaited<ReturnType<typeof getUserByKeyId>>
 
 const botApp = () => examRoutes({ EXAM_BASE_URL: "https://unison.test" } as Env)
@@ -93,7 +96,7 @@ describe("POST /exam/bot/start", () => {
 	it("mints a new eligible session with an exam link when none exists", async () => {
 		vi.mocked(isAuthorizedBot).mockReturnValue(true)
 		vi.mocked(getUserByKeyId).mockResolvedValue(user)
-		vi.mocked(examDb.getSessionByKeyId).mockResolvedValue(null)
+		vi.mocked(examDb.getLatestSessionByKeyId).mockResolvedValue(null)
 		const res = await post(botApp(), "/exam/bot/start", { keyId: KEY, discordId: "d1" })
 		const body = (await res.json()) as {
 			data: { status: string; examUrl: string; expiresAt: number }
@@ -107,7 +110,7 @@ describe("POST /exam/bot/start", () => {
 	it("derives an absolute link from RAILWAY_PUBLIC_DOMAIN when EXAM_BASE_URL is unset", async () => {
 		vi.mocked(isAuthorizedBot).mockReturnValue(true)
 		vi.mocked(getUserByKeyId).mockResolvedValue(user)
-		vi.mocked(examDb.getSessionByKeyId).mockResolvedValue(null)
+		vi.mocked(examDb.getLatestSessionByKeyId).mockResolvedValue(null)
 		const app = examRoutes({ RAILWAY_PUBLIC_DOMAIN: "unison.up.railway.app" } as Env)
 		const res = await post(app, "/exam/bot/start", { keyId: KEY, discordId: "d1" })
 		const body = (await res.json()) as { data: { examUrl: string } }
@@ -117,7 +120,7 @@ describe("POST /exam/bot/start", () => {
 	it("returns 500 without minting when no absolute base URL can be derived", async () => {
 		vi.mocked(isAuthorizedBot).mockReturnValue(true)
 		vi.mocked(getUserByKeyId).mockResolvedValue(user)
-		vi.mocked(examDb.getSessionByKeyId).mockResolvedValue(null)
+		vi.mocked(examDb.getLatestSessionByKeyId).mockResolvedValue(null)
 		const res = await post(examRoutes({} as Env), "/exam/bot/start", {
 			keyId: KEY,
 			discordId: "d1",
@@ -130,7 +133,7 @@ describe("POST /exam/bot/start", () => {
 	it("resumes an in_progress session with a fresh link, without a new draw", async () => {
 		vi.mocked(isAuthorizedBot).mockReturnValue(true)
 		vi.mocked(getUserByKeyId).mockResolvedValue(user)
-		vi.mocked(examDb.getSessionByKeyId).mockResolvedValue({ ...okSession } as never)
+		vi.mocked(examDb.getLatestSessionByKeyId).mockResolvedValue({ ...okSession } as never)
 		const res = await post(botApp(), "/exam/bot/start", { keyId: KEY, discordId: "d1" })
 		const body = (await res.json()) as { data: { status: string; examUrl: string } }
 		expect(body.data.status).toBe("eligible")
@@ -138,22 +141,97 @@ describe("POST /exam/bot/start", () => {
 		expect(vi.mocked(startSession)).not.toHaveBeenCalled()
 	})
 
-	it("reports a submitted session as already_attempted without a link", async () => {
+	it("reports a failed attempt inside the cooldown as already_attempted with its retake time", async () => {
 		vi.mocked(isAuthorizedBot).mockReturnValue(true)
 		vi.mocked(getUserByKeyId).mockResolvedValue(user)
-		vi.mocked(examDb.getSessionByKeyId).mockResolvedValue({
+		vi.mocked(examDb.getLatestSessionByKeyId).mockResolvedValue({
 			...okSession,
 			state: "failed",
 			score: 12,
-			submittedAt: 123,
+			submittedAt: NOW,
+			decidedAt: null,
 		} as never)
 		const res = await post(botApp(), "/exam/bot/start", { keyId: KEY, discordId: "d1" })
 		const body = (await res.json()) as {
 			data: { status: string; attempt: { state: string; score: number } }
 		}
 		expect(body.data.status).toBe("already_attempted")
-		expect(body.data.attempt).toEqual({ state: "failed", score: 12, submittedAt: 123 })
+		expect(body.data.attempt).toEqual({
+			state: "failed",
+			score: 12,
+			submittedAt: NOW,
+			retakeAt: NOW + COOLDOWN,
+		})
+		expect(vi.mocked(startSession)).not.toHaveBeenCalled()
 	})
+
+	it("mints a fresh draw for a failed attempt once the cooldown has passed", async () => {
+		vi.mocked(isAuthorizedBot).mockReturnValue(true)
+		vi.mocked(getUserByKeyId).mockResolvedValue(user)
+		vi.mocked(examDb.getLatestSessionByKeyId).mockResolvedValue({
+			...okSession,
+			state: "failed",
+			submittedAt: NOW - COOLDOWN - 1,
+			decidedAt: null,
+		} as never)
+		const res = await post(botApp(), "/exam/bot/start", { keyId: KEY, discordId: "d1" })
+		const body = (await res.json()) as { data: { status: string; examUrl: string } }
+		expect(body.data.status).toBe("eligible")
+		expect(body.data.examUrl).toMatch(/^https:\/\/unison\.test\/exam\?t=/)
+		expect(vi.mocked(startSession)).toHaveBeenCalled()
+		expect(vi.mocked(examDb.reissueToken)).not.toHaveBeenCalled()
+	})
+
+	it("mints a fresh draw for a council rejection once the cooldown from the decision has passed", async () => {
+		vi.mocked(isAuthorizedBot).mockReturnValue(true)
+		vi.mocked(getUserByKeyId).mockResolvedValue(user)
+		vi.mocked(examDb.getLatestSessionByKeyId).mockResolvedValue({
+			...okSession,
+			state: "rejected",
+			submittedAt: NOW - 2 * COOLDOWN,
+			decidedAt: NOW - COOLDOWN - 1,
+		} as never)
+		const res = await post(botApp(), "/exam/bot/start", { keyId: KEY, discordId: "d1" })
+		expect(((await res.json()) as { data: { status: string } }).data.status).toBe("eligible")
+		expect(vi.mocked(startSession)).toHaveBeenCalled()
+	})
+
+	it("keeps a council rejection locked until the cooldown from the decision passes", async () => {
+		vi.mocked(isAuthorizedBot).mockReturnValue(true)
+		vi.mocked(getUserByKeyId).mockResolvedValue(user)
+		vi.mocked(examDb.getLatestSessionByKeyId).mockResolvedValue({
+			...okSession,
+			state: "rejected",
+			score: 90,
+			submittedAt: NOW - 2 * COOLDOWN,
+			decidedAt: NOW - 10,
+		} as never)
+		const res = await post(botApp(), "/exam/bot/start", { keyId: KEY, discordId: "d1" })
+		const body = (await res.json()) as { data: { status: string; attempt: { retakeAt: number } } }
+		expect(body.data.status).toBe("already_attempted")
+		expect(body.data.attempt.retakeAt).toBe(NOW - 10 + COOLDOWN)
+		expect(vi.mocked(startSession)).not.toHaveBeenCalled()
+	})
+
+	it.each(["approved", "pending_review"] as const)(
+		"never offers a retake for a %s attempt, however old",
+		async (state) => {
+			vi.mocked(isAuthorizedBot).mockReturnValue(true)
+			vi.mocked(getUserByKeyId).mockResolvedValue(user)
+			vi.mocked(examDb.getLatestSessionByKeyId).mockResolvedValue({
+				...okSession,
+				state,
+				score: 95,
+				submittedAt: 1,
+				decidedAt: 2,
+			} as never)
+			const res = await post(botApp(), "/exam/bot/start", { keyId: KEY, discordId: "d1" })
+			const body = (await res.json()) as { data: { status: string; attempt: object } }
+			expect(body.data.status).toBe("already_attempted")
+			expect(body.data.attempt).toEqual({ state, score: 95, submittedAt: 1 })
+			expect(vi.mocked(startSession)).not.toHaveBeenCalled()
+		}
+	)
 })
 
 describe("GET /exam/bot/applicants", () => {

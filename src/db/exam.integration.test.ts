@@ -7,7 +7,7 @@ import pg from "pg"
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest"
 import {
 	type ExamQuestionInput,
-	getSessionByKeyId,
+	getLatestSessionByKeyId,
 	getSessionByTokenHash,
 	getSessionQuestions,
 	listApplicantReports,
@@ -128,11 +128,11 @@ describeIntegration("exam data access (integration)", () => {
 			{ keyId: KEY("a"), discordId: null, tokenHash: "h", seed: 1, expiresAt: SOON, isDev: false },
 			[1]
 		)
-		expect((await getSessionByKeyId(env, KEY("a")))?.examStartedAt).toBeNull()
+		expect((await getLatestSessionByKeyId(env, KEY("a")))?.examStartedAt).toBeNull()
 
 		const first = await markExamStarted(env, session.id)
 		expect(first).toBeGreaterThan(0)
-		expect((await getSessionByKeyId(env, KEY("a")))?.examStartedAt).toBe(first)
+		expect((await getLatestSessionByKeyId(env, KEY("a")))?.examStartedAt).toBe(first)
 
 		// A second Begin (a reopen) must not reset the clock.
 		await new Promise((r) => setTimeout(r, 1100))
@@ -179,7 +179,7 @@ describeIntegration("exam data access (integration)", () => {
 				{ questionId: 2, awardedPoints: 3, maxPoints: 3 },
 			],
 		})
-		const stored = await getSessionByKeyId(env, KEY("a"))
+		const stored = await getLatestSessionByKeyId(env, KEY("a"))
 		expect(stored?.state).toBe("pending_review")
 		expect(stored?.score).toBe(6)
 
@@ -263,7 +263,7 @@ describeIntegration("exam data access (integration)", () => {
 		})
 		expect(await recordDecision(env, session.id, "approve", "admin1")).toBe(true)
 		expect(await recordDecision(env, session.id, "reject", "admin2")).toBe(false) // already decided
-		const stored = await getSessionByKeyId(env, KEY("a"))
+		const stored = await getLatestSessionByKeyId(env, KEY("a"))
 		expect(stored?.state).toBe("approved")
 		expect(stored?.decidedByDiscordId).toBe("admin1")
 	})
@@ -412,7 +412,7 @@ describeIntegration("exam data access (integration)", () => {
 	})
 
 	describe("invariants", () => {
-		it("allows only one real attempt per account", async () => {
+		it("allows only one open real attempt per account", async () => {
 			await seedBank()
 			await startSession(
 				env,
@@ -440,6 +440,76 @@ describeIntegration("exam data access (integration)", () => {
 					[2]
 				)
 			).rejects.toThrow()
+		})
+
+		it("allows a retake row once the earlier attempt is graded, and looks up the newest", async () => {
+			await seedBank()
+			const first = await startSession(
+				env,
+				{
+					keyId: KEY("a"),
+					discordId: "d1",
+					tokenHash: "h1",
+					seed: 1,
+					expiresAt: SOON,
+					isDev: false,
+				},
+				[1]
+			)
+			await recordGrade(env, first.id, {
+				state: "failed",
+				score: 0,
+				maxScore: 3,
+				cutoff: 2.55,
+				submittedAt: 100,
+				perQuestion: [{ questionId: 1, awardedPoints: 0, maxPoints: 3 }],
+			})
+			const retake = await startSession(
+				env,
+				{
+					keyId: KEY("a"),
+					discordId: "d1",
+					tokenHash: "h2",
+					seed: 2,
+					expiresAt: SOON,
+					isDev: false,
+				},
+				[2]
+			)
+			const latest = await getLatestSessionByKeyId(env, KEY("a"))
+			expect(latest?.id).toBe(retake.id)
+			expect(latest?.state).toBe("in_progress")
+			expect((await getSessionQuestions(env, first.id)).map((q) => q.questionId)).toEqual([1])
+			expect((await listApplicantReports(env, "d1")).map((r) => r.applicantId)).toEqual([first.id])
+		})
+
+		it("keeps the latest lookup blind to dev sessions", async () => {
+			await seedBank()
+			const real = await startSession(
+				env,
+				{
+					keyId: KEY("a"),
+					discordId: null,
+					tokenHash: "h1",
+					seed: 1,
+					expiresAt: SOON,
+					isDev: false,
+				},
+				[1]
+			)
+			await startSession(
+				env,
+				{
+					keyId: KEY("a"),
+					discordId: null,
+					tokenHash: "h2",
+					seed: 2,
+					expiresAt: SOON,
+					isDev: true,
+				},
+				[2]
+			)
+			expect((await getLatestSessionByKeyId(env, KEY("a")))?.id).toBe(real.id)
 		})
 
 		it("exempts dev sessions from the one-attempt rule", async () => {

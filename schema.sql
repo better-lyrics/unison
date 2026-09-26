@@ -414,9 +414,11 @@ CREATE TABLE IF NOT EXISTS exam_session (
 -- Stamped on first Begin (not at mint) so the clock anchors there and resumes on reload.
 ALTER TABLE exam_session ADD COLUMN IF NOT EXISTS exam_started_at INTEGER;
 
--- DB backstop for one real attempt per account; dev sessions are exempt.
-CREATE UNIQUE INDEX IF NOT EXISTS idx_exam_session_one_per_account
-    ON exam_session(key_id) WHERE is_dev = FALSE;
+-- DB backstop for one open real attempt per account; retakes after a cooldown add rows, dev sessions are exempt.
+DROP INDEX IF EXISTS idx_exam_session_one_per_account;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_exam_session_one_open_per_account
+    ON exam_session(key_id) WHERE is_dev = FALSE AND state = 'in_progress';
+CREATE INDEX IF NOT EXISTS idx_exam_session_key ON exam_session(key_id, id DESC);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_exam_session_token
     ON exam_session(token_hash) WHERE token_hash IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_exam_session_state ON exam_session(state);
