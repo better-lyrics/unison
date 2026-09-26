@@ -48,6 +48,9 @@ async function hydrateSubmitter(env: Env, row: LyricsRow): Promise<void> {
 	}
 }
 
+const SERVABLE_FOR_VIDEO = `${videoServesExpr("l.")} AND l.deleted_at IS NULL AND NOT ${AUTO_HIDE_PREDICATE_JOINED}`
+const PRIMARY_ORDER = `ORDER BY (CASE WHEN ${PROVEN_EXPR_JOINED} THEN 1 ELSE 0 END) DESC, ${RANKING_EXPR_VARIANT} DESC`
+
 async function getPrimary(env: Env, videoId: string): Promise<LyricsRow | null> {
 	const cached = await env.CACHE.get(`v:${videoId}`)
 	if (cached) {
@@ -67,7 +70,7 @@ async function getPrimary(env: Env, videoId: string): Promise<LyricsRow | null> 
 
 	cacheLog.debug("miss", { key: `v:${videoId}` })
 	const result = await env.DB.prepare(
-		`${LYRICS_WITH_SUBMITTER} WHERE ${videoServesExpr("l.")} AND l.deleted_at IS NULL AND NOT ${AUTO_HIDE_PREDICATE_JOINED} ORDER BY (CASE WHEN ${PROVEN_EXPR_JOINED} THEN 1 ELSE 0 END) DESC, ${RANKING_EXPR_VARIANT} DESC LIMIT 1`
+		`${LYRICS_WITH_SUBMITTER} WHERE ${SERVABLE_FOR_VIDEO} ${PRIMARY_ORDER} LIMIT 1`
 	)
 		.bind(videoId, videoId)
 		.first<LyricsRow>()
@@ -139,6 +142,18 @@ export async function findEligibleChallengers(
 	return rows
 }
 
+async function findOwnVariant(env: Env, videoId: string, keyId: string): Promise<LyricsRow | null> {
+	const row = await env.DB.prepare(
+		`${LYRICS_WITH_SUBMITTER} WHERE ${SERVABLE_FOR_VIDEO} AND u.key_id = ? ${PRIMARY_ORDER} LIMIT 1`
+	)
+		.bind(videoId, videoId, keyId)
+		.first<LyricsRow>()
+	if (row && isCompressed(row.lyrics)) {
+		row.lyrics = await decompress(row.lyrics)
+	}
+	return row
+}
+
 export async function findByVideoId(
 	env: Env,
 	videoId: string,
@@ -146,7 +161,11 @@ export async function findByVideoId(
 ): Promise<LyricsRow | null> {
 	const primary = await getPrimary(env, videoId)
 	if (!primary) return null
-	if (!keyId || !config.exploration.enabled) return primary
+	if (!keyId || primary.submitter_key_id === keyId) return primary
+
+	const own = await findOwnVariant(env, videoId, keyId)
+	if (own) return own
+	if (!config.exploration.enabled) return primary
 
 	const bucket = hashBucket(keyId, videoId)
 	const eps = epsilonForTier(primary.confidence)
