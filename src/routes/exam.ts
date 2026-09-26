@@ -1,9 +1,10 @@
 import { config } from "@/config"
 import {
 	type ExamQuestionInput,
+	type ExamSession,
 	type ResolveExamResult,
+	getLatestSessionByKeyId,
 	getSessionById,
-	getSessionByKeyId,
 	getSessionQuestion,
 	getSessionQuestions,
 	listApplicantReports,
@@ -16,6 +17,7 @@ import {
 	resolveCandidateName,
 	resolveExamSession,
 	saveAnswer,
+	startAttempt,
 	startSession,
 	upsertQuestions,
 } from "@/db/exam"
@@ -27,6 +29,7 @@ import { ErrorCode, buildError } from "@/utils/errors"
 import { toClientQuestion } from "@/utils/exam-client"
 import { type DrawSlot, drawQuestions } from "@/utils/exam-draw"
 import { gradeExam, toGradeableItems } from "@/utils/exam-grading"
+import { canStartNewAttempt, retakeAvailableAt } from "@/utils/exam-retake"
 import { isScenarioTerminated } from "@/utils/exam-scenario"
 import { generateExamToken, hashExamToken } from "@/utils/exam-token"
 import { Elysia, t } from "elysia"
@@ -68,34 +71,71 @@ function examUrl(env: Env, token: string): string {
 	return `${examBaseUrl(env)}/exam?t=${token}`
 }
 
-async function mintSession(
-	env: Env,
-	params: {
-		keyId: string
-		discordId: string | null
-		seed: number
-		isDev: boolean
-		drawShape?: readonly DrawSlot[]
-	}
-) {
+interface MintParams {
+	keyId: string
+	discordId: string | null
+	seed: number
+	isDev: boolean
+	drawShape?: readonly DrawSlot[]
+}
+
+async function drawSession(env: Env, params: MintParams) {
 	const bank = await loadDrawableBank(env)
 	const orderedIds = drawQuestions(bank, params.drawShape ?? config.exam.draw, params.seed)
 	const token = generateExamToken()
-	const tokenHash = await hashExamToken(token)
 	const expiresAt = Math.floor(Date.now() / 1000) + config.exam.tokenTtlSec
-	const session = await startSession(
-		env,
-		{
-			keyId: params.keyId,
-			discordId: params.discordId,
-			tokenHash,
-			seed: params.seed,
-			expiresAt,
-			isDev: params.isDev,
-		},
-		orderedIds
-	)
+	const sessionParams = {
+		keyId: params.keyId,
+		discordId: params.discordId,
+		tokenHash: await hashExamToken(token),
+		seed: params.seed,
+		expiresAt,
+		isDev: params.isDev,
+	}
+	return { orderedIds, token, expiresAt, sessionParams }
+}
+
+async function mintSession(env: Env, params: MintParams) {
+	const { orderedIds, token, expiresAt, sessionParams } = await drawSession(env, params)
+	const session = await startSession(env, sessionParams, orderedIds)
 	return { session, token, expiresAt }
+}
+
+function canRetake(latest: ExamSession): boolean {
+	return canStartNewAttempt(latest, config.exam.retakeCooldownSec, Math.floor(Date.now() / 1000))
+}
+
+async function mintAttempt(env: Env, params: MintParams) {
+	const { orderedIds, token, expiresAt, sessionParams } = await drawSession(env, params)
+	const result = await startAttempt(env, sessionParams, orderedIds, canRetake)
+	return result.ok ? { ok: true as const, token, expiresAt } : result
+}
+
+async function respondToExisting(env: Env, latest: ExamSession) {
+	if (latest.state === "in_progress") return resumeSession(env, latest.id)
+	const retakeAt = retakeAvailableAt(latest, config.exam.retakeCooldownSec)
+	return {
+		success: true as const,
+		data: {
+			status: "already_attempted" as const,
+			attempt: {
+				state: latest.state,
+				score: latest.score ?? undefined,
+				submittedAt: latest.submittedAt ?? undefined,
+				retakeAt: retakeAt ?? undefined,
+			},
+		},
+	}
+}
+
+async function resumeSession(env: Env, sessionId: number) {
+	const token = generateExamToken()
+	const expiresAt = Math.floor(Date.now() / 1000) + config.exam.tokenTtlSec
+	await reissueToken(env, sessionId, await hashExamToken(token), expiresAt)
+	return {
+		success: true as const,
+		data: { status: "eligible" as const, examUrl: examUrl(env, token), expiresAt },
+	}
 }
 
 const answerKeySchema = t.Object({
@@ -136,39 +176,23 @@ export const examRoutes = (env: Env) =>
 				const user = await getUserByKeyId(env, body.keyId)
 				if (!user) return status(404, buildError(ErrorCode.NOT_FOUND))
 
-				const existing = await getSessionByKeyId(env, body.keyId)
-				if (existing) {
-					if (existing.state === "in_progress") {
-						const token = generateExamToken()
-						const expiresAt = Math.floor(Date.now() / 1000) + config.exam.tokenTtlSec
-						await reissueToken(env, existing.id, await hashExamToken(token), expiresAt)
-						return {
-							success: true,
-							data: { status: "eligible", examUrl: examUrl(env, token), expiresAt },
-						}
-					}
-					return {
-						success: true,
-						data: {
-							status: "already_attempted",
-							attempt: {
-								state: existing.state,
-								score: existing.score ?? undefined,
-								submittedAt: existing.submittedAt ?? undefined,
-							},
-						},
-					}
-				}
+				const existing = await getLatestSessionByKeyId(env, body.keyId)
+				if (existing && !canRetake(existing)) return respondToExisting(env, existing)
 
-				const { token, expiresAt } = await mintSession(env, {
+				const minted = await mintAttempt(env, {
 					keyId: body.keyId,
 					discordId: body.discordId,
 					seed: randomSeed(),
 					isDev: false,
 				})
+				if (!minted.ok) return respondToExisting(env, minted.latest)
 				return {
 					success: true,
-					data: { status: "eligible", examUrl: examUrl(env, token), expiresAt },
+					data: {
+						status: "eligible",
+						examUrl: examUrl(env, minted.token),
+						expiresAt: minted.expiresAt,
+					},
 				}
 			},
 			{ body: t.Object({ keyId: t.String(), discordId: t.String() }) }

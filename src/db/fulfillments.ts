@@ -1,6 +1,7 @@
 import { awardRequestFilledXp } from "@/db/contribution-events"
 import { AUTO_HIDE_PREDICATE, AUTO_HIDE_PREDICATE_JOINED, videoServesExpr } from "@/db/predicates"
 import { windowCutoff } from "@/db/requests"
+import { advisoryXactLock } from "@/infra/database"
 import { Logger } from "@/infra/logger"
 import type { Env } from "@/types"
 
@@ -22,10 +23,7 @@ export async function recordFulfillment(
 	params: RecordFulfillmentParams
 ): Promise<RecordFulfillmentResult> {
 	const result = await env.DB.transaction<RecordFulfillmentResult>(async (tx) => {
-		await tx
-			.prepare("SELECT pg_advisory_xact_lock(hashtext(?))")
-			.bind(`fulfillment:${params.videoId}`)
-			.run()
+		await advisoryXactLock(tx, `fulfillment:${params.videoId}`)
 
 		const priorServable = await tx
 			.prepare(

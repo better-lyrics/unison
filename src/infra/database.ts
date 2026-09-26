@@ -126,3 +126,11 @@ export class D1Compat {
 		}
 	}
 }
+
+export function isUniqueViolation(err: unknown): boolean {
+	return typeof err === "object" && err !== null && (err as { code?: unknown }).code === "23505"
+}
+
+export async function advisoryXactLock(tx: D1Compat, key: string): Promise<void> {
+	await tx.prepare("SELECT pg_advisory_xact_lock(hashtext(?))").bind(key).run()
+}

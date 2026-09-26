@@ -1,5 +1,5 @@
-import { afterEach, describe, expect, it, vi } from "vitest"
 import { disabledJevGate } from "@/services/jev-gate"
+import { afterEach, describe, expect, it, vi } from "vitest"
 import { readJevGate, readTranslationProxyEnabled } from "./env"
 
 afterEach(() => {

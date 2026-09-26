@@ -1,6 +1,7 @@
 import { isCommittee } from "@/db/committee"
 import { type FeedFilters, buildOrderByClause } from "@/db/feed-filters"
 import { AUTO_HIDE_PREDICATE_JOINED, RANKING_EXPR_JOINED } from "@/db/predicates"
+import { isUniqueViolation } from "@/infra/database"
 import type { Env, LyricsFormat } from "@/types"
 
 export type QueueSort = "top-rated" | "most-voted"
@@ -87,7 +88,7 @@ export async function rejectLyric(
 			.bind(lyricsId, userId, now, note ?? null)
 			.run()
 	} catch (err) {
-		if ((err as { code?: string }).code === "23505") {
+		if (isUniqueViolation(err)) {
 			return { ok: false, reason: "already_rejected" }
 		}
 		throw err

@@ -1,13 +1,15 @@
 import { readFileSync } from "node:fs"
+import { config } from "@/config"
 import { D1Compat } from "@/infra/database"
 import type { Env } from "@/types"
+import { canStartNewAttempt } from "@/utils/exam-retake"
 import { hashExamToken } from "@/utils/exam-token"
 import type { AnswerKey } from "@/utils/exam-types"
 import pg from "pg"
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest"
 import {
 	type ExamQuestionInput,
-	getSessionByKeyId,
+	getLatestSessionByKeyId,
 	getSessionByTokenHash,
 	getSessionQuestions,
 	listApplicantReports,
@@ -20,6 +22,7 @@ import {
 	resolveExamSession,
 	retireQuestionsExcept,
 	saveAnswer,
+	startAttempt,
 	startSession,
 	upsertQuestions,
 } from "./exam"
@@ -128,11 +131,11 @@ describeIntegration("exam data access (integration)", () => {
 			{ keyId: KEY("a"), discordId: null, tokenHash: "h", seed: 1, expiresAt: SOON, isDev: false },
 			[1]
 		)
-		expect((await getSessionByKeyId(env, KEY("a")))?.examStartedAt).toBeNull()
+		expect((await getLatestSessionByKeyId(env, KEY("a")))?.examStartedAt).toBeNull()
 
 		const first = await markExamStarted(env, session.id)
 		expect(first).toBeGreaterThan(0)
-		expect((await getSessionByKeyId(env, KEY("a")))?.examStartedAt).toBe(first)
+		expect((await getLatestSessionByKeyId(env, KEY("a")))?.examStartedAt).toBe(first)
 
 		// A second Begin (a reopen) must not reset the clock.
 		await new Promise((r) => setTimeout(r, 1100))
@@ -179,7 +182,7 @@ describeIntegration("exam data access (integration)", () => {
 				{ questionId: 2, awardedPoints: 3, maxPoints: 3 },
 			],
 		})
-		const stored = await getSessionByKeyId(env, KEY("a"))
+		const stored = await getLatestSessionByKeyId(env, KEY("a"))
 		expect(stored?.state).toBe("pending_review")
 		expect(stored?.score).toBe(6)
 
@@ -263,9 +266,182 @@ describeIntegration("exam data access (integration)", () => {
 		})
 		expect(await recordDecision(env, session.id, "approve", "admin1")).toBe(true)
 		expect(await recordDecision(env, session.id, "reject", "admin2")).toBe(false) // already decided
-		const stored = await getSessionByKeyId(env, KEY("a"))
+		const stored = await getLatestSessionByKeyId(env, KEY("a"))
 		expect(stored?.state).toBe("approved")
 		expect(stored?.decidedByDiscordId).toBe("admin1")
+	})
+
+	describe("superseded attempts", () => {
+		async function failedAttempt(tokenHash: string, submittedAt: number) {
+			const session = await startSession(
+				env,
+				{ keyId: KEY("a"), discordId: "d1", tokenHash, seed: 1, expiresAt: SOON, isDev: false },
+				[1]
+			)
+			await recordGrade(env, session.id, {
+				state: "failed",
+				score: 1,
+				maxScore: 3,
+				cutoff: 2.55,
+				submittedAt,
+				perQuestion: [{ questionId: 1, awardedPoints: 1, maxPoints: 3 }],
+			})
+			return session
+		}
+
+		it("lists only the newest attempt per account as an applicant", async () => {
+			await seedBank()
+			await failedAttempt("h1", 100)
+			const retake = await failedAttempt("h2", 200)
+			expect((await listApplicants(env, true)).map((a) => a.applicantId)).toEqual([retake.id])
+		})
+
+		it("refuses a decision on an attempt a retake has replaced", async () => {
+			await seedBank()
+			const first = await failedAttempt("h1", 100)
+			const retake = await failedAttempt("h2", 200)
+			expect(await recordDecision(env, first.id, "approve", "admin1")).toBe(false)
+			expect(await recordDecision(env, retake.id, "approve", "admin1")).toBe(true)
+			expect((await getLatestSessionByKeyId(env, KEY("a")))?.state).toBe("approved")
+		})
+
+		it("regression: cannot approve an old attempt while its retake is in progress", async () => {
+			await seedBank()
+			const first = await failedAttempt("h1", 100)
+			await startSession(
+				env,
+				{
+					keyId: KEY("a"),
+					discordId: "d1",
+					tokenHash: "h2",
+					seed: 2,
+					expiresAt: SOON,
+					isDev: false,
+				},
+				[2]
+			)
+			expect(await recordDecision(env, first.id, "approve", "admin1")).toBe(false)
+			expect(await listApplicants(env, true)).toHaveLength(0)
+		})
+
+		it("keeps every attempt in the user's report history", async () => {
+			await seedBank()
+			const first = await failedAttempt("h1", 100)
+			const retake = await failedAttempt("h2", 200)
+			expect((await listApplicantReports(env, "d1")).map((r) => r.applicantId)).toEqual([
+				retake.id,
+				first.id,
+			])
+		})
+
+		it("does not let another account's newer attempt supersede this one", async () => {
+			await seedBank()
+			const mine = await failedAttempt("h1", 100)
+			await startSession(
+				env,
+				{
+					keyId: KEY("b"),
+					discordId: "d2",
+					tokenHash: "h2",
+					seed: 2,
+					expiresAt: SOON,
+					isDev: false,
+				},
+				[2]
+			)
+			expect(await recordDecision(env, mine.id, "approve", "admin1")).toBe(true)
+		})
+	})
+
+	describe("startAttempt", () => {
+		const admitByRule = (latest: NonNullable<Parameters<typeof canStartNewAttempt>[0]>) =>
+			canStartNewAttempt(latest, config.exam.retakeCooldownSec, Math.floor(Date.now() / 1000))
+
+		function attemptParams(keyId: string, tokenHash: string) {
+			return { keyId, discordId: "d1", tokenHash, seed: 1, expiresAt: SOON, isDev: false }
+		}
+
+		async function failOldAttempt(keyId: string, tokenHash: string) {
+			const session = await startSession(env, attemptParams(keyId, tokenHash), [1])
+			await recordGrade(env, session.id, {
+				state: "failed",
+				score: 1,
+				maxScore: 3,
+				cutoff: 2.55,
+				submittedAt: 100,
+				perQuestion: [{ questionId: 1, awardedPoints: 1, maxPoints: 3 }],
+			})
+			return session
+		}
+
+		async function realRows(keyId: string) {
+			const res = await pool.query<{ id: string; state: string }>(
+				"SELECT id, state FROM exam_session WHERE key_id = $1 AND is_dev = FALSE ORDER BY id",
+				[keyId]
+			)
+			return res.rows
+		}
+
+		it("starts a first attempt without consulting the retake rule", async () => {
+			await seedBank()
+			const result = await startAttempt(env, attemptParams(KEY("a"), "h1"), [1], () => false)
+			expect(result.ok).toBe(true)
+			expect(await realRows(KEY("a"))).toHaveLength(1)
+		})
+
+		it("hands the newest real attempt to the retake rule", async () => {
+			await seedBank()
+			const old = await failOldAttempt(KEY("a"), "h1")
+			const seen: number[] = []
+			await startAttempt(env, attemptParams(KEY("a"), "h2"), [2], (latest) => {
+				seen.push(latest.id)
+				return false
+			})
+			expect(seen).toEqual([old.id])
+		})
+
+		it("refuses without inserting when the rule rejects the latest attempt", async () => {
+			await seedBank()
+			const first = await startSession(env, attemptParams(KEY("a"), "h1"), [1])
+			const result = await startAttempt(env, attemptParams(KEY("a"), "h2"), [2], admitByRule)
+			expect(result).toEqual({ ok: false, latest: expect.objectContaining({ id: first.id }) })
+			expect(await realRows(KEY("a"))).toHaveLength(1)
+		})
+
+		it("starts a retake once the rule admits the failed attempt", async () => {
+			await seedBank()
+			await failOldAttempt(KEY("a"), "h1")
+			const result = await startAttempt(env, attemptParams(KEY("a"), "h2"), [2], admitByRule)
+			expect(result.ok).toBe(true)
+			expect((await realRows(KEY("a"))).map((r) => r.state)).toEqual(["failed", "in_progress"])
+		})
+
+		describe("invariants", () => {
+			it("lets exactly one of two simultaneous starts through", async () => {
+				await seedBank()
+				const results = await Promise.all([
+					startAttempt(env, attemptParams(KEY("a"), "h1"), [1], admitByRule),
+					startAttempt(env, attemptParams(KEY("a"), "h2"), [2], admitByRule),
+				])
+				expect(results.filter((r) => r.ok)).toHaveLength(1)
+				const loser = results.find((r) => !r.ok)
+				expect(loser && !loser.ok && loser.latest.state).toBe("in_progress")
+				expect(await realRows(KEY("a"))).toHaveLength(1)
+			})
+
+			it("regression: never both approves an old attempt and opens a retake for it", async () => {
+				await seedBank()
+				for (const c of ["p", "q", "r", "s", "t", "u", "v", "w"]) {
+					const old = await failOldAttempt(KEY(c), `h-${c}`)
+					const [approved, started] = await Promise.all([
+						recordDecision(env, old.id, "approve", "admin1"),
+						startAttempt(env, attemptParams(KEY(c), `h2-${c}`), [2], admitByRule),
+					])
+					expect(approved && started.ok).toBe(false)
+					expect(approved || started.ok).toBe(true)
+				}
+			})
+		})
 	})
 
 	describe("listApplicantReports", () => {
@@ -412,7 +588,7 @@ describeIntegration("exam data access (integration)", () => {
 	})
 
 	describe("invariants", () => {
-		it("allows only one real attempt per account", async () => {
+		it("allows only one open real attempt per account", async () => {
 			await seedBank()
 			await startSession(
 				env,
@@ -440,6 +616,76 @@ describeIntegration("exam data access (integration)", () => {
 					[2]
 				)
 			).rejects.toThrow()
+		})
+
+		it("allows a retake row once the earlier attempt is graded, and looks up the newest", async () => {
+			await seedBank()
+			const first = await startSession(
+				env,
+				{
+					keyId: KEY("a"),
+					discordId: "d1",
+					tokenHash: "h1",
+					seed: 1,
+					expiresAt: SOON,
+					isDev: false,
+				},
+				[1]
+			)
+			await recordGrade(env, first.id, {
+				state: "failed",
+				score: 0,
+				maxScore: 3,
+				cutoff: 2.55,
+				submittedAt: 100,
+				perQuestion: [{ questionId: 1, awardedPoints: 0, maxPoints: 3 }],
+			})
+			const retake = await startSession(
+				env,
+				{
+					keyId: KEY("a"),
+					discordId: "d1",
+					tokenHash: "h2",
+					seed: 2,
+					expiresAt: SOON,
+					isDev: false,
+				},
+				[2]
+			)
+			const latest = await getLatestSessionByKeyId(env, KEY("a"))
+			expect(latest?.id).toBe(retake.id)
+			expect(latest?.state).toBe("in_progress")
+			expect((await getSessionQuestions(env, first.id)).map((q) => q.questionId)).toEqual([1])
+			expect((await listApplicantReports(env, "d1")).map((r) => r.applicantId)).toEqual([first.id])
+		})
+
+		it("keeps the latest lookup blind to dev sessions", async () => {
+			await seedBank()
+			const real = await startSession(
+				env,
+				{
+					keyId: KEY("a"),
+					discordId: null,
+					tokenHash: "h1",
+					seed: 1,
+					expiresAt: SOON,
+					isDev: false,
+				},
+				[1]
+			)
+			await startSession(
+				env,
+				{
+					keyId: KEY("a"),
+					discordId: null,
+					tokenHash: "h2",
+					seed: 2,
+					expiresAt: SOON,
+					isDev: true,
+				},
+				[2]
+			)
+			expect((await getLatestSessionByKeyId(env, KEY("a")))?.id).toBe(real.id)
 		})
 
 		it("exempts dev sessions from the one-attempt rule", async () => {
