@@ -13,6 +13,7 @@ export const AVATAR_PRESETS: AvatarPreset[] = [
 	{ id: "bee-cat", label: "Bee Cat", file: "bee-cat.webp" },
 	{ id: "blurry-kitten", label: "Blurry Kitten", file: "blurry-kitten.webp" },
 	{ id: "bow-kitten-5", label: "Bow Kitten 5", file: "bow-kitten-5.webp" },
+	{ id: "cat-hi", label: "Cat Hi", file: "cat-hi.webp" },
 	{ id: "cat-mugshot", label: "Cat Mugshot", file: "cat-mugshot.webp" },
 	{ id: "cool-chicken", label: "Cool Chicken", file: "cool-chicken.webp" },
 	{ id: "cool-monkey", label: "Cool Monkey", file: "cool-monkey.webp" },
