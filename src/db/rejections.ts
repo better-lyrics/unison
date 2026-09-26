@@ -49,6 +49,9 @@ export async function getSealCandidates(
 				AND NOT EXISTS (
 					SELECT 1 FROM rejections r WHERE r.lyrics_id = l.id AND r.revoked_at IS NULL
 				)
+				AND NOT EXISTS (
+					SELECT 1 FROM committee_members c WHERE c.user_id = l.submitter_id
+				)
 			ORDER BY l.video_id, ${RANKING_EXPR_JOINED} DESC
 		) AS unique_videos
 		ORDER BY ${orderBy}
