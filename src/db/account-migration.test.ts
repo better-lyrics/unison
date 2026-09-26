@@ -220,6 +220,8 @@ describe("runMigration (merge case)", () => {
 		if ("error" in result) throw new Error("unexpected error")
 		expect(Object.keys(result.snapshot).sort()).toEqual(
 			[
+				"badge_awards",
+				"contribution_events",
 				"discord_links",
 				"lyric_revisions",
 				"lyrics",
@@ -257,6 +259,38 @@ describe("runMigration (merge case)", () => {
 		expect(idx(calls, "UPDATE discord_links SET key_id")).toBeGreaterThanOrEqual(0)
 		expect(idx(calls, "is_self_vote")).toBeGreaterThan(idx(calls, "UPDATE users SET key_id"))
 		expect(idx(calls, "avg_vote")).toBeGreaterThan(idx(calls, "is_self_vote"))
+	})
+
+	it("regression: re-points contribution_events and badge_awards before deleting the new user (avoids FK violation)", async () => {
+		const db = makeMockDB(mergeSeed())
+		const result = await runMigration(makeEnv(db), {
+			oldKey: "oldkey",
+			newKey: "newkey",
+			migrationId: 7,
+		})
+		if ("error" in result) throw new Error("unexpected error")
+		const calls = db.calls
+		expect(idx(calls, "UPDATE contribution_events SET user_id")).toBeGreaterThanOrEqual(0)
+		expect(idx(calls, "UPDATE badge_awards SET user_id")).toBeGreaterThanOrEqual(0)
+		expect(idx(calls, "UPDATE contribution_events SET user_id")).toBeLessThan(
+			idx(calls, "DELETE FROM users")
+		)
+		expect(idx(calls, "UPDATE badge_awards SET user_id")).toBeLessThan(idx(calls, "DELETE FROM users"))
+	})
+
+	it("regression: dedupes contribution_events and badge_awards on unique-key collision, folds them into collisionsDropped", async () => {
+		const seed = mergeSeed()
+		seed.push([], [], { n: 2 }, { n: 1 }) // contrib snapshot, badge snapshot, contrib collisions, badge collisions
+		const db = makeMockDB(seed)
+		const result = await runMigration(makeEnv(db), {
+			oldKey: "oldkey",
+			newKey: "newkey",
+			migrationId: 7,
+		})
+		if ("error" in result) throw new Error("unexpected error")
+		expect(db.calls.some((c) => c.sql.includes("DELETE FROM contribution_events"))).toBe(true)
+		expect(db.calls.some((c) => c.sql.includes("DELETE FROM badge_awards"))).toBe(true)
+		expect(result.moved.collisionsDropped).toBe(1 /* votes */ + 0 /* reports */ + 1 /* requests */ + 2 + 1)
 	})
 
 	it("regression: lyrics_requests dedup keeps the survivor's (old key) request and drops the new key's dup", async () => {
@@ -715,5 +749,56 @@ describe("restoreFromSnapshot", () => {
 		// lyrics restored by targeted UPDATE, never deleted (would cascade its votes/reports)
 		expect(calls.some((c) => c.sql.includes("DELETE FROM lyrics "))).toBe(false)
 		expect(idx(calls, "UPDATE lyrics SET submitter_id")).toBeGreaterThanOrEqual(0)
+	})
+
+	function committedAuditRowWithGamification() {
+		const base = committedAuditRow()
+		return {
+			...base,
+			snapshot: {
+				...base.snapshot,
+				contribution_events: [
+					{
+						id: 50,
+						user_id: 2,
+						delta: 5,
+						kind: "vote_consensus",
+						ref_type: "lyrics",
+						ref_id: 10,
+						created_at: 1,
+					},
+				],
+				badge_awards: [
+					{ id: 60, user_id: 2, badge_key: "first_blood", tier: null, awarded_at: 1, context: null },
+				],
+			},
+		}
+	}
+
+	it("regression: refuses restore when the survivor earned XP after commit", async () => {
+		const db = makeMockDB([
+			committedAuditRowWithGamification(), // getAudit
+			[{ id: 11 }], // votes
+			[], // reports
+			[{ id: 10 }], // lyrics
+			[{ id: 5 }], // fulfillments
+			[{ id: 3 }], // requests
+			[{ id: 50 }, { id: 999 }], // contribution_events: snapshot's 50 + interim 999
+		])
+		const result = await restoreFromSnapshot(makeEnv(db), 7)
+		expect(result).toEqual({ error: "HAS_INTERIM_ACTIVITY" })
+	})
+
+	it("regression: restores contribution_events and badge_awards ownership on undo", async () => {
+		const db = makeMockDB([committedAuditRowWithGamification()])
+		const result = await restoreFromSnapshot(makeEnv(db), 7)
+		expect(result).toEqual({ restored: true })
+
+		const calls = db.calls
+		expect(calls.some((c) => c.sql.includes("DELETE FROM contribution_events"))).toBe(true)
+		const insertContrib = calls.find((c) => c.sql.includes("INSERT INTO contribution_events"))
+		expect(insertContrib?.params).toEqual([50, 2, 5, "vote_consensus", "lyrics", 10, 1])
+		const insertBadge = calls.find((c) => c.sql.includes("INSERT INTO badge_awards"))
+		expect(insertBadge?.params).toEqual([60, 2, "first_blood", null, 1, null])
 	})
 })
