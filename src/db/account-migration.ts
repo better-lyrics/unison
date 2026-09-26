@@ -303,7 +303,9 @@ export async function runMigration(
 			"SELECT * FROM contribution_events WHERE user_id = ANY(?)",
 			[ids]
 		)
-		snapshot.badge_awards = await all(tx, "SELECT * FROM badge_awards WHERE user_id = ANY(?)", [ids])
+		snapshot.badge_awards = await all(tx, "SELECT * FROM badge_awards WHERE user_id = ANY(?)", [
+			ids,
+		])
 
 		let contribCollisions = 0
 		let badgeCollisions = 0
@@ -336,12 +338,24 @@ export async function runMigration(
 			)
 			await tx
 				.prepare(
+					`UPDATE badge_awards AS survivor SET tier = dup.tier
+					 FROM badge_awards AS dup
+					 WHERE survivor.user_id = ? AND dup.user_id = ? AND dup.badge_key = survivor.badge_key
+					   AND COALESCE(dup.tier, 0) > COALESCE(survivor.tier, 0)`
+				)
+				.bind(oldId, newId)
+				.run()
+			await tx
+				.prepare(
 					`DELETE FROM badge_awards
 					 WHERE user_id = ? AND badge_key IN (SELECT badge_key FROM badge_awards WHERE user_id = ?)`
 				)
 				.bind(newId, oldId)
 				.run()
-			await tx.prepare("UPDATE badge_awards SET user_id = ? WHERE user_id = ?").bind(oldId, newId).run()
+			await tx
+				.prepare("UPDATE badge_awards SET user_id = ? WHERE user_id = ?")
+				.bind(oldId, newId)
+				.run()
 		}
 
 		if (newId !== null) {
@@ -678,27 +692,13 @@ export async function restoreFromSnapshot(
 					[ids, ids]
 				)
 			: []
-		const snapContribs = snap.contribution_events as SnapContributionEvent[] | undefined
-		const snapContribIds = new Set(snapContribs?.map((e) => e.id))
-		const snapBadges = snap.badge_awards as SnapBadgeAward[] | undefined
-		const snapBadgeIds = new Set(snapBadges?.map((b) => b.id))
-		const currentContribs = snapContribs
-			? await all<{ id: number }>(tx, "SELECT id FROM contribution_events WHERE user_id = ANY(?)", [
-					ids,
-				])
-			: []
-		const currentBadges = snapBadges
-			? await all<{ id: number }>(tx, "SELECT id FROM badge_awards WHERE user_id = ANY(?)", [ids])
-			: []
 		if (
 			currentVotes.some((v) => !snapVoteIds.has(v.id)) ||
 			currentReports.some((r) => !snapReportIds.has(r.id)) ||
 			currentLyrics.some((l) => !snapLyricsIds.has(l.id)) ||
 			currentFulfillments.some((f) => !snapFulfillmentIds.has(f.id)) ||
 			currentRequests.some((r) => !snapRequestIds.has(r.id)) ||
-			currentRevisions.some((r) => !snapRevisionIds.has(r.id)) ||
-			currentContribs.some((e) => !snapContribIds.has(e.id)) ||
-			currentBadges.some((b) => !snapBadgeIds.has(b.id))
+			currentRevisions.some((r) => !snapRevisionIds.has(r.id))
 		) {
 			return { error: "HAS_INTERIM_ACTIVITY" } as const
 		}
@@ -806,24 +806,31 @@ export async function restoreFromSnapshot(
 				.run()
 		}
 
-		await tx.prepare("DELETE FROM contribution_events WHERE user_id = ANY(?)").bind(ids).run()
-		for (const e of snapContribs ?? []) {
-			await tx
-				.prepare(
-					"INSERT INTO contribution_events (id, user_id, delta, kind, ref_type, ref_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)"
-				)
-				.bind(e.id, e.user_id, e.delta, e.kind, e.ref_type, e.ref_id, e.created_at)
-				.run()
+		// Derived state: interim rows are dropped and re-derived by the XP and badge backfills.
+		const snapContribs = snap.contribution_events as SnapContributionEvent[] | undefined
+		if (snapContribs) {
+			await tx.prepare("DELETE FROM contribution_events WHERE user_id = ANY(?)").bind(ids).run()
+			for (const e of snapContribs) {
+				await tx
+					.prepare(
+						"INSERT INTO contribution_events (id, user_id, delta, kind, ref_type, ref_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)"
+					)
+					.bind(e.id, e.user_id, e.delta, e.kind, e.ref_type, e.ref_id, e.created_at)
+					.run()
+			}
 		}
 
-		await tx.prepare("DELETE FROM badge_awards WHERE user_id = ANY(?)").bind(ids).run()
-		for (const b of snapBadges ?? []) {
-			await tx
-				.prepare(
-					"INSERT INTO badge_awards (id, user_id, badge_key, tier, awarded_at, context) VALUES (?, ?, ?, ?, ?, ?)"
-				)
-				.bind(b.id, b.user_id, b.badge_key, b.tier, b.awarded_at, b.context)
-				.run()
+		const snapBadges = snap.badge_awards as SnapBadgeAward[] | undefined
+		if (snapBadges) {
+			await tx.prepare("DELETE FROM badge_awards WHERE user_id = ANY(?)").bind(ids).run()
+			for (const b of snapBadges) {
+				await tx
+					.prepare(
+						"INSERT INTO badge_awards (id, user_id, badge_key, tier, awarded_at, context) VALUES (?, ?, ?, ?, ?, ?)"
+					)
+					.bind(b.id, b.user_id, b.badge_key, b.tier, b.awarded_at, b.context)
+					.run()
+			}
 		}
 
 		return { restored: true } as const
