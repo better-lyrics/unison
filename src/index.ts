@@ -1,5 +1,5 @@
-import { existsSync, readFileSync, statSync } from "node:fs"
-import { extname, resolve, sep } from "node:path"
+import { existsSync } from "node:fs"
+import { resolve } from "node:path"
 import { config } from "@/config"
 import { refreshCatalogue } from "@/db/avatar-presets"
 import { closeRedis } from "@/infra/cache"
@@ -44,6 +44,7 @@ import { translateRoutes } from "@/routes/translate"
 import { userRoutes } from "@/routes/users"
 import { videoLinkRoutes } from "@/routes/video-links"
 import { voteBotRoutes, voteRoutes } from "@/routes/votes"
+import { loadSpa, serveSpa } from "@/spa"
 import { cors } from "@elysiajs/cors"
 import { cron } from "@elysiajs/cron"
 import { node } from "@elysiajs/node"
@@ -54,48 +55,7 @@ const log = new Logger("app")
 const httpLog = new Logger("http")
 const cronLog = new Logger("cron")
 
-// @elysiajs/static on the Node adapter omits content-type headers and ignores
-// indexHTML for unmatched routes, so we serve the SPA dist ourselves.
-const SPA_DIST = resolve(process.cwd(), "web/dist")
-const MIME_TYPES: Record<string, string> = {
-	".html": "text/html; charset=utf-8",
-	".css": "text/css; charset=utf-8",
-	".js": "application/javascript; charset=utf-8",
-	".mjs": "application/javascript; charset=utf-8",
-	".json": "application/json; charset=utf-8",
-	".svg": "image/svg+xml",
-	".png": "image/png",
-	".jpg": "image/jpeg",
-	".jpeg": "image/jpeg",
-	".webp": "image/webp",
-	".ico": "image/x-icon",
-	".woff": "font/woff",
-	".woff2": "font/woff2",
-	".map": "application/json; charset=utf-8",
-	".txt": "text/plain; charset=utf-8",
-}
-
-let spaIndexHtml: string | null = null
-try {
-	spaIndexHtml = readFileSync(resolve(SPA_DIST, "index.html"), "utf8")
-} catch {
-	spaIndexHtml = null
-}
-
-function readSpaFile(pathname: string): { body: Buffer; contentType: string } | null {
-	const cleaned = pathname.replace(/^\/+/, "")
-	if (!cleaned) return null
-	const fullPath = resolve(SPA_DIST, cleaned)
-	if (fullPath !== SPA_DIST && !fullPath.startsWith(`${SPA_DIST}${sep}`)) return null
-	try {
-		if (!statSync(fullPath).isFile()) return null
-	} catch {
-		return null
-	}
-	const body = readFileSync(fullPath)
-	const contentType = MIME_TYPES[extname(fullPath).toLowerCase()] ?? "application/octet-stream"
-	return { body, contentType }
-}
+const SPA = loadSpa(resolve(process.cwd(), "web/dist"))
 
 const app = new Elysia({ adapter: node() })
 	.use(
@@ -232,30 +192,9 @@ const app = new Elysia({ adapter: node() })
 	.use(migrationRoutes(env))
 	.use(adminRoutes(env))
 	.get("/*", ({ request }) => {
-		const { pathname } = new URL(request.url)
-
-		if (pathname.includes(".")) {
-			const file = readSpaFile(pathname)
-			if (file) {
-				return new Response(file.body, {
-					status: 200,
-					headers: {
-						"content-type": file.contentType,
-						"cache-control": "public, max-age=31536000, immutable",
-					},
-				})
-			}
-			throw new NotFoundError()
-		}
-
-		if (spaIndexHtml) {
-			return new Response(spaIndexHtml, {
-				status: 200,
-				headers: { "content-type": "text/html; charset=utf-8" },
-			})
-		}
-
-		throw new NotFoundError()
+		const response = serveSpa(new URL(request.url).pathname, SPA)
+		if (!response) throw new NotFoundError()
+		return response
 	})
 	.listen(Number.parseInt(process.env.PORT || "3000", 10))
 
@@ -265,9 +204,9 @@ log.info(`listening on port ${port}`)
 startWatchdog()
 log.info("spa serving", {
 	cwd: process.cwd(),
-	spaDist: SPA_DIST,
-	indexHtmlLoaded: spaIndexHtml !== null,
-	assetsDirExists: existsSync(resolve(SPA_DIST, "assets")),
+	spaDist: SPA.dist,
+	indexHtmlLoaded: SPA.indexHtml !== null,
+	assetsDirExists: existsSync(resolve(SPA.dist, "assets")),
 })
 
 backfillTextSearch(env)

@@ -8,7 +8,7 @@ export function isAlbumArtUrl(url: string | null | undefined): boolean {
 	} catch {
 		return false
 	}
-	if (parsed.protocol !== "https:" && parsed.protocol !== "http:") return false
+	if (parsed.protocol !== "https:") return false
 	const host = parsed.hostname
 	if (host !== "googleusercontent.com" && !host.endsWith(".googleusercontent.com")) return false
 	const m = url.match(SIZE_SUFFIX)

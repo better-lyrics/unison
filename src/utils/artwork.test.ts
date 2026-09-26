@@ -35,7 +35,10 @@ describe("isAlbumArtUrl", () => {
 		it("regression: rejects googleusercontent.com only in the path", () => {
 			expect(isAlbumArtUrl("https://evil.com/googleusercontent.com/x=w1-h1")).toBe(false)
 		})
-		it("rejects non-http(s) schemes even on the trusted host", () => {
+		it("regression: rejects plain http art, which the SPA content security policy would block", () => {
+			expect(isAlbumArtUrl("http://yt3.googleusercontent.com/abc=w544-h544-l90-rj")).toBe(false)
+		})
+		it("rejects non-https schemes even on the trusted host", () => {
 			expect(isAlbumArtUrl("ftp://x.googleusercontent.com/x=w1-h1")).toBe(false)
 		})
 		it("accepts a legitimate googleusercontent subdomain", () => {

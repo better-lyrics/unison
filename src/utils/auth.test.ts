@@ -199,6 +199,24 @@ describe("signedRequest middleware: error responses", () => {
 		expect(body).toMatchObject({ success: false, error: "KEY_ID_MISMATCH" })
 	})
 
+	it("regression: refuses an upper-case keyId for a real key instead of registering a second account", async () => {
+		const keyPair = await generateKeyPair()
+		const publicJwk = await exportPublicJwk(keyPair)
+		const keyId = (await hashPublicKey(publicJwk)).toUpperCase()
+
+		const db = makeMockDB([null])
+		const env = makeEnv(db, makeMockCache())
+		const app = makeApp(env)
+
+		const payload = { timestamp: Date.now(), nonce: "n".repeat(32), keyId }
+		const res = await app.handle(makeRequest({ payload, signature: "x", publicKey: publicJwk }))
+		const body = await readJson(res)
+
+		expect(res.status).toBe(403)
+		expect(body).toMatchObject({ success: false, error: "KEY_ID_MISMATCH" })
+		expect(db.calls.some((c) => /insert/i.test(c.sql))).toBe(false)
+	})
+
 	it("returns 401 INVALID_SIGNATURE when stored key cannot verify the signature", async () => {
 		const keyPair = await generateKeyPair()
 		const publicJwk = await exportPublicJwk(keyPair)
