@@ -22,7 +22,9 @@ function makeMockDB(queue: unknown[] = []) {
 						getParams: () => args,
 						async first<T>(): Promise<T | null> {
 							calls.push({ sql, params: args })
-							return (queue.shift() as T) ?? null
+							const next = queue.shift()
+							if (next instanceof Error) throw next
+							return (next as T) ?? null
 						},
 						async all<T>(): Promise<{ results: T[] }> {
 							calls.push({ sql, params: args })
@@ -388,6 +390,40 @@ describe("GET /links/discord/callback", () => {
 				expect(upd?.params).toEqual(["alice", null, "same-id", "alice", null])
 			})
 		})
+
+		describe("cross-field interactions", () => {
+			it("evicts the curator leaderboard cache when the refresh changed the row", async () => {
+				const cache = makeMockCache({
+					"link_state:st-ev": KEY,
+					[CURATOR_LEADERBOARD_CACHE_KEY]: "{}",
+				})
+				const db = makeMockDB([existingLink("same-id", "old-hash"), { discord_id: "same-id" }])
+				const app = linkRoutes(
+					makeEnv(db, cache),
+					discordFetch({ id: "same-id", username: "alice", global_name: "Alice", avatar: NEW_HASH })
+				)
+
+				await callback(app, "st-ev")
+
+				expect(cache.store.has(CURATOR_LEADERBOARD_CACHE_KEY)).toBe(false)
+			})
+
+			it("keeps the curator leaderboard cache when the refresh changed nothing", async () => {
+				const cache = makeMockCache({
+					"link_state:st-keep": KEY,
+					[CURATOR_LEADERBOARD_CACHE_KEY]: "{}",
+				})
+				const db = makeMockDB([existingLink("same-id", NEW_HASH), null])
+				const app = linkRoutes(
+					makeEnv(db, cache),
+					discordFetch({ id: "same-id", username: "alice", global_name: "Alice", avatar: NEW_HASH })
+				)
+
+				await callback(app, "st-keep")
+
+				expect(cache.store.has(CURATOR_LEADERBOARD_CACHE_KEY)).toBe(true)
+			})
+		})
 	})
 })
 
@@ -689,6 +725,42 @@ describe("POST /links/bot/discord-profiles", () => {
 
 		it("rejects a body without profiles", async () => {
 			const res = await push(makeMockDB(), makeMockCache(), {})
+			expect(res.status).toBe(422)
+		})
+
+		it("still evicts the leaderboard cache when a later profile fails after one changed", async () => {
+			const cache = makeMockCache({ [CURATOR_LEADERBOARD_CACHE_KEY]: "{}" })
+			const db = makeMockDB([{ discord_id: ALICE }, new Error("Connection terminated")])
+			const res = await push(db, cache, {
+				profiles: [
+					{ discordId: ALICE, avatar: HASH, username: "Alice" },
+					{ discordId: BOB, avatar: HASH, username: "Bob" },
+				],
+			})
+			expect(res.status).toBe(500)
+			expect(cache.store.has(CURATOR_LEADERBOARD_CACHE_KEY)).toBe(false)
+		})
+
+		it("rejects a Discord id that is not a snowflake", async () => {
+			const db = makeMockDB()
+			const res = await push(db, makeMockCache(), {
+				profiles: [{ discordId: "alice", avatar: HASH, username: "Alice" }],
+			})
+			expect(res.status).toBe(422)
+			expect(db.calls).toHaveLength(0)
+		})
+
+		it("rejects an empty username", async () => {
+			const res = await push(makeMockDB(), makeMockCache(), {
+				profiles: [{ discordId: ALICE, avatar: HASH, username: "" }],
+			})
+			expect(res.status).toBe(422)
+		})
+
+		it("rejects a username longer than 100 characters", async () => {
+			const res = await push(makeMockDB(), makeMockCache(), {
+				profiles: [{ discordId: ALICE, avatar: HASH, username: "a".repeat(101) }],
+			})
 			expect(res.status).toBe(422)
 		})
 	})

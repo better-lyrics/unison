@@ -146,11 +146,12 @@ export const linkRoutes = (env: Env, fetchImpl: typeof fetch = fetch) =>
 
 				const existing = await getByKeyId(env, keyId)
 				if (existing?.discord_id === identity.id) {
-					await refreshDiscordProfile(env, {
+					const changed = await refreshDiscordProfile(env, {
 						discordId: identity.id,
 						discordUsername: identity.displayName,
 						discordAvatar: identity.avatar,
 					})
+					if (changed) await invalidateCuratorLeaderboardCache(env)
 					log.info("discord profile refreshed", { keyId, discordId: identity.id })
 					return redirectToLinkPage("linked", identity.displayName)
 				}
@@ -186,24 +187,27 @@ export const linkRoutes = (env: Env, fetchImpl: typeof fetch = fetch) =>
 					return status(401, buildError(ErrorCode.AUTH_REQUIRED))
 				}
 				let updated = 0
-				for (const profile of body.profiles) {
-					const changed = await refreshDiscordProfile(env, {
-						discordId: profile.discordId,
-						discordUsername: profile.username,
-						discordAvatar: sanitizeDiscordAvatarHash(profile.avatar),
-					})
-					if (changed) updated++
+				try {
+					for (const profile of body.profiles) {
+						const changed = await refreshDiscordProfile(env, {
+							discordId: profile.discordId,
+							discordUsername: profile.username,
+							discordAvatar: sanitizeDiscordAvatarHash(profile.avatar),
+						})
+						if (changed) updated++
+					}
+				} finally {
+					if (updated > 0) await invalidateCuratorLeaderboardCache(env)
 				}
-				if (updated > 0) await invalidateCuratorLeaderboardCache(env)
 				return status(200, { success: true, data: { updated } })
 			},
 			{
 				body: t.Object({
 					profiles: t.Array(
 						t.Object({
-							discordId: t.String(),
+							discordId: t.String({ pattern: "^[0-9]{17,20}$" }),
 							avatar: t.Union([t.String(), t.Null()]),
-							username: t.String(),
+							username: t.String({ minLength: 1, maxLength: 100 }),
 						}),
 						{ maxItems: config.linking.botProfileBatchMax }
 					),

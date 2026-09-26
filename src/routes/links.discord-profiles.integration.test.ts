@@ -113,6 +113,15 @@ describeIntegration("POST /links/bot/discord-profiles (integration)", () => {
 		})
 	})
 
+	describe("regressions", () => {
+		it("regression: a Discord id repeated in one batch is counted once", async () => {
+			const profile = { discordId: ALICE, avatar: NEW_HASH, username: "Alice" }
+			const res = await push([profile, profile])
+			expect(res.updated).toBe(1)
+			expect((await link(ALICE))?.discord_avatar).toBe(NEW_HASH)
+		})
+	})
+
 	describe("invariants", () => {
 		it("leaves the leaderboard cache alone when nothing changed", async () => {
 			db.cache.store.set(CURATOR_LEADERBOARD_CACHE_KEY, "{}")
