@@ -38,6 +38,9 @@ export const ErrorCode = {
 	DISCORD_AVATAR_UNAVAILABLE: "DISCORD_AVATAR_UNAVAILABLE",
 	SONG_NOT_SUBMITTED: "SONG_NOT_SUBMITTED",
 	SONG_ARTWORK_UNAVAILABLE: "SONG_ARTWORK_UNAVAILABLE",
+	AVATAR_PRESET_EXISTS: "AVATAR_PRESET_EXISTS",
+	AVATAR_IMAGE_INVALID: "AVATAR_IMAGE_INVALID",
+	CDN_UNAVAILABLE: "CDN_UNAVAILABLE",
 	LINK_BLACKLISTED: "LINK_BLACKLISTED",
 	LINKING_DISABLED: "LINKING_DISABLED",
 	NOT_LINKED: "NOT_LINKED",
@@ -217,6 +220,18 @@ const TEMPLATES: Record<ErrorCode, Template> = {
 	SONG_ARTWORK_UNAVAILABLE: {
 		error: "Song cover unavailable",
 		hint: "This song has no cover art yet. Pick another song or picture.",
+	},
+	AVATAR_PRESET_EXISTS: {
+		error: "Avatar already exists",
+		hint: "A preset with this name is already in the catalogue. Pick a different name.",
+	},
+	AVATAR_IMAGE_INVALID: {
+		error: "Invalid avatar image",
+		hint: "That image could not be processed. Use a JPEG, PNG, GIF, or WebP within the size limit.",
+	},
+	CDN_UNAVAILABLE: {
+		error: "Avatar storage unavailable",
+		hint: "Avatar publishing is not configured on the server right now. Try again later.",
 	},
 	LINK_BLACKLISTED: {
 		error: "Account cannot be linked",

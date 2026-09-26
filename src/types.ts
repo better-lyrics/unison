@@ -1,6 +1,7 @@
 import type { KVCompat } from "@/infra/cache"
 import type { D1Compat } from "@/infra/database"
 import type { RedisRateLimiter } from "@/infra/rate-limiter"
+import type { Storage } from "@/infra/storage"
 import type { JevGate } from "@/services/jev-gate"
 import type { TierName } from "@/utils/tiers"
 
@@ -9,6 +10,7 @@ export interface B2Config {
 	applicationKey: string
 	bucket: string
 	endpoint: string
+	region?: string
 }
 
 export interface Env {
@@ -21,6 +23,7 @@ export interface Env {
 	DUMP_PUBLIC_BASE_URL: string
 	DUMP_DATABASE_URL: string | null
 	B2: B2Config | null
+	CDN: Storage | null
 	BUTLER_BOT_SECRET?: string | null
 	ADMIN_SECRET?: string | null
 	DISCORD_OAUTH?: { clientId: string; clientSecret: string; redirectUri: string } | null

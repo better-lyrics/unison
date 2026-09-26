@@ -35,6 +35,7 @@ function makeEnv(cache: ReturnType<typeof makeMockCache>): Env {
 		DUMP_PUBLIC_BASE_URL: "",
 		DUMP_DATABASE_URL: null,
 		B2: null,
+		CDN: null,
 	}
 }
 

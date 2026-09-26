@@ -1,26 +1,38 @@
 import { config } from "@/config"
-import { AVATAR_PRESETS, findPreset } from "@/db/avatar-presets"
+import {
+	deletePreset,
+	findPreset,
+	getPresets,
+	publishPreset,
+	refreshCatalogue,
+	reservePreset,
+} from "@/db/avatar-presets"
 import { getByKeyId } from "@/db/discordLinks"
 import { hasSubmissionForVideo } from "@/db/profile"
 import { clearAvatarChoice, resolveAvatarUrl, setAvatarChoice } from "@/db/users"
+import { Logger } from "@/infra/logger"
 import { resolveArtwork } from "@/services/artwork"
+import { AvatarImageError, formatAvatar } from "@/services/avatar-image"
 import type { Env } from "@/types"
+import { isAuthorizedBot } from "@/utils/bot-auth"
 import { eitherAuth } from "@/utils/either-auth"
 import { ErrorCode, buildError } from "@/utils/errors"
 import { readRateLimit } from "@/utils/read-rate-limit"
 import { isVideoId } from "@/utils/video-id"
-import { Elysia } from "elysia"
+import { Elysia, t } from "elysia"
+
+const log = new Logger("avatars")
 
 export const avatarRoutes = (env: Env) =>
 	new Elysia({ prefix: "/avatars" })
 		.decorate("env", env)
 		.use(readRateLimit)
 		.get("/", ({ set }) => {
-			set.headers["cache-control"] = "public, max-age=3600"
+			set.headers["cache-control"] = `public, max-age=${config.avatar.catalogueCacheSeconds}`
 			return {
 				success: true,
 				data: {
-					presets: AVATAR_PRESETS.map((p) => ({
+					presets: getPresets().map((p) => ({
 						id: p.id,
 						label: p.label,
 						url: config.avatar.cdnBase + p.file,
@@ -32,6 +44,69 @@ export const avatarRoutes = (env: Env) =>
 				},
 			}
 		})
+		.post(
+			"/presets",
+			async ({ env, headers, body, status }) => {
+				if (!isAuthorizedBot(headers.authorization, env)) {
+					return status(401, buildError(ErrorCode.AUTH_REQUIRED))
+				}
+				if (!env.CDN) return status(503, buildError(ErrorCode.CDN_UNAVAILABLE))
+
+				const { id, label, createdBy, mime, dataBase64 } = body
+				if (findPreset(id)) return status(409, buildError(ErrorCode.AVATAR_PRESET_EXISTS))
+
+				const input = Buffer.from(dataBase64, "base64")
+				if (input.length === 0) return status(422, buildError(ErrorCode.AVATAR_IMAGE_INVALID))
+
+				let webp: Buffer
+				try {
+					webp = (await formatAvatar(input, mime)).webp
+				} catch (err) {
+					if (err instanceof AvatarImageError) {
+						return status(422, buildError(ErrorCode.AVATAR_IMAGE_INVALID))
+					}
+					throw err
+				}
+
+				const file = `${id}.webp`
+				// Reserve before the CDN write so a duplicate id can never overwrite a live avatar.
+				if (
+					(await reservePreset(env, { id, label, file, createdBy: createdBy ?? null })) === "exists"
+				) {
+					return status(409, buildError(ErrorCode.AVATAR_PRESET_EXISTS))
+				}
+
+				try {
+					await env.CDN.putObject(config.avatar.cdnKeyPrefix + file, webp, "image/webp")
+				} catch (err) {
+					await deletePreset(env, id).catch((rollbackErr) =>
+						log.error("avatar reservation rollback failed", {
+							id,
+							error: (rollbackErr as Error).message,
+						})
+					)
+					throw err
+				}
+
+				await publishPreset(env, id)
+				await refreshCatalogue(env).catch((err) =>
+					log.error("avatar catalogue refresh failed", { error: (err as Error).message })
+				)
+				return status(200, {
+					success: true,
+					data: { id, label, url: config.avatar.cdnBase + file },
+				})
+			},
+			{
+				body: t.Object({
+					id: t.String({ pattern: "^[a-z0-9-]+$", minLength: 1, maxLength: 64 }),
+					label: t.String({ minLength: 1, maxLength: 64 }),
+					createdBy: t.Optional(t.String({ maxLength: 64 })),
+					mime: t.String({ minLength: 1, maxLength: 64 }),
+					dataBase64: t.String({ minLength: 1 }),
+				}),
+			}
+		)
 		.use(
 			new Elysia()
 				.decorate("env", env)

@@ -93,6 +93,7 @@ function makeEnv(db: ReturnType<typeof makeMockDB>, cache: object = makeMockCach
 		DUMP_PUBLIC_BASE_URL: "",
 		DUMP_DATABASE_URL: null,
 		B2: null,
+		CDN: null,
 	}
 }
 

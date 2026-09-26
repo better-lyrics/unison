@@ -46,6 +46,7 @@
     "ioredis": "^5.4.0",
     "obscenity": "^0.4.6",
     "pg": "^8.13.0",
+    "sharp": "^0.35.4",
     "youtubei.js": "^18.0.0"
   },
   "devDependencies": {

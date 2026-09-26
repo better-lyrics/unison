@@ -24,7 +24,7 @@ export function createStorage(cfg: B2Config | null): Storage | null {
 
 	const client = new S3Client({
 		endpoint: cfg.endpoint,
-		region: "us-east-1",
+		region: cfg.region ?? "us-east-1",
 		credentials: {
 			accessKeyId: cfg.keyId,
 			secretAccessKey: cfg.applicationKey,

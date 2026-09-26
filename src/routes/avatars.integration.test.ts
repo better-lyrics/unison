@@ -1,7 +1,14 @@
 import { config } from "@/config"
-import { AVATAR_PRESETS } from "@/db/avatar-presets"
+import {
+	AVATAR_PRESETS,
+	findPreset,
+	insertPreset,
+	listPublishedPresets,
+	refreshCatalogue,
+} from "@/db/avatar-presets"
 import { resolveAvatarUrl } from "@/db/users"
 import {
+	BOT_SECRET,
 	type IntegrationDb,
 	describeIntegration,
 	openIntegrationDb,
@@ -13,7 +20,8 @@ import {
 import { readRevisionFixture } from "@/test/lyric-fixtures"
 import type { Env } from "@/types"
 import { canonicalJson, hashPublicKey } from "@/utils/crypto"
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest"
+import sharp from "sharp"
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest"
 import { avatarRoutes } from "./avatars"
 
 const KEY = "a".repeat(64)
@@ -325,5 +333,199 @@ describeIntegration("PUT /avatars/me (integration)", () => {
 			expect(status).toBe(400)
 			expect(body.code).toBe("UNKNOWN_AVATAR_PRESET")
 		})
+	})
+})
+
+describeIntegration("POST /avatars/presets (integration)", () => {
+	let db: IntegrationDb
+	let pngBase64: string
+
+	function makeCdn() {
+		const puts: { key: string; contentType: string; bytes: number }[] = []
+		const deletes: string[] = []
+		const storage = {
+			async putObject(key: string, body: Buffer, contentType: string) {
+				puts.push({ key, contentType, bytes: body.length })
+			},
+			async listObjects() {
+				return []
+			},
+			async deleteObject(key: string) {
+				deletes.push(key)
+			},
+		} as unknown as NonNullable<Env["CDN"]>
+		return { puts, deletes, storage }
+	}
+
+	interface PostBody {
+		success: boolean
+		code?: string
+		data?: { id: string; label: string; url: string }
+	}
+
+	async function post(
+		env: Env,
+		body: unknown,
+		auth: string | null = BOT_SECRET
+	): Promise<{ status: number; body: PostBody }> {
+		const headers: Record<string, string> = { "content-type": "application/json" }
+		if (auth) headers.authorization = `Bearer ${auth}`
+		const res = await avatarRoutes(env).handle(
+			new Request("http://localhost/avatars/presets", {
+				method: "POST",
+				headers,
+				body: JSON.stringify(body),
+			})
+		)
+		const text = await res.text()
+		let parsed: PostBody
+		try {
+			parsed = JSON.parse(text) as PostBody
+		} catch {
+			parsed = { success: false }
+		}
+		return { status: res.status, body: parsed }
+	}
+
+	beforeAll(async () => {
+		db = await openIntegrationDb()
+		const png = await sharp({
+			create: { width: 300, height: 200, channels: 3, background: { r: 200, g: 120, b: 40 } },
+		})
+			.png()
+			.toBuffer()
+		pngBase64 = png.toString("base64")
+	})
+
+	afterAll(async () => {
+		await db.pool.end()
+	})
+
+	beforeEach(async () => {
+		await db.pool.query("DELETE FROM avatar_presets")
+	})
+
+	afterEach(async () => {
+		await db.pool.query("DELETE FROM avatar_presets")
+		await refreshCatalogue(db.env)
+	})
+
+	it("makes the published preset pickable on this instance", async () => {
+		const cdn = makeCdn()
+		const env: Env = { ...db.env, CDN: cdn.storage }
+		await post(env, { id: "sky-cat", label: "Sky Cat", mime: "image/png", dataBase64: pngBase64 })
+		expect(findPreset("sky-cat")).toEqual({ id: "sky-cat", label: "Sky Cat", file: "sky-cat.webp" })
+	})
+
+	describe("regressions", () => {
+		it("regression: the reserved row is not published before the CDN write finishes", async () => {
+			let publishedDuringUpload: string[] | null = null
+			const probingCdn = {
+				async putObject() {
+					publishedDuringUpload = (await listPublishedPresets(db.env)).map((p) => p.id)
+				},
+				async listObjects() {
+					return []
+				},
+				async deleteObject() {},
+			} as unknown as NonNullable<Env["CDN"]>
+			const { status } = await post(
+				{ ...db.env, CDN: probingCdn },
+				{ id: "sky-cat", label: "Sky Cat", mime: "image/png", dataBase64: pngBase64 }
+			)
+			expect(status).toBe(200)
+			expect(publishedDuringUpload).toEqual([])
+			expect((await listPublishedPresets(db.env)).map((p) => p.id)).toEqual(["sky-cat"])
+		})
+
+		it("regression: refuses a built-in id with 409 even when the seed row is missing", async () => {
+			const cdn = makeCdn()
+			const env: Env = { ...db.env, CDN: cdn.storage }
+			const { status, body } = await post(env, {
+				id: AVATAR_PRESETS[0].id,
+				label: "Hijack",
+				mime: "image/png",
+				dataBase64: pngBase64,
+			})
+			expect(status).toBe(409)
+			expect(body.code).toBe("AVATAR_PRESET_EXISTS")
+			expect(cdn.puts).toHaveLength(0)
+			const { rows } = await db.pool.query("SELECT id FROM avatar_presets")
+			expect(rows).toHaveLength(0)
+		})
+	})
+
+	it("formats, uploads, stores, and returns the CDN url", async () => {
+		const cdn = makeCdn()
+		const env: Env = { ...db.env, CDN: cdn.storage }
+		const { status, body } = await post(env, {
+			id: "sky-cat",
+			label: "Sky Cat",
+			createdBy: "k".repeat(64),
+			mime: "image/png",
+			dataBase64: pngBase64,
+		})
+		expect(status).toBe(200)
+		expect(body.data?.url).toBe(`${config.avatar.cdnBase}sky-cat.webp`)
+		expect(cdn.puts).toEqual([
+			{ key: "avatars/sky-cat.webp", contentType: "image/webp", bytes: expect.any(Number) },
+		])
+		const { rows } = await db.pool.query("SELECT id, label, file, created_by FROM avatar_presets")
+		expect(rows).toEqual([
+			{ id: "sky-cat", label: "Sky Cat", file: "sky-cat.webp", created_by: "k".repeat(64) },
+		])
+	})
+
+	it("rejects a duplicate id already in the catalogue with 409 and no upload", async () => {
+		const cdn = makeCdn()
+		const env: Env = { ...db.env, CDN: cdn.storage }
+		await post(env, { id: "dupe", label: "Dupe", mime: "image/png", dataBase64: pngBase64 })
+		const { status, body } = await post(env, {
+			id: "dupe",
+			label: "Dupe Two",
+			mime: "image/png",
+			dataBase64: pngBase64,
+		})
+		expect(status).toBe(409)
+		expect(body.code).toBe("AVATAR_PRESET_EXISTS")
+		expect(cdn.puts).toHaveLength(1)
+	})
+
+	it("returns 409 for an existing id and never touches the CDN", async () => {
+		await insertPreset(db.env, { id: "outofband", label: "Out", file: "outofband.webp" })
+		const cdn = makeCdn()
+		const env: Env = { ...db.env, CDN: cdn.storage }
+		const { status, body } = await post(env, {
+			id: "outofband",
+			label: "Out",
+			mime: "image/png",
+			dataBase64: pngBase64,
+		})
+		expect(status).toBe(409)
+		expect(body.code).toBe("AVATAR_PRESET_EXISTS")
+		expect(cdn.puts).toHaveLength(0)
+		expect(cdn.deletes).toHaveLength(0)
+	})
+
+	it("rolls back the reserved row when the CDN upload fails", async () => {
+		const failingCdn = {
+			async putObject() {
+				throw new Error("cdn down")
+			},
+			async listObjects() {
+				return []
+			},
+			async deleteObject() {},
+		} as unknown as NonNullable<Env["CDN"]>
+		const env: Env = { ...db.env, CDN: failingCdn }
+		const { status } = await post(env, {
+			id: "boom-cat",
+			label: "Boom",
+			mime: "image/png",
+			dataBase64: pngBase64,
+		})
+		expect(status).toBe(500)
+		const { rows } = await db.pool.query("SELECT id FROM avatar_presets WHERE id = 'boom-cat'")
+		expect(rows).toHaveLength(0)
 	})
 })

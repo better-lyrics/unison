@@ -96,6 +96,7 @@ function makeEnv(db: ReturnType<typeof makeMockDB>): Env {
 		DUMP_PUBLIC_BASE_URL: "",
 		DUMP_DATABASE_URL: null,
 		B2: null,
+		CDN: null,
 	}
 }
 
@@ -586,6 +587,7 @@ describe("GET /lyrics/mine", () => {
 			DUMP_PUBLIC_BASE_URL: "",
 			DUMP_DATABASE_URL: null,
 			B2: null,
+			CDN: null,
 		}
 		const app = lyricsRoutes(env)
 
@@ -744,6 +746,7 @@ describe("GET /lyrics/variants/:videoId", () => {
 			DUMP_PUBLIC_BASE_URL: "",
 			DUMP_DATABASE_URL: null,
 			B2: null,
+			CDN: null,
 		}
 		const app = lyricsRoutes(env)
 		const res = await app.handle(
@@ -787,6 +790,7 @@ describe("GET /lyrics/variants/:videoId", () => {
 			DUMP_PUBLIC_BASE_URL: "",
 			DUMP_DATABASE_URL: null,
 			B2: null,
+			CDN: null,
 		}
 		const app = lyricsRoutes(env)
 		const res = await app.handle(

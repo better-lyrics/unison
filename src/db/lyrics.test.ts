@@ -134,6 +134,7 @@ function createEnv(db: MockDB, cache: MockCache): Env {
 		DUMP_PUBLIC_BASE_URL: "",
 		DUMP_DATABASE_URL: null,
 		B2: null,
+		CDN: null,
 	}
 }
 
@@ -1468,6 +1469,7 @@ describe("softDeleteLyrics", () => {
 			DUMP_PUBLIC_BASE_URL: "",
 			DUMP_DATABASE_URL: null,
 			B2: null,
+			CDN: null,
 		} as Env
 
 		await expect(softDeleteLyrics(env, 1, 42, "submitter", "regret")).rejects.toThrow(

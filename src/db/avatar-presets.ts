@@ -1,3 +1,6 @@
+import { config } from "@/config"
+import type { Env } from "@/types"
+
 export interface AvatarPreset {
 	id: string
 	label: string
@@ -48,6 +51,90 @@ export const AVATAR_PRESETS: AvatarPreset[] = [
 	{ id: "yawning-tabby", label: "Yawning Tabby", file: "yawning-tabby.webp" },
 ]
 
+const BUILT_IN_IDS = new Set(AVATAR_PRESETS.map((p) => p.id))
+
+let catalogue: AvatarPreset[] = [...AVATAR_PRESETS]
+let lastRefreshStarted = 0
+let lastRefreshApplied = 0
+
+export function getPresets(): AvatarPreset[] {
+	return catalogue
+}
+
 export function findPreset(id: string): AvatarPreset | undefined {
-	return AVATAR_PRESETS.find((p) => p.id === id)
+	return catalogue.find((p) => p.id === id)
+}
+
+export async function refreshCatalogue(env: Env): Promise<void> {
+	const ticket = ++lastRefreshStarted
+	const published = await listPublishedPresets(env)
+	if (ticket < lastRefreshApplied) return
+	lastRefreshApplied = ticket
+	catalogue = [...AVATAR_PRESETS, ...published.filter((p) => !BUILT_IN_IDS.has(p.id))]
+}
+
+interface PresetRow {
+	id: string
+	label: string
+	file: string
+	createdBy?: string | null
+}
+
+export async function insertPreset(
+	env: Env,
+	preset: PresetRow,
+	now: number = Date.now()
+): Promise<"inserted" | "exists"> {
+	const { results } = await env.DB.prepare(
+		`INSERT INTO avatar_presets (id, label, file, created_by, created_at, published_at)
+		 VALUES (?, ?, ?, ?, ?, ?)
+		 ON CONFLICT (id) DO NOTHING
+		 RETURNING id`
+	)
+		.bind(preset.id, preset.label, preset.file, preset.createdBy ?? null, now, now)
+		.all<{ id: string }>()
+	return results.length > 0 ? "inserted" : "exists"
+}
+
+export async function reservePreset(
+	env: Env,
+	preset: PresetRow,
+	now: number = Date.now()
+): Promise<"reserved" | "exists"> {
+	const { results } = await env.DB.prepare(
+		`INSERT INTO avatar_presets (id, label, file, created_by, created_at, published_at)
+		 VALUES (?, ?, ?, ?, ?, NULL)
+		 ON CONFLICT (id) DO UPDATE SET
+		   label = EXCLUDED.label, file = EXCLUDED.file,
+		   created_by = EXCLUDED.created_by, created_at = EXCLUDED.created_at
+		 WHERE avatar_presets.published_at IS NULL AND avatar_presets.created_at < ?
+		 RETURNING id`
+	)
+		.bind(
+			preset.id,
+			preset.label,
+			preset.file,
+			preset.createdBy ?? null,
+			now,
+			now - config.avatar.reservationTtlMs
+		)
+		.all<{ id: string }>()
+	return results.length > 0 ? "reserved" : "exists"
+}
+
+export async function publishPreset(env: Env, id: string, now: number = Date.now()): Promise<void> {
+	await env.DB.prepare("UPDATE avatar_presets SET published_at = ? WHERE id = ?")
+		.bind(now, id)
+		.run()
+}
+
+export async function deletePreset(env: Env, id: string): Promise<void> {
+	await env.DB.prepare("DELETE FROM avatar_presets WHERE id = ?").bind(id).run()
+}
+
+export async function listPublishedPresets(env: Env): Promise<AvatarPreset[]> {
+	const { results } = await env.DB.prepare(
+		"SELECT id, label, file FROM avatar_presets WHERE published_at IS NOT NULL ORDER BY id"
+	).all<AvatarPreset>()
+	return results
 }
