@@ -22,6 +22,10 @@ export class DiscordOAuthError extends Error {
 	}
 }
 
+export function sanitizeDiscordAvatarHash(hash: string | null | undefined): string | null {
+	return hash && DISCORD_AVATAR_HASH.test(hash) ? hash : null
+}
+
 export function buildAuthorizeUrl(
 	cfg: Pick<DiscordOAuthConfig, "clientId" | "redirectUri">,
 	state: string,
@@ -76,6 +80,6 @@ export async function exchangeCodeForUser(
 		id: user.id,
 		username: user.username,
 		displayName: user.global_name || user.username,
-		avatar: user.avatar && DISCORD_AVATAR_HASH.test(user.avatar) ? user.avatar : null,
+		avatar: sanitizeDiscordAvatarHash(user.avatar),
 	}
 }

@@ -106,6 +106,7 @@ export const config = {
 		stateTtlSeconds: 600, // OAuth round-trip window for the Discord link flow
 		discordScope: "identify",
 		blacklistedKeyIds: new Set<string>([COMMUNITY_KEY_ID]),
+		botProfileBatchMax: 100,
 	},
 
 	avatar: {

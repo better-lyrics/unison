@@ -44,17 +44,18 @@ export async function linkDiscord(
 export async function refreshDiscordProfile(
 	env: Env,
 	params: {
-		keyId: string
 		discordId: string
 		discordUsername: string | null
 		discordAvatar: string | null
 	}
-): Promise<void> {
-	await env.DB.prepare(
-		"UPDATE discord_links SET discord_username = ?, discord_avatar = ? WHERE key_id = ? AND discord_id = ?"
+): Promise<boolean> {
+	const { discordId, discordUsername, discordAvatar } = params
+	const row = await env.DB.prepare(
+		"UPDATE discord_links SET discord_username = ?, discord_avatar = ? WHERE discord_id = ? AND (discord_username IS DISTINCT FROM ? OR discord_avatar IS DISTINCT FROM ?) RETURNING discord_id"
 	)
-		.bind(params.discordUsername, params.discordAvatar, params.keyId, params.discordId)
-		.run()
+		.bind(discordUsername, discordAvatar, discordId, discordUsername, discordAvatar)
+		.first<{ discord_id: string }>()
+	return row !== null
 }
 
 export async function unlinkByKeyId(env: Env, keyId: string): Promise<void> {

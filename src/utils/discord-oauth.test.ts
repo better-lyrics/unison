@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest"
-import { DiscordOAuthError, buildAuthorizeUrl, exchangeCodeForUser } from "./discord-oauth"
+import {
+	DiscordOAuthError,
+	buildAuthorizeUrl,
+	exchangeCodeForUser,
+	sanitizeDiscordAvatarHash,
+} from "./discord-oauth"
 
 const HASH = "8342729096ea3675442027381ff50dfe"
 
@@ -144,6 +149,49 @@ describe("exchangeCodeForUser", () => {
 			await expect(exchangeCodeForUser(CFG, "code", fetchImpl)).rejects.toBeInstanceOf(
 				DiscordOAuthError
 			)
+		})
+	})
+})
+
+describe("sanitizeDiscordAvatarHash", () => {
+	it("keeps a static avatar hash", () => {
+		expect(sanitizeDiscordAvatarHash(HASH)).toBe(HASH)
+	})
+
+	it("keeps an animated avatar hash", () => {
+		expect(sanitizeDiscordAvatarHash(`a_${HASH}`)).toBe(`a_${HASH}`)
+	})
+
+	describe("edge cases", () => {
+		it("returns null for null", () => {
+			expect(sanitizeDiscordAvatarHash(null)).toBeNull()
+		})
+
+		it("returns null for an empty string", () => {
+			expect(sanitizeDiscordAvatarHash("")).toBeNull()
+		})
+
+		it("rejects uppercase hex", () => {
+			expect(sanitizeDiscordAvatarHash(HASH.toUpperCase())).toBeNull()
+		})
+
+		it("rejects a hash one character short or long", () => {
+			expect(sanitizeDiscordAvatarHash(HASH.slice(1))).toBeNull()
+			expect(sanitizeDiscordAvatarHash(`${HASH}0`)).toBeNull()
+		})
+
+		it("rejects surrounding whitespace", () => {
+			expect(sanitizeDiscordAvatarHash(` ${HASH}`)).toBeNull()
+		})
+	})
+
+	describe("error paths", () => {
+		it("rejects a path traversal payload", () => {
+			expect(sanitizeDiscordAvatarHash("../../evil?x=")).toBeNull()
+		})
+
+		it("rejects a hash with an unknown prefix", () => {
+			expect(sanitizeDiscordAvatarHash(`b_${HASH}`)).toBeNull()
 		})
 	})
 })
