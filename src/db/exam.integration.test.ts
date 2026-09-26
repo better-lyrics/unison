@@ -10,6 +10,7 @@ import {
 	getSessionByKeyId,
 	getSessionByTokenHash,
 	getSessionQuestions,
+	listApplicantReports,
 	listApplicants,
 	loadDrawableBank,
 	markExamStarted,
@@ -265,6 +266,95 @@ describeIntegration("exam data access (integration)", () => {
 		const stored = await getSessionByKeyId(env, KEY("a"))
 		expect(stored?.state).toBe("approved")
 		expect(stored?.decidedByDiscordId).toBe("admin1")
+	})
+
+	describe("listApplicantReports", () => {
+		async function gradedSession(
+			key: string,
+			discordId: string,
+			opts: { submittedAt: number; isDev?: boolean; tokenHash: string }
+		) {
+			const session = await startSession(
+				env,
+				{
+					keyId: key,
+					discordId,
+					tokenHash: opts.tokenHash,
+					seed: 1,
+					expiresAt: SOON,
+					isDev: opts.isDev ?? false,
+				},
+				[1, 3]
+			)
+			await recordGrade(env, session.id, {
+				state: "pending_review",
+				score: 4,
+				maxScore: 6,
+				cutoff: 5.1,
+				submittedAt: opts.submittedAt,
+				perQuestion: [
+					{ questionId: 1, awardedPoints: 3, maxPoints: 3 },
+					{ questionId: 3, awardedPoints: 1, maxPoints: 3 },
+				],
+			})
+			return session
+		}
+
+		it("keeps an approved applicant's report with its breakdown and decision", async () => {
+			await seedBank()
+			const session = await gradedSession(KEY("a"), "d1", { submittedAt: 100, tokenHash: "h1" })
+			await recordDecision(env, session.id, "approve", "admin1")
+
+			const [report] = await listApplicantReports(env, "d1")
+			expect(report).toMatchObject({
+				applicantId: session.id,
+				discordId: "d1",
+				score: 4,
+				maxScore: 6,
+				state: "approved",
+				decidedByDiscordId: "admin1",
+			})
+			expect(report.decidedAt).toEqual(expect.any(Number))
+			expect(report.breakdown).toContainEqual({ section: "seal-or-not", score: 3, max: 3 })
+		})
+
+		it("lists every graded attempt for the user, newest first", async () => {
+			await seedBank()
+			const older = await gradedSession(KEY("a"), "d1", { submittedAt: 100, tokenHash: "h1" })
+			const newer = await gradedSession(KEY("b"), "d1", { submittedAt: 200, tokenHash: "h2" })
+			const reports = await listApplicantReports(env, "d1")
+			expect(reports.map((r) => r.applicantId)).toEqual([newer.id, older.id])
+		})
+
+		describe("edge cases", () => {
+			it("returns nothing for a user who never took the exam", async () => {
+				expect(await listApplicantReports(env, "nobody")).toEqual([])
+			})
+
+			it("skips attempts that are not graded yet", async () => {
+				await seedBank()
+				await startSession(
+					env,
+					{
+						keyId: KEY("a"),
+						discordId: "d1",
+						tokenHash: "h",
+						seed: 1,
+						expiresAt: SOON,
+						isDev: false,
+					},
+					[1]
+				)
+				expect(await listApplicantReports(env, "d1")).toEqual([])
+			})
+
+			it("skips dev sessions and other users", async () => {
+				await seedBank()
+				await gradedSession(KEY("a"), "d1", { submittedAt: 100, tokenHash: "h1", isDev: true })
+				await gradedSession(KEY("b"), "d2", { submittedAt: 100, tokenHash: "h2" })
+				expect(await listApplicantReports(env, "d1")).toEqual([])
+			})
+		})
 	})
 
 	describe("resolveCandidateName", () => {

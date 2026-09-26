@@ -444,6 +444,8 @@ export interface Applicant {
 	breakdown: ApplicantArea[]
 	submittedAt: number | null
 	state: ExamSessionState
+	decidedAt: number | null
+	decidedByDiscordId: string | null
 }
 
 export async function listApplicants(env: Env, includeBelowCutoff: boolean): Promise<Applicant[]> {
@@ -453,7 +455,21 @@ export async function listApplicants(env: Env, includeBelowCutoff: boolean): Pro
 	)
 		.bind(states)
 		.all<ExamSessionRow>()
-	const sessions = res.results.map(toSession)
+	return toApplicants(env, res.results.map(toSession))
+}
+
+export async function listApplicantReports(env: Env, discordId: string): Promise<Applicant[]> {
+	const res = await env.DB.prepare(
+		`SELECT ${SESSION_COLS} FROM exam_session
+		WHERE discord_id = ? AND is_dev = FALSE AND state <> 'in_progress'
+		ORDER BY submitted_at DESC NULLS LAST, id DESC`
+	)
+		.bind(discordId)
+		.all<ExamSessionRow>()
+	return toApplicants(env, res.results.map(toSession))
+}
+
+async function toApplicants(env: Env, sessions: ExamSession[]): Promise<Applicant[]> {
 	if (sessions.length === 0) return []
 
 	const breakdowns = await loadBreakdowns(
@@ -474,6 +490,8 @@ export async function listApplicants(env: Env, includeBelowCutoff: boolean): Pro
 			breakdown: breakdowns.get(s.id) ?? [],
 			submittedAt: s.submittedAt,
 			state: s.state,
+			decidedAt: s.decidedAt,
+			decidedByDiscordId: s.decidedByDiscordId,
 		})
 	}
 	return applicants
