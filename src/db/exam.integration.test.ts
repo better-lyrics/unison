@@ -1,6 +1,8 @@
 import { readFileSync } from "node:fs"
+import { config } from "@/config"
 import { D1Compat } from "@/infra/database"
 import type { Env } from "@/types"
+import { canStartNewAttempt } from "@/utils/exam-retake"
 import { hashExamToken } from "@/utils/exam-token"
 import type { AnswerKey } from "@/utils/exam-types"
 import pg from "pg"
@@ -20,6 +22,7 @@ import {
 	resolveExamSession,
 	retireQuestionsExcept,
 	saveAnswer,
+	startAttempt,
 	startSession,
 	upsertQuestions,
 } from "./exam"
@@ -347,6 +350,97 @@ describeIntegration("exam data access (integration)", () => {
 				[2]
 			)
 			expect(await recordDecision(env, mine.id, "approve", "admin1")).toBe(true)
+		})
+	})
+
+	describe("startAttempt", () => {
+		const admitByRule = (latest: NonNullable<Parameters<typeof canStartNewAttempt>[0]>) =>
+			canStartNewAttempt(latest, config.exam.retakeCooldownSec, Math.floor(Date.now() / 1000))
+
+		function attemptParams(keyId: string, tokenHash: string) {
+			return { keyId, discordId: "d1", tokenHash, seed: 1, expiresAt: SOON, isDev: false }
+		}
+
+		async function failOldAttempt(keyId: string, tokenHash: string) {
+			const session = await startSession(env, attemptParams(keyId, tokenHash), [1])
+			await recordGrade(env, session.id, {
+				state: "failed",
+				score: 1,
+				maxScore: 3,
+				cutoff: 2.55,
+				submittedAt: 100,
+				perQuestion: [{ questionId: 1, awardedPoints: 1, maxPoints: 3 }],
+			})
+			return session
+		}
+
+		async function realRows(keyId: string) {
+			const res = await pool.query<{ id: string; state: string }>(
+				"SELECT id, state FROM exam_session WHERE key_id = $1 AND is_dev = FALSE ORDER BY id",
+				[keyId]
+			)
+			return res.rows
+		}
+
+		it("starts a first attempt without consulting the retake rule", async () => {
+			await seedBank()
+			const result = await startAttempt(env, attemptParams(KEY("a"), "h1"), [1], () => false)
+			expect(result.ok).toBe(true)
+			expect(await realRows(KEY("a"))).toHaveLength(1)
+		})
+
+		it("hands the newest real attempt to the retake rule", async () => {
+			await seedBank()
+			const old = await failOldAttempt(KEY("a"), "h1")
+			const seen: number[] = []
+			await startAttempt(env, attemptParams(KEY("a"), "h2"), [2], (latest) => {
+				seen.push(latest.id)
+				return false
+			})
+			expect(seen).toEqual([old.id])
+		})
+
+		it("refuses without inserting when the rule rejects the latest attempt", async () => {
+			await seedBank()
+			const first = await startSession(env, attemptParams(KEY("a"), "h1"), [1])
+			const result = await startAttempt(env, attemptParams(KEY("a"), "h2"), [2], admitByRule)
+			expect(result).toEqual({ ok: false, latest: expect.objectContaining({ id: first.id }) })
+			expect(await realRows(KEY("a"))).toHaveLength(1)
+		})
+
+		it("starts a retake once the rule admits the failed attempt", async () => {
+			await seedBank()
+			await failOldAttempt(KEY("a"), "h1")
+			const result = await startAttempt(env, attemptParams(KEY("a"), "h2"), [2], admitByRule)
+			expect(result.ok).toBe(true)
+			expect((await realRows(KEY("a"))).map((r) => r.state)).toEqual(["failed", "in_progress"])
+		})
+
+		describe("invariants", () => {
+			it("lets exactly one of two simultaneous starts through", async () => {
+				await seedBank()
+				const results = await Promise.all([
+					startAttempt(env, attemptParams(KEY("a"), "h1"), [1], admitByRule),
+					startAttempt(env, attemptParams(KEY("a"), "h2"), [2], admitByRule),
+				])
+				expect(results.filter((r) => r.ok)).toHaveLength(1)
+				const loser = results.find((r) => !r.ok)
+				expect(loser && !loser.ok && loser.latest.state).toBe("in_progress")
+				expect(await realRows(KEY("a"))).toHaveLength(1)
+			})
+
+			it("regression: never both approves an old attempt and opens a retake for it", async () => {
+				await seedBank()
+				for (const c of ["p", "q", "r", "s", "t", "u", "v", "w"]) {
+					const old = await failOldAttempt(KEY(c), `h-${c}`)
+					const [approved, started] = await Promise.all([
+						recordDecision(env, old.id, "approve", "admin1"),
+						startAttempt(env, attemptParams(KEY(c), `h2-${c}`), [2], admitByRule),
+					])
+					expect(approved && started.ok).toBe(false)
+					expect(approved || started.ok).toBe(true)
+				}
+			})
 		})
 	})
 

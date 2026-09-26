@@ -26,6 +26,7 @@ vi.mock("@/db/exam", () => ({
 	resolveCandidateName: vi.fn(),
 	resolveExamSession: vi.fn(),
 	saveAnswer: vi.fn(),
+	startAttempt: vi.fn(),
 	startSession: vi.fn(),
 	upsertQuestions: vi.fn(),
 }))
@@ -68,11 +69,12 @@ const okSession = {
 	examStartedAt: null,
 	state: "in_progress" as const,
 }
-const { startSession, loadDrawableBank } = examDb
+const { startAttempt, startSession, loadDrawableBank } = examDb
 
 beforeEach(() => {
 	vi.clearAllMocks()
 	vi.mocked(startSession).mockResolvedValue({ id: 9 } as never)
+	vi.mocked(startAttempt).mockResolvedValue({ ok: true, session: { id: 9 } } as never)
 	vi.mocked(loadDrawableBank).mockResolvedValue([])
 	vi.mocked(resolveDisplayName).mockResolvedValue("Tester")
 	vi.mocked(examDb.resolveCandidateName).mockResolvedValue("test_candidate")
@@ -104,7 +106,7 @@ describe("POST /exam/bot/start", () => {
 		expect(body.data.status).toBe("eligible")
 		expect(body.data.examUrl).toMatch(/^https:\/\/unison\.test\/exam\?t=[A-Za-z0-9_-]+$/)
 		expect(typeof body.data.expiresAt).toBe("number")
-		expect(vi.mocked(startSession)).toHaveBeenCalled()
+		expect(vi.mocked(startAttempt)).toHaveBeenCalled()
 	})
 
 	it("derives an absolute link from RAILWAY_PUBLIC_DOMAIN when EXAM_BASE_URL is unset", async () => {
@@ -127,7 +129,7 @@ describe("POST /exam/bot/start", () => {
 		})
 		expect(res.status).toBe(500)
 		expect(((await res.json()) as { code: string }).code).toBe("EXAM_NOT_CONFIGURED")
-		expect(vi.mocked(startSession)).not.toHaveBeenCalled()
+		expect(vi.mocked(startAttempt)).not.toHaveBeenCalled()
 	})
 
 	it("resumes an in_progress session with a fresh link, without a new draw", async () => {
@@ -138,7 +140,7 @@ describe("POST /exam/bot/start", () => {
 		const body = (await res.json()) as { data: { status: string; examUrl: string } }
 		expect(body.data.status).toBe("eligible")
 		expect(vi.mocked(examDb.reissueToken)).toHaveBeenCalled()
-		expect(vi.mocked(startSession)).not.toHaveBeenCalled()
+		expect(vi.mocked(startAttempt)).not.toHaveBeenCalled()
 	})
 
 	it("reports a failed attempt inside the cooldown as already_attempted with its retake time", async () => {
@@ -162,7 +164,7 @@ describe("POST /exam/bot/start", () => {
 			submittedAt: NOW,
 			retakeAt: NOW + COOLDOWN,
 		})
-		expect(vi.mocked(startSession)).not.toHaveBeenCalled()
+		expect(vi.mocked(startAttempt)).not.toHaveBeenCalled()
 	})
 
 	it("mints a fresh draw for a failed attempt once the cooldown has passed", async () => {
@@ -178,7 +180,7 @@ describe("POST /exam/bot/start", () => {
 		const body = (await res.json()) as { data: { status: string; examUrl: string } }
 		expect(body.data.status).toBe("eligible")
 		expect(body.data.examUrl).toMatch(/^https:\/\/unison\.test\/exam\?t=/)
-		expect(vi.mocked(startSession)).toHaveBeenCalled()
+		expect(vi.mocked(startAttempt)).toHaveBeenCalled()
 		expect(vi.mocked(examDb.reissueToken)).not.toHaveBeenCalled()
 	})
 
@@ -193,7 +195,7 @@ describe("POST /exam/bot/start", () => {
 		} as never)
 		const res = await post(botApp(), "/exam/bot/start", { keyId: KEY, discordId: "d1" })
 		expect(((await res.json()) as { data: { status: string } }).data.status).toBe("eligible")
-		expect(vi.mocked(startSession)).toHaveBeenCalled()
+		expect(vi.mocked(startAttempt)).toHaveBeenCalled()
 	})
 
 	it("keeps a council rejection locked until the cooldown from the decision passes", async () => {
@@ -210,21 +212,16 @@ describe("POST /exam/bot/start", () => {
 		const body = (await res.json()) as { data: { status: string; attempt: { retakeAt: number } } }
 		expect(body.data.status).toBe("already_attempted")
 		expect(body.data.attempt.retakeAt).toBe(NOW - 10 + COOLDOWN)
-		expect(vi.mocked(startSession)).not.toHaveBeenCalled()
+		expect(vi.mocked(startAttempt)).not.toHaveBeenCalled()
 	})
 
-	it("resumes the winning session when a simultaneous start already opened one", async () => {
+	it("resumes the session a simultaneous start opened first", async () => {
 		vi.mocked(isAuthorizedBot).mockReturnValue(true)
 		vi.mocked(getUserByKeyId).mockResolvedValue(user)
-		vi.mocked(examDb.getLatestSessionByKeyId)
-			.mockResolvedValueOnce(null)
-			.mockResolvedValueOnce({ ...okSession } as never)
-		vi.mocked(startSession).mockRejectedValueOnce(
-			Object.assign(new Error("duplicate key"), { code: "23505" })
-		)
+		vi.mocked(examDb.getLatestSessionByKeyId).mockResolvedValue(null)
+		vi.mocked(startAttempt).mockResolvedValueOnce({ ok: false, latest: { ...okSession } } as never)
 		const res = await post(botApp(), "/exam/bot/start", { keyId: KEY, discordId: "d1" })
 		const body = (await res.json()) as { data: { status: string; examUrl: string } }
-		expect(res.status).toBe(200)
 		expect(body.data.status).toBe("eligible")
 		expect(body.data.examUrl).toMatch(/^https:\/\/unison\.test\/exam\?t=/)
 		expect(vi.mocked(examDb.reissueToken)).toHaveBeenCalledWith(
@@ -235,11 +232,43 @@ describe("POST /exam/bot/start", () => {
 		)
 	})
 
-	it("still fails loudly on a start error that is not a lost race", async () => {
+	it("reports the approval that landed while a retake was being started", async () => {
+		vi.mocked(isAuthorizedBot).mockReturnValue(true)
+		vi.mocked(getUserByKeyId).mockResolvedValue(user)
+		vi.mocked(examDb.getLatestSessionByKeyId).mockResolvedValue({
+			...okSession,
+			state: "failed",
+			submittedAt: NOW - COOLDOWN - 1,
+			decidedAt: null,
+		} as never)
+		vi.mocked(startAttempt).mockResolvedValueOnce({
+			ok: false,
+			latest: { ...okSession, state: "approved", score: 80, submittedAt: 1, decidedAt: NOW },
+		} as never)
+		const res = await post(botApp(), "/exam/bot/start", { keyId: KEY, discordId: "d1" })
+		const body = (await res.json()) as { data: { status: string; attempt: object } }
+		expect(body.data.status).toBe("already_attempted")
+		expect(body.data.attempt).toEqual({ state: "approved", score: 80, submittedAt: 1 })
+		expect(vi.mocked(examDb.reissueToken)).not.toHaveBeenCalled()
+	})
+
+	it("admits through the retake rule so the database re-checks it under the lock", async () => {
 		vi.mocked(isAuthorizedBot).mockReturnValue(true)
 		vi.mocked(getUserByKeyId).mockResolvedValue(user)
 		vi.mocked(examDb.getLatestSessionByKeyId).mockResolvedValue(null)
-		vi.mocked(startSession).mockRejectedValueOnce(new Error("connection reset"))
+		await post(botApp(), "/exam/bot/start", { keyId: KEY, discordId: "d1" })
+		const admit = vi.mocked(startAttempt).mock.calls[0][3]
+		expect(admit({ ...okSession, submittedAt: null, decidedAt: null } as never)).toBe(false)
+		expect(
+			admit({ ...okSession, state: "failed", submittedAt: NOW, decidedAt: null } as never)
+		).toBe(false)
+	})
+
+	it("still fails loudly when starting the attempt errors", async () => {
+		vi.mocked(isAuthorizedBot).mockReturnValue(true)
+		vi.mocked(getUserByKeyId).mockResolvedValue(user)
+		vi.mocked(examDb.getLatestSessionByKeyId).mockResolvedValue(null)
+		vi.mocked(startAttempt).mockRejectedValueOnce(new Error("connection reset"))
 		const res = await post(botApp(), "/exam/bot/start", { keyId: KEY, discordId: "d1" })
 		expect(res.status).toBe(500)
 		expect(vi.mocked(examDb.reissueToken)).not.toHaveBeenCalled()
@@ -261,7 +290,7 @@ describe("POST /exam/bot/start", () => {
 			const body = (await res.json()) as { data: { status: string; attempt: object } }
 			expect(body.data.status).toBe("already_attempted")
 			expect(body.data.attempt).toEqual({ state, score: 95, submittedAt: 1 })
-			expect(vi.mocked(startSession)).not.toHaveBeenCalled()
+			expect(vi.mocked(startAttempt)).not.toHaveBeenCalled()
 		}
 	)
 })

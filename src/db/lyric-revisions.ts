@@ -1,4 +1,4 @@
-import type { D1Compat } from "@/infra/database"
+import { type D1Compat, advisoryXactLock } from "@/infra/database"
 import type {
 	LyricsFormat,
 	PendingReason,
@@ -187,10 +187,7 @@ export async function getPreviouslyLiveRow(
 
 // Serializes one author's saves across lyrics so the per-user daily limit holds.
 export async function lockRevisionAuthor(tx: D1Compat, authorId: number): Promise<void> {
-	await tx
-		.prepare("SELECT pg_advisory_xact_lock(hashtext(?))")
-		.bind(`lyric-revisions:author:${authorId}`)
-		.run()
+	await advisoryXactLock(tx, `lyric-revisions:author:${authorId}`)
 }
 
 export async function countRecentRevisions(

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { retakeAvailableAt } from "./exam-retake"
+import { canStartNewAttempt, retakeAvailableAt } from "./exam-retake"
 
 const COOLDOWN = 1000
 
@@ -56,6 +56,57 @@ describe("retakeAvailableAt", () => {
 			for (const decidedAt of [50, 51, 900]) {
 				const at = retakeAvailableAt({ state: "rejected", submittedAt: 50, decidedAt }, COOLDOWN)
 				expect(at).toBeGreaterThanOrEqual(50 + COOLDOWN)
+			}
+		})
+	})
+})
+
+describe("canStartNewAttempt", () => {
+	it("admits an account that has never sat the exam", () => {
+		expect(canStartNewAttempt(null, COOLDOWN, 0)).toBe(true)
+	})
+
+	it("admits a failed attempt once the cooldown has passed", () => {
+		expect(
+			canStartNewAttempt({ state: "failed", submittedAt: 50, decidedAt: null }, COOLDOWN, 1050)
+		).toBe(true)
+	})
+
+	describe("edge cases", () => {
+		it("refuses one second before the retake time", () => {
+			expect(
+				canStartNewAttempt({ state: "failed", submittedAt: 50, decidedAt: null }, COOLDOWN, 1049)
+			).toBe(false)
+		})
+
+		it("refuses an attempt that is still in progress", () => {
+			expect(
+				canStartNewAttempt(
+					{ state: "in_progress", submittedAt: null, decidedAt: null },
+					COOLDOWN,
+					10_000
+				)
+			).toBe(false)
+		})
+
+		it.each(["pending_review", "approved"] as const)(
+			"refuses %s however much time has passed",
+			(state) => {
+				expect(canStartNewAttempt({ state, submittedAt: 1, decidedAt: 2 }, COOLDOWN, 10_000)).toBe(
+					false
+				)
+			}
+		)
+	})
+
+	describe("invariants", () => {
+		it("agrees with retakeAvailableAt for every graded outcome", () => {
+			for (const state of ["failed", "rejected", "pending_review", "approved"] as const) {
+				const attempt = { state, submittedAt: 50, decidedAt: 200 }
+				const at = retakeAvailableAt(attempt, COOLDOWN)
+				for (const now of [0, 1199, 1200, 5000]) {
+					expect(canStartNewAttempt(attempt, COOLDOWN, now)).toBe(at !== null && now >= at)
+				}
 			}
 		})
 	})

@@ -1,3 +1,4 @@
+import { type D1Compat, advisoryXactLock } from "@/infra/database"
 import type { Env } from "@/types"
 import { hashExamToken } from "@/utils/exam-token"
 import type { AnswerKey, AnswerValue, ExamQuestionType } from "@/utils/exam-types"
@@ -162,36 +163,65 @@ export interface StartSessionParams {
 	isDev: boolean
 }
 
+async function insertSession(
+	tx: D1Compat,
+	params: StartSessionParams,
+	orderedQuestionIds: number[]
+): Promise<ExamSession> {
+	const row = await tx
+		.prepare(
+			`INSERT INTO exam_session (key_id, discord_id, token_hash, seed, is_dev, expires_at)
+			VALUES (?, ?, ?, ?, ?, ?) RETURNING ${SESSION_COLS}`
+		)
+		.bind(
+			params.keyId,
+			params.discordId,
+			params.tokenHash,
+			params.seed,
+			params.isDev,
+			params.expiresAt
+		)
+		.first<ExamSessionRow>()
+	const session = toSession(row as ExamSessionRow)
+	for (let i = 0; i < orderedQuestionIds.length; i++) {
+		await tx
+			.prepare(
+				"INSERT INTO exam_session_question (session_id, question_id, position) VALUES (?, ?, ?)"
+			)
+			.bind(session.id, orderedQuestionIds[i], i)
+			.run()
+	}
+	return session
+}
+
 export async function startSession(
 	env: Env,
 	params: StartSessionParams,
 	orderedQuestionIds: number[]
 ): Promise<ExamSession> {
+	return env.DB.transaction((tx) => insertSession(tx, params, orderedQuestionIds))
+}
+
+// Starts and decisions for one account take this lock so each sees the other's committed result.
+function lockAccountAttempts(tx: D1Compat, keyId: string): Promise<void> {
+	return advisoryXactLock(tx, `exam:${keyId}`)
+}
+
+export type StartAttemptResult =
+	| { ok: true; session: ExamSession }
+	| { ok: false; latest: ExamSession }
+
+export async function startAttempt(
+	env: Env,
+	params: StartSessionParams,
+	orderedQuestionIds: number[],
+	admitRetake: (latest: ExamSession) => boolean
+): Promise<StartAttemptResult> {
 	return env.DB.transaction(async (tx) => {
-		const row = await tx
-			.prepare(
-				`INSERT INTO exam_session (key_id, discord_id, token_hash, seed, is_dev, expires_at)
-				VALUES (?, ?, ?, ?, ?, ?) RETURNING ${SESSION_COLS}`
-			)
-			.bind(
-				params.keyId,
-				params.discordId,
-				params.tokenHash,
-				params.seed,
-				params.isDev,
-				params.expiresAt
-			)
-			.first<ExamSessionRow>()
-		const session = toSession(row as ExamSessionRow)
-		for (let i = 0; i < orderedQuestionIds.length; i++) {
-			await tx
-				.prepare(
-					"INSERT INTO exam_session_question (session_id, question_id, position) VALUES (?, ?, ?)"
-				)
-				.bind(session.id, orderedQuestionIds[i], i)
-				.run()
-		}
-		return session
+		await lockAccountAttempts(tx, params.keyId)
+		const latest = await selectLatestSession(tx, params.keyId)
+		if (latest && !admitRetake(latest)) return { ok: false, latest }
+		return { ok: true, session: await insertSession(tx, params, orderedQuestionIds) }
 	})
 }
 
@@ -199,11 +229,16 @@ export async function getLatestSessionByKeyId(
 	env: Env,
 	keyId: string
 ): Promise<ExamSession | null> {
-	const row = await env.DB.prepare(
-		`SELECT ${SESSION_COLS} FROM exam_session
-		WHERE key_id = ? AND is_dev = FALSE
-		ORDER BY id DESC LIMIT 1`
-	)
+	return selectLatestSession(env.DB, keyId)
+}
+
+async function selectLatestSession(db: D1Compat, keyId: string): Promise<ExamSession | null> {
+	const row = await db
+		.prepare(
+			`SELECT ${SESSION_COLS} FROM exam_session
+			WHERE key_id = ? AND is_dev = FALSE
+			ORDER BY id DESC LIMIT 1`
+		)
 		.bind(keyId)
 		.first<ExamSessionRow>()
 	return row ? toSession(row) : null
@@ -547,14 +582,22 @@ export async function recordDecision(
 	deciderDiscordId: string
 ): Promise<boolean> {
 	const state = decision === "approve" ? "approved" : "rejected"
-	const now = Math.floor(Date.now() / 1000)
-	const row = await env.DB.prepare(
-		`UPDATE exam_session
-		SET state = ?, decided_at = ?, decided_by_discord_id = ?
-		WHERE id = ? AND state IN ('pending_review', 'failed') AND ${IS_LATEST_ATTEMPT}
-		RETURNING id`
-	)
-		.bind(state, now, deciderDiscordId, applicantId)
-		.first<{ id: number | string }>()
-	return row !== null
+	return env.DB.transaction(async (tx) => {
+		const target = await tx
+			.prepare("SELECT key_id FROM exam_session WHERE id = ?")
+			.bind(applicantId)
+			.first<{ key_id: string }>()
+		if (!target) return false
+		await lockAccountAttempts(tx, target.key_id)
+		const row = await tx
+			.prepare(
+				`UPDATE exam_session
+				SET state = ?, decided_at = ?, decided_by_discord_id = ?
+				WHERE id = ? AND state IN ('pending_review', 'failed') AND ${IS_LATEST_ATTEMPT}
+				RETURNING id`
+			)
+			.bind(state, Math.floor(Date.now() / 1000), deciderDiscordId, applicantId)
+			.first<{ id: number | string }>()
+		return row !== null
+	})
 }

@@ -15,3 +15,13 @@ export function retakeAvailableAt(attempt: ExamAttemptOutcome, cooldownSec: numb
 				: null
 	return anchor === null ? null : anchor + cooldownSec
 }
+
+export function canStartNewAttempt(
+	latest: ExamAttemptOutcome | null,
+	cooldownSec: number,
+	now: number
+): boolean {
+	if (latest === null) return true
+	const retakeAt = retakeAvailableAt(latest, cooldownSec)
+	return retakeAt !== null && now >= retakeAt
+}
