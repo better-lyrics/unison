@@ -62,8 +62,9 @@ export function AboutPage() {
       </section>
 
       <section className="rounded-2xl border border-unison-border/50 bg-[rgba(255,255,255,0.075)] px-3.5 py-2.5 text-sm leading-relaxed text-pretty text-unison-text-secondary">
-        Heads up: signing in with Better Lyrics doesn't work in Firefox yet. You'll need a Chromium browser like Chrome
-        or Edge for now.
+        Heads up: without the Better Lyrics extension (Firefox, for example), sign in with your identity file. Export
+        it in Better Lyrics options → Identity → Export Key, then pick Sign in → Upload identity file. Linking Discord
+        still needs the extension in Chrome or Edge.
       </section>
 
       <section className="space-y-3">
