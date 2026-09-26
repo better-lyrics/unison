@@ -50,13 +50,11 @@ describe("signInWithIdentityFile", () => {
   })
 
   describe("edge cases", () => {
-    it("accepts an uppercase keyId, matching the server's case-insensitive check", async () => {
+    it("regression: rejects an uppercase keyId, which the server would register as a second account", async () => {
       const exported = await makeIdentityExport()
-      const body = await signInWithIdentityFile(
-        identityFile({ ...exported, keyId: exported.keyId.toUpperCase() }),
-        NONCE,
-      )
-      expect(await verifySignature(body.payload as object, body.signature, body.publicKey as JsonWebKey)).toBe(true)
+      await expect(
+        signInWithIdentityFile(identityFile({ ...exported, keyId: exported.keyId.toUpperCase() }), NONCE),
+      ).rejects.toThrow(IDENTITY_FILE_ERRORS.damaged)
     })
 
     it("tolerates extra JWK fields such as key_ops and ext", async () => {

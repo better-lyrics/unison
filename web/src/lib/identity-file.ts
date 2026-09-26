@@ -58,7 +58,7 @@ function toBase64(buffer: ArrayBuffer): string {
 
 async function importSigningKey(identity: IdentityExport): Promise<CryptoKey> {
   const sameKey = identity.privateKey.x === identity.publicKey.x && identity.privateKey.y === identity.publicKey.y
-  if (!sameKey || (await hashPublicKey(identity.publicKey)) !== identity.keyId.toLowerCase()) {
+  if (!sameKey || (await hashPublicKey(identity.publicKey)) !== identity.keyId) {
     throw new Error(IDENTITY_FILE_ERRORS.damaged)
   }
   try {
