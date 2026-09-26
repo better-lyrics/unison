@@ -64,6 +64,25 @@ describe("formatAvatar", () => {
 		})
 	})
 
+	describe("regressions", () => {
+		it("regression: treats a single-frame webp as static", async () => {
+			const staticWebp = await sharp(await makeNoisyPng(512))
+				.webp()
+				.toBuffer()
+			const { webp, animated } = await formatAvatar(staticWebp, "image/webp")
+			expect(animated).toBe(false)
+			const meta = await sharp(webp).metadata()
+			expect(meta.width).toBe(256)
+			expect(meta.height).toBe(256)
+		})
+
+		it("regression: still treats an animated webp as animated", async () => {
+			const animWebp = await sharp(animGif, { animated: true }).webp().toBuffer()
+			const { animated } = await formatAvatar(animWebp, "image/webp")
+			expect(animated).toBe(true)
+		})
+	})
+
 	describe("size budget", () => {
 		it("steps quality down to fit a tighter byte budget", async () => {
 			const png = await makeNoisyPng()

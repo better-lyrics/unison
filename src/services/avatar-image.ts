@@ -32,8 +32,7 @@ export async function formatAvatar(
 	if (!ACCEPTED_MIME.has(mime)) throw new AvatarImageError("unsupported_type")
 	if (input.length > maxInputBytes) throw new AvatarImageError("too_large")
 
-	// Trust the decoded bytes, not the caller's mime: sharp/libvips sniffs the format, so an
-	// attacker could label SVG/TIFF as image/png to reach a wider (untrusted) decoder surface.
+	// Trust the decoded format, not the caller's mime, so SVG/TIFF labelled image/png never decode.
 	let meta: Metadata
 	try {
 		meta = await sharp(input, { limitInputPixels: maxInputPixels }).metadata()
@@ -45,7 +44,7 @@ export async function formatAvatar(
 	}
 	if ((meta.pages ?? 1) > maxPages) throw new AvatarImageError("too_large")
 
-	const animated = meta.format === "gif" || meta.format === "webp"
+	const animated = (meta.pages ?? 1) > 1
 	const { effort } = config.avatar.webp
 	const steps = animated ? config.avatar.webp.animated.steps : config.avatar.webp.static.steps
 
