@@ -53,6 +53,15 @@ describe("formatAvatar", () => {
 				reason: "decode_failed",
 			})
 		})
+
+		it("rejects bytes whose real format is not allowed even if the mime is spoofed", async () => {
+			const svg = Buffer.from(
+				'<svg xmlns="http://www.w3.org/2000/svg"><rect width="8" height="8"/></svg>'
+			)
+			await expect(formatAvatar(svg, "image/png")).rejects.toMatchObject({
+				reason: "unsupported_type",
+			})
+		})
 	})
 
 	describe("size budget", () => {

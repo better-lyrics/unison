@@ -1,5 +1,5 @@
 import { config } from "@/config"
-import sharp from "sharp"
+import sharp, { type Metadata } from "sharp"
 
 export type AvatarImageReason = "unsupported_type" | "too_large" | "decode_failed"
 
@@ -18,6 +18,7 @@ export interface FormatAvatarOptions {
 }
 
 const ACCEPTED_MIME = new Set(["image/jpeg", "image/png", "image/gif", "image/webp"])
+const ACCEPTED_FORMAT = new Set(["jpeg", "png", "gif", "webp"])
 
 export async function formatAvatar(
 	input: Buffer,
@@ -26,19 +27,33 @@ export async function formatAvatar(
 ): Promise<{ webp: Buffer; animated: boolean }> {
 	const maxInputBytes = options.maxInputBytes ?? config.avatar.maxInputBytes
 	const maxOutputBytes = options.maxOutputBytes ?? config.avatar.maxOutputBytes
+	const { maxInputPixels, maxPages, artworkSize } = config.avatar
 
 	if (!ACCEPTED_MIME.has(mime)) throw new AvatarImageError("unsupported_type")
 	if (input.length > maxInputBytes) throw new AvatarImageError("too_large")
 
-	const animated = mime === "image/gif" || mime === "image/webp"
+	// Trust the decoded bytes, not the caller's mime: sharp/libvips sniffs the format, so an
+	// attacker could label SVG/TIFF as image/png to reach a wider (untrusted) decoder surface.
+	let meta: Metadata
+	try {
+		meta = await sharp(input, { limitInputPixels: maxInputPixels }).metadata()
+	} catch {
+		throw new AvatarImageError("decode_failed")
+	}
+	if (!meta.format || !ACCEPTED_FORMAT.has(meta.format)) {
+		throw new AvatarImageError("unsupported_type")
+	}
+	if ((meta.pages ?? 1) > maxPages) throw new AvatarImageError("too_large")
+
+	const animated = meta.format === "gif" || meta.format === "webp"
 	const { effort } = config.avatar.webp
 	const steps = animated ? config.avatar.webp.animated.steps : config.avatar.webp.static.steps
 
 	for (const quality of steps) {
 		let webp: Buffer
 		try {
-			webp = await sharp(input, { animated })
-				.resize(256, 256, { fit: "cover" })
+			webp = await sharp(input, { animated, limitInputPixels: maxInputPixels })
+				.resize(artworkSize, artworkSize, { fit: "cover" })
 				.webp({ quality, effort })
 				.toBuffer()
 		} catch {

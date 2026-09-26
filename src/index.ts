@@ -307,6 +307,14 @@ backfillAvatarPresets(env)
 		}
 	})
 
+// Other replicas only mutate their own in-memory catalogue on the POST they serve, so refresh
+// from the DB on an interval to bound cross-instance staleness of newly published presets.
+setInterval(() => {
+	listPresetsFromDb(env)
+		.then(setCatalogue)
+		.catch((err) => log.error("avatar catalogue refresh failed", { error: (err as Error).message }))
+}, config.avatar.catalogueRefreshMs).unref()
+
 backfillSyncType(env)
 	.then(({ scanned, changed }) => {
 		if (changed > 0) log.info("sync_type backfill complete", { scanned, changed })
