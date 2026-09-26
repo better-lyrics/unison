@@ -1,6 +1,8 @@
 import type { SignedBody } from "./auth"
 
 export const BL_EXTENSION_ID = "effdbpeggelllpfkjppbokhmmiinhlmg"
+export const BL_EDGE_EXTENSION_ID = "mjfeaklppoegooljmjicjdbiccgjdlhd"
+export const BL_EXTENSION_IDS = [BL_EXTENSION_ID, BL_EDGE_EXTENSION_ID] as const
 
 interface Port {
   onMessage: { addListener: (l: (msg: unknown) => void) => void }
@@ -22,7 +24,7 @@ function getRuntime(): ChromeRuntime | null {
 
 type AuthResponse = { ok: true; signedBody: SignedBody } | { ok: false; reason: string }
 
-export function signInWithBetterLyrics(nonce: string): Promise<SignedBody> {
+export function signInWithBetterLyrics(nonce: string, extensionId: string): Promise<SignedBody> {
   return new Promise((resolve, reject) => {
     const runtime = getRuntime()
     if (!runtime) {
@@ -32,7 +34,7 @@ export function signInWithBetterLyrics(nonce: string): Promise<SignedBody> {
 
     let port: Port
     try {
-      port = runtime.connect(BL_EXTENSION_ID, { name: "bl-auth-site" })
+      port = runtime.connect(extensionId, { name: "bl-auth-site" })
     } catch {
       reject(new Error("Better Lyrics extension not installed or origin not allowed"))
       return
@@ -68,37 +70,38 @@ export function signInWithBetterLyrics(nonce: string): Promise<SignedBody> {
   })
 }
 
-export function detectBetterLyrics(timeoutMs = 200): Promise<"available" | "unavailable"> {
+function probe(runtime: ChromeRuntime, extensionId: string, timeoutMs: number): Promise<boolean> {
   return new Promise((resolve) => {
-    const runtime = getRuntime()
-    if (!runtime) {
-      resolve("unavailable")
-      return
-    }
-
     let port: Port
     try {
-      port = runtime.connect(BL_EXTENSION_ID, { name: "bl-probe" })
+      port = runtime.connect(extensionId, { name: "bl-probe" })
     } catch {
-      resolve("unavailable")
+      resolve(false)
       return
     }
 
     let settled = false
-    const settle = (result: "available" | "unavailable") => {
+    const settle = (found: boolean) => {
       if (settled) return
       settled = true
       try {
         port.disconnect()
       } catch {}
-      resolve(result)
+      resolve(found)
     }
 
-    const timer = setTimeout(() => settle("available"), timeoutMs)
+    const timer = setTimeout(() => settle(true), timeoutMs)
 
     port.onDisconnect.addListener(() => {
       clearTimeout(timer)
-      settle(runtime.lastError ? "unavailable" : "available")
+      settle(!runtime.lastError)
     })
   })
+}
+
+export async function findBetterLyrics(timeoutMs = 200): Promise<string | null> {
+  const runtime = getRuntime()
+  if (!runtime) return null
+  const found = await Promise.all(BL_EXTENSION_IDS.map((id) => probe(runtime, id, timeoutMs)))
+  return BL_EXTENSION_IDS.find((_, i) => found[i]) ?? null
 }

@@ -10,6 +10,7 @@ const keyId = "a".repeat(64)
 const ownerSession = {
   status: "signed-in",
   extensionAvailable: true,
+  extensionId: "effdbpeggelllpfkjppbokhmmiinhlmg",
   identity: { keyId, displayName: "Aurora Wynter", expiresAt: Math.floor(Date.now() / 1000) + 1000 },
   signOut: () => {},
   updateDisplayName: () => {},

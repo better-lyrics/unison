@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
-import { BL_EXTENSION_ID, detectBetterLyrics, signInWithBetterLyrics } from "./extension"
+import { BL_EDGE_EXTENSION_ID, BL_EXTENSION_ID, findBetterLyrics, signInWithBetterLyrics } from "./extension"
 
 type Listener<T> = (value: T) => void
 
@@ -81,6 +81,23 @@ function installChrome(
   return { connectCalls }
 }
 
+function installPorts(lastError?: { message: string }) {
+  const ports = new Map<string, PortHarness>()
+  const { connectCalls } = installChrome((id, info) => {
+    const harness = makePort(info.name)
+    ports.set(id, harness)
+    return harness.port
+  }, lastError)
+  const port = (id: string) => {
+    const harness = ports.get(id)
+    if (!harness) throw new Error(`no port for ${id}`)
+    return harness
+  }
+  return { port, connectCalls }
+}
+
+const RECEIVING_END_MISSING = { message: "Could not establish connection. Receiving end does not exist." }
+
 beforeEach(() => {
   vi.unstubAllGlobals()
 })
@@ -88,9 +105,10 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
-describe("BL_EXTENSION_ID", () => {
-  it("is the chrome web store id", () => {
+describe("extension ids", () => {
+  it("lists the chrome web store id first and the edge add-ons id second", () => {
     expect(BL_EXTENSION_ID).toBe("effdbpeggelllpfkjppbokhmmiinhlmg")
+    expect(BL_EDGE_EXTENSION_ID).toBe("mjfeaklppoegooljmjicjdbiccgjdlhd")
   })
 })
 
@@ -107,7 +125,7 @@ describe("signInWithBetterLyrics", () => {
         harness = makePort(info.name)
         return harness.port
       })
-      const promise = signInWithBetterLyrics("n")
+      const promise = signInWithBetterLyrics("n", BL_EXTENSION_ID)
       harness.fireMessage({ ok: true, signedBody })
       await expect(promise).resolves.toEqual(signedBody)
     })
@@ -118,7 +136,7 @@ describe("signInWithBetterLyrics", () => {
         harness = makePort(info.name)
         return harness.port
       })
-      const promise = signInWithBetterLyrics("nonce-xyz")
+      const promise = signInWithBetterLyrics("nonce-xyz", BL_EXTENSION_ID)
       expect(connectCalls[0].extensionId).toBe(BL_EXTENSION_ID)
       expect(connectCalls[0].info.name).toBe("bl-auth-site")
       expect(harness.sentMessages).toEqual([
@@ -130,6 +148,18 @@ describe("signInWithBetterLyrics", () => {
       })
       await promise
     })
+
+    it("connects to the extension id it is given", async () => {
+      let harness!: PortHarness
+      const { connectCalls } = installChrome((_id, info) => {
+        harness = makePort(info.name)
+        return harness.port
+      })
+      const promise = signInWithBetterLyrics("n", BL_EDGE_EXTENSION_ID)
+      expect(connectCalls[0].extensionId).toBe(BL_EDGE_EXTENSION_ID)
+      harness.fireMessage({ ok: true, signedBody: { payload: {}, signature: "", publicKey: {} } })
+      await promise
+    })
   })
 
   describe("error paths", () => {
@@ -139,7 +169,7 @@ describe("signInWithBetterLyrics", () => {
         harness = makePort(info.name)
         return harness.port
       })
-      const promise = signInWithBetterLyrics("n")
+      const promise = signInWithBetterLyrics("n", BL_EXTENSION_ID)
       harness.fireMessage({ ok: false, reason: "USER_CANCELLED" })
       await expect(promise).rejects.toThrow("USER_CANCELLED")
     })
@@ -152,19 +182,19 @@ describe("signInWithBetterLyrics", () => {
           harness = makePort(info.name)
           return harness.port
         })
-        const promise = signInWithBetterLyrics("n")
+        const promise = signInWithBetterLyrics("n", BL_EXTENSION_ID)
         harness.fireMessage({ ok: false, reason })
         await expect(promise).rejects.toThrow(reason)
       },
     )
 
     it("rejects when chrome is undefined", async () => {
-      await expect(signInWithBetterLyrics("n")).rejects.toThrow("Better Lyrics extension not detected")
+      await expect(signInWithBetterLyrics("n", BL_EXTENSION_ID)).rejects.toThrow("Better Lyrics extension not detected")
     })
 
     it("rejects when chrome.runtime.connect is missing", async () => {
       vi.stubGlobal("chrome", { runtime: {} })
-      await expect(signInWithBetterLyrics("n")).rejects.toThrow("Better Lyrics extension not detected")
+      await expect(signInWithBetterLyrics("n", BL_EXTENSION_ID)).rejects.toThrow("Better Lyrics extension not detected")
     })
 
     it("rejects when chrome.runtime.connect throws synchronously", async () => {
@@ -175,7 +205,7 @@ describe("signInWithBetterLyrics", () => {
           },
         },
       })
-      await expect(signInWithBetterLyrics("n")).rejects.toThrow(
+      await expect(signInWithBetterLyrics("n", BL_EXTENSION_ID)).rejects.toThrow(
         "Better Lyrics extension not installed or origin not allowed",
       )
     })
@@ -189,7 +219,7 @@ describe("signInWithBetterLyrics", () => {
         },
         { message: "Could not establish connection. Receiving end does not exist." },
       )
-      const promise = signInWithBetterLyrics("n")
+      const promise = signInWithBetterLyrics("n", BL_EXTENSION_ID)
       harness.fireDisconnect()
       await expect(promise).rejects.toThrow("Could not establish connection. Receiving end does not exist.")
     })
@@ -200,7 +230,7 @@ describe("signInWithBetterLyrics", () => {
         harness = makePort(info.name)
         return harness.port
       })
-      const promise = signInWithBetterLyrics("n")
+      const promise = signInWithBetterLyrics("n", BL_EXTENSION_ID)
       harness.fireDisconnect()
       await expect(promise).rejects.toThrow("Port closed before response")
     })
@@ -219,7 +249,7 @@ describe("signInWithBetterLyrics", () => {
         }
         return harness.port
       })
-      const promise = signInWithBetterLyrics("n")
+      const promise = signInWithBetterLyrics("n", BL_EXTENSION_ID)
       expect(countsAtPost).not.toBeNull()
       expect((countsAtPost as unknown as { onMessage: number }).onMessage).toBeGreaterThanOrEqual(1)
       expect((countsAtPost as unknown as { onDisconnect: number }).onDisconnect).toBeGreaterThanOrEqual(1)
@@ -233,7 +263,7 @@ describe("signInWithBetterLyrics", () => {
         harness = makePort(info.name)
         return harness.port
       })
-      const promise = signInWithBetterLyrics("n")
+      const promise = signInWithBetterLyrics("n", BL_EXTENSION_ID)
       harness.fireMessage({
         ok: true,
         signedBody: { payload: {}, signature: "", publicKey: {} },
@@ -248,7 +278,7 @@ describe("signInWithBetterLyrics", () => {
         harness = makePort(info.name)
         return harness.port
       })
-      const promise = signInWithBetterLyrics("n")
+      const promise = signInWithBetterLyrics("n", BL_EXTENSION_ID)
       harness.fireMessage({ ok: false, reason: "USER_CANCELLED" })
       await expect(promise).rejects.toThrow("USER_CANCELLED")
       expect(harness.isDisconnected()).toBe(true)
@@ -266,7 +296,7 @@ describe("signInWithBetterLyrics", () => {
       }
       window.addEventListener("unhandledrejection", onUnhandled)
       try {
-        const promise = signInWithBetterLyrics("n")
+        const promise = signInWithBetterLyrics("n", BL_EXTENSION_ID)
         harness.fireMessage({
           ok: true,
           signedBody: { payload: {}, signature: "", publicKey: {} },
@@ -286,7 +316,7 @@ describe("signInWithBetterLyrics", () => {
         harness = makePort(info.name)
         return harness.port
       })
-      const promise = signInWithBetterLyrics("n")
+      const promise = signInWithBetterLyrics("n", BL_EXTENSION_ID)
       const rejected = promise.catch((e) => e)
       harness.fireDisconnect()
       const first = await rejected
@@ -304,18 +334,18 @@ describe("signInWithBetterLyrics", () => {
   })
 })
 
-describe("detectBetterLyrics", () => {
-  describe("unavailable paths", () => {
-    it("resolves to 'unavailable' when chrome is undefined", async () => {
-      await expect(detectBetterLyrics()).resolves.toBe("unavailable")
+describe("findBetterLyrics", () => {
+  describe("not found", () => {
+    it("resolves to null when chrome is undefined", async () => {
+      await expect(findBetterLyrics()).resolves.toBeNull()
     })
 
-    it("resolves to 'unavailable' when chrome.runtime.connect is missing", async () => {
+    it("resolves to null when chrome.runtime.connect is missing", async () => {
       vi.stubGlobal("chrome", { runtime: {} })
-      await expect(detectBetterLyrics()).resolves.toBe("unavailable")
+      await expect(findBetterLyrics()).resolves.toBeNull()
     })
 
-    it("resolves to 'unavailable' when chrome.runtime.connect throws synchronously", async () => {
+    it("resolves to null when chrome.runtime.connect throws synchronously", async () => {
       vi.stubGlobal("chrome", {
         runtime: {
           connect: () => {
@@ -323,73 +353,63 @@ describe("detectBetterLyrics", () => {
           },
         },
       })
-      await expect(detectBetterLyrics()).resolves.toBe("unavailable")
+      await expect(findBetterLyrics()).resolves.toBeNull()
     })
 
-    it("resolves to 'unavailable' when the port disconnects with lastError set", async () => {
-      let harness!: PortHarness
-      installChrome(
-        (_id, info) => {
-          harness = makePort(info.name)
-          return harness.port
-        },
-        { message: "Could not establish connection. Receiving end does not exist." },
-      )
-      const promise = detectBetterLyrics()
-      harness.fireDisconnect()
-      await expect(promise).resolves.toBe("unavailable")
+    it("resolves to null when every probe disconnects with lastError set", async () => {
+      const { port } = installPorts(RECEIVING_END_MISSING)
+      const promise = findBetterLyrics()
+      port(BL_EXTENSION_ID).fireDisconnect()
+      port(BL_EDGE_EXTENSION_ID).fireDisconnect()
+      await expect(promise).resolves.toBeNull()
     })
   })
 
-  describe("available paths", () => {
-    it("resolves to 'available' when the port disconnects with no lastError", async () => {
-      let harness!: PortHarness
-      installChrome((_id, info) => {
-        harness = makePort(info.name)
-        return harness.port
-      })
-      const promise = detectBetterLyrics()
-      harness.fireDisconnect()
-      await expect(promise).resolves.toBe("available")
+  describe("found", () => {
+    it("resolves to the chrome web store id when only it answers", async () => {
+      const { port } = installPorts(RECEIVING_END_MISSING)
+      const promise = findBetterLyrics(5)
+      port(BL_EDGE_EXTENSION_ID).fireDisconnect()
+      await expect(promise).resolves.toBe(BL_EXTENSION_ID)
     })
 
-    it("resolves to 'available' when no events fire before the timeout", async () => {
-      const harness = makePort("bl-probe")
-      installChrome(() => harness.port)
-      await expect(detectBetterLyrics(5)).resolves.toBe("available")
+    it("resolves to the edge add-ons id when only it answers", async () => {
+      const { port } = installPorts(RECEIVING_END_MISSING)
+      const promise = findBetterLyrics(5)
+      port(BL_EXTENSION_ID).fireDisconnect()
+      await expect(promise).resolves.toBe(BL_EDGE_EXTENSION_ID)
+    })
+
+    it("prefers the chrome web store id when both answer", async () => {
+      installPorts()
+      await expect(findBetterLyrics(5)).resolves.toBe(BL_EXTENSION_ID)
+    })
+
+    it("treats a clean disconnect with no lastError as found", async () => {
+      const { port } = installPorts()
+      const promise = findBetterLyrics()
+      port(BL_EXTENSION_ID).fireDisconnect()
+      port(BL_EDGE_EXTENSION_ID).fireDisconnect()
+      await expect(promise).resolves.toBe(BL_EXTENSION_ID)
     })
   })
 
   describe("invariants", () => {
-    it("uses the bl-probe port name (not bl-auth-site)", async () => {
-      let harness!: PortHarness
-      const { connectCalls } = installChrome((_id, info) => {
-        harness = makePort(info.name)
-        return harness.port
-      })
-      const promise = detectBetterLyrics()
-      harness.fireDisconnect()
+    it("probes both ids in parallel on the bl-probe port", async () => {
+      const { connectCalls } = installPorts()
+      const promise = findBetterLyrics(5)
+      expect(connectCalls.map((c) => c.extensionId)).toEqual([BL_EXTENSION_ID, BL_EDGE_EXTENSION_ID])
+      expect(connectCalls.every((c) => c.info.name === "bl-probe")).toBe(true)
       await promise
-      expect(connectCalls[0].info.name).toBe("bl-probe")
     })
 
-    it("disconnects the probe port after settling", async () => {
-      let harness!: PortHarness
-      installChrome((_id, info) => {
-        harness = makePort(info.name)
-        return harness.port
-      })
-      const promise = detectBetterLyrics()
-      harness.fireDisconnect()
+    it("disconnects every probe port after settling", async () => {
+      const { port } = installPorts(RECEIVING_END_MISSING)
+      const promise = findBetterLyrics(5)
+      port(BL_EDGE_EXTENSION_ID).fireDisconnect()
       await promise
-      expect(harness.isDisconnected()).toBe(true)
-    })
-
-    it("disconnects the probe port after the timeout fallback fires", async () => {
-      const harness = makePort("bl-probe")
-      installChrome(() => harness.port)
-      await detectBetterLyrics(5)
-      expect(harness.isDisconnected()).toBe(true)
+      expect(port(BL_EXTENSION_ID).isDisconnected()).toBe(true)
+      expect(port(BL_EDGE_EXTENSION_ID).isDisconnected()).toBe(true)
     })
   })
 })

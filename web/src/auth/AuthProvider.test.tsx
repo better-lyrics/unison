@@ -1,4 +1,5 @@
 import { STORAGE_KEY, type StoredSession, saveStoredSession } from "@/lib/auth"
+import { BL_EDGE_EXTENSION_ID, BL_EXTENSION_ID } from "@/lib/extension"
 import { act, cleanup, render, screen, waitFor } from "@testing-library/react"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { AuthProvider } from "./AuthProvider"
@@ -19,6 +20,7 @@ function Probe() {
     <>
       <span data-testid="status">{session.status}</span>
       <span data-testid="ext">{String(session.extensionAvailable)}</span>
+      <span data-testid="ext-id">{session.extensionId ?? "none"}</span>
       {session.status === "signed-out" || session.status === "error" ? (
         <span data-testid="signing-in">{String(session.signingIn)}</span>
       ) : null}
@@ -160,6 +162,25 @@ function stubChromePortMissing() {
   })
 }
 
+function stubEdgeStoreOnly() {
+  vi.stubGlobal("chrome", {
+    runtime: {
+      connect: (id: string, info: { name: string }) => ({
+        name: info.name,
+        onMessage: { addListener: (_l: (m: unknown) => void) => {} },
+        onDisconnect: {
+          addListener: (l: () => void) => {
+            if (id !== BL_EDGE_EXTENSION_ID) queueMicrotask(l)
+          },
+        },
+        postMessage: (_msg: unknown) => {},
+        disconnect: () => {},
+      }),
+      lastError: { message: "Could not establish connection. Receiving end does not exist." },
+    },
+  })
+}
+
 interface DeferredPort {
   name: string
   onMessage: { addListener: (l: (m: unknown) => void) => void }
@@ -206,6 +227,56 @@ function stubChromePortDeferred(): {
 }
 
 describe("AuthProvider signIn flow", () => {
+  it("signs in through the edge add-ons id when that is the build found", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ success: true, data: { nonce: "n1", expiresAt: 1 } }), { status: 200 }),
+      )
+      .mockResolvedValueOnce(new Response(JSON.stringify({ success: true, data: valid }), { status: 200 }))
+    vi.stubGlobal("fetch", fetchMock)
+    const authIds: string[] = []
+    vi.stubGlobal("chrome", {
+      runtime: {
+        connect: (id: string, info: { name: string }) => {
+          if (info.name === "bl-auth-site") authIds.push(id)
+          let onMessageListener: ((m: unknown) => void) | null = null
+          return {
+            name: info.name,
+            onMessage: {
+              addListener: (l: (m: unknown) => void) => {
+                onMessageListener = l
+              },
+            },
+            onDisconnect: {
+              addListener: (l: () => void) => {
+                if (info.name === "bl-probe" && id !== BL_EDGE_EXTENSION_ID) queueMicrotask(l)
+              },
+            },
+            postMessage: () => {
+              queueMicrotask(() =>
+                onMessageListener?.({ ok: true, signedBody: { payload: {}, signature: "", publicKey: {} } }),
+              )
+            },
+            disconnect: () => {},
+          }
+        },
+        lastError: { message: "Could not establish connection. Receiving end does not exist." },
+      },
+    })
+    render(
+      <AuthProvider>
+        <Probe />
+      </AuthProvider>,
+    )
+    await waitFor(() => expect(screen.getByTestId("ext-id").textContent).toBe(BL_EDGE_EXTENSION_ID))
+    await act(async () => {
+      screen.getByText("sign-in").click()
+    })
+    await waitFor(() => expect(screen.getByTestId("status").textContent).toBe("signed-in"))
+    expect(authIds).toEqual([BL_EDGE_EXTENSION_ID])
+  })
+
   it("runs challenge then extension then session and lands in signed-in", async () => {
     const fetchMock = vi
       .fn()
@@ -456,6 +527,40 @@ describe("AuthProvider extension detection", () => {
     )
     await waitFor(() => expect(screen.getByTestId("status").textContent).toBe("signed-out"))
     expect(screen.getByTestId("ext").textContent).toBe("false")
+  })
+
+  it("exposes the chrome web store id when that build answers", async () => {
+    stubChromePort(() => ({ ok: true }))
+    render(
+      <AuthProvider>
+        <Probe />
+      </AuthProvider>,
+    )
+    await waitFor(() => expect(screen.getByTestId("status").textContent).toBe("signed-out"))
+    expect(screen.getByTestId("ext-id").textContent).toBe(BL_EXTENSION_ID)
+  })
+
+  it("exposes the edge add-ons id when only the edge store build answers", async () => {
+    stubEdgeStoreOnly()
+    render(
+      <AuthProvider>
+        <Probe />
+      </AuthProvider>,
+    )
+    await waitFor(() => expect(screen.getByTestId("status").textContent).toBe("signed-out"))
+    expect(screen.getByTestId("ext-id").textContent).toBe(BL_EDGE_EXTENSION_ID)
+    expect(screen.getByTestId("ext").textContent).toBe("true")
+  })
+
+  it("exposes a null extension id when nothing answers", async () => {
+    stubChromePortMissing()
+    render(
+      <AuthProvider>
+        <Probe />
+      </AuthProvider>,
+    )
+    await waitFor(() => expect(screen.getByTestId("status").textContent).toBe("signed-out"))
+    expect(screen.getByTestId("ext-id").textContent).toBe("none")
   })
 
   it("exposes extensionAvailable=false when the probe port disconnects with lastError", async () => {

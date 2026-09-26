@@ -12,6 +12,7 @@ const curator = SEED_CURATORS[0]
 const fakeSession = {
   status: "signed-in",
   extensionAvailable: true,
+  extensionId: "effdbpeggelllpfkjppbokhmmiinhlmg",
   identity: {
     keyId: curator.keyId,
     displayName: curator.displayName,
