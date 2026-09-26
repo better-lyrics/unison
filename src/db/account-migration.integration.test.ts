@@ -45,6 +45,7 @@ describeIntegration("account migration (integration)", () => {
 
 	async function wipe() {
 		await pool.query("DELETE FROM boosts")
+		await pool.query("DELETE FROM rejections")
 		await pool.query("DELETE FROM badge_awards")
 		await pool.query("DELETE FROM committee_members")
 		await pool.query("DELETE FROM contribution_events")
@@ -594,42 +595,42 @@ describeIntegration("account migration (integration)", () => {
 		).toBe(1)
 	})
 
+	async function seedIdentities(): Promise<{ oldId: number; newId: number }> {
+		await pool.query("INSERT INTO public_keys (key_id, public_key) VALUES ($1, 'x'), ($2, 'y')", [
+			OLD_KEY,
+			NEW_KEY,
+		])
+		const oldUser = await one<{ id: number }>(
+			"INSERT INTO users (key_id) VALUES ($1) RETURNING id",
+			[OLD_KEY]
+		)
+		const newUser = await one<{ id: number }>(
+			"INSERT INTO users (key_id) VALUES ($1) RETURNING id",
+			[NEW_KEY]
+		)
+		return { oldId: oldUser.id, newId: newUser.id }
+	}
+
+	async function migrate(sessionId: string): Promise<number> {
+		const plan = await computeMigrationPlan(env, OLD_KEY, NEW_KEY)
+		if ("error" in plan) throw new Error(plan.error)
+		const auditId = await createPreviewAudit(env, {
+			sessionId,
+			discordId: "disc-1",
+			oldKey: OLD_KEY,
+			newKey: NEW_KEY,
+			counts: plan.counts,
+		})
+		const result = await runMigration(env, {
+			oldKey: OLD_KEY,
+			newKey: NEW_KEY,
+			migrationId: auditId,
+		})
+		if ("error" in result) throw new Error(result.error)
+		return auditId
+	}
+
 	describe("lyric revisions", () => {
-		async function seedIdentities(): Promise<{ oldId: number; newId: number }> {
-			await pool.query("INSERT INTO public_keys (key_id, public_key) VALUES ($1, 'x'), ($2, 'y')", [
-				OLD_KEY,
-				NEW_KEY,
-			])
-			const oldUser = await one<{ id: number }>(
-				"INSERT INTO users (key_id) VALUES ($1) RETURNING id",
-				[OLD_KEY]
-			)
-			const newUser = await one<{ id: number }>(
-				"INSERT INTO users (key_id) VALUES ($1) RETURNING id",
-				[NEW_KEY]
-			)
-			return { oldId: oldUser.id, newId: newUser.id }
-		}
-
-		async function migrate(sessionId: string): Promise<number> {
-			const plan = await computeMigrationPlan(env, OLD_KEY, NEW_KEY)
-			if ("error" in plan) throw new Error(plan.error)
-			const auditId = await createPreviewAudit(env, {
-				sessionId,
-				discordId: "disc-1",
-				oldKey: OLD_KEY,
-				newKey: NEW_KEY,
-				counts: plan.counts,
-			})
-			const result = await runMigration(env, {
-				oldKey: OLD_KEY,
-				newKey: NEW_KEY,
-				migrationId: auditId,
-			})
-			if ("error" in result) throw new Error(result.error)
-			return auditId
-		}
-
 		const revisionOf = (lyricsId: number) =>
 			one<{ author_id: number | null; reviewed_by: number | null }>(
 				"SELECT author_id, reviewed_by FROM lyric_revisions WHERE lyrics_id = $1 AND rev_no = 1",
@@ -677,6 +678,97 @@ describeIntegration("account migration (integration)", () => {
 			await pool.query("UPDATE lyrics SET submitter_id = NULL WHERE id = $1", [lyric])
 
 			expect(await restoreFromSnapshot(env, auditId)).toEqual({ error: "HAS_INTERIM_ACTIVITY" })
+		})
+	})
+	describe("committee ownership", () => {
+		const committeeRow = (userId: number) =>
+			num("SELECT count(*)::int n FROM committee_members WHERE user_id = $1", [userId])
+		const boosterOf = (lyricsId: number) =>
+			one<{ booster_id: number }>("SELECT booster_id FROM boosts WHERE lyrics_id = $1", [lyricsId])
+		const rejecterOf = (lyricsId: number) =>
+			one<{ rejected_by: number }>("SELECT rejected_by FROM rejections WHERE lyrics_id = $1", [
+				lyricsId,
+			])
+		const approverOf = (lyricsId: number) =>
+			one<{ committee_approved_by: number | null }>(
+				"SELECT committee_approved_by FROM lyrics WHERE id = $1",
+				[lyricsId]
+			)
+
+		async function seedCommitteeActivity(memberId: number, submitterId: number) {
+			await pool.query("INSERT INTO committee_members (user_id, added_by) VALUES ($1, 'admin')", [
+				memberId,
+			])
+			const boosted = await insertLyric(submitterId, "vidBoost")
+			const rejected = await insertLyric(submitterId, "vidReject")
+			await pool.query("INSERT INTO boosts (booster_id, lyrics_id) VALUES ($1, $2)", [
+				memberId,
+				boosted,
+			])
+			await pool.query(
+				"UPDATE lyrics SET committee_approved_by = $1, committee_approved_at = 100 WHERE id = $2",
+				[memberId, boosted]
+			)
+			await pool.query(
+				"INSERT INTO rejections (lyrics_id, rejected_by, rejected_at) VALUES ($1, $2, 100)",
+				[rejected, memberId]
+			)
+			return { boosted, rejected }
+		}
+
+		it("regression: merging a new identity that sits on the committee carries its seat and actions to the survivor", async () => {
+			const { oldId, newId } = await seedIdentities()
+			const { boosted, rejected } = await seedCommitteeActivity(newId, oldId)
+
+			await migrate("sess-committee")
+
+			expect(await committeeRow(oldId)).toBe(1)
+			expect(await committeeRow(newId)).toBe(0)
+			expect(await boosterOf(boosted)).toEqual({ booster_id: oldId })
+			expect(await rejecterOf(rejected)).toEqual({ rejected_by: oldId })
+			expect(await approverOf(boosted)).toEqual({ committee_approved_by: oldId })
+			expect(await num("SELECT count(*)::int n FROM users WHERE id = $1", [newId])).toBe(0)
+		})
+
+		it("keeps the survivor's own seat when both identities sit on the committee", async () => {
+			const { oldId, newId } = await seedIdentities()
+			await pool.query(
+				"INSERT INTO committee_members (user_id, added_at, added_by) VALUES ($1, 50, 'first'), ($2, 90, 'second')",
+				[oldId, newId]
+			)
+
+			await migrate("sess-committee-both")
+
+			expect(await one("SELECT user_id, added_at, added_by FROM committee_members", [])).toEqual({
+				user_id: oldId,
+				added_at: 50,
+				added_by: "first",
+			})
+		})
+
+		it("restores the seat and every committee action to the new identity on undo", async () => {
+			const { oldId, newId } = await seedIdentities()
+			const { boosted, rejected } = await seedCommitteeActivity(newId, oldId)
+
+			const auditId = await migrate("sess-committee-undo")
+			expect(await restoreFromSnapshot(env, auditId)).toEqual({ restored: true })
+
+			expect(await committeeRow(newId)).toBe(1)
+			expect(await committeeRow(oldId)).toBe(0)
+			expect(await boosterOf(boosted)).toEqual({ booster_id: newId })
+			expect(await rejecterOf(rejected)).toEqual({ rejected_by: newId })
+			expect(await approverOf(boosted)).toEqual({ committee_approved_by: newId })
+		})
+
+		it("refuses to restore over a boost made after commit", async () => {
+			const { oldId, newId } = await seedIdentities()
+			await pool.query("INSERT INTO committee_members (user_id) VALUES ($1)", [newId])
+			const auditId = await migrate("sess-committee-interim")
+			const lyric = await insertLyric(oldId, "vidLateBoost")
+			await pool.query("INSERT INTO boosts (booster_id, lyrics_id) VALUES ($1, $2)", [oldId, lyric])
+
+			expect(await restoreFromSnapshot(env, auditId)).toEqual({ error: "HAS_INTERIM_ACTIVITY" })
+			expect(await boosterOf(lyric)).toEqual({ booster_id: oldId })
 		})
 	})
 })
