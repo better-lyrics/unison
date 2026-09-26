@@ -1,9 +1,9 @@
 import { readFileSync } from "node:fs"
-import pg from "pg"
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest"
 import { insertPreset, listPresetsFromDb } from "@/db/avatar-presets"
 import { D1Compat } from "@/infra/database"
 import type { Env } from "@/types"
+import pg from "pg"
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest"
 
 const { Pool } = pg
 

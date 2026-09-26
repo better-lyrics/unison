@@ -49,9 +49,9 @@ describe("formatAvatar", () => {
 		})
 
 		it("rejects an undecodable buffer", async () => {
-			await expect(formatAvatar(Buffer.from("not an image"), "image/png")).rejects.toMatchObject(
-				{ reason: "decode_failed" }
-			)
+			await expect(formatAvatar(Buffer.from("not an image"), "image/png")).rejects.toMatchObject({
+				reason: "decode_failed",
+			})
 		})
 	})
 
