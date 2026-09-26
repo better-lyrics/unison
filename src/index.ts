@@ -44,6 +44,7 @@ import { translateRoutes } from "@/routes/translate"
 import { userRoutes } from "@/routes/users"
 import { videoLinkRoutes } from "@/routes/video-links"
 import { voteBotRoutes, voteRoutes } from "@/routes/votes"
+import { SPA_CONTENT_SECURITY_POLICY } from "@/utils/content-security-policy"
 import { cors } from "@elysiajs/cors"
 import { cron } from "@elysiajs/cron"
 import { node } from "@elysiajs/node"
@@ -251,7 +252,10 @@ const app = new Elysia({ adapter: node() })
 		if (spaIndexHtml) {
 			return new Response(spaIndexHtml, {
 				status: 200,
-				headers: { "content-type": "text/html; charset=utf-8" },
+				headers: {
+					"content-type": "text/html; charset=utf-8",
+					"content-security-policy": SPA_CONTENT_SECURITY_POLICY,
+				},
 			})
 		}
 
