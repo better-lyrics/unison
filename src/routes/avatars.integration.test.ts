@@ -1,7 +1,8 @@
 import { config } from "@/config"
-import { AVATAR_PRESETS } from "@/db/avatar-presets"
+import { AVATAR_PRESETS, insertPreset, setCatalogue } from "@/db/avatar-presets"
 import { resolveAvatarUrl } from "@/db/users"
 import {
+	BOT_SECRET,
 	type IntegrationDb,
 	describeIntegration,
 	openIntegrationDb,
@@ -13,7 +14,8 @@ import {
 import { readRevisionFixture } from "@/test/lyric-fixtures"
 import type { Env } from "@/types"
 import { canonicalJson, hashPublicKey } from "@/utils/crypto"
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest"
+import sharp from "sharp"
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest"
 import { avatarRoutes } from "./avatars"
 
 const KEY = "a".repeat(64)
@@ -325,5 +327,148 @@ describeIntegration("PUT /avatars/me (integration)", () => {
 			expect(status).toBe(400)
 			expect(body.code).toBe("UNKNOWN_AVATAR_PRESET")
 		})
+	})
+})
+
+describeIntegration("POST /avatars/presets (integration)", () => {
+	let db: IntegrationDb
+	let pngBase64: string
+
+	function makeCdn() {
+		const puts: { key: string; contentType: string; bytes: number }[] = []
+		const deletes: string[] = []
+		const storage = {
+			async putObject(key: string, body: Buffer, contentType: string) {
+				puts.push({ key, contentType, bytes: body.length })
+			},
+			async listObjects() {
+				return []
+			},
+			async deleteObject(key: string) {
+				deletes.push(key)
+			},
+		} as unknown as NonNullable<Env["CDN"]>
+		return { puts, deletes, storage }
+	}
+
+	interface PostBody {
+		success: boolean
+		code?: string
+		data?: { id: string; label: string; url: string }
+	}
+
+	async function post(
+		env: Env,
+		body: unknown,
+		auth: string | null = BOT_SECRET
+	): Promise<{ status: number; body: PostBody }> {
+		const headers: Record<string, string> = { "content-type": "application/json" }
+		if (auth) headers.authorization = `Bearer ${auth}`
+		const res = await avatarRoutes(env).handle(
+			new Request("http://localhost/avatars/presets", {
+				method: "POST",
+				headers,
+				body: JSON.stringify(body),
+			})
+		)
+		const text = await res.text()
+		let parsed: PostBody
+		try {
+			parsed = JSON.parse(text) as PostBody
+		} catch {
+			parsed = { success: false }
+		}
+		return { status: res.status, body: parsed }
+	}
+
+	beforeAll(async () => {
+		db = await openIntegrationDb()
+		const png = await sharp({
+			create: { width: 300, height: 200, channels: 3, background: { r: 200, g: 120, b: 40 } },
+		})
+			.png()
+			.toBuffer()
+		pngBase64 = png.toString("base64")
+	})
+
+	afterAll(async () => {
+		await db.pool.end()
+	})
+
+	beforeEach(async () => {
+		await db.pool.query("DELETE FROM avatar_presets")
+	})
+
+	afterEach(() => {
+		setCatalogue([...AVATAR_PRESETS])
+	})
+
+	it("formats, uploads, stores, and returns the CDN url", async () => {
+		const cdn = makeCdn()
+		const env: Env = { ...db.env, CDN: cdn.storage }
+		const { status, body } = await post(env, {
+			id: "sky-cat",
+			label: "Sky Cat",
+			createdBy: "k".repeat(64),
+			mime: "image/png",
+			dataBase64: pngBase64,
+		})
+		expect(status).toBe(200)
+		expect(body.data?.url).toBe(`${config.avatar.cdnBase}sky-cat.webp`)
+		expect(cdn.puts).toEqual([
+			{ key: "avatars/sky-cat.webp", contentType: "image/webp", bytes: expect.any(Number) },
+		])
+		const { rows } = await db.pool.query("SELECT id, label, file, created_by FROM avatar_presets")
+		expect(rows).toEqual([
+			{ id: "sky-cat", label: "Sky Cat", file: "sky-cat.webp", created_by: "k".repeat(64) },
+		])
+	})
+
+	it("rejects a duplicate id already in the catalogue with 409 and no upload", async () => {
+		const cdn = makeCdn()
+		const env: Env = { ...db.env, CDN: cdn.storage }
+		await post(env, { id: "dupe", label: "Dupe", mime: "image/png", dataBase64: pngBase64 })
+		const { status, body } = await post(env, {
+			id: "dupe",
+			label: "Dupe Two",
+			mime: "image/png",
+			dataBase64: pngBase64,
+		})
+		expect(status).toBe(409)
+		expect(body.code).toBe("AVATAR_PRESET_EXISTS")
+		expect(cdn.puts).toHaveLength(1)
+	})
+
+	it("returns 409 when the id exists in the db but not the in-memory catalogue", async () => {
+		await insertPreset(db.env, { id: "outofband", label: "Out", file: "outofband.webp" })
+		const cdn = makeCdn()
+		const env: Env = { ...db.env, CDN: cdn.storage }
+		const { status, body } = await post(env, {
+			id: "outofband",
+			label: "Out",
+			mime: "image/png",
+			dataBase64: pngBase64,
+		})
+		expect(status).toBe(409)
+		expect(body.code).toBe("AVATAR_PRESET_EXISTS")
+		expect(cdn.deletes).toHaveLength(0)
+	})
+
+	it("deletes the uploaded object when the db insert throws", async () => {
+		const cdn = makeCdn()
+		const throwingDb = {
+			prepare: () => ({
+				bind: () => ({
+					all: async () => {
+						throw new Error("db down")
+					},
+				}),
+			}),
+		} as unknown as Env["DB"]
+		const env: Env = { ...db.env, DB: throwingDb, CDN: cdn.storage }
+		await expect(
+			post(env, { id: "boom-cat", label: "Boom", mime: "image/png", dataBase64: pngBase64 })
+		).resolves.toMatchObject({ status: 500 })
+		expect(cdn.deletes).toEqual(["avatars/boom-cat.webp"])
 	})
 })
