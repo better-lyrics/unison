@@ -27,6 +27,10 @@ export interface MigrationSnapshot {
 	lyric_revisions?: unknown[]
 	contribution_events?: unknown[]
 	badge_awards?: unknown[]
+	committee_members?: unknown[]
+	boosts?: unknown[]
+	rejections?: unknown[]
+	committee_approvals?: unknown[]
 }
 
 export interface MigrationResult {
@@ -356,9 +360,51 @@ export async function runMigration(
 				.prepare("UPDATE badge_awards SET user_id = ? WHERE user_id = ?")
 				.bind(oldId, newId)
 				.run()
-		}
 
-		if (newId !== null) {
+			snapshot.committee_members = await all(
+				tx,
+				"SELECT * FROM committee_members WHERE user_id = ANY(?)",
+				[ids]
+			)
+			snapshot.boosts = await all(
+				tx,
+				"SELECT id, booster_id FROM boosts WHERE booster_id = ANY(?)",
+				[ids]
+			)
+			snapshot.rejections = await all(
+				tx,
+				"SELECT id, rejected_by FROM rejections WHERE rejected_by = ANY(?)",
+				[ids]
+			)
+			snapshot.committee_approvals = await all(
+				tx,
+				"SELECT id, committee_approved_by FROM lyrics WHERE committee_approved_by = ANY(?)",
+				[ids]
+			)
+
+			await tx
+				.prepare(
+					"DELETE FROM committee_members WHERE user_id = ? AND EXISTS (SELECT 1 FROM committee_members WHERE user_id = ?)"
+				)
+				.bind(newId, oldId)
+				.run()
+			await tx
+				.prepare("UPDATE committee_members SET user_id = ? WHERE user_id = ?")
+				.bind(oldId, newId)
+				.run()
+			await tx
+				.prepare("UPDATE boosts SET booster_id = ? WHERE booster_id = ?")
+				.bind(oldId, newId)
+				.run()
+			await tx
+				.prepare("UPDATE rejections SET rejected_by = ? WHERE rejected_by = ?")
+				.bind(oldId, newId)
+				.run()
+			await tx
+				.prepare("UPDATE lyrics SET committee_approved_by = ? WHERE committee_approved_by = ?")
+				.bind(oldId, newId)
+				.run()
+
 			await tx.prepare("DELETE FROM users WHERE id = ?").bind(newId).run()
 		}
 		await tx.prepare("UPDATE users SET key_id = ? WHERE id = ?").bind(newKey, oldId).run()
@@ -623,6 +669,23 @@ interface SnapContributionEvent {
 	ref_id: number
 	created_at: number
 }
+interface SnapCommitteeMember {
+	user_id: number
+	added_at: number
+	added_by: string | null
+}
+interface SnapBoost {
+	id: number
+	booster_id: number
+}
+interface SnapRejection {
+	id: number
+	rejected_by: number
+}
+interface SnapCommitteeApproval {
+	id: number
+	committee_approved_by: number
+}
 interface SnapBadgeAward {
 	id: number
 	user_id: number
@@ -660,6 +723,12 @@ export async function restoreFromSnapshot(
 		const snapRequestIds = new Set((snap.lyrics_requests as SnapRequest[]).map((r) => r.id))
 		const snapRevisions = snap.lyric_revisions as SnapRevision[] | undefined
 		const snapRevisionIds = new Set(snapRevisions?.map((r) => r.id))
+		const snapBoosts = snap.boosts as SnapBoost[] | undefined
+		const snapBoostIds = new Set(snapBoosts?.map((b) => b.id))
+		const snapRejections = snap.rejections as SnapRejection[] | undefined
+		const snapRejectionIds = new Set(snapRejections?.map((r) => r.id))
+		const snapApprovals = snap.committee_approvals as SnapCommitteeApproval[] | undefined
+		const snapApprovalIds = new Set(snapApprovals?.map((a) => a.id))
 		const currentVotes = await all<{ id: number }>(
 			tx,
 			"SELECT id FROM votes WHERE user_id = ANY(?)",
@@ -692,13 +761,29 @@ export async function restoreFromSnapshot(
 					[ids, ids]
 				)
 			: []
+		const currentBoosts = snapBoosts
+			? await all<{ id: number }>(tx, "SELECT id FROM boosts WHERE booster_id = ANY(?)", [ids])
+			: []
+		const currentRejections = snapRejections
+			? await all<{ id: number }>(tx, "SELECT id FROM rejections WHERE rejected_by = ANY(?)", [ids])
+			: []
+		const currentApprovals = snapApprovals
+			? await all<{ id: number }>(
+					tx,
+					"SELECT id FROM lyrics WHERE committee_approved_by = ANY(?)",
+					[ids]
+				)
+			: []
 		if (
 			currentVotes.some((v) => !snapVoteIds.has(v.id)) ||
 			currentReports.some((r) => !snapReportIds.has(r.id)) ||
 			currentLyrics.some((l) => !snapLyricsIds.has(l.id)) ||
 			currentFulfillments.some((f) => !snapFulfillmentIds.has(f.id)) ||
 			currentRequests.some((r) => !snapRequestIds.has(r.id)) ||
-			currentRevisions.some((r) => !snapRevisionIds.has(r.id))
+			currentRevisions.some((r) => !snapRevisionIds.has(r.id)) ||
+			currentBoosts.some((b) => !snapBoostIds.has(b.id)) ||
+			currentRejections.some((r) => !snapRejectionIds.has(r.id)) ||
+			currentApprovals.some((a) => !snapApprovalIds.has(a.id))
 		) {
 			return { error: "HAS_INTERIM_ACTIVITY" } as const
 		}
@@ -831,6 +916,38 @@ export async function restoreFromSnapshot(
 					.bind(b.id, b.user_id, b.badge_key, b.tier, b.awarded_at, b.context)
 					.run()
 			}
+		}
+
+		const snapCommittee = snap.committee_members as SnapCommitteeMember[] | undefined
+		if (snapCommittee) {
+			await tx.prepare("DELETE FROM committee_members WHERE user_id = ANY(?)").bind(ids).run()
+			for (const c of snapCommittee) {
+				await tx
+					.prepare("INSERT INTO committee_members (user_id, added_at, added_by) VALUES (?, ?, ?)")
+					.bind(c.user_id, c.added_at, c.added_by)
+					.run()
+			}
+		}
+
+		for (const b of snapBoosts ?? []) {
+			await tx
+				.prepare("UPDATE boosts SET booster_id = ? WHERE id = ?")
+				.bind(b.booster_id, b.id)
+				.run()
+		}
+
+		for (const r of snapRejections ?? []) {
+			await tx
+				.prepare("UPDATE rejections SET rejected_by = ? WHERE id = ?")
+				.bind(r.rejected_by, r.id)
+				.run()
+		}
+
+		for (const a of snapApprovals ?? []) {
+			await tx
+				.prepare("UPDATE lyrics SET committee_approved_by = ? WHERE id = ?")
+				.bind(a.committee_approved_by, a.id)
+				.run()
 		}
 
 		return { restored: true } as const

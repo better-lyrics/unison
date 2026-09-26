@@ -221,11 +221,15 @@ describe("runMigration (merge case)", () => {
 		expect(Object.keys(result.snapshot).sort()).toEqual(
 			[
 				"badge_awards",
+				"boosts",
+				"committee_approvals",
+				"committee_members",
 				"contribution_events",
 				"discord_links",
 				"lyric_revisions",
 				"lyrics",
 				"lyrics_requests",
+				"rejections",
 				"reports",
 				"request_fulfillments",
 				"users",
@@ -818,12 +822,21 @@ describe("restoreFromSnapshot", () => {
 		)
 	})
 
-	it("regression: undo of a snapshot taken before XP and badges were captured leaves them untouched", async () => {
+	it("regression: undo of a snapshot taken before XP, badges and committee rows were captured leaves them untouched", async () => {
 		const db = makeMockDB([committedAuditRow()])
 		const result = await restoreFromSnapshot(makeEnv(db), 7)
 		expect(result).toEqual({ restored: true })
 		expect(
-			db.calls.some((c) => c.sql.includes("contribution_events") || c.sql.includes("badge_awards"))
+			db.calls.some((c) =>
+				[
+					"contribution_events",
+					"badge_awards",
+					"committee_members",
+					"boosts",
+					"rejections",
+					"committee_approved_by",
+				].some((table) => c.sql.includes(table))
+			)
 		).toBe(false)
 	})
 
