@@ -1,20 +1,19 @@
-import { readFileSync } from "node:fs"
-import { D1Compat } from "@/infra/database"
+import {
+	type IntegrationDb,
+	describeIntegration,
+	openIntegrationDb,
+	wipeRevisionData,
+} from "@/test/integration-harness"
 import type { Env } from "@/types"
-import pg from "pg"
+import type pg from "pg"
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest"
 import { getSealCandidates, rejectLyric, undoRejection } from "./rejections"
-
-const { Pool } = pg
-
-const shouldRun = process.env.RUN_INTEGRATION === "1"
-const describeIntegration = shouldRun ? describe : describe.skip
 
 const kid = (n: number): string => n.toString(16).padStart(64, "0")
 const NOW = Math.floor(Date.now() / 1000)
 
 describeIntegration("rejections store (integration)", () => {
-	const url = process.env.INTEGRATION_DATABASE_URL ?? process.env.DATABASE_URL
+	let db: IntegrationDb
 	let pool: pg.Pool
 	let env: Env
 	let userSeq = 0
@@ -23,25 +22,14 @@ describeIntegration("rejections store (integration)", () => {
 		(await pool.query(sql, params)).rows[0] as T
 
 	beforeAll(async () => {
-		if (!url) throw new Error("INTEGRATION_DATABASE_URL or DATABASE_URL is required")
-		pool = new Pool({ connectionString: url })
-		const schema = readFileSync(new URL("../../schema.sql", import.meta.url), "utf-8")
-		await pool.query(schema)
-		env = { DB: new D1Compat(pool) } as unknown as Env
+		db = await openIntegrationDb()
+		pool = db.pool
+		env = db.env
 	})
 
 	afterAll(async () => {
 		await pool.end()
 	})
-
-	async function wipe() {
-		await pool.query("DELETE FROM rejections")
-		await pool.query("DELETE FROM boosts")
-		await pool.query("DELETE FROM committee_members")
-		await pool.query("DELETE FROM votes")
-		await pool.query("DELETE FROM lyrics")
-		await pool.query("DELETE FROM users")
-	}
 
 	function newUser(nickname: string | null = null): Promise<number> {
 		userSeq++
@@ -114,7 +102,7 @@ describeIntegration("rejections store (integration)", () => {
 		)
 	}
 
-	beforeEach(wipe)
+	beforeEach(() => wipeRevisionData(db))
 
 	describe("getSealCandidates", () => {
 		it("returns an eligible candidate with submitter display info", async () => {
@@ -209,6 +197,90 @@ describeIntegration("rejections store (integration)", () => {
 			const rows = await getSealCandidates(env, { limit: 10, sort: "top-rated" })
 			expect(rows[0].submitter_key_id).toBeNull()
 			expect(rows[0].submitter_nickname).toBeNull()
+		})
+
+		describe("committee submitters", () => {
+			describe("happy paths", () => {
+				it("excludes a lyric submitted by a committee member", async () => {
+					const member = await newUser("Member")
+					await addToCommittee(member)
+					await insertLyric({ videoId: "vCouncil", submitterId: member })
+					const keep = await insertLyric({ videoId: "vPublic", submitterId: await newUser() })
+
+					const rows = await getSealCandidates(env, { limit: 10, sort: "top-rated" })
+					expect(rows.map((r) => r.id)).toEqual([keep])
+				})
+
+				it("falls back to the best non-committee variant of the same video", async () => {
+					const member = await newUser()
+					await addToCommittee(member)
+					await insertLyric({ videoId: "shared", submitterId: member, effectiveScore: 0.9 })
+					const fallback = await insertLyric({
+						videoId: "shared",
+						submitterId: await newUser(),
+						effectiveScore: 0.3,
+					})
+
+					const rows = await getSealCandidates(env, { limit: 10, sort: "top-rated" })
+					expect(rows.map((r) => r.id)).toEqual([fallback])
+				})
+
+				it("excludes committee lyrics under most-voted too", async () => {
+					const member = await newUser()
+					await addToCommittee(member)
+					await insertLyric({ videoId: "loud", submitterId: member, voteCount: 99 })
+					const keep = await insertLyric({ videoId: "quiet", voteCount: 1 })
+
+					const rows = await getSealCandidates(env, { limit: 10, sort: "most-voted" })
+					expect(rows.map((r) => r.id)).toEqual([keep])
+				})
+			})
+
+			describe("edge cases", () => {
+				it("returns [] when every candidate is from a committee member", async () => {
+					const member = await newUser()
+					await addToCommittee(member)
+					await insertLyric({ videoId: "only", submitterId: member })
+
+					expect(await getSealCandidates(env, { limit: 10, sort: "top-rated" })).toEqual([])
+				})
+
+				it("does not hide non-committee lyrics while a committee exists", async () => {
+					await addToCommittee(await newUser())
+					const id = await insertLyric({ videoId: "vOther", submitterId: await newUser() })
+					const orphan = await insertLyric({ videoId: "vOrphan", submitterId: null })
+
+					const rows = await getSealCandidates(env, { limit: 10, sort: "top-rated" })
+					expect(rows.map((r) => r.id).sort()).toEqual([id, orphan].sort())
+				})
+			})
+
+			describe("invariants", () => {
+				it("fills the limit with non-committee lyrics", async () => {
+					const member = await newUser()
+					await addToCommittee(member)
+					await insertLyric({ videoId: "top1", submitterId: member, effectiveScore: 0.9 })
+					await insertLyric({ videoId: "top2", submitterId: member, effectiveScore: 0.8 })
+					const a = await insertLyric({ videoId: "mid1", effectiveScore: 0.5 })
+					const b = await insertLyric({ videoId: "mid2", effectiveScore: 0.4 })
+					await insertLyric({ videoId: "low", effectiveScore: 0.1 })
+
+					const rows = await getSealCandidates(env, { limit: 2, sort: "top-rated" })
+					expect(rows.map((r) => r.id)).toEqual([a, b])
+				})
+
+				it("shows the lyric again once the submitter leaves the committee", async () => {
+					const member = await newUser()
+					await addToCommittee(member)
+					const id = await insertLyric({ videoId: "vLeaver", submitterId: member })
+					expect(await getSealCandidates(env, { limit: 10, sort: "top-rated" })).toEqual([])
+
+					await pool.query("DELETE FROM committee_members WHERE user_id = $1", [member])
+
+					const rows = await getSealCandidates(env, { limit: 10, sort: "top-rated" })
+					expect(rows.map((r) => r.id)).toEqual([id])
+				})
+			})
 		})
 	})
 
