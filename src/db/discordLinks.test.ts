@@ -136,10 +136,12 @@ describe("discordLinks", () => {
 	})
 
 	describe("refreshDiscordProfile", () => {
-		it("rewrites the username and avatar in place, scoped to key and discord id", async () => {
-			const db = makeMockDB([null])
+		const CHANGED_SQL =
+			"WHERE discord_id = ? AND (discord_username IS DISTINCT FROM ? OR discord_avatar IS DISTINCT FROM ?)"
+
+		it("rewrites the username and avatar in place for the linked discord id", async () => {
+			const db = makeMockDB([{ discord_id: "d6" }])
 			await refreshDiscordProfile(makeEnv(db), {
-				keyId: KEY,
 				discordId: "d6",
 				discordUsername: "Alicia",
 				discordAvatar: "fresh-hash",
@@ -147,21 +149,40 @@ describe("discordLinks", () => {
 			expect(db.calls).toHaveLength(1)
 			const upd = db.calls[0]
 			expect(upd.sql).toContain("UPDATE discord_links SET discord_username = ?, discord_avatar = ?")
-			expect(upd.sql).toContain("WHERE key_id = ? AND discord_id = ?")
-			expect(upd.params).toEqual(["Alicia", "fresh-hash", KEY, "d6"])
+			expect(upd.sql).toContain(CHANGED_SQL)
+			expect(upd.params).toEqual(["Alicia", "fresh-hash", "d6", "Alicia", "fresh-hash"])
+		})
+
+		it("reports true when a row changed", async () => {
+			const db = makeMockDB([{ discord_id: "d6" }])
+			const changed = await refreshDiscordProfile(makeEnv(db), {
+				discordId: "d6",
+				discordUsername: "Alicia",
+				discordAvatar: "fresh-hash",
+			})
+			expect(changed).toBe(true)
+		})
+
+		it("reports false when nothing changed or the id is not linked", async () => {
+			const db = makeMockDB([null])
+			const changed = await refreshDiscordProfile(makeEnv(db), {
+				discordId: "d6",
+				discordUsername: "Alicia",
+				discordAvatar: "fresh-hash",
+			})
+			expect(changed).toBe(false)
 		})
 
 		describe("invariants", () => {
-			it("never deletes, inserts or touches linked_at", async () => {
+			it("never deletes, inserts or touches linked_at or key_id", async () => {
 				const db = makeMockDB([null])
 				await refreshDiscordProfile(makeEnv(db), {
-					keyId: KEY,
 					discordId: "d6",
 					discordUsername: "Alicia",
 					discordAvatar: "h",
 				})
 				for (const c of db.calls) {
-					expect(c.sql).not.toMatch(/DELETE|INSERT|linked_at/)
+					expect(c.sql).not.toMatch(/DELETE|INSERT|linked_at|key_id/)
 				}
 			})
 		})
@@ -170,12 +191,11 @@ describe("discordLinks", () => {
 			it("clears the stored hash when the user removed their Discord avatar", async () => {
 				const db = makeMockDB([null])
 				await refreshDiscordProfile(makeEnv(db), {
-					keyId: KEY,
 					discordId: "d6",
 					discordUsername: "Alicia",
 					discordAvatar: null,
 				})
-				expect(db.calls[0].params).toEqual(["Alicia", null, KEY, "d6"])
+				expect(db.calls[0].params).toEqual(["Alicia", null, "d6", "Alicia", null])
 			})
 		})
 	})

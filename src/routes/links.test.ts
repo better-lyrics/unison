@@ -1,4 +1,5 @@
 import { COMMUNITY_KEY_ID } from "@/config"
+import { CURATOR_LEADERBOARD_CACHE_KEY } from "@/db/leaderboard"
 import type { Env } from "@/types"
 import { canonicalJson, hashPublicKey } from "@/utils/crypto"
 import { describe, expect, it } from "vitest"
@@ -21,7 +22,9 @@ function makeMockDB(queue: unknown[] = []) {
 						getParams: () => args,
 						async first<T>(): Promise<T | null> {
 							calls.push({ sql, params: args })
-							return (queue.shift() as T) ?? null
+							const next = queue.shift()
+							if (next instanceof Error) throw next
+							return (next as T) ?? null
 						},
 						async all<T>(): Promise<{ results: T[] }> {
 							calls.push({ sql, params: args })
@@ -324,7 +327,7 @@ describe("GET /links/discord/callback", () => {
 			expect(res.status).toBe(302)
 			expect(res.headers.get("location")).toContain("/link?status=linked")
 			const upd = db.calls.find((c) => c.sql.includes("UPDATE discord_links"))
-			expect(upd?.params).toEqual(["Alice", NEW_HASH, KEY, "same-id"])
+			expect(upd?.params).toEqual(["Alice", NEW_HASH, "same-id", "Alice", NEW_HASH])
 		})
 
 		it("relinks through delete and insert when the Discord account differs", async () => {
@@ -384,7 +387,41 @@ describe("GET /links/discord/callback", () => {
 				await callback(app, "st-clr")
 
 				const upd = db.calls.find((c) => c.sql.includes("UPDATE discord_links"))
-				expect(upd?.params).toEqual(["alice", null, KEY, "same-id"])
+				expect(upd?.params).toEqual(["alice", null, "same-id", "alice", null])
+			})
+		})
+
+		describe("cross-field interactions", () => {
+			it("evicts the curator leaderboard cache when the refresh changed the row", async () => {
+				const cache = makeMockCache({
+					"link_state:st-ev": KEY,
+					[CURATOR_LEADERBOARD_CACHE_KEY]: "{}",
+				})
+				const db = makeMockDB([existingLink("same-id", "old-hash"), { discord_id: "same-id" }])
+				const app = linkRoutes(
+					makeEnv(db, cache),
+					discordFetch({ id: "same-id", username: "alice", global_name: "Alice", avatar: NEW_HASH })
+				)
+
+				await callback(app, "st-ev")
+
+				expect(cache.store.has(CURATOR_LEADERBOARD_CACHE_KEY)).toBe(false)
+			})
+
+			it("keeps the curator leaderboard cache when the refresh changed nothing", async () => {
+				const cache = makeMockCache({
+					"link_state:st-keep": KEY,
+					[CURATOR_LEADERBOARD_CACHE_KEY]: "{}",
+				})
+				const db = makeMockDB([existingLink("same-id", NEW_HASH), null])
+				const app = linkRoutes(
+					makeEnv(db, cache),
+					discordFetch({ id: "same-id", username: "alice", global_name: "Alice", avatar: NEW_HASH })
+				)
+
+				await callback(app, "st-keep")
+
+				expect(cache.store.has(CURATOR_LEADERBOARD_CACHE_KEY)).toBe(true)
 			})
 		})
 	})
@@ -534,6 +571,198 @@ describe("bot read endpoints", () => {
 		expect(res.status).toBe(200)
 		const json = (await res.json()) as { data: { keyIds: string[] } }
 		expect(json.data.keyIds).toContain(COMMUNITY_KEY_ID)
+	})
+})
+
+describe("POST /links/bot/discord-profiles", () => {
+	const HASH = "8342729096ea3675442027381ff50dfe"
+	const ANIMATED = "a_1234567890abcdef1234567890abcdef"
+	const ALICE = "123456789012345678"
+	const BOB = "876543210987654321"
+
+	function push(
+		db: ReturnType<typeof makeMockDB>,
+		cache: ReturnType<typeof makeMockCache>,
+		body: unknown,
+		authorization = "Bearer bot-secret"
+	) {
+		const app = linkRoutes(makeEnv(db, cache, { BUTLER_BOT_SECRET: "bot-secret" }))
+		return app.handle(
+			new Request("http://localhost/links/bot/discord-profiles", {
+				method: "POST",
+				headers: { authorization, "content-type": "application/json" },
+				body: JSON.stringify(body),
+			})
+		)
+	}
+
+	const updates = (db: ReturnType<typeof makeMockDB>) =>
+		db.calls.filter((c) => c.sql.includes("UPDATE discord_links"))
+
+	it("refreshes each profile and reports how many rows changed", async () => {
+		const db = makeMockDB([{ discord_id: ALICE }, null])
+		const res = await push(db, makeMockCache(), {
+			profiles: [
+				{ discordId: ALICE, avatar: HASH, username: "Alice" },
+				{ discordId: BOB, avatar: ANIMATED, username: "Bob" },
+			],
+		})
+		expect(res.status).toBe(200)
+		expect(await res.json()).toEqual({ success: true, data: { updated: 1 } })
+		expect(updates(db).map((c) => c.params.slice(0, 3))).toEqual([
+			["Alice", HASH, ALICE],
+			["Bob", ANIMATED, BOB],
+		])
+	})
+
+	it("evicts the curator leaderboard cache when a row changed", async () => {
+		const cache = makeMockCache({ [CURATOR_LEADERBOARD_CACHE_KEY]: "{}" })
+		await push(makeMockDB([{ discord_id: ALICE }]), cache, {
+			profiles: [{ discordId: ALICE, avatar: HASH, username: "Alice" }],
+		})
+		expect(cache.store.has(CURATOR_LEADERBOARD_CACHE_KEY)).toBe(false)
+	})
+
+	describe("edge cases", () => {
+		it("accepts an empty batch without touching the database", async () => {
+			const db = makeMockDB()
+			const res = await push(db, makeMockCache(), { profiles: [] })
+			expect(await res.json()).toEqual({ success: true, data: { updated: 0 } })
+			expect(db.calls).toHaveLength(0)
+		})
+
+		it("stores a null avatar for a user with no custom Discord avatar", async () => {
+			const db = makeMockDB([null])
+			await push(db, makeMockCache(), {
+				profiles: [{ discordId: ALICE, avatar: null, username: "Alice" }],
+			})
+			expect(updates(db)[0].params[1]).toBeNull()
+		})
+
+		it("keeps a unicode username verbatim", async () => {
+			const db = makeMockDB([null])
+			await push(db, makeMockCache(), {
+				profiles: [{ discordId: ALICE, avatar: HASH, username: "ありす ✿" }],
+			})
+			expect(updates(db)[0].params[0]).toBe("ありす ✿")
+		})
+
+		it("accepts a full batch of 100 profiles", async () => {
+			const profiles = Array.from({ length: 100 }, (_, i) => ({
+				discordId: String(100000000000000000n + BigInt(i)),
+				avatar: HASH,
+				username: `user${i}`,
+			}))
+			const db = makeMockDB()
+			const res = await push(db, makeMockCache(), { profiles })
+			expect(res.status).toBe(200)
+			expect(updates(db)).toHaveLength(100)
+		})
+	})
+
+	describe("invariants", () => {
+		it("leaves the leaderboard cache alone when nothing changed", async () => {
+			const cache = makeMockCache({ [CURATOR_LEADERBOARD_CACHE_KEY]: "{}" })
+			await push(makeMockDB([null]), cache, {
+				profiles: [{ discordId: ALICE, avatar: HASH, username: "Alice" }],
+			})
+			expect(cache.store.has(CURATOR_LEADERBOARD_CACHE_KEY)).toBe(true)
+		})
+
+		it("never inserts or deletes links", async () => {
+			const db = makeMockDB([null, null])
+			await push(db, makeMockCache(), {
+				profiles: [
+					{ discordId: ALICE, avatar: HASH, username: "Alice" },
+					{ discordId: BOB, avatar: null, username: "Bob" },
+				],
+			})
+			for (const c of db.calls) expect(c.sql).not.toMatch(/INSERT|DELETE/)
+		})
+	})
+
+	describe("error paths", () => {
+		it("rejects an unauthorized bot", async () => {
+			const db = makeMockDB()
+			const res = await push(
+				db,
+				makeMockCache(),
+				{ profiles: [{ discordId: ALICE, avatar: HASH, username: "Alice" }] },
+				"Bearer wrong"
+			)
+			expect(res.status).toBe(401)
+			expect(db.calls).toHaveLength(0)
+		})
+
+		it("stores null instead of an avatar that is not a Discord image hash", async () => {
+			const db = makeMockDB([null])
+			await push(db, makeMockCache(), {
+				profiles: [{ discordId: ALICE, avatar: "../../evil?x=", username: "Alice" }],
+			})
+			expect(updates(db)[0].params[1]).toBeNull()
+		})
+
+		it("rejects a batch larger than 100 profiles", async () => {
+			const profiles = Array.from({ length: 101 }, (_, i) => ({
+				discordId: String(i),
+				avatar: null,
+				username: "u",
+			}))
+			const db = makeMockDB()
+			const res = await push(db, makeMockCache(), { profiles })
+			expect(res.status).toBe(422)
+			expect(db.calls).toHaveLength(0)
+		})
+
+		it("rejects a malformed profile", async () => {
+			const db = makeMockDB()
+			const res = await push(db, makeMockCache(), {
+				profiles: [{ discordId: ALICE, avatar: 42, username: "Alice" }],
+			})
+			expect(res.status).toBe(422)
+			expect(db.calls).toHaveLength(0)
+		})
+
+		it("rejects a body without profiles", async () => {
+			const res = await push(makeMockDB(), makeMockCache(), {})
+			expect(res.status).toBe(422)
+		})
+
+		it("still evicts the leaderboard cache when a later profile fails after one changed", async () => {
+			const cache = makeMockCache({ [CURATOR_LEADERBOARD_CACHE_KEY]: "{}" })
+			const db = makeMockDB([{ discord_id: ALICE }, new Error("Connection terminated")])
+			const res = await push(db, cache, {
+				profiles: [
+					{ discordId: ALICE, avatar: HASH, username: "Alice" },
+					{ discordId: BOB, avatar: HASH, username: "Bob" },
+				],
+			})
+			expect(res.status).toBe(500)
+			expect(cache.store.has(CURATOR_LEADERBOARD_CACHE_KEY)).toBe(false)
+		})
+
+		it("rejects a Discord id that is not a snowflake", async () => {
+			const db = makeMockDB()
+			const res = await push(db, makeMockCache(), {
+				profiles: [{ discordId: "alice", avatar: HASH, username: "Alice" }],
+			})
+			expect(res.status).toBe(422)
+			expect(db.calls).toHaveLength(0)
+		})
+
+		it("rejects an empty username", async () => {
+			const res = await push(makeMockDB(), makeMockCache(), {
+				profiles: [{ discordId: ALICE, avatar: HASH, username: "" }],
+			})
+			expect(res.status).toBe(422)
+		})
+
+		it("rejects a username longer than 100 characters", async () => {
+			const res = await push(makeMockDB(), makeMockCache(), {
+				profiles: [{ discordId: ALICE, avatar: HASH, username: "a".repeat(101) }],
+			})
+			expect(res.status).toBe(422)
+		})
 	})
 })
 

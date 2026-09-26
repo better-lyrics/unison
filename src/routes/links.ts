@@ -7,13 +7,18 @@ import {
 	refreshDiscordProfile,
 	unlinkByKeyId,
 } from "@/db/discordLinks"
+import { invalidateCuratorLeaderboardCache } from "@/db/leaderboard"
 import { Logger } from "@/infra/logger"
 import type { Env } from "@/types"
 import { signedRequest } from "@/utils/auth"
 import { isLinkBlacklisted } from "@/utils/blacklist"
 import { isAuthorizedBot } from "@/utils/bot-auth"
 import type { DiscordIdentity } from "@/utils/discord-oauth"
-import { buildAuthorizeUrl, exchangeCodeForUser } from "@/utils/discord-oauth"
+import {
+	buildAuthorizeUrl,
+	exchangeCodeForUser,
+	sanitizeDiscordAvatarHash,
+} from "@/utils/discord-oauth"
 import { discordAvatarUrl } from "@/utils/avatar-url"
 import { eitherAuth } from "@/utils/either-auth"
 import { ErrorCode, buildError } from "@/utils/errors"
@@ -141,12 +146,12 @@ export const linkRoutes = (env: Env, fetchImpl: typeof fetch = fetch) =>
 
 				const existing = await getByKeyId(env, keyId)
 				if (existing?.discord_id === identity.id) {
-					await refreshDiscordProfile(env, {
-						keyId,
+					const changed = await refreshDiscordProfile(env, {
 						discordId: identity.id,
 						discordUsername: identity.displayName,
 						discordAvatar: identity.avatar,
 					})
+					if (changed) await invalidateCuratorLeaderboardCache(env)
 					log.info("discord profile refreshed", { keyId, discordId: identity.id })
 					return redirectToLinkPage("linked", identity.displayName)
 				}
@@ -175,6 +180,40 @@ export const linkRoutes = (env: Env, fetchImpl: typeof fetch = fetch) =>
 			}
 			return status(200, { success: true, data: { keyIds: [...config.linking.blacklistedKeyIds] } })
 		})
+		.post(
+			"/bot/discord-profiles",
+			async ({ env, headers, body, status }) => {
+				if (!isAuthorizedBot(headers.authorization, env)) {
+					return status(401, buildError(ErrorCode.AUTH_REQUIRED))
+				}
+				let updated = 0
+				try {
+					for (const profile of body.profiles) {
+						const changed = await refreshDiscordProfile(env, {
+							discordId: profile.discordId,
+							discordUsername: profile.username,
+							discordAvatar: sanitizeDiscordAvatarHash(profile.avatar),
+						})
+						if (changed) updated++
+					}
+				} finally {
+					if (updated > 0) await invalidateCuratorLeaderboardCache(env)
+				}
+				return status(200, { success: true, data: { updated } })
+			},
+			{
+				body: t.Object({
+					profiles: t.Array(
+						t.Object({
+							discordId: t.String({ pattern: "^[0-9]{17,20}$" }),
+							avatar: t.Union([t.String(), t.Null()]),
+							username: t.String({ minLength: 1, maxLength: 100 }),
+						}),
+						{ maxItems: config.linking.botProfileBatchMax }
+					),
+				}),
+			}
+		)
 		.use(eitherAuth)
 		.get("/me", async ({ env, keyId, status }) => {
 			const link = await getByKeyId(env, keyId)
