@@ -1,5 +1,11 @@
 import { config } from "@/config"
-import { addToCatalogue, findPreset, getPresets, insertPreset } from "@/db/avatar-presets"
+import {
+	addToCatalogue,
+	deletePreset,
+	findPreset,
+	getPresets,
+	insertPreset,
+} from "@/db/avatar-presets"
 import { getByKeyId } from "@/db/discordLinks"
 import { hasSubmissionForVideo } from "@/db/profile"
 import { clearAvatarChoice, resolveAvatarUrl, setAvatarChoice } from "@/db/users"
@@ -43,8 +49,6 @@ export const avatarRoutes = (env: Env) =>
 				if (!env.CDN) return status(503, buildError(ErrorCode.CDN_UNAVAILABLE))
 
 				const { id, label, createdBy, mime, dataBase64 } = body
-				if (findPreset(id)) return status(409, buildError(ErrorCode.AVATAR_PRESET_EXISTS))
-
 				const input = Buffer.from(dataBase64, "base64")
 				if (input.length === 0) return status(422, buildError(ErrorCode.AVATAR_IMAGE_INVALID))
 
@@ -59,17 +63,21 @@ export const avatarRoutes = (env: Env) =>
 				}
 
 				const file = `${id}.webp`
-				const key = config.avatar.cdnKeyPrefix + file
-				await env.CDN.putObject(key, webp, "image/webp")
+				// Reserve the id in the db before the CDN write, so a duplicate never overwrites a live
+				// avatar and a failed upload leaves no row behind.
+				if (
+					(await insertPreset(env, { id, label, file, createdBy: createdBy ?? null })) === "exists"
+				) {
+					return status(409, buildError(ErrorCode.AVATAR_PRESET_EXISTS))
+				}
 
-				let result: "inserted" | "exists"
+				const key = config.avatar.cdnKeyPrefix + file
 				try {
-					result = await insertPreset(env, { id, label, file, createdBy: createdBy ?? null })
+					await env.CDN.putObject(key, webp, "image/webp")
 				} catch (err) {
-					await env.CDN.deleteObject(key).catch(() => {})
+					await deletePreset(env, id).catch(() => {})
 					throw err
 				}
-				if (result === "exists") return status(409, buildError(ErrorCode.AVATAR_PRESET_EXISTS))
 
 				addToCatalogue({ id, label, file })
 				return status(200, {

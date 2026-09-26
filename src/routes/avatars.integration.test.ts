@@ -439,7 +439,7 @@ describeIntegration("POST /avatars/presets (integration)", () => {
 		expect(cdn.puts).toHaveLength(1)
 	})
 
-	it("returns 409 when the id exists in the db but not the in-memory catalogue", async () => {
+	it("returns 409 for an existing id and never touches the CDN", async () => {
 		await insertPreset(db.env, { id: "outofband", label: "Out", file: "outofband.webp" })
 		const cdn = makeCdn()
 		const env: Env = { ...db.env, CDN: cdn.storage }
@@ -451,24 +451,29 @@ describeIntegration("POST /avatars/presets (integration)", () => {
 		})
 		expect(status).toBe(409)
 		expect(body.code).toBe("AVATAR_PRESET_EXISTS")
+		expect(cdn.puts).toHaveLength(0)
 		expect(cdn.deletes).toHaveLength(0)
 	})
 
-	it("deletes the uploaded object when the db insert throws", async () => {
-		const cdn = makeCdn()
-		const throwingDb = {
-			prepare: () => ({
-				bind: () => ({
-					all: async () => {
-						throw new Error("db down")
-					},
-				}),
-			}),
-		} as unknown as Env["DB"]
-		const env: Env = { ...db.env, DB: throwingDb, CDN: cdn.storage }
-		await expect(
-			post(env, { id: "boom-cat", label: "Boom", mime: "image/png", dataBase64: pngBase64 })
-		).resolves.toMatchObject({ status: 500 })
-		expect(cdn.deletes).toEqual(["avatars/boom-cat.webp"])
+	it("rolls back the reserved row when the CDN upload fails", async () => {
+		const failingCdn = {
+			async putObject() {
+				throw new Error("cdn down")
+			},
+			async listObjects() {
+				return []
+			},
+			async deleteObject() {},
+		} as unknown as NonNullable<Env["CDN"]>
+		const env: Env = { ...db.env, CDN: failingCdn }
+		const { status } = await post(env, {
+			id: "boom-cat",
+			label: "Boom",
+			mime: "image/png",
+			dataBase64: pngBase64,
+		})
+		expect(status).toBe(500)
+		const { rows } = await db.pool.query("SELECT id FROM avatar_presets WHERE id = 'boom-cat'")
+		expect(rows).toHaveLength(0)
 	})
 })

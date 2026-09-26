@@ -83,6 +83,10 @@ export async function insertPreset(
 	return results.length > 0 ? "inserted" : "exists"
 }
 
+export async function deletePreset(env: Env, id: string): Promise<void> {
+	await env.DB.prepare("DELETE FROM avatar_presets WHERE id = ?").bind(id).run()
+}
+
 export async function listPresetsFromDb(env: Env): Promise<AvatarPreset[]> {
 	const { results } = await env.DB.prepare(
 		"SELECT id, label, file FROM avatar_presets ORDER BY id"
