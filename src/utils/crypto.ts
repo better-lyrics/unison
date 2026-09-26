@@ -46,8 +46,7 @@ export async function hashPublicKey(publicKeyJwk: JsonWebKey): Promise<string> {
 }
 
 export async function verifyKeyId(keyId: string, publicKeyJwk: JsonWebKey): Promise<boolean> {
-	const computed = await hashPublicKey(publicKeyJwk)
-	return computed.toLowerCase() === keyId.toLowerCase()
+	return (await hashPublicKey(publicKeyJwk)) === keyId
 }
 
 function base64ToBuffer(base64: string): ArrayBuffer {
