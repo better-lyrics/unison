@@ -15,6 +15,7 @@ vi.mock("@/db/exam", () => ({
 	getSessionById: vi.fn(),
 	getSessionQuestion: vi.fn(),
 	getSessionQuestions: vi.fn(),
+	listApplicantReports: vi.fn(),
 	listApplicants: vi.fn(),
 	loadDrawableBank: vi.fn(),
 	markExamStarted: vi.fn(),
@@ -117,7 +118,10 @@ describe("POST /exam/bot/start", () => {
 		vi.mocked(isAuthorizedBot).mockReturnValue(true)
 		vi.mocked(getUserByKeyId).mockResolvedValue(user)
 		vi.mocked(examDb.getSessionByKeyId).mockResolvedValue(null)
-		const res = await post(examRoutes({} as Env), "/exam/bot/start", { keyId: KEY, discordId: "d1" })
+		const res = await post(examRoutes({} as Env), "/exam/bot/start", {
+			keyId: KEY,
+			discordId: "d1",
+		})
 		expect(res.status).toBe(500)
 		expect(((await res.json()) as { code: string }).code).toBe("EXAM_NOT_CONFIGURED")
 		expect(vi.mocked(startSession)).not.toHaveBeenCalled()
@@ -166,6 +170,34 @@ describe("GET /exam/bot/applicants", () => {
 		expect((await res.json()) as unknown).toEqual({
 			success: true,
 			data: { applicants: [{ applicantId: 1 }] },
+		})
+	})
+})
+
+describe("GET /exam/bot/reports", () => {
+	it("rejects a bad bot secret with 401", async () => {
+		vi.mocked(isAuthorizedBot).mockReturnValue(false)
+		expect((await get(botApp(), "/exam/bot/reports?discordId=d1")).status).toBe(401)
+		expect(vi.mocked(examDb.listApplicantReports)).not.toHaveBeenCalled()
+	})
+
+	it("requires a discordId", async () => {
+		vi.mocked(isAuthorizedBot).mockReturnValue(true)
+		expect((await get(botApp(), "/exam/bot/reports")).status).toBe(422)
+		expect(vi.mocked(examDb.listApplicantReports)).not.toHaveBeenCalled()
+	})
+
+	it("returns the user's reports", async () => {
+		vi.mocked(isAuthorizedBot).mockReturnValue(true)
+		vi.mocked(examDb.listApplicantReports).mockResolvedValue([{ applicantId: 1 }] as never)
+		const res = await get(botApp(), "/exam/bot/reports?discordId=123456789012345678")
+		expect(vi.mocked(examDb.listApplicantReports)).toHaveBeenCalledWith(
+			expect.anything(),
+			"123456789012345678"
+		)
+		expect((await res.json()) as unknown).toEqual({
+			success: true,
+			data: { reports: [{ applicantId: 1 }] },
 		})
 	})
 })
@@ -353,7 +385,10 @@ describe("POST /exam/answer", () => {
 			return { category: "capstone", answerKey: capstoneKey, answer } as never
 		}
 		function commit(answer: Record<string, string>) {
-			vi.mocked(examDb.resolveExamSession).mockResolvedValue({ ok: true, session: okSession as never })
+			vi.mocked(examDb.resolveExamSession).mockResolvedValue({
+				ok: true,
+				session: okSession as never,
+			})
 			return post(spaApp(), "/exam/answer", { t: "x", questionId: 9, answer }, false)
 		}
 
@@ -362,7 +397,9 @@ describe("POST /exam/answer", () => {
 			const res = await commit({ queue: "reject" })
 			expect(res.status).toBe(200)
 			expect(((await res.json()) as { data: { terminated: boolean } }).data.terminated).toBe(false)
-			expect(vi.mocked(examDb.saveAnswer)).toHaveBeenCalledWith(expect.anything(), 5, 9, { queue: "reject" })
+			expect(vi.mocked(examDb.saveAnswer)).toHaveBeenCalledWith(expect.anything(), 5, 9, {
+				queue: "reject",
+			})
 		})
 
 		it("commits a wrong beat and reports the story terminated", async () => {
@@ -381,14 +418,18 @@ describe("POST /exam/answer", () => {
 		})
 
 		it("rejects a new commit once the story has terminated", async () => {
-			vi.mocked(examDb.getSessionQuestion).mockResolvedValue(capstone({ queue: "reject", dm: "cave" }))
+			vi.mocked(examDb.getSessionQuestion).mockResolvedValue(
+				capstone({ queue: "reject", dm: "cave" })
+			)
 			const res = await commit({ queue: "reject", dm: "cave", council: "hold" })
 			expect(res.status).toBe(409)
 			expect(vi.mocked(examDb.saveAnswer)).not.toHaveBeenCalled()
 		})
 
 		it("is idempotent: re-sending the same terminated answer is accepted", async () => {
-			vi.mocked(examDb.getSessionQuestion).mockResolvedValue(capstone({ queue: "reject", dm: "cave" }))
+			vi.mocked(examDb.getSessionQuestion).mockResolvedValue(
+				capstone({ queue: "reject", dm: "cave" })
+			)
 			const res = await commit({ queue: "reject", dm: "cave" })
 			expect(res.status).toBe(200)
 		})

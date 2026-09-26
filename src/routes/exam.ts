@@ -6,6 +6,7 @@ import {
 	getSessionByKeyId,
 	getSessionQuestion,
 	getSessionQuestions,
+	listApplicantReports,
 	listApplicants,
 	loadDrawableBank,
 	markExamStarted,
@@ -22,12 +23,12 @@ import { getUserByKeyId } from "@/db/users"
 import type { Env } from "@/types"
 import { isAuthorizedAdmin } from "@/utils/admin-auth"
 import { isAuthorizedBot } from "@/utils/bot-auth"
+import { ErrorCode, buildError } from "@/utils/errors"
 import { toClientQuestion } from "@/utils/exam-client"
 import { type DrawSlot, drawQuestions } from "@/utils/exam-draw"
 import { gradeExam, toGradeableItems } from "@/utils/exam-grading"
 import { isScenarioTerminated } from "@/utils/exam-scenario"
 import { generateExamToken, hashExamToken } from "@/utils/exam-token"
-import { ErrorCode, buildError } from "@/utils/errors"
 import { Elysia, t } from "elysia"
 
 const DEV_KEY = "d".repeat(64)
@@ -183,6 +184,17 @@ export const examRoutes = (env: Env) =>
 			},
 			{ query: t.Object({ includeBelowCutoff: t.Optional(t.String()) }) }
 		)
+		.get(
+			"/bot/reports",
+			async ({ env, headers, query, status }) => {
+				if (!isAuthorizedBot(headers.authorization, env)) {
+					return status(401, buildError(ErrorCode.AUTH_REQUIRED))
+				}
+				const reports = await listApplicantReports(env, query.discordId)
+				return { success: true, data: { reports } }
+			},
+			{ query: t.Object({ discordId: t.String({ minLength: 1, maxLength: 32 }) }) }
+		)
 		.post(
 			"/bot/applicants/:applicantId/decision",
 			async ({ env, headers, params, body, status }) => {
@@ -268,7 +280,10 @@ export const examRoutes = (env: Env) =>
 						}
 					}
 					// Once a wrong beat has ended the story, no further beats may be committed.
-					if (isScenarioTerminated(question.answerKey, stored) && !sameAnswer(body.answer, stored)) {
+					if (
+						isScenarioTerminated(question.answerKey, stored) &&
+						!sameAnswer(body.answer, stored)
+					) {
 						return status(409, buildError(ErrorCode.EXAM_ANSWER_LOCKED))
 					}
 					await saveAnswer(env, resolved.session.id, body.questionId, body.answer)
