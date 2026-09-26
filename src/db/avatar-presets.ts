@@ -32,6 +32,7 @@ export const AVATAR_PRESETS: AvatarPreset[] = [
 	{ id: "lebron-selfie", label: "Lebron Selfie", file: "lebron-selfie.webp" },
 	{ id: "melon-dog", label: "Melon Dog", file: "melon-dog.webp" },
 	{ id: "meme-face", label: "Meme Face", file: "meme-face.webp" },
+	{ id: "oia-uia-cat", label: "Oia Uia Cat", file: "oia-uia-cat.webp" },
 	{ id: "pale-frog", label: "Pale Frog", file: "pale-frog.webp" },
 	{ id: "pink-hood-toy", label: "Pink Hood Toy", file: "pink-hood-toy.webp" },
 	{ id: "rich-daffy", label: "Rich Daffy", file: "rich-daffy.webp" },
