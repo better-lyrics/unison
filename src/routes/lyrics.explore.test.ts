@@ -139,7 +139,7 @@ describe("GET /lyrics epsilon exploration threading", () => {
 		const challenger = makeLyricsRow({ id: 2, sync_type: "plain", vote_count: 0 })
 		const cache = makeMockCache()
 		seedPrimary(cache, primary)
-		const db = makeMockDB([null, [challenger], null])
+		const db = makeMockDB([null, null, [challenger], null])
 		const app = lyricsRoutes(makeEnv(db, cache))
 
 		const res = await app.handle(
@@ -175,7 +175,7 @@ describe("GET /lyrics epsilon exploration threading", () => {
 		const challenger = makeLyricsRow({ id: 2, sync_type: "plain", vote_count: 0 })
 		const cache = makeMockCache()
 		seedPrimary(cache, primary)
-		const db = makeMockDB([null, [challenger], null])
+		const db = makeMockDB([null, null, [challenger], null])
 		const app = lyricsRoutes(makeEnv(db, cache))
 
 		const res = await app.handle(
@@ -194,7 +194,7 @@ describe("GET /lyrics epsilon exploration threading", () => {
 		const challenger = makeLyricsRow({ id: 2, song: "Challenger Song", sync_type: "plain" })
 		const cache = makeMockCache()
 		seedPrimary(cache, primary)
-		const db = makeMockDB([null, [challenger], null])
+		const db = makeMockDB([null, null, [challenger], null])
 		const app = lyricsRoutes(makeEnv(db, cache))
 
 		const res = await app.handle(

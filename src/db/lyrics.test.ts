@@ -530,7 +530,7 @@ describe("findByVideoId exploration", () => {
 		const keyId = "key-18"
 		expect(hashBucket(keyId, "vidExplore")).toBeLessThan(eps)
 
-		const db = createMockDB([[challenger]])
+		const db = createMockDB([null, [challenger]])
 		const cache = cacheWithPrimary()
 		const env = createEnv(db, cache)
 
@@ -545,7 +545,7 @@ describe("findByVideoId exploration", () => {
 		const keyId = "key-18"
 		expect(hashBucket(keyId, "vidExplore")).toBeLessThan(eps)
 
-		const db = createMockDB([[]])
+		const db = createMockDB([null, []])
 		const env = createEnv(db, cacheWithPrimary())
 
 		const result = await findByVideoId(env, "vidExplore", keyId)
@@ -557,7 +557,7 @@ describe("findByVideoId exploration", () => {
 		const keyId = "key-18"
 		expect(hashBucket(keyId, "vidExplore")).toBeLessThan(eps)
 
-		const db = createMockDB([[challenger]])
+		const db = createMockDB([null, [challenger]])
 		const env = createEnv(db, cacheWithPrimary())
 		;(config.exploration as { enabled: boolean }).enabled = false
 		try {
@@ -577,10 +577,10 @@ describe("findByVideoId exploration", () => {
 			{ ...challenger, id: 100, upvotes: 0, downvotes: 1 },
 		]
 
-		const dbA = createMockDB([pool])
+		const dbA = createMockDB([null, pool])
 		const first = await findByVideoId(createEnv(dbA, cacheWithPrimary()), "vidExplore", keyId)
 
-		const dbB = createMockDB([pool])
+		const dbB = createMockDB([null, pool])
 		const second = await findByVideoId(createEnv(dbB, cacheWithPrimary()), "vidExplore", keyId)
 
 		expect(first?.id).toBe(second?.id)
