@@ -1,23 +1,30 @@
 import { useSession } from "@/auth/useSession";
-import { Tooltip } from "@/components/Tooltip";
 import { UserAvatar } from "@/components/UserAvatar";
-import { IconCheck, IconCopy, IconLogout, IconUser } from "@tabler/icons-react";
-import { useEffect, useRef, useState } from "react";
+import { IconCheck, IconCopy, IconFileUpload, IconLogout, IconUser } from "@tabler/icons-react";
+import { type ChangeEvent, useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 
 export function SignInControl() {
   const session = useSession();
-  const [open, setOpen] = useState(false);
+  const menu = session.status === "signed-in" ? "account" : "sign-in";
+  const [openMenu, setOpenMenu] = useState<"account" | "sign-in" | null>(null);
+  const open = openMenu === menu;
+  const setOpen = (next: boolean | ((current: boolean) => boolean)) =>
+    setOpenMenu((current) => {
+      const value = typeof next === "function" ? next(current === menu) : next;
+      return value ? menu : null;
+    });
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [copied, setCopied] = useState(false);
   const wrapperRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     if (!open) return;
     const onClick = (e: MouseEvent) => {
-      if (!wrapperRef.current?.contains(e.target as Node)) setOpen(false);
+      if (!wrapperRef.current?.contains(e.target as Node)) setOpenMenu(null);
     };
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setOpen(false);
+      if (e.key === "Escape") setOpenMenu(null);
     };
     document.addEventListener("mousedown", onClick);
     document.addEventListener("keydown", onKey);
@@ -124,29 +131,71 @@ export function SignInControl() {
   }
 
   if (!session.extensionAvailable) {
-    if (/firefox/i.test(navigator.userAgent)) {
-      return (
-        <Tooltip label="Signing in with Better Lyrics needs the page to talk directly to the extension via the externally_connectable API, which Firefox hasn't implemented yet (and may never). Sign in from Chrome or Edge instead.">
-          <button
-            type="button"
-            data-state="firefox-signin"
-            className="max-w-full cursor-default truncate text-sm text-unison-text-muted"
-          >
-            Firefox sign-in unavailable
-          </button>
-        </Tooltip>
-      );
-    }
+    const onIdentityFile = (e: ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      e.target.value = "";
+      if (file) void session.signInWithFile(file);
+    };
     return (
-      <a
-        href="https://betterlyrics.org"
-        target="_blank"
-        rel="noopener noreferrer"
-        data-state="no-extension"
-        className="text-sm text-unison-text-secondary transition-colors hover:text-unison-text"
-      >
-        Get Better Lyrics
-      </a>
+      <div className="relative" ref={wrapperRef} data-state="no-extension">
+        <button
+          type="button"
+          onClick={() => setOpen((o) => !o)}
+          aria-haspopup="menu"
+          aria-expanded={open}
+          className="cursor-pointer rounded-md bg-unison-bg-elevated px-3 py-1.5 text-sm font-medium text-unison-text transition-colors hover:bg-unison-bg-hover"
+        >
+          Sign in
+        </button>
+        {open ? (
+          <div
+            role="menu"
+            data-state="open"
+            className="absolute right-0 z-20 mt-2 w-64 rounded-lg border border-unison-border bg-unison-bg-elevated p-3 shadow-lg"
+          >
+            <div className="space-y-2 pb-3">
+              <button
+                type="button"
+                role="menuitem"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={session.signingIn}
+                className="flex w-full cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm text-unison-text transition-colors hover:bg-unison-bg-hover disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <IconFileUpload className="size-4" stroke={1.5} />
+                {session.signingIn ? "Signing in..." : "Upload identity file"}
+              </button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".json,application/json"
+                aria-label="Identity file"
+                className="hidden"
+                onChange={onIdentityFile}
+              />
+              <p className="px-2 text-xs leading-relaxed text-unison-text-muted">
+                Export it in Better Lyrics options → Identity → Export Key. Only upload it on this site, it is the key
+                to your account.
+              </p>
+              {session.status === "error" ? (
+                <p role="alert" className="px-2 text-xs text-red-400">
+                  {session.error.message}
+                </p>
+              ) : null}
+            </div>
+            <div className="border-t border-unison-border pt-2">
+              <a
+                href="https://betterlyrics.org"
+                target="_blank"
+                rel="noopener noreferrer"
+                role="menuitem"
+                className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm text-unison-text-secondary transition-colors hover:bg-unison-bg-hover hover:text-unison-text"
+              >
+                Get Better Lyrics
+              </a>
+            </div>
+          </div>
+        ) : null}
+      </div>
     );
   }
 
