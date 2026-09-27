@@ -1,9 +1,5 @@
+import { isEditableTarget } from "@/lib/dom"
 import { type RefObject, useEffect } from "react"
-
-function isEditableTarget(el: Element | null): boolean {
-  if (!(el instanceof HTMLElement)) return false
-  return el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.isContentEditable
-}
 
 export function useSearchShortcut(ref: RefObject<HTMLInputElement | null>, enabled = true) {
   useEffect(() => {
