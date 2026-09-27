@@ -114,7 +114,7 @@ class UncheckedLiveEdit extends Error {}
 const NOT_SAVABLE: GateOutcome = { goesLive: false, reason: null }
 const LANGUAGE_HINT = "Pick a language from the list."
 const ISRC_HINT = "An ISRC looks like USRC17607839."
-const ALBUM_HINT = `Album names can be up to ${config.validation.album.maxLength} characters.`
+const ALBUM_HINT = `Album names must be a single line of up to ${config.validation.album.maxLength} characters.`
 
 async function revisionLines(stored: string, format: LyricsFormat): Promise<LyricLine[]> {
 	try {
@@ -156,7 +156,7 @@ function acceptIsrc(value: string): ResolvedField {
 
 const acceptAlbum = (value: string): ResolvedField => ({
 	value,
-	valid: value.length <= config.validation.album.maxLength,
+	valid: value.length <= config.validation.album.maxLength && !/\p{Cc}/u.test(value),
 })
 
 async function languageCheck(

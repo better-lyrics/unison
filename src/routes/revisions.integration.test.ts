@@ -305,7 +305,7 @@ describeIntegration("revision routes (integration)", () => {
 				expect([status, json.code, json.hint]).toEqual([
 					400,
 					"INVALID_PAYLOAD",
-					`Album names can be up to ${max} characters.`,
+					`Album names must be a single line of up to ${max} characters.`,
 				])
 				expect((await listRevisions()).json.data.revisions).toHaveLength(1)
 			})

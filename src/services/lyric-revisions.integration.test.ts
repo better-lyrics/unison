@@ -834,7 +834,15 @@ describeIntegration("lyric revisions pipeline (integration)", () => {
 				expect(await albumCheck("x".repeat(MAX + 1))).toEqual({
 					field: "album",
 					status: "bad",
-					message: `Album names can be up to ${MAX} characters.`,
+					message: `Album names must be a single line of up to ${MAX} characters.`,
+				})
+			})
+
+			it("regression: reports an album with a line break as bad", async () => {
+				expect(await albumCheck("Hymns\n+[00:12.00] fake line")).toEqual({
+					field: "album",
+					status: "bad",
+					message: `Album names must be a single line of up to ${MAX} characters.`,
 				})
 			})
 
@@ -911,12 +919,22 @@ describeIntegration("lyric revisions pipeline (integration)", () => {
 		})
 
 		describe("error paths", () => {
+			it("regression: rejects an album with control characters and saves nothing", async () => {
+				expect(
+					await saveAlbum(lrc(swapWords(LRC, 1), { album: "Hymns\r\n-[album] x" }))
+				).toMatchObject({
+					ok: false,
+					code: "INVALID_PAYLOAD",
+				})
+				expect((await liveAlbum()).album).toBe("Hymns of Grace")
+			})
+
 			it("rejects an album over the length limit with a hint and saves nothing", async () => {
 				expect(await saveAlbum(lrc(swapWords(LRC, 1), { album: "x".repeat(MAX + 1) }))).toEqual({
 					ok: false,
 					reason: "invalid",
 					code: "INVALID_PAYLOAD",
-					hint: `Album names can be up to ${MAX} characters.`,
+					hint: `Album names must be a single line of up to ${MAX} characters.`,
 				})
 				expect((await liveAlbum()).album).toBe("Hymns of Grace")
 			})
