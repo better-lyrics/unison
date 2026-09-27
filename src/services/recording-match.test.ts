@@ -652,7 +652,6 @@ describe("breaker", () => {
 	const tripping: Array<[string, Reply]> = [
 		["a 429", new Response("slow down", { status: 429 })],
 		["a 529", new Response("overloaded", { status: 529 })],
-		["a timeout", new DOMException("The operation was aborted due to timeout", "TimeoutError")],
 	]
 
 	for (const [label, reply] of tripping) {
@@ -685,6 +684,7 @@ describe("breaker", () => {
 
 	for (const [label, reply] of [
 		["a 500", new Response("boom", { status: 500 })],
+		["a timeout", new DOMException("The operation was aborted due to timeout", "TimeoutError")],
 		["a malformed score", 2.4],
 		["a network error", new Error("socket hang up")],
 	] as Array<[string, Reply]>) {

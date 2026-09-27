@@ -79,8 +79,7 @@ const BUDGET_KEY = "recmatch:budget"
 const BACK_OFF_STATUSES = new Set([429, 529])
 
 function shouldBackOff(err: unknown): boolean {
-	if (err instanceof TypesafeHttpError) return BACK_OFF_STATUSES.has(err.status)
-	return err instanceof Error && err.name === "TimeoutError"
+	return err instanceof TypesafeHttpError && BACK_OFF_STATUSES.has(err.status)
 }
 
 async function mayCallTypesafe(env: Env, ids: Record<string, unknown>): Promise<boolean> {
