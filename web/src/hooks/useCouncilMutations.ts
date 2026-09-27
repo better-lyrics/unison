@@ -1,16 +1,20 @@
+import { fetchUserByHandle } from "@/lib/api"
 import { clearStoredSession } from "@/lib/auth"
 import { AUTHED_FETCH_ERRORS, AuthedFetchError } from "@/lib/authedFetch"
 import {
+  addCouncilMember,
   createBookmark,
   decideApplicant,
   decideEdit,
   rejectLyric,
   releaseBookmark,
+  removeCouncilMember,
   sealLyric,
   setApplicantOpinion,
   undoRejectLyric,
   unsealLyric,
 } from "@/lib/council-api"
+import type { MemberInput } from "@/lib/council-roster"
 import type {
   ApplicantView,
   BookmarkItemType,
@@ -249,6 +253,37 @@ export function useApplicantDecision() {
       })
     },
     onError: (error) => councilErrorToast(error, "record the decision"),
+    onSettled: () => refreshCouncil(client),
+  })
+}
+
+export function useAddMember() {
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: async (input: MemberInput) => {
+      const keyId =
+        input.kind === "keyId"
+          ? input.value
+          : await fetchUserByHandle(input.value).then(
+              (user) => user.keyId,
+              () => {
+                throw new Error(`No account uses the handle ${input.value}`)
+              },
+            )
+      await addCouncilMember(keyId)
+    },
+    onSuccess: (_, input) => pushToast({ kind: "info", message: `Added ${input.value} to the council` }),
+    onError: (error) => councilErrorToast(error, "add the member"),
+    onSettled: () => refreshCouncil(client),
+  })
+}
+
+export function useRemoveMember() {
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: (member: CouncilPerson) => removeCouncilMember(member.keyId),
+    onSuccess: (_, member) => pushToast({ kind: "info", message: `Removed ${member.displayName} from the council` }),
+    onError: (error) => councilErrorToast(error, "remove the member"),
     onSettled: () => refreshCouncil(client),
   })
 }

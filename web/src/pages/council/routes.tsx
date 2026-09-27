@@ -4,6 +4,7 @@ import { CouncilApplicantsPage } from "./CouncilApplicantsPage"
 import { CouncilBookmarksPage } from "./CouncilBookmarksPage"
 import { CouncilEditsPage } from "./CouncilEditsPage"
 import { CouncilLayout } from "./CouncilLayout"
+import { CouncilMembersPage } from "./CouncilMembersPage"
 import { CouncilOverviewPage } from "./CouncilOverviewPage"
 import { CouncilQueuePage } from "./CouncilQueuePage"
 
@@ -18,5 +19,6 @@ export const councilRoute = {
     { path: "bookmarks", element: <CouncilBookmarksPage /> },
     { path: "applicants", element: <CouncilApplicantsPage /> },
     { path: "activity", element: <CouncilActivityPage /> },
+    { path: "members", element: <CouncilMembersPage /> },
   ] as RouteObject[],
 } satisfies RouteObject
