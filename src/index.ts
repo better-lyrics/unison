@@ -11,6 +11,7 @@ import { backfillArtwork } from "@/jobs/backfill-artwork"
 import { backfillAvatarPresets } from "@/jobs/backfill-avatar-presets"
 import { backfillBadges } from "@/jobs/backfill-badges"
 import { backfillConfidence } from "@/jobs/backfill-confidence"
+import { backfillCouncilEvents } from "@/jobs/backfill-council-events"
 import { backfillFormatDetection } from "@/jobs/backfill-format-detection"
 import { backfillLanguage } from "@/jobs/backfill-language"
 import { backfillNorms } from "@/jobs/backfill-norms"
@@ -214,6 +215,12 @@ backfillTextSearch(env)
 		if (updated > 0) log.info("text search backfill complete", { updated })
 	})
 	.catch((err) => log.error("text search backfill failed", { error: (err as Error).message }))
+
+backfillCouncilEvents(env)
+	.then((inserted) => {
+		if (inserted > 0) log.info("council log backfill complete", { inserted })
+	})
+	.catch((err) => log.error("council log backfill failed", { error: (err as Error).message }))
 
 backfillRevisions(env)
 	.then(({ created, failed }) => {
