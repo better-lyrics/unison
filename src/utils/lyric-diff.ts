@@ -157,7 +157,7 @@ export function renderLinesForDiff(lines: LyricLine[]): string {
 	return lines.map((line) => `${stamp(line.startMs)}${label(line)}${line.text}\n`).join("")
 }
 
-function withoutSmallMoves(before: LyricLine[], after: LyricLine[]): LyricLine[] {
+export function withoutSmallMoves(before: LyricLine[], after: LyricLine[]): LyricLine[] {
 	const settled = [...after]
 	let i = 0
 	let j = 0
