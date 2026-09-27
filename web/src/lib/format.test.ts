@@ -2,10 +2,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import {
   formatCompact,
   formatDuration,
+  formatElapsed,
   formatExact,
   formatRank,
   formatRelativeTime,
+  formatRemaining,
   formatShortDate,
+  plural,
   titleCase,
 } from "./format"
 
@@ -148,5 +151,56 @@ describe("titleCase", () => {
       expect(titleCase("")).toBe("")
       expect(titleCase("Elite")).toBe("Elite")
     })
+  })
+})
+
+describe("formatElapsed", () => {
+  it("picks minutes, hours, days, then weeks", () => {
+    expect(formatElapsed(5 * 60)).toBe("5m")
+    expect(formatElapsed(3 * 3600)).toBe("3h")
+    expect(formatElapsed(4 * 86400 + 3 * 3600)).toBe("4d")
+    expect(formatElapsed(20 * 86400)).toBe("3w")
+  })
+
+  describe("edge cases", () => {
+    it("never shows zero minutes, even for a future or zero age", () => {
+      expect(formatElapsed(0)).toBe("1m")
+      expect(formatElapsed(-30)).toBe("1m")
+    })
+
+    it("switches units exactly at the hour, day and two week marks", () => {
+      expect(formatElapsed(3599)).toBe("60m")
+      expect(formatElapsed(3600)).toBe("1h")
+      expect(formatElapsed(86400)).toBe("1d")
+      expect(formatElapsed(14 * 86400 - 1)).toBe("14d")
+      expect(formatElapsed(14 * 86400)).toBe("2w")
+    })
+  })
+})
+
+describe("formatRemaining", () => {
+  it("shows days and hours, then hours, then minutes", () => {
+    expect(formatRemaining(2 * 86400 + 5 * 3600 + 59)).toBe("2d 5h")
+    expect(formatRemaining(5 * 3600 + 40 * 60)).toBe("5h")
+    expect(formatRemaining(40 * 60)).toBe("40m")
+  })
+
+  describe("edge cases", () => {
+    it("floors instead of rounding so the countdown never overstates", () => {
+      expect(formatRemaining(86400 - 1)).toBe("23h")
+      expect(formatRemaining(59)).toBe("0m")
+    })
+
+    it("clamps an expired countdown to zero", () => {
+      expect(formatRemaining(-100)).toBe("0m")
+    })
+  })
+})
+
+describe("plural", () => {
+  it("uses the singular only for exactly one", () => {
+    expect(plural(1, "edit", "edits")).toBe("1 edit")
+    expect(plural(0, "edit", "edits")).toBe("0 edits")
+    expect(plural(2, "applicant needs", "applicants need")).toBe("2 applicants need")
   })
 })

@@ -20,11 +20,14 @@
   --color-unison-warn: #f5a623;
   --color-unison-discord: hsl(235 86% 75%);
   --color-unison-medal-gold: #ffc83d;
+  --color-unison-medal-gold-wash: rgba(255, 200, 61, 0.12);
   --color-unison-medal-silver: #c0c7d1;
   --color-unison-medal-bronze: #cd7f32;
   --color-council-seal: #c08600;
   --color-council-edit: #6f7af0;
   --color-council-reject: #d95f8a;
+  --color-council-edit-ink: #a9b0ff;
+  --color-council-reject-ink: #f0a3bf;
   --shadow-inset-rim: inset 0 1px 0 0 rgba(255, 255, 255, 0.075), inset 0 -1px 0 0 rgba(255, 255, 255, 0.025);
   --font-sans: "Satoshi", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;

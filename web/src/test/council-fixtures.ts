@@ -1,6 +1,7 @@
 import { type StoredSession, saveStoredSession } from "@/lib/auth"
 import type {
   ApplicantView,
+  CouncilEvent,
   CouncilOverview,
   CouncilPerson,
   EditItem,
@@ -151,6 +152,26 @@ export function applicant(overrides: Partial<ApplicantView> = {}): ApplicantView
   }
 }
 
+export function councilEvent(overrides: Partial<CouncilEvent> = {}): CouncilEvent {
+  return {
+    id: 1,
+    kind: "seal",
+    source: "web",
+    at: NOW - 2 * HOUR,
+    note: null,
+    undone: false,
+    actor: { ...OLA },
+    subject: null,
+    lyric: { id: 722, videoId: "SMQpJ9x7zEk", song: "Story of a Warrior", artist: "John Michael Howell" },
+    ...overrides,
+  }
+}
+
+export function dayDecisions(days: [sealed: number, rejected: number, editsReviewed: number][]) {
+  const start = Math.floor(NOW / DAY) * DAY - (days.length - 1) * DAY
+  return days.map(([sealed, rejected, editsReviewed], i) => ({ day: start + i * DAY, sealed, rejected, editsReviewed }))
+}
+
 export interface CouncilData {
   queue: QueueItem[]
   edits: EditsPayload
@@ -158,6 +179,7 @@ export interface CouncilData {
   members: RosterMember[]
   applicants: ApplicantView[]
   events: EventsPage
+  myOverview?: CouncilOverview
 }
 
 export function councilData(overrides: Partial<CouncilData> = {}): CouncilData {
@@ -172,7 +194,7 @@ export function councilData(overrides: Partial<CouncilData> = {}): CouncilData {
   }
 }
 
-const ENDPOINTS: [string, keyof CouncilData][] = [
+const ENDPOINTS: [string, Exclude<keyof CouncilData, "myOverview">][] = [
   ["/committee/queue", "queue"],
   ["/committee/edits", "edits"],
   ["/committee/overview", "overview"],
@@ -204,7 +226,11 @@ export function stubCouncilApi(
     },
     ...ENDPOINTS.map(([path, key]) => ({
       match: (url: string, init?: RequestInit) => (init?.method ?? "GET") === "GET" && url.split("?")[0] === path,
-      respond: () => jsonResponse({ success: true, data: data[key] }),
+      respond: (url: string) =>
+        jsonResponse({
+          success: true,
+          data: url.includes("scope=me") ? (data.myOverview ?? data.overview) : data[key],
+        }),
     })),
   ])
   vi.stubGlobal("fetch", router.fn)

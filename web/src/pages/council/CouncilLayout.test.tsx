@@ -1,4 +1,3 @@
-import { AuthProvider } from "@/auth/AuthProvider"
 import { saveStoredSession } from "@/lib/auth"
 import {
   ME,
@@ -13,45 +12,20 @@ import {
   stubCouncilApi,
 } from "@/test/council-fixtures"
 import { fetchRouter, jsonResponse } from "@/test/fetch-router"
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
-import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react"
-import { Outlet, RouterProvider, createMemoryRouter, useLocation } from "react-router-dom"
+import { renderCouncil as renderWithRoutes } from "@/test/render-council"
+import { act, cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react"
+import { useLocation } from "react-router-dom"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
-import { councilRoute } from "./routes"
 
 function Where() {
   return <p data-testid="where">{useLocation().pathname}</p>
 }
 
-function renderCouncil(path = "/council") {
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } })
-  const router = createMemoryRouter(
-    [
-      {
-        path: "/",
-        element: (
-          <AuthProvider>
-            <Outlet />
-          </AuthProvider>
-        ),
-        children: [
-          {
-            ...councilRoute,
-            children: ["", "queue", "edits", "bookmarks", "applicants", "activity", "members"].map((p) =>
-              p === "" ? { index: true, element: <Where /> } : { path: p, element: <Where /> },
-            ),
-          },
-        ],
-      },
-    ],
-    { initialEntries: [path] },
-  )
-  render(
-    <QueryClientProvider client={client}>
-      <RouterProvider router={router} />
-    </QueryClientProvider>,
-  )
-}
+const probes = ["", "queue", "edits", "bookmarks", "applicants", "activity", "members"].map((p) =>
+  p === "" ? { index: true, element: <Where /> } : { path: p, element: <Where /> },
+)
+
+const renderCouncil = (path?: string) => renderWithRoutes(path, probes)
 
 const rail = () => screen.getByRole("navigation", { name: "Council sections" })
 

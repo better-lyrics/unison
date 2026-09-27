@@ -99,7 +99,7 @@ function RailLink({ section, count }: { section: Section; count: SectionCount | 
       className={({ isActive }) =>
         cn(
           "group flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md px-3 py-1.5 text-sm font-medium text-unison-text-secondary transition-colors hover:bg-unison-bg-hover hover:text-unison-text",
-          "council:w-full council:gap-2.5 council:rounded-lg council:px-2.5 council:py-[7px]",
+          "council:w-full council:gap-2.5 council:rounded-lg council:px-2.5 council:py-[7px] council:leading-[18px]",
           isActive && "bg-unison-bg-elevated text-unison-text council:bg-unison-bg-hover council:shadow-inset-rim",
         )
       }

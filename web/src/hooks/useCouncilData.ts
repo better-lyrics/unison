@@ -2,11 +2,12 @@ import { useSession } from "@/auth/useSession"
 import {
   fetchCouncilApplicants,
   fetchCouncilEdits,
+  fetchCouncilEvents,
   fetchCouncilMembers,
   fetchCouncilOverview,
   fetchCouncilQueue,
 } from "@/lib/council-api"
-import { useQuery } from "@tanstack/react-query"
+import { keepPreviousData, useQuery } from "@tanstack/react-query"
 
 export const councilKeys = {
   all: ["council"] as const,
@@ -54,6 +55,7 @@ export function useCouncilOverview(scope: "council" | "me" = "council") {
     queryFn: ({ signal }) => fetchCouncilOverview(scope, signal),
     enabled: role !== null,
     staleTime: 60_000,
+    placeholderData: keepPreviousData,
   })
 }
 
@@ -74,6 +76,17 @@ export function useCouncilApplicants(includeBelowCutoff = false) {
     queryFn: ({ signal }) => fetchCouncilApplicants(includeBelowCutoff, signal),
     enabled: role !== null,
     staleTime: 60_000,
+  })
+}
+
+export function useCouncilFeed() {
+  const role = useCouncilRole()
+  return useQuery({
+    queryKey: councilKeys.events({}),
+    queryFn: ({ signal }) => fetchCouncilEvents({}, signal),
+    enabled: role !== null,
+    refetchInterval: REFRESH_MS,
+    staleTime: 15_000,
   })
 }
 

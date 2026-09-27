@@ -27,7 +27,7 @@ function MemberLink({ className, role, onClick }: CouncilNavLinkProps) {
     >
       Council
       {open > 0 ? (
-        <span className="min-w-4 rounded-full bg-[rgba(255,200,61,0.12)] px-1 text-center font-mono text-[10px] leading-4 text-unison-medal-gold tabular-nums">
+        <span className="min-w-4 rounded-full bg-unison-medal-gold-wash px-1 text-center font-mono text-[10px] leading-4 text-unison-medal-gold tabular-nums">
           {open}
         </span>
       ) : null}

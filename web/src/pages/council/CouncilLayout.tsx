@@ -4,6 +4,7 @@ import { CouncilRail } from "@/components/council/CouncilRail"
 import { Bone, skeletonKeys } from "@/components/skeleton"
 import { useCouncilShortcuts } from "@/hooks/useCouncilShortcuts"
 import { Outlet, useNavigate } from "react-router-dom"
+import type { CouncilContext } from "./context"
 
 const SHELL =
   "-my-8 grid council:min-h-[calc(100dvh-var(--app-header-h))] council:grid-cols-[232px_minmax(0,1fr)] council:gap-x-14"
@@ -38,7 +39,7 @@ function CouncilShell({ meKeyId }: { meKeyId: string }) {
     <div className={SHELL}>
       <CouncilRail meKeyId={meKeyId} />
       <div className={CONTENT}>
-        <Outlet />
+        <Outlet context={{ meKeyId } satisfies CouncilContext} />
       </div>
     </div>
   )
