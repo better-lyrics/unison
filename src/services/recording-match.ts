@@ -4,6 +4,7 @@ import { TypesafeHttpError, readScore } from "@/services/typesafe"
 import type { Env } from "@/types"
 import { sha256Hex } from "@/utils/hash"
 import type { SongCandidate } from "@/utils/innertube"
+import { collapseWhitespace } from "@/utils/normalize"
 
 const log = new Logger("recording-match")
 
@@ -40,11 +41,14 @@ export function matchLevel(score: number): MatchLevel {
 
 export function recordingMatchState(lyric: LyricTrack, candidate: SongCandidate) {
 	return {
-		lyric_track: { title: lyric.title, artist: lyric.artist },
+		lyric_track: {
+			title: collapseWhitespace(lyric.title),
+			artist: collapseWhitespace(lyric.artist),
+		},
 		candidate: {
-			title: candidate.title,
-			artists: candidate.artists,
-			album: candidate.album,
+			title: collapseWhitespace(candidate.title),
+			artists: candidate.artists.map(collapseWhitespace),
+			album: candidate.album === null ? null : collapseWhitespace(candidate.album),
 			kind: candidate.videoType === "song" ? "audio track" : "video upload",
 		},
 	}

@@ -122,7 +122,7 @@ function envWith(fetchImpl?: typeof fetch, cache = makeMemoryCache(), limiter = 
 }
 
 function cacheKey(lyric: LyricTrack, c: SongCandidate): string {
-	return `recmatch:v1:${sha256Hex(JSON.stringify(recordingMatchState(lyric, c)))}`
+	return `recmatch:v2:${sha256Hex(JSON.stringify(recordingMatchState(lyric, c)))}`
 }
 
 describe("matchLevel", () => {
@@ -162,10 +162,10 @@ describe("recordingMatchState", () => {
 	})
 
 	describe("edge cases", () => {
-		it("keeps the raw lyric title, version tag, case and all", () => {
+		it("keeps the lyric title's version tag and case, folding only its whitespace", () => {
 			const lyric = { title: "BLINDING LIGHTS (Chromatics Remix) ", artist: "The Weeknd" }
 			expect(recordingMatchState(lyric, REMIX).lyric_track.title).toBe(
-				"BLINDING LIGHTS (Chromatics Remix) "
+				"BLINDING LIGHTS (Chromatics Remix)"
 			)
 		})
 
@@ -283,7 +283,7 @@ describe("matchSuggestions", () => {
 
 		expect(puts).toHaveLength(1)
 		expect(puts[0].key).toBe(cacheKey(LYRIC, ALBUM))
-		expect(puts[0].key).toMatch(/^recmatch:v1:[0-9a-f]{64}$/)
+		expect(puts[0].key).toMatch(/^recmatch:v2:[0-9a-f]{64}$/)
 		expect(puts[0].ttl).toBe(60 * 60 * 24 * 30)
 		expect(config.videoLinking.recordingMatch.cacheTtlSeconds).toBe(60 * 60 * 24 * 30)
 	})
@@ -542,6 +542,68 @@ describe("matchSuggestions", () => {
 	})
 })
 
+describe("whitespace", () => {
+	const MESSY_LYRIC = { title: "  Blinding \t Lights ", artist: " The  Weeknd\n" }
+	const MESSY_CANDIDATE = candidate({
+		videoId: "fHI8X4OXluQ",
+		title: " Blinding   Lights (Chromatics  Remix) ",
+		artists: ["  The Weeknd ", "Chromatics\u00a0 "],
+		album: "After  Hours\n",
+	})
+
+	it("trims and collapses whitespace in every state string", () => {
+		expect(recordingMatchState(MESSY_LYRIC, MESSY_CANDIDATE)).toEqual({
+			lyric_track: { title: "Blinding Lights", artist: "The Weeknd" },
+			candidate: {
+				title: "Blinding Lights (Chromatics Remix)",
+				artists: ["The Weeknd", "Chromatics"],
+				album: "After Hours",
+				kind: "audio track",
+			},
+		})
+	})
+
+	it("keeps brackets and case raw", () => {
+		const state = recordingMatchState(
+			{ title: "BLINDING lights [Live]", artist: "the weeknd" },
+			candidate({ videoId: "fHI8X4OXluQ", title: "Blinding Lights (LIVE)" })
+		)
+		expect(state.lyric_track).toEqual({ title: "BLINDING lights [Live]", artist: "the weeknd" })
+		expect(state.candidate.title).toBe("Blinding Lights (LIVE)")
+	})
+
+	it("uses cache version v2 for the whitespace-folded state", () => {
+		expect(config.videoLinking.recordingMatch.cacheVersion).toBe("v2")
+	})
+
+	describe("regressions", () => {
+		it("regression: a padded lyric title reuses the match cached for the clean one", async () => {
+			const { requests, fetchImpl } = fakeTypesafe(scoreByCandidate())
+			const { env } = envWith(fetchImpl)
+			await matchSuggestions(env, LYRIC, [suggest(ALBUM)])
+			const [again] = await matchSuggestions(
+				env,
+				{ title: " Blinding  Lights ", artist: "The Weeknd " },
+				[suggest(ALBUM)]
+			)
+			expect(again.match).toEqual({ level: "same", score: 1.9 })
+			expect(requests).toHaveLength(1)
+		})
+
+		it("regression: the link-time lookup finds a match cached under different spacing", async () => {
+			const { fetchImpl } = fakeTypesafe(scoreByCandidate())
+			const { env } = envWith(fetchImpl)
+			await matchSuggestions(env, { title: "Blinding  Lights ", artist: " The Weeknd" }, [
+				suggest(EDIT),
+			])
+			expect(await cachedRecordingMatch(env, LYRIC, EDIT)).toEqual({
+				level: "related",
+				score: 0.98,
+			})
+		})
+	})
+})
+
 describe("budget", () => {
 	it("spends one global budget slot per uncached call, with the configured limits", async () => {
 		const { fetchImpl } = fakeTypesafe(scoreByCandidate())
@@ -563,7 +625,7 @@ describe("budget", () => {
 		const out = await matchSuggestions(env, LYRIC, [suggest(ALBUM), suggest(REMIX), suggest(EDIT)])
 		expect(requests).toHaveLength(1)
 		expect(out.filter((s) => s.match === null)).toHaveLength(2)
-		expect([...cache.store.keys()].filter((k) => k.startsWith("recmatch:v1:"))).toHaveLength(1)
+		expect([...cache.store.keys()].filter((k) => k.startsWith("recmatch:v2:"))).toHaveLength(1)
 	})
 
 	it("serves cache hits without spending budget", async () => {

@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest"
-import { normalize, normalizeAlbum, normalizeArtist, normalizeSong } from "./normalize"
+import {
+	collapseWhitespace,
+	normalize,
+	normalizeAlbum,
+	normalizeArtist,
+	normalizeSong,
+} from "./normalize"
 
 describe("normalize", () => {
 	describe("happy paths", () => {
@@ -134,6 +140,35 @@ describe("normalizeAlbum", () => {
 			for (const album of ["Beyoncé", "今すぐ輪廻", "  Spaced   Out  "]) {
 				expect(normalizeAlbum(album)).toBe(normalize(album))
 			}
+		})
+	})
+})
+
+describe("collapseWhitespace", () => {
+	it("trims and folds runs of whitespace to one space", () => {
+		expect(collapseWhitespace("  Blinding \t Lights\n")).toBe("Blinding Lights")
+	})
+
+	describe("edge cases", () => {
+		it("returns an empty string for whitespace only", () => {
+			expect(collapseWhitespace(" \n\t ")).toBe("")
+		})
+
+		it("folds non-breaking and ideographic spaces", () => {
+			expect(collapseWhitespace("\u00a0春\u3000の\u00a0 歌")).toBe("春 の 歌")
+		})
+	})
+
+	describe("invariants", () => {
+		it("keeps brackets, case and punctuation", () => {
+			expect(collapseWhitespace("BLINDING lights (Live) [2020]!")).toBe(
+				"BLINDING lights (Live) [2020]!"
+			)
+		})
+
+		it("is idempotent", () => {
+			const once = collapseWhitespace("  a   b  ")
+			expect(collapseWhitespace(once)).toBe(once)
 		})
 	})
 })

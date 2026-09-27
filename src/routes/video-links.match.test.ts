@@ -1,5 +1,5 @@
 import { createTypesafeClient } from "@/services/typesafe"
-import { makeMemoryCache } from "@/test/integration-harness"
+import { makeMemoryCache, makeOpenLimiter } from "@/test/integration-harness"
 import type { Env } from "@/types"
 import type { SongCandidate } from "@/utils/innertube"
 import { normalizeArtist, normalizeSong } from "@/utils/normalize"
@@ -60,7 +60,7 @@ function queuedDb(queue: unknown[]) {
 	}
 }
 
-function appWith(queue: unknown[], typesafe: boolean) {
+function appWith(queue: unknown[], typesafe: boolean, judged: string[] = []) {
 	const cache = makeMemoryCache()
 	const issuedAt = Math.floor(Date.now() / 1000)
 	cache.store.set(
@@ -73,15 +73,12 @@ function appWith(queue: unknown[], typesafe: boolean) {
 	)
 	const fetchImpl = (async (_url: string, init?: RequestInit) => {
 		const { state } = JSON.parse(String(init?.body))
+		judged.push(state.candidate.title)
 		return Response.json({
 			answers: { link: { type: "score", score: SCORES[state.candidate.title] } },
 		})
 	}) as typeof fetch
-	const limiter = {
-		async limit() {
-			return { success: true }
-		},
-	}
+	const limiter = makeOpenLimiter()
 	const env = {
 		DB: queuedDb([{ id: 42, key_id: KEY }, ...queue]),
 		CACHE: cache,
@@ -158,6 +155,28 @@ describe("recording match on the suggestion routes", () => {
 					expect(s).toHaveProperty("match", null)
 				}
 			}
+		})
+	})
+
+	describe("regressions", () => {
+		it("regression: padding the title with whitespace does not buy fresh TypeSafe calls", async () => {
+			const judged: string[] = []
+			const app = appWith([{ id: 42, key_id: KEY }], true, judged)
+			await app.handle(songRequest())
+			expect(judged).toHaveLength(3)
+
+			const padded = await app.handle(
+				new Request("http://localhost/lyrics/suggested-videos", {
+					method: "POST",
+					headers: { authorization: "Bearer tok", "content-type": "application/json" },
+					body: JSON.stringify({ ...SONG, song: "  Blinding   Lights ", album: "After Hours" }),
+				})
+			)
+			const body = (await padded.json()) as SuggestionsBody
+			expect(body.data.suggestions.map(({ videoId, match }) => ({ videoId, match }))).toEqual(
+				EXPECTED
+			)
+			expect(judged).toHaveLength(3)
 		})
 	})
 

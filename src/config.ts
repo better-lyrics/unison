@@ -86,7 +86,7 @@ export const config = {
 			maxCandidates: 10,
 			concurrency: 5,
 			cacheTtlSeconds: 60 * 60 * 24 * 30,
-			cacheVersion: "v1", // bump when the question text changes
+			cacheVersion: "v2", // bump when the question text or state shape changes
 			budget: { maxRequests: 300, windowSeconds: 60 },
 			breakerSeconds: 30,
 		},
