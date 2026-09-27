@@ -10,7 +10,7 @@ import {
 import { readRevisionFixture } from "@/test/lyric-fixtures"
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest"
 import { recordCouncilEvent } from "./council-events"
-import { getCouncilOverview } from "./council-stats"
+import { getCouncilOverview, getCouncilRoster } from "./council-stats"
 
 const DAY = 86400
 const HOUR = 3600
@@ -150,6 +150,46 @@ describeIntegration("council overview stats (integration)", () => {
 			const stats = await overview()
 			expect(stats.decisionsByDay[29].sealed).toBe(0)
 			expect(stats.sealRate).toBe(0)
+		})
+	})
+
+	describe("roster", () => {
+		const roster = () => getCouncilRoster(db.env, { meId: mira, now: NOW })
+
+		it("lists every member with month counts, quota and activity", async () => {
+			await db.pool.query("UPDATE users SET nickname = 'Mira' WHERE id = $1", [mira])
+			await db.pool.query("UPDATE committee_members SET is_admin = TRUE WHERE user_id = $1", [ola])
+			await decide(mira, "seal", NOW - HOUR)
+			await decide(mira, "reject", NOW - 2 * HOUR)
+			await decide(mira, "edit_approve", NOW - 3 * HOUR)
+			await recordCouncilEvent(db.env.DB, {
+				actorId: ola,
+				kind: "bookmark",
+				source: "web",
+				refId: 900,
+				at: NOW - 5 * DAY,
+			})
+			const members = await roster()
+			expect(members.map((m) => m.keyId)).toEqual([MIRA, OLA])
+			expect(members[0]).toMatchObject({
+				displayName: "Mira",
+				isYou: true,
+				isAdmin: false,
+				sealsThisMonth: 1,
+				rejectsThisMonth: 1,
+				editsThisMonth: 1,
+				lastActiveAt: NOW - HOUR,
+			})
+			expect(members[0].quota.quota).toBeGreaterThan(0)
+			expect(members[0].weekly).toHaveLength(8)
+			expect(members[0].weekly[7]).toBe(3)
+			expect(members[1]).toMatchObject({ isYou: false, isAdmin: true, lastActiveAt: NOW - 5 * DAY })
+			expect(members[1].weekly.every((n) => n === 0)).toBe(true)
+		})
+
+		it("reports no activity for a quiet member", async () => {
+			const members = await roster()
+			expect(members.find((m) => m.keyId === OLA)?.lastActiveAt).toBeNull()
 		})
 	})
 })

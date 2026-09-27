@@ -1,11 +1,6 @@
 import { config } from "@/config"
-import { listActiveBookmarks } from "@/db/council-bookmarks"
-import {
-	type CouncilPerson,
-	type QueueBookmark,
-	toQueueBookmark,
-	withTier,
-} from "@/db/council-queue"
+import { type BookmarkView, listActiveBookmarks, toBookmarkView } from "@/db/council-bookmarks"
+import { type CouncilPerson, withTier } from "@/db/council-person"
 import { getCuratorTierMap } from "@/db/leaderboard"
 import { resolvePeopleByKeyIds } from "@/db/users"
 import { listPendingCards } from "@/services/lyric-revisions"
@@ -13,7 +8,7 @@ import type { Env, PendingRevisionCard } from "@/types"
 
 export interface EditItem extends Omit<PendingRevisionCard, "author" | "authorKeyId"> {
 	author: CouncilPerson | null
-	bookmark: QueueBookmark | null
+	bookmark: BookmarkView | null
 }
 
 export interface EditThresholds {
@@ -41,7 +36,7 @@ export async function listCouncilEdits(
 		return {
 			...card,
 			author: person ? withTier(person, tiers) : null,
-			bookmark: bookmark ? toQueueBookmark(bookmark, tiers) : null,
+			bookmark: bookmark ? toBookmarkView(bookmark, tiers) : null,
 		}
 	})
 	return {

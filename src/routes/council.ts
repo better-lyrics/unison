@@ -1,11 +1,17 @@
 import { config } from "@/config"
-import { isCommittee, isCouncilAdmin } from "@/db/committee"
-import { type BookmarkItemType, createBookmark, releaseBookmark } from "@/db/council-bookmarks"
+import { addCommittee, isCommittee, isCouncilAdmin, removeCommittee } from "@/db/committee"
+import {
+	type BookmarkItemType,
+	createBookmark,
+	releaseBookmark,
+	toBookmarkView,
+} from "@/db/council-bookmarks"
 import { listCouncilEdits } from "@/db/council-edits"
 import { type CouncilEventKind, listCouncilEvents } from "@/db/council-events"
-import { listCouncilQueue, toQueueBookmark } from "@/db/council-queue"
-import { getCouncilOverview } from "@/db/council-stats"
+import { listCouncilQueue } from "@/db/council-queue"
+import { getCouncilOverview, getCouncilRoster } from "@/db/council-stats"
 import { getCuratorTierMap } from "@/db/leaderboard"
+import { getUserByKeyId } from "@/db/users"
 import type { Env } from "@/types"
 import { allowCouncilWrite } from "@/utils/council-input"
 import { eitherAuth } from "@/utils/either-auth"
@@ -33,6 +39,8 @@ const EVENT_GROUPS: Record<string, CouncilEventKind[]> = {
 	membership: ["member_add", "member_remove", "applicant_approve", "applicant_reject"],
 }
 
+const notAdmin = () => buildError(ErrorCode.NOT_COUNCIL_ADMIN)
+
 export const councilRoutes = (env: Env) =>
 	new Elysia({ prefix: "/committee" })
 		.decorate("env", env)
@@ -56,7 +64,7 @@ export const councilRoutes = (env: Env) =>
 				const tiers = await getCuratorTierMap(env)
 				return {
 					success: true,
-					data: { ...toQueueBookmark(result.bookmark, tiers), itemType, itemId, lyricsId },
+					data: { ...toBookmarkView(result.bookmark, tiers), itemType, itemId, lyricsId },
 				}
 			}
 			switch (result.reason) {
@@ -140,3 +148,28 @@ export const councilRoutes = (env: Env) =>
 			}),
 			{ query: t.Object({ scope: t.Optional(t.String()) }) }
 		)
+		.get("/members", async ({ env, userId }) => ({
+			success: true,
+			data: await getCouncilRoster(env, { meId: userId }),
+		}))
+		.post("/members", async ({ env, userId, keyId, councilAdmin, body, status }) => {
+			if (!councilAdmin) return status(403, notAdmin())
+			if (typeof body.keyId !== "string" || body.keyId.length === 0) {
+				return status(400, buildError(ErrorCode.INVALID_PAYLOAD))
+			}
+			if (!(await allowCouncilWrite(env, keyId)))
+				return status(429, buildError(ErrorCode.RATE_LIMITED))
+			const member = await getUserByKeyId(env, body.keyId)
+			if (!member) return status(404, buildError(ErrorCode.NOT_FOUND))
+			await addCommittee(env, member.id, { actorId: userId, source: "web" })
+			return { success: true, data: { keyId: body.keyId } }
+		})
+		.delete("/members/:keyId", async ({ env, userId, keyId, councilAdmin, params, status }) => {
+			if (!councilAdmin) return status(403, notAdmin())
+			if (!(await allowCouncilWrite(env, keyId)))
+				return status(429, buildError(ErrorCode.RATE_LIMITED))
+			const member = await getUserByKeyId(env, params.keyId)
+			if (!member) return status(404, buildError(ErrorCode.NOT_FOUND))
+			await removeCommittee(env, member.id, { actorId: userId, source: "web" })
+			return { success: true }
+		})

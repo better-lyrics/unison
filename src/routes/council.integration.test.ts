@@ -409,4 +409,60 @@ describeIntegration("council dashboard routes (integration)", () => {
 			expect(mine.json.data.decisionsByDay.at(-1)?.sealed).toBe(0)
 		})
 	})
+
+	describe("members", () => {
+		it("lists the roster with me marked", async () => {
+			const res = await call<{ keyId: string; isYou: boolean; isAdmin: boolean }[]>(
+				"GET",
+				"/committee/members",
+				{
+					token: "mira",
+				}
+			)
+			expect(res.status).toBe(200)
+			expect(res.json.data.map((m) => [m.keyId, m.isYou, m.isAdmin])).toEqual([
+				[MIRA, true, false],
+				[OLA, false, false],
+				[ADMIN, false, true],
+			])
+		})
+
+		it("lets an admin add and remove members and logs both", async () => {
+			const added = await call("POST", "/committee/members", {
+				token: "admin",
+				body: { keyId: SUBMITTER },
+			})
+			expect(added.status).toBe(200)
+			const removed = await call("DELETE", `/committee/members/${SUBMITTER}`, { token: "admin" })
+			expect(removed.status).toBe(200)
+			const { rows } = await db.pool.query(
+				"SELECT kind, source, actor_id FROM council_events WHERE kind LIKE 'member%' ORDER BY id"
+			)
+			expect(rows).toEqual([
+				{ kind: "member_add", source: "web", actor_id: admin },
+				{ kind: "member_remove", source: "web", actor_id: admin },
+			])
+		})
+
+		it("refuses member changes from a non-admin and unknown keys", async () => {
+			expect(
+				(await call("POST", "/committee/members", { token: "mira", body: { keyId: SUBMITTER } }))
+					.json.code
+			).toBe("NOT_COUNCIL_ADMIN")
+			expect((await call("DELETE", `/committee/members/${OLA}`, { token: "mira" })).status).toBe(
+				403
+			)
+			expect(
+				(
+					await call("POST", "/committee/members", {
+						token: "admin",
+						body: { keyId: "0".repeat(64) },
+					})
+				).status
+			).toBe(404)
+			expect((await call("POST", "/committee/members", { token: "admin", body: {} })).status).toBe(
+				400
+			)
+		})
+	})
 })

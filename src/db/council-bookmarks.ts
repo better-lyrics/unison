@@ -1,9 +1,11 @@
 import { config } from "@/config"
 import { isCommittee } from "@/db/committee"
 import { type CouncilSource, recordCouncilEvent } from "@/db/council-events"
+import { type CouncilPerson, withTier } from "@/db/council-person"
 import { type Person, resolvePeople } from "@/db/users"
 import { type D1Compat, advisoryXactLock } from "@/infra/database"
 import type { Env } from "@/types"
+import type { TierName } from "@/utils/tiers"
 
 export type BookmarkItemType = "seal" | "edit"
 
@@ -15,6 +17,25 @@ export interface ActiveBookmark {
 	holder: Person
 	createdAt: number
 	expiresAt: number
+}
+
+export interface BookmarkView {
+	id: number
+	holder: CouncilPerson
+	createdAt: number
+	expiresAt: number
+}
+
+export function toBookmarkView(
+	bookmark: ActiveBookmark,
+	tiers: Map<string, TierName | null>
+): BookmarkView {
+	return {
+		id: bookmark.id,
+		holder: withTier(bookmark.holder, tiers),
+		createdAt: bookmark.createdAt,
+		expiresAt: bookmark.expiresAt,
+	}
 }
 
 export type BookmarkResult =

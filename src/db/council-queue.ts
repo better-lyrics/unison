@@ -1,22 +1,11 @@
 import { config } from "@/config"
-import { type ActiveBookmark, listActiveBookmarks } from "@/db/council-bookmarks"
+import { type BookmarkView, listActiveBookmarks, toBookmarkView } from "@/db/council-bookmarks"
+import { type CouncilPerson, withTier } from "@/db/council-person"
 import { getCuratorTierMap } from "@/db/leaderboard"
 import { getSealCandidates } from "@/db/rejections"
 import { ttmlFlagsFor } from "@/db/ttml-flags"
-import { type Person, resolvePeople } from "@/db/users"
+import { resolvePeople } from "@/db/users"
 import type { Confidence, Env, LyricsFormat, SyncType } from "@/types"
-import type { TierName } from "@/utils/tiers"
-
-export interface CouncilPerson extends Person {
-	tier: TierName | null
-}
-
-export interface QueueBookmark {
-	id: number
-	holder: CouncilPerson
-	createdAt: number
-	expiresAt: number
-}
 
 export interface QueueSubmitter extends CouncilPerson {
 	reputation: number
@@ -42,23 +31,7 @@ export interface QueueItem {
 	requestsFilled: number
 	flags: string[]
 	submitter: QueueSubmitter | null
-	bookmark: QueueBookmark | null
-}
-
-export function withTier(person: Person, tiers: Map<string, TierName | null>): CouncilPerson {
-	return { ...person, tier: tiers.get(person.keyId) ?? null }
-}
-
-export function toQueueBookmark(
-	bookmark: ActiveBookmark,
-	tiers: Map<string, TierName | null>
-): QueueBookmark {
-	return {
-		id: bookmark.id,
-		holder: withTier(bookmark.holder, tiers),
-		createdAt: bookmark.createdAt,
-		expiresAt: bookmark.expiresAt,
-	}
+	bookmark: BookmarkView | null
 }
 
 async function countByKey(env: Env, sql: string, keys: unknown[]): Promise<Map<string, number>> {
@@ -155,7 +128,7 @@ export async function listCouncilQueue(env: Env): Promise<QueueItem[]> {
 						sealed: Number(stat?.sealed ?? 0),
 					}
 				: null,
-			bookmark: bookmark ? toQueueBookmark(bookmark, tiers) : null,
+			bookmark: bookmark ? toBookmarkView(bookmark, tiers) : null,
 		}
 	})
 }

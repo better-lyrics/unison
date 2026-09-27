@@ -1,5 +1,8 @@
 import { type BoostQuota, getQuota, monthWindow } from "@/db/boost"
 import { DECISION_KINDS, UNDONE_EXPR } from "@/db/council-events"
+import { type CouncilPerson, withTier } from "@/db/council-person"
+import { getCuratorTierMap } from "@/db/leaderboard"
+import { resolvePeople } from "@/db/users"
 import type { Env } from "@/types"
 
 const DAY = 86400
@@ -127,4 +130,90 @@ export async function getCouncilOverview(
 			medianDecisionHours: mine,
 		},
 	}
+}
+
+const WEEK = 7 * DAY
+const ROSTER_WEEKS = 8
+
+export interface RosterMember extends CouncilPerson {
+	isYou: boolean
+	isAdmin: boolean
+	addedAt: number
+	quota: BoostQuota
+	sealsThisMonth: number
+	rejectsThisMonth: number
+	editsThisMonth: number
+	lastActiveAt: number | null
+	weekly: number[]
+}
+
+export async function getCouncilRoster(
+	env: Env,
+	opts: { meId: number; now?: number }
+): Promise<RosterMember[]> {
+	const now = opts.now ?? Math.floor(Date.now() / 1000)
+	const { monthStart } = monthWindow(now * 1000)
+	const weeksStart = now - ROSTER_WEEKS * WEEK
+	const members = await env.DB.prepare(
+		"SELECT user_id, added_at, is_admin FROM committee_members ORDER BY added_at ASC, user_id ASC"
+	)
+		.bind()
+		.all<{ user_id: number | string; added_at: number | string; is_admin: boolean }>()
+	const ids = members.results.map((m) => Number(m.user_id))
+	if (ids.length === 0) return []
+
+	const [people, tiers, month, weekly, lastActive, quotas] = await Promise.all([
+		resolvePeople(env, ids),
+		getCuratorTierMap(env),
+		env.DB.prepare(
+			`SELECT e.actor_id, e.kind, COUNT(*) AS n FROM council_events e
+			 WHERE ${DECIDED} AND e.created_at >= ? AND e.actor_id = ANY(?)
+			 GROUP BY 1, 2`
+		)
+			.bind(DECISION_KINDS, monthStart, ids)
+			.all<{ actor_id: number | string; kind: string; n: number | string }>(),
+		env.DB.prepare(
+			`SELECT e.actor_id, ((e.created_at - ?) / ${WEEK}) AS week, COUNT(*) AS n
+			 FROM council_events e
+			 WHERE ${DECIDED} AND e.created_at >= ? AND e.created_at < ? AND e.actor_id = ANY(?)
+			 GROUP BY 1, 2`
+		)
+			.bind(weeksStart, DECISION_KINDS, weeksStart, now, ids)
+			.all<{ actor_id: number | string; week: number | string; n: number | string }>(),
+		env.DB.prepare(
+			"SELECT actor_id, MAX(created_at) AS at FROM council_events WHERE actor_id = ANY(?) GROUP BY 1"
+		)
+			.bind(ids)
+			.all<{ actor_id: number | string; at: number | string }>(),
+		Promise.all(ids.map((id) => getQuota(env, id))),
+	])
+
+	return members.results.flatMap((m, i) => {
+		const userId = Number(m.user_id)
+		const person = people.get(userId)
+		if (!person) return []
+		const kinds = (list: string[]) =>
+			month.results
+				.filter((r) => Number(r.actor_id) === userId && list.includes(r.kind))
+				.reduce((n, r) => n + Number(r.n), 0)
+		const buckets = Array.from({ length: ROSTER_WEEKS }, () => 0)
+		for (const r of weekly.results) {
+			if (Number(r.actor_id) === userId) buckets[Number(r.week)] += Number(r.n)
+		}
+		const last = lastActive.results.find((r) => Number(r.actor_id) === userId)
+		return [
+			{
+				...withTier(person, tiers),
+				isYou: userId === opts.meId,
+				isAdmin: m.is_admin,
+				addedAt: Number(m.added_at),
+				quota: quotas[i],
+				sealsThisMonth: kinds(["seal"]),
+				rejectsThisMonth: kinds(["reject"]),
+				editsThisMonth: kinds(["edit_approve", "edit_reject"]),
+				lastActiveAt: last ? Number(last.at) : null,
+				weekly: buckets,
+			},
+		]
+	})
 }

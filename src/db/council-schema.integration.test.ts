@@ -50,9 +50,10 @@ describeIntegration("council dashboard schema (integration)", () => {
 		await db.pool.query("INSERT INTO committee_members (user_id, added_by) VALUES ($1, 'test')", [
 			member,
 		])
-		const { rows } = await db.pool.query("SELECT is_admin FROM committee_members WHERE user_id = $1", [
-			member,
-		])
+		const { rows } = await db.pool.query(
+			"SELECT is_admin FROM committee_members WHERE user_id = $1",
+			[member]
+		)
 		expect(rows[0].is_admin).toBe(false)
 	})
 
