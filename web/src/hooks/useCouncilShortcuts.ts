@@ -32,7 +32,7 @@ function onKeyDown(event: KeyboardEvent) {
     return
   }
   if (event.metaKey || event.ctrlKey || event.altKey) return
-  if (isEditableTarget(document.activeElement)) return
+  if (isEditableTarget(document.activeElement) || document.activeElement?.closest("dialog, [role='dialog']")) return
 
   if (Date.now() - chordAt <= CHORD_WINDOW_MS) {
     chordAt = 0
@@ -53,11 +53,11 @@ export function useCouncilShortcuts(map: ShortcutMap, enabled = true) {
   useEffect(() => {
     if (!enabled) return
     owners.push(mapRef)
-    if (owners.length === 1) window.addEventListener("keydown", onKeyDown)
+    if (owners.length === 1) window.addEventListener("keydown", onKeyDown, { capture: true })
     return () => {
       owners.splice(owners.indexOf(mapRef), 1)
       if (owners.length === 0) {
-        window.removeEventListener("keydown", onKeyDown)
+        window.removeEventListener("keydown", onKeyDown, { capture: true })
         chordAt = 0
       }
     }

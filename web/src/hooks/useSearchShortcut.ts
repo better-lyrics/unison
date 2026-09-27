@@ -5,7 +5,7 @@ export function useSearchShortcut(ref: RefObject<HTMLInputElement | null>, enabl
   useEffect(() => {
     if (!enabled) return
     function onKeyDown(e: KeyboardEvent) {
-      if (e.key !== "/") return
+      if (e.key !== "/" || e.defaultPrevented) return
       const withMod = e.metaKey || e.ctrlKey
       if (!withMod && isEditableTarget(document.activeElement)) return
       e.preventDefault()

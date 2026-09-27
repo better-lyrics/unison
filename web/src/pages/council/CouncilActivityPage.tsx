@@ -16,6 +16,7 @@ import type { CouncilEvent, CouncilSource, EventGroup, RosterMember } from "@/li
 import { formatElapsed } from "@/lib/format"
 import { IconArrowBackUp, IconHistory } from "@tabler/icons-react"
 import { useState } from "react"
+import { useSearchParams } from "react-router-dom"
 import { useCouncilContext } from "./context"
 
 type KindFilter = "all" | EventGroup
@@ -30,7 +31,18 @@ export function CouncilActivityPage() {
   const { meKeyId } = useCouncilContext()
   const now = Math.floor(Date.now() / 1000)
   const [kind, setKind] = useState<KindFilter>("all")
-  const [actor, setActor] = useState("")
+  const [params, setParams] = useSearchParams()
+  const actor = params.get("actor") ?? ""
+  const setActor = (keyId: string) =>
+    setParams(
+      (prev) => {
+        const next = new URLSearchParams(prev)
+        if (keyId) next.set("actor", keyId)
+        else next.delete("actor")
+        return next
+      },
+      { replace: true },
+    )
   const [includeBookmarks, setIncludeBookmarks] = useState(false)
   const members = useCouncilMembers().data
   const log = useCouncilLog({

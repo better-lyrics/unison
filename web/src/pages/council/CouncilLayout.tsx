@@ -1,8 +1,11 @@
 import { useSession } from "@/auth/useSession"
 import { EmptyState } from "@/components/EmptyState"
+import { CommandMenu } from "@/components/council/CommandMenu"
 import { CouncilRail } from "@/components/council/CouncilRail"
+import { ShortcutsSheet } from "@/components/council/ShortcutsSheet"
 import { Bone, skeletonKeys } from "@/components/skeleton"
 import { useCouncilShortcuts } from "@/hooks/useCouncilShortcuts"
+import { useState } from "react"
 import { Outlet, useNavigate } from "react-router-dom"
 import type { CouncilContext } from "./context"
 
@@ -29,7 +32,17 @@ export function CouncilLayout() {
 
 function CouncilShell({ meKeyId }: { meKeyId: string }) {
   const navigate = useNavigate()
+  const [menuOpen, setMenuOpen] = useState(false)
+  const [keysOpen, setKeysOpen] = useState(false)
   useCouncilShortcuts({
+    "mod+k": () => {
+      setKeysOpen(false)
+      setMenuOpen((open) => !open)
+    },
+    "?": () => {
+      setMenuOpen(false)
+      setKeysOpen(true)
+    },
     "g o": () => navigate("/council"),
     "g q": () => navigate("/council/queue"),
     "g e": () => navigate("/council/edits"),
@@ -37,10 +50,12 @@ function CouncilShell({ meKeyId }: { meKeyId: string }) {
   })
   return (
     <div className={SHELL}>
-      <CouncilRail meKeyId={meKeyId} />
+      <CouncilRail meKeyId={meKeyId} onOpenMenu={() => setMenuOpen(true)} onOpenKeys={() => setKeysOpen(true)} />
       <div className={CONTENT}>
         <Outlet context={{ meKeyId } satisfies CouncilContext} />
       </div>
+      <CommandMenu open={menuOpen} onOpenChange={setMenuOpen} />
+      <ShortcutsSheet open={keysOpen} onOpenChange={setKeysOpen} />
     </div>
   )
 }

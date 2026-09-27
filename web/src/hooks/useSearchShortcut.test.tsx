@@ -49,6 +49,16 @@ describe("useSearchShortcut", () => {
     expect(document.activeElement).toBe(other)
   })
 
+  it("leaves a bare / to a page shortcut that already handled it", () => {
+    render(<Harness />)
+    screen.getByTestId("btn").focus()
+    const claim = (e: KeyboardEvent) => e.preventDefault()
+    window.addEventListener("keydown", claim, { capture: true })
+    fireEvent.keyDown(window, { key: "/" })
+    window.removeEventListener("keydown", claim, { capture: true })
+    expect(document.activeElement).toBe(screen.getByTestId("btn"))
+  })
+
   it("does nothing when disabled", () => {
     render(<Harness enabled={false} />)
     const btn = screen.getByTestId("btn")

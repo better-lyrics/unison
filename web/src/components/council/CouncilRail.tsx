@@ -1,3 +1,4 @@
+import { Kbd } from "@/components/Kbd"
 import {
   useCouncilApplicants,
   useCouncilEdits,
@@ -12,7 +13,9 @@ import type { TierName } from "@/lib/types"
 import {
   type Icon,
   IconBookmark,
+  IconCommand,
   IconHistory,
+  IconKeyboard,
   IconLayoutDashboard,
   IconPencil,
   IconRosetteDiscountCheck,
@@ -68,7 +71,15 @@ function useSectionCounts(meKeyId: string): Partial<Record<SectionId, SectionCou
   return counts
 }
 
-export function CouncilRail({ meKeyId }: { meKeyId: string }) {
+export function CouncilRail({
+  meKeyId,
+  onOpenMenu,
+  onOpenKeys,
+}: {
+  meKeyId: string
+  onOpenMenu: () => void
+  onOpenKeys: () => void
+}) {
   const counts = useSectionCounts(meKeyId)
   return (
     <aside className="max-council:pt-8 max-council:pb-6 council:sticky council:top-(--app-header-h) council:flex council:h-[calc(100dvh-var(--app-header-h))] council:flex-col council:gap-6 council:self-start council:overflow-y-auto council:py-8">
@@ -86,6 +97,10 @@ export function CouncilRail({ meKeyId }: { meKeyId: string }) {
         </nav>
       </div>
       <QuotaCard />
+      <div className="mt-auto hidden flex-col gap-2 px-2.5 text-xs text-unison-text-muted council:flex">
+        <RailFootButton icon={IconCommand} label="Command menu" keys={["Mod", "K"]} onClick={onOpenMenu} />
+        <RailFootButton icon={IconKeyboard} label="Keyboard shortcuts" keys={["?"]} onClick={onOpenKeys} />
+      </div>
     </aside>
   )
 }
@@ -123,6 +138,32 @@ function RailLink({ section, count }: { section: Section; count: SectionCount | 
         </span>
       ) : null}
     </NavLink>
+  )
+}
+
+function RailFootButton({
+  icon: FootIcon,
+  label,
+  keys,
+  onClick,
+}: {
+  icon: Icon
+  label: string
+  keys: string[]
+  onClick: () => void
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="flex cursor-pointer items-center gap-2 text-left transition-colors hover:text-unison-text"
+    >
+      <FootIcon aria-hidden className="size-3.5" stroke={1.5} />
+      {label}
+      <span className="ml-auto">
+        <Kbd keys={keys} />
+      </span>
+    </button>
   )
 }
 

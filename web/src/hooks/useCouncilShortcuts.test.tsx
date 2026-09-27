@@ -92,6 +92,21 @@ describe("useCouncilShortcuts", () => {
     expect(outer).not.toHaveBeenCalled()
   })
 
+  it("ignores plain keys while focus is inside a dialog", () => {
+    const s = vi.fn()
+    render(
+      <>
+        <Harness map={{ s }} />
+        <dialog open>
+          <button type="button">inside</button>
+        </dialog>
+      </>,
+    )
+    screen.getByRole("button", { name: "inside" }).focus()
+    press("s")
+    expect(s).not.toHaveBeenCalled()
+  })
+
   it("handles mod+k with either modifier", () => {
     const palette = vi.fn()
     render(<Harness map={{ "mod+k": palette }} />)
