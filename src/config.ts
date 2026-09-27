@@ -11,6 +11,11 @@ export const config = {
 		maxVariantsPerUserPerVideo: 3,
 	},
 
+	typesafe: {
+		endpoint: "https://api.typesafe.ai/v1/systemone",
+		model: "jev-latest",
+	},
+
 	revisions: {
 		textDriftLimit: 0.15,
 		timingDriftLimit: 0.3,
@@ -24,8 +29,6 @@ export const config = {
 		diffPreviewLines: 6,
 		pendingQueueLimit: 50,
 		preview: { maxRequests: 60, windowSeconds: 60 },
-		jevEndpoint: "https://api.typesafe.ai/v1/systemone",
-		jevModel: "jev-latest",
 		jevFlagThreshold: 0.8,
 		jevTimeoutMs: 3000,
 		jevLyricContextChars: 12_000, // ~3k tokens of lyrics for Jev; longer songs are trimmed around the edit
