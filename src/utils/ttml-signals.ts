@@ -30,6 +30,22 @@ const SIGNAL_ORDER = [
 	"handoff-candidate",
 ] as const
 
+const SIGNAL_LABELS: Record<(typeof SIGNAL_ORDER)[number], string> = {
+	"line-synced": "Line-synced, not word-by-word",
+	"filler-line": "Filler or instrumental lines",
+	"stretched-spelling": "Stretched spelling",
+	"unbracketed-bg": "Unbracketed background vocals",
+	"not-sentence-case": "Capitalization",
+	"multi-bracket-bg": "Multiple bracket pairs",
+	"handoff-candidate": "Mid-line voice change",
+}
+
+export function signalLabel(code: string): string {
+	return Object.hasOwn(SIGNAL_LABELS, code)
+		? SIGNAL_LABELS[code as keyof typeof SIGNAL_LABELS]
+		: code
+}
+
 function tagOf(node: Node): string | null {
 	for (const key of Object.keys(node)) {
 		if (key !== ":@" && key !== "#text") return key

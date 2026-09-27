@@ -1,11 +1,14 @@
 import { EmptyState } from "@/components/EmptyState"
+import type { BookmarkState } from "@/components/council/ActionBar"
 import { ListSearch, fieldClass } from "@/components/council/ListSearch"
+import { SealDetail } from "@/components/council/SealDetail"
 import { Segmented } from "@/components/council/Segmented"
 import { TriageList, TriageShell } from "@/components/council/TriageList"
 import { BookmarkToggle, TriageRow, queueRowParts } from "@/components/council/TriageRow"
 import { PageHead } from "@/components/council/headings"
 import { Bone, skeletonKeys } from "@/components/skeleton"
-import { useCouncilOverview, useCouncilQueue } from "@/hooks/useCouncilData"
+import { useCouncilEdits, useCouncilOverview, useCouncilQueue } from "@/hooks/useCouncilData"
+import { type Decision, useCouncilDecision } from "@/hooks/useCouncilMutations"
 import { useStoredState } from "@/hooks/useStoredState"
 import { useTriage } from "@/hooks/useTriage"
 import { type QueueFilter, type QueueSort, filterQueue, languageFilters, sortQueue } from "@/lib/council-triage"
@@ -20,13 +23,32 @@ export function CouncilQueuePage() {
   const { meKeyId } = useCouncilContext()
   const now = Math.floor(Date.now() / 1000)
   const queue = useCouncilQueue().data
-  const cap = useCouncilOverview().data?.me.bookmarkCap ?? null
+  const overview = useCouncilOverview().data
+  const edits = useCouncilEdits().data?.items
+  const cap = overview?.me.bookmarkCap ?? null
+  const decision = useCouncilDecision()
   const [text, setText] = useState("")
   const [sort, setSort] = useState<QueueSort>("top")
   const [filter, setFilter] = useState<QueueFilter>("all")
   const [autoAdvance, setAutoAdvance] = useStoredState<"on" | "off">("council.autoAdvance", "on")
   const shown = sortQueue(filterQueue(queue ?? [], { text, filter }), sort)
   const triage = useTriage({ all: queue, shown, entry, meKeyId, now })
+
+  const decide = (d: Extract<Decision, { item: QueueItem }>) => {
+    const key = String(d.item.id)
+    triage.select(autoAdvance === "on" ? triage.nextAfter(key) : null)
+    decision.mutate(d)
+  }
+
+  const myBookmarks = [...(queue ?? []), ...(edits ?? [])].filter(
+    (i) => i.bookmark !== null && i.bookmark.expiresAt > now && i.bookmark.holder.keyId === meKeyId,
+  ).length
+
+  const bookmarkState = (item: QueueItem): BookmarkState => {
+    if (triage.heldByOther(item) && item.bookmark) return { kind: "other", holder: item.bookmark.holder.displayName }
+    if (item.bookmark && item.bookmark.expiresAt > now) return { kind: "mine" }
+    return { kind: "open", capped: cap !== null && myBookmarks >= cap, cap: cap ?? 0 }
+  }
 
   const row = (item: QueueItem) => {
     const key = entry(item).key
@@ -126,7 +148,20 @@ export function CouncilQueuePage() {
           )
         }
         detail={
-          triage.selectedItem ? null : (
+          triage.selectedItem ? (
+            <SealDetail
+              item={triage.selectedItem}
+              meKeyId={meKeyId}
+              now={now}
+              quota={overview?.me.quota ?? null}
+              bookmark={bookmarkState(triage.selectedItem)}
+              bookmarkPending={triage.bookmarkPending}
+              onBookmark={() => triage.selectedItem && triage.toggleBookmark(triage.selectedItem)}
+              onSeal={() => triage.selectedItem && decide({ kind: "seal", item: triage.selectedItem })}
+              onReject={(note) => triage.selectedItem && decide({ kind: "reject", item: triage.selectedItem, note })}
+              busy={decision.isPending}
+            />
+          ) : (
             <EmptyState
               icon={<IconPointer className="size-5" stroke={1.5} />}
               title="Nothing selected"

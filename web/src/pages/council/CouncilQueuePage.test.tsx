@@ -31,7 +31,10 @@ function busy() {
         score: 0.94,
         voteCount: 37,
         createdAt: NOW - 15 * DAY,
-        flags: ["not-sentence-case", "filler-line"],
+        flags: [
+          { code: "not-sentence-case", label: "Capitalization" },
+          { code: "filler-line", label: "Filler or instrumental lines" },
+        ],
       }),
       queueItem({ id: 406, song: "Catch Catch", artist: "YENA", language: "ko", score: 0.96, voteCount: 28 }),
       queueItem({ id: 669, song: "Isn't She Lovely", bookmark: { ...bookmarkBy(OLA, 2), expiresAt: NOW + 5 * HOUR } }),

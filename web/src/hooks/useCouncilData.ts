@@ -90,6 +90,16 @@ export function useCouncilFeed() {
   })
 }
 
+export function useLyricCouncilHistory(lyricId: number) {
+  const role = useCouncilRole()
+  return useQuery({
+    queryKey: councilKeys.events({ lyric: lyricId }),
+    queryFn: ({ signal }) => fetchCouncilEvents({ lyric: lyricId }, signal),
+    enabled: role !== null,
+    staleTime: 30_000,
+  })
+}
+
 export function useOpenWorkCount(): number {
   const queue = useCouncilQueue()
   const edits = useCouncilEdits()

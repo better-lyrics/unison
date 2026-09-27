@@ -8,6 +8,7 @@ import {
 	wipeRevisionData,
 } from "@/test/integration-harness"
 import { readRevisionFixture } from "@/test/lyric-fixtures"
+import { signalLabel, ttmlSignals } from "@/utils/ttml-signals"
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest"
 import { createBookmark } from "./council-bookmarks"
 import { listCouncilQueue } from "./council-queue"
@@ -116,7 +117,9 @@ describeIntegration("council seal queue (integration)", () => {
 		it("reports automatic checks for TTML candidates", async () => {
 			await candidate("dQw4w9WgXcQ", { ttml: true })
 			const [item] = await listCouncilQueue(db.env)
-			expect(Array.isArray(item.flags)).toBe(true)
+			const expected = ttmlSignals(TTML).map((code) => ({ code, label: signalLabel(code) }))
+			expect(expected.length).toBeGreaterThan(0)
+			expect(item.flags).toEqual(expected)
 		})
 	})
 

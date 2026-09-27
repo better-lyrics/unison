@@ -1,17 +1,18 @@
 import "@braccato/core/element"
-import type { BraccatoLyricsElement, LineClickDetail } from "@braccato/core/element"
-import { LRCParser, type LyricParser, PlainParser, TTMLParser } from "@braccato/parsers"
-import { useEffect, useMemo, useRef } from "react"
 import braccatoTheme from "@/components/braccato-theme.css?raw"
 import { Bone } from "@/components/skeleton"
 import { cn } from "@/lib/cn"
 import type { LyricsFormat, VariantFull } from "@/lib/types"
+import type { BraccatoLyricsElement, LineClickDetail } from "@braccato/core/element"
+import { LRCParser, type LyricParser, PlainParser, TTMLParser } from "@braccato/parsers"
+import { useEffect, useMemo, useRef } from "react"
 
 interface LyricsRendererProps {
   variant: VariantFull
   getCurrentTime: () => number
   getPlaying: () => boolean
   onLineClick?: (timeSeconds: number) => void
+  className?: string
 }
 
 const PARSER_BY_FORMAT: Record<LyricsFormat, LyricParser> = {
@@ -20,12 +21,17 @@ const PARSER_BY_FORMAT: Record<LyricsFormat, LyricParser> = {
   plain: PlainParser,
 }
 
-export function LyricsRenderer({ variant, getCurrentTime, getPlaying, onLineClick }: LyricsRendererProps) {
+export function parseVariantLyrics(variant: Pick<VariantFull, "format" | "lyrics">) {
+  return PARSER_BY_FORMAT[variant.format].parse(variant.lyrics)
+}
+
+export function LyricsRenderer({ variant, getCurrentTime, getPlaying, onLineClick, className }: LyricsRendererProps) {
   const elementRef = useRef<BraccatoLyricsElement>(null)
 
   // No duration to hand the parser: the player reports one only once the iframe is ready, and each
   // parser keeps the lengths the document already states when it goes without.
-  const lyrics = useMemo(() => PARSER_BY_FORMAT[variant.format].parse(variant.lyrics), [variant.lyrics, variant.format])
+  const { format, lyrics: text } = variant
+  const lyrics = useMemo(() => parseVariantLyrics({ format, lyrics: text }), [format, text])
 
   // Ahead of the lyrics write: the theme carries the settings the lines are built against, and
   // writing it rebuilds the view.
@@ -77,7 +83,7 @@ export function LyricsRenderer({ variant, getCurrentTime, getPlaying, onLineClic
     }
   }, [])
 
-  return <braccato-lyrics ref={elementRef} className="mx-auto h-[576px] w-full max-w-3xl" />
+  return <braccato-lyrics ref={elementRef} className={cn("mx-auto h-[576px] w-full max-w-3xl", className)} />
 }
 
 const LYRIC_SKELETON_LINES = [

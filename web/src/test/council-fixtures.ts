@@ -10,6 +10,7 @@ import type {
   QueueItem,
   RosterMember,
 } from "@/lib/council-types"
+import type { VariantFull } from "@/lib/types"
 import { vi } from "vitest"
 import { type FetchRoute, fetchRouter, jsonResponse } from "./fetch-router"
 
@@ -172,6 +173,34 @@ export function dayDecisions(days: [sealed: number, rejected: number, editsRevie
   return days.map(([sealed, rejected, editsReviewed], i) => ({ day: start + i * DAY, sealed, rejected, editsReviewed }))
 }
 
+export const PREVIEW_TTML = `<?xml version="1.0" encoding="UTF-8"?>
+<tt xmlns="http://www.w3.org/ns/ttml">
+  <body dur="00:00:12.000">
+    <div begin="00:00:04.000" end="00:00:11.000">
+      <p begin="00:00:04.000" end="00:00:07.000"><span begin="00:00:04.000" end="00:00:05.000">Amazing </span><span begin="00:00:05.000" end="00:00:07.000">grace</span></p>
+      <p begin="00:00:08.000" end="00:00:11.000">How sweet the sound</p>
+    </div>
+  </body>
+</tt>`
+
+export function variantFull(item: QueueItem, overrides: Partial<VariantFull> = {}): VariantFull {
+  return {
+    id: item.id,
+    videoId: item.videoId,
+    song: item.song,
+    artist: item.artist,
+    format: "ttml",
+    syncType: "richsync",
+    score: 38,
+    effectiveScore: item.score,
+    voteCount: item.voteCount,
+    confidence: item.confidence,
+    hidden: false,
+    lyrics: PREVIEW_TTML,
+    ...overrides,
+  }
+}
+
 export interface CouncilData {
   queue: QueueItem[]
   edits: EditsPayload
@@ -180,6 +209,7 @@ export interface CouncilData {
   applicants: ApplicantView[]
   events: EventsPage
   myOverview?: CouncilOverview
+  variants?: VariantFull[]
 }
 
 export function councilData(overrides: Partial<CouncilData> = {}): CouncilData {
@@ -218,6 +248,24 @@ export function stubCouncilApi(
   saveStoredSession(MEMBER_SESSION)
   const router = fetchRouter([
     ...extra,
+    {
+      match: (url) => url.startsWith("/lyrics/variants/"),
+      respond: (url) => {
+        const videoId = decodeURIComponent(url.split("/").pop() ?? "")
+        const variants = (data.variants ?? []).filter((v) => v.videoId === videoId)
+        return jsonResponse({ success: true, data: variants.map(({ lyrics: _, ...summary }) => summary) })
+      },
+    },
+    {
+      match: (url, init) => (init?.method ?? "GET") === "GET" && /^\/lyrics\/\d+$/.test(url),
+      respond: (url) => {
+        const id = Number(url.split("/").pop())
+        const variant = data.variants?.find((v) => v.id === id)
+        return variant
+          ? jsonResponse({ success: true, data: variant })
+          : jsonResponse({ success: false, error: "Not found" }, 404)
+      },
+    },
     {
       match: (url) => url.startsWith("/artwork?"),
       respond: () => jsonResponse({ success: true, data: { artworkUrl: null } }),

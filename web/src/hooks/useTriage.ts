@@ -61,8 +61,11 @@ export function useTriage<T extends Bookmarkable>({ all, shown, entry, meKeyId, 
   }
 
   const firstKey = order[0] ?? null
+  const autoSelected = useRef(false)
   useEffect(() => {
-    if (selectedKey === null && firstKey !== null) select(firstKey)
+    if (autoSelected.current || firstKey === null) return
+    autoSelected.current = true
+    if (selectedKey === null) select(firstKey)
   })
 
   const toggleBookmark = (item: T) => {

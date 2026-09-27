@@ -30,6 +30,11 @@ export interface QueueSubmitter extends CouncilPerson {
   sealed: number
 }
 
+export interface QueueFlag {
+  code: string
+  label: string
+}
+
 export interface QueueItem {
   id: number
   videoId: string
@@ -46,7 +51,7 @@ export interface QueueItem {
   createdAt: number
   variants: number
   requestsFilled: number
-  flags: string[]
+  flags: QueueFlag[]
   submitter: QueueSubmitter | null
   bookmark: BookmarkView | null
 }

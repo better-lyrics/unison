@@ -74,7 +74,7 @@ describe("sortQueue", () => {
 describe("filterQueue", () => {
   const items = [
     queueItem({ id: 1, song: "Catch Catch", artist: "YENA", language: "ko" }),
-    queueItem({ id: 2, song: "misery.", flags: ["stretched-spelling"] }),
+    queueItem({ id: 2, song: "misery.", flags: [{ code: "stretched-spelling", label: "Stretched spelling" }] }),
     queueItem({ id: 3, song: "Alone", artist: "Alan Walker" }),
   ]
 
