@@ -20,6 +20,16 @@ export async function getByKeyId(env: Env, keyId: string): Promise<DiscordLink |
 		.first<DiscordLink>()
 }
 
+export async function discordIdsByKeyIds(env: Env, keyIds: string[]): Promise<Map<string, string>> {
+	if (keyIds.length === 0) return new Map()
+	const rows = await env.DB.prepare(
+		"SELECT key_id, discord_id FROM discord_links WHERE key_id = ANY(?)"
+	)
+		.bind([...new Set(keyIds)])
+		.all<{ key_id: string; discord_id: string }>()
+	return new Map(rows.results.map((r) => [r.key_id, r.discord_id]))
+}
+
 export async function linkDiscord(
 	env: Env,
 	params: {

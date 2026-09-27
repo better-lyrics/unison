@@ -3,6 +3,7 @@ import type { EditItem, EditThresholds } from "@/db/council-edits"
 import type { QueueItem } from "@/db/council-queue"
 import { saveRevision } from "@/services/lyric-revisions"
 import {
+	BOT_SECRET,
 	type IntegrationDb,
 	describeIntegration,
 	openIntegrationDb,
@@ -16,6 +17,7 @@ import { readRevisionFixture, swapWords } from "@/test/lyric-fixtures"
 import type { Env } from "@/types"
 import { Elysia } from "elysia"
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest"
+import { committeeBotRoutes } from "./committee"
 import { councilRoutes } from "./council"
 
 const MIRA = "91".repeat(32)
@@ -141,6 +143,139 @@ describeIntegration("council dashboard routes (integration)", () => {
 		it("returns no items when nothing is pending", async () => {
 			const res = await call<{ items: EditItem[] }>("GET", "/committee/edits", { token: "mira" })
 			expect(res.json.data.items).toEqual([])
+		})
+	})
+
+	describe("bookmarks", () => {
+		interface Bookmark {
+			id: number
+			itemType: string
+			itemId: number
+			holder: { keyId: string; tier: string | null }
+			expiresAt: number
+		}
+
+		it("bookmarks and releases a seal candidate", async () => {
+			const created = await call<Bookmark>("POST", "/committee/bookmarks", {
+				token: "mira",
+				body: { itemType: "seal", itemId: lyricId },
+			})
+			expect(created.status).toBe(200)
+			expect(created.json.data).toMatchObject({
+				itemType: "seal",
+				itemId: lyricId,
+				holder: { keyId: MIRA },
+			})
+			const released = await call("DELETE", `/committee/bookmarks/${created.json.data.id}`, {
+				token: "mira",
+			})
+			expect(released.status).toBe(200)
+		})
+
+		it("reports the holder when someone else has the item", async () => {
+			await call("POST", "/committee/bookmarks", {
+				token: "mira",
+				body: { itemType: "seal", itemId: lyricId },
+			})
+			const res = await call("POST", "/committee/bookmarks", {
+				token: "ola",
+				body: { itemType: "seal", itemId: lyricId },
+			})
+			expect(res.status).toBe(409)
+			expect(res.json.code).toBe("BOOKMARK_HELD")
+		})
+
+		it("maps the cap, a missing item, a bad body and someone else's release", async () => {
+			for (let i = 0; i < 5; i++) {
+				const id = await seedLyric(db, submitter, {
+					lyrics: LRC,
+					format: "lrc",
+					videoId: `capcapcap0${i}`,
+				})
+				await createBookmark(db.env, mira, "seal", id, "web")
+			}
+			const capped = await call("POST", "/committee/bookmarks", {
+				token: "mira",
+				body: { itemType: "seal", itemId: lyricId },
+			})
+			expect(capped.status).toBe(409)
+			expect(capped.json.code).toBe("BOOKMARK_CAP")
+			const missing = await call("POST", "/committee/bookmarks", {
+				token: "ola",
+				body: { itemType: "seal", itemId: 99999999 },
+			})
+			expect(missing.status).toBe(404)
+			for (const body of [
+				{ itemType: "song", itemId: lyricId },
+				{ itemType: "seal", itemId: -1 },
+				{},
+			]) {
+				expect((await call("POST", "/committee/bookmarks", { token: "ola", body })).status).toBe(
+					400
+				)
+			}
+			const held = await call<Bookmark>("POST", "/committee/bookmarks", {
+				token: "ola",
+				body: { itemType: "seal", itemId: lyricId },
+			})
+			const forbidden = await call("DELETE", `/committee/bookmarks/${held.json.data.id}`, {
+				token: "mira",
+			})
+			expect(forbidden.status).toBe(403)
+			expect(
+				(await call("DELETE", "/committee/bookmarks/12345678", { token: "mira" })).status
+			).toBe(404)
+		})
+
+		it("throttles bookmark writes", async () => {
+			const limited = {
+				...db.env,
+				RATE_LIMITER: {
+					async limit() {
+						return { success: false }
+					},
+				},
+			} as unknown as Env
+			const res = await call("POST", "/committee/bookmarks", {
+				token: "mira",
+				body: { itemType: "seal", itemId: lyricId },
+				env: limited,
+			})
+			expect(res.status).toBe(429)
+		})
+	})
+
+	describe("GET /committee/bookmarks/bot", () => {
+		const botCall = async (token: string) => {
+			const res = await committeeBotRoutes(db.env).handle(
+				new Request("http://localhost/committee/bookmarks/bot", {
+					headers: { authorization: `Bearer ${token}` },
+				})
+			)
+			return { status: res.status, json: (await res.json()) as Envelope<{ bookmarks: unknown[] }> }
+		}
+
+		it("lists active bookmarks with the holder's Discord id", async () => {
+			await db.pool.query(
+				"INSERT INTO discord_links (discord_id, key_id, discord_username) VALUES ('d-mira', $1, 'mira')",
+				[MIRA]
+			)
+			await createBookmark(db.env, mira, "seal", lyricId, "web")
+			const res = await botCall(BOT_SECRET)
+			expect(res.status).toBe(200)
+			expect(res.json.data.bookmarks).toEqual([
+				expect.objectContaining({
+					itemType: "seal",
+					itemId: lyricId,
+					lyricsId: lyricId,
+					holder: expect.objectContaining({ keyId: MIRA, discordId: "d-mira" }),
+				}),
+			])
+			await db.pool.query("DELETE FROM discord_links WHERE key_id = $1", [MIRA])
+		})
+
+		it("refuses a wrong bot secret", async () => {
+			expect((await botCall("nope")).status).toBe(401)
 		})
 	})
 })
