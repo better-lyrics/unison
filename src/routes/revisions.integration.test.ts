@@ -132,7 +132,7 @@ describeIntegration("revision routes (integration)", () => {
 			expect((await listRevisions()).json.data.revisions).toHaveLength(1)
 		})
 
-		it("returns the preview diff against the anchor with field rows last", async () => {
+		it("returns the preview diff against the live revision with field rows last", async () => {
 			const { status, json } = await call<PreviewResult>(
 				"POST",
 				`/lyrics/${lyricId}/revisions/preview`,

@@ -1520,13 +1520,26 @@ describeIntegration("lyric revisions pipeline (integration)", () => {
 		})
 
 		describe("against which revision", () => {
-			it("measures against the anchor, not the live revision, after a live edit", async () => {
+			it("compares against the live revision, not the drift anchor, after a live edit", async () => {
 				expect((await save(lrc(swapWords(LRC, 1)))).status).toBe("live")
 				const { diff } = await preview(lrc(swapWords(LRC, 2)))
-				expect(diff.againstRevNo).toBe(1)
-				expect(changeRows(diff.rows).map((row) => row.kind === "word" && row.lineNo)).toEqual([
-					1, 2,
+				expect(diff.againstRevNo).toBe(2)
+				expect(changeRows(diff.rows)).toEqual([
+					expect.objectContaining({ kind: "word", lineNo: 2 }),
 				])
+			})
+
+			it("keeps drift measured against the anchor while the rows compare against live", async () => {
+				await save(lrc(swapWords(LRC, 1)))
+				const result = await preview(lrc(swapWords(LRC, 2)))
+				expect(result.drift.text).toBeCloseTo(2 / 98, 10)
+				expect(changeRows(result.diff.rows)).toHaveLength(1)
+			})
+
+			it("shows no field row for a value an earlier live edit already set", async () => {
+				await save(lrc(swapWords(LRC, 1), { language: "es" }))
+				const { diff } = await preview(lrc(swapWords(LRC, 2), { language: "es" }))
+				expect(fieldRows(diff.rows)).toEqual([])
 			})
 
 			it("measures against the approved revision once the council approves it", async () => {
@@ -1549,7 +1562,7 @@ describeIntegration("lyric revisions pipeline (integration)", () => {
 				expect(changeRows(diff.rows)).toHaveLength(2)
 			})
 
-			it("reads the lyric's album when the anchor was written without one", async () => {
+			it("reads the lyric's album when the live revision was written without one", async () => {
 				await db.pool.query(
 					"UPDATE lyric_revisions SET album = NULL, album_known = FALSE WHERE lyrics_id = $1",
 					[albumLyric]
@@ -1584,9 +1597,7 @@ describeIntegration("lyric revisions pipeline (integration)", () => {
 			it("keeps a field left out of the body out of the rows", async () => {
 				await save(lrc(LRC, { isrc: "USRC17607839" }))
 				const { diff } = await preview({ lyrics: swapWords(LRC, 1), format: "lrc" })
-				expect(fieldRows(diff.rows)).toEqual([
-					{ kind: "field", field: "isrc", before: null, after: "USRC17607839" },
-				])
+				expect(fieldRows(diff.rows)).toEqual([])
 			})
 
 			it("keeps unicode album names intact", async () => {
@@ -1637,6 +1648,14 @@ describeIntegration("lyric revisions pipeline (integration)", () => {
 		})
 
 		describe("invariants", () => {
+			it("shows the rows the history diff shows once the edit is saved after a live edit", async () => {
+				await save(lrc(swapWords(LRC, 1), { isrc: "USRC17607839" }))
+				const input = lrc(swapWords(LRC, 2), { language: "es" })
+				const { diff } = await preview(input)
+				const saved = await save(input)
+				expect(await diffRevisions(db.env, lyricId, saved.id, null)).toEqual(diff)
+			})
+
 			it("shows the same field rows the history diff shows once the edit is saved", async () => {
 				const input = lrc(swapWords(LRC, 1), { language: "es", isrc: "USRC17607839" })
 				const { diff } = await preview(input)

@@ -95,7 +95,8 @@ interface Assessment {
 	rateLimit: RevisionRateLimit
 	anchorLines: LyricLine[]
 	candidateLines: LyricLine[]
-	anchorRevNo: number
+	liveLines: LyricLine[]
+	liveRevNo: number
 	fieldChanges: FieldChange[]
 }
 
@@ -135,9 +136,6 @@ async function revisionLines(stored: string, format: LyricsFormat): Promise<Lyri
 }
 
 const joinText = (lines: LyricLine[]): string => lines.map((line) => line.text).join("\n")
-
-const revisionAlbum = (row: RevisionRow, lyricAlbum: string | null): string | null =>
-	row.album_known ? row.album : lyricAlbum
 
 interface ResolvedField {
 	value: string | null
@@ -269,9 +267,10 @@ async function assess(
 
 	const rateLimit = await remainingEdits(db, lyricsId, userId)
 	const validated = validateLyricContent(input.lyrics, input.format)
-	const language = resolveField(input.language, live.language, revert?.language, acceptLanguage)
-	const isrc = resolveField(input.isrc, live.isrc, revert?.isrc, acceptIsrc)
-	const album = resolveField(input.album, lyric.album, revert?.album, acceptAlbum)
+	const current = { language: live.language, isrc: live.isrc, album: lyric.album }
+	const language = resolveField(input.language, current.language, revert?.language, acceptLanguage)
+	const isrc = resolveField(input.isrc, current.isrc, revert?.isrc, acceptIsrc)
+	const album = resolveField(input.album, current.album, revert?.album, acceptAlbum)
 
 	const comparable = validated.ok ? extractComparableLines(input.lyrics, validated.format) : null
 	const lines = comparable?.filter((line) => line.head === undefined) ?? null
@@ -295,11 +294,15 @@ async function assess(
 
 	const failure = firstFailure(validated, language, isrc, album)
 	const anchorLines = comparable ? await revisionLines(anchor.lyrics, anchor.format) : []
+	const liveLines =
+		comparable && live.id !== anchor.id
+			? await revisionLines(live.lyrics, live.format)
+			: anchorLines
 	const fieldChanges = (
 		[
-			["language", anchor.language, language],
-			["isrc", anchor.isrc, isrc],
-			["album", revisionAlbum(anchor, lyric.album), album],
+			["language", current.language, language],
+			["isrc", current.isrc, isrc],
+			["album", current.album, album],
 		] as const
 	)
 		.filter(([, , resolved]) => resolved.valid)
@@ -320,7 +323,8 @@ async function assess(
 				rateLimit,
 				anchorLines,
 				candidateLines: comparable ?? [],
-				anchorRevNo: anchor.rev_no,
+				liveLines,
+				liveRevNo: live.rev_no,
 				fieldChanges,
 			},
 		}
@@ -336,9 +340,9 @@ async function assess(
 	}
 	const noChanges =
 		sha256Hex(candidate.content) === live.content_hash &&
-		candidate.language === live.language &&
-		candidate.isrc === live.isrc &&
-		candidate.album === lyric.album
+		candidate.language === current.language &&
+		candidate.isrc === current.isrc &&
+		candidate.album === current.album
 
 	const drift = measureDrift(anchorLines, comparable)
 	const outcome = decideOutcome({
@@ -362,7 +366,8 @@ async function assess(
 			rateLimit,
 			anchorLines,
 			candidateLines: comparable,
-			anchorRevNo: anchor.rev_no,
+			liveLines,
+			liveRevNo: live.rev_no,
 			fieldChanges,
 		},
 	}
@@ -394,8 +399,8 @@ export async function previewRevision(
 			diff: {
 				rows: a.noChanges
 					? []
-					: [...buildDiffRows(a.anchorLines, a.candidateLines), ...buildFieldRows(a.fieldChanges)],
-				againstRevNo: a.anchorRevNo,
+					: [...buildDiffRows(a.liveLines, a.candidateLines), ...buildFieldRows(a.fieldChanges)],
+				againstRevNo: a.liveRevNo,
 			},
 		},
 	}
@@ -589,7 +594,7 @@ export async function getRevisionDetail(
 		format: row.format,
 		language: row.language,
 		isrc: row.isrc,
-		album: revisionAlbum(row, lyric.album),
+		album: row.album_known ? row.album : lyric.album,
 	}
 }
 
