@@ -6,15 +6,14 @@ import {
 	rejectLyric,
 	undoRejection,
 } from "@/db/rejections"
+import { ttmlFlagsFor } from "@/db/ttml-flags"
 import { getUserByKeyId } from "@/db/users"
 import type { Env } from "@/types"
 import { isAuthorizedBot } from "@/utils/bot-auth"
-import { decompress, isCompressed } from "@/utils/compression"
 import { allowCouncilWrite, parseCouncilNote } from "@/utils/council-input"
 import { eitherAuth } from "@/utils/either-auth"
 import { ErrorCode, buildError } from "@/utils/errors"
 import { generatePetName } from "@/utils/petname"
-import { ttmlSignals } from "@/utils/ttml-signals"
 import { Elysia, t } from "elysia"
 
 const DEFAULT_LIMIT = 10
@@ -41,16 +40,6 @@ function parseLimit(raw: string | undefined): number {
 	const n = Number(raw)
 	if (!Number.isInteger(n) || n < 1) return DEFAULT_LIMIT
 	return Math.min(MAX_LIMIT, n)
-}
-
-// Signals are advisory: a corrupt payload must never break the queue.
-async function signalsFor(content: string): Promise<string[]> {
-	try {
-		const ttml = isCompressed(content) ? await decompress(content) : content
-		return ttmlSignals(ttml)
-	} catch {
-		return []
-	}
 }
 
 export const reviewQueueRoutes = (env: Env) =>
@@ -115,7 +104,10 @@ export const reviewQueueBotRoutes = (env: Env) =>
 								: null,
 						}
 						if (c.format !== "ttml") return base
-						return { ...base, ttmlSignals: await signalsFor(c.lyrics) }
+						return {
+							...base,
+							ttmlSignals: await ttmlFlagsFor(env, c.id, c.current_revision_id, c.lyrics),
+						}
 					})
 				)
 

@@ -4,7 +4,7 @@ import { type CouncilSource, recordCouncilEvent } from "@/db/council-events"
 import { type FeedFilters, buildOrderByClause } from "@/db/feed-filters"
 import { AUTO_HIDE_PREDICATE_JOINED, RANKING_EXPR_JOINED } from "@/db/predicates"
 import { isUniqueViolation } from "@/infra/database"
-import type { Env, LyricsFormat } from "@/types"
+import type { Confidence, Env, LyricsFormat, SyncType } from "@/types"
 
 export type QueueSort = "top-rated" | "most-voted"
 
@@ -17,8 +17,17 @@ export interface SealCandidate {
 	score: number
 	vote_count: number
 	lyrics: string
+	submitter_id: number | null
 	submitter_key_id: string | null
 	submitter_nickname: string | null
+	effective_score: number
+	upvotes: number
+	downvotes: number
+	confidence: Confidence
+	language: string | null
+	sync_type: SyncType
+	created_at: number
+	current_revision_id: number | null
 }
 
 export type RejectResult =
@@ -37,12 +46,15 @@ export async function getSealCandidates(
 	)
 
 	const sql = `
-		SELECT id, video_id, song, artist, format, score, vote_count, lyrics,
-			submitter_key_id, submitter_nickname
+		SELECT id, video_id, song, artist, format, score, vote_count, lyrics, submitter_id,
+			submitter_key_id, submitter_nickname, effective_score, upvotes, downvotes, confidence,
+			language, sync_type, created_at, current_revision_id
 		FROM (
 			SELECT DISTINCT ON (l.video_id)
 				l.id, l.video_id, l.song, l.artist, l.format, l.score, l.effective_score,
-				l.vote_count, l.lyrics, u.key_id AS submitter_key_id, u.nickname AS submitter_nickname
+				l.vote_count, l.lyrics, l.submitter_id, u.key_id AS submitter_key_id,
+				u.nickname AS submitter_nickname, l.upvotes, l.downvotes, l.confidence, l.language,
+				l.sync_type, l.created_at, l.current_revision_id
 			FROM lyrics l
 			LEFT JOIN users u ON u.id = l.submitter_id
 			WHERE l.deleted_at IS NULL

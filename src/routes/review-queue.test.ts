@@ -1,5 +1,6 @@
 import { type SealCandidate, getSealCandidates, rejectLyric, undoRejection } from "@/db/rejections"
 import { getUserByKeyId } from "@/db/users"
+import { makeMemoryCache } from "@/test/integration-harness"
 import type { Env } from "@/types"
 import { isAuthorizedBot } from "@/utils/bot-auth"
 import { compress } from "@/utils/compression"
@@ -16,7 +17,7 @@ vi.mock("@/db/rejections", () => ({
 
 const KEY = "k".repeat(64)
 const reviewer = { id: 7, key_id: KEY } as unknown as Awaited<ReturnType<typeof getUserByKeyId>>
-const app = () => reviewQueueBotRoutes({} as Env)
+const app = () => reviewQueueBotRoutes({ CACHE: makeMemoryCache() } as unknown as Env)
 
 function candidate(over: Partial<SealCandidate> = {}): SealCandidate {
 	return {
@@ -28,8 +29,17 @@ function candidate(over: Partial<SealCandidate> = {}): SealCandidate {
 		score: 5,
 		vote_count: 3,
 		lyrics: "gz",
+		submitter_id: 3,
 		submitter_key_id: "a".repeat(64),
 		submitter_nickname: "Nick",
+		effective_score: 0.9,
+		upvotes: 3,
+		downvotes: 0,
+		confidence: "medium",
+		language: "en",
+		sync_type: "linesync",
+		created_at: 1700000000,
+		current_revision_id: 1,
 		...over,
 	}
 }
@@ -191,7 +201,10 @@ describe("POST /lyrics/:id/reject/bot", () => {
 		const res = await app().handle(bodyReq("POST", "42", { keyId: KEY, note: "bad sync" }))
 		expect(res.status).toBe(200)
 		expect(await res.json()).toEqual({ success: true })
-		expect(vi.mocked(rejectLyric)).toHaveBeenCalledWith(expect.anything(), 42, 7, { note: "bad sync", source: "discord" })
+		expect(vi.mocked(rejectLyric)).toHaveBeenCalledWith(expect.anything(), 42, 7, {
+			note: "bad sync",
+			source: "discord",
+		})
 	})
 })
 
