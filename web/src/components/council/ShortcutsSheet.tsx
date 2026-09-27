@@ -1,25 +1,30 @@
-import { Kbd } from "@/components/Kbd"
+import { Kbd, KeySteps } from "@/components/Kbd"
 import { CouncilOverlay } from "./CouncilOverlay"
 
-const GROUPS: { title: string; keys: [string, string[]][] }[] = [
+type Row = [label: string, keys: string[], steps?: "then" | "or"]
+
+const GROUPS: { title: string; keys: Row[] }[] = [
   {
     title: "Anywhere",
     keys: [
       ["Command menu", ["Mod", "K"]],
-      ["Go to overview", ["G", "O"]],
-      ["Go to seal queue", ["G", "Q"]],
-      ["Go to edits", ["G", "E"]],
-      ["Go to activity", ["G", "A"]],
+      ["Go to overview", ["G", "O"], "then"],
+      ["Go to seal queue", ["G", "Q"], "then"],
+      ["Go to edits", ["G", "E"], "then"],
+      ["Go to activity", ["G", "A"], "then"],
       ["This sheet", ["?"]],
+      ["Cancel a decision or close a dialog", ["Escape"]],
     ],
   },
   {
     title: "In a queue",
     keys: [
-      ["Next or previous item", ["J", "K"]],
+      ["Next or previous item", ["J", "K"], "or"],
       ["Bookmark or release", ["B"]],
-      ["Seal (queue) or approve (edits)", ["S", "A"]],
+      ["Seal a lyric", ["S"]],
+      ["Approve an edit", ["A"]],
       ["Reject with a reason", ["R"]],
+      ["Send the rejection", ["Mod", "Enter"]],
       ["Play lyric preview", ["P"]],
       ["Open in YouTube Music", ["O"]],
       ["Search this list", ["/"]],
@@ -43,14 +48,14 @@ export function ShortcutsSheet({ open, onOpenChange }: { open: boolean; onOpenCh
               {group.title}
             </h3>
             <dl>
-              {group.keys.map(([label, keys]) => (
+              {group.keys.map(([label, keys, steps]) => (
                 <div
                   key={label}
                   className="flex items-center justify-between py-[5px] text-[13px] text-unison-text-secondary"
                 >
                   <dt>{label}</dt>
                   <dd className="text-unison-text-muted">
-                    <Kbd keys={keys} />
+                    {steps ? <KeySteps keys={keys} word={steps} /> : <Kbd keys={keys} />}
                   </dd>
                 </div>
               ))}

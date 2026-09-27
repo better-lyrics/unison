@@ -109,6 +109,13 @@ describe("ShortcutsSheet", () => {
     const sheet = await screen.findByRole("dialog", { name: "Keyboard shortcuts" })
     expect(within(sheet).getByText("Go to seal queue")).toBeTruthy()
     expect(within(sheet).getByText("Reject with a reason")).toBeTruthy()
+    const row = (label: string) => within(sheet).getByText(label).parentElement?.textContent
+    expect(row("Go to seal queue")).toBe("Go to seal queueGthenQ")
+    expect(row("Next or previous item")).toBe("Next or previous itemJorK")
+    expect(row("Seal a lyric")).toBe("Seal a lyricS")
+    expect(row("Approve an edit")).toBe("Approve an editA")
+    expect(row("Send the rejection")).toContain("↵")
+    expect(row("Cancel a decision or close a dialog")).toContain("Esc")
     press("g")
     press("q")
     expect(where()).toBe("/council")

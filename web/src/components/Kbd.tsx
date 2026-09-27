@@ -1,6 +1,7 @@
 import { formatKey } from "@/lib/format-key"
 import { isMac as platformIsMac } from "@/lib/platform"
 import { IconCommand } from "@tabler/icons-react"
+import { Fragment } from "react"
 
 interface KbdProps {
   keys: string[]
@@ -17,6 +18,19 @@ export function Kbd({ keys, isMac = platformIsMac }: KbdProps) {
         >
           {key === "Mod" && isMac ? <IconCommand className="size-2.5" /> : formatKey(key, isMac)}
         </span>
+      ))}
+    </span>
+  )
+}
+
+export function KeySteps({ keys, word }: { keys: string[]; word: "then" | "or" }) {
+  return (
+    <span className="inline-flex items-center gap-1">
+      {keys.map((key, i) => (
+        <Fragment key={key}>
+          {i > 0 ? <span className="text-[10px]">{word}</span> : null}
+          <Kbd keys={[key]} />
+        </Fragment>
       ))}
     </span>
   )

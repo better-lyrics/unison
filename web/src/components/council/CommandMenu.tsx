@@ -1,4 +1,4 @@
-import { Kbd } from "@/components/Kbd"
+import { Kbd, KeySteps } from "@/components/Kbd"
 import { SongThumbnail } from "@/components/SongThumbnail"
 import { useCouncilEdits, useCouncilMembers, useCouncilQueue } from "@/hooks/useCouncilData"
 import { cn } from "@/lib/cn"
@@ -36,7 +36,7 @@ function useCommands(): Command[] {
       group: "Go to",
       label: s.label,
       icon: <s.icon aria-hidden className={iconClass} stroke={1.5} />,
-      end: SECTION_KEYS[s.id] ? <Kbd keys={SECTION_KEYS[s.id]} /> : undefined,
+      end: SECTION_KEYS[s.id] ? <KeySteps keys={SECTION_KEYS[s.id]} word="then" /> : undefined,
       to: s.to,
     })),
     ...queue.map((i) => ({
