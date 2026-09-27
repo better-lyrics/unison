@@ -81,6 +81,13 @@ export const config = {
 		durationDeltaSeconds: 2,
 		suggestionCacheTtlSeconds: 60 * 60 * 6,
 		emptySuggestionCacheTtlSeconds: 60 * 30,
+		recordingMatch: {
+			timeoutMs: 1500,
+			maxCandidates: 10,
+			concurrency: 5,
+			cacheTtlSeconds: 60 * 60 * 24 * 30,
+			cacheVersion: "v1", // bump when the question text changes
+		},
 	},
 
 	moderation: {

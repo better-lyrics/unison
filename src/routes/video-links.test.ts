@@ -213,6 +213,7 @@ describe("POST /lyrics/:id/suggested-videos", () => {
 					videoType: "song",
 					artworkUrl: null,
 					matchScore: 1,
+					match: { level: "same" as const, score: 1.9 },
 				},
 			],
 		})
@@ -271,6 +272,7 @@ describe("POST /lyrics/suggested-videos", () => {
 		videoType: "video" as const,
 		artworkUrl: null,
 		matchScore: 0.8,
+		match: null,
 	}
 	const VALID = {
 		song: "Blinding Lights",

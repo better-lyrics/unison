@@ -3,6 +3,7 @@ import type { D1Compat } from "@/infra/database"
 import type { RedisRateLimiter } from "@/infra/rate-limiter"
 import type { Storage } from "@/infra/storage"
 import type { JevGate } from "@/services/jev-gate"
+import type { TypesafeClient } from "@/services/typesafe"
 import type { TierName } from "@/utils/tiers"
 
 export interface B2Config {
@@ -31,6 +32,7 @@ export interface Env {
 	EXAM_BASE_URL?: string
 	RAILWAY_PUBLIC_DOMAIN?: string
 	JEV?: JevGate
+	TYPESAFE?: TypesafeClient | null
 }
 
 export interface RateLimiter {

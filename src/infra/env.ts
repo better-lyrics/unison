@@ -1,5 +1,6 @@
 import { config } from "@/config"
 import { type JevGate, createTypesafeJevGate, disabledJevGate } from "@/services/jev-gate"
+import { type TypesafeClient, createTypesafeClient } from "@/services/typesafe"
 import type { B2Config, Env } from "@/types"
 import { KVCompat, getRedis } from "./cache"
 import { D1Compat, getPool } from "./database"
@@ -78,9 +79,18 @@ function readDiscordOAuthConfig(): Env["DISCORD_OAUTH"] {
 	return { clientId, clientSecret, redirectUri }
 }
 
+function readTypesafeApiKey(): string | undefined {
+	return process.env.TYPESAFE_API_KEY?.trim() || undefined
+}
+
 export function readJevGate(): JevGate {
-	const apiKey = process.env.TYPESAFE_API_KEY?.trim()
+	const apiKey = readTypesafeApiKey()
 	return apiKey ? createTypesafeJevGate({ apiKey }) : disabledJevGate
+}
+
+export function readTypesafeClient(): TypesafeClient | null {
+	const apiKey = readTypesafeApiKey()
+	return apiKey ? createTypesafeClient({ apiKey }) : null
 }
 
 export function createEnv(): Env {
@@ -119,5 +129,6 @@ export function createEnv(): Env {
 		EXAM_BASE_URL: process.env.EXAM_BASE_URL || "",
 		RAILWAY_PUBLIC_DOMAIN: process.env.RAILWAY_PUBLIC_DOMAIN || "",
 		JEV: readJevGate(),
+		TYPESAFE: readTypesafeClient(),
 	}
 }

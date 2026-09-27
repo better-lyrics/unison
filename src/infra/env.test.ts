@@ -1,6 +1,6 @@
 import { disabledJevGate } from "@/services/jev-gate"
 import { afterEach, describe, expect, it, vi } from "vitest"
-import { readJevGate, readTranslationProxyEnabled } from "./env"
+import { readJevGate, readTranslationProxyEnabled, readTypesafeClient } from "./env"
 
 afterEach(() => {
 	vi.unstubAllEnvs()
@@ -41,5 +41,22 @@ describe("readJevGate", () => {
 	it("uses the TypeSafe gate when a key is set", () => {
 		vi.stubEnv("TYPESAFE_API_KEY", "ts-key")
 		expect(readJevGate()).not.toBe(disabledJevGate)
+	})
+})
+
+describe("readTypesafeClient", () => {
+	it("disables TypeSafe when TYPESAFE_API_KEY is unset", () => {
+		vi.stubEnv("TYPESAFE_API_KEY", "")
+		expect(readTypesafeClient()).toBeNull()
+	})
+
+	it("disables TypeSafe for a whitespace-only key", () => {
+		vi.stubEnv("TYPESAFE_API_KEY", "   ")
+		expect(readTypesafeClient()).toBeNull()
+	})
+
+	it("returns a client when a key is set", () => {
+		vi.stubEnv("TYPESAFE_API_KEY", "ts-key")
+		expect(readTypesafeClient()).toEqual({ ask: expect.any(Function) })
 	})
 })
