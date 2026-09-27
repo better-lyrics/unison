@@ -1,4 +1,5 @@
 import { isCommittee, isCouncilAdmin } from "@/db/committee"
+import { listCouncilEdits } from "@/db/council-edits"
 import { listCouncilQueue } from "@/db/council-queue"
 import type { Env } from "@/types"
 import { eitherAuth } from "@/utils/either-auth"
@@ -16,3 +17,4 @@ export const councilRoutes = (env: Env) =>
 			return { councilAdmin: await isCouncilAdmin(env, userId) }
 		})
 		.get("/queue", async ({ env }) => ({ success: true, data: await listCouncilQueue(env) }))
+		.get("/edits", async ({ env }) => ({ success: true, data: await listCouncilEdits(env) }))

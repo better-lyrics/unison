@@ -1,4 +1,7 @@
+import { createBookmark } from "@/db/council-bookmarks"
+import type { EditItem, EditThresholds } from "@/db/council-edits"
 import type { QueueItem } from "@/db/council-queue"
+import { saveRevision } from "@/services/lyric-revisions"
 import {
 	type IntegrationDb,
 	describeIntegration,
@@ -9,7 +12,7 @@ import {
 	seedUser,
 	wipeRevisionData,
 } from "@/test/integration-harness"
-import { readRevisionFixture } from "@/test/lyric-fixtures"
+import { readRevisionFixture, swapWords } from "@/test/lyric-fixtures"
 import type { Env } from "@/types"
 import { Elysia } from "elysia"
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest"
@@ -97,6 +100,47 @@ describeIntegration("council dashboard routes (integration)", () => {
 			expect(res.status).toBe(200)
 			expect(res.json.data.map((i) => i.id)).toEqual([lyricId])
 			expect(res.json.data[0].submitter?.keyId).toBe(SUBMITTER)
+		})
+	})
+
+	describe("GET /committee/edits", () => {
+		async function pendingEdit(): Promise<number> {
+			await db.pool.query("UPDATE lyrics SET committee_approved_at = 1 WHERE id = $1", [lyricId])
+			await db.pool.query("UPDATE users SET nickname = 'Sigma' WHERE id = $1", [submitter])
+			const saved = await saveRevision(db.env, lyricId, submitter, {
+				lyrics: swapWords(LRC, 2),
+				format: "lrc",
+				language: "en",
+			})
+			if (!saved.ok) throw new Error("setup")
+			return saved.revision.id
+		}
+
+		it("lists pending edits with the author, bookmark and thresholds", async () => {
+			const revisionId = await pendingEdit()
+			await createBookmark(db.env, ola, "edit", revisionId, "web")
+			const res = await call<{ items: EditItem[]; thresholds: EditThresholds }>(
+				"GET",
+				"/committee/edits",
+				{ token: "mira" }
+			)
+			expect(res.status).toBe(200)
+			expect(res.json.data.thresholds).toEqual({ textDrift: 0.15, timingDrift: 0.3, jevFlag: 0.8 })
+			const [item] = res.json.data.items
+			expect(item).toMatchObject({
+				revisionId,
+				lyricsId: lyricId,
+				pendingReason: "sealed",
+				author: { keyId: SUBMITTER, displayName: "Sigma" },
+				bookmark: { holder: { keyId: OLA } },
+			})
+			expect(item).not.toHaveProperty("authorKeyId")
+			expect(item.diffFull).toContain("--- rev 1")
+		})
+
+		it("returns no items when nothing is pending", async () => {
+			const res = await call<{ items: EditItem[] }>("GET", "/committee/edits", { token: "mira" })
+			expect(res.json.data.items).toEqual([])
 		})
 	})
 })
