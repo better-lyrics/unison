@@ -15,6 +15,7 @@ export const config = {
 		textDriftLimit: 0.15,
 		timingDriftLimit: 0.3,
 		timingLineThresholdMs: 1000,
+		minTimingChangeMs: 100,
 		perLyricPerWindow: 5,
 		perUserPerWindow: 20,
 		windowSeconds: 24 * 60 * 60,

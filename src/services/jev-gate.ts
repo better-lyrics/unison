@@ -1,7 +1,7 @@
 import { config } from "@/config"
 import { Logger } from "@/infra/logger"
 import type { LyricLine } from "@/utils/extract-text"
-import { renderLinesForDiff } from "@/utils/lyric-diff"
+import { renderLinesForDiff, withoutSmallMoves } from "@/utils/lyric-diff"
 
 const log = new Logger("jev")
 
@@ -71,7 +71,7 @@ export function jevLyricContext(
 
 	const { first, last } = changedRegion(
 		rows,
-		edited.map((line) => renderLinesForDiff([line]))
+		withoutSmallMoves(current, edited).map((line) => renderLinesForDiff([line]))
 	)
 	let budget = maxChars - EARLIER_OMITTED.length - LATER_OMITTED.length
 	let lo = first

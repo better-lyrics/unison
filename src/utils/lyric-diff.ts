@@ -16,15 +16,17 @@ function wordParts(before: string, after: string): DiffPart[] {
 
 const headOf = (line: LyricLine): { head?: HeadTextRef } => (line.head ? { head: line.head } : {})
 
+function timingShift(before: LyricLine, after: LyricLine): number | null {
+	return before.startMs === null || after.startMs === null ? null : after.startMs - before.startMs
+}
+
+const isVisibleShift = (deltaMs: number): boolean =>
+	Math.abs(deltaMs) >= config.revisions.minTimingChangeMs
+
 function keptRow(before: LyricLine, after: LyricLine, lineNo: number): DiffRow {
-	if (before.startMs !== null && after.startMs !== null && before.startMs !== after.startMs) {
-		return {
-			kind: "timing",
-			lineNo,
-			startMs: after.startMs,
-			deltaMs: after.startMs - before.startMs,
-			text: after.text,
-		}
+	const deltaMs = timingShift(before, after)
+	if (deltaMs !== null && after.startMs !== null && isVisibleShift(deltaMs)) {
+		return { kind: "timing", lineNo, startMs: after.startMs, deltaMs, text: after.text }
 	}
 	return { kind: "same", lineNo, startMs: after.startMs, text: after.text, ...headOf(after) }
 }
@@ -155,20 +157,86 @@ export function renderLinesForDiff(lines: LyricLine[]): string {
 	return lines.map((line) => `${stamp(line.startMs)}${label(line)}${line.text}\n`).join("")
 }
 
-export function unifiedDiff(
+export function withoutSmallMoves(before: LyricLine[], after: LyricLine[]): LyricLine[] {
+	const settled = [...after]
+	let i = 0
+	let j = 0
+	for (const change of diffArrays(
+		before.map((line) => line.text),
+		after.map((line) => line.text)
+	)) {
+		if (change.added) {
+			j += change.count
+		} else if (change.removed) {
+			i += change.count
+		} else {
+			for (let k = 0; k < change.count; k++) {
+				const kept = after[j + k]
+				const deltaMs = timingShift(before[i + k], kept)
+				if (deltaMs !== null && !isVisibleShift(deltaMs)) {
+					settled[j + k] = { ...kept, startMs: before[i + k].startMs }
+				}
+			}
+			i += change.count
+			j += change.count
+		}
+	}
+	return settled
+}
+
+export function showsChanges(before: LyricLine[], after: LyricLine[]): boolean {
+	return renderLinesForDiff(before) !== renderLinesForDiff(withoutSmallMoves(before, after))
+}
+
+type DiffLabels = { before: string; after: string }
+
+function patch(labels: DiffLabels, before: string, after: string): string {
+	return createTwoFilesPatch(labels.before, labels.after, before, after, undefined, undefined, {
+		context: 3,
+	})
+}
+
+export function unifiedDiff(before: LyricLine[], after: LyricLine[], labels: DiffLabels): string {
+	return patch(
+		labels,
+		renderLinesForDiff(before),
+		renderLinesForDiff(withoutSmallMoves(before, after))
+	)
+}
+
+interface FieldChange {
+	field: string
+	before: string | null
+	after: string | null
+}
+
+function renderFields(changes: FieldChange[], side: "before" | "after"): string {
+	return changes
+		.filter((change) => change.before !== change.after && change[side] !== null)
+		.map((change) => `[${change.field}] ${change[side]}\n`)
+		.join("")
+}
+
+const SMALL_MOVES_NOTE = `Timing changed slightly, no line moved by ${config.revisions.minTimingChangeMs} ms or more.`
+
+export function reviewDiff(
 	before: LyricLine[],
 	after: LyricLine[],
-	labels: { before: string; after: string }
-): string {
-	return createTwoFilesPatch(
-		labels.before,
-		labels.after,
-		renderLinesForDiff(before),
-		renderLinesForDiff(after),
-		undefined,
-		undefined,
-		{ context: 3 }
+	fields: FieldChange[],
+	labels: DiffLabels
+): { full: string; preview: string } {
+	const full = patch(
+		labels,
+		renderFields(fields, "before") + renderLinesForDiff(before),
+		renderFields(fields, "after") + renderLinesForDiff(withoutSmallMoves(before, after))
 	)
+	const onlySmallMoves =
+		renderLinesForDiff(before) !== renderLinesForDiff(after) && !showsChanges(before, after)
+	if (!onlySmallMoves) return { full, preview: diffPreview(full) }
+	return {
+		full: `${full}${SMALL_MOVES_NOTE}\n`,
+		preview: [diffPreview(full), SMALL_MOVES_NOTE].filter(Boolean).join("\n"),
+	}
 }
 
 export function diffPreview(unified: string): string {

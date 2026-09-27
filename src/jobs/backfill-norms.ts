@@ -1,6 +1,6 @@
 import { Logger } from "@/infra/logger"
 import type { Env } from "@/types"
-import { normalize, normalizeArtist, normalizeSong } from "@/utils/normalize"
+import { normalizeAlbum, normalizeArtist, normalizeSong } from "@/utils/normalize"
 
 const log = new Logger("backfill-norms")
 const BATCH_SIZE = 200
@@ -40,7 +40,7 @@ export async function backfillNorms(env: Env): Promise<{ scanned: number; update
 
 			const songNorm = normalizeSong(row.song)
 			const artistNorm = normalizeArtist(row.artist)
-			const albumNorm = row.album ? normalize(row.album) : null
+			const albumNorm = normalizeAlbum(row.album)
 
 			if (
 				songNorm === row.song_norm &&

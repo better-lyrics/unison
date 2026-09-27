@@ -210,6 +210,12 @@ describe("timingDrift", () => {
 			}
 		})
 
+		it("regression: a TTML Composer re-export that moves lines by 1 ms adds no timing drift", () => {
+			const before = extractComparableLines(readRevisionFixture("90210-before.ttml"), "ttml")
+			const after = extractComparableLines(readRevisionFixture("90210-after.ttml"), "ttml")
+			expect(timingDrift(before, after)).toEqual({ drift: 0, offsetMs: 0 })
+		})
+
 		it("regression: an offset plus a few retimed lines only counts the retimed lines", () => {
 			const retimed = extractLines(
 				shiftLrc(LRC, (i) => (i === 5 ? 4000 : 1500)),
