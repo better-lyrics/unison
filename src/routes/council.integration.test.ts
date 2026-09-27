@@ -375,4 +375,38 @@ describeIntegration("council dashboard routes (integration)", () => {
 			expect((await call("GET", "/committee/events?lyric=abc", { token: "mira" })).status).toBe(400)
 		})
 	})
+
+	describe("GET /committee/overview", () => {
+		it("returns the chart, rates and my month", async () => {
+			await recordCouncilEvent(db.env.DB, {
+				actorId: mira,
+				kind: "reject",
+				source: "web",
+				lyricsId: lyricId,
+				refId: 1,
+			})
+			await recordCouncilEvent(db.env.DB, {
+				actorId: ola,
+				kind: "seal",
+				source: "discord",
+				lyricsId: lyricId,
+				refId: 2,
+			})
+			const council = await call<{
+				decisionsByDay: { sealed: number; rejected: number }[]
+				sealRate: number
+			}>("GET", "/committee/overview", { token: "mira" })
+			expect(council.status).toBe(200)
+			expect(council.json.data.decisionsByDay.at(-1)).toMatchObject({ sealed: 1, rejected: 1 })
+			expect(council.json.data.sealRate).toBe(0.5)
+			const mine = await call<{ decisionsByDay: { sealed: number }[] }>(
+				"GET",
+				"/committee/overview?scope=me",
+				{
+					token: "mira",
+				}
+			)
+			expect(mine.json.data.decisionsByDay.at(-1)?.sealed).toBe(0)
+		})
+	})
 })

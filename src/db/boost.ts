@@ -30,8 +30,8 @@ export type BoostResult =
 
 export type RevokeResult = { ok: true } | { ok: false; reason: "not_found" | "forbidden" }
 
-function monthWindow(): { monthStart: number; resetsAt: number } {
-	const now = new Date()
+export function monthWindow(at = Date.now()): { monthStart: number; resetsAt: number } {
+	const now = new Date(at)
 	const year = now.getUTCFullYear()
 	const month = now.getUTCMonth()
 	return {

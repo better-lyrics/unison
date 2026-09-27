@@ -4,6 +4,7 @@ import { type BookmarkItemType, createBookmark, releaseBookmark } from "@/db/cou
 import { listCouncilEdits } from "@/db/council-edits"
 import { type CouncilEventKind, listCouncilEvents } from "@/db/council-events"
 import { listCouncilQueue, toQueueBookmark } from "@/db/council-queue"
+import { getCouncilOverview } from "@/db/council-stats"
 import { getCuratorTierMap } from "@/db/leaderboard"
 import type { Env } from "@/types"
 import { allowCouncilWrite } from "@/utils/council-input"
@@ -127,4 +128,15 @@ export const councilRoutes = (env: Env) =>
 					limit: t.Optional(t.String()),
 				}),
 			}
+		)
+		.get(
+			"/overview",
+			async ({ env, userId, query }) => ({
+				success: true,
+				data: await getCouncilOverview(env, {
+					meId: userId,
+					scope: query.scope === "me" ? "me" : "council",
+				}),
+			}),
+			{ query: t.Object({ scope: t.Optional(t.String()) }) }
 		)

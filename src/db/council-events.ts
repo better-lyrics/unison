@@ -18,6 +18,16 @@ export type CouncilEventKind =
 
 export type CouncilSource = "web" | "discord" | "admin"
 
+export const DECISION_KINDS: CouncilEventKind[] = ["seal", "reject", "edit_approve", "edit_reject"]
+
+export const UNDONE_EXPR = `CASE
+	WHEN e.kind = 'seal' THEN EXISTS (
+		SELECT 1 FROM boosts b WHERE b.id = e.ref_id AND b.revoked_at IS NOT NULL)
+	WHEN e.kind = 'reject' THEN EXISTS (
+		SELECT 1 FROM rejections r WHERE r.id = e.ref_id AND r.revoked_at IS NOT NULL)
+	ELSE FALSE
+END`
+
 export interface CouncilEventInput {
 	actorId: number | null
 	kind: CouncilEventKind
@@ -126,13 +136,7 @@ export async function listCouncilEvents(
 	const rows = await env.DB.prepare(
 		`SELECT e.id, e.kind, e.source, e.created_at, e.note, e.actor_id, e.subject_user_id,
 			l.id AS lyric_id, l.video_id, l.song, l.artist,
-			CASE
-				WHEN e.kind = 'seal' THEN EXISTS (
-					SELECT 1 FROM boosts b WHERE b.id = e.ref_id AND b.revoked_at IS NOT NULL)
-				WHEN e.kind = 'reject' THEN EXISTS (
-					SELECT 1 FROM rejections r WHERE r.id = e.ref_id AND r.revoked_at IS NOT NULL)
-				ELSE FALSE
-			END AS undone
+			${UNDONE_EXPR} AS undone
 		 FROM council_events e
 		 LEFT JOIN lyrics l ON l.id = e.lyrics_id
 		 ${where.length > 0 ? `WHERE ${where.join(" AND ")}` : ""}
