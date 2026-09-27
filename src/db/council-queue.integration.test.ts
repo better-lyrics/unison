@@ -8,7 +8,7 @@ import {
 	wipeRevisionData,
 } from "@/test/integration-harness"
 import { readRevisionFixture } from "@/test/lyric-fixtures"
-import { signalLabel, ttmlSignals } from "@/utils/ttml-signals"
+import { SIGNALS_VERSION, signalLabel, ttmlSignals } from "@/utils/ttml-signals"
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest"
 import { createBookmark } from "./council-bookmarks"
 import { listCouncilQueue } from "./council-queue"
@@ -159,6 +159,21 @@ describeIntegration("council seal queue (integration)", () => {
 			const keys = [...db.cache.store.keys()].filter((k) => k.startsWith("ttml-flags:"))
 			expect(keys).toHaveLength(1)
 			expect(keys[0]).toContain(`:${id}:`)
+			expect(keys[0]).toContain(`:v${SIGNALS_VERSION}:`)
+		})
+	})
+
+	describe("regressions", () => {
+		it("ignores automatic checks cached before the signal rules changed", async () => {
+			const id = await candidate("dQw4w9WgXcQ", { ttml: true })
+			const { rows } = await db.pool.query<{ current_revision_id: number | null }>(
+				"SELECT current_revision_id FROM lyrics WHERE id = $1",
+				[id]
+			)
+			const oldKey = `ttml-flags:${id}:${rows[0].current_revision_id ?? "base"}`
+			await db.env.CACHE.put(oldKey, JSON.stringify(["stale-signal"]))
+			const [item] = await listCouncilQueue(db.env)
+			expect(item.flags.map((f) => f.code)).toEqual(ttmlSignals(TTML))
 		})
 	})
 })

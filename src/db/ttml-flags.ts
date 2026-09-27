@@ -1,14 +1,14 @@
 import { config } from "@/config"
 import type { Env } from "@/types"
 import { decompress, isCompressed } from "@/utils/compression"
-import { ttmlSignals } from "@/utils/ttml-signals"
+import { SIGNALS_VERSION, ttmlSignals } from "@/utils/ttml-signals"
 
 export async function ttmlFlagsFor(
 	env: Env,
 	lyricsId: number,
 	revisionId: number | null
 ): Promise<string[]> {
-	const key = `ttml-flags:${lyricsId}:${revisionId ?? "base"}`
+	const key = `ttml-flags:v${SIGNALS_VERSION}:${lyricsId}:${revisionId ?? "base"}`
 	const cached = await env.CACHE.get(key)
 	if (cached) {
 		try {

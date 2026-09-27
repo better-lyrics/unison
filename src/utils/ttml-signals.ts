@@ -19,6 +19,9 @@ const BRACKETED_RE = /^\(.*\)$/
 const STRETCH_RE = /(\p{L})\1\1/u
 const BRACKET_PAIR_RE = /\([^)]*\)/g
 
+// Bump when a rule changes so cached signal lists are recomputed.
+export const SIGNALS_VERSION = 1
+
 // Order the reviewer sees; keep firm signals before heuristics.
 const SIGNAL_ORDER = [
 	"line-synced",
