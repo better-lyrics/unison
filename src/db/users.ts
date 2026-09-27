@@ -61,6 +61,43 @@ export async function resolveIdentity(env: Env, keyId: string): Promise<UserIden
 	}
 }
 
+export interface Person extends UserIdentity {
+	userId: number
+	keyId: string
+}
+
+export async function resolvePeople(env: Env, userIds: number[]): Promise<Map<number, Person>> {
+	const ids = [...new Set(userIds)]
+	const people = new Map<number, Person>()
+	if (ids.length === 0) return people
+	const rows = await env.DB.prepare(
+		`SELECT u.id, u.key_id, u.nickname, u.nickname_lower, ${AVATAR_COLUMNS}
+		 FROM users u
+		 ${AVATAR_JOINS}
+		 WHERE u.id = ANY(?)`
+	)
+		.bind(ids)
+		.all<
+			AvatarRow & {
+				id: number | string
+				key_id: string
+				nickname: string | null
+				nickname_lower: string | null
+			}
+		>()
+	for (const row of rows.results) {
+		const userId = Number(row.id)
+		people.set(userId, {
+			userId,
+			keyId: row.key_id,
+			displayName: row.nickname ?? generatePetName(row.key_id),
+			handle: row.nickname_lower,
+			avatarUrl: avatarUrlForRow(row),
+		})
+	}
+	return people
+}
+
 export async function resolveDisplayName(env: Env, keyId: string): Promise<string> {
 	return (await resolveIdentity(env, keyId)).displayName
 }
