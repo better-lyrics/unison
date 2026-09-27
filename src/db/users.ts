@@ -53,7 +53,13 @@ export async function resolveIdentity(env: Env, keyId: string): Promise<UserIden
 		 WHERE u.key_id = ?`
 	)
 		.bind(keyId)
-		.first<AvatarRow & { nickname: string | null; nickname_lower: string | null }>()
+		.first<IdentityRow>()
+	return identityFromRow(keyId, row)
+}
+
+type IdentityRow = AvatarRow & { nickname: string | null; nickname_lower: string | null }
+
+function identityFromRow(keyId: string, row: IdentityRow | null): UserIdentity {
 	return {
 		displayName: row?.nickname ?? generatePetName(keyId),
 		handle: row?.nickname_lower ?? null,
@@ -66,12 +72,7 @@ export interface Person extends UserIdentity {
 	keyId: string
 }
 
-type PersonRow = AvatarRow & {
-	id: number | string
-	key_id: string
-	nickname: string | null
-	nickname_lower: string | null
-}
+type PersonRow = IdentityRow & { id: number | string; key_id: string }
 
 async function queryPeople(
 	env: Env,
@@ -90,9 +91,7 @@ async function queryPeople(
 	return rows.results.map((row) => ({
 		userId: Number(row.id),
 		keyId: row.key_id,
-		displayName: row.nickname ?? generatePetName(row.key_id),
-		handle: row.nickname_lower,
-		avatarUrl: avatarUrlForRow(row),
+		...identityFromRow(row.key_id, row),
 	}))
 }
 
