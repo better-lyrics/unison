@@ -76,6 +76,7 @@ describeIntegration("badge derivation (integration)", () => {
 
 	async function insertLyric(opts: {
 		submitterId: number
+		videoId?: string
 		confidence?: Confidence
 		language?: string | null
 		effectiveScore?: number
@@ -99,7 +100,7 @@ describeIntegration("badge derivation (integration)", () => {
 				 $3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
 			 RETURNING id`,
 			[
-				`vid${videoSeq}`,
+				opts.videoId ?? `vid${videoSeq}`,
 				opts.syncType ?? "linesync",
 				opts.submitterId,
 				opts.confidence ?? "low",
@@ -635,6 +636,25 @@ describeIntegration("badge derivation (integration)", () => {
 				["b".repeat(64)]
 			)
 			expect(await run("early-adopter", late.id)).toEqual({ earned: false })
+		})
+	})
+
+	describe("regressions", () => {
+		it("regression: prolific counts several sources for one song once", async () => {
+			const userId = await seedUser()
+			for (let i = 0; i < 30; i++) {
+				await insertLyric({ submitterId: userId, videoId: "dQw4w9WgXcQ" })
+			}
+			await insertLyric({ submitterId: userId, videoId: "kJQP7kiw5Fk" })
+			await insertLyric({ submitterId: userId, videoId: "kJQP7kiw5Fk", syncType: "richsync" })
+			await insertLyric({ submitterId: userId, videoId: "9bZkp7q19f0", deleted: true })
+			await insertLyric({ submitterId: userId, videoId: "OPf0YbXqDm0", reputationPenalized: true })
+
+			expect(await run("prolific", userId)).toEqual({
+				earned: false,
+				tier: undefined,
+				progress: { current: 2, next: 25 },
+			})
 		})
 	})
 
