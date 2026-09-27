@@ -29,6 +29,7 @@ import type {
 import { pushToast } from "@/lib/toast"
 import { type QueryClient, useMutation, useQueryClient } from "@tanstack/react-query"
 import { councilKeys } from "./useCouncilData"
+import { lyricsKeys } from "./useLyricsData"
 
 export function councilErrorToast(error: unknown, action: string): void {
   const message = error instanceof Error ? error.message : ""
@@ -86,7 +87,8 @@ export function useBookmarkToggle() {
       const { id, holder, createdAt, expiresAt } = await createBookmark(target.itemType, target.itemId)
       return { id, holder, createdAt, expiresAt }
     },
-    onMutate: (target) => {
+    onMutate: async (target) => {
+      await client.cancelQueries({ queryKey: target.itemType === "seal" ? councilKeys.queue : councilKeys.edits })
       if (target.bookmark?.holder.keyId === target.meKeyId) patchBookmark(client, target.itemType, target.itemId, null)
     },
     onSuccess: (bookmark, target) => patchBookmark(client, target.itemType, target.itemId, bookmark),
@@ -147,7 +149,8 @@ export function useUndoDecision() {
       pushToast({ kind: "info", group: DECISION_TOAST, message: `${verb} “${event.lyric?.song}”` })
     },
     onError: (error) => councilErrorToast(error, "undo the decision"),
-    onSettled: () => refreshCouncil(client),
+    onSettled: (_, __, event) =>
+      refreshCouncil(client, event.lyric ? { lyricsId: event.lyric.id, videoId: event.lyric.videoId } : undefined),
   })
 }
 
@@ -155,8 +158,17 @@ function isQueueDecision(decision: Decision): decision is Extract<Decision, { it
   return decision.kind === "seal" || decision.kind === "reject"
 }
 
-function refreshCouncil(client: QueryClient): void {
+function refreshCouncil(client: QueryClient, lyric?: { lyricsId: number; videoId: string }): void {
   client.invalidateQueries({ queryKey: councilKeys.all })
+  if (!lyric) return
+  client.invalidateQueries({ queryKey: lyricsKeys.variants(lyric.videoId) })
+  client.invalidateQueries({ queryKey: lyricsKeys.variant(lyric.lyricsId) })
+  client.invalidateQueries({ queryKey: lyricsKeys.revisions(lyric.lyricsId) })
+}
+
+function lyricOf(decision: Decision): { lyricsId: number; videoId: string } {
+  const lyricsId = isQueueDecision(decision) ? decision.item.id : decision.item.lyricsId
+  return { lyricsId, videoId: decision.item.videoId }
 }
 
 export function useCouncilDecision() {
@@ -198,7 +210,7 @@ export function useCouncilDecision() {
                 undo().then(
                   () => {
                     pushToast({ kind: "info", group: DECISION_TOAST, message: `${done.undo} “${decision.item.song}”` })
-                    refreshCouncil(client)
+                    refreshCouncil(client, lyricOf(decision))
                   },
                   (error) => councilErrorToast(error, "undo the decision"),
                 )
@@ -207,7 +219,7 @@ export function useCouncilDecision() {
           : undefined,
       })
     },
-    onSettled: () => refreshCouncil(client),
+    onSettled: (_, __, decision) => refreshCouncil(client, lyricOf(decision)),
   })
 }
 

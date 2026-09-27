@@ -1,8 +1,10 @@
+import { lyricsKeys } from "@/hooks/useLyricsData"
 import type { DiffRow, RevisionSummary } from "@/lib/revision-types"
 import { __resetToastStore } from "@/lib/toast"
 import { NOW, OLA, bookmarkBy, councilData, editItem, stubCouncilApi } from "@/test/council-fixtures"
 import { jsonResponse } from "@/test/fetch-router"
 import { renderCouncil } from "@/test/render-council"
+import { QueryObserver } from "@tanstack/react-query"
 import { act, cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
@@ -174,6 +176,27 @@ describe("CouncilEditsPage", () => {
     await waitFor(() => expect(log).toEqual(["/lyrics/669/revisions/9001/approve {}"]))
     await screen.findByText("Approved the edit to “Isn't She Lovely”")
     expect(screen.queryByRole("button", { name: "Undo" })).toBeNull()
+  })
+
+  it("refetches the lyric's cached versions after a decision", async () => {
+    const log: string[] = []
+    stubCouncilApi(data(), { admin: false }, routes(log))
+    const { client } = renderCouncil("/council/edits?item=9001")
+    const keys = [lyricsKeys.variants("oE56g61mW44"), lyricsKeys.variant(669), lyricsKeys.revisions(669)]
+    const stops = keys.map((queryKey) =>
+      new QueryObserver(client, { queryKey, queryFn: () => null, staleTime: Number.POSITIVE_INFINITY }).subscribe(
+        () => {},
+      ),
+    )
+    const updates = () => keys.map((k) => client.getQueryState(k)?.dataUpdateCount ?? 0)
+    await waitFor(() => expect(within(detail()).getByRole("button", { name: /^Approve/ })).toBeTruthy())
+    await waitFor(() => expect(updates().every((n) => n > 0)).toBe(true))
+    const before = updates()
+    act(() => void fireEvent.keyDown(window, { key: "a" }))
+    act(() => void fireEvent.keyDown(window, { key: "a" }))
+    await waitFor(() => expect(log).toHaveLength(1))
+    await waitFor(() => expect(updates().map((n, i) => n > before[i])).toEqual([true, true, true]))
+    for (const stop of stops) stop()
   })
 
   it("rejects an edit with a note for the author", async () => {

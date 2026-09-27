@@ -164,6 +164,46 @@ describe("CouncilQueuePage bookmarks", () => {
     expect(router.calls.some((c) => c.url === "/committee/bookmarks/1")).toBe(true)
   })
 
+  it("regression: a refetch already in flight does not undo a release", async () => {
+    const data = busy()
+    const stale = structuredClone(data.queue)
+    let holdRefetch: ((r: Response) => void) | null = null
+    let finishRelease: ((r: Response) => void) | null = null
+    let hold = false
+    stubCouncilApi(data, { admin: false }, [
+      {
+        match: (url, init) => (init?.method ?? "GET") === "GET" && url === "/committee/queue",
+        respond: () => {
+          if (!hold) return jsonResponse({ success: true, data: data.queue })
+          hold = false
+          return new Promise<Response>((resolve) => {
+            holdRefetch = resolve
+          })
+        },
+      },
+      {
+        match: (url, init) => url === "/committee/bookmarks/1" && init?.method === "DELETE",
+        respond: () =>
+          new Promise<Response>((resolve) => {
+            finishRelease = resolve
+          }),
+      },
+    ])
+    const { client } = renderCouncil("/council/queue")
+    await waitFor(() => expect(selected()).toBe("722"))
+    hold = true
+    act(() => void client.invalidateQueries({ queryKey: ["council", "queue"] }))
+    await waitFor(() => expect(holdRefetch).not.toBeNull())
+    press("b")
+    await waitFor(() => expect(screen.queryByRole("list", { name: "Your bookmarks" })).toBeNull())
+    await act(async () => holdRefetch?.(jsonResponse({ success: true, data: stale })))
+    await waitFor(() => expect(client.getQueryState(["council", "queue"])?.fetchStatus).toBe("idle"))
+    expect(screen.queryByRole("list", { name: "Your bookmarks" })).toBeNull()
+    data.queue = data.queue.map((i) => (i.id === 722 ? { ...i, bookmark: null } : i))
+    await act(async () => finishRelease?.(jsonResponse({ success: true, data: null })))
+    await waitFor(() => expect(screen.queryByRole("list", { name: "Your bookmarks" })).toBeNull())
+  })
+
   it("shows the server reason and rolls back when the bookmark fails", async () => {
     stubCouncilApi(busy(), { admin: false }, [
       {
