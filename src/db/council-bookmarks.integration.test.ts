@@ -151,6 +151,24 @@ describeIntegration("council bookmarks (integration)", () => {
 			})
 		})
 
+		it("refuses a lyric that is already sealed or rejected", async () => {
+			await db.pool.query("UPDATE lyrics SET committee_approved_at = 1 WHERE id = $1", [
+				lyricIds[0],
+			])
+			expect(await createBookmark(db.env, mira, "seal", lyricIds[0], "web")).toEqual({
+				ok: false,
+				reason: "item_not_found",
+			})
+			await db.pool.query(
+				"INSERT INTO rejections (lyrics_id, rejected_by, rejected_at) VALUES ($1, $2, 1)",
+				[lyricIds[1], ola]
+			)
+			expect(await createBookmark(db.env, mira, "seal", lyricIds[1], "web")).toEqual({
+				ok: false,
+				reason: "item_not_found",
+			})
+		})
+
 		it("reports the holder when someone else holds the item", async () => {
 			await createBookmark(db.env, mira, "seal", lyricIds[0], "web")
 			const result = await createBookmark(db.env, ola, "seal", lyricIds[0], "web")
@@ -238,6 +256,44 @@ describeIntegration("council bookmarks (integration)", () => {
 	})
 
 	describe("regressions", () => {
+		it("regression: a bookmark on an item that left the queue without a decision stops counting", async () => {
+			const sealed = await createBookmark(db.env, mira, "seal", lyricIds[0], "web")
+			const deleted = await createBookmark(db.env, mira, "seal", lyricIds[1], "web")
+			const rejected = await createBookmark(db.env, mira, "seal", lyricIds[2], "web")
+			const revisionId = await seedPendingRevision(lyricIds[3])
+			const withdrawn = await createBookmark(db.env, mira, "edit", revisionId, "web")
+			const kept = await createBookmark(db.env, mira, "seal", lyricIds[4], "web")
+			if (!sealed.ok || !deleted.ok || !rejected.ok || !withdrawn.ok || !kept.ok)
+				throw new Error("setup")
+			await db.pool.query("UPDATE lyrics SET committee_approved_at = 1 WHERE id = $1", [
+				lyricIds[0],
+			])
+			await db.pool.query(
+				"UPDATE lyrics SET deleted_at = 1, deleted_by_user_id = $1, deleted_by_role = 'submitter' WHERE id = $2",
+				[submitter, lyricIds[1]]
+			)
+			await db.pool.query(
+				"INSERT INTO rejections (lyrics_id, rejected_by, rejected_at) VALUES ($1, $2, 1)",
+				[lyricIds[2], ola]
+			)
+			await db.pool.query("UPDATE lyric_revisions SET status = 'withdrawn' WHERE id = $1", [
+				revisionId,
+			])
+			const active = await listActiveBookmarks(db.env, { userId: mira })
+			expect(active.map((b) => b.id)).toEqual([kept.bookmark.id])
+			expect((await createBookmark(db.env, mira, "seal", lyricIds[5], "web")).ok).toBe(true)
+		})
+
+		it("regression: a removed member's bookmarks no longer hold items", async () => {
+			const held = await createBookmark(db.env, ola, "seal", lyricIds[0], "web")
+			if (!held.ok) throw new Error("setup")
+			await db.pool.query("DELETE FROM committee_members WHERE user_id = $1", [ola])
+			expect(
+				await listActiveBookmarks(db.env, { itemType: "seal", itemIds: [lyricIds[0]] })
+			).toEqual([])
+			expect((await createBookmark(db.env, mira, "seal", lyricIds[0], "web")).ok).toBe(true)
+		})
+
 		it("regression: two members racing for one item yields exactly one holder", async () => {
 			const results = await Promise.all([
 				createBookmark(db.env, mira, "seal", lyricIds[0], "web"),

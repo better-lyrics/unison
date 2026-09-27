@@ -446,6 +446,18 @@ describeIntegration("council dashboard routes (integration)", () => {
 			])
 		})
 
+		it("refuses to remove an admin or yourself", async () => {
+			await db.pool.query("UPDATE committee_members SET is_admin = TRUE WHERE user_id = $1", [ola])
+			const peer = await call("DELETE", `/committee/members/${OLA}`, { token: "admin" })
+			expect(peer.status).toBe(403)
+			expect(peer.json.code).toBe("PROTECTED_MEMBER")
+			const self = await call("DELETE", `/committee/members/${ADMIN}`, { token: "admin" })
+			expect(self.status).toBe(403)
+			expect(self.json.code).toBe("PROTECTED_MEMBER")
+			const { rows } = await db.pool.query("SELECT COUNT(*)::int AS n FROM committee_members")
+			expect(rows[0].n).toBe(3)
+		})
+
 		it("refuses member changes from a non-admin and unknown keys", async () => {
 			expect(
 				(await call("POST", "/committee/members", { token: "mira", body: { keyId: SUBMITTER } }))

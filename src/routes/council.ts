@@ -183,6 +183,9 @@ export const councilRoutes = (env: Env) =>
 				return status(429, buildError(ErrorCode.RATE_LIMITED))
 			const member = await getUserByKeyId(env, params.keyId)
 			if (!member) return status(404, buildError(ErrorCode.NOT_FOUND))
+			if (member.id === userId || (await isCouncilAdmin(env, member.id))) {
+				return status(403, buildError(ErrorCode.PROTECTED_MEMBER))
+			}
 			await removeCommittee(env, member.id, { actorId: userId, source: "web" })
 			return { success: true }
 		})

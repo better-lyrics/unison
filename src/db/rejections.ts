@@ -2,7 +2,11 @@ import { isCommittee } from "@/db/committee"
 import { releaseBookmarksForItem } from "@/db/council-bookmarks"
 import { type CouncilSource, recordCouncilEvent } from "@/db/council-events"
 import { type FeedFilters, buildOrderByClause } from "@/db/feed-filters"
-import { AUTO_HIDE_PREDICATE_JOINED, RANKING_EXPR_JOINED } from "@/db/predicates"
+import {
+	AUTO_HIDE_PREDICATE_JOINED,
+	RANKING_EXPR_JOINED,
+	UNDECIDED_LYRIC_JOINED,
+} from "@/db/predicates"
 import { isUniqueViolation } from "@/infra/database"
 import type { Confidence, Env, LyricsFormat, SyncType } from "@/types"
 
@@ -57,13 +61,9 @@ export async function getSealCandidates(
 				l.sync_type, l.created_at, l.current_revision_id
 			FROM lyrics l
 			LEFT JOIN users u ON u.id = l.submitter_id
-			WHERE l.deleted_at IS NULL
-				AND l.committee_approved_at IS NULL
+			WHERE ${UNDECIDED_LYRIC_JOINED}
 				AND l.effective_score > 0
 				AND NOT ${AUTO_HIDE_PREDICATE_JOINED}
-				AND NOT EXISTS (
-					SELECT 1 FROM rejections r WHERE r.lyrics_id = l.id AND r.revoked_at IS NULL
-				)
 				AND NOT EXISTS (
 					SELECT 1 FROM committee_members c WHERE c.user_id = l.submitter_id
 				)

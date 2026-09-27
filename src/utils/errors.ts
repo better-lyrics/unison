@@ -78,6 +78,7 @@ export const ErrorCode = {
 	BOOKMARK_CAP: "BOOKMARK_CAP",
 	NOT_COUNCIL_ADMIN: "NOT_COUNCIL_ADMIN",
 	INVALID_OPINION: "INVALID_OPINION",
+	PROTECTED_MEMBER: "PROTECTED_MEMBER",
 } as const
 
 export type ErrorCode = (typeof ErrorCode)[keyof typeof ErrorCode]
@@ -380,6 +381,10 @@ const TEMPLATES: Record<ErrorCode, Template> = {
 	NOT_COUNCIL_ADMIN: {
 		error: "Council admins only",
 		hint: "This action is limited to council admins.",
+	},
+	PROTECTED_MEMBER: {
+		error: "This member cannot be removed here",
+		hint: "Council admins, including you, are removed by a server admin.",
 	},
 	INVALID_OPINION: {
 		error: "Invalid opinion",

@@ -2,6 +2,7 @@ import { config } from "@/config"
 import { isCommittee } from "@/db/committee"
 import { type CouncilSource, recordCouncilEvent } from "@/db/council-events"
 import { type CouncilPerson, withTier } from "@/db/council-person"
+import { UNDECIDED_LYRIC_JOINED } from "@/db/predicates"
 import { type Person, resolvePeople } from "@/db/users"
 import { type D1Compat, advisoryXactLock } from "@/infra/database"
 import type { Env } from "@/types"
@@ -66,11 +67,17 @@ interface BookmarkRow {
 	created_at: number | string
 }
 
+const HELD_ITEM = `EXISTS (SELECT 1 FROM committee_members c WHERE c.user_id = b.user_id)
+	AND CASE WHEN b.item_type = 'seal'
+		THEN EXISTS (SELECT 1 FROM lyrics l WHERE l.id = b.item_id AND ${UNDECIDED_LYRIC_JOINED})
+		ELSE EXISTS (SELECT 1 FROM lyric_revisions r WHERE r.id = b.item_id AND r.status = 'pending')
+	END`
+
 const ACTIVE_SELECT = `SELECT b.id, b.user_id, b.item_type, b.item_id, b.created_at,
 		CASE WHEN b.item_type = 'seal' THEN b.item_id
 			ELSE (SELECT r.lyrics_id FROM lyric_revisions r WHERE r.id = b.item_id) END AS lyrics_id
 	 FROM council_bookmarks b
-	 WHERE b.released_at IS NULL AND b.created_at > ?`
+	 WHERE b.released_at IS NULL AND b.created_at > ? AND ${HELD_ITEM}`
 
 async function queryActive(
 	env: Env,
@@ -134,7 +141,9 @@ async function itemLyricsId(
 	const row =
 		itemType === "seal"
 			? await db
-					.prepare("SELECT id AS lyrics_id FROM lyrics WHERE id = ? AND deleted_at IS NULL")
+					.prepare(
+						`SELECT l.id AS lyrics_id FROM lyrics l WHERE l.id = ? AND ${UNDECIDED_LYRIC_JOINED}`
+					)
 					.bind(itemId)
 					.first<{ lyrics_id: number | string }>()
 			: await db
@@ -164,7 +173,8 @@ export async function createBookmark(
 		}
 		const held = await tx
 			.prepare(
-				"SELECT COUNT(*)::int AS n FROM council_bookmarks WHERE user_id = ? AND released_at IS NULL AND created_at > ?"
+				`SELECT COUNT(*)::int AS n FROM council_bookmarks b
+				 WHERE b.user_id = ? AND b.released_at IS NULL AND b.created_at > ? AND ${HELD_ITEM}`
 			)
 			.bind(userId, bookmarkActiveSince(now()))
 			.first<{ n: number }>()
