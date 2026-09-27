@@ -7,6 +7,7 @@
 @import "@braccato/core/styles/instrumental.css";
 
 @theme {
+  --breakpoint-triage: 53.75rem;
   --breakpoint-council: 68.75rem;
   --color-unison-bg: #0f0e13;
   --color-unison-bg-elevated: #141316;

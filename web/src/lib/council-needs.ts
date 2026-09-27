@@ -1,3 +1,4 @@
+import { groupByBookmark } from "./council-triage"
 import type { ApplicantView, EditItem, QueueItem } from "./council-types"
 import { formatElapsed, formatRemaining, plural } from "./format"
 
@@ -61,8 +62,7 @@ export function deriveNeeds({ queue, edits, applicants, meKeyId, now }: NeedsInp
     })
   }
 
-  const held = [...queue, ...edits].filter((i) => i.bookmark !== null && i.bookmark.expiresAt > now)
-  const mine = held.filter((i) => i.bookmark?.holder.keyId === meKeyId)
+  const { mine } = groupByBookmark<QueueItem | EditItem>([...queue, ...edits], meKeyId, now)
   const firstToGo = oldest(mine, (i) => i.bookmark?.expiresAt ?? 0)
   if (firstToGo?.bookmark) {
     needs.push({
@@ -75,13 +75,7 @@ export function deriveNeeds({ queue, edits, applicants, meKeyId, now }: NeedsInp
   }
 
   const expiring = oldest(
-    queue.filter(
-      (i) =>
-        i.bookmark !== null &&
-        i.bookmark.holder.keyId !== meKeyId &&
-        i.bookmark.expiresAt > now &&
-        i.bookmark.expiresAt - now < EXPIRING_SOON_SEC,
-    ),
+    groupByBookmark(queue, meKeyId, now).others.filter((i) => (i.bookmark?.expiresAt ?? 0) - now < EXPIRING_SOON_SEC),
     (i) => i.bookmark?.expiresAt ?? 0,
   )
   if (expiring?.bookmark) {

@@ -8,12 +8,24 @@ export const AUTHED_FETCH_ERRORS = {
   CONFLICT: "CONFLICT",
 } as const
 
-async function readServerError(res: Response): Promise<string | null> {
+export class AuthedFetchError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+    readonly hint: string | null = null,
+  ) {
+    super(message)
+    this.name = "AuthedFetchError"
+  }
+}
+
+async function readServerError(res: Response): Promise<{ error: string | null; hint: string | null }> {
+  const text = (value: unknown) => (typeof value === "string" && value.length > 0 ? value : null)
   try {
-    const body = (await res.json()) as { error?: unknown }
-    return typeof body.error === "string" && body.error.length > 0 ? body.error : null
+    const body = (await res.json()) as { error?: unknown; hint?: unknown }
+    return { error: text(body.error), hint: text(body.hint) }
   } catch {
-    return null
+    return { error: null, hint: null }
   }
 }
 
@@ -45,17 +57,14 @@ export async function authedFetch<T>(input: RequestInfo | URL, init?: RequestIni
     if (session) headers.authorization = `Bearer ${session.sessionToken}`
   }
   const res = await fetch(input, { ...init, headers })
-  if (res.status === 401) throw new Error(AUTHED_FETCH_ERRORS.AUTH_REQUIRED)
-  if (res.status === 429) throw new Error(AUTHED_FETCH_ERRORS.RATE_LIMITED)
-  if (res.status === 409) {
-    const message = await readServerError(res)
-    throw new Error(message ?? AUTHED_FETCH_ERRORS.CONFLICT)
-  }
+  if (res.status === 401) throw new AuthedFetchError(AUTHED_FETCH_ERRORS.AUTH_REQUIRED, 401)
+  if (res.status === 429) throw new AuthedFetchError(AUTHED_FETCH_ERRORS.RATE_LIMITED, 429)
   if (!res.ok) {
-    const message = await readServerError(res)
-    throw new Error(message ?? AUTHED_FETCH_ERRORS.REQUEST_FAILED)
+    const { error, hint } = await readServerError(res)
+    const fallback = res.status === 409 ? AUTHED_FETCH_ERRORS.CONFLICT : AUTHED_FETCH_ERRORS.REQUEST_FAILED
+    throw new AuthedFetchError(error ?? fallback, res.status, hint)
   }
   const body = (await res.json()) as ApiEnvelope<T>
-  if (!body.success) throw new Error(AUTHED_FETCH_ERRORS.REQUEST_FAILED)
+  if (!body.success) throw new AuthedFetchError(AUTHED_FETCH_ERRORS.REQUEST_FAILED, res.status)
   return body.data
 }

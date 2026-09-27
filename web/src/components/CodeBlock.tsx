@@ -1,9 +1,11 @@
+import { useStoredState } from "@/hooks/useStoredState"
+import { cn } from "@/lib/cn"
 import { IconCheck, IconCopy } from "@tabler/icons-react"
 import { Highlight, type Language, themes } from "prism-react-renderer"
 import {
-  createContext,
   Fragment,
   type ReactNode,
+  createContext,
   useCallback,
   useContext,
   useEffect,
@@ -11,7 +13,6 @@ import {
   useRef,
   useState,
 } from "react"
-import { cn } from "@/lib/cn"
 
 // bash is hand-tokenized; everything else is any language prism bundles (json, javascript, python, go, ...).
 export type CodeLang = Language | "bash"
@@ -26,21 +27,7 @@ const CodeLangContext = createContext<CodeLangValue | null>(null)
 const STORAGE_KEY = "unison:docs:code-lang"
 
 export function CodeLangProvider({ children, fallback = "cURL" }: { children: ReactNode; fallback?: string }) {
-  const [selected, setSelectedState] = useState(() => {
-    try {
-      return localStorage.getItem(STORAGE_KEY) ?? fallback
-    } catch {
-      return fallback
-    }
-  })
-  const setSelected = useCallback((label: string) => {
-    setSelectedState(label)
-    try {
-      localStorage.setItem(STORAGE_KEY, label)
-    } catch {
-      // storage may be unavailable (private mode); the in-memory choice still syncs across blocks
-    }
-  }, [])
+  const [selected, setSelected] = useStoredState(STORAGE_KEY, fallback)
   return <CodeLangContext.Provider value={{ selected, setSelected }}>{children}</CodeLangContext.Provider>
 }
 

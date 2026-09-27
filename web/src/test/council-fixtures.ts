@@ -11,7 +11,7 @@ import type {
   RosterMember,
 } from "@/lib/council-types"
 import { vi } from "vitest"
-import { fetchRouter, jsonResponse } from "./fetch-router"
+import { type FetchRoute, fetchRouter, jsonResponse } from "./fetch-router"
 
 export const NOW = 1_790_000_000
 const HOUR = 3600
@@ -213,9 +213,15 @@ export const MEMBER_SESSION: StoredSession = {
 export function stubCouncilApi(
   data: CouncilData = councilData(),
   council: { admin: boolean } | null = { admin: false },
+  extra: FetchRoute[] = [],
 ) {
   saveStoredSession(MEMBER_SESSION)
   const router = fetchRouter([
+    ...extra,
+    {
+      match: (url) => url.startsWith("/artwork?"),
+      respond: () => jsonResponse({ success: true, data: { artworkUrl: null } }),
+    },
     {
       match: (url) => url === "/auth/me",
       respond: () =>

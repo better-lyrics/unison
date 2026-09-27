@@ -60,6 +60,38 @@ describe("useCouncilShortcuts", () => {
     expect(approve).not.toHaveBeenCalled()
   })
 
+  it("completes a chord from one owner without running another owner's single key", () => {
+    const goActivity = vi.fn()
+    const approve = vi.fn()
+    render(
+      <>
+        <Harness map={{ "g a": goActivity }} />
+        <Harness map={{ a: approve }} />
+      </>,
+    )
+    press("g")
+    press("a")
+    expect(goActivity).toHaveBeenCalledTimes(1)
+    expect(approve).not.toHaveBeenCalled()
+    press("a")
+    expect(approve).toHaveBeenCalledTimes(1)
+  })
+
+  it("lets the most recently mounted owner win a shared key", () => {
+    const outer = vi.fn()
+    const inner = vi.fn()
+    const { rerender } = render(<Harness map={{ j: outer }} />)
+    rerender(
+      <>
+        <Harness map={{ j: outer }} />
+        <Harness map={{ j: inner }} />
+      </>,
+    )
+    press("j")
+    expect(inner).toHaveBeenCalledTimes(1)
+    expect(outer).not.toHaveBeenCalled()
+  })
+
   it("handles mod+k with either modifier", () => {
     const palette = vi.fn()
     render(<Harness map={{ "mod+k": palette }} />)

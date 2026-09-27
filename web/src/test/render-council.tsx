@@ -1,4 +1,5 @@
 import { AuthProvider } from "@/auth/AuthProvider"
+import { ToastViewport } from "@/components/ToastViewport"
 import { councilRoute } from "@/pages/council/routes"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { render } from "@testing-library/react"
@@ -13,6 +14,7 @@ export function renderCouncil(path = "/council", children: RouteObject[] = counc
         element: (
           <AuthProvider>
             <Outlet />
+            <ToastViewport />
           </AuthProvider>
         ),
         children: [{ ...councilRoute, children }],
