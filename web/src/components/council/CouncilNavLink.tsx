@@ -1,4 +1,5 @@
 import { useCouncilRole, useOpenWorkCount } from "@/hooks/useCouncilData"
+import { plural } from "@/lib/format"
 import { NavLink, type NavLinkProps } from "react-router-dom"
 
 interface CouncilNavLinkProps {
@@ -19,7 +20,7 @@ function MemberLink({ className, role, onClick }: CouncilNavLinkProps) {
       to="/council"
       role={role}
       onClick={onClick}
-      aria-label={open > 0 ? `Council, ${open} open items` : undefined}
+      aria-label={open > 0 ? `Council, ${plural(open, "open item", "open items")}` : undefined}
       className={(state) => {
         const base = typeof className === "function" ? className(state) : className
         return `${base ?? ""} inline-flex items-center gap-1.5`
