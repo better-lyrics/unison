@@ -19,6 +19,7 @@ import { toFeedResponse } from "@/routes/feed"
 import { toResponse, toSearchResponse } from "@/routes/lyrics.transformers"
 import { buildSealMarks, resolveActors } from "@/routes/marks"
 import type { Env, LyricsSubmission } from "@/types"
+import { ALBUM_HINT, isValidAlbum } from "@/utils/album"
 import { signedRequest } from "@/utils/auth"
 import { ErrorCode, buildError } from "@/utils/errors"
 import { readRateLimit } from "@/utils/read-rate-limit"
@@ -395,6 +396,9 @@ export const lyricsRoutes = (env: Env) =>
 			}
 			if ((p.artist as string).length > config.validation.artist.maxLength) {
 				return status(400, buildError(ErrorCode.ARTIST_TOO_LONG))
+			}
+			if (typeof p.album === "string" && !isValidAlbum(p.album.trim())) {
+				return status(400, buildError(ErrorCode.INVALID_PAYLOAD, { hint: ALBUM_HINT }))
 			}
 			if (
 				(p.duration as number) < config.validation.duration.min ||

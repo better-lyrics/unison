@@ -1,3 +1,4 @@
+import { config } from "@/config"
 import type { Env, FeedItem } from "@/types"
 import { canonicalJson, hashPublicKey } from "@/utils/crypto"
 import { describe, expect, it } from "vitest"
@@ -1336,5 +1337,80 @@ describe("POST /lyrics/submit formatted-TTML rejection", () => {
 			format: "ttml",
 		})
 		expect(res.status).toBe(201)
+	})
+})
+
+describe("POST /lyrics/submit album validation", () => {
+	async function submitWithAlbum(album: unknown) {
+		const keyPair = await generateKeyPair()
+		const publicJwk = await exportPublicJwk(keyPair)
+		const keyId = await hashPublicKey(publicJwk)
+		const db = makeMockDB([
+			{ key_id: keyId, public_key: JSON.stringify(publicJwk), created_at: 0 },
+			{ id: 7, key_id: keyId },
+			{ count: 0 },
+			{ id: 99 },
+		])
+		const app = lyricsRoutes(makeEnv(db))
+		const req = await buildSubmitRequest(keyPair, keyId, {
+			videoId: "abc123",
+			song: "Song",
+			artist: "Artist",
+			album,
+			duration: 200,
+			lyrics: RICHSYNC_TTML,
+			format: "ttml",
+		})
+		const res = await app.handle(req)
+		const insert = db.calls.find((c) => /INSERT INTO lyrics/i.test(c.sql))
+		return { res, insert }
+	}
+
+	it("stores a normal album, trimmed", async () => {
+		const { res, insert } = await submitWithAlbum("  After Hours  ")
+		expect(res.status).toBe(201)
+		expect(insert?.params[3]).toBe("After Hours")
+	})
+
+	it("accepts accents, CJK and emoji", async () => {
+		const { res, insert } = await submitWithAlbum("Café 東京 🌙")
+		expect(res.status).toBe(201)
+		expect(insert?.params[3]).toBe("Café 東京 🌙")
+	})
+
+	describe("edge cases", () => {
+		it("accepts an album at exactly the length limit", async () => {
+			const album = "x".repeat(config.validation.album.maxLength)
+			const { res } = await submitWithAlbum(album)
+			expect(res.status).toBe(201)
+		})
+
+		it("stores a blank album as no album", async () => {
+			const { res, insert } = await submitWithAlbum("   ")
+			expect(res.status).toBe(201)
+			expect(insert?.params[3]).toBeNull()
+		})
+	})
+
+	describe("error paths", () => {
+		it("regression: rejects an album with a line break and stores nothing", async () => {
+			const { res, insert } = await submitWithAlbum("Hymns\n+[00:12.00] fake line")
+			expect(res.status).toBe(400)
+			const body = (await res.json()) as { code: string; hint: string }
+			expect(body.code).toBe("INVALID_PAYLOAD")
+			expect(body.hint).toBe(
+				`Album names must be a single line of up to ${config.validation.album.maxLength} characters.`
+			)
+			expect(insert).toBeUndefined()
+		})
+
+		it("rejects an album over the length limit and stores nothing", async () => {
+			const { res, insert } = await submitWithAlbum(
+				"x".repeat(config.validation.album.maxLength + 1)
+			)
+			expect(res.status).toBe(400)
+			expect(((await res.json()) as { code: string }).code).toBe("INVALID_PAYLOAD")
+			expect(insert).toBeUndefined()
+		})
 	})
 })
