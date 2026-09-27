@@ -16,6 +16,7 @@ interface TriageListProps<T extends Bookmarkable> {
   tools?: ReactNode
   openAside?: string
   empty: ReactNode | null
+  flat?: boolean
 }
 
 const HEAD =
@@ -32,6 +33,7 @@ export function TriageList<T extends Bookmarkable>({
   tools,
   openAside,
   empty,
+  flat = false,
 }: TriageListProps<T>) {
   const mine = triage.mine.map(row)
   const open = triage.open.map(row)
@@ -53,56 +55,61 @@ export function TriageList<T extends Bookmarkable>({
             {fresh.count} new {fresh.count === 1 ? noun[0] : noun[1]}
           </button>
         ) : null}
-        {empty ?? (
-          <>
-            {mine.length > 0 ? (
-              <>
-                <div className={HEAD}>
-                  <IconBookmark aria-hidden className="size-3" stroke={1.5} />
-                  Your bookmarks
-                  <span className={COUNT}>{cap === null ? mine.length : `${mine.length}/${cap}`}</span>
-                </div>
-                <ul aria-label="Your bookmarks" className={ROWS}>
-                  {mine}
-                </ul>
-              </>
-            ) : null}
-            <div className={HEAD}>
-              Open <span className={COUNT}>{open.length}</span>
-              {openAside ? <span className={ASIDE}>{openAside}</span> : null}
-            </div>
-            <ul aria-label={label} className={ROWS}>
-              {open.length > 0 ? (
-                open
-              ) : (
-                <li className="px-1 py-2 text-xs text-unison-text-muted">No open items match this filter.</li>
-              )}
+        {empty ??
+          (flat ? (
+            <ul aria-label={label} className={cn(ROWS, "pt-1")}>
+              {[...mine, ...open, ...others]}
             </ul>
-            {others.length > 0 ? (
-              <>
-                <button
-                  type="button"
-                  aria-expanded={othersOpen}
-                  onClick={onToggleOthers}
-                  className={cn(HEAD, "cursor-pointer")}
-                >
-                  <IconChevronDown
-                    aria-hidden
-                    className={cn("size-3 transition-transform duration-300", !othersOpen && "-rotate-90")}
-                    stroke={1.5}
-                  />
-                  Bookmarked by others <span className={COUNT}>{others.length}</span>
-                  <span className={ASIDE}>Skip these unless they expire</span>
-                </button>
-                {othersOpen ? (
-                  <ul aria-label="Bookmarked by others" className={ROWS}>
-                    {others}
+          ) : (
+            <>
+              {mine.length > 0 ? (
+                <>
+                  <div className={HEAD}>
+                    <IconBookmark aria-hidden className="size-3" stroke={1.5} />
+                    Your bookmarks
+                    <span className={COUNT}>{cap === null ? mine.length : `${mine.length}/${cap}`}</span>
+                  </div>
+                  <ul aria-label="Your bookmarks" className={ROWS}>
+                    {mine}
                   </ul>
-                ) : null}
-              </>
-            ) : null}
-          </>
-        )}
+                </>
+              ) : null}
+              <div className={HEAD}>
+                Open <span className={COUNT}>{open.length}</span>
+                {openAside ? <span className={ASIDE}>{openAside}</span> : null}
+              </div>
+              <ul aria-label={label} className={ROWS}>
+                {open.length > 0 ? (
+                  open
+                ) : (
+                  <li className="px-1 py-2 text-xs text-unison-text-muted">No open items match this filter.</li>
+                )}
+              </ul>
+              {others.length > 0 ? (
+                <>
+                  <button
+                    type="button"
+                    aria-expanded={othersOpen}
+                    onClick={onToggleOthers}
+                    className={cn(HEAD, "cursor-pointer")}
+                  >
+                    <IconChevronDown
+                      aria-hidden
+                      className={cn("size-3 transition-transform duration-300", !othersOpen && "-rotate-90")}
+                      stroke={1.5}
+                    />
+                    Bookmarked by others <span className={COUNT}>{others.length}</span>
+                    <span className={ASIDE}>Skip these unless they expire</span>
+                  </button>
+                  {othersOpen ? (
+                    <ul aria-label="Bookmarked by others" className={ROWS}>
+                      {others}
+                    </ul>
+                  ) : null}
+                </>
+              ) : null}
+            </>
+          ))}
       </div>
       <div className="flex items-center justify-between gap-2 pt-2 text-xs text-unison-text-muted">
         <Switch checked={triage.autoAdvance} onChange={triage.setAutoAdvance}>

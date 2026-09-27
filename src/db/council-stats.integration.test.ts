@@ -96,6 +96,7 @@ describeIntegration("council overview stats (integration)", () => {
 				rejectsThisMonth: 1,
 				editsThisMonth: 1,
 				bookmarkCap: config.council.bookmarkCap,
+				bookmarkTtlSec: config.council.bookmarkTtlSec,
 			})
 			expect(stats.me.quota.quota).toBeGreaterThan(0)
 		})

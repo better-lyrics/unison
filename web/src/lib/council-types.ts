@@ -149,6 +149,7 @@ export interface CouncilOverview {
     editsThisMonth: number
     medianDecisionHours: number | null
     bookmarkCap: number
+    bookmarkTtlSec: number
   }
 }
 

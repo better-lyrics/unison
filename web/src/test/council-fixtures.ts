@@ -109,6 +109,7 @@ export function overview(overrides: Partial<CouncilOverview> = {}): CouncilOverv
       editsThisMonth: 9,
       medianDecisionHours: 18,
       bookmarkCap: 5,
+      bookmarkTtlSec: 3 * DAY,
     },
     ...overrides,
   }

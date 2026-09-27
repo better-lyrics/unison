@@ -29,6 +29,7 @@ export interface CouncilOverview {
 		editsThisMonth: number
 		medianDecisionHours: number | null
 		bookmarkCap: number
+		bookmarkTtlSec: number
 	}
 }
 
@@ -131,6 +132,7 @@ export async function getCouncilOverview(
 			editsThisMonth: count(["edit_approve", "edit_reject"], true),
 			medianDecisionHours: mine,
 			bookmarkCap: config.council.bookmarkCap,
+			bookmarkTtlSec: config.council.bookmarkTtlSec,
 		},
 	}
 }
