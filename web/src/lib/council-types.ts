@@ -163,6 +163,7 @@ export interface RosterMember extends CouncilPerson {
   editsThisMonth: number
   lastActiveAt: number | null
   weekly: number[]
+  lastWeek: { sealed: number; rejected: number; edits: number }
 }
 
 export type OpinionStance = "support" | "object"

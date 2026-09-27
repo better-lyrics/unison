@@ -150,6 +150,7 @@ export interface RosterMember extends CouncilPerson {
 	editsThisMonth: number
 	lastActiveAt: number | null
 	weekly: number[]
+	lastWeek: { sealed: number; rejected: number; edits: number }
 }
 
 export async function getCouncilRoster(
@@ -178,13 +179,18 @@ export async function getCouncilRoster(
 			.bind(DECISION_KINDS, monthStart, ids)
 			.all<{ actor_id: number | string; kind: string; n: number | string }>(),
 		env.DB.prepare(
-			`SELECT e.actor_id, ((e.created_at - ?) / ${WEEK}) AS week, COUNT(*) AS n
+			`SELECT e.actor_id, ((e.created_at - ?) / ${WEEK}) AS week, e.kind, COUNT(*) AS n
 			 FROM council_events e
 			 WHERE ${DECIDED} AND e.created_at >= ? AND e.created_at < ? AND e.actor_id = ANY(?)
-			 GROUP BY 1, 2`
+			 GROUP BY 1, 2, 3`
 		)
 			.bind(weeksStart, DECISION_KINDS, weeksStart, now, ids)
-			.all<{ actor_id: number | string; week: number | string; n: number | string }>(),
+			.all<{
+				actor_id: number | string
+				week: number | string
+				kind: string
+				n: number | string
+			}>(),
 		env.DB.prepare(
 			"SELECT actor_id, MAX(created_at) AS at FROM council_events WHERE actor_id = ANY(?) GROUP BY 1"
 		)
@@ -202,8 +208,15 @@ export async function getCouncilRoster(
 				.filter((r) => Number(r.actor_id) === userId && list.includes(r.kind))
 				.reduce((n, r) => n + Number(r.n), 0)
 		const buckets = Array.from({ length: ROSTER_WEEKS }, () => 0)
+		const lastWeek = { sealed: 0, rejected: 0, edits: 0 }
 		for (const r of weekly.results) {
-			if (Number(r.actor_id) === userId) buckets[Number(r.week)] += Number(r.n)
+			if (Number(r.actor_id) !== userId) continue
+			const week = Number(r.week)
+			buckets[week] += Number(r.n)
+			if (week !== ROSTER_WEEKS - 1) continue
+			if (r.kind === "seal") lastWeek.sealed += Number(r.n)
+			else if (r.kind === "reject") lastWeek.rejected += Number(r.n)
+			else lastWeek.edits += Number(r.n)
 		}
 		const last = lastActive.results.find((r) => Number(r.actor_id) === userId)
 		return [
@@ -218,6 +231,7 @@ export async function getCouncilRoster(
 				editsThisMonth: kinds(["edit_approve", "edit_reject"]),
 				lastActiveAt: last ? Number(last.at) : null,
 				weekly: buckets,
+				lastWeek,
 			},
 		]
 	})

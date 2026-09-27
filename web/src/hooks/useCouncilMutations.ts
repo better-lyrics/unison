@@ -15,6 +15,7 @@ import type {
   ApplicantView,
   BookmarkItemType,
   BookmarkView,
+  CouncilEvent,
   CouncilPerson,
   EditItem,
   EditsPayload,
@@ -126,6 +127,22 @@ function undoOf(decision: Decision): (() => Promise<void>) | null {
   if (decision.kind === "seal") return () => unsealLyric(decision.item.id)
   if (decision.kind === "reject") return () => undoRejectLyric(decision.item.id)
   return null
+}
+
+export function useUndoDecision() {
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: (event: CouncilEvent) => {
+      if (!event.lyric) throw new Error(AUTHED_FETCH_ERRORS.REQUEST_FAILED)
+      return event.kind === "seal" ? unsealLyric(event.lyric.id) : undoRejectLyric(event.lyric.id)
+    },
+    onSuccess: (_, event) => {
+      const verb = event.kind === "seal" ? DONE.seal.undo : DONE.reject.undo
+      pushToast({ kind: "info", message: `${verb} “${event.lyric?.song}”` })
+    },
+    onError: (error) => councilErrorToast(error, "undo the decision"),
+    onSettled: () => refreshCouncil(client),
+  })
 }
 
 function isQueueDecision(decision: Decision): decision is Extract<Decision, { item: QueueItem }> {

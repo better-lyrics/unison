@@ -1,5 +1,6 @@
 import { useSession } from "@/auth/useSession"
 import {
+  type EventsQuery,
   fetchCouncilApplicants,
   fetchCouncilEdits,
   fetchCouncilEvents,
@@ -7,7 +8,7 @@ import {
   fetchCouncilOverview,
   fetchCouncilQueue,
 } from "@/lib/council-api"
-import { keepPreviousData, useQuery } from "@tanstack/react-query"
+import { keepPreviousData, useInfiniteQuery, useQuery } from "@tanstack/react-query"
 
 export const councilKeys = {
   all: ["council"] as const,
@@ -15,6 +16,7 @@ export const councilKeys = {
   edits: ["council", "edits"] as const,
   overview: (scope: "council" | "me") => ["council", "overview", scope] as const,
   events: (filters: object) => ["council", "events", filters] as const,
+  log: (filters: EventsQuery) => ["council", "log", filters] as const,
   members: ["council", "members"] as const,
   applicants: (includeBelowCutoff: boolean) => ["council", "applicants", includeBelowCutoff] as const,
 }
@@ -98,6 +100,19 @@ export function useLyricCouncilHistory(lyricId: number) {
     queryFn: ({ signal }) => fetchCouncilEvents({ lyric: lyricId }, signal),
     enabled: role !== null,
     staleTime: 30_000,
+  })
+}
+
+export function useCouncilLog(filters: Omit<EventsQuery, "cursor">) {
+  const role = useCouncilRole()
+  return useInfiniteQuery({
+    queryKey: councilKeys.log(filters),
+    queryFn: ({ pageParam, signal }) => fetchCouncilEvents({ ...filters, cursor: pageParam ?? undefined }, signal),
+    initialPageParam: null as string | null,
+    getNextPageParam: (page) => page.nextCursor,
+    enabled: role !== null,
+    staleTime: 15_000,
+    placeholderData: keepPreviousData,
   })
 }
 

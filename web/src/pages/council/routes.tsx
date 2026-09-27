@@ -1,4 +1,5 @@
 import type { RouteObject } from "react-router-dom"
+import { CouncilActivityPage } from "./CouncilActivityPage"
 import { CouncilApplicantsPage } from "./CouncilApplicantsPage"
 import { CouncilBookmarksPage } from "./CouncilBookmarksPage"
 import { CouncilEditsPage } from "./CouncilEditsPage"
@@ -16,5 +17,6 @@ export const councilRoute = {
     { path: "edits", element: <CouncilEditsPage /> },
     { path: "bookmarks", element: <CouncilBookmarksPage /> },
     { path: "applicants", element: <CouncilApplicantsPage /> },
+    { path: "activity", element: <CouncilActivityPage /> },
   ] as RouteObject[],
 } satisfies RouteObject

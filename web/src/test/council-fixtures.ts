@@ -127,6 +127,7 @@ export function rosterMember(person: CouncilPerson, overrides: Partial<RosterMem
     editsThisMonth: 9,
     lastActiveAt: NOW - HOUR,
     weekly: [3, 5, 2, 6, 4, 7, 5, 8],
+    lastWeek: { sealed: 1, rejected: 4, edits: 3 },
     ...overrides,
   }
 }
