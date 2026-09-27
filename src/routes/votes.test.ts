@@ -562,6 +562,7 @@ describe("POST /lyrics/:id/boost", () => {
 		const res = await app.handle(boostReq(5, "POST", { authorization: "Bearer tok" }))
 		expect(res.status).toBe(200)
 		expect(await res.json()).toEqual({ success: true, quota: BOOST_QUOTA })
+		expect(vi.mocked(createBoost)).toHaveBeenCalledWith(expect.anything(), 7, 5, "web")
 	})
 
 	it("maps over_quota to 429 BOOST_QUOTA_EXCEEDED", async () => {
@@ -611,6 +612,7 @@ describe("DELETE /lyrics/:id/boost", () => {
 		const res = await app.handle(boostReq(5, "DELETE", { authorization: "Bearer tok" }))
 		expect(res.status).toBe(200)
 		expect(await res.json()).toEqual({ success: true })
+		expect(vi.mocked(revokeBoost)).toHaveBeenCalledWith(expect.anything(), 7, 5, "web")
 	})
 
 	it("maps forbidden to 403 BOOST_NOT_OWNER", async () => {
@@ -775,6 +777,7 @@ describe("bot-authenticated committee bridge", () => {
 		const res = await app().handle(botReq(5, "POST", { keyId: KEY }))
 		expect(res.status).toBe(200)
 		expect(await res.json()).toEqual({ success: true, quota: BOOST_QUOTA })
+		expect(vi.mocked(createBoost)).toHaveBeenCalledWith(expect.anything(), 7, 5, "discord")
 	})
 
 	it("POST maps not_committee to 403", async () => {
@@ -811,6 +814,7 @@ describe("bot-authenticated committee bridge", () => {
 		const res = await app().handle(botReq(5, "DELETE", { keyId: KEY }))
 		expect(res.status).toBe(200)
 		expect(await res.json()).toEqual({ success: true })
+		expect(vi.mocked(revokeBoost)).toHaveBeenCalledWith(expect.anything(), 7, 5, "discord")
 	})
 
 	it("DELETE maps forbidden to 403 BOOST_NOT_OWNER", async () => {

@@ -1,5 +1,7 @@
 import { config } from "@/config"
 import { isCommittee } from "@/db/committee"
+import { releaseBookmarksForItem } from "@/db/council-bookmarks"
+import { type CouncilSource, recordCouncilEvent } from "@/db/council-events"
 import { getCuratorRank } from "@/db/leaderboard"
 import { invalidateCacheForLyric } from "@/db/lyrics"
 import { isUniqueViolation } from "@/infra/database"
@@ -58,7 +60,8 @@ export async function getQuota(env: Env, boosterId: number): Promise<BoostQuota>
 export async function createBoost(
 	env: Env,
 	boosterId: number,
-	lyricsId: number
+	lyricsId: number,
+	source: CouncilSource
 ): Promise<BoostResult> {
 	if (!(await isCommittee(env, boosterId))) {
 		return { ok: false, reason: "not_committee" }
@@ -104,16 +107,25 @@ export async function createBoost(
 			}
 
 			const nowEpoch = Math.floor(Date.now() / 1000)
-			await tx
-				.prepare("INSERT INTO boosts (booster_id, lyrics_id) VALUES (?, ?)")
+			const boost = await tx
+				.prepare("INSERT INTO boosts (booster_id, lyrics_id) VALUES (?, ?) RETURNING id")
 				.bind(boosterId, lyricsId)
-				.run()
+				.first<{ id: number | string }>()
 			await tx
 				.prepare(
 					"UPDATE lyrics SET committee_approved_at = ?, committee_approved_by = ? WHERE id = ?"
 				)
 				.bind(nowEpoch, boosterId, lyricsId)
 				.run()
+			await recordCouncilEvent(tx, {
+				actorId: boosterId,
+				kind: "seal",
+				source,
+				lyricsId,
+				refId: Number(boost?.id),
+				at: nowEpoch,
+			})
+			await releaseBookmarksForItem(tx, "seal", lyricsId)
 
 			const usedAfter = used + 1
 			return {
@@ -134,16 +146,31 @@ export async function createBoost(
 	return result
 }
 
-async function clearBoost(env: Env, boostId: number, lyricsId: number): Promise<void> {
+async function clearBoost(
+	env: Env,
+	boostId: number,
+	lyricsId: number,
+	actorId: number | null,
+	source: CouncilSource
+): Promise<void> {
 	const nowEpoch = Math.floor(Date.now() / 1000)
-	await env.DB.prepare("UPDATE boosts SET revoked_at = ? WHERE id = ?")
-		.bind(nowEpoch, boostId)
-		.run()
-	await env.DB.prepare(
-		"UPDATE lyrics SET committee_approved_at = NULL, committee_approved_by = NULL WHERE id = ?"
-	)
-		.bind(lyricsId)
-		.run()
+	await env.DB.transaction(async (tx) => {
+		await tx.prepare("UPDATE boosts SET revoked_at = ? WHERE id = ?").bind(nowEpoch, boostId).run()
+		await tx
+			.prepare(
+				"UPDATE lyrics SET committee_approved_at = NULL, committee_approved_by = NULL WHERE id = ?"
+			)
+			.bind(lyricsId)
+			.run()
+		await recordCouncilEvent(tx, {
+			actorId,
+			kind: "unseal",
+			source,
+			lyricsId,
+			refId: boostId,
+			at: nowEpoch,
+		})
+	})
 
 	await invalidateCacheForLyric(env, lyricsId)
 }
@@ -151,7 +178,8 @@ async function clearBoost(env: Env, boostId: number, lyricsId: number): Promise<
 export async function revokeBoost(
 	env: Env,
 	actorId: number,
-	lyricsId: number
+	lyricsId: number,
+	source: CouncilSource
 ): Promise<RevokeResult> {
 	const boost = await env.DB.prepare(
 		"SELECT id, booster_id FROM boosts WHERE lyrics_id = ? AND revoked_at IS NULL"
@@ -165,7 +193,7 @@ export async function revokeBoost(
 		return { ok: false, reason: "forbidden" }
 	}
 
-	await clearBoost(env, boost.id, lyricsId)
+	await clearBoost(env, boost.id, lyricsId, actorId, source)
 	return { ok: true }
 }
 
@@ -179,6 +207,6 @@ export async function revokeBoostByAdmin(env: Env, lyricsId: number): Promise<Re
 		return { ok: false, reason: "not_found" }
 	}
 
-	await clearBoost(env, boost.id, lyricsId)
+	await clearBoost(env, boost.id, lyricsId, null, "admin")
 	return { ok: true }
 }

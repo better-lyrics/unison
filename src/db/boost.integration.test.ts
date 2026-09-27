@@ -5,6 +5,8 @@ import type { Env } from "@/types"
 import pg from "pg"
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest"
 import { createBoost, getQuota, revokeBoost, revokeBoostByAdmin } from "./boost"
+import { createBookmark, listActiveBookmarks } from "./council-bookmarks"
+import { listCouncilEvents } from "./council-events"
 
 const { Pool } = pg
 
@@ -108,14 +110,14 @@ describeIntegration("boost store (integration)", () => {
 			const booster = await newUser()
 			const submitter = await newUser()
 			const lyricsId = await insertLyric(submitter, "vidNC")
-			const result = await createBoost(env, booster, lyricsId)
+			const result = await createBoost(env, booster, lyricsId, "web")
 			expect(result).toEqual({ ok: false, reason: "not_committee" })
 		})
 
 		it("lyric_not_found for a bogus lyrics id", async () => {
 			const booster = await newUser()
 			await addToCommittee(booster)
-			const result = await createBoost(env, booster, 999999)
+			const result = await createBoost(env, booster, 999999, "web")
 			expect(result).toEqual({ ok: false, reason: "lyric_not_found" })
 		})
 
@@ -123,7 +125,7 @@ describeIntegration("boost store (integration)", () => {
 			const booster = await newUser()
 			await addToCommittee(booster)
 			const lyricsId = await insertLyric(booster, "vidSelf")
-			const result = await createBoost(env, booster, lyricsId)
+			const result = await createBoost(env, booster, lyricsId, "web")
 			expect(result).toEqual({ ok: false, reason: "self" })
 		})
 
@@ -133,7 +135,7 @@ describeIntegration("boost store (integration)", () => {
 			const otherCommittee = await newUser()
 			await addToCommittee(otherCommittee)
 			const lyricsId = await insertLyric(otherCommittee, "vidTC")
-			const result = await createBoost(env, booster, lyricsId)
+			const result = await createBoost(env, booster, lyricsId, "web")
 			expect(result).toEqual({ ok: false, reason: "target_committee" })
 		})
 
@@ -142,8 +144,8 @@ describeIntegration("boost store (integration)", () => {
 			await addToCommittee(booster)
 			const submitter = await newUser()
 			const lyricsId = await insertLyric(submitter, "vidAB")
-			expect((await createBoost(env, booster, lyricsId)).ok).toBe(true)
-			const result = await createBoost(env, booster, lyricsId)
+			expect((await createBoost(env, booster, lyricsId, "web")).ok).toBe(true)
+			const result = await createBoost(env, booster, lyricsId, "web")
 			expect(result).toEqual({ ok: false, reason: "already_boosted" })
 		})
 
@@ -154,9 +156,9 @@ describeIntegration("boost store (integration)", () => {
 			const l1 = await insertLyric(submitter, "vidQ1")
 			const l2 = await insertLyric(submitter, "vidQ2")
 			const l3 = await insertLyric(submitter, "vidQ3")
-			expect((await createBoost(env, booster, l1)).ok).toBe(true)
-			expect((await createBoost(env, booster, l2)).ok).toBe(true)
-			const result = await createBoost(env, booster, l3)
+			expect((await createBoost(env, booster, l1, "web")).ok).toBe(true)
+			expect((await createBoost(env, booster, l2, "web")).ok).toBe(true)
+			const result = await createBoost(env, booster, l3, "web")
 			expect(result).toEqual({ ok: false, reason: "over_quota" })
 		})
 	})
@@ -168,7 +170,7 @@ describeIntegration("boost store (integration)", () => {
 			const submitter = await newUser()
 			const lyricsId = await insertLyric(submitter, "vidHappy")
 
-			const result = await createBoost(env, booster, lyricsId)
+			const result = await createBoost(env, booster, lyricsId, "web")
 			expect(result.ok).toBe(true)
 
 			const boost = await activeBoostRow(lyricsId)
@@ -189,8 +191,8 @@ describeIntegration("boost store (integration)", () => {
 			const submitter = await newUser()
 			const lyricsId = await insertLyric(submitter, "vidRevoke")
 
-			expect((await createBoost(env, booster, lyricsId)).ok).toBe(true)
-			expect(await revokeBoost(env, booster, lyricsId)).toEqual({ ok: true })
+			expect((await createBoost(env, booster, lyricsId, "web")).ok).toBe(true)
+			expect(await revokeBoost(env, booster, lyricsId, "web")).toEqual({ ok: true })
 
 			const mirror = await lyricMirror(lyricsId)
 			expect(mirror.committee_approved_at).toBeNull()
@@ -202,7 +204,7 @@ describeIntegration("boost store (integration)", () => {
 			)
 			expect(revoked.revoked_at).not.toBeNull()
 
-			expect((await createBoost(env, booster, lyricsId)).ok).toBe(true)
+			expect((await createBoost(env, booster, lyricsId, "web")).ok).toBe(true)
 		})
 
 		it("forbidden when a non-booster tries to revoke", async () => {
@@ -213,8 +215,8 @@ describeIntegration("boost store (integration)", () => {
 			const submitter = await newUser()
 			const lyricsId = await insertLyric(submitter, "vidForbidden")
 
-			expect((await createBoost(env, booster, lyricsId)).ok).toBe(true)
-			expect(await revokeBoost(env, other, lyricsId)).toEqual({
+			expect((await createBoost(env, booster, lyricsId, "web")).ok).toBe(true)
+			expect(await revokeBoost(env, other, lyricsId, "web")).toEqual({
 				ok: false,
 				reason: "forbidden",
 			})
@@ -224,7 +226,10 @@ describeIntegration("boost store (integration)", () => {
 			const actor = await newUser()
 			const submitter = await newUser()
 			const lyricsId = await insertLyric(submitter, "vidNoActive")
-			expect(await revokeBoost(env, actor, lyricsId)).toEqual({ ok: false, reason: "not_found" })
+			expect(await revokeBoost(env, actor, lyricsId, "web")).toEqual({
+				ok: false,
+				reason: "not_found",
+			})
 		})
 	})
 
@@ -235,7 +240,7 @@ describeIntegration("boost store (integration)", () => {
 			const submitter = await newUser()
 			const lyricsId = await insertLyric(submitter, "vidAdminRevoke")
 
-			expect((await createBoost(env, booster, lyricsId)).ok).toBe(true)
+			expect((await createBoost(env, booster, lyricsId, "web")).ok).toBe(true)
 			expect(await revokeBoostByAdmin(env, lyricsId)).toEqual({ ok: true })
 
 			const mirror = await lyricMirror(lyricsId)
@@ -248,13 +253,76 @@ describeIntegration("boost store (integration)", () => {
 			)
 			expect(revoked.revoked_at).not.toBeNull()
 
-			expect((await createBoost(env, booster, lyricsId)).ok).toBe(true)
+			expect((await createBoost(env, booster, lyricsId, "web")).ok).toBe(true)
 		})
 
 		it("not_found when there is no active boost", async () => {
 			const submitter = await newUser()
 			const lyricsId = await insertLyric(submitter, "vidAdminNoBoost")
 			expect(await revokeBoostByAdmin(env, lyricsId)).toEqual({ ok: false, reason: "not_found" })
+		})
+	})
+
+	describe("council log", () => {
+		const log = async () =>
+			(await listCouncilEvents(env, { includeBookmarks: false, limit: 50 })).events
+
+		it("logs a seal with its booster and source", async () => {
+			const booster = await newUser()
+			await addToCommittee(booster)
+			const lyricsId = await insertLyric(await newUser(), "vidLogSeal")
+			expect((await createBoost(env, booster, lyricsId, "discord")).ok).toBe(true)
+			const events = await log()
+			expect(events).toHaveLength(1)
+			expect(events[0]).toMatchObject({ kind: "seal", source: "discord", undone: false })
+			expect(events[0].actor?.userId).toBe(booster)
+			expect(events[0].lyric?.id).toBe(lyricsId)
+		})
+
+		it("logs an unseal by its actor and marks the seal undone", async () => {
+			const booster = await newUser()
+			await addToCommittee(booster)
+			const lyricsId = await insertLyric(await newUser(), "vidLogUnseal")
+			await createBoost(env, booster, lyricsId, "web")
+			await revokeBoost(env, booster, lyricsId, "web")
+			const events = await log()
+			expect(events.map((e) => [e.kind, e.undone])).toEqual([
+				["unseal", false],
+				["seal", true],
+			])
+			expect(events[0].actor?.userId).toBe(booster)
+		})
+
+		it("logs an admin revoke without an actor", async () => {
+			const booster = await newUser()
+			await addToCommittee(booster)
+			const lyricsId = await insertLyric(await newUser(), "vidLogAdmin")
+			await createBoost(env, booster, lyricsId, "web")
+			await revokeBoostByAdmin(env, lyricsId)
+			const [unseal] = await log()
+			expect(unseal).toMatchObject({ kind: "unseal", source: "admin", actor: null })
+		})
+
+		it("logs nothing for a refused seal", async () => {
+			const booster = await newUser()
+			await addToCommittee(booster)
+			const lyricsId = await insertLyric(booster, "vidLogSelf")
+			expect(await createBoost(env, booster, lyricsId, "web")).toEqual({
+				ok: false,
+				reason: "self",
+			})
+			expect(await log()).toEqual([])
+		})
+
+		it("lifts an active bookmark on the sealed lyric", async () => {
+			const booster = await newUser()
+			const holder = await newUser()
+			await addToCommittee(booster)
+			await addToCommittee(holder)
+			const lyricsId = await insertLyric(await newUser(), "vidLogBookmark")
+			expect((await createBookmark(env, holder, "seal", lyricsId, "web")).ok).toBe(true)
+			await createBoost(env, booster, lyricsId, "web")
+			expect(await listActiveBookmarks(env)).toEqual([])
 		})
 	})
 
@@ -273,13 +341,13 @@ describeIntegration("boost store (integration)", () => {
 			expect(before.remaining).toBe(2)
 			expect(before.resetsAt).toBeGreaterThan(now)
 
-			await createBoost(env, booster, l1)
-			await createBoost(env, booster, l2)
+			await createBoost(env, booster, l1, "web")
+			await createBoost(env, booster, l2, "web")
 			const full = await getQuota(env, booster)
 			expect(full.used).toBe(2)
 			expect(full.remaining).toBe(0)
 
-			await revokeBoost(env, booster, l1)
+			await revokeBoost(env, booster, l1, "web")
 			const freed = await getQuota(env, booster)
 			expect(freed.used).toBe(1)
 			expect(freed.remaining).toBe(1)
@@ -293,7 +361,7 @@ describeIntegration("boost store (integration)", () => {
 				["cc1", "cc2", "cc3", "cc4", "cc5"].map((v) => insertLyric(submitter, v))
 			)
 
-			const results = await Promise.all(lyricIds.map((id) => createBoost(env, booster, id)))
+			const results = await Promise.all(lyricIds.map((id) => createBoost(env, booster, id, "web")))
 
 			expect(results.filter((r) => r.ok).length).toBe(2)
 			expect(results.filter((r) => !r.ok && r.reason === "over_quota").length).toBe(3)
