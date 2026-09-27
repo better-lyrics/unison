@@ -2,6 +2,7 @@ import { cleanup, render, screen, waitFor } from "@testing-library/react"
 import { MemoryRouter, Route, Routes, useParams } from "react-router-dom"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { clearAsyncDataCache } from "@/hooks/useAsyncData"
+import { QueryProvider } from "@/lib/queryClient"
 import { UserPage } from "./UserPage"
 
 const keyId = "a".repeat(64)
@@ -13,13 +14,15 @@ function HandleProbe() {
 
 function renderAt(path: string) {
   return render(
-    <MemoryRouter initialEntries={[path]}>
-      <Routes>
-        <Route path="/curator/:keyId" element={<UserPage />} />
-        <Route path="/curator" element={<UserPage />} />
-        <Route path="/u/:nickname" element={<HandleProbe />} />
-      </Routes>
-    </MemoryRouter>,
+    <QueryProvider>
+      <MemoryRouter initialEntries={[path]}>
+        <Routes>
+          <Route path="/curator/:keyId" element={<UserPage />} />
+          <Route path="/curator" element={<UserPage />} />
+          <Route path="/u/:nickname" element={<HandleProbe />} />
+        </Routes>
+      </MemoryRouter>
+    </QueryProvider>,
   )
 }
 

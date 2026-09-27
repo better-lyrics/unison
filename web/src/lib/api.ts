@@ -11,6 +11,8 @@ import type {
   LyricsSearchHit,
   QueueEntry,
   SongsLeaderboardResponse,
+  SubmissionSort,
+  SubmissionSyncType,
   UserGamification,
   UserRankResponse,
   UserSubmissionsResponse,
@@ -46,10 +48,26 @@ export async function fetchUserByHandle(handle: string): Promise<{ keyId: string
   return getJson<{ keyId: string }>(`/users/by-handle/${encodeURIComponent(handle)}`)
 }
 
-export async function fetchUserSubmissions(keyId: string, cursor?: string): Promise<UserSubmissionsResponse> {
+export interface UserSubmissionsQuery {
+  search?: string
+  syncType?: SubmissionSyncType
+  sort?: SubmissionSort
+  cursor?: string
+}
+
+export async function fetchUserSubmissions(
+  keyId: string,
+  query: UserSubmissionsQuery = {},
+): Promise<UserSubmissionsResponse> {
   if (IS_SPA_EXPANSION_SEED) return (await import("./dev-seed")).seedUserSubmissions(keyId)
-  const params = cursor !== undefined ? `?cursor=${encodeURIComponent(cursor)}` : ""
-  return getJson<UserSubmissionsResponse>(`/users/${encodeURIComponent(keyId)}/submissions${params}`)
+  const params = new URLSearchParams()
+  const search = query.search?.trim()
+  if (search) params.set("q", search)
+  if (query.syncType) params.set("syncType", query.syncType)
+  if (query.sort && query.sort !== "newest") params.set("sort", query.sort)
+  if (query.cursor !== undefined) params.set("cursor", query.cursor)
+  const qs = params.toString()
+  return getJson<UserSubmissionsResponse>(`/users/${encodeURIComponent(keyId)}/submissions${qs ? `?${qs}` : ""}`)
 }
 
 export async function fetchBadgeCatalogue(): Promise<BadgeCatalogue> {

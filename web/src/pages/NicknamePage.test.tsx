@@ -3,6 +3,7 @@ import { MemoryRouter, Route, Routes } from "react-router-dom"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { SessionContext } from "@/auth/AuthProvider"
 import { clearAsyncDataCache } from "@/hooks/useAsyncData"
+import { QueryProvider } from "@/lib/queryClient"
 import { NicknamePage } from "./NicknamePage"
 
 const keyId = "a".repeat(64)
@@ -27,11 +28,13 @@ function notFound(): Promise<Response> {
 
 function renderAt(path: string) {
   return render(
-    <MemoryRouter initialEntries={[path]}>
-      <Routes>
-        <Route path="/u/:nickname" element={<NicknamePage />} />
-      </Routes>
-    </MemoryRouter>,
+    <QueryProvider>
+      <MemoryRouter initialEntries={[path]}>
+        <Routes>
+          <Route path="/u/:nickname" element={<NicknamePage />} />
+        </Routes>
+      </MemoryRouter>
+    </QueryProvider>,
   )
 }
 
@@ -105,13 +108,15 @@ describe("NicknamePage", () => {
     )
 
     render(
-      <SessionContext.Provider value={ownerSession}>
-        <MemoryRouter initialEntries={["/u/aurorawynter"]}>
-          <Routes>
-            <Route path="/u/:nickname" element={<NicknamePage />} />
-          </Routes>
-        </MemoryRouter>
-      </SessionContext.Provider>,
+      <QueryProvider>
+        <SessionContext.Provider value={ownerSession}>
+          <MemoryRouter initialEntries={["/u/aurorawynter"]}>
+            <Routes>
+              <Route path="/u/:nickname" element={<NicknamePage />} />
+            </Routes>
+          </MemoryRouter>
+        </SessionContext.Provider>
+      </QueryProvider>,
     )
     await waitFor(() => expect(screen.getByText("Aurora Wynter")).toBeTruthy())
     expect(screen.getByTestId("nickname-editor")).toBeTruthy()

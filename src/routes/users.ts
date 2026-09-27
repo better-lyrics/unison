@@ -1,7 +1,7 @@
 import { config } from "@/config"
 import { getUserBadges, setFeatured } from "@/db/badges"
 import { getFulfillmentStatsBySubmitter } from "@/db/fulfillments"
-import { getSubmissionsByUser } from "@/db/profile"
+import { decodeSubmissionCursor, encodeSubmissionCursor, getSubmissionsByUser } from "@/db/profile"
 import { resolveKeyIdByHandle } from "@/db/users"
 import type { Env } from "@/types"
 import { eitherAuth } from "@/utils/either-auth"
@@ -11,11 +11,6 @@ import { Elysia, t } from "elysia"
 
 const DEFAULT_LIMIT = 20
 const MAX_LIMIT = 50
-
-function parseCursor(raw: string): { createdAt: number; id: number } {
-	const [createdAtStr, idStr] = raw.split(":")
-	return { createdAt: Number(createdAtStr), id: Number(idStr) }
-}
 
 function parseFeaturedKeys(body: unknown): string[] | null {
 	if (!body || typeof body !== "object") return null
@@ -41,9 +36,15 @@ export const userRoutes = (env: Env) =>
 			"/:keyId/submissions",
 			async ({ params, query, env }) => {
 				const limit = query.limit ?? DEFAULT_LIMIT
-				const cursor = query.cursor ? parseCursor(query.cursor) : null
+				const cursor = query.cursor ? decodeSubmissionCursor(query.cursor) : null
+				const sort = query.sort ?? "newest"
+				const search = query.q?.trim()
 
-				const rows = await getSubmissionsByUser(env, params.keyId, limit + 1, cursor)
+				const rows = await getSubmissionsByUser(env, params.keyId, limit + 1, cursor, {
+					search: search ? search : undefined,
+					syncType: query.syncType,
+					sort,
+				})
 
 				const hasMore = rows.length > limit
 				const submissions = hasMore ? rows.slice(0, limit) : rows
@@ -53,7 +54,7 @@ export const userRoutes = (env: Env) =>
 				} = { submissions }
 				if (hasMore) {
 					const last = submissions[submissions.length - 1]
-					data.nextCursor = `${last.createdAt}:${last.id}`
+					data.nextCursor = encodeSubmissionCursor(last, sort)
 				}
 
 				return { success: true, data }
@@ -63,6 +64,18 @@ export const userRoutes = (env: Env) =>
 				query: t.Object({
 					limit: t.Optional(t.Numeric({ minimum: 1, maximum: MAX_LIMIT })),
 					cursor: t.Optional(t.String({ pattern: "^[0-9]+:[0-9]+$" })),
+					q: t.Optional(t.String({ maxLength: 100 })),
+					syncType: t.Optional(
+						t.Union([t.Literal("richsync"), t.Literal("linesync"), t.Literal("plain")])
+					),
+					sort: t.Optional(
+						t.Union([
+							t.Literal("newest"),
+							t.Literal("oldest"),
+							t.Literal("most_votes"),
+							t.Literal("least_votes"),
+						])
+					),
 				}),
 			}
 		)

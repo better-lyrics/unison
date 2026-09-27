@@ -224,4 +224,179 @@ describeIntegration("user badges and featured routes (integration)", () => {
 		)
 		expect(res.status).toBe(401)
 	})
+
+	describe("GET /users/:keyId/submissions filters", () => {
+		const keyId = "c".repeat(64)
+
+		interface SubmissionSeed {
+			song: string
+			artist: string
+			syncType: "richsync" | "linesync" | "plain"
+			voteCount: number
+			createdAt: number
+		}
+
+		async function insertSubmission(submitterId: number, seed: SubmissionSeed): Promise<void> {
+			videoSeq++
+			await pool.query(
+				`INSERT INTO lyrics
+					(video_id, song, artist, duration, song_norm, artist_norm, lyrics, format, sync_type,
+					 submitter_id, confidence, effective_score, upvotes, downvotes, vote_count, created_at)
+				 VALUES ($1,$2,$3,180,LOWER($2),LOWER($3),'gz','lrc',$4,$5,'low',0,0,0,$6,$7)`,
+				[
+					`vid${videoSeq}`,
+					seed.song,
+					seed.artist,
+					seed.syncType,
+					submitterId,
+					seed.voteCount,
+					seed.createdAt,
+				]
+			)
+		}
+
+		async function seedCatalogue(): Promise<void> {
+			const userId = await seedUser(keyId)
+			const other = await seedUser("d".repeat(64))
+			await insertSubmission(userId, {
+				song: "Blinding Lights",
+				artist: "The Weeknd",
+				syncType: "richsync",
+				voteCount: 5,
+				createdAt: 1700000100,
+			})
+			await insertSubmission(userId, {
+				song: "Save Your Tears",
+				artist: "The Weeknd",
+				syncType: "linesync",
+				voteCount: 12,
+				createdAt: 1700000200,
+			})
+			await insertSubmission(userId, {
+				song: "Levitating",
+				artist: "Dua Lipa",
+				syncType: "richsync",
+				voteCount: 0,
+				createdAt: 1700000300,
+			})
+			await insertSubmission(userId, {
+				song: "100%_Pure",
+				artist: "Nobody",
+				syncType: "plain",
+				voteCount: 7,
+				createdAt: 1700000400,
+			})
+			await insertSubmission(other, {
+				song: "Blinding Lights",
+				artist: "The Weeknd",
+				syncType: "richsync",
+				voteCount: 99,
+				createdAt: 1700000500,
+			})
+		}
+
+		async function songs(query: string): Promise<{ songs: string[]; nextCursor?: string }> {
+			const app = userRoutes(env)
+			const res = await app.handle(
+				new Request(`http://localhost/users/${keyId}/submissions${query}`)
+			)
+			expect(res.status).toBe(200)
+			const json = (await res.json()) as {
+				data: { submissions: Array<{ song: string }>; nextCursor?: string }
+			}
+			return {
+				songs: json.data.submissions.map((s) => s.song),
+				nextCursor: json.data.nextCursor,
+			}
+		}
+
+		async function allPages(query: string): Promise<string[]> {
+			const collected: string[] = []
+			let cursor: string | undefined
+			do {
+				const sep = query.length > 0 ? "&" : "?"
+				const suffix = cursor === undefined ? "" : `${sep}cursor=${cursor}`
+				const page = await songs(`${query}${suffix}`)
+				collected.push(...page.songs)
+				cursor = page.nextCursor
+			} while (cursor !== undefined)
+			return collected
+		}
+
+		beforeEach(seedCatalogue)
+
+		it("matches the search against song or artist, case-insensitively, across every row", async () => {
+			expect((await songs("?q=weeknd")).songs).toEqual(["Save Your Tears", "Blinding Lights"])
+			expect((await songs("?q=LEVIT")).songs).toEqual(["Levitating"])
+		})
+
+		it("treats LIKE wildcards in the search as literal characters", async () => {
+			expect((await songs("?q=%25_")).songs).toEqual(["100%_Pure"])
+			expect((await songs("?q=_")).songs).toEqual(["100%_Pure"])
+		})
+
+		it("filters by sync type", async () => {
+			expect((await songs("?syncType=richsync")).songs).toEqual(["Levitating", "Blinding Lights"])
+			expect((await songs("?syncType=plain")).songs).toEqual(["100%_Pure"])
+		})
+
+		it("combines search and sync type", async () => {
+			expect((await songs("?q=weeknd&syncType=linesync")).songs).toEqual(["Save Your Tears"])
+		})
+
+		it("sorts every sort mode over the whole set, not just the first page", async () => {
+			expect(await allPages("?limit=1&sort=newest")).toEqual([
+				"100%_Pure",
+				"Levitating",
+				"Save Your Tears",
+				"Blinding Lights",
+			])
+			expect(await allPages("?limit=1&sort=oldest")).toEqual([
+				"Blinding Lights",
+				"Save Your Tears",
+				"Levitating",
+				"100%_Pure",
+			])
+			expect(await allPages("?limit=1&sort=most_votes")).toEqual([
+				"Save Your Tears",
+				"100%_Pure",
+				"Blinding Lights",
+				"Levitating",
+			])
+			expect(await allPages("?limit=1&sort=least_votes")).toEqual([
+				"Levitating",
+				"Blinding Lights",
+				"100%_Pure",
+				"Save Your Tears",
+			])
+		})
+
+		it("keeps filters applied while paging with a cursor", async () => {
+			expect(await allPages("?limit=1&syncType=richsync&sort=most_votes")).toEqual([
+				"Blinding Lights",
+				"Levitating",
+			])
+		})
+
+		it("pages through vote ties without skipping or repeating rows", async () => {
+			const userId = (await one<{ id: number }>("SELECT id FROM users WHERE key_id = $1", [keyId]))
+				.id
+			for (const song of ["Tie A", "Tie B", "Tie C"]) {
+				await insertSubmission(userId, {
+					song,
+					artist: "Tied",
+					syncType: "plain",
+					voteCount: 3,
+					createdAt: 1700001000,
+				})
+			}
+			const paged = await allPages("?limit=2&q=tied&sort=most_votes")
+			expect([...paged].sort()).toEqual(["Tie A", "Tie B", "Tie C"])
+			expect(new Set(paged).size).toBe(3)
+		})
+
+		it("returns nothing when the search matches no rows", async () => {
+			expect(await songs("?q=zzzz")).toEqual({ songs: [], nextCursor: undefined })
+		})
+	})
 })

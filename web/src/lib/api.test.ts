@@ -170,10 +170,28 @@ describe("fetchUserSubmissions", () => {
         { status: 200 },
       ),
     )
-    const data = await fetchUserSubmissions("k", "1699999999:42")
+    const data = await fetchUserSubmissions("k", { cursor: "1699999999:42" })
     expect(data.submissions).toEqual([])
     expect(data.nextCursor).toBeUndefined()
     expect(fetchSpy).toHaveBeenCalledWith("/users/k/submissions?cursor=1699999999%3A42")
+  })
+
+  it("sends trimmed search, sync type, non-default sort and cursor", async () => {
+    const fetchSpy = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(new Response(JSON.stringify({ success: true, data: { submissions: [] } }), { status: 200 }))
+    await fetchUserSubmissions("k", { search: "  daft & punk ", syncType: "richsync", sort: "least_votes", cursor: "3:9" })
+    expect(fetchSpy).toHaveBeenCalledWith(
+      "/users/k/submissions?q=daft+%26+punk&syncType=richsync&sort=least_votes&cursor=3%3A9",
+    )
+  })
+
+  it("omits the default sort and a blank search", async () => {
+    const fetchSpy = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(new Response(JSON.stringify({ success: true, data: { submissions: [] } }), { status: 200 }))
+    await fetchUserSubmissions("k", { search: "   ", sort: "newest" })
+    expect(fetchSpy).toHaveBeenCalledWith("/users/k/submissions")
   })
 
   it("url-encodes the keyId", async () => {
