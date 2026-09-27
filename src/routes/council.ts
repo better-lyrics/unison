@@ -100,8 +100,7 @@ export const councilRoutes = (env: Env) =>
 						: Object.hasOwn(EVENT_GROUPS, query.kind)
 							? EVENT_GROUPS[query.kind]
 							: null
-				if (query.kind !== undefined && !kinds)
-					return status(400, buildError(ErrorCode.INVALID_PAYLOAD))
+				if (kinds === null) return status(400, buildError(ErrorCode.INVALID_PAYLOAD))
 				const lyricsId = query.lyric === undefined ? undefined : parseId(query.lyric)
 				if (lyricsId === null) return status(400, buildError(ErrorCode.INVALID_ID))
 				const limit = Math.min(

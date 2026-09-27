@@ -369,6 +369,9 @@ describeIntegration("council dashboard routes (integration)", () => {
 			expect(
 				(await call("GET", "/committee/events?kind=everything", { token: "mira" })).status
 			).toBe(400)
+			expect(
+				(await call("GET", "/committee/events?kind=constructor", { token: "mira" })).status
+			).toBe(400)
 			expect((await call("GET", "/committee/events?lyric=abc", { token: "mira" })).status).toBe(400)
 		})
 	})
