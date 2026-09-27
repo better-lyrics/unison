@@ -38,6 +38,7 @@ import type {
 	RevisionRateLimit,
 	RevisionSummary,
 } from "@/types"
+import { ALBUM_HINT, isValidAlbum } from "@/utils/album"
 import { decompressIfNeeded } from "@/utils/compression"
 import { detectLanguage } from "@/utils/detect-language"
 import { ErrorCode, buildError } from "@/utils/errors"
@@ -114,7 +115,6 @@ class UncheckedLiveEdit extends Error {}
 const NOT_SAVABLE: GateOutcome = { goesLive: false, reason: null }
 const LANGUAGE_HINT = "Pick a language from the list."
 const ISRC_HINT = "An ISRC looks like USRC17607839."
-const ALBUM_HINT = `Album names must be a single line of up to ${config.validation.album.maxLength} characters.`
 
 async function revisionLines(stored: string, format: LyricsFormat): Promise<LyricLine[]> {
 	try {
@@ -154,10 +154,7 @@ function acceptIsrc(value: string): ResolvedField {
 	return normalized ? { value: normalized, valid: true } : { value, valid: false }
 }
 
-const acceptAlbum = (value: string): ResolvedField => ({
-	value,
-	valid: value.length <= config.validation.album.maxLength && !/\p{Cc}/u.test(value),
-})
+const acceptAlbum = (value: string): ResolvedField => ({ value, valid: isValidAlbum(value) })
 
 async function languageCheck(
 	language: ResolvedField,
