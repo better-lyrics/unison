@@ -27,12 +27,12 @@ afterEach(() => {
 })
 
 describe("useCouncilShortcuts", () => {
-  it("runs single-key shortcuts case-insensitively", () => {
+  it("runs single-key shortcuts case-insensitively, so Caps Lock does not matter", () => {
     const j = vi.fn()
     const help = vi.fn()
     render(<Harness map={{ j, "?": help }} />)
     press("j")
-    press("J", { shiftKey: true })
+    press("J")
     press("?", { shiftKey: true })
     expect(j).toHaveBeenCalledTimes(2)
     expect(help).toHaveBeenCalledTimes(1)
@@ -141,6 +141,53 @@ describe("useCouncilShortcuts", () => {
       render(<Harness map={{ j }} enabled={false} />)
       press("j")
       expect(j).not.toHaveBeenCalled()
+    })
+
+    it("regression: Shift with a letter does not run the letter shortcut", () => {
+      const seal = vi.fn()
+      render(<Harness map={{ s: seal }} />)
+      press("S", { shiftKey: true })
+      expect(seal).not.toHaveBeenCalled()
+    })
+
+    it("regression: mod shortcuts do not reach the page while a dialog has focus", () => {
+      const submit = vi.fn()
+      const palette = vi.fn()
+      render(
+        <>
+          <Harness map={{ "mod+Enter": submit, "mod+k": palette }} />
+          {/* biome-ignore lint/a11y/useSemanticElements: floating-ui dialogs render this exact shape */}
+          <div role="dialog" aria-label="menu">
+            <button type="button">inside</button>
+          </div>
+        </>,
+      )
+      screen.getByRole("button", { name: "inside" }).focus()
+      press("Enter", { metaKey: true })
+      expect(submit).not.toHaveBeenCalled()
+      press("k", { metaKey: true })
+      expect(palette).toHaveBeenCalledTimes(1)
+    })
+
+    it("passes the key on when a handler declines it", () => {
+      const lower = vi.fn()
+      render(
+        <>
+          <Harness map={{ "/": lower }} />
+          <Harness map={{ "/": () => false }} />
+        </>,
+      )
+      const event = new KeyboardEvent("keydown", { key: "/", cancelable: true })
+      window.dispatchEvent(event)
+      expect(lower).toHaveBeenCalledTimes(1)
+      expect(event.defaultPrevented).toBe(true)
+    })
+
+    it("leaves the browser default alone when every handler declines", () => {
+      render(<Harness map={{ "/": () => false }} />)
+      const event = new KeyboardEvent("keydown", { key: "/", cancelable: true })
+      window.dispatchEvent(event)
+      expect(event.defaultPrevented).toBe(false)
     })
 
     it("regression: a held key does not fire twice", () => {

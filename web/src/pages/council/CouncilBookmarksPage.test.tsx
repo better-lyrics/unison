@@ -79,4 +79,20 @@ describe("CouncilBookmarksPage", () => {
     expect(screen.getByText(/Press B on any queue item to hold it for 3 days/)).toBeTruthy()
     expect(screen.queryByRole("region", { name: "Details" })).toBeNull()
   })
+
+  describe("regressions", () => {
+    it("leaves / to the site search, since this page has no search box", async () => {
+      stubCouncilApi(data(), { admin: false }, [
+        {
+          match: (url) => /\/revisions/.test(url),
+          respond: () => jsonResponse({ success: true, data: { rows: [], againstRevNo: null, revisions: [] } }),
+        },
+      ])
+      renderCouncil("/council/bookmarks")
+      await waitFor(() => expect(titles()).toHaveLength(2))
+      const event = new KeyboardEvent("keydown", { key: "/", cancelable: true })
+      window.dispatchEvent(event)
+      expect(event.defaultPrevented).toBe(false)
+    })
+  })
 })

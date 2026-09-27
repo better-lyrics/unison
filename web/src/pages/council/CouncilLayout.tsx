@@ -43,10 +43,18 @@ function CouncilShell({ meKeyId }: { meKeyId: string }) {
       setMenuOpen(false)
       setKeysOpen(true)
     },
-    "g o": () => navigate("/council"),
-    "g q": () => navigate("/council/queue"),
-    "g e": () => navigate("/council/edits"),
-    "g a": () => navigate("/council/activity"),
+    "g o": () => {
+      navigate("/council")
+    },
+    "g q": () => {
+      navigate("/council/queue")
+    },
+    "g e": () => {
+      navigate("/council/edits")
+    },
+    "g a": () => {
+      navigate("/council/activity")
+    },
   })
   return (
     <div className={SHELL}>

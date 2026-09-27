@@ -106,7 +106,10 @@ export function useTriage<T extends Bookmarkable>({ all, shown, entry, meKeyId, 
     b: () => {
       if (selectedItem && !heldByOther(selectedItem)) toggleBookmark(selectedItem)
     },
-    "/": () => searchRef.current?.focus(),
+    "/": () => {
+      if (!searchRef.current) return false
+      searchRef.current.focus()
+    },
   })
 
   return {

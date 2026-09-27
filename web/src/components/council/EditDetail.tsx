@@ -40,7 +40,11 @@ const pct = (value: number) => `${Math.round(value * 100)}%`
 export function EditDetail(props: EditDetailProps) {
   const { item, thresholds, now } = props
   const [mode, setMode] = useState<DiffMode>("unified")
-  useCouncilShortcuts({ o: () => window.open(youTubeMusicUrl(item.videoId), "_blank", "noreferrer") })
+  useCouncilShortcuts({
+    o: () => {
+      window.open(youTubeMusicUrl(item.videoId), "_blank", "noreferrer")
+    },
+  })
   const sealed = item.pendingReason === "sealed"
   const ReasonIcon = sealed ? IconRosetteDiscountCheck : IconAlertTriangle
 

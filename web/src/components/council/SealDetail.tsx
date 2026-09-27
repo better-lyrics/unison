@@ -28,7 +28,11 @@ interface SealDetailProps {
 
 export function SealDetail(props: SealDetailProps) {
   const { item, now, quota } = props
-  useCouncilShortcuts({ o: () => window.open(youTubeMusicUrl(item.videoId), "_blank", "noreferrer") })
+  useCouncilShortcuts({
+    o: () => {
+      window.open(youTubeMusicUrl(item.videoId), "_blank", "noreferrer")
+    },
+  })
   const remaining = quota?.remaining ?? 0
 
   return (
