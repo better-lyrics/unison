@@ -1,11 +1,11 @@
 import { type ComponentType, Suspense, lazy } from "react"
 import { type RouteObject, RouterProvider, createBrowserRouter } from "react-router-dom"
 import { AppLayout } from "./components/AppLayout"
+import { MobileGate } from "./components/exam/MobileGate"
 import { AboutPage } from "./pages/AboutPage"
 import { CuratorsPage } from "./pages/CuratorsPage"
 import { DocsPage } from "./pages/DocsPage"
 import { DownloadsPage } from "./pages/DownloadsPage"
-import { MobileGate } from "./components/exam/MobileGate"
 import { ExamPage } from "./pages/ExamPage"
 import { LinkPage } from "./pages/LinkPage"
 import { LyricsPage } from "./pages/LyricsPage"
@@ -16,6 +16,7 @@ import { QueuePage } from "./pages/QueuePage"
 import { SearchPage } from "./pages/SearchPage"
 import { SongsPage } from "./pages/SongsPage"
 import { UserPage } from "./pages/UserPage"
+import { councilRoute } from "./pages/council/routes"
 
 // Dev-only state gallery for the link/profile UI. The import.meta.env.DEV branch
 // is statically false in production builds, so this whole block (and the lazy
@@ -60,6 +61,7 @@ const router = createBrowserRouter([
       { path: "docs", element: <DocsPage /> },
       { path: "link", element: <LinkPage /> },
       { path: "migrate", element: <MigratePage /> },
+      councilRoute,
       {
         path: "exam",
         element: (

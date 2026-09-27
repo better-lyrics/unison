@@ -5,6 +5,8 @@ const compactFormatter = new Intl.NumberFormat("en-US", {
 
 const exactFormatter = new Intl.NumberFormat("en-US")
 
+const shortDateFormatter = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric" })
+
 export function formatRank(rank: number): string {
   return `#${rank}`
 }
@@ -15,6 +17,14 @@ export function formatCompact(n: number): string {
 
 export function formatExact(n: number): string {
   return exactFormatter.format(n)
+}
+
+export function titleCase(value: string): string {
+  return value.charAt(0).toUpperCase() + value.slice(1)
+}
+
+export function formatShortDate(epochSec: number): string {
+  return shortDateFormatter.format(epochSec * 1000)
 }
 
 export function formatDuration(seconds: number): string {

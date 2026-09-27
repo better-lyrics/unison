@@ -1,5 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
-import { formatCompact, formatDuration, formatExact, formatRank, formatRelativeTime } from "./format"
+import {
+  formatCompact,
+  formatDuration,
+  formatExact,
+  formatRank,
+  formatRelativeTime,
+  formatShortDate,
+  titleCase,
+} from "./format"
 
 describe("formatRank", () => {
   it("renders rank as #N", () => {
@@ -119,5 +127,26 @@ describe("formatRelativeTime", () => {
     expect(formatRelativeTime(now)).toBeTruthy()
     const futureRendered = formatRelativeTime(now + 30)
     expect(futureRendered.length).toBeGreaterThan(0)
+  })
+})
+
+describe("formatShortDate", () => {
+  it("renders the month and day of an epoch second", () => {
+    expect(formatShortDate(Date.UTC(2026, 9, 1, 12) / 1000)).toBe("Oct 1")
+    expect(formatShortDate(Date.UTC(2026, 11, 31, 12) / 1000)).toBe("Dec 31")
+  })
+})
+
+describe("titleCase", () => {
+  it("capitalises the first letter only", () => {
+    expect(titleCase("elite")).toBe("Elite")
+    expect(titleCase("grandmaster")).toBe("Grandmaster")
+  })
+
+  describe("edge cases", () => {
+    it("keeps an empty string and an already capitalised word", () => {
+      expect(titleCase("")).toBe("")
+      expect(titleCase("Elite")).toBe("Elite")
+    })
   })
 })

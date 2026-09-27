@@ -7,6 +7,7 @@
 @import "@braccato/core/styles/instrumental.css";
 
 @theme {
+  --breakpoint-council: 68.75rem;
   --color-unison-bg: #0f0e13;
   --color-unison-bg-elevated: #141316;
   --color-unison-bg-hover: rgba(255, 255, 255, 0.06);
@@ -38,6 +39,10 @@ body,
 html {
   scrollbar-gutter: stable;
   color-scheme: dark;
+}
+
+:root {
+  --app-header-h: 69px;
 }
 
 body {

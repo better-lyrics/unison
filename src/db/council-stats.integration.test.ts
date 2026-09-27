@@ -1,3 +1,4 @@
+import { config } from "@/config"
 import {
 	type IntegrationDb,
 	describeIntegration,
@@ -91,7 +92,11 @@ describeIntegration("council overview stats (integration)", () => {
 			await decide(mira, "edit_reject", NOW - HOUR)
 			const stats = await overview()
 			expect(stats.sealRate).toBeCloseTo(1 / 3, 5)
-			expect(stats.me).toMatchObject({ rejectsThisMonth: 1, editsThisMonth: 1 })
+			expect(stats.me).toMatchObject({
+				rejectsThisMonth: 1,
+				editsThisMonth: 1,
+				bookmarkCap: config.council.bookmarkCap,
+			})
 			expect(stats.me.quota.quota).toBeGreaterThan(0)
 		})
 

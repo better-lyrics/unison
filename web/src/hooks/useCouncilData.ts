@@ -1,5 +1,11 @@
 import { useSession } from "@/auth/useSession"
-import { fetchCouncilEdits, fetchCouncilQueue } from "@/lib/council-api"
+import {
+  fetchCouncilApplicants,
+  fetchCouncilEdits,
+  fetchCouncilMembers,
+  fetchCouncilOverview,
+  fetchCouncilQueue,
+} from "@/lib/council-api"
 import { useQuery } from "@tanstack/react-query"
 
 export const councilKeys = {
@@ -38,6 +44,36 @@ export function useCouncilEdits() {
     enabled: role !== null,
     refetchInterval: REFRESH_MS,
     staleTime: 15_000,
+  })
+}
+
+export function useCouncilOverview(scope: "council" | "me" = "council") {
+  const role = useCouncilRole()
+  return useQuery({
+    queryKey: councilKeys.overview(scope),
+    queryFn: ({ signal }) => fetchCouncilOverview(scope, signal),
+    enabled: role !== null,
+    staleTime: 60_000,
+  })
+}
+
+export function useCouncilMembers() {
+  const role = useCouncilRole()
+  return useQuery({
+    queryKey: councilKeys.members,
+    queryFn: ({ signal }) => fetchCouncilMembers(signal),
+    enabled: role !== null,
+    staleTime: 60_000,
+  })
+}
+
+export function useCouncilApplicants(includeBelowCutoff = false) {
+  const role = useCouncilRole()
+  return useQuery({
+    queryKey: councilKeys.applicants(includeBelowCutoff),
+    queryFn: ({ signal }) => fetchCouncilApplicants(includeBelowCutoff, signal),
+    enabled: role !== null,
+    staleTime: 60_000,
   })
 }
 

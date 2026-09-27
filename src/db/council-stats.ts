@@ -1,3 +1,4 @@
+import { config } from "@/config"
 import { type BoostQuota, getQuota, monthWindow } from "@/db/boost"
 import { DECISION_KINDS, UNDONE_EXPR } from "@/db/council-events"
 import { type CouncilPerson, withTier } from "@/db/council-person"
@@ -27,6 +28,7 @@ export interface CouncilOverview {
 		rejectsThisMonth: number
 		editsThisMonth: number
 		medianDecisionHours: number | null
+		bookmarkCap: number
 	}
 }
 
@@ -128,6 +130,7 @@ export async function getCouncilOverview(
 			rejectsThisMonth: count(["reject"], true),
 			editsThisMonth: count(["edit_approve", "edit_reject"], true),
 			medianDecisionHours: mine,
+			bookmarkCap: config.council.bookmarkCap,
 		},
 	}
 }

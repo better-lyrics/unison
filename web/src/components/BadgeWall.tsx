@@ -1,19 +1,16 @@
-import { Fragment, type ReactNode } from "react"
 import { useBadgeModal } from "@/components/BadgeModalContext"
 import { CollapsibleSection } from "@/components/CollapsibleSection"
 import { OdometerNumber } from "@/components/OdometerNumber"
 import { groupBadgesByCategory, isRareBadge, resolveBadgeImage } from "@/lib/badge-view"
 import { cn } from "@/lib/cn"
+import { titleCase } from "@/lib/format"
 import type { BadgeCatalogue, BadgeDef, UserBadge, UserGamification } from "@/lib/types"
+import { Fragment, type ReactNode } from "react"
 
 interface BadgeWallProps {
   gamification: UserGamification
   catalogue: BadgeCatalogue
   defaultOpen?: boolean
-}
-
-function titleCase(value: string): string {
-  return value.charAt(0).toUpperCase() + value.slice(1)
 }
 
 function stateText(userBadge: UserBadge | undefined): string {
