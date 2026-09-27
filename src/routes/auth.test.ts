@@ -1,7 +1,7 @@
-import { describe, expect, it } from "vitest"
 import type { Env } from "@/types"
 import { canonicalJson, hashPublicKey } from "@/utils/crypto"
 import { generatePetName } from "@/utils/petname"
+import { describe, expect, it } from "vitest"
 import { authRoutes } from "./auth"
 
 function makeMockCache(seed: Record<string, string> = {}) {
@@ -91,10 +91,7 @@ function makeMockDB(queue: unknown[] = []) {
 						async run(): Promise<void> {
 							calls.push({ sql, params: args })
 							const next = queue.shift()
-							if (
-								next instanceof Error ||
-								(next && typeof next === "object" && "code" in next)
-							) {
+							if (next instanceof Error || (next && typeof next === "object" && "code" in next)) {
 								throw next
 							}
 						},
@@ -255,6 +252,7 @@ describe("POST /auth/session", () => {
 		const db = makeMockDB([
 			...registrationQueue(first.keyId, first.publicKey),
 			{ nickname: null },
+			null,
 			...registrationQueue(second.keyId, second.publicKey),
 		])
 		const env = makeEnvFull(db, cache)
@@ -452,6 +450,25 @@ describe("GET /auth/me", () => {
 		expect(json.data.keyId).toBe(keyId)
 		expect(json.data.displayName.length).toBeGreaterThan(0)
 		expect(json.data.expiresAt).toBe(issuedAt + ttl)
+		expect((json.data as { council?: unknown }).council).toBeNull()
+	})
+
+	it("carries the council role for a council member", async () => {
+		const cache = makeMockCache()
+		const keyId = "f".repeat(64)
+		const issuedAt = Math.floor(Date.now() / 1000)
+		cache.store.set("session:tok-council", {
+			value: JSON.stringify({ keyId, issuedAt, expiresAt: issuedAt + 600 }),
+			ttl: 600,
+		})
+		const db = makeMockDB([{ nickname: "Mira" }, { is_admin: true }])
+		const app = authRoutes(makeEnvFull(db, cache))
+		const res = await app.handle(
+			new Request("http://localhost/auth/me", { headers: { authorization: "Bearer tok-council" } })
+		)
+		const json = (await res.json()) as { data: { council: { admin: boolean } | null } }
+		expect(json.data.council).toEqual({ admin: true })
+		expect(db.calls.some((c) => c.sql.includes("committee_members"))).toBe(true)
 	})
 
 	it("returns 401 when no Authorization header is sent", async () => {
@@ -970,12 +987,7 @@ describe("PUT /auth/nickname", () => {
 	it("200 round-trip: PUT returns the new displayName", async () => {
 		const cache = makeMockCache()
 		const { keyId, publicKey, body } = await buildBody({ nickname: "Alex" })
-		const db = makeMockDB([
-			...registrationQueue(keyId, publicKey),
-			null,
-			[],
-			{ nickname: "Alex" },
-		])
+		const db = makeMockDB([...registrationQueue(keyId, publicKey), null, [], { nickname: "Alex" }])
 		const env = makeEnvFull(db, cache)
 		const app = authRoutes(env)
 		const res = await app.handle(
@@ -998,10 +1010,7 @@ describe("PUT /auth/nickname", () => {
 	it("409 NICKNAME_TAKEN when another user holds it (case-insensitive)", async () => {
 		const cache = makeMockCache()
 		const { keyId, publicKey, body } = await buildBody({ nickname: "alex" })
-		const db = makeMockDB([
-			...registrationQueue(keyId, publicKey),
-			{ code: "23505" },
-		])
+		const db = makeMockDB([...registrationQueue(keyId, publicKey), { code: "23505" }])
 		const env = makeEnvFull(db, cache)
 		const app = authRoutes(env)
 		const res = await app.handle(
@@ -1020,12 +1029,7 @@ describe("PUT /auth/nickname", () => {
 	it("200 when the same user re-submits their own nickname", async () => {
 		const cache = makeMockCache()
 		const { keyId, publicKey, body } = await buildBody({ nickname: "Alex" })
-		const db = makeMockDB([
-			...registrationQueue(keyId, publicKey),
-			null,
-			[],
-			{ nickname: "Alex" },
-		])
+		const db = makeMockDB([...registrationQueue(keyId, publicKey), null, [], { nickname: "Alex" }])
 		const env = makeEnvFull(db, cache)
 		const app = authRoutes(env)
 		const res = await app.handle(
@@ -1169,12 +1173,7 @@ describe("DELETE /auth/nickname", () => {
 	it("clears the nickname and returns the generated fallback", async () => {
 		const cache = makeMockCache()
 		const { keyId, publicKey, body } = await buildBody()
-		const db = makeMockDB([
-			...registrationQueue(keyId, publicKey),
-			null,
-			[],
-			{ nickname: null },
-		])
+		const db = makeMockDB([...registrationQueue(keyId, publicKey), null, [], { nickname: null }])
 		const env = makeEnvFull(db, cache)
 		const app = authRoutes(env)
 		const res = await app.handle(

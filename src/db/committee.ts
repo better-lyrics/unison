@@ -31,6 +31,15 @@ export async function isCouncilAdmin(env: Env, userId: number): Promise<boolean>
 	return row !== null
 }
 
+export async function getCouncilRole(env: Env, keyId: string): Promise<{ admin: boolean } | null> {
+	const row = await env.DB.prepare(
+		"SELECT c.is_admin FROM committee_members c JOIN users u ON u.id = c.user_id WHERE u.key_id = ?"
+	)
+		.bind(keyId)
+		.first<{ is_admin: boolean }>()
+	return row ? { admin: row.is_admin } : null
+}
+
 export async function setCouncilAdmin(env: Env, userId: number, admin: boolean): Promise<boolean> {
 	const row = await env.DB.prepare(
 		"UPDATE committee_members SET is_admin = ? WHERE user_id = ? RETURNING user_id"

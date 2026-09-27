@@ -6,6 +6,7 @@ import pg from "pg"
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest"
 import {
 	addCommittee,
+	getCouncilRole,
 	isCommittee,
 	isCouncilAdmin,
 	listCommittee,
@@ -175,6 +176,19 @@ describeIntegration("committee roster (integration)", () => {
 			await removeCommittee(env, member, { actorId: null, source: "admin" })
 			await addCommittee(env, member, { actorId: null, source: "admin" })
 			expect(await isCouncilAdmin(env, member)).toBe(false)
+		})
+	})
+
+	describe("getCouncilRole", () => {
+		it("returns null for a stranger, the role for members and admins", async () => {
+			const key = "cb".repeat(32)
+			expect(await getCouncilRole(env, key)).toBeNull()
+			const member = await insertUser(key)
+			expect(await getCouncilRole(env, key)).toBeNull()
+			await addCommittee(env, member, { actorId: null, source: "admin" })
+			expect(await getCouncilRole(env, key)).toEqual({ admin: false })
+			await setCouncilAdmin(env, member, true)
+			expect(await getCouncilRole(env, key)).toEqual({ admin: true })
 		})
 	})
 })
