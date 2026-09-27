@@ -4,4 +4,5 @@ export interface StoredSession {
   displayName: string
   expiresAt: number
   avatarUrl?: string | null
+  council?: { admin: boolean } | null
 }

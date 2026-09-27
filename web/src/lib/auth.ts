@@ -11,6 +11,7 @@ export interface Identity {
   displayName: string
   expiresAt: number
   avatarUrl?: string | null
+  council?: { admin: boolean } | null
 }
 
 export interface SignedBody {

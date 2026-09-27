@@ -4,6 +4,7 @@ import { Link, NavLink } from "react-router-dom"
 import { cn } from "@/lib/cn"
 import { type PageWidth, pageWidthClass } from "@/lib/page-width"
 import { BetterLyricsLogo } from "./BetterLyricsLogo"
+import { CouncilNavLink } from "./council/CouncilNavLink"
 import { SearchBar } from "./SearchBar"
 import { SignInControl } from "./SignInControl"
 
@@ -62,6 +63,7 @@ export function AppHeader({ width }: { width: PageWidth }) {
 					<NavLink to="/curators" className={tabClass}>
 						Leaderboard
 					</NavLink>
+					<CouncilNavLink className={tabClass} />
 					<NavLink to="/about" className={tabClass}>
 						About
 					</NavLink>
@@ -110,6 +112,7 @@ export function AppHeader({ width }: { width: PageWidth }) {
 						<NavLink to="/curators" role="menuitem" onClick={closeMenu} className={tabClass}>
 							Leaderboard
 						</NavLink>
+						<CouncilNavLink role="menuitem" onClick={closeMenu} className={tabClass} />
 						<NavLink to="/about" role="menuitem" onClick={closeMenu} className={tabClass}>
 							About
 						</NavLink>

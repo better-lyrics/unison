@@ -1,0 +1,49 @@
+import { useSession } from "@/auth/useSession"
+import { fetchCouncilEdits, fetchCouncilQueue } from "@/lib/council-api"
+import { useQuery } from "@tanstack/react-query"
+
+export const councilKeys = {
+  all: ["council"] as const,
+  queue: ["council", "queue"] as const,
+  edits: ["council", "edits"] as const,
+  overview: (scope: "council" | "me") => ["council", "overview", scope] as const,
+  events: (filters: object) => ["council", "events", filters] as const,
+  members: ["council", "members"] as const,
+  applicants: (includeBelowCutoff: boolean) => ["council", "applicants", includeBelowCutoff] as const,
+}
+
+const REFRESH_MS = 60_000
+
+export function useCouncilRole(): { admin: boolean } | null {
+  const session = useSession()
+  return session.status === "signed-in" ? (session.identity.council ?? null) : null
+}
+
+export function useCouncilQueue() {
+  const role = useCouncilRole()
+  return useQuery({
+    queryKey: councilKeys.queue,
+    queryFn: ({ signal }) => fetchCouncilQueue(signal),
+    enabled: role !== null,
+    refetchInterval: REFRESH_MS,
+    staleTime: 15_000,
+  })
+}
+
+export function useCouncilEdits() {
+  const role = useCouncilRole()
+  return useQuery({
+    queryKey: councilKeys.edits,
+    queryFn: ({ signal }) => fetchCouncilEdits(signal),
+    enabled: role !== null,
+    refetchInterval: REFRESH_MS,
+    staleTime: 15_000,
+  })
+}
+
+export function useOpenWorkCount(): number {
+  const queue = useCouncilQueue()
+  const edits = useCouncilEdits()
+  const open = (items: { bookmark: unknown }[] | undefined) => items?.filter((i) => i.bookmark === null).length ?? 0
+  return open(queue.data) + open(edits.data?.items)
+}
