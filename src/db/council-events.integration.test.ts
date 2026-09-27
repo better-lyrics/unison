@@ -28,6 +28,7 @@ describeIntegration("council event log (integration)", () => {
 	})
 
 	afterAll(async () => {
+		await wipeRevisionData(db)
 		await db.pool.end()
 	})
 

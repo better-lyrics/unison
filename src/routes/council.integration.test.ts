@@ -1,3 +1,4 @@
+import type { ApplicantView } from "@/db/council-applicants"
 import { createBookmark } from "@/db/council-bookmarks"
 import type { EditItem, EditThresholds } from "@/db/council-edits"
 import { type CouncilEvent, recordCouncilEvent } from "@/db/council-events"
@@ -49,6 +50,7 @@ describeIntegration("council dashboard routes (integration)", () => {
 	})
 
 	afterAll(async () => {
+		await wipeRevisionData(db)
 		await db.pool.end()
 	})
 
@@ -463,6 +465,123 @@ describeIntegration("council dashboard routes (integration)", () => {
 			expect((await call("POST", "/committee/members", { token: "admin", body: {} })).status).toBe(
 				400
 			)
+		})
+	})
+
+	describe("applicants", () => {
+		const APPLICANT = "96".repeat(32)
+		let session: number
+
+		beforeEach(async () => {
+			await db.pool.query("DELETE FROM exam_session WHERE key_id = $1", [APPLICANT])
+			await db.pool.query("DELETE FROM users WHERE key_id = $1", [APPLICANT])
+			const { rows } = await db.pool.query<{ id: string }>(
+				`INSERT INTO exam_session (key_id, discord_id, seed, expires_at, state, score, max_score, cutoff, submitted_at)
+				 VALUES ($1, 'd-app', 1, 2000000000, 'pending_review', 94, 100, 85, 1790000000) RETURNING id`,
+				[APPLICANT]
+			)
+			session = Number(rows[0].id)
+		})
+
+		const applicants = async (token: string, qs = "") =>
+			(await call<ApplicantView[]>("GET", `/committee/applicants${qs}`, { token })).json.data
+
+		it("lists applicants with opinions and my stance", async () => {
+			await call("PUT", `/committee/applicants/${session}/opinion`, {
+				token: "ola",
+				body: { stance: "object", note: "Sealed too eagerly in two scenarios." },
+			})
+			await call("PUT", `/committee/applicants/${session}/opinion`, {
+				token: "mira",
+				body: { stance: "support" },
+			})
+			const [a] = await applicants("mira")
+			expect(a).toMatchObject({
+				applicantId: session,
+				score: 94,
+				cutoff: 85,
+				state: "pending_review",
+			})
+			expect(a).not.toHaveProperty("decidedByDiscordId")
+			expect(a.opinions.mine).toBe("support")
+			expect(a.opinions.support.map((p) => p.keyId)).toEqual([MIRA])
+			expect(a.opinions.object.map((p) => p.keyId)).toEqual([OLA])
+			expect(a.opinions.notes).toEqual([
+				expect.objectContaining({ stance: "object", note: "Sealed too eagerly in two scenarios." }),
+			])
+		})
+
+		it("clears an opinion and refuses a bad stance or unknown applicant", async () => {
+			await call("PUT", `/committee/applicants/${session}/opinion`, {
+				token: "mira",
+				body: { stance: "support" },
+			})
+			await call("PUT", `/committee/applicants/${session}/opinion`, {
+				token: "mira",
+				body: { stance: null },
+			})
+			expect((await applicants("mira"))[0].opinions.mine).toBeNull()
+			const bad = await call("PUT", `/committee/applicants/${session}/opinion`, {
+				token: "mira",
+				body: { stance: "maybe" },
+			})
+			expect(bad.json.code).toBe("INVALID_OPINION")
+			const missing = await call("PUT", "/committee/applicants/987654321/opinion", {
+				token: "mira",
+				body: { stance: "support" },
+			})
+			expect(missing.status).toBe(404)
+		})
+
+		it("lets an admin approve, which adds the applicant to the council", async () => {
+			const res = await call("POST", `/committee/applicants/${session}/decision`, {
+				token: "admin",
+				body: { decision: "approve" },
+			})
+			expect(res.status).toBe(200)
+			const { rows } = await db.pool.query(
+				"SELECT 1 FROM committee_members c JOIN users u ON u.id = c.user_id WHERE u.key_id = $1",
+				[APPLICANT]
+			)
+			expect(rows).toHaveLength(1)
+			expect(await applicants("mira")).toEqual([])
+			await db.pool.query(
+				"DELETE FROM committee_members WHERE user_id = (SELECT id FROM users WHERE key_id = $1)",
+				[APPLICANT]
+			)
+		})
+
+		it("refuses a decision from a non-admin, a bad decision and a decided applicant", async () => {
+			const member = await call("POST", `/committee/applicants/${session}/decision`, {
+				token: "mira",
+				body: { decision: "approve" },
+			})
+			expect(member.status).toBe(403)
+			expect(
+				(
+					await call("POST", `/committee/applicants/${session}/decision`, {
+						token: "admin",
+						body: { decision: "maybe" },
+					})
+				).status
+			).toBe(400)
+			await call("POST", `/committee/applicants/${session}/decision`, {
+				token: "admin",
+				body: { decision: "reject" },
+			})
+			const again = await call("POST", `/committee/applicants/${session}/decision`, {
+				token: "admin",
+				body: { decision: "approve" },
+			})
+			expect(again.status).toBe(404)
+		})
+
+		it("shows near misses only on request", async () => {
+			await db.pool.query("UPDATE exam_session SET state = 'failed' WHERE id = $1", [session])
+			expect(await applicants("mira")).toEqual([])
+			const [a] = await applicants("mira", "?includeBelowCutoff=1")
+			expect(a.state).toBe("failed")
+			expect(a.retakeAt).toBeGreaterThan(1790000000)
 		})
 	})
 })

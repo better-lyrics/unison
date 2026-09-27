@@ -38,6 +38,7 @@ describeIntegration("council bookmarks (integration)", () => {
 	})
 
 	afterAll(async () => {
+		await wipeRevisionData(db)
 		await db.pool.end()
 	})
 

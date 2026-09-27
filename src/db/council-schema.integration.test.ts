@@ -19,6 +19,7 @@ describeIntegration("council dashboard schema (integration)", () => {
 	})
 
 	afterAll(async () => {
+		await wipeRevisionData(db)
 		await db.pool.end()
 	})
 

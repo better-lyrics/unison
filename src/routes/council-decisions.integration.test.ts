@@ -38,6 +38,7 @@ describeIntegration("council decisions from the web (integration)", () => {
 	})
 
 	afterAll(async () => {
+		await wipeRevisionData(db)
 		await db.pool.end()
 	})
 

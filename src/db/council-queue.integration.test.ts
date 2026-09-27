@@ -29,6 +29,7 @@ describeIntegration("council seal queue (integration)", () => {
 	})
 
 	afterAll(async () => {
+		await wipeRevisionData(db)
 		await db.pool.end()
 	})
 

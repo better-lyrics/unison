@@ -1,5 +1,7 @@
 import { config } from "@/config"
+import { type OpinionStance, setOpinion } from "@/db/applicant-opinions"
 import { addCommittee, isCommittee, isCouncilAdmin, removeCommittee } from "@/db/committee"
+import { listCouncilApplicants } from "@/db/council-applicants"
 import {
 	type BookmarkItemType,
 	createBookmark,
@@ -10,10 +12,11 @@ import { listCouncilEdits } from "@/db/council-edits"
 import { type CouncilEventKind, listCouncilEvents } from "@/db/council-events"
 import { listCouncilQueue } from "@/db/council-queue"
 import { getCouncilOverview, getCouncilRoster } from "@/db/council-stats"
+import { getSessionById, recordDecision } from "@/db/exam"
 import { getCuratorTierMap } from "@/db/leaderboard"
-import { getUserByKeyId } from "@/db/users"
+import { getOrCreateUser, getUserByKeyId } from "@/db/users"
 import type { Env } from "@/types"
-import { allowCouncilWrite } from "@/utils/council-input"
+import { allowCouncilWrite, parseCouncilNote } from "@/utils/council-input"
 import { eitherAuth } from "@/utils/either-auth"
 import { ErrorCode, buildError } from "@/utils/errors"
 import { Elysia, t } from "elysia"
@@ -37,6 +40,16 @@ const EVENT_GROUPS: Record<string, CouncilEventKind[]> = {
 	rejections: ["reject", "unreject"],
 	edits: ["edit_approve", "edit_reject"],
 	membership: ["member_add", "member_remove", "applicant_approve", "applicant_reject"],
+}
+
+function parseOpinionBody(
+	body: Record<string, unknown>
+): { stance: OpinionStance | null; note: string | null } | null {
+	const { stance } = body
+	if (stance !== null && stance !== "support" && stance !== "object") return null
+	const note = parseCouncilNote(body)
+	if (!note.ok) return null
+	return { stance, note: stance === null ? null : note.note }
 }
 
 const notAdmin = () => buildError(ErrorCode.NOT_COUNCIL_ADMIN)
@@ -173,3 +186,49 @@ export const councilRoutes = (env: Env) =>
 			await removeCommittee(env, member.id, { actorId: userId, source: "web" })
 			return { success: true }
 		})
+		.get(
+			"/applicants",
+			async ({ env, userId, query }) => ({
+				success: true,
+				data: await listCouncilApplicants(env, {
+					meId: userId,
+					includeBelowCutoff: query.includeBelowCutoff === "1",
+				}),
+			}),
+			{ query: t.Object({ includeBelowCutoff: t.Optional(t.String()) }) }
+		)
+		.put("/applicants/:id/opinion", async ({ env, userId, keyId, params, body, status }) => {
+			const id = parseId(params.id)
+			if (id === null) return status(400, buildError(ErrorCode.INVALID_ID))
+			const input = parseOpinionBody(body)
+			if (!input) return status(400, buildError(ErrorCode.INVALID_OPINION))
+			if (!(await allowCouncilWrite(env, keyId)))
+				return status(429, buildError(ErrorCode.RATE_LIMITED))
+			if (!(await setOpinion(env, id, userId, input.stance, input.note))) {
+				return status(404, buildError(ErrorCode.EXAM_SESSION_NOT_FOUND))
+			}
+			return { success: true }
+		})
+		.post(
+			"/applicants/:id/decision",
+			async ({ env, userId, keyId, councilAdmin, params, body, status }) => {
+				if (!councilAdmin) return status(403, notAdmin())
+				const id = parseId(params.id)
+				if (id === null) return status(400, buildError(ErrorCode.INVALID_ID))
+				const decision = body.decision
+				if (decision !== "approve" && decision !== "reject") {
+					return status(400, buildError(ErrorCode.INVALID_PAYLOAD))
+				}
+				if (!(await allowCouncilWrite(env, keyId)))
+					return status(429, buildError(ErrorCode.RATE_LIMITED))
+				const session = await getSessionById(env, id)
+				if (!session || !(await recordDecision(env, id, decision, { source: "web", userId }))) {
+					return status(404, buildError(ErrorCode.EXAM_SESSION_NOT_FOUND))
+				}
+				if (decision === "approve") {
+					const applicant = await getOrCreateUser(env, session.keyId)
+					await addCommittee(env, applicant.id, { actorId: userId, source: "web" })
+				}
+				return { success: true }
+			}
+		)
