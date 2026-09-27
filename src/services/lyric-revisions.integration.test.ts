@@ -340,6 +340,20 @@ describeIntegration("lyric revisions pipeline (integration)", () => {
 				expect(calls).toHaveLength(0)
 			})
 
+			it("regression: never asks Jev about an edit that only moves lines under the minimum", async () => {
+				const { calls, env } = recordingGate(async () => ({ flagged: true, probability: 0.99 }))
+				const revision = await save(lrc(shiftLrc(LRC, () => 50)), env)
+				expect(revision).toMatchObject({ status: "live", timingDrift: 0 })
+				expect(calls).toHaveLength(0)
+			})
+
+			it("asks Jev about an edit that moves a line by the minimum", async () => {
+				const { calls, env } = recordingGate(async () => ({ flagged: false, probability: 0.1 }))
+				await save(lrc(shiftLrc(LRC, (i) => (i === 0 ? 100 : 0))), env)
+				expect(calls).toHaveLength(1)
+				expect(calls[0].diff).toContain("+[00:12.10] Amazing grace! How sweet the sound")
+			})
+
 			it("never asks Jev about a save that changes nothing", async () => {
 				const { calls, env } = recordingGate(async () => ({ flagged: true, probability: 0.99 }))
 				expect(await saveRevision(env, lyricId, owner, lrc(LRC))).toEqual({
@@ -1057,6 +1071,30 @@ describeIntegration("lyric revisions pipeline (integration)", () => {
 			expect(card.diffFull).toContain("--- rev 1")
 			expect(card.diffPreview.split("\n")).toHaveLength(6)
 			expect(card.diffPreview).toContain("-[00:12.00] Amazing grace! How sweet the sound")
+		})
+
+		describe("regressions", () => {
+			const jittered = (lyrics: string) => shiftLrc(lyrics, () => 50)
+			const changedLines = (before: string, after: string) => {
+				const a = before.split("\n")
+				return after.split("\n").filter((line, i) => line !== a[i]).length
+			}
+
+			it("regression: a diff shows no timing rows for lines moved under the minimum", async () => {
+				const revision = await save(lrc(jittered(swapWords(LRC, 1))))
+				const diff = await diffRevisions(db.env, lyricId, revision.id, null)
+				expect(diff?.rows.filter((row) => row.kind !== "same" && row.kind !== "gap")).toEqual([
+					expect.objectContaining({ kind: "word", lineNo: 1 }),
+				])
+			})
+
+			it("regression: a queue card lists only lines whose text changed when the rest moved under the minimum", async () => {
+				await save(lrc(jittered(swapWords(LRC, 15))))
+				const [card] = await listPendingCards(db.env)
+				const added = card.diffFull.split("\n").filter((line) => /^\+[^+]/.test(line))
+				expect(added).toHaveLength(changedLines(LRC, swapWords(LRC, 15)))
+				expect(added[0]).toBe("+[00:12.05] Amazing grace! How soft the sound")
+			})
 		})
 
 		it("leaves deleted lyrics out of the queue", async () => {

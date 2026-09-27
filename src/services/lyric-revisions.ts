@@ -44,7 +44,7 @@ import { ErrorCode, buildError } from "@/utils/errors"
 import { type LyricLine, extractComparableLines } from "@/utils/extract-text"
 import { sha256Hex } from "@/utils/hash"
 import { normalizeIsrc } from "@/utils/isrc"
-import { buildDiffRows, diffPreview, renderLinesForDiff, unifiedDiff } from "@/utils/lyric-diff"
+import { buildDiffRows, diffPreview, showsChanges, unifiedDiff } from "@/utils/lyric-diff"
 import { type DriftResult, measureDrift } from "@/utils/lyric-drift"
 import { decideOutcome } from "@/utils/revision-gate"
 import { type ContentValidation, validateLyricContent } from "@/utils/validate-lyrics"
@@ -353,7 +353,7 @@ const needsJev = (a: Assessment): boolean =>
 	!a.noChanges &&
 	a.outcome.goesLive &&
 	hasRoom(a.rateLimit) &&
-	renderLinesForDiff(a.anchorLines) !== renderLinesForDiff(a.candidateLines)
+	showsChanges(a.anchorLines, a.candidateLines)
 
 // Runs before the row lock so a slow TypeSafe call never holds it.
 async function checkWithJev(

@@ -16,15 +16,17 @@ function wordParts(before: string, after: string): DiffPart[] {
 
 const headOf = (line: LyricLine): { head?: HeadTextRef } => (line.head ? { head: line.head } : {})
 
+function timingShift(before: LyricLine, after: LyricLine): number | null {
+	return before.startMs === null || after.startMs === null ? null : after.startMs - before.startMs
+}
+
+const isVisibleShift = (deltaMs: number): boolean =>
+	Math.abs(deltaMs) >= config.revisions.minTimingChangeMs
+
 function keptRow(before: LyricLine, after: LyricLine, lineNo: number): DiffRow {
-	if (before.startMs !== null && after.startMs !== null && before.startMs !== after.startMs) {
-		return {
-			kind: "timing",
-			lineNo,
-			startMs: after.startMs,
-			deltaMs: after.startMs - before.startMs,
-			text: after.text,
-		}
+	const deltaMs = timingShift(before, after)
+	if (deltaMs !== null && after.startMs !== null && isVisibleShift(deltaMs)) {
+		return { kind: "timing", lineNo, startMs: after.startMs, deltaMs, text: after.text }
 	}
 	return { kind: "same", lineNo, startMs: after.startMs, text: after.text, ...headOf(after) }
 }
@@ -155,6 +157,37 @@ export function renderLinesForDiff(lines: LyricLine[]): string {
 	return lines.map((line) => `${stamp(line.startMs)}${label(line)}${line.text}\n`).join("")
 }
 
+function withoutSmallMoves(before: LyricLine[], after: LyricLine[]): LyricLine[] {
+	const settled = [...after]
+	let i = 0
+	let j = 0
+	for (const change of diffArrays(
+		before.map((line) => line.text),
+		after.map((line) => line.text)
+	)) {
+		if (change.added) {
+			j += change.count
+		} else if (change.removed) {
+			i += change.count
+		} else {
+			for (let k = 0; k < change.count; k++) {
+				const kept = after[j + k]
+				const deltaMs = timingShift(before[i + k], kept)
+				if (deltaMs !== null && !isVisibleShift(deltaMs)) {
+					settled[j + k] = { ...kept, startMs: before[i + k].startMs }
+				}
+			}
+			i += change.count
+			j += change.count
+		}
+	}
+	return settled
+}
+
+export function showsChanges(before: LyricLine[], after: LyricLine[]): boolean {
+	return renderLinesForDiff(before) !== renderLinesForDiff(withoutSmallMoves(before, after))
+}
+
 export function unifiedDiff(
 	before: LyricLine[],
 	after: LyricLine[],
@@ -164,7 +197,7 @@ export function unifiedDiff(
 		labels.before,
 		labels.after,
 		renderLinesForDiff(before),
-		renderLinesForDiff(after),
+		renderLinesForDiff(withoutSmallMoves(before, after)),
 		undefined,
 		undefined,
 		{ context: 3 }

@@ -1,10 +1,19 @@
+import { config } from "@/config"
 import { AMAZING_GRACE_SPANISH, readRevisionFixture, withTranslation } from "@/test/lyric-fixtures"
 import type { DiffRow } from "@/types"
 import { type LyricLine, extractComparableLines, extractLines } from "@/utils/extract-text"
 import { describe, expect, it } from "vitest"
-import { buildDiffRows, diffPreview, renderLinesForDiff, unifiedDiff } from "./lyric-diff"
+import {
+	buildDiffRows,
+	diffPreview,
+	renderLinesForDiff,
+	showsChanges,
+	unifiedDiff,
+} from "./lyric-diff"
 
 const LRC = readRevisionFixture("amazing-grace.lrc")
+const REEXPORT_BEFORE = ttmlLinesOf("90210-before.ttml")
+const REEXPORT_AFTER = ttmlLinesOf("90210-after.ttml")
 const base = () => extractLines(LRC, "lrc")
 const TTML = readRevisionFixture("amazing-grace.ttml")
 const SPANISH_TTML = withTranslation(TTML, "es", AMAZING_GRACE_SPANISH)
@@ -21,6 +30,16 @@ const withRomaji = (ttml: string, lines: string[]) =>
 		"</iTunesMetadata>",
 		`<transliterations><transliteration xml:lang="en-Latn">${lines.map((text, i) => `<text for="L${i + 1}">${text}</text>`).join("")}</transliteration></transliterations></iTunesMetadata>`
 	)
+
+function ttmlLinesOf(name: string): LyricLine[] {
+	return extractComparableLines(readRevisionFixture(name), "ttml")
+}
+
+function shiftEvery(lines: LyricLine[], deltaMs: number): LyricLine[] {
+	return lines.map((line) =>
+		line.startMs === null ? line : { ...line, startMs: line.startMs + deltaMs }
+	)
+}
 
 function edit(lines: LyricLine[], index: number, patch: Partial<LyricLine>): LyricLine[] {
 	return lines.map((line, i) => (i === index ? { ...line, ...patch } : line))
@@ -341,6 +360,160 @@ describe("unifiedDiff and diffPreview", () => {
 			expect(diffPreview(unifiedDiff(before, after, { before: "a", after: "b" }))).toBe(
 				"--- intro --\n+-- outro --"
 			)
+		})
+	})
+})
+
+describe("minimum timing change", () => {
+	const shifted = (deltaMs: number) => edit(base(), 0, { startMs: 12000 + deltaMs })
+	const firstRow = (deltaMs: number) => buildDiffRows(base(), shifted(deltaMs))[0]
+
+	it("is 100 ms", () => {
+		expect(config.revisions.minTimingChangeMs).toBe(100)
+	})
+
+	it("shows a line moved by exactly the minimum as a timing row", () => {
+		expect(firstRow(100)).toEqual({
+			kind: "timing",
+			lineNo: 1,
+			startMs: 12100,
+			deltaMs: 100,
+			text: "Amazing grace! How sweet the sound",
+		})
+	})
+
+	it("shows a line moved by just over the minimum as a timing row", () => {
+		expect(firstRow(101)).toMatchObject({ kind: "timing", deltaMs: 101 })
+		expect(firstRow(-101)).toMatchObject({ kind: "timing", deltaMs: -101 })
+	})
+
+	it("shows a line moved earlier by exactly the minimum as a timing row", () => {
+		expect(firstRow(-100)).toMatchObject({ kind: "timing", deltaMs: -100 })
+	})
+
+	it("treats a line moved by just under the minimum as unchanged", () => {
+		expect(buildDiffRows(base(), shifted(99))).toEqual([{ kind: "gap", count: 16 }])
+		expect(buildDiffRows(base(), shifted(-99))).toEqual([{ kind: "gap", count: 16 }])
+	})
+
+	it("keeps the unified diff empty for a move under the minimum", () => {
+		const full = unifiedDiff(base(), shifted(99), { before: "a", after: "b" })
+		expect(diffPreview(full)).toBe("")
+	})
+
+	it("lists a move of at least the minimum in the unified diff", () => {
+		const full = unifiedDiff(base(), shifted(100), { before: "a", after: "b" })
+		expect(diffPreview(full)).toBe(
+			"-[00:12.00] Amazing grace! How sweet the sound\n+[00:12.10] Amazing grace! How sweet the sound"
+		)
+	})
+
+	describe("showsChanges", () => {
+		it("is false for identical lines", () => {
+			expect(showsChanges(base(), base())).toBe(false)
+		})
+
+		it("is false when every line only moves under the minimum", () => {
+			expect(showsChanges(base(), shiftEvery(base(), 10))).toBe(false)
+			expect(showsChanges(base(), shiftEvery(base(), -99))).toBe(false)
+		})
+
+		it("is true when a line moves by the minimum", () => {
+			expect(showsChanges(base(), shifted(100))).toBe(true)
+		})
+
+		it("is true when text changes", () => {
+			expect(showsChanges(base(), edit(base(), 3, { text: "Was dark, but now I see." }))).toBe(true)
+		})
+
+		it("is true when a line is added or removed", () => {
+			expect(showsChanges(base(), base().slice(1))).toBe(true)
+			expect(showsChanges(base().slice(1), base())).toBe(true)
+		})
+	})
+
+	describe("edge cases", () => {
+		it("keeps a line that gains or loses its time as unchanged", () => {
+			const untimed = edit(base(), 0, { startMs: null })
+			expect(buildDiffRows(base(), untimed)[0]).toEqual({ kind: "gap", count: 16 })
+			expect(buildDiffRows(untimed, base())[0]).toEqual({ kind: "gap", count: 16 })
+		})
+
+		it("still lists a line that loses its time in the unified diff", () => {
+			const untimed = edit(base(), 0, { startMs: null })
+			const full = unifiedDiff(base(), untimed, { before: "a", after: "b" })
+			expect(diffPreview(full)).toBe(
+				"-[00:12.00] Amazing grace! How sweet the sound\n+Amazing grace! How sweet the sound"
+			)
+			expect(showsChanges(base(), untimed)).toBe(true)
+			expect(showsChanges(untimed, base())).toBe(true)
+		})
+
+		it("still shows a text change on a line that also moved under the minimum", () => {
+			const after = edit(base(), 0, { startMs: 12050, text: "Amazing grace! How soft the sound" })
+			expect(buildDiffRows(base(), after)[0]).toMatchObject({ kind: "word", startMs: 12050 })
+		})
+
+		it("shows the real start time for a moved line after an unchanged neighbour", () => {
+			const after = edit(shiftEvery(base(), 40), 5, { startMs: 33500 })
+			const timing = buildDiffRows(base(), after).filter((row) => row.kind === "timing")
+			expect(timing).toEqual([
+				{
+					kind: "timing",
+					lineNo: 6,
+					startMs: 33500,
+					deltaMs: 500,
+					text: base()[5].text,
+				},
+			])
+		})
+	})
+
+	describe("regressions", () => {
+		it("regression: a TTML Composer re-export that moves lines by 1 ms shows no timing rows", () => {
+			const rows = buildDiffRows(REEXPORT_BEFORE, REEXPORT_AFTER)
+			expect(rows.filter((row) => row.kind === "timing")).toEqual([])
+		})
+
+		it("regression: the re-export still shows its one real text change", () => {
+			const rows = buildDiffRows(REEXPORT_BEFORE, REEXPORT_AFTER)
+			expect(rows.filter((row) => row.kind !== "same" && row.kind !== "gap")).toEqual([
+				expect.objectContaining({ kind: "word", lineNo: 35 }),
+			])
+		})
+
+		it("regression: the re-export unified diff lists only the real text change", () => {
+			const full = unifiedDiff(REEXPORT_BEFORE, REEXPORT_AFTER, { before: "a", after: "b" })
+			expect(diffPreview(full)).toBe(
+				"-[03:51.58] salary, we 'bout to cap, bitch\n+[03:50.31] I'ma sell it, your niggas salary, we 'bout to cap, bitch"
+			)
+		})
+
+		it("regression: 1 ms jitter on every line shows no changes", () => {
+			expect(buildDiffRows(base(), shiftEvery(base(), -1))).toEqual([{ kind: "gap", count: 16 }])
+			expect(showsChanges(REEXPORT_BEFORE, shiftEvery(REEXPORT_BEFORE, 1))).toBe(false)
+		})
+	})
+
+	describe("invariants", () => {
+		it("never emits a timing row smaller than the minimum", () => {
+			for (const delta of [-150, -100, -99, -1, 0, 1, 50, 99, 100, 150]) {
+				const after = shiftEvery(base(), delta)
+				for (const row of buildDiffRows(base(), after)) {
+					if (row.kind === "timing") {
+						expect(Math.abs(row.deltaMs)).toBeGreaterThanOrEqual(config.revisions.minTimingChangeMs)
+					}
+				}
+			}
+		})
+
+		it("does not mutate its inputs", () => {
+			const before = base()
+			const after = shiftEvery(base(), 30)
+			const snapshot = structuredClone(after)
+			unifiedDiff(before, after, { before: "a", after: "b" })
+			showsChanges(before, after)
+			expect(after).toEqual(snapshot)
 		})
 	})
 })
