@@ -45,7 +45,14 @@ import { ErrorCode, buildError } from "@/utils/errors"
 import { type LyricLine, extractComparableLines } from "@/utils/extract-text"
 import { sha256Hex } from "@/utils/hash"
 import { normalizeIsrc } from "@/utils/isrc"
-import { buildDiffRows, reviewDiff, showsChanges, unifiedDiff } from "@/utils/lyric-diff"
+import {
+	type FieldChange,
+	buildDiffRows,
+	buildFieldRows,
+	reviewDiff,
+	showsChanges,
+	unifiedDiff,
+} from "@/utils/lyric-diff"
 import { type DriftResult, measureDrift } from "@/utils/lyric-drift"
 import { decideOutcome } from "@/utils/revision-gate"
 import { type ContentValidation, validateLyricContent } from "@/utils/validate-lyrics"
@@ -88,6 +95,10 @@ interface Assessment {
 	rateLimit: RevisionRateLimit
 	anchorLines: LyricLine[]
 	candidateLines: LyricLine[]
+	liveLines: LyricLine[]
+	liveRevNo: number
+	anchorRevNo: number
+	fieldChanges: FieldChange[]
 }
 
 type AccessFailure = { ok: false; reason: "not_found" | "not_owner" }
@@ -257,9 +268,10 @@ async function assess(
 
 	const rateLimit = await remainingEdits(db, lyricsId, userId)
 	const validated = validateLyricContent(input.lyrics, input.format)
-	const language = resolveField(input.language, live.language, revert?.language, acceptLanguage)
-	const isrc = resolveField(input.isrc, live.isrc, revert?.isrc, acceptIsrc)
-	const album = resolveField(input.album, lyric.album, revert?.album, acceptAlbum)
+	const current = { language: live.language, isrc: live.isrc, album: lyric.album }
+	const language = resolveField(input.language, current.language, revert?.language, acceptLanguage)
+	const isrc = resolveField(input.isrc, current.isrc, revert?.isrc, acceptIsrc)
+	const album = resolveField(input.album, current.album, revert?.album, acceptAlbum)
 
 	const comparable = validated.ok ? extractComparableLines(input.lyrics, validated.format) : null
 	const lines = comparable?.filter((line) => line.head === undefined) ?? null
@@ -282,6 +294,20 @@ async function assess(
 	]
 
 	const failure = firstFailure(validated, language, isrc, album)
+	const anchorLines = comparable ? await revisionLines(anchor.lyrics, anchor.format) : []
+	const liveLines =
+		comparable && live.id !== anchor.id
+			? await revisionLines(live.lyrics, live.format)
+			: anchorLines
+	const fieldChanges = (
+		[
+			["language", current.language, language],
+			["isrc", current.isrc, isrc],
+			["album", current.album, album],
+		] as const
+	)
+		.filter(([, , resolved]) => resolved.valid)
+		.map(([field, before, resolved]): FieldChange => ({ field, before, after: resolved.value }))
 
 	if (!validated.ok || !lines || !comparable || failure) {
 		return {
@@ -296,8 +322,12 @@ async function assess(
 				jevProbability: null,
 				outcome: NOT_SAVABLE,
 				rateLimit,
-				anchorLines: [],
-				candidateLines: [],
+				anchorLines,
+				candidateLines: comparable ?? [],
+				liveLines,
+				liveRevNo: live.rev_no,
+				anchorRevNo: anchor.rev_no,
+				fieldChanges,
 			},
 		}
 	}
@@ -312,11 +342,10 @@ async function assess(
 	}
 	const noChanges =
 		sha256Hex(candidate.content) === live.content_hash &&
-		candidate.language === live.language &&
-		candidate.isrc === live.isrc &&
-		candidate.album === lyric.album
+		candidate.language === current.language &&
+		candidate.isrc === current.isrc &&
+		candidate.album === current.album
 
-	const anchorLines = await revisionLines(anchor.lyrics, anchor.format)
 	const drift = measureDrift(anchorLines, comparable)
 	const outcome = decideOutcome({
 		sealed: lyric.committee_approved_at !== null,
@@ -339,6 +368,10 @@ async function assess(
 			rateLimit,
 			anchorLines,
 			candidateLines: comparable,
+			liveLines,
+			liveRevNo: live.rev_no,
+			anchorRevNo: anchor.rev_no,
+			fieldChanges,
 		},
 	}
 }
@@ -362,10 +395,17 @@ export async function previewRevision(
 				timingOffsetMs: a.drift.timingOffsetMs,
 				textLimit: config.revisions.textDriftLimit,
 				timingLimit: config.revisions.timingDriftLimit,
+				anchorRevNo: a.anchorRevNo,
 			},
 			outcome: a.outcome,
 			noChanges: a.noChanges,
 			rateLimit: a.rateLimit,
+			diff: {
+				rows: a.noChanges
+					? []
+					: [...buildDiffRows(a.liveLines, a.candidateLines), ...buildFieldRows(a.fieldChanges)],
+				againstRevNo: a.liveRevNo,
+			},
 		},
 	}
 }
@@ -577,11 +617,21 @@ export async function diffRevisions(
 			: await getRevisionRow(env.DB, lyricsId, againstId)
 	if (againstId !== null && !base) return null
 	if (!base) return { rows: [], againstRevNo: null }
+	const albumKnown = base.album_known && target.album_known
 	return {
-		rows: buildDiffRows(
-			await revisionLines(base.lyrics, base.format),
-			await revisionLines(target.lyrics, target.format)
-		),
+		rows: [
+			...buildDiffRows(
+				await revisionLines(base.lyrics, base.format),
+				await revisionLines(target.lyrics, target.format)
+			),
+			...buildFieldRows([
+				{ field: "language", before: base.language, after: target.language },
+				{ field: "isrc", before: base.isrc, after: target.isrc },
+				...(albumKnown
+					? [{ field: "album" as const, before: base.album, after: target.album }]
+					: []),
+			]),
+		],
 		againstRevNo: base.rev_no,
 	}
 }

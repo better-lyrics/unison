@@ -125,11 +125,92 @@ describeIntegration("revision routes (integration)", () => {
 			expect(json.data).toMatchObject({
 				outcome: { goesLive: false, reason: "large_text_drift" },
 				noChanges: false,
-				drift: { textLimit: 0.15, timingLimit: 0.3 },
+				drift: { textLimit: 0.15, timingLimit: 0.3, anchorRevNo: 1 },
 				rateLimit: { lyricRemaining: 5, userRemaining: 20 },
 			})
 			expect(json.data.checks.map((c) => c.field)).toEqual(["lyrics", "language", "isrc", "album"])
 			expect((await listRevisions()).json.data.revisions).toHaveLength(1)
+		})
+
+		it("returns the preview diff against the live revision with field rows last", async () => {
+			const { status, json } = await call<PreviewResult>(
+				"POST",
+				`/lyrics/${lyricId}/revisions/preview`,
+				{
+					token: "owner-token",
+					body: {
+						lyrics: swapWords(LRC, 1),
+						format: "lrc",
+						language: "es",
+						isrc: "USRC17607839",
+						album: "Sacred Songs",
+					},
+				}
+			)
+			expect(status).toBe(200)
+			expect(json.data.noChanges).toBe(false)
+			expect(json.data.diff).toEqual({
+				rows: [
+					{
+						kind: "word",
+						lineNo: 1,
+						startMs: 12000,
+						parts: [
+							["=", "Amazing grace! How "],
+							["-", "sweet"],
+							["+", "soft"],
+							["=", " the sound"],
+						],
+					},
+					{ kind: "same", lineNo: 2, startMs: 16000, text: "That saved a wretch like me!" },
+					{ kind: "same", lineNo: 3, startMs: 20000, text: "I once was lost, but now am found;" },
+					{ kind: "gap", count: 13 },
+					{ kind: "field", field: "language", before: "en", after: "es" },
+					{ kind: "field", field: "isrc", before: null, after: "USRC17607839" },
+					{ kind: "field", field: "album", before: null, after: "Sacred Songs" },
+				],
+				againstRevNo: 1,
+			})
+		})
+
+		it("returns an empty preview diff when nothing changed", async () => {
+			const { json } = await call<PreviewResult>("POST", `/lyrics/${lyricId}/revisions/preview`, {
+				token: "owner-token",
+				body: { lyrics: LRC, format: "lrc", language: "en" },
+			})
+			expect(json.data.noChanges).toBe(true)
+			expect(json.data.diff).toEqual({ rows: [], againstRevNo: 1 })
+		})
+
+		it("returns only field rows in the preview diff when the lyrics do not parse", async () => {
+			const { status, json } = await call<PreviewResult>(
+				"POST",
+				`/lyrics/${lyricId}/revisions/preview`,
+				{
+					token: "owner-token",
+					body: { lyrics: "<tt><body><div><p>unclosed", format: "ttml", language: "es" },
+				}
+			)
+			expect(status).toBe(200)
+			expect(json.data.diff).toEqual({
+				rows: [{ kind: "field", field: "language", before: "en", after: "es" }],
+				againstRevNo: 1,
+			})
+		})
+
+		it("returns history diff field rows with the same shape as the preview", async () => {
+			await call<Saved>("POST", `/lyrics/${lyricId}/revisions`, {
+				token: "owner-token",
+				body: { lyrics: LRC, format: "lrc", language: "es" },
+			})
+			const [latest] = (await listRevisions()).json.data.revisions
+			const diff = await call<RevisionDiff>("GET", `/lyrics/${lyricId}/revisions/${latest.id}/diff`)
+			expect(diff.json.data.rows.at(-1)).toEqual({
+				kind: "field",
+				field: "language",
+				before: "en",
+				after: "es",
+			})
 		})
 
 		it("lists, reads, and diffs revisions without auth", async () => {

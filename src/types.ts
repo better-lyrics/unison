@@ -272,8 +272,10 @@ export interface RevisionDetail extends RevisionSummary {
 
 export type CheckStatus = "ok" | "warn" | "bad"
 
+export type MetadataField = "language" | "isrc" | "album"
+
 export interface FieldCheck {
-	field: "lyrics" | "language" | "isrc" | "album"
+	field: "lyrics" | MetadataField
 	status: CheckStatus
 	message: string
 	line?: number
@@ -299,10 +301,12 @@ export interface PreviewResult {
 		timingOffsetMs: number
 		textLimit: number
 		timingLimit: number
+		anchorRevNo: number | null
 	}
 	outcome: GateOutcome
 	noChanges: boolean
 	rateLimit: RevisionRateLimit
+	diff: RevisionDiff
 }
 
 export type DiffPart = ["=" | "+" | "-", string]
@@ -320,6 +324,7 @@ export type DiffRow =
 	| { kind: "word"; lineNo: number; startMs: number | null; parts: DiffPart[]; head?: HeadTextRef }
 	| { kind: "timing"; lineNo: number; startMs: number; deltaMs: number; text: string }
 	| { kind: "gap"; count: number; section?: "head" }
+	| { kind: "field"; field: MetadataField; before: string | null; after: string | null }
 
 export interface RevisionDiff {
 	rows: DiffRow[]

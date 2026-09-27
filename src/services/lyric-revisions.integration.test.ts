@@ -17,9 +17,11 @@ import {
 	swapWords,
 	withTranslation,
 } from "@/test/lyric-fixtures"
-import type { Env } from "@/types"
+import type { DiffRow, Env } from "@/types"
 import { decompress } from "@/utils/compression"
+import { extractComparableLines } from "@/utils/extract-text"
 import { sha256Hex } from "@/utils/hash"
+import { buildDiffRows } from "@/utils/lyric-diff"
 import { shiftTtml } from "@/utils/ttml-timing"
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest"
 import {
@@ -1407,6 +1409,303 @@ describeIntegration("lyric revisions pipeline (integration)", () => {
 		})
 	})
 
+	describe("preview diff", () => {
+		const SPANISH_TTML = withTranslation(TTML, "es", AMAZING_GRACE_SPANISH)
+		const lrcLines = (lyrics: string) => extractComparableLines(lyrics, "lrc")
+		const changeRows = (rows: DiffRow[]) =>
+			rows.filter((row) => row.kind !== "same" && row.kind !== "gap")
+		const fieldRows = (rows: DiffRow[]) => rows.filter((row) => row.kind === "field")
+		const seal = (id: number) =>
+			db.pool.query(
+				"UPDATE lyrics SET committee_approved_at = 1700000000, committee_approved_by = $2 WHERE id = $1",
+				[id, owner]
+			)
+		let albumLyric: number
+
+		beforeEach(async () => {
+			albumLyric = await seedLyric(db, owner, {
+				lyrics: LRC,
+				format: "lrc",
+				videoId: "albumdiff01",
+				album: "Hymns of Grace",
+			})
+		})
+
+		async function preview(input: RevisionInput, id = lyricId) {
+			const result = await previewRevision(db.env, id, owner, input)
+			if (!result.ok) throw new Error(result.reason)
+			return result.preview
+		}
+
+		it("diffs a lyric edit with the same rows as the history diff", async () => {
+			const { diff } = await preview(lrc(swapWords(LRC, 1)))
+			expect(diff).toEqual({
+				rows: buildDiffRows(lrcLines(LRC), lrcLines(swapWords(LRC, 1))),
+				againstRevNo: 1,
+			})
+			expect(changeRows(diff.rows)).toEqual([expect.objectContaining({ kind: "word", lineNo: 1 })])
+		})
+
+		it("appends an album row after the lyric rows for an album-only edit", async () => {
+			const { diff } = await preview(lrc(LRC, { album: "  Sacred Songs  " }), albumLyric)
+			expect(diff.rows).toEqual([
+				{ kind: "gap", count: 16 },
+				{ kind: "field", field: "album", before: "Hymns of Grace", after: "Sacred Songs" },
+			])
+		})
+
+		it("lists language then ISRC rows with the ISRC the save would store", async () => {
+			const { diff } = await preview(lrc(LRC, { language: "es", isrc: "us-rc1-76-07839" }))
+			expect(fieldRows(diff.rows)).toEqual([
+				{ kind: "field", field: "language", before: "en", after: "es" },
+				{ kind: "field", field: "isrc", before: null, after: "USRC17607839" },
+			])
+		})
+
+		it("shows a cleared album with a null after", async () => {
+			const { diff } = await preview(lrc(LRC, { album: null }), albumLyric)
+			expect(fieldRows(diff.rows)).toEqual([
+				{ kind: "field", field: "album", before: "Hymns of Grace", after: null },
+			])
+		})
+
+		it("returns no rows when nothing changed", async () => {
+			const result = await preview(lrc(LRC))
+			expect(result.noChanges).toBe(true)
+			expect(result.diff).toEqual({ rows: [], againstRevNo: 1 })
+		})
+
+		it("shows no timing row for lines moved under 100 ms", async () => {
+			const result = await preview(lrc(shiftLrc(LRC, () => 50)))
+			expect(result.noChanges).toBe(false)
+			expect(result.diff.rows).toEqual([{ kind: "gap", count: 16 }])
+		})
+
+		it("shows a timing row for a line moved by 100 ms", async () => {
+			const { diff } = await preview(lrc(shiftLrc(LRC, (i) => (i === 0 ? 100 : 0))))
+			expect(changeRows(diff.rows)).toEqual([
+				expect.objectContaining({ kind: "timing", lineNo: 1, deltaMs: 100 }),
+			])
+		})
+
+		it("orders body rows, then head rows, then field rows", async () => {
+			const ttmlLyric = await seedLyric(db, owner, {
+				lyrics: SPANISH_TTML,
+				format: "ttml",
+				videoId: "ttmldiff001",
+			})
+			const edited = swapWords(
+				withTranslation(
+					TTML,
+					"es",
+					AMAZING_GRACE_SPANISH.map((line, i) => (i === 1 ? "Que salvó a un alma como yo" : line))
+				),
+				1
+			)
+			const { diff } = await preview(
+				{ lyrics: edited, format: "ttml", language: "es", album: "Sacred Songs" },
+				ttmlLyric
+			)
+			const changed = changeRows(diff.rows)
+			expect(changed.map((row) => [row.kind, "head" in row, "field" in row && row.field])).toEqual([
+				["word", false, false],
+				["word", true, false],
+				["field", false, "language"],
+				["field", false, "album"],
+			])
+			expect(diff.rows.slice(-2)).toEqual([
+				{ kind: "field", field: "language", before: "en", after: "es" },
+				{ kind: "field", field: "album", before: null, after: "Sacred Songs" },
+			])
+		})
+
+		describe("against which revision", () => {
+			it("reports the same revision for drift and diff when the anchor is live", async () => {
+				const result = await preview(lrc(swapWords(LRC, 1)))
+				expect(result.drift.anchorRevNo).toBe(1)
+				expect(result.diff.againstRevNo).toBe(1)
+			})
+
+			it("reports the older anchor for drift after a live edit", async () => {
+				await save(lrc(swapWords(LRC, 1)))
+				const result = await preview(lrc(swapWords(LRC, 2)))
+				expect(result.drift.anchorRevNo).toBe(1)
+				expect(result.diff.againstRevNo).toBe(2)
+			})
+
+			it("reports the live anchor for drift while a revision is pending", async () => {
+				await seal(lyricId)
+				await save(lrc(swapWords(LRC, 1)))
+				const result = await preview(lrc(swapWords(LRC, 2)))
+				expect(result.drift.anchorRevNo).toBe(1)
+				expect(result.diff.againstRevNo).toBe(1)
+			})
+
+			it("reports the anchor for drift even when the lyrics do not parse", async () => {
+				await save(lrc(swapWords(LRC, 1)))
+				const result = await preview({ lyrics: "<tt><body><div><p>unclosed", format: "ttml" })
+				expect(result.drift.anchorRevNo).toBe(1)
+			})
+
+			it("compares against the live revision, not the drift anchor, after a live edit", async () => {
+				expect((await save(lrc(swapWords(LRC, 1)))).status).toBe("live")
+				const { diff } = await preview(lrc(swapWords(LRC, 2)))
+				expect(diff.againstRevNo).toBe(2)
+				expect(changeRows(diff.rows)).toEqual([
+					expect.objectContaining({ kind: "word", lineNo: 2 }),
+				])
+			})
+
+			it("keeps drift measured against the anchor while the rows compare against live", async () => {
+				await save(lrc(swapWords(LRC, 1)))
+				const result = await preview(lrc(swapWords(LRC, 2)))
+				expect(result.drift.text).toBeCloseTo(2 / 98, 10)
+				expect(changeRows(result.diff.rows)).toHaveLength(1)
+			})
+
+			it("shows no field row for a value an earlier live edit already set", async () => {
+				await save(lrc(swapWords(LRC, 1), { language: "es" }))
+				const { diff } = await preview(lrc(swapWords(LRC, 2), { language: "es" }))
+				expect(fieldRows(diff.rows)).toEqual([])
+			})
+
+			it("measures against the approved revision once the council approves it", async () => {
+				await seal(lyricId)
+				const council = await seedCouncilMember(db, "c".repeat(64))
+				const pending = await save(lrc(swapWords(LRC, 1)))
+				await approveRevision(db.env, lyricId, pending.id, council)
+				const { diff } = await preview(lrc(swapWords(LRC, 2)))
+				expect(diff.againstRevNo).toBe(2)
+				expect(changeRows(diff.rows)).toEqual([
+					expect.objectContaining({ kind: "word", lineNo: 2 }),
+				])
+			})
+
+			it("ignores a pending revision", async () => {
+				await seal(lyricId)
+				expect((await save(lrc(swapWords(LRC, 1)))).status).toBe("pending")
+				const { diff } = await preview(lrc(swapWords(LRC, 2)))
+				expect(diff.againstRevNo).toBe(1)
+				expect(changeRows(diff.rows)).toHaveLength(2)
+			})
+
+			it("reads the lyric's album when the live revision was written without one", async () => {
+				await db.pool.query(
+					"UPDATE lyric_revisions SET album = NULL, album_known = FALSE WHERE lyrics_id = $1",
+					[albumLyric]
+				)
+				const { diff } = await preview(lrc(LRC, { album: "Sacred Songs" }), albumLyric)
+				expect(fieldRows(diff.rows)).toEqual([
+					{ kind: "field", field: "album", before: "Hymns of Grace", after: "Sacred Songs" },
+				])
+			})
+		})
+
+		describe("edge cases", () => {
+			it("returns only field rows when the lyrics do not parse", async () => {
+				const result = await preview(
+					{ lyrics: "<tt><body><div><p>unclosed", format: "ttml", album: "Sacred Songs" },
+					albumLyric
+				)
+				expect(result.checks[0].status).toBe("bad")
+				expect(result.diff).toEqual({
+					rows: [
+						{ kind: "field", field: "album", before: "Hymns of Grace", after: "Sacred Songs" },
+					],
+					againstRevNo: 1,
+				})
+			})
+
+			it("returns no rows when the lyrics do not parse and no field changed", async () => {
+				const { diff } = await preview({ lyrics: "<tt><body><div><p>unclosed", format: "ttml" })
+				expect(diff.rows).toEqual([])
+			})
+
+			it("keeps a field left out of the body out of the rows", async () => {
+				await save(lrc(LRC, { isrc: "USRC17607839" }))
+				const { diff } = await preview({ lyrics: swapWords(LRC, 1), format: "lrc" })
+				expect(fieldRows(diff.rows)).toEqual([])
+			})
+
+			it("keeps unicode album names intact", async () => {
+				const { diff } = await preview(
+					lrc(LRC, { album: "今すぐ輪廻 (Beyoncé Remix)" }),
+					albumLyric
+				)
+				expect(fieldRows(diff.rows)).toEqual([
+					{
+						kind: "field",
+						field: "album",
+						before: "Hymns of Grace",
+						after: "今すぐ輪廻 (Beyoncé Remix)",
+					},
+				])
+			})
+		})
+
+		describe("error paths", () => {
+			it("leaves out a row for an invalid ISRC but keeps the other rows", async () => {
+				const result = await preview(lrc(swapWords(LRC, 1), { language: "es", isrc: "nope" }))
+				expect(result.checks.find((check) => check.field === "isrc")?.status).toBe("bad")
+				expect(changeRows(result.diff.rows)).toEqual([
+					expect.objectContaining({ kind: "word", lineNo: 1 }),
+					{ kind: "field", field: "language", before: "en", after: "es" },
+				])
+			})
+
+			it("leaves out a row for a language that is not on the list", async () => {
+				const { diff } = await preview(lrc(LRC, { language: "klingon" }))
+				expect(fieldRows(diff.rows)).toEqual([])
+			})
+
+			it("leaves out a row for an album over the length limit", async () => {
+				const long = "x".repeat(config.validation.album.maxLength + 1)
+				const { diff } = await preview(lrc(LRC, { album: long }), albumLyric)
+				expect(fieldRows(diff.rows)).toEqual([])
+			})
+		})
+
+		describe("regressions", () => {
+			it("regression: returns no rows for a no-op edit while the anchor is behind the live revision", async () => {
+				await save(lrc(swapWords(LRC, 1)))
+				const result = await preview(lrc(swapWords(LRC, 1)))
+				expect(result.noChanges).toBe(true)
+				expect(result.diff.rows).toEqual([])
+			})
+		})
+
+		describe("invariants", () => {
+			it("shows the rows the history diff shows once the edit is saved after a live edit", async () => {
+				await save(lrc(swapWords(LRC, 1), { isrc: "USRC17607839" }))
+				const input = lrc(swapWords(LRC, 2), { language: "es" })
+				const { diff } = await preview(input)
+				const saved = await save(input)
+				expect(await diffRevisions(db.env, lyricId, saved.id, null)).toEqual(diff)
+			})
+
+			it("shows the same field rows the history diff shows once the edit is saved", async () => {
+				const input = lrc(swapWords(LRC, 1), { language: "es", isrc: "USRC17607839" })
+				const { diff } = await preview(input)
+				const saved = await save(input)
+				const history = await diffRevisions(db.env, lyricId, saved.id, null)
+				expect(history?.rows).toEqual(diff.rows)
+				expect(history?.againstRevNo).toBe(diff.againstRevNo)
+			})
+
+			it("never reports a change row when noChanges is true", async () => {
+				await save(lrc(LRC, { isrc: "USRC17607839" }))
+				for (const input of [
+					lrc(LRC, { isrc: "USRC17607839" }),
+					{ lyrics: LRC, format: "lrc" as const },
+				]) {
+					const result = await preview(input)
+					expect(result.noChanges).toBe(true)
+					expect(result.diff.rows).toEqual([])
+				}
+			})
+		})
+	})
+
 	describe("history, diff, and the council queue", () => {
 		it("lists revisions newest first with the anchor marked", async () => {
 			await save(lrc(swapWords(LRC, 1)))
@@ -1439,6 +1738,62 @@ describeIntegration("lyric revisions pipeline (integration)", () => {
 			const diff = await diffRevisions(db.env, lyricId, third.id, await revisionId(1))
 			expect(diff?.againstRevNo).toBe(1)
 			expect(diff?.rows.filter((row) => row.kind === "word")).toHaveLength(2)
+		})
+
+		describe("field rows", () => {
+			const fieldRows = (rows: DiffRow[] | undefined) => rows?.filter((row) => row.kind === "field")
+
+			it("appends language and ISRC rows after the lyric rows", async () => {
+				const revision = await save(
+					lrc(swapWords(LRC, 1), { language: "es", isrc: "USRC17607839" })
+				)
+				const diff = await diffRevisions(db.env, lyricId, revision.id, null)
+				expect(diff?.rows.slice(-2)).toEqual([
+					{ kind: "field", field: "language", before: "en", after: "es" },
+					{ kind: "field", field: "isrc", before: null, after: "USRC17607839" },
+				])
+			})
+
+			it("emits no field rows when the metadata is the same", async () => {
+				const revision = await save(lrc(swapWords(LRC, 1)))
+				expect(fieldRows((await diffRevisions(db.env, lyricId, revision.id, null))?.rows)).toEqual(
+					[]
+				)
+			})
+
+			it("emits an album row when both revisions record their album", async () => {
+				const revision = await save(lrc(LRC, { album: "Sacred Songs" }))
+				expect(fieldRows((await diffRevisions(db.env, lyricId, revision.id, null))?.rows)).toEqual([
+					{ kind: "field", field: "album", before: null, after: "Sacred Songs" },
+				])
+			})
+
+			it("emits a row for a field cleared between revisions", async () => {
+				await save(lrc(LRC, { isrc: "USRC17607839" }))
+				const cleared = await save(lrc(LRC, { isrc: null }))
+				expect(fieldRows((await diffRevisions(db.env, lyricId, cleared.id, null))?.rows)).toEqual([
+					{ kind: "field", field: "isrc", before: "USRC17607839", after: null },
+				])
+			})
+
+			it("emits no album row when either revision was written without an album", async () => {
+				const revision = await save(lrc(LRC, { album: "Sacred Songs" }))
+				await db.pool.query(
+					"UPDATE lyric_revisions SET album = NULL, album_known = FALSE WHERE id = $1",
+					[await revisionId(1)]
+				)
+				expect(fieldRows((await diffRevisions(db.env, lyricId, revision.id, null))?.rows)).toEqual(
+					[]
+				)
+			})
+
+			it("diffs field rows against an explicit revision", async () => {
+				await save(lrc(LRC, { language: "es" }))
+				const third = await save(lrc(LRC, { language: "fr" }))
+				expect(
+					fieldRows((await diffRevisions(db.env, lyricId, third.id, await revisionId(1)))?.rows)
+				).toEqual([{ kind: "field", field: "language", before: "en", after: "fr" }])
+			})
 		})
 
 		describe("edge cases", () => {

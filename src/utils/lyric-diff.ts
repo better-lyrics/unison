@@ -1,5 +1,5 @@
 import { config } from "@/config"
-import type { DiffPart, DiffRow, HeadTextRef } from "@/types"
+import type { DiffPart, DiffRow, HeadTextRef, MetadataField } from "@/types"
 import type { LyricLine } from "@/utils/extract-text"
 import { createTwoFilesPatch, diffArrays } from "diff"
 
@@ -204,15 +204,26 @@ export function unifiedDiff(before: LyricLine[], after: LyricLine[], labels: Dif
 	)
 }
 
-interface FieldChange {
-	field: string
+export interface FieldChange {
+	field: MetadataField
 	before: string | null
 	after: string | null
 }
 
+const FIELD_ORDER: MetadataField[] = ["language", "isrc", "album"]
+
+const isChanged = (change: FieldChange): boolean => change.before !== change.after
+
+export function buildFieldRows(changes: FieldChange[]): DiffRow[] {
+	return changes
+		.filter(isChanged)
+		.sort((a, b) => FIELD_ORDER.indexOf(a.field) - FIELD_ORDER.indexOf(b.field))
+		.map(({ field, before, after }) => ({ kind: "field", field, before, after }))
+}
+
 function renderFields(changes: FieldChange[], side: "before" | "after"): string {
 	return changes
-		.filter((change) => change.before !== change.after && change[side] !== null)
+		.filter((change) => isChanged(change) && change[side] !== null)
 		.map((change) => `[${change.field}] ${change[side]}\n`)
 		.join("")
 }
