@@ -17,7 +17,18 @@ vi.mock("@/db/rejections", () => ({
 
 const KEY = "k".repeat(64)
 const reviewer = { id: 7, key_id: KEY } as unknown as Awaited<ReturnType<typeof getUserByKeyId>>
-const app = () => reviewQueueBotRoutes({ CACHE: makeMemoryCache() } as unknown as Env)
+function lyricsDb(contents: Map<number, string>) {
+	return {
+		prepare: () => ({
+			bind: (id: number) => ({
+				first: async () => (contents.has(id) ? { lyrics: contents.get(id) } : null),
+			}),
+		}),
+	}
+}
+
+const app = (contents = new Map<number, string>()) =>
+	reviewQueueBotRoutes({ CACHE: makeMemoryCache(), DB: lyricsDb(contents) } as unknown as Env)
 
 function candidate(over: Partial<SealCandidate> = {}): SealCandidate {
 	return {
@@ -28,7 +39,6 @@ function candidate(over: Partial<SealCandidate> = {}): SealCandidate {
 		format: "lrc",
 		score: 5,
 		vote_count: 3,
-		lyrics: "gz",
 		submitter_id: 3,
 		submitter_key_id: "a".repeat(64),
 		submitter_nickname: "Nick",
@@ -106,10 +116,10 @@ describe("GET /lyrics/queue/bot", () => {
 		const ttml =
 			'<tt xmlns="http://www.w3.org/ns/ttml" xmlns:ttm="http://www.w3.org/ns/ttml#metadata"><body><div><p begin="0:00" end="0:02">hello world</p></div></body></tt>'
 		vi.mocked(getSealCandidates).mockResolvedValue([
-			candidate({ id: 1, format: "ttml", lyrics: await compress(ttml) }),
+			candidate({ id: 1, format: "ttml" }),
 			candidate({ id: 2, format: "lrc" }),
 		])
-		const res = await app().handle(getReq())
+		const res = await app(new Map([[1, await compress(ttml)]])).handle(getReq())
 		const body = (await res.json()) as {
 			data: { id: number; ttmlSignals?: string[] }[]
 		}

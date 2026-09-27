@@ -3,10 +3,10 @@ import { type BookmarkView, listActiveBookmarks, toBookmarkView } from "@/db/cou
 import { type CouncilPerson, withTier } from "@/db/council-person"
 import { getCuratorTierMap } from "@/db/leaderboard"
 import { resolvePeopleByKeyIds } from "@/db/users"
-import { listPendingCards } from "@/services/lyric-revisions"
-import type { Env, PendingRevisionCard } from "@/types"
+import { type PendingRevisionSummary, listPendingRevisions } from "@/services/lyric-revisions"
+import type { Env } from "@/types"
 
-export interface EditItem extends Omit<PendingRevisionCard, "author" | "authorKeyId"> {
+export interface EditItem extends Omit<PendingRevisionSummary, "author" | "authorKeyId"> {
 	author: CouncilPerson | null
 	bookmark: BookmarkView | null
 }
@@ -20,7 +20,7 @@ export interface EditThresholds {
 export async function listCouncilEdits(
 	env: Env
 ): Promise<{ items: EditItem[]; thresholds: EditThresholds }> {
-	const cards = await listPendingCards(env)
+	const cards = await listPendingRevisions(env)
 	const [people, tiers, bookmarks] = await Promise.all([
 		resolvePeopleByKeyIds(
 			env,

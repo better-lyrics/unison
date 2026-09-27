@@ -140,7 +140,7 @@ describeIntegration("council dashboard routes (integration)", () => {
 				bookmark: { holder: { keyId: OLA } },
 			})
 			expect(item).not.toHaveProperty("authorKeyId")
-			expect(item.diffFull).toContain("--- rev 1")
+			expect(item).not.toHaveProperty("diffFull")
 		})
 
 		it("returns no items when nothing is pending", async () => {

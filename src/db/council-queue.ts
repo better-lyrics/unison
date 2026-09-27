@@ -91,7 +91,7 @@ export async function listCouncilQueue(env: Env): Promise<QueueItem[]> {
 		Promise.all(
 			candidates.map((c) =>
 				c.format === "ttml"
-					? ttmlFlagsFor(env, c.id, c.current_revision_id, c.lyrics)
+					? ttmlFlagsFor(env, c.id, c.current_revision_id)
 					: Promise.resolve([] as string[])
 			)
 		),

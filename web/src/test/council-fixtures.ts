@@ -85,8 +85,6 @@ export function editItem(overrides: Partial<EditItem> = {}): EditItem {
     textDrift: 0.23,
     timingDrift: 0.04,
     createdAt: NOW - 20 * HOUR,
-    diffPreview: "",
-    diffFull: "",
     author: { ...OLA, userId: 11, keyId: "e5".repeat(32), displayName: "Yes", handle: null },
     bookmark: null,
     ...overrides,

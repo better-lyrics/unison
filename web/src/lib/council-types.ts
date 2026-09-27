@@ -72,8 +72,6 @@ export interface EditItem {
   textDrift: number
   timingDrift: number
   createdAt: number
-  diffPreview: string
-  diffFull: string
   author: CouncilPerson | null
   bookmark: BookmarkView | null
 }

@@ -6,8 +6,7 @@ import { ttmlSignals } from "@/utils/ttml-signals"
 export async function ttmlFlagsFor(
 	env: Env,
 	lyricsId: number,
-	revisionId: number | null,
-	content: string
+	revisionId: number | null
 ): Promise<string[]> {
 	const key = `ttml-flags:${lyricsId}:${revisionId ?? "base"}`
 	const cached = await env.CACHE.get(key)
@@ -18,9 +17,13 @@ export async function ttmlFlagsFor(
 			await env.CACHE.delete(key)
 		}
 	}
+	const row = await env.DB.prepare("SELECT lyrics FROM lyrics WHERE id = ?")
+		.bind(lyricsId)
+		.first<{ lyrics: string }>()
+	if (!row) return []
 	let flags: string[]
 	try {
-		flags = ttmlSignals(isCompressed(content) ? await decompress(content) : content)
+		flags = ttmlSignals(isCompressed(row.lyrics) ? await decompress(row.lyrics) : row.lyrics)
 	} catch {
 		return []
 	}

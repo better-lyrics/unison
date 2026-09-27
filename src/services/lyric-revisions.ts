@@ -624,6 +624,35 @@ export async function rejectRevision(
 	)
 }
 
+type PendingRow = Awaited<ReturnType<typeof listPendingRevisionRows>>[number]
+
+export type PendingRevisionSummary = Omit<PendingRevisionCard, "diffPreview" | "diffFull">
+
+function pendingSummary(row: PendingRow): PendingRevisionSummary {
+	return {
+		lyricsId: row.lyrics_id,
+		revisionId: row.id,
+		revNo: row.rev_no,
+		liveRevNo: row.live_rev_no,
+		videoId: row.video_id,
+		song: row.song,
+		artist: row.artist,
+		format: row.format,
+		pendingReason: row.pending_reason,
+		jevProbability: row.jev_probability,
+		textDrift: row.text_drift,
+		timingDrift: row.timing_drift,
+		author: revisionAuthor(row.author_key_id, row.author_nickname),
+		authorKeyId: row.author_key_id,
+		createdAt: row.created_at,
+	}
+}
+
+export async function listPendingRevisions(env: Env): Promise<PendingRevisionSummary[]> {
+	const rows = await listPendingRevisionRows(env.DB, config.revisions.pendingQueueLimit)
+	return rows.map(pendingSummary)
+}
+
 export async function listPendingCards(env: Env): Promise<PendingRevisionCard[]> {
 	const rows = await listPendingRevisionRows(env.DB, config.revisions.pendingQueueLimit)
 	return Promise.all(
@@ -633,25 +662,7 @@ export async function listPendingCards(env: Env): Promise<PendingRevisionCard[]>
 				await revisionLines(row.lyrics, row.format),
 				{ before: `rev ${row.live_rev_no}`, after: `rev ${row.rev_no}` }
 			)
-			return {
-				lyricsId: row.lyrics_id,
-				revisionId: row.id,
-				revNo: row.rev_no,
-				liveRevNo: row.live_rev_no,
-				videoId: row.video_id,
-				song: row.song,
-				artist: row.artist,
-				format: row.format,
-				pendingReason: row.pending_reason,
-				jevProbability: row.jev_probability,
-				textDrift: row.text_drift,
-				timingDrift: row.timing_drift,
-				author: revisionAuthor(row.author_key_id, row.author_nickname),
-				authorKeyId: row.author_key_id,
-				createdAt: row.created_at,
-				diffPreview: diffPreview(full),
-				diffFull: full,
-			}
+			return { ...pendingSummary(row), diffPreview: diffPreview(full), diffFull: full }
 		})
 	)
 }

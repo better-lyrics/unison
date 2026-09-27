@@ -106,7 +106,7 @@ export const reviewQueueBotRoutes = (env: Env) =>
 						if (c.format !== "ttml") return base
 						return {
 							...base,
-							ttmlSignals: await ttmlFlagsFor(env, c.id, c.current_revision_id, c.lyrics),
+							ttmlSignals: await ttmlFlagsFor(env, c.id, c.current_revision_id),
 						}
 					})
 				)
