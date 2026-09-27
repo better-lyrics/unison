@@ -1,96 +1,70 @@
+import { keepPreviousData, useInfiniteQuery } from "@tanstack/react-query"
 import { CollapsibleSection } from "@/components/CollapsibleSection"
 import { EmptyState } from "@/components/EmptyState"
 import { Bone, skeletonKeys } from "@/components/skeleton"
 import { SongThumbnail } from "@/components/SongThumbnail"
-import { useAsyncData } from "@/hooks/useAsyncData"
+import { useDebouncedValue } from "@/hooks/useDebouncedValue"
 import { fetchUserSubmissions } from "@/lib/api"
 import { formatCompact, formatExact, formatRelativeTime } from "@/lib/format"
-import type { UserSubmission } from "@/lib/types"
-import { useCallback, useEffect, useMemo, useState } from "react"
+import type { SubmissionSort, SubmissionSyncType } from "@/lib/types"
+import { useMemo, useState } from "react"
 import { Link } from "react-router-dom"
 
 interface SubmissionsListProps {
   keyId: string
 }
 
-interface PageState {
-  keyId: string
-  extra: UserSubmission[]
-  cursor: string | undefined
-  cursorInitialized: boolean
-  loadingMore: boolean
-  loadMoreError: string | null
-}
-
-type SyncFilter = "all" | "richsync" | "linesync" | "plain"
-type SortMode = "newest" | "oldest" | "most_votes" | "least_votes"
+type SyncFilter = "all" | SubmissionSyncType
 
 interface ToolbarState {
   search: string
   syncType: SyncFilter
-  sort: SortMode
+  sort: SubmissionSort
 }
 
 const DEFAULT_TOOLBAR: ToolbarState = { search: "", syncType: "all", sort: "newest" }
-
-function emptyState(keyId: string): PageState {
-  return {
-    keyId,
-    extra: [],
-    cursor: undefined,
-    cursorInitialized: false,
-    loadingMore: false,
-    loadMoreError: null,
-  }
-}
+const SEARCH_DEBOUNCE_MS = 300
+const SEARCH_MAX_LENGTH = 100
 
 export function SubmissionsList({ keyId }: SubmissionsListProps) {
-  const firstPageFetcher = useCallback(() => fetchUserSubmissions(keyId), [keyId])
-  const firstPage = useAsyncData(firstPageFetcher, `user:submissions:${keyId}`)
-  const [page, setPage] = useState<PageState>(() => emptyState(keyId))
+  return <CuratorSubmissions key={keyId} keyId={keyId} />
+}
+
+function CuratorSubmissions({ keyId }: SubmissionsListProps) {
   const [toolbar, setToolbar] = useState<ToolbarState>(DEFAULT_TOOLBAR)
 
-  useEffect(() => {
-    setPage(emptyState(keyId))
-    setToolbar(DEFAULT_TOOLBAR)
-  }, [keyId])
+  const typedSearch = toolbar.search.trim()
+  const debouncedSearch = useDebouncedValue(typedSearch, typedSearch.length === 0 ? 0 : SEARCH_DEBOUNCE_MS)
+  const search = typedSearch.length === 0 ? "" : debouncedSearch
+  const syncType = toolbar.syncType === "all" ? undefined : toolbar.syncType
+  const { sort } = toolbar
+  const filtered = search.length > 0 || syncType !== undefined
+  const toolbarChanged = filtered || sort !== DEFAULT_TOOLBAR.sort
 
-  useEffect(() => {
-    if (firstPage.status !== "success") return
-    setPage((prev) => {
-      if (prev.keyId !== keyId || prev.cursorInitialized) return prev
-      return { ...prev, cursor: firstPage.data.nextCursor, cursorInitialized: true }
-    })
-  }, [firstPage, keyId])
-
-  const sameKey = page.keyId === keyId
-  const all = useMemo<UserSubmission[]>(() => {
-    if (firstPage.status !== "success") return []
-    return [...firstPage.data.submissions, ...(sameKey ? page.extra : [])]
-  }, [firstPage, page.extra, sameKey])
+  const {
+    data,
+    status,
+    error,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+    isFetchNextPageError,
+    isPlaceholderData,
+  } = useInfiniteQuery({
+    queryKey: ["user", keyId, "submissions", { search, syncType, sort }],
+    queryFn: ({ pageParam }) => fetchUserSubmissions(keyId, { search, syncType, sort, cursor: pageParam }),
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (last) => last.nextCursor,
+    placeholderData: keepPreviousData,
+    staleTime: 60_000,
+  })
 
   const visible = useMemo(() => {
-    const needle = toolbar.search.trim().toLowerCase()
-    const filtered = all.filter((s) => {
-      if (toolbar.syncType !== "all" && s.syncType !== toolbar.syncType) return false
-      if (needle.length === 0) return true
-      return `${s.song} ${s.artist}`.toLowerCase().includes(needle)
-    })
-    return [...filtered].sort((a, b) => {
-      switch (toolbar.sort) {
-        case "newest":
-          return b.createdAt - a.createdAt
-        case "oldest":
-          return a.createdAt - b.createdAt
-        case "most_votes":
-          return b.voteCount - a.voteCount
-        case "least_votes":
-          return a.voteCount - b.voteCount
-      }
-    })
-  }, [all, toolbar])
+    const seen = new Set<number>()
+    return (data?.pages.flatMap((page) => page.submissions) ?? []).filter((s) => !seen.has(s.id) && seen.add(s.id))
+  }, [data])
 
-  if (firstPage.status === "loading") {
+  if (status === "pending") {
     return (
       <CollapsibleSection title="Submissions">
         <div className="space-y-3">
@@ -115,37 +89,16 @@ export function SubmissionsList({ keyId }: SubmissionsListProps) {
       </CollapsibleSection>
     )
   }
-  if (firstPage.status === "error") {
-    return <EmptyState title="Could not load submissions" hint={firstPage.error.message} />
+  const listError = status === "error" && !isFetchNextPageError ? error.message : null
+  if (listError !== null && !toolbarChanged) {
+    return <EmptyState title="Could not load submissions" hint={listError} />
   }
 
-  if (all.length === 0) {
+  if (visible.length === 0 && !filtered && !isPlaceholderData && listError === null) {
     return <EmptyState title="No submissions yet" />
   }
 
-  const cursor = sameKey && page.cursorInitialized ? page.cursor : firstPage.data.nextCursor
-
-  const loadMore = async () => {
-    if (cursor === undefined || page.loadingMore) return
-    setPage((prev) => ({ ...prev, loadingMore: true, loadMoreError: null }))
-    try {
-      const next = await fetchUserSubmissions(keyId, cursor)
-      setPage((prev) =>
-        prev.keyId === keyId
-          ? {
-              ...prev,
-              extra: [...prev.extra, ...next.submissions],
-              cursor: next.nextCursor,
-              loadingMore: false,
-              loadMoreError: null,
-            }
-          : prev,
-      )
-    } catch (err) {
-      const message = err instanceof Error ? err.message : "Could not load more"
-      setPage((prev) => (prev.keyId === keyId ? { ...prev, loadingMore: false, loadMoreError: message } : prev))
-    }
-  }
+  const loadMoreError = isFetchNextPageError ? (error?.message ?? "Could not load more") : null
 
   const inputClass =
     "rounded-md border border-unison-border bg-unison-bg-elevated px-3 py-1.5 text-sm text-unison-text transition-colors hover:bg-unison-bg-hover focus:border-unison-border-strong focus:outline-none"
@@ -158,6 +111,7 @@ export function SubmissionsList({ keyId }: SubmissionsListProps) {
             type="search"
             value={toolbar.search}
             onChange={(e) => setToolbar((t) => ({ ...t, search: e.target.value }))}
+            maxLength={SEARCH_MAX_LENGTH}
             placeholder="Search song or artist"
             aria-label="Search submissions"
             className={`${inputClass} min-w-0 flex-1 placeholder:text-unison-text-muted`}
@@ -175,7 +129,7 @@ export function SubmissionsList({ keyId }: SubmissionsListProps) {
           </select>
           <select
             value={toolbar.sort}
-            onChange={(e) => setToolbar((t) => ({ ...t, sort: e.target.value as SortMode }))}
+            onChange={(e) => setToolbar((t) => ({ ...t, sort: e.target.value as SubmissionSort }))}
             aria-label="Sort submissions"
             className={`${inputClass} cursor-pointer`}
           >
@@ -185,10 +139,12 @@ export function SubmissionsList({ keyId }: SubmissionsListProps) {
             <option value="least_votes">Least votes</option>
           </select>
         </div>
-        {visible.length === 0 ? (
-          <p className="text-xs text-unison-text-muted">
-            No matches in loaded submissions. Try clearing filters or loading more.
+        {listError !== null ? (
+          <p role="alert" className="text-xs text-unison-text-muted">
+            Could not load submissions. {listError}
           </p>
+        ) : visible.length === 0 ? (
+          <p className="text-xs text-unison-text-muted">No submissions match these filters.</p>
         ) : (
           <ul className="border-b border-unison-border">
             {visible.map((s) => (
@@ -222,19 +178,19 @@ export function SubmissionsList({ keyId }: SubmissionsListProps) {
             ))}
           </ul>
         )}
-        {cursor !== undefined ? (
+        {hasNextPage && !isPlaceholderData ? (
           <div className="space-y-2">
             <button
               type="button"
-              onClick={loadMore}
-              disabled={page.loadingMore}
+              onClick={() => void fetchNextPage()}
+              disabled={isFetchingNextPage}
               className="cursor-pointer rounded-md border border-unison-border bg-unison-bg-elevated px-3 py-1.5 text-xs text-unison-text-secondary transition-colors hover:bg-unison-bg-hover hover:text-unison-text disabled:opacity-50"
             >
-              {page.loadingMore ? "Loading..." : page.loadMoreError ? "Retry" : "Load more"}
+              {isFetchingNextPage ? "Loading..." : loadMoreError ? "Retry" : "Load more"}
             </button>
-            {page.loadMoreError ? (
+            {loadMoreError ? (
               <p role="alert" className="text-xs text-unison-text-muted">
-                {page.loadMoreError}
+                {loadMoreError}
               </p>
             ) : null}
           </div>

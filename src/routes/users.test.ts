@@ -282,6 +282,59 @@ describe("GET /users/:keyId/submissions", () => {
 		expect(res.status).toBeGreaterThanOrEqual(400)
 	})
 
+	it("uses the vote count as the cursor key when sorting by votes", async () => {
+		const rows = [
+			rawRow({ id: 5, vote_count: 9 }),
+			rawRow({ id: 6, vote_count: 4 }),
+			rawRow({ id: 7, vote_count: 1 }),
+		]
+		const db = makeMockDB([rows])
+		const app = userRoutes(makeEnv(db))
+		const res = await app.handle(
+			new Request(`http://localhost/users/${KEY}/submissions?limit=2&sort=most_votes`)
+		)
+		const json = (await res.json()) as { data: { nextCursor?: string } }
+		expect(json.data.nextCursor).toBe("4:6")
+	})
+
+	it("ignores a whitespace-only search", async () => {
+		const db = makeMockDB([[]])
+		const app = userRoutes(makeEnv(db))
+		const res = await app.handle(new Request(`http://localhost/users/${KEY}/submissions?q=%20%20`))
+		expect(res.status).toBe(200)
+		expect(db.calls[0].params).toEqual([KEY, 21])
+	})
+
+	it("rejects an unknown sort", async () => {
+		const db = makeMockDB([[]])
+		const app = userRoutes(makeEnv(db))
+		const res = await app.handle(
+			new Request(`http://localhost/users/${KEY}/submissions?sort=random`)
+		)
+		expect(res.status).toBeGreaterThanOrEqual(400)
+		expect(db.calls.length).toBe(0)
+	})
+
+	it("rejects an unknown sync type", async () => {
+		const db = makeMockDB([[]])
+		const app = userRoutes(makeEnv(db))
+		const res = await app.handle(
+			new Request(`http://localhost/users/${KEY}/submissions?syncType=wordsync`)
+		)
+		expect(res.status).toBeGreaterThanOrEqual(400)
+		expect(db.calls.length).toBe(0)
+	})
+
+	it("rejects a search longer than 100 characters", async () => {
+		const db = makeMockDB([[]])
+		const app = userRoutes(makeEnv(db))
+		const res = await app.handle(
+			new Request(`http://localhost/users/${KEY}/submissions?q=${"x".repeat(101)}`)
+		)
+		expect(res.status).toBeGreaterThanOrEqual(400)
+		expect(db.calls.length).toBe(0)
+	})
+
 	it("rejects a keyId that is not 64 hex characters", async () => {
 		const db = makeMockDB([])
 		const env = makeEnv(db)

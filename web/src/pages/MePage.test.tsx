@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { AuthProvider } from "@/auth/AuthProvider"
 import { clearAsyncDataCache } from "@/hooks/useAsyncData"
 import { type StoredSession, saveStoredSession } from "@/lib/auth"
+import { QueryProvider } from "@/lib/queryClient"
 import { MePage } from "./MePage"
 
 const ownKeyId = "k".repeat(64)
@@ -21,11 +22,13 @@ const valid: StoredSession = {
 
 function renderPage() {
   return render(
-    <MemoryRouter>
-      <AuthProvider>
-        <MePage />
-      </AuthProvider>
-    </MemoryRouter>,
+    <QueryProvider>
+      <MemoryRouter>
+        <AuthProvider>
+          <MePage />
+        </AuthProvider>
+      </MemoryRouter>
+    </QueryProvider>,
   )
 }
 

@@ -80,7 +80,7 @@ export interface UserSubmission {
   album?: string
   duration: number
   format: "ttml" | "lrc" | "plain"
-  syncType: "richsync" | "linesync" | "plain"
+  syncType: SubmissionSyncType
   language?: string
   effectiveScore: number
   voteCount: number
@@ -88,6 +88,9 @@ export interface UserSubmission {
   createdAt: number
   hidden: boolean
 }
+
+export type SubmissionSyncType = "richsync" | "linesync" | "plain"
+export type SubmissionSort = "newest" | "oldest" | "most_votes" | "least_votes"
 
 export interface UserSubmissionsResponse {
   submissions: UserSubmission[]

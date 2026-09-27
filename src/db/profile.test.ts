@@ -168,7 +168,7 @@ describe("getSubmissionsByUser", () => {
 	it("passes the cursor as a (created_at, id) upper bound when provided", async () => {
 		const db = makeMockDB([[]])
 		const env = makeEnv(db)
-		await getSubmissionsByUser(env, "k1", 21, { createdAt: 1700000050, id: 42 })
+		await getSubmissionsByUser(env, "k1", 21, { key: 1700000050, id: 42 })
 		expect(db.calls[0].params).toEqual(["k1", 1700000050, 42, 21])
 		expect(db.calls[0].sql).toContain("(l.created_at, l.id) < (?, ?)")
 	})

@@ -29,7 +29,7 @@ interface RawSubmissionRow {
 	sync_type: "richsync" | "linesync" | "plain"
 	language: string | null
 	effective_score: number
-	vote_count: number
+	vote_count: number | null
 	confidence: Confidence
 	created_at: number
 	hidden: boolean
@@ -49,17 +49,68 @@ export async function getLastVoteAt(env: Env, keyId: string): Promise<number | n
 	return Number(row.last_vote_at)
 }
 
+export type SubmissionSyncType = SubmissionRow["syncType"]
+export type SubmissionSort = "newest" | "oldest" | "most_votes" | "least_votes"
+
+export interface SubmissionCursor {
+	key: number
+	id: number
+}
+
+export interface SubmissionFilters {
+	search?: string
+	syncType?: SubmissionSyncType
+	sort: SubmissionSort
+}
+
+const SUBMISSION_ORDER: Record<
+	SubmissionSort,
+	{ column: string; direction: "ASC" | "DESC"; cursorKey: (row: SubmissionRow) => number }
+> = {
+	newest: { column: "l.created_at", direction: "DESC", cursorKey: (r) => r.createdAt },
+	oldest: { column: "l.created_at", direction: "ASC", cursorKey: (r) => r.createdAt },
+	most_votes: {
+		column: "COALESCE(l.vote_count, 0)",
+		direction: "DESC",
+		cursorKey: (r) => r.voteCount,
+	},
+	least_votes: {
+		column: "COALESCE(l.vote_count, 0)",
+		direction: "ASC",
+		cursorKey: (r) => r.voteCount,
+	},
+}
+
+export function encodeSubmissionCursor(row: SubmissionRow, sort: SubmissionSort): string {
+	return `${SUBMISSION_ORDER[sort].cursorKey(row)}:${row.id}`
+}
+
+export function decodeSubmissionCursor(raw: string): SubmissionCursor {
+	const [key, id] = raw.split(":")
+	return { key: Number(key), id: Number(id) }
+}
+
 export async function getSubmissionsByUser(
 	env: Env,
 	keyId: string,
 	limit: number,
-	cursor: { createdAt: number; id: number } | null
+	cursor: SubmissionCursor | null,
+	filters: SubmissionFilters = { sort: "newest" }
 ): Promise<SubmissionRow[]> {
+	const order = SUBMISSION_ORDER[filters.sort]
 	const params: unknown[] = [keyId]
 	let where = "u.key_id = ? AND l.deleted_at IS NULL"
+	if (filters.syncType !== undefined) {
+		where += " AND l.sync_type = ?"
+		params.push(filters.syncType)
+	}
+	if (filters.search !== undefined) {
+		where += " AND position(LOWER(?) IN LOWER(l.song || ' ' || l.artist)) > 0"
+		params.push(filters.search)
+	}
 	if (cursor !== null) {
-		where += " AND (l.created_at, l.id) < (?, ?)"
-		params.push(cursor.createdAt, cursor.id)
+		where += ` AND (${order.column}, l.id) ${order.direction === "DESC" ? "<" : ">"} (?, ?)`
+		params.push(cursor.key, cursor.id)
 	}
 	params.push(limit)
 
@@ -71,7 +122,7 @@ export async function getSubmissionsByUser(
 		 FROM lyrics l
 		 JOIN users u ON u.id = l.submitter_id
 		 WHERE ${where}
-		 ORDER BY l.created_at DESC, l.id DESC
+		 ORDER BY ${order.column} ${order.direction}, l.id ${order.direction}
 		 LIMIT ?`
 	)
 		.bind(...params)
@@ -88,7 +139,7 @@ export async function getSubmissionsByUser(
 		syncType: r.sync_type,
 		language: r.language,
 		effectiveScore: Number(r.effective_score),
-		voteCount: Number(r.vote_count),
+		voteCount: Number(r.vote_count ?? 0),
 		confidence: r.confidence,
 		createdAt: Number(r.created_at),
 		hidden: Boolean(r.hidden),
