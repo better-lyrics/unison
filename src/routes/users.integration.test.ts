@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs"
 import { evaluateAndAward } from "@/db/badges"
 import { D1Compat } from "@/infra/database"
 import { userRoutes } from "@/routes/users"
+import { wipeCouncilTables } from "@/test/integration-harness"
 import type { Confidence, Env } from "@/types"
 import pg from "pg"
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest"
@@ -88,6 +89,7 @@ describeIntegration("user badges and featured routes (integration)", () => {
 		await pool.query("DELETE FROM reports")
 		await pool.query("DELETE FROM lyrics")
 		await pool.query("DELETE FROM discord_links")
+		await wipeCouncilTables(pool)
 		await pool.query("DELETE FROM users")
 		await pool.query("DELETE FROM public_keys")
 		cache.store.clear()

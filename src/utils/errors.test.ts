@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { buildError, ErrorCode } from "./errors"
+import { ErrorCode, buildError } from "./errors"
 
 describe("buildError", () => {
 	it("returns success: false, a short error title, a code, and a rich hint", () => {
@@ -25,6 +25,13 @@ describe("buildError", () => {
 		expect(buildError(ErrorCode.NO_CHANGES).code).toBe("NO_CHANGES")
 		expect(buildError(ErrorCode.ALREADY_DECIDED).code).toBe("ALREADY_DECIDED")
 		expect(buildError(ErrorCode.STALE).code).toBe("STALE")
+	})
+
+	it("defines the council dashboard codes", () => {
+		expect(buildError(ErrorCode.BOOKMARK_HELD).code).toBe("BOOKMARK_HELD")
+		expect(buildError(ErrorCode.BOOKMARK_CAP).hint).toMatch(/release one/i)
+		expect(buildError(ErrorCode.NOT_COUNCIL_ADMIN).code).toBe("NOT_COUNCIL_ADMIN")
+		expect(buildError(ErrorCode.INVALID_OPINION).code).toBe("INVALID_OPINION")
 	})
 
 	it("allows overriding the hint when context-specific guidance is useful", () => {

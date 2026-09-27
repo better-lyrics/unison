@@ -1,8 +1,9 @@
 import { readFileSync } from "node:fs"
+import { D1Compat } from "@/infra/database"
+import { wipeCouncilTables } from "@/test/integration-harness"
+import type { Env, LyricsSubmission } from "@/types"
 import pg from "pg"
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest"
-import { D1Compat } from "@/infra/database"
-import type { Env, LyricsSubmission } from "@/types"
 import { getXp } from "./contribution-events"
 import { submitLyrics } from "./lyrics"
 
@@ -61,6 +62,7 @@ describeIntegration("submitLyrics does not award first-for-song xp on raw submit
 		await pool.query("DELETE FROM votes")
 		await pool.query("DELETE FROM reports")
 		await pool.query("DELETE FROM lyrics")
+		await wipeCouncilTables(pool)
 		await pool.query("DELETE FROM users")
 		await pool.query("DELETE FROM public_keys")
 	}

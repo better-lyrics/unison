@@ -1,11 +1,12 @@
 import { readFileSync } from "node:fs"
-import pg from "pg"
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest"
 import { config } from "@/config"
 import { getXp } from "@/db/contribution-events"
 import { D1Compat } from "@/infra/database"
 import { backfillXp } from "@/jobs/backfill-xp"
+import { wipeCouncilTables } from "@/test/integration-harness"
 import type { Env } from "@/types"
+import pg from "pg"
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest"
 
 const { Pool } = pg
 
@@ -118,6 +119,7 @@ describeIntegration("backfill xp (integration)", () => {
 		await pool.query("DELETE FROM votes")
 		await pool.query("DELETE FROM reports")
 		await pool.query("DELETE FROM lyrics")
+		await wipeCouncilTables(pool)
 		await pool.query("DELETE FROM users")
 		await pool.query("DELETE FROM public_keys")
 	}

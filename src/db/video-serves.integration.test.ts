@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs"
 import { videoServesExpr } from "@/db/predicates"
+import { wipeCouncilTables } from "@/test/integration-harness"
 import { compress } from "@/utils/compression"
 import pg from "pg"
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest"
@@ -71,6 +72,7 @@ describeIntegration("videoServesExpr (integration)", () => {
 	beforeEach(async () => {
 		await pool.query("DELETE FROM lyrics_video_ids")
 		await pool.query("DELETE FROM lyrics")
+		await wipeCouncilTables(pool)
 		await pool.query("DELETE FROM users")
 		submitter = (await pool.query("INSERT INTO users (key_id) VALUES ('owner') RETURNING id"))
 			.rows[0].id

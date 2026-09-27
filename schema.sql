@@ -502,3 +502,52 @@ CREATE INDEX IF NOT EXISTS idx_lyrics_without_revision
 
 -- Edit-as-variant lineage, replaced by lyric_revisions. Prod had no rows using it.
 ALTER TABLE lyrics DROP COLUMN IF EXISTS parent_id;
+
+-- ---- council dashboard ----
+
+ALTER TABLE committee_members ADD COLUMN IF NOT EXISTS is_admin BOOLEAN NOT NULL DEFAULT FALSE;
+
+CREATE TABLE IF NOT EXISTS council_bookmarks (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER NOT NULL REFERENCES users(id),
+    item_type TEXT NOT NULL CHECK (item_type IN ('seal', 'edit')),
+    item_id INTEGER NOT NULL,
+    created_at INTEGER NOT NULL DEFAULT (EXTRACT(EPOCH FROM NOW())::INTEGER),
+    released_at INTEGER,
+    release_reason TEXT CHECK (release_reason IN ('released', 'decided'))
+);
+CREATE INDEX IF NOT EXISTS idx_council_bookmarks_open
+    ON council_bookmarks(item_type, item_id) WHERE released_at IS NULL;
+CREATE INDEX IF NOT EXISTS idx_council_bookmarks_user_open
+    ON council_bookmarks(user_id) WHERE released_at IS NULL;
+
+CREATE TABLE IF NOT EXISTS council_events (
+    id SERIAL PRIMARY KEY,
+    actor_id INTEGER REFERENCES users(id),
+    kind TEXT NOT NULL CHECK (kind IN (
+        'seal', 'unseal', 'reject', 'unreject', 'edit_approve', 'edit_reject',
+        'bookmark', 'release', 'member_add', 'member_remove',
+        'applicant_approve', 'applicant_reject')),
+    source TEXT NOT NULL CHECK (source IN ('web', 'discord', 'admin')),
+    lyrics_id INTEGER REFERENCES lyrics(id) ON DELETE CASCADE,
+    ref_id INTEGER,
+    subject_user_id INTEGER REFERENCES users(id),
+    note TEXT,
+    created_at INTEGER NOT NULL DEFAULT (EXTRACT(EPOCH FROM NOW())::INTEGER)
+);
+CREATE INDEX IF NOT EXISTS idx_council_events_created ON council_events(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_council_events_actor ON council_events(actor_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_council_events_lyric ON council_events(lyrics_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_council_events_decision_ref ON council_events(kind, ref_id)
+    WHERE kind IN ('seal', 'unseal', 'reject', 'unreject', 'edit_approve', 'edit_reject');
+
+CREATE TABLE IF NOT EXISTS applicant_opinions (
+    exam_session_id INTEGER NOT NULL REFERENCES exam_session(id) ON DELETE CASCADE,
+    user_id INTEGER NOT NULL REFERENCES users(id),
+    stance TEXT NOT NULL CHECK (stance IN ('support', 'object')),
+    note TEXT,
+    updated_at INTEGER NOT NULL DEFAULT (EXTRACT(EPOCH FROM NOW())::INTEGER),
+    PRIMARY KEY (exam_session_id, user_id)
+);
+
+ALTER TABLE exam_session ADD COLUMN IF NOT EXISTS decided_by_user_id INTEGER REFERENCES users(id);

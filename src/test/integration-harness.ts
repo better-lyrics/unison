@@ -102,7 +102,14 @@ export class InterleavedDb extends D1Compat {
 	}
 }
 
+export async function wipeCouncilTables(pool: pg.Pool): Promise<void> {
+	await pool.query("DELETE FROM applicant_opinions")
+	await pool.query("DELETE FROM council_bookmarks")
+	await pool.query("DELETE FROM council_events")
+}
+
 export async function wipeRevisionData(db: IntegrationDb): Promise<void> {
+	await wipeCouncilTables(db.pool)
 	await db.pool.query("DELETE FROM badge_awards")
 	await db.pool.query("DELETE FROM rejections")
 	await db.pool.query("DELETE FROM boosts")

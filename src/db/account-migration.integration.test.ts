@@ -1,9 +1,9 @@
 import { readFileSync } from "node:fs"
+import { D1Compat } from "@/infra/database"
+import { wipeCouncilTables } from "@/test/integration-harness"
+import type { Env } from "@/types"
 import pg from "pg"
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest"
-import { D1Compat } from "@/infra/database"
-import type { Env } from "@/types"
-import { ensureBaseRevision } from "./lyric-revisions"
 import {
 	computeMigrationPlan,
 	createPreviewAudit,
@@ -12,6 +12,7 @@ import {
 	restoreFromSnapshot,
 	runMigration,
 } from "./account-migration"
+import { ensureBaseRevision } from "./lyric-revisions"
 
 const { Pool } = pg
 
@@ -57,6 +58,7 @@ describeIntegration("account migration (integration)", () => {
 		await pool.query("DELETE FROM reports")
 		await pool.query("DELETE FROM lyrics")
 		await pool.query("DELETE FROM discord_links")
+		await wipeCouncilTables(pool)
 		await pool.query("DELETE FROM users")
 		await pool.query("DELETE FROM public_keys")
 	}

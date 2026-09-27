@@ -74,6 +74,10 @@ export const ErrorCode = {
 	EXAM_SESSION_NOT_FOUND: "EXAM_SESSION_NOT_FOUND",
 	EXAM_ANSWER_LOCKED: "EXAM_ANSWER_LOCKED",
 	EXAM_NOT_CONFIGURED: "EXAM_NOT_CONFIGURED",
+	BOOKMARK_HELD: "BOOKMARK_HELD",
+	BOOKMARK_CAP: "BOOKMARK_CAP",
+	NOT_COUNCIL_ADMIN: "NOT_COUNCIL_ADMIN",
+	INVALID_OPINION: "INVALID_OPINION",
 } as const
 
 export type ErrorCode = (typeof ErrorCode)[keyof typeof ErrorCode]
@@ -364,6 +368,22 @@ const TEMPLATES: Record<ErrorCode, Template> = {
 	EXAM_NOT_CONFIGURED: {
 		error: "Exam not configured",
 		hint: "The exam link base URL is not set on the server.",
+	},
+	BOOKMARK_HELD: {
+		error: "Another council member holds this item",
+		hint: "Someone bookmarked this item and is likely reviewing it. It returns to the open queue when they decide, release it, or the bookmark expires.",
+	},
+	BOOKMARK_CAP: {
+		error: "Bookmark limit reached",
+		hint: "You already hold the maximum number of bookmarks. Release one or decide on it first.",
+	},
+	NOT_COUNCIL_ADMIN: {
+		error: "Council admins only",
+		hint: "This action is limited to council admins.",
+	},
+	INVALID_OPINION: {
+		error: "Invalid opinion",
+		hint: "Choose support or object, or send null to clear your opinion. Notes are limited to 1000 characters.",
 	},
 }
 
