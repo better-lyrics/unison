@@ -75,6 +75,22 @@ describeIntegration("applicant opinions (integration)", () => {
 		it("refuses an unknown applicant", async () => {
 			expect(await setOpinion(db.env, 987654321, mira, "support", null)).toBe(false)
 		})
+
+		it("refuses an applicant who is not waiting for review", async () => {
+			for (const state of ["in_progress", "failed", "approved", "rejected"]) {
+				await db.pool.query("UPDATE exam_session SET state = $1 WHERE id = $2", [state, session])
+				expect([state, await setOpinion(db.env, session, mira, "support", null)]).toEqual([
+					state,
+					false,
+				])
+			}
+			expect((await listOpinions(db.env, [session])).get(session)).toBeUndefined()
+		})
+
+		it("refuses a dev exam session", async () => {
+			await db.pool.query("UPDATE exam_session SET is_dev = TRUE WHERE id = $1", [session])
+			expect(await setOpinion(db.env, session, mira, "support", null)).toBe(false)
+		})
 	})
 
 	describe("invariants", () => {

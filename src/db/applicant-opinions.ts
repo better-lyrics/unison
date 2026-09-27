@@ -16,7 +16,9 @@ export async function setOpinion(
 	stance: OpinionStance | null,
 	note: string | null
 ): Promise<boolean> {
-	const session = await env.DB.prepare("SELECT id FROM exam_session WHERE id = ?")
+	const session = await env.DB.prepare(
+		"SELECT id FROM exam_session WHERE id = ? AND state = 'pending_review' AND NOT is_dev"
+	)
 		.bind(examSessionId)
 		.first<{ id: number | string }>()
 	if (!session) return false
