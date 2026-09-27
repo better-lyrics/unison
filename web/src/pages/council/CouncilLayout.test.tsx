@@ -2,6 +2,7 @@ import { saveStoredSession } from "@/lib/auth"
 import {
   ME,
   MEMBER_SESSION,
+  NOW,
   OLA,
   applicant,
   bookmarkBy,
@@ -29,11 +30,15 @@ const renderCouncil = (path?: string) => renderWithRoutes(path, probes)
 
 const rail = () => screen.getByRole("navigation", { name: "Council sections" })
 
-beforeEach(() => localStorage.clear())
+beforeEach(() => {
+  localStorage.clear()
+  vi.spyOn(Date, "now").mockReturnValue(NOW * 1000)
+})
 afterEach(() => {
   cleanup()
   localStorage.clear()
   vi.unstubAllGlobals()
+  vi.restoreAllMocks()
 })
 
 describe("CouncilLayout gate", () => {
@@ -147,6 +152,22 @@ describe("CouncilLayout rail", () => {
   })
 
   describe("edge cases", () => {
+    it("regression: counts an item whose bookmark ran out as open", async () => {
+      stubCouncilApi(
+        councilData({
+          queue: [queueItem({ id: 1, bookmark: { ...bookmarkBy(OLA), expiresAt: Math.floor(Date.now() / 1000) - 1 } })],
+        }),
+      )
+      renderCouncil()
+      await waitFor(() =>
+        expect(
+          within(rail())
+            .getByRole("link", { name: /Seal queue/ })
+            .querySelector("[data-count]")?.textContent,
+        ).toBe("1"),
+      )
+    })
+
     it("renders no counts before the data arrives", async () => {
       saveStoredSession(MEMBER_SESSION)
       vi.stubGlobal(

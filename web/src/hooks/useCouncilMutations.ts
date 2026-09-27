@@ -101,6 +101,8 @@ export function useBookmarkToggle() {
   })
 }
 
+const DECISION_TOAST = "council-decision"
+
 export type Decision =
   | { kind: "seal"; item: QueueItem }
   | { kind: "reject"; item: QueueItem; note: string | null }
@@ -142,7 +144,7 @@ export function useUndoDecision() {
     },
     onSuccess: (_, event) => {
       const verb = event.kind === "seal" ? DONE.seal.undo : DONE.reject.undo
-      pushToast({ kind: "info", message: `${verb} “${event.lyric?.song}”` })
+      pushToast({ kind: "info", group: DECISION_TOAST, message: `${verb} “${event.lyric?.song}”` })
     },
     onError: (error) => councilErrorToast(error, "undo the decision"),
     onSettled: () => refreshCouncil(client),
@@ -187,6 +189,7 @@ export function useCouncilDecision() {
       const undo = undoOf(decision)
       pushToast({
         kind: "info",
+        group: DECISION_TOAST,
         message: `${done.message} “${decision.item.song}”`,
         action: undo
           ? {
@@ -194,7 +197,7 @@ export function useCouncilDecision() {
               onAction: () => {
                 undo().then(
                   () => {
-                    pushToast({ kind: "info", message: `${done.undo} “${decision.item.song}”` })
+                    pushToast({ kind: "info", group: DECISION_TOAST, message: `${done.undo} “${decision.item.song}”` })
                     refreshCouncil(client)
                   },
                   (error) => councilErrorToast(error, "undo the decision"),

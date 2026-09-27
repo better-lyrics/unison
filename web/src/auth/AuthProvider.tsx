@@ -1,12 +1,12 @@
 import {
   type Identity,
+  type SignedBody,
   clearStoredSession,
   fetchChallenge,
   fetchMe,
   loadStoredSession,
   postSession,
   revokeSession,
-  type SignedBody,
   saveStoredSession,
 } from "@/lib/auth"
 import { findBetterLyrics, signInWithBetterLyrics } from "@/lib/extension"
@@ -119,6 +119,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
           displayName: session.displayName,
           expiresAt: session.expiresAt,
           avatarUrl: session.avatarUrl,
+          council: session.council ?? null,
         },
       })
     } catch (err) {

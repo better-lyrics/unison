@@ -59,7 +59,7 @@ export function TriageRow<T extends Bookmarkable & { videoId: string; song: stri
       {heldByOther ? null : (
         <div className="absolute top-1/2 right-3.5 -translate-y-1/2">
           <BookmarkToggle
-            on={item.bookmark !== null}
+            on={triage.bookmarkState(item).kind === "mine"}
             song={item.song}
             disabled={triage.bookmarkPending}
             onToggle={() => triage.toggleBookmark(item)}

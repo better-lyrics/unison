@@ -11,6 +11,14 @@ export interface TriageGroups<T> {
   others: T[]
 }
 
+export function activeBookmark(item: { bookmark: BookmarkView | null }, now: number): BookmarkView | null {
+  return item.bookmark !== null && item.bookmark.expiresAt > now ? item.bookmark : null
+}
+
+export function openItems<T extends { bookmark: BookmarkView | null }>(items: T[], now: number): T[] {
+  return items.filter((item) => activeBookmark(item, now) === null)
+}
+
 export function groupByBookmark<T extends { bookmark: BookmarkView | null }>(
   items: T[],
   meKeyId: string,
@@ -18,7 +26,7 @@ export function groupByBookmark<T extends { bookmark: BookmarkView | null }>(
 ): TriageGroups<T> {
   const groups: TriageGroups<T> = { mine: [], open: [], others: [] }
   for (const item of items) {
-    const held = item.bookmark !== null && item.bookmark.expiresAt > now ? item.bookmark : null
+    const held = activeBookmark(item, now)
     if (!held) groups.open.push(item)
     else if (held.holder.keyId === meKeyId) groups.mine.push(item)
     else groups.others.push(item)

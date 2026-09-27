@@ -7,7 +7,8 @@ import {
   useCouncilQueue,
 } from "@/hooks/useCouncilData"
 import { cn } from "@/lib/cn"
-import type { BoostQuota } from "@/lib/council-types"
+import { groupByBookmark, openItems } from "@/lib/council-triage"
+import type { BoostQuota, EditItem, QueueItem } from "@/lib/council-types"
 import { formatShortDate, titleCase } from "@/lib/format"
 import type { TierName } from "@/lib/types"
 import {
@@ -49,13 +50,14 @@ interface SectionCount {
 }
 
 function useSectionCounts(meKeyId: string): Partial<Record<SectionId, SectionCount>> {
+  const now = Math.floor(Date.now() / 1000)
   const queue = useCouncilQueue().data
   const edits = useCouncilEdits().data
   const overview = useCouncilOverview().data
   const applicants = useCouncilApplicants().data
   const members = useCouncilMembers().data
   const counts: Partial<Record<SectionId, SectionCount>> = {}
-  if (queue) counts.queue = { value: String(queue.filter((i) => i.bookmark === null).length) }
+  if (queue) counts.queue = { value: String(openItems(queue, now).length) }
   if (edits) {
     counts.edits = {
       value: String(edits.items.length),
@@ -63,7 +65,7 @@ function useSectionCounts(meKeyId: string): Partial<Record<SectionId, SectionCou
     }
   }
   if (queue && edits && overview) {
-    const mine = [...queue, ...edits.items].filter((i) => i.bookmark?.holder.keyId === meKeyId).length
+    const mine = groupByBookmark<QueueItem | EditItem>([...queue, ...edits.items], meKeyId, now).mine.length
     counts.bookmarks = { value: `${mine}/${overview.me.bookmarkCap}` }
   }
   if (applicants) counts.applicants = { value: String(applicants.filter((a) => a.state === "pending_review").length) }

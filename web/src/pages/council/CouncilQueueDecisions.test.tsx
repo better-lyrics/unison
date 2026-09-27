@@ -154,6 +154,23 @@ describe("sealing", () => {
     await screen.findByText("Seal lifted from “Story of a Warrior”")
   })
 
+  it("keeps only the latest decision toast", async () => {
+    const log: string[] = []
+    const server = data()
+    stubCouncilApi(server, { admin: false }, decisionRoutes(log, server))
+    renderCouncil("/council/queue?item=722")
+    await waitFor(() => expect(selected()).toBe("722"))
+    press("s")
+    press("s")
+    await screen.findByText("Sealed “Story of a Warrior”")
+    await waitFor(() => expect(selected()).toBe("1320"))
+    press("r")
+    fireEvent.click(within(detail()).getByRole("button", { name: /Reject lyric/ }))
+    await screen.findByText("Rejected “Run Rabbit”")
+    expect(screen.queryByText("Sealed “Story of a Warrior”")).toBeNull()
+    expect(screen.getAllByRole("button", { name: "Undo" })).toHaveLength(1)
+  })
+
   it("seals from the keyboard with S twice", async () => {
     const log: string[] = []
     const server = data()

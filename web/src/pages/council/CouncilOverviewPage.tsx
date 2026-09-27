@@ -20,6 +20,7 @@ import {
 } from "@/hooks/useCouncilData"
 import { cn } from "@/lib/cn"
 import { deriveNeeds } from "@/lib/council-needs"
+import { openItems } from "@/lib/council-triage"
 import type { DayDecisions } from "@/lib/council-types"
 import { waitBuckets } from "@/lib/council-wait"
 import { formatElapsed } from "@/lib/format"
@@ -40,7 +41,7 @@ export function CouncilOverviewPage() {
   const edits = useCouncilEdits().data?.items
   const applicants = useCouncilApplicants().data
   const stats = useCouncilOverview().data
-  const open = queue?.filter((i) => i.bookmark === null)
+  const open = queue && openItems(queue, now)
   const pending = applicants?.filter((a) => a.state === "pending_review")
   const oldestEdit = edits?.reduce<number | null>(
     (min, e) => (min === null || e.createdAt < min ? e.createdAt : min),

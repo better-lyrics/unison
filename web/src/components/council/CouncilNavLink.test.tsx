@@ -31,7 +31,10 @@ function renderLink() {
   )
 }
 
-const item = (bookmarked: boolean) => ({ id: Math.random(), bookmark: bookmarked ? { id: 1 } : null })
+const item = (bookmarked: boolean) => ({
+  id: Math.random(),
+  bookmark: bookmarked ? { id: 1, expiresAt: Math.floor(Date.now() / 1000) + 3600 } : null,
+})
 
 beforeEach(() => {
   queueMock.mockResolvedValue([item(false), item(false), item(true)])

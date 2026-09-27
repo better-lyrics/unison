@@ -8,6 +8,8 @@ import {
   fetchCouncilOverview,
   fetchCouncilQueue,
 } from "@/lib/council-api"
+import { openItems } from "@/lib/council-triage"
+import type { BookmarkView } from "@/lib/council-types"
 import { keepPreviousData, useInfiniteQuery, useQuery } from "@tanstack/react-query"
 
 export const councilKeys = {
@@ -119,6 +121,7 @@ export function useCouncilLog(filters: Omit<EventsQuery, "cursor">) {
 export function useOpenWorkCount(): number {
   const queue = useCouncilQueue()
   const edits = useCouncilEdits()
-  const open = (items: { bookmark: unknown }[] | undefined) => items?.filter((i) => i.bookmark === null).length ?? 0
+  const now = Math.floor(Date.now() / 1000)
+  const open = (items: { bookmark: BookmarkView | null }[] | undefined) => openItems(items ?? [], now).length
   return open(queue.data) + open(edits.data?.items)
 }

@@ -150,4 +150,38 @@ describe("toast store", () => {
       expect(result.current[0]?.detail).toBe("3 seals left this month.")
     })
   })
+
+  describe("groups", () => {
+    it("replaces the previous toast of the same group", () => {
+      const { result } = renderHook(() => useToasts())
+      act(() => {
+        pushToast({
+          kind: "info",
+          message: "Sealed A",
+          group: "decision",
+          action: { label: "Undo", onAction: () => {} },
+        })
+        pushToast({ kind: "info", message: "Other" })
+        pushToast({
+          kind: "info",
+          message: "Rejected B",
+          group: "decision",
+          action: { label: "Undo", onAction: () => {} },
+        })
+      })
+      expect(result.current.map((t) => t.message)).toEqual(["Other", "Rejected B"])
+    })
+
+    it("clears the timer of a replaced toast", () => {
+      const { result } = renderHook(() => useToasts())
+      act(() => {
+        pushToast({ kind: "info", message: "first", group: "g", durationMs: 1000 })
+        pushToast({ kind: "info", message: "second", group: "g", durationMs: 5000 })
+      })
+      act(() => {
+        vi.advanceTimersByTime(1500)
+      })
+      expect(result.current.map((t) => t.message)).toEqual(["second"])
+    })
+  })
 })
