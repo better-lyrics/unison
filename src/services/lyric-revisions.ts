@@ -45,7 +45,14 @@ import { ErrorCode, buildError } from "@/utils/errors"
 import { type LyricLine, extractComparableLines } from "@/utils/extract-text"
 import { sha256Hex } from "@/utils/hash"
 import { normalizeIsrc } from "@/utils/isrc"
-import { buildDiffRows, reviewDiff, showsChanges, unifiedDiff } from "@/utils/lyric-diff"
+import {
+	type FieldChange,
+	buildDiffRows,
+	buildFieldRows,
+	reviewDiff,
+	showsChanges,
+	unifiedDiff,
+} from "@/utils/lyric-diff"
 import { type DriftResult, measureDrift } from "@/utils/lyric-drift"
 import { decideOutcome } from "@/utils/revision-gate"
 import { type ContentValidation, validateLyricContent } from "@/utils/validate-lyrics"
@@ -88,6 +95,8 @@ interface Assessment {
 	rateLimit: RevisionRateLimit
 	anchorLines: LyricLine[]
 	candidateLines: LyricLine[]
+	anchorRevNo: number
+	fieldChanges: FieldChange[]
 }
 
 type AccessFailure = { ok: false; reason: "not_found" | "not_owner" }
@@ -126,6 +135,9 @@ async function revisionLines(stored: string, format: LyricsFormat): Promise<Lyri
 }
 
 const joinText = (lines: LyricLine[]): string => lines.map((line) => line.text).join("\n")
+
+const revisionAlbum = (row: RevisionRow, lyricAlbum: string | null): string | null =>
+	row.album_known ? row.album : lyricAlbum
 
 interface ResolvedField {
 	value: string | null
@@ -282,6 +294,16 @@ async function assess(
 	]
 
 	const failure = firstFailure(validated, language, isrc, album)
+	const anchorLines = comparable ? await revisionLines(anchor.lyrics, anchor.format) : []
+	const fieldChanges = (
+		[
+			["language", anchor.language, language],
+			["isrc", anchor.isrc, isrc],
+			["album", revisionAlbum(anchor, lyric.album), album],
+		] as const
+	)
+		.filter(([, , resolved]) => resolved.valid)
+		.map(([field, before, resolved]): FieldChange => ({ field, before, after: resolved.value }))
 
 	if (!validated.ok || !lines || !comparable || failure) {
 		return {
@@ -296,8 +318,10 @@ async function assess(
 				jevProbability: null,
 				outcome: NOT_SAVABLE,
 				rateLimit,
-				anchorLines: [],
-				candidateLines: [],
+				anchorLines,
+				candidateLines: comparable ?? [],
+				anchorRevNo: anchor.rev_no,
+				fieldChanges,
 			},
 		}
 	}
@@ -316,7 +340,6 @@ async function assess(
 		candidate.isrc === live.isrc &&
 		candidate.album === lyric.album
 
-	const anchorLines = await revisionLines(anchor.lyrics, anchor.format)
 	const drift = measureDrift(anchorLines, comparable)
 	const outcome = decideOutcome({
 		sealed: lyric.committee_approved_at !== null,
@@ -339,6 +362,8 @@ async function assess(
 			rateLimit,
 			anchorLines,
 			candidateLines: comparable,
+			anchorRevNo: anchor.rev_no,
+			fieldChanges,
 		},
 	}
 }
@@ -366,6 +391,12 @@ export async function previewRevision(
 			outcome: a.outcome,
 			noChanges: a.noChanges,
 			rateLimit: a.rateLimit,
+			diff: {
+				rows: a.noChanges
+					? []
+					: [...buildDiffRows(a.anchorLines, a.candidateLines), ...buildFieldRows(a.fieldChanges)],
+				againstRevNo: a.anchorRevNo,
+			},
 		},
 	}
 }
@@ -558,7 +589,7 @@ export async function getRevisionDetail(
 		format: row.format,
 		language: row.language,
 		isrc: row.isrc,
-		album: row.album_known ? row.album : lyric.album,
+		album: revisionAlbum(row, lyric.album),
 	}
 }
 
@@ -577,11 +608,21 @@ export async function diffRevisions(
 			: await getRevisionRow(env.DB, lyricsId, againstId)
 	if (againstId !== null && !base) return null
 	if (!base) return { rows: [], againstRevNo: null }
+	const albumKnown = base.album_known && target.album_known
 	return {
-		rows: buildDiffRows(
-			await revisionLines(base.lyrics, base.format),
-			await revisionLines(target.lyrics, target.format)
-		),
+		rows: [
+			...buildDiffRows(
+				await revisionLines(base.lyrics, base.format),
+				await revisionLines(target.lyrics, target.format)
+			),
+			...buildFieldRows([
+				{ field: "language", before: base.language, after: target.language },
+				{ field: "isrc", before: base.isrc, after: target.isrc },
+				...(albumKnown
+					? [{ field: "album" as const, before: base.album, after: target.album }]
+					: []),
+			]),
+		],
 		againstRevNo: base.rev_no,
 	}
 }

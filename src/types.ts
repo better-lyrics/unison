@@ -305,6 +305,7 @@ export interface PreviewResult {
 	outcome: GateOutcome
 	noChanges: boolean
 	rateLimit: RevisionRateLimit
+	diff: RevisionDiff
 }
 
 export type DiffPart = ["=" | "+" | "-", string]
