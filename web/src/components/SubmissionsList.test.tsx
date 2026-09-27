@@ -171,6 +171,46 @@ describe("SubmissionsList", () => {
       await waitFor(() => expect(screen.getByText("Abc Song")).toBeTruthy())
       expect(requested).toEqual([base, `${base}?q=abc`])
     })
+
+    it("regression: typing right after clearing never resurrects the previous search", async () => {
+      const requested = stubRoutes({
+        [base]: { submissions: [submission(1, "Line Song")] },
+        [`${base}?q=abc`]: { submissions: [submission(2, "Abc Song")] },
+        [`${base}?q=x`]: { submissions: [submission(3, "X Song")] },
+      })
+      renderList()
+      await waitFor(() => expect(screen.getByText("Line Song")).toBeTruthy())
+      const input = screen.getByLabelText("Search submissions")
+      fireEvent.change(input, { target: { value: "abc" } })
+      await waitFor(() => expect(screen.getByText("Abc Song")).toBeTruthy())
+      fireEvent.change(input, { target: { value: "" } })
+      await new Promise((resolve) => setTimeout(resolve, 20))
+      fireEvent.change(input, { target: { value: "x" } })
+      await waitFor(() => expect(screen.getByText("Line Song")).toBeTruthy())
+      expect(screen.queryByText("Abc Song")).toBeNull()
+      await waitFor(() => expect(screen.getByText("X Song")).toBeTruthy())
+      expect(requested).toEqual([base, `${base}?q=abc`, `${base}?q=x`])
+    })
+
+    it("never renders the same submission twice when a row shifts across pages", async () => {
+      stubRoutes({
+        [`${base}?sort=most_votes`]: {
+          submissions: [submission(1, "Top"), submission(2, "Shifting")],
+          nextCursor: "4:2",
+        },
+        [base]: { submissions: [submission(9, "Line Song")] },
+        [`${base}?sort=most_votes&cursor=4%3A2`]: {
+          submissions: [submission(2, "Shifting"), submission(3, "Bottom")],
+        },
+      })
+      renderList()
+      await waitFor(() => expect(screen.getByText("Line Song")).toBeTruthy())
+      fireEvent.change(screen.getByLabelText("Sort submissions"), { target: { value: "most_votes" } })
+      await waitFor(() => expect(screen.getByText("Top")).toBeTruthy())
+      fireEvent.click(screen.getByRole("button", { name: "Load more" }))
+      await waitFor(() => expect(screen.getByText("Bottom")).toBeTruthy())
+      expect(screen.getAllByText("Shifting")).toHaveLength(1)
+    })
   })
 
   describe("cross-field interactions", () => {
@@ -229,6 +269,18 @@ describe("SubmissionsList", () => {
   })
 
   describe("error paths", () => {
+    it("keeps the toolbar when a filtered request fails so the filter can be undone", async () => {
+      stubRoutes({ [base]: { submissions: [submission(1, "Line Song")] } })
+      renderList()
+      await waitFor(() => expect(screen.getByText("Line Song")).toBeTruthy())
+      const filter = screen.getByLabelText("Filter by sync type")
+      fireEvent.change(filter, { target: { value: "plain" } })
+      await waitFor(() => expect(screen.getByRole("alert").textContent).toMatch(/could not load submissions/i))
+      fireEvent.change(filter, { target: { value: "all" } })
+      await waitFor(() => expect(screen.getByText("Line Song")).toBeTruthy())
+      expect(screen.queryByRole("alert")).toBeNull()
+    })
+
     it("shows an error when the first page fails", async () => {
       stubRoutes({})
       renderList()

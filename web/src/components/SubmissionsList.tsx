@@ -34,11 +34,12 @@ function CuratorSubmissions({ keyId }: SubmissionsListProps) {
   const [toolbar, setToolbar] = useState<ToolbarState>(DEFAULT_TOOLBAR)
 
   const typedSearch = toolbar.search.trim()
-  const debouncedSearch = useDebouncedValue(typedSearch, SEARCH_DEBOUNCE_MS)
+  const debouncedSearch = useDebouncedValue(typedSearch, typedSearch.length === 0 ? 0 : SEARCH_DEBOUNCE_MS)
   const search = typedSearch.length === 0 ? "" : debouncedSearch
   const syncType = toolbar.syncType === "all" ? undefined : toolbar.syncType
   const { sort } = toolbar
   const filtered = search.length > 0 || syncType !== undefined
+  const toolbarChanged = filtered || sort !== DEFAULT_TOOLBAR.sort
 
   const {
     data,
@@ -58,7 +59,10 @@ function CuratorSubmissions({ keyId }: SubmissionsListProps) {
     staleTime: 60_000,
   })
 
-  const visible = useMemo(() => data?.pages.flatMap((page) => page.submissions) ?? [], [data])
+  const visible = useMemo(() => {
+    const seen = new Set<number>()
+    return (data?.pages.flatMap((page) => page.submissions) ?? []).filter((s) => !seen.has(s.id) && seen.add(s.id))
+  }, [data])
 
   if (status === "pending") {
     return (
@@ -85,11 +89,12 @@ function CuratorSubmissions({ keyId }: SubmissionsListProps) {
       </CollapsibleSection>
     )
   }
-  if (status === "error" && !isFetchNextPageError) {
-    return <EmptyState title="Could not load submissions" hint={error.message} />
+  const listError = status === "error" && !isFetchNextPageError ? error.message : null
+  if (listError !== null && !toolbarChanged) {
+    return <EmptyState title="Could not load submissions" hint={listError} />
   }
 
-  if (visible.length === 0 && !filtered && !isPlaceholderData) {
+  if (visible.length === 0 && !filtered && !isPlaceholderData && listError === null) {
     return <EmptyState title="No submissions yet" />
   }
 
@@ -134,7 +139,11 @@ function CuratorSubmissions({ keyId }: SubmissionsListProps) {
             <option value="least_votes">Least votes</option>
           </select>
         </div>
-        {visible.length === 0 ? (
+        {listError !== null ? (
+          <p role="alert" className="text-xs text-unison-text-muted">
+            Could not load submissions. {listError}
+          </p>
+        ) : visible.length === 0 ? (
           <p className="text-xs text-unison-text-muted">No submissions match these filters.</p>
         ) : (
           <ul className="border-b border-unison-border">
