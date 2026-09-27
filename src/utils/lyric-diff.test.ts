@@ -4,7 +4,9 @@ import type { DiffRow } from "@/types"
 import { type LyricLine, extractComparableLines, extractLines } from "@/utils/extract-text"
 import { describe, expect, it } from "vitest"
 import {
+	type FieldChange,
 	buildDiffRows,
+	buildFieldRows,
 	diffPreview,
 	renderLinesForDiff,
 	reviewDiff,
@@ -521,7 +523,7 @@ describe("minimum timing change", () => {
 
 describe("reviewDiff", () => {
 	const labels = { before: "rev 1", after: "rev 2" }
-	const unchanged = [
+	const unchanged: FieldChange[] = [
 		{ field: "language", before: "en", after: "en" },
 		{ field: "isrc", before: null, after: null },
 		{ field: "album", before: "Hymns", after: "Hymns" },
@@ -536,14 +538,14 @@ describe("reviewDiff", () => {
 	})
 
 	it("shows a changed album as labelled lines", () => {
-		const changes = [{ field: "album", before: "Hymns", after: "Sacred Songs" }]
+		const changes: FieldChange[] = [{ field: "album", before: "Hymns", after: "Sacred Songs" }]
 		const review = reviewDiff(base(), base(), changes, labels)
 		expect(review.preview).toBe("-[album] Hymns\n+[album] Sacred Songs")
 		expect(review.full).toContain("-[album] Hymns\n+[album] Sacred Songs\n")
 	})
 
 	it("shows a set and a cleared field with one side only", () => {
-		const changes = [
+		const changes: FieldChange[] = [
 			{ field: "language", before: "en", after: null },
 			{ field: "isrc", before: null, after: "USRC17607839" },
 		]
@@ -561,7 +563,7 @@ describe("reviewDiff", () => {
 	})
 
 	it("shows field changes and the timing line together", () => {
-		const changes = [{ field: "album", before: "Hymns", after: null }]
+		const changes: FieldChange[] = [{ field: "album", before: "Hymns", after: null }]
 		expect(reviewDiff(base(), shiftedBy(50), changes, labels).preview).toBe(
 			"-[album] Hymns\nTiming changed slightly, no line moved by 100 ms or more."
 		)
@@ -599,6 +601,98 @@ describe("reviewDiff", () => {
 		it("never uses a dash in the timing line", () => {
 			const { preview } = reviewDiff(base(), shiftedBy(30), unchanged, labels)
 			expect(preview).not.toMatch(/[-\u2013\u2014]/)
+		})
+	})
+})
+
+describe("buildFieldRows", () => {
+	it("returns a field row for a changed album", () => {
+		expect(buildFieldRows([{ field: "album", before: "Hymns", after: "Sacred Songs" }])).toEqual([
+			{ kind: "field", field: "album", before: "Hymns", after: "Sacred Songs" },
+		])
+	})
+
+	it("leaves out fields whose value did not change", () => {
+		expect(
+			buildFieldRows([
+				{ field: "language", before: "en", after: "en" },
+				{ field: "isrc", before: null, after: "USRC17607839" },
+				{ field: "album", before: "Hymns", after: "Hymns" },
+			])
+		).toEqual([{ kind: "field", field: "isrc", before: null, after: "USRC17607839" }])
+	})
+
+	it("orders rows language, isrc, album whatever order the changes come in", () => {
+		const rows = buildFieldRows([
+			{ field: "album", before: null, after: "Sacred Songs" },
+			{ field: "isrc", before: "GBAYE0400001", after: "USRC17607839" },
+			{ field: "language", before: "en", after: "es" },
+		])
+		expect(rows.map((row) => (row.kind === "field" ? row.field : row.kind))).toEqual([
+			"language",
+			"isrc",
+			"album",
+		])
+	})
+
+	describe("edge cases", () => {
+		it("returns no rows for no changes", () => {
+			expect(buildFieldRows([])).toEqual([])
+		})
+
+		it("returns no rows when a field stays empty", () => {
+			expect(buildFieldRows([{ field: "isrc", before: null, after: null }])).toEqual([])
+		})
+
+		it("keeps a cleared field with a null after", () => {
+			expect(buildFieldRows([{ field: "language", before: "en", after: null }])).toEqual([
+				{ kind: "field", field: "language", before: "en", after: null },
+			])
+		})
+
+		it("counts a case-only album change as a change", () => {
+			expect(buildFieldRows([{ field: "album", before: "Hymns", after: "hymns" }])).toHaveLength(1)
+		})
+
+		it("keeps unicode values intact", () => {
+			expect(
+				buildFieldRows([{ field: "album", before: null, after: "今すぐ輪廻 (Beyoncé Remix)" }])
+			).toEqual([
+				{ kind: "field", field: "album", before: null, after: "今すぐ輪廻 (Beyoncé Remix)" },
+			])
+		})
+	})
+
+	describe("invariants", () => {
+		const changes: FieldChange[] = [
+			{ field: "album", before: "Hymns", after: "Sacred Songs" },
+			{ field: "language", before: "en", after: "es" },
+		]
+
+		it("does not modify the changes it is given", () => {
+			const copy = structuredClone(changes)
+			buildFieldRows(changes)
+			expect(changes).toEqual(copy)
+		})
+
+		it("never returns a row whose before equals its after", () => {
+			for (const row of buildFieldRows([...changes, { field: "isrc", before: "x", after: "x" }])) {
+				expect(row.kind === "field" && row.before !== row.after).toBe(true)
+			}
+		})
+
+		it("agrees with the council card on which fields changed", () => {
+			const all: FieldChange[] = [
+				...changes,
+				{ field: "isrc", before: "USRC17607839", after: "USRC17607839" },
+			]
+			const review = reviewDiff(base(), base(), all, { before: "a", after: "b" })
+			const carded = ["language", "isrc", "album"].filter((field) =>
+				review.full.includes(`[${field}]`)
+			)
+			expect(buildFieldRows(all).map((row) => (row.kind === "field" ? row.field : ""))).toEqual(
+				carded
+			)
 		})
 	})
 })
