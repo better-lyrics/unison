@@ -594,7 +594,7 @@ describeIntegration("exam data access (integration)", () => {
 
 		const events = async () => {
 			const { rows } = await pool.query(
-				"SELECT kind, source, actor_id, subject_user_id, ref_id FROM council_events WHERE kind LIKE 'applicant%' AND ref_id IN (SELECT id FROM exam_session WHERE key_id = $1)",
+				"SELECT kind, source, actor_id, subject_user_id, ref_id::int AS ref_id FROM council_events WHERE kind LIKE 'applicant%' AND ref_id IN (SELECT id FROM exam_session WHERE key_id = $1)",
 				[APPLICANT]
 			)
 			return rows
