@@ -1404,6 +1404,17 @@ describe("POST /lyrics/submit album validation", () => {
 			expect(insert).toBeUndefined()
 		})
 
+		it("rejects an album with a Unicode line separator", async () => {
+			const { res, insert } = await submitWithAlbum("Hymns\u2028fake line")
+			expect(res.status).toBe(400)
+			expect(insert).toBeUndefined()
+		})
+
+		it("rejects an album with a tab", async () => {
+			const { res } = await submitWithAlbum("Hymns\tof Grace")
+			expect(res.status).toBe(400)
+		})
+
 		it("rejects an album over the length limit and stores nothing", async () => {
 			const { res, insert } = await submitWithAlbum(
 				"x".repeat(config.validation.album.maxLength + 1)
