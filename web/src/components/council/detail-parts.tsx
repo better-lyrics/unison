@@ -4,6 +4,7 @@ import { TierChip } from "@/components/TierChip"
 import { UserAvatar } from "@/components/UserAvatar"
 import { cn } from "@/lib/cn"
 import type { TierName } from "@/lib/types"
+import { youTubeMusicUrl } from "@/lib/youtube-music"
 import { IconExternalLink } from "@tabler/icons-react"
 import type { ReactNode } from "react"
 import { cardClass } from "./headings"
@@ -15,10 +16,6 @@ export function DetailCard({ children, actions }: { children: ReactNode; actions
       {actions}
     </section>
   )
-}
-
-export function youTubeMusicUrl(videoId: string): string {
-  return `https://music.youtube.com/watch?v=${encodeURIComponent(videoId)}`
 }
 
 export function DetailHeader({

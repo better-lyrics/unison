@@ -6,12 +6,13 @@ import { cn } from "@/lib/cn"
 import type { BookmarkState } from "@/lib/council-triage"
 import type { BoostQuota, QueueItem } from "@/lib/council-types"
 import { formatElapsed, formatRemaining, formatShortDate, titleCase } from "@/lib/format"
+import { youTubeMusicUrl } from "@/lib/youtube-music"
 import { IconAlertTriangle, IconBookmark, IconCheck, IconRosetteDiscountCheck } from "@tabler/icons-react"
 import type { ReactNode } from "react"
 import { ActionBar } from "./ActionBar"
 import { CouncilHistory } from "./CouncilHistory"
 import { LyricPreview } from "./LyricPreview"
-import { BlockHead, Callout, Chip, DetailCard, DetailHeader, PersonCard, youTubeMusicUrl } from "./detail-parts"
+import { BlockHead, Callout, Chip, DetailCard, DetailHeader, PersonCard } from "./detail-parts"
 
 interface SealDetailProps {
   item: QueueItem

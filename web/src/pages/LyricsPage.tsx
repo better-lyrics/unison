@@ -13,6 +13,7 @@ import { useYouTubePlayer } from "@/hooks/useYouTubePlayer"
 import { cn } from "@/lib/cn"
 import { downloadTextFile } from "@/lib/download"
 import { MIME_BY_FORMAT, lyricsFilename } from "@/lib/lyrics-download"
+import { youTubeMusicUrl } from "@/lib/youtube-music"
 import { useCallback, useMemo, useState } from "react"
 import { useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom"
 
@@ -132,7 +133,7 @@ export function LyricsPage() {
             <VariantMetadataSkeleton />
           )}
           <a
-            href={`https://music.youtube.com/watch?v=${safeVideoId}`}
+            href={youTubeMusicUrl(safeVideoId)}
             target="_blank"
             rel="noopener noreferrer"
             className="flex items-center justify-center gap-2 rounded-[10px] bg-white/[0.08] px-4 py-3 text-[13px] font-semibold text-unison-text shadow-[0_1px_2px_rgba(0,0,0,0.4),inset_0_1px_0_0_rgba(255,255,255,0.07)] transition-colors hover:bg-white/[0.12] active:translate-y-px"

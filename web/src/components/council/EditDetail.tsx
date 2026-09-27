@@ -7,21 +7,13 @@ import type { BookmarkState } from "@/lib/council-triage"
 import type { EditItem, EditThresholds } from "@/lib/council-types"
 import { formatElapsed } from "@/lib/format"
 import type { RevisionSummary } from "@/lib/revision-types"
+import { youTubeMusicUrl } from "@/lib/youtube-music"
 import { IconAlertTriangle, IconCheck, IconRosetteDiscountCheck } from "@tabler/icons-react"
 import { useState } from "react"
 import { ActionBar } from "./ActionBar"
 import { type DiffMode, DiffView } from "./DiffView"
 import { Segmented } from "./Segmented"
-import {
-  BlockHead,
-  Callout,
-  Chip,
-  DetailCard,
-  DetailHeader,
-  PersonCard,
-  historyItemClass,
-  youTubeMusicUrl,
-} from "./detail-parts"
+import { BlockHead, Callout, Chip, DetailCard, DetailHeader, PersonCard, historyItemClass } from "./detail-parts"
 
 interface EditDetailProps {
   item: EditItem
