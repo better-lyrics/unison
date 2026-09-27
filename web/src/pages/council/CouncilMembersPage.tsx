@@ -191,7 +191,7 @@ function MemberRow({
       </td>
       {admin ? (
         <td className="text-right whitespace-nowrap">
-          {member.isYou ? null : confirming ? (
+          {member.isYou || member.isAdmin ? null : confirming ? (
             <span className="inline-flex items-center gap-1.5">
               <button type="button" className={buttonClass("ghost", "sm")} onClick={onCancel}>
                 Cancel

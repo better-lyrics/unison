@@ -129,6 +129,7 @@ describe("CouncilMembersPage", () => {
     renderCouncil("/council/members")
     await waitFor(() => expect(names()).toHaveLength(3))
     expect(screen.queryByRole("button", { name: "Remove boidu from the council" })).toBeNull()
+    expect(screen.queryByRole("button", { name: "Remove olafix52 from the council" })).toBeNull()
     fireEvent.click(screen.getByRole("button", { name: "Remove Ado from the council" }))
     fireEvent.click(screen.getByRole("button", { name: "Remove Ado" }))
     await waitFor(() => expect(log).toEqual([`/committee/members/${ADO.keyId}`]))

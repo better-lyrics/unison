@@ -133,8 +133,7 @@ describe("CouncilApplicantsPage", () => {
     expect(screen.queryByRole("button", { name: /Approve and add to council/ })).toBeNull()
   })
 
-  it("approves an applicant as an admin", async () => {
-    const log: string[] = []
+  function stubDecisions(log: string[]) {
     stubCouncilApi(councilData({ applicants: [golden] }), { admin: true }, [
       {
         match: (url, init) => init?.method === "POST" && url === "/committee/applicants/71/decision",
@@ -144,10 +143,39 @@ describe("CouncilApplicantsPage", () => {
         },
       },
     ])
+  }
+
+  it("approves an applicant as an admin after a confirmation", async () => {
+    const log: string[] = []
+    stubDecisions(log)
     renderCouncil("/council/applicants")
     fireEvent.click(await screen.findByRole("button", { name: /Approve and add to council/ }))
+    expect(log).toEqual([])
+    fireEvent.click(screen.getByRole("button", { name: "Approve GoldenKickWhisper" }))
     await waitFor(() => expect(log).toEqual([`/committee/applicants/71/decision {"decision":"approve"}`]))
     await screen.findByText("Added GoldenKickWhisper to the council")
+  })
+
+  it("rejects an applicant as an admin after a confirmation", async () => {
+    const log: string[] = []
+    stubDecisions(log)
+    renderCouncil("/council/applicants")
+    fireEvent.click(await screen.findByRole("button", { name: "Reject" }))
+    expect(log).toEqual([])
+    expect(screen.queryByRole("button", { name: /Approve and add to council/ })).toBeNull()
+    fireEvent.click(screen.getByRole("button", { name: "Reject GoldenKickWhisper" }))
+    await waitFor(() => expect(log).toEqual([`/committee/applicants/71/decision {"decision":"reject"}`]))
+  })
+
+  it("sends nothing when the admin cancels the confirmation", async () => {
+    const log: string[] = []
+    stubDecisions(log)
+    renderCouncil("/council/applicants")
+    fireEvent.click(await screen.findByRole("button", { name: "Reject" }))
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }))
+    expect(screen.getByRole("button", { name: "Reject" })).toBeTruthy()
+    expect(screen.getByRole("button", { name: /Approve and add to council/ })).toBeTruthy()
+    expect(log).toEqual([])
   })
 
   describe("edge cases", () => {

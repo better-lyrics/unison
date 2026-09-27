@@ -5,6 +5,7 @@ import { cn } from "@/lib/cn"
 import type { ApplicantView, OpinionStance } from "@/lib/council-types"
 import { formatElapsed } from "@/lib/format"
 import { IconCheck, IconThumbDown, IconThumbUp } from "@tabler/icons-react"
+import { useState } from "react"
 import { cardClass } from "./headings"
 
 const monthYear = new Intl.DateTimeFormat("en-US", { month: "short", year: "numeric" })
@@ -27,6 +28,7 @@ export function ApplicantCard({ applicant, now, admin, busy, onOpinion, onDecisi
   const cutoff = applicant.cutoff === null ? null : Math.round((applicant.cutoff / max) * 100)
   const { support, object, notes, mine } = applicant.opinions
   const toggle = (stance: OpinionStance) => onOpinion(mine === stance ? null : stance)
+  const [confirming, setConfirming] = useState<"approve" | "reject" | null>(null)
 
   return (
     <article aria-label={name} className={cn(cardClass, "flex flex-col gap-[22px] p-6", failed && "opacity-70")}>
@@ -146,13 +148,30 @@ export function ApplicantCard({ applicant, now, admin, busy, onOpinion, onDecisi
               ))}
             </span>
           </div>
-          {admin ? (
+          {!admin ? null : confirming ? (
+            <div className="flex justify-end gap-2">
+              <button type="button" className={buttonClass("ghost", "sm")} onClick={() => setConfirming(null)}>
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={busy}
+                className={buttonClass(confirming === "reject" ? "danger" : "primary", "sm")}
+                onClick={() => {
+                  setConfirming(null)
+                  onDecision(confirming)
+                }}
+              >
+                {confirming === "reject" ? "Reject" : "Approve"} {name}
+              </button>
+            </div>
+          ) : (
             <div className="flex justify-end gap-2">
               <button
                 type="button"
                 disabled={busy}
                 className={buttonClass("ghost", "sm")}
-                onClick={() => onDecision("reject")}
+                onClick={() => setConfirming("reject")}
               >
                 Reject
               </button>
@@ -160,13 +179,13 @@ export function ApplicantCard({ applicant, now, admin, busy, onOpinion, onDecisi
                 type="button"
                 disabled={busy}
                 className={buttonClass("primary", "sm")}
-                onClick={() => onDecision("approve")}
+                onClick={() => setConfirming("approve")}
               >
                 <IconCheck aria-hidden className="size-3.5" stroke={1.75} />
                 Approve and add to council
               </button>
             </div>
-          ) : null}
+          )}
         </>
       )}
     </article>
