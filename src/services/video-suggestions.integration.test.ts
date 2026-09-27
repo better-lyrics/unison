@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs"
 import { config } from "@/config"
 import { D1Compat } from "@/infra/database"
 import { createTypesafeClient } from "@/services/typesafe"
-import { makeMemoryCache } from "@/test/integration-harness"
+import { makeMemoryCache, makeOpenLimiter } from "@/test/integration-harness"
 import type { Env } from "@/types"
 import type { SongCandidate } from "@/utils/innertube"
 import pg from "pg"
@@ -159,6 +159,7 @@ describeIntegration("video suggestions (integration)", () => {
 			const matchEnv = {
 				...env,
 				CACHE: makeMemoryCache(),
+				RATE_LIMITER: makeOpenLimiter(),
 				TYPESAFE: createTypesafeClient({ apiKey: "k", fetch: fetchImpl }),
 			} as unknown as Env
 			return { states, matchEnv }

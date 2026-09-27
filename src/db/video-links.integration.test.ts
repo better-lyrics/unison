@@ -4,7 +4,7 @@ import { D1Compat } from "@/infra/database"
 import { Logger } from "@/infra/logger"
 import { matchSuggestions } from "@/services/recording-match"
 import { createTypesafeClient } from "@/services/typesafe"
-import { makeMemoryCache } from "@/test/integration-harness"
+import { makeMemoryCache, makeOpenLimiter } from "@/test/integration-harness"
 import type { Env } from "@/types"
 import type { SongCandidate } from "@/utils/innertube"
 import pg from "pg"
@@ -274,6 +274,7 @@ describeIntegration("video link service (integration)", () => {
 			const withCache = {
 				...env,
 				CACHE: makeMemoryCache(),
+				RATE_LIMITER: makeOpenLimiter(),
 				TYPESAFE: createTypesafeClient({ apiKey: "k", fetch: fetchImpl }),
 			} as unknown as Env
 			return { calls, withCache }

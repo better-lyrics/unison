@@ -5,6 +5,7 @@ import type { Env } from "@/types"
 import { sha256Hex } from "@/utils/hash"
 import type { SongCandidate } from "@/utils/innertube"
 import { afterEach, describe, expect, it, vi } from "vitest"
+import { createTypesafeJevGate } from "./jev-gate"
 import {
 	type LyricTrack,
 	cachedRecordingMatch,
@@ -97,12 +98,27 @@ function scoreByCandidate(overrides: Record<string, Reply> = {}) {
 	}
 }
 
-function envWith(fetchImpl?: typeof fetch, cache = makeMemoryCache()) {
+function countingLimiter(allow = Number.POSITIVE_INFINITY) {
+	const calls: Array<{ key: string; maxRequests?: number; windowSeconds?: number }> = []
+	const counts = new Map<string, number>()
+	return {
+		calls,
+		async limit(opts: { key: string; maxRequests?: number; windowSeconds?: number }) {
+			calls.push(opts)
+			const count = (counts.get(opts.key) ?? 0) + 1
+			counts.set(opts.key, count)
+			return { success: count <= Math.min(allow, opts.maxRequests ?? 10) }
+		},
+	}
+}
+
+function envWith(fetchImpl?: typeof fetch, cache = makeMemoryCache(), limiter = countingLimiter()) {
 	const env = {
 		CACHE: cache,
+		RATE_LIMITER: limiter,
 		TYPESAFE: fetchImpl ? createTypesafeClient({ apiKey: "ts-key", fetch: fetchImpl }) : null,
 	} as unknown as Env
-	return { env, cache }
+	return { env, cache, limiter }
 }
 
 function cacheKey(lyric: LyricTrack, c: SongCandidate): string {
@@ -522,6 +538,162 @@ describe("matchSuggestions", () => {
 				suggest(ALBUM),
 			])
 			expect(requests).toHaveLength(2)
+		})
+	})
+})
+
+describe("budget", () => {
+	it("spends one global budget slot per uncached call, with the configured limits", async () => {
+		const { fetchImpl } = fakeTypesafe(scoreByCandidate())
+		const { env, limiter } = envWith(fetchImpl)
+		await matchSuggestions(env, LYRIC, [suggest(ALBUM), suggest(REMIX)])
+		expect(config.videoLinking.recordingMatch.budget).toEqual({
+			maxRequests: 300,
+			windowSeconds: 60,
+		})
+		expect(limiter.calls).toEqual([
+			{ key: "recmatch:budget", maxRequests: 300, windowSeconds: 60 },
+			{ key: "recmatch:budget", maxRequests: 300, windowSeconds: 60 },
+		])
+	})
+
+	it("leaves rows unjudged without calling TypeSafe once the budget is spent", async () => {
+		const { requests, fetchImpl } = fakeTypesafe(scoreByCandidate())
+		const { env, cache } = envWith(fetchImpl, makeMemoryCache(), countingLimiter(1))
+		const out = await matchSuggestions(env, LYRIC, [suggest(ALBUM), suggest(REMIX), suggest(EDIT)])
+		expect(requests).toHaveLength(1)
+		expect(out.filter((s) => s.match === null)).toHaveLength(2)
+		expect([...cache.store.keys()].filter((k) => k.startsWith("recmatch:v1:"))).toHaveLength(1)
+	})
+
+	it("serves cache hits without spending budget", async () => {
+		const { fetchImpl } = fakeTypesafe(scoreByCandidate())
+		const cache = makeMemoryCache()
+		await matchSuggestions(envWith(fetchImpl, cache).env, LYRIC, [suggest(ALBUM)])
+
+		const limiter = countingLimiter(0)
+		const [out] = await matchSuggestions(envWith(fetchImpl, cache, limiter).env, LYRIC, [
+			suggest(ALBUM),
+		])
+		expect(out.match).toEqual({ level: "same", score: 1.9 })
+		expect(limiter.calls).toHaveLength(0)
+	})
+
+	it("spends nothing when matching is disabled", async () => {
+		const { env, limiter } = envWith()
+		await matchSuggestions(env, LYRIC, [suggest(ALBUM)])
+		expect(limiter.calls).toHaveLength(0)
+	})
+})
+
+describe("breaker", () => {
+	const tripping: Array<[string, Reply]> = [
+		["a 429", new Response("slow down", { status: 429 })],
+		["a 529", new Response("overloaded", { status: 529 })],
+		["a timeout", new DOMException("The operation was aborted due to timeout", "TimeoutError")],
+	]
+
+	for (const [label, reply] of tripping) {
+		it(`stops calling TypeSafe for the breaker window after ${label}`, async () => {
+			const puts: Array<{ key: string; ttl?: number }> = []
+			const cache = makeMemoryCache()
+			const put = cache.put
+			cache.put = async (key: string, value: string, opts?: { expirationTtl?: number }) => {
+				puts.push({ key, ttl: opts?.expirationTtl })
+				await put(key, value)
+			}
+			let calls = 0
+			const { fetchImpl } = fakeTypesafe(() => {
+				calls++
+				return calls === 1 ? reply : 1.9
+			})
+			const { env, limiter } = envWith(fetchImpl, cache)
+			const [first] = await matchSuggestions(env, LYRIC, [suggest(ALBUM)])
+			expect(first.match).toBeNull()
+			expect(puts).toEqual([{ key: "recmatch:breaker", ttl: 30 }])
+			expect(config.videoLinking.recordingMatch.breakerSeconds).toBe(30)
+
+			const budgetBefore = limiter.calls.length
+			const out = await matchSuggestions(env, LYRIC, [suggest(ALBUM), suggest(REMIX)])
+			expect(out.map((s) => s.match)).toEqual([null, null])
+			expect(calls).toBe(1)
+			expect(limiter.calls).toHaveLength(budgetBefore)
+		})
+	}
+
+	for (const [label, reply] of [
+		["a 500", new Response("boom", { status: 500 })],
+		["a malformed score", 2.4],
+		["a network error", new Error("socket hang up")],
+	] as Array<[string, Reply]>) {
+		it(`stays closed after ${label}`, async () => {
+			let calls = 0
+			const { fetchImpl } = fakeTypesafe(() => {
+				calls++
+				return calls === 1 ? reply : 1.9
+			})
+			const { env, cache } = envWith(fetchImpl)
+			await matchSuggestions(env, LYRIC, [suggest(ALBUM)])
+			expect(cache.store.has("recmatch:breaker")).toBe(false)
+			const [again] = await matchSuggestions(env, LYRIC, [suggest(ALBUM)])
+			expect(again.match).toEqual({ level: "same", score: 1.9 })
+			expect(calls).toBe(2)
+		})
+	}
+
+	it("still serves cached answers while open", async () => {
+		const { fetchImpl } = fakeTypesafe(scoreByCandidate())
+		const { env, cache } = envWith(fetchImpl)
+		await matchSuggestions(env, LYRIC, [suggest(ALBUM)])
+		cache.store.set("recmatch:breaker", "1")
+		const out = await matchSuggestions(env, LYRIC, [suggest(ALBUM), suggest(REMIX)])
+		expect(out.map((s) => [s.videoId, s.match])).toEqual([
+			[ALBUM.videoId, { level: "same", score: 1.9 }],
+			[REMIX.videoId, null],
+		])
+	})
+
+	it("logs once when it opens", async () => {
+		const warn = vi.spyOn(Logger.prototype, "warn")
+		const { fetchImpl } = fakeTypesafe(() => new Response("slow down", { status: 429 }))
+		const { env } = envWith(fetchImpl)
+		await matchSuggestions(env, { ...LYRIC, lyricsId: 42 }, [suggest(ALBUM)])
+		expect(warn).toHaveBeenCalledWith(
+			"recording match backing off from TypeSafe",
+			expect.objectContaining({ lyricsId: 42, videoId: ALBUM.videoId, seconds: 30 })
+		)
+	})
+
+	describe("invariants", () => {
+		it("never touches the Jev revision gate", async () => {
+			const { fetchImpl } = fakeTypesafe(() => new Response("slow down", { status: 429 }))
+			const { env, cache } = envWith(fetchImpl)
+			await matchSuggestions(env, LYRIC, [suggest(ALBUM)])
+			expect(cache.store.has("recmatch:breaker")).toBe(true)
+
+			let gateCalls = 0
+			const gateFetch = (async () => {
+				gateCalls++
+				return Response.json({
+					answers: Object.fromEntries(
+						[
+							"offensive_insertion",
+							"unrelated_content",
+							"deliberate_corruption",
+							"section_removal",
+						].map((id) => [id, { type: "noul", noul: 0.1 }])
+					),
+				})
+			}) as typeof fetch
+			const verdict = await createTypesafeJevGate({ apiKey: "k", fetch: gateFetch }).check({
+				lyricsId: 1,
+				song: "Blinding Lights",
+				artist: "The Weeknd",
+				diff: "-a\n+b",
+				lyrics: "a\n",
+			})
+			expect(gateCalls).toBe(1)
+			expect(verdict).toEqual({ flagged: false, probability: 0.1 })
 		})
 	})
 })

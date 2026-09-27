@@ -17,6 +17,12 @@ export interface TypesafeClientOptions {
 	fetch?: typeof fetch
 }
 
+export class TypesafeHttpError extends Error {
+	constructor(readonly status: number) {
+		super(`TypeSafe returned ${status}`)
+	}
+}
+
 export function createTypesafeClient(options: TypesafeClientOptions): TypesafeClient {
 	const fetchImpl = options.fetch ?? fetch
 	return {
@@ -30,7 +36,7 @@ export function createTypesafeClient(options: TypesafeClientOptions): TypesafeCl
 				body: JSON.stringify({ state, model: config.typesafe.model, questions }),
 				signal: AbortSignal.timeout(timeoutMs),
 			})
-			if (!res.ok) throw new Error(`TypeSafe returned ${res.status}`)
+			if (!res.ok) throw new TypesafeHttpError(res.status)
 			const { answers } = (await res.json()) as { answers?: unknown }
 			if (typeof answers !== "object" || answers === null || Array.isArray(answers)) {
 				throw new Error("TypeSafe response has no answers")

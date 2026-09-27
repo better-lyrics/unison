@@ -1,6 +1,6 @@
 import { config } from "@/config"
 import { Logger } from "@/infra/logger"
-import { readScore } from "@/services/typesafe"
+import { TypesafeHttpError, readScore } from "@/services/typesafe"
 import type { Env } from "@/types"
 import { sha256Hex } from "@/utils/hash"
 import type { SongCandidate } from "@/utils/innertube"
@@ -70,6 +70,28 @@ export async function cachedRecordingMatch(
 	}
 }
 
+const BREAKER_KEY = "recmatch:breaker"
+const BUDGET_KEY = "recmatch:budget"
+const BACK_OFF_STATUSES = new Set([429, 529])
+
+function shouldBackOff(err: unknown): boolean {
+	if (err instanceof TypesafeHttpError) return BACK_OFF_STATUSES.has(err.status)
+	return err instanceof Error && err.name === "TimeoutError"
+}
+
+async function mayCallTypesafe(env: Env, ids: Record<string, unknown>): Promise<boolean> {
+	if (await env.CACHE.get(BREAKER_KEY)) {
+		log.debug("recording match backing off, leaving the suggestion unjudged", ids)
+		return false
+	}
+	const { success } = await env.RATE_LIMITER.limit({
+		key: BUDGET_KEY,
+		...config.videoLinking.recordingMatch.budget,
+	})
+	if (!success) log.warn("recording match budget spent, leaving the suggestion unjudged", ids)
+	return success
+}
+
 async function judge(
 	env: Env,
 	lyric: LyricTrack,
@@ -77,9 +99,11 @@ async function judge(
 ): Promise<RecordingMatch | null> {
 	const client = env.TYPESAFE
 	if (!client) return null
+	const ids = { lyricsId: lyric.lyricsId, videoId: candidate.videoId }
 	try {
 		const cached = await cachedRecordingMatch(env, lyric, candidate)
 		if (cached) return cached
+		if (!(await mayCallTypesafe(env, ids))) return null
 		const answers = await client.ask({
 			state: recordingMatchState(lyric, candidate),
 			questions: QUESTIONS,
@@ -92,10 +116,14 @@ async function judge(
 		return { level: matchLevel(score), score }
 	} catch (err) {
 		log.warn("recording match failed, leaving the suggestion unjudged", {
-			lyricsId: lyric.lyricsId,
-			videoId: candidate.videoId,
+			...ids,
 			error: (err as Error).message,
 		})
+		if (shouldBackOff(err)) {
+			const seconds = config.videoLinking.recordingMatch.breakerSeconds
+			await env.CACHE.put(BREAKER_KEY, "1", { expirationTtl: seconds })
+			log.warn("recording match backing off from TypeSafe", { ...ids, seconds })
+		}
 		return null
 	}
 }

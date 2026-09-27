@@ -42,6 +42,14 @@ export function makeMemoryCache() {
 
 export type MemoryCache = ReturnType<typeof makeMemoryCache>
 
+export function makeOpenLimiter() {
+	return {
+		async limit() {
+			return { success: true }
+		},
+	}
+}
+
 export interface IntegrationDb {
 	pool: pg.Pool
 	cache: MemoryCache
@@ -54,11 +62,7 @@ export async function openIntegrationDb(): Promise<IntegrationDb> {
 	const pool = new pg.Pool({ connectionString: url })
 	await pool.query(readFileSync(new URL("../../schema.sql", import.meta.url), "utf-8"))
 	const cache = makeMemoryCache()
-	const limiter = {
-		async limit() {
-			return { success: true }
-		},
-	}
+	const limiter = makeOpenLimiter()
 	const env = {
 		DB: new D1Compat(pool),
 		CACHE: cache,

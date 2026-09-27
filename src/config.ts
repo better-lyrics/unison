@@ -87,6 +87,8 @@ export const config = {
 			concurrency: 5,
 			cacheTtlSeconds: 60 * 60 * 24 * 30,
 			cacheVersion: "v1", // bump when the question text changes
+			budget: { maxRequests: 300, windowSeconds: 60 },
+			breakerSeconds: 30,
 		},
 	},
 

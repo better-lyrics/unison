@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { createTypesafeClient, readNoul, readScore } from "./typesafe"
+import { TypesafeHttpError, createTypesafeClient, readNoul, readScore } from "./typesafe"
 
 interface CapturedRequest {
 	url: string
@@ -88,6 +88,17 @@ describe("createTypesafeClient", () => {
 				).rejects.toThrow(String(status))
 			})
 		}
+
+		it("carries the HTTP status on the error so callers can back off", async () => {
+			const { fetchImpl } = fakeTypesafe(() => new Response("busy", { status: 529 }))
+			const failure = createTypesafeClient({ apiKey: "k", fetch: fetchImpl }).ask({
+				state: STATE,
+				questions: QUESTIONS,
+				timeoutMs: 1500,
+			})
+			await expect(failure).rejects.toBeInstanceOf(TypesafeHttpError)
+			await expect(failure).rejects.toMatchObject({ status: 529 })
+		})
 
 		it("throws when the request times out", async () => {
 			const fetchImpl = (async () => {

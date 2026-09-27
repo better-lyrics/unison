@@ -1,5 +1,5 @@
 import { createTypesafeClient } from "@/services/typesafe"
-import { makeMemoryCache } from "@/test/integration-harness"
+import { makeMemoryCache, makeOpenLimiter } from "@/test/integration-harness"
 import type { Env } from "@/types"
 import type { SongCandidate } from "@/utils/innertube"
 import { describe, expect, it, vi } from "vitest"
@@ -436,7 +436,11 @@ describe("suggestVideosForSong recording match", () => {
 			"Blinding Lights": 1.9,
 			"Blinding Lights (Chromatics Remix)": 0.1,
 		})
-		const env = { CACHE: makeMemoryCache(), TYPESAFE: client } as unknown as Env
+		const env = {
+			CACHE: makeMemoryCache(),
+			RATE_LIMITER: makeOpenLimiter(),
+			TYPESAFE: client,
+		} as unknown as Env
 		const out = await suggestVideosForSong(env, SONG, {
 			search: async () => [REMIX, ALBUM, MUSIC_VIDEO],
 		})
@@ -449,7 +453,11 @@ describe("suggestVideosForSong recording match", () => {
 
 	it("judges against the raw lyric title, not the normalized one", async () => {
 		const { states, client } = typesafe({ "Blinding Lights": 1.9 })
-		const env = { CACHE: makeMemoryCache(), TYPESAFE: client } as unknown as Env
+		const env = {
+			CACHE: makeMemoryCache(),
+			RATE_LIMITER: makeOpenLimiter(),
+			TYPESAFE: client,
+		} as unknown as Env
 		await suggestVideosForSong(
 			env,
 			{ ...SONG, song: "Blinding Lights (Remastered)" },
@@ -471,7 +479,11 @@ describe("suggestVideosForSong recording match", () => {
 
 	it("only judges candidates that survive the suggestion filters", async () => {
 		const { states, client } = typesafe({ "Blinding Lights": 1.9 })
-		const env = { CACHE: makeMemoryCache(), TYPESAFE: client } as unknown as Env
+		const env = {
+			CACHE: makeMemoryCache(),
+			RATE_LIMITER: makeOpenLimiter(),
+			TYPESAFE: client,
+		} as unknown as Env
 		await suggestVideosForSong(env, SONG, {
 			search: async () => [
 				ALBUM,
