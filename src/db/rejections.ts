@@ -1,4 +1,6 @@
 import { isCommittee } from "@/db/committee"
+import { releaseBookmarksForItem } from "@/db/council-bookmarks"
+import { type CouncilSource, recordCouncilEvent } from "@/db/council-events"
 import { type FeedFilters, buildOrderByClause } from "@/db/feed-filters"
 import { AUTO_HIDE_PREDICATE_JOINED, RANKING_EXPR_JOINED } from "@/db/predicates"
 import { isUniqueViolation } from "@/infra/database"
@@ -67,7 +69,7 @@ export async function rejectLyric(
 	env: Env,
 	lyricsId: number,
 	userId: number,
-	note?: string
+	opts: { note?: string; source: CouncilSource }
 ): Promise<RejectResult> {
 	if (!(await isCommittee(env, userId))) {
 		return { ok: false, reason: "not_committee" }
@@ -82,11 +84,24 @@ export async function rejectLyric(
 
 	const now = Math.floor(Date.now() / 1000)
 	try {
-		await env.DB.prepare(
-			"INSERT INTO rejections (lyrics_id, rejected_by, rejected_at, note) VALUES (?, ?, ?, ?)"
-		)
-			.bind(lyricsId, userId, now, note ?? null)
-			.run()
+		await env.DB.transaction(async (tx) => {
+			const row = await tx
+				.prepare(
+					"INSERT INTO rejections (lyrics_id, rejected_by, rejected_at, note) VALUES (?, ?, ?, ?) RETURNING id"
+				)
+				.bind(lyricsId, userId, now, opts.note ?? null)
+				.first<{ id: number | string }>()
+			await recordCouncilEvent(tx, {
+				actorId: userId,
+				kind: "reject",
+				source: opts.source,
+				lyricsId,
+				refId: Number(row?.id),
+				note: opts.note ?? null,
+				at: now,
+			})
+			await releaseBookmarksForItem(tx, "seal", lyricsId)
+		})
 	} catch (err) {
 		if (isUniqueViolation(err)) {
 			return { ok: false, reason: "already_rejected" }
@@ -99,20 +114,32 @@ export async function rejectLyric(
 export async function undoRejection(
 	env: Env,
 	lyricsId: number,
-	userId: number
+	userId: number,
+	source: CouncilSource
 ): Promise<UndoRejectResult> {
 	if (!(await isCommittee(env, userId))) {
 		return { ok: false, reason: "not_committee" }
 	}
 
 	const now = Math.floor(Date.now() / 1000)
-	const revoked = await env.DB.prepare(
-		"UPDATE rejections SET revoked_at = ? WHERE lyrics_id = ? AND revoked_at IS NULL RETURNING id"
-	)
-		.bind(now, lyricsId)
-		.first<{ id: number }>()
-	if (!revoked) {
-		return { ok: false, reason: "not_found" }
-	}
-	return { ok: true }
+	return env.DB.transaction(async (tx): Promise<UndoRejectResult> => {
+		const revoked = await tx
+			.prepare(
+				"UPDATE rejections SET revoked_at = ? WHERE lyrics_id = ? AND revoked_at IS NULL RETURNING id"
+			)
+			.bind(now, lyricsId)
+			.first<{ id: number | string }>()
+		if (!revoked) {
+			return { ok: false, reason: "not_found" }
+		}
+		await recordCouncilEvent(tx, {
+			actorId: userId,
+			kind: "unreject",
+			source,
+			lyricsId,
+			refId: Number(revoked.id),
+			at: now,
+		})
+		return { ok: true }
+	})
 }

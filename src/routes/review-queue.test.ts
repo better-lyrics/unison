@@ -191,7 +191,7 @@ describe("POST /lyrics/:id/reject/bot", () => {
 		const res = await app().handle(bodyReq("POST", "42", { keyId: KEY, note: "bad sync" }))
 		expect(res.status).toBe(200)
 		expect(await res.json()).toEqual({ success: true })
-		expect(vi.mocked(rejectLyric)).toHaveBeenCalledWith(expect.anything(), 42, 7, "bad sync")
+		expect(vi.mocked(rejectLyric)).toHaveBeenCalledWith(expect.anything(), 42, 7, { note: "bad sync", source: "discord" })
 	})
 })
 
@@ -233,6 +233,6 @@ describe("DELETE /lyrics/:id/reject/bot", () => {
 		const res = await app().handle(bodyReq("DELETE", "9", { keyId: KEY }))
 		expect(res.status).toBe(200)
 		expect(await res.json()).toEqual({ success: true })
-		expect(vi.mocked(undoRejection)).toHaveBeenCalledWith(expect.anything(), 9, 7)
+		expect(vi.mocked(undoRejection)).toHaveBeenCalledWith(expect.anything(), 9, 7, "discord")
 	})
 })

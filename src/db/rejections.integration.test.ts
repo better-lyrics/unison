@@ -7,6 +7,8 @@ import {
 import type { Env } from "@/types"
 import type pg from "pg"
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest"
+import { createBookmark, listActiveBookmarks } from "./council-bookmarks"
+import { listCouncilEvents } from "./council-events"
 import { getSealCandidates, rejectLyric, undoRejection } from "./rejections"
 
 const kid = (n: number): string => n.toString(16).padStart(64, "0")
@@ -141,7 +143,7 @@ describeIntegration("rejections store (integration)", () => {
 			const rejected = await insertLyric({ videoId: "vRejected" })
 			const reviewer = await newUser()
 			await addToCommittee(reviewer)
-			await rejectLyric(env, rejected, reviewer)
+			await rejectLyric(env, rejected, reviewer, { source: "discord" })
 
 			const keep = await insertLyric({ videoId: "vKeep" })
 			const rows = await getSealCandidates(env, { limit: 25, sort: "top-rated" })
@@ -288,13 +290,16 @@ describeIntegration("rejections store (integration)", () => {
 		it("not_committee when the reviewer is not on the roster", async () => {
 			const reviewer = await newUser()
 			const id = await insertLyric({ videoId: "vNC" })
-			expect(await rejectLyric(env, id, reviewer)).toEqual({ ok: false, reason: "not_committee" })
+			expect(await rejectLyric(env, id, reviewer, { source: "discord" })).toEqual({
+				ok: false,
+				reason: "not_committee",
+			})
 		})
 
 		it("lyric_not_found for a bogus lyrics id", async () => {
 			const reviewer = await newUser()
 			await addToCommittee(reviewer)
-			expect(await rejectLyric(env, 999999, reviewer)).toEqual({
+			expect(await rejectLyric(env, 999999, reviewer, { source: "discord" })).toEqual({
 				ok: false,
 				reason: "lyric_not_found",
 			})
@@ -305,7 +310,9 @@ describeIntegration("rejections store (integration)", () => {
 			await addToCommittee(reviewer)
 			const id = await insertLyric({ videoId: "vRej" })
 
-			expect(await rejectLyric(env, id, reviewer, "bad sync")).toEqual({ ok: true })
+			expect(await rejectLyric(env, id, reviewer, { note: "bad sync", source: "discord" })).toEqual(
+				{ ok: true }
+			)
 			expect(await activeRejection(id)).toMatchObject({ rejected_by: reviewer, note: "bad sync" })
 		})
 
@@ -313,8 +320,8 @@ describeIntegration("rejections store (integration)", () => {
 			const reviewer = await newUser()
 			await addToCommittee(reviewer)
 			const id = await insertLyric({ videoId: "vDup" })
-			await rejectLyric(env, id, reviewer)
-			expect(await rejectLyric(env, id, reviewer)).toEqual({
+			await rejectLyric(env, id, reviewer, { source: "discord" })
+			expect(await rejectLyric(env, id, reviewer, { source: "discord" })).toEqual({
 				ok: false,
 				reason: "already_rejected",
 			})
@@ -325,14 +332,20 @@ describeIntegration("rejections store (integration)", () => {
 		it("not_committee when the actor is not on the roster", async () => {
 			const actor = await newUser()
 			const id = await insertLyric({ videoId: "vU" })
-			expect(await undoRejection(env, id, actor)).toEqual({ ok: false, reason: "not_committee" })
+			expect(await undoRejection(env, id, actor, "discord")).toEqual({
+				ok: false,
+				reason: "not_committee",
+			})
 		})
 
 		it("not_found when there is no active rejection", async () => {
 			const actor = await newUser()
 			await addToCommittee(actor)
 			const id = await insertLyric({ videoId: "vNone" })
-			expect(await undoRejection(env, id, actor)).toEqual({ ok: false, reason: "not_found" })
+			expect(await undoRejection(env, id, actor, "discord")).toEqual({
+				ok: false,
+				reason: "not_found",
+			})
 		})
 
 		it("revokes the active rejection and lets any council member undo", async () => {
@@ -341,9 +354,9 @@ describeIntegration("rejections store (integration)", () => {
 			const other = await newUser()
 			await addToCommittee(other)
 			const id = await insertLyric({ videoId: "vUndo" })
-			await rejectLyric(env, id, rejecter)
+			await rejectLyric(env, id, rejecter, { source: "discord" })
 
-			expect(await undoRejection(env, id, other)).toEqual({ ok: true })
+			expect(await undoRejection(env, id, other, "discord")).toEqual({ ok: true })
 			expect(await activeRejection(id)).toBeUndefined()
 		})
 
@@ -351,15 +364,73 @@ describeIntegration("rejections store (integration)", () => {
 			const reviewer = await newUser()
 			await addToCommittee(reviewer)
 			const id = await insertLyric({ videoId: "vReRej" })
-			await rejectLyric(env, id, reviewer)
-			await undoRejection(env, id, reviewer)
+			await rejectLyric(env, id, reviewer, { source: "discord" })
+			await undoRejection(env, id, reviewer, "discord")
 
-			expect(await rejectLyric(env, id, reviewer)).toEqual({ ok: true })
+			expect(await rejectLyric(env, id, reviewer, { source: "discord" })).toEqual({ ok: true })
 			const count = await one<{ n: string }>(
 				"SELECT COUNT(*) AS n FROM rejections WHERE lyrics_id = $1",
 				[id]
 			)
 			expect(Number(count.n)).toBe(2)
+		})
+	})
+
+	describe("council log", () => {
+		const log = async () =>
+			(await listCouncilEvents(env, { includeBookmarks: false, limit: 50 })).events
+
+		it("logs a rejection with its note, source and reviewer", async () => {
+			const reviewer = await newUser("Mira")
+			await addToCommittee(reviewer)
+			const id = await insertLyric({ videoId: "vLogRej" })
+			await rejectLyric(env, id, reviewer, {
+				note: "Second verse runs 400 ms late.",
+				source: "web",
+			})
+			const [event] = await log()
+			expect(event).toMatchObject({
+				kind: "reject",
+				source: "web",
+				note: "Second verse runs 400 ms late.",
+				undone: false,
+				actor: { displayName: "Mira" },
+			})
+		})
+
+		it("regression: records who undid a rejection, not only when", async () => {
+			const rejecter = await newUser("Mira")
+			const undoer = await newUser("Ola")
+			await addToCommittee(rejecter)
+			await addToCommittee(undoer)
+			const id = await insertLyric({ videoId: "vLogUndo" })
+			await rejectLyric(env, id, rejecter, { source: "discord" })
+			await undoRejection(env, id, undoer, "web")
+			const events = await log()
+			expect(events.map((e) => [e.kind, e.actor?.displayName, e.undone])).toEqual([
+				["unreject", "Ola", false],
+				["reject", "Mira", true],
+			])
+		})
+
+		it("logs a duplicate rejection once", async () => {
+			const reviewer = await newUser()
+			await addToCommittee(reviewer)
+			const id = await insertLyric({ videoId: "vLogDup" })
+			await rejectLyric(env, id, reviewer, { source: "web" })
+			await rejectLyric(env, id, reviewer, { source: "web" })
+			expect(await log()).toHaveLength(1)
+		})
+
+		it("lifts an active bookmark on the rejected lyric", async () => {
+			const reviewer = await newUser()
+			const holder = await newUser()
+			await addToCommittee(reviewer)
+			await addToCommittee(holder)
+			const id = await insertLyric({ videoId: "vLogBm" })
+			expect((await createBookmark(env, holder, "seal", id, "web")).ok).toBe(true)
+			await rejectLyric(env, id, reviewer, { source: "web" })
+			expect(await listActiveBookmarks(env)).toEqual([])
 		})
 	})
 })

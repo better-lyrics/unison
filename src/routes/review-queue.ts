@@ -101,7 +101,7 @@ export const reviewQueueBotRoutes = (env: Env) =>
 				if (!user) {
 					return status(404, buildError(ErrorCode.NOT_FOUND))
 				}
-				const result = await rejectLyric(env, id, user.id, body.note)
+				const result = await rejectLyric(env, id, user.id, { note: body.note, source: "discord" })
 				if (!result.ok) {
 					const mapped = REJECT_ERROR[result.reason]
 					return status(mapped.status, buildError(mapped.code))
@@ -127,7 +127,7 @@ export const reviewQueueBotRoutes = (env: Env) =>
 				if (!user) {
 					return status(404, buildError(ErrorCode.NOT_FOUND))
 				}
-				const result = await undoRejection(env, id, user.id)
+				const result = await undoRejection(env, id, user.id, "discord")
 				if (!result.ok) {
 					const mapped = UNDO_ERROR[result.reason]
 					return status(mapped.status, buildError(mapped.code))
