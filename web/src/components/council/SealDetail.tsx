@@ -177,7 +177,7 @@ function Fact({ label, value, sub }: { label: string; value: ReactNode; sub: Rea
 function VoteSplit({ up, down }: { up: number; down: number }) {
   if (up + down === 0) return <>No votes yet</>
   return (
-    <span className="mt-1 flex h-1 gap-0.5" aria-label={`${up} up, ${down} down`}>
+    <span role="img" className="mt-1 flex h-1 gap-0.5" aria-label={`${up} up, ${down} down`}>
       <i className="block rounded-[2px] bg-[#86d98a]" style={{ flex: up }} />
       <i className="block rounded-[2px] bg-[#f7c46c]" style={{ flex: Math.max(down, 0.001) }} />
     </span>

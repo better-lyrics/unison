@@ -53,6 +53,8 @@ describe("CommandMenu", () => {
     await waitFor(() => expect(document.activeElement).toBe(input))
     expect(options()[0]).toContain("Overview")
     expect(options()).toHaveLength(7)
+    const sections = within(menu()).getByRole("group", { name: "Go to" })
+    expect(within(sections).getAllByRole("option")).toHaveLength(7)
     fireEvent.keyDown(input, { key: "ArrowDown" })
     fireEvent.keyDown(input, { key: "Enter" })
     await waitFor(() => expect(where()).toBe("/council/queue"))
@@ -72,6 +74,11 @@ describe("CommandMenu", () => {
     press("k", { metaKey: true })
     fireEvent.change(await screen.findByRole("combobox"), { target: { value: "olafix" } })
     await waitFor(() => expect(options()).toEqual(["olafix52's activity"]))
+    expect(
+      within(menu())
+        .getAllByRole("group")
+        .map((g) => g.getAttribute("aria-label")),
+    ).toEqual(["Members"])
     fireEvent.click(within(menu()).getByRole("option"))
     await waitFor(() => expect(where()).toBe(`/council/activity?actor=${OLA.keyId}`))
   })

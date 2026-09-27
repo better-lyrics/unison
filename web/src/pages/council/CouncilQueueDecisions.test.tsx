@@ -93,6 +93,7 @@ describe("SealDetail", () => {
     const text = () => detail().textContent ?? ""
     expect(text()).toContain("0.97")
     expect(text()).toContain("37 / 1")
+    expect(within(detail()).getByRole("img", { name: "37 up, 1 down" })).toBeTruthy()
     expect(text()).toContain("No automatic flags")
     expect(text()).toContain("High confidence")
     await waitFor(() => expect(text()).toContain("Other variants for this song"))

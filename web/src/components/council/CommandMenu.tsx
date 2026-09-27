@@ -143,40 +143,56 @@ function MenuBody({ inputRef, onClose }: { inputRef: React.RefObject<HTMLInputEl
         {results.length === 0 ? (
           <p className="p-4 text-[13px] text-unison-text-muted">No matches.</p>
         ) : (
-          results.map((command, i) => (
-            <div key={command.id}>
-              {i === 0 || results[i - 1].group !== command.group ? (
-                <div role="presentation" className="px-2.5 pt-2.5 pb-1 text-[11px] text-unison-text-muted">
-                  {command.group}
-                </div>
-              ) : null}
-              <div
-                id={`${listId}-${command.id}`}
-                // biome-ignore lint/a11y/useSemanticElements: option of the combobox popup above
-                role="option"
-                tabIndex={-1}
-                aria-selected={i === current}
-                onMouseMove={() => setActive(i)}
-                onClick={() => run(command)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") run(command)
-                }}
-                className={cn(
-                  "flex w-full cursor-pointer items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm text-unison-text-secondary",
-                  i === current && "bg-unison-bg-hover text-unison-text shadow-inset-rim",
-                )}
-              >
-                {command.icon}
-                <span className="truncate">{command.label}</span>
-                {command.end ? <span className="ml-auto flex shrink-0 gap-0.5">{command.end}</span> : null}
-                {i === current && !command.end ? (
-                  <IconArrowRight aria-hidden className="ml-auto size-3.5 opacity-60" stroke={1.5} />
-                ) : null}
+          groupsOf(results).map((group) => (
+            <div
+              key={group.name}
+              // biome-ignore lint/a11y/useSemanticElements: a group of listbox options, not form controls
+              role="group"
+              aria-label={group.name}
+            >
+              <div aria-hidden className="px-2.5 pt-2.5 pb-1 text-[11px] text-unison-text-muted">
+                {group.name}
               </div>
+              {group.items.map(({ command, index: i }) => (
+                <div
+                  key={command.id}
+                  id={`${listId}-${command.id}`}
+                  // biome-ignore lint/a11y/useSemanticElements: option of the combobox popup above
+                  role="option"
+                  tabIndex={-1}
+                  aria-selected={i === current}
+                  onMouseMove={() => setActive(i)}
+                  onClick={() => run(command)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") run(command)
+                  }}
+                  className={cn(
+                    "flex w-full cursor-pointer items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm text-unison-text-secondary",
+                    i === current && "bg-unison-bg-hover text-unison-text shadow-inset-rim",
+                  )}
+                >
+                  {command.icon}
+                  <span className="truncate">{command.label}</span>
+                  {command.end ? <span className="ml-auto flex shrink-0 gap-0.5">{command.end}</span> : null}
+                  {i === current && !command.end ? (
+                    <IconArrowRight aria-hidden className="ml-auto size-3.5 opacity-60" stroke={1.5} />
+                  ) : null}
+                </div>
+              ))}
             </div>
           ))
         )}
       </div>
     </>
   )
+}
+
+function groupsOf(results: Command[]): { name: string; items: { command: Command; index: number }[] }[] {
+  const groups: { name: string; items: { command: Command; index: number }[] }[] = []
+  results.forEach((command, index) => {
+    const last = groups.at(-1)
+    if (last?.name === command.group) last.items.push({ command, index })
+    else groups.push({ name: command.group, items: [{ command, index }] })
+  })
+  return groups
 }
