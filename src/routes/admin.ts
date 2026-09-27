@@ -12,7 +12,7 @@ import {
 	runMigration,
 } from "@/db/account-migration"
 import { revokeBoostByAdmin } from "@/db/boost"
-import { addCommittee, listCommittee, removeCommittee } from "@/db/committee"
+import { addCommittee, listCommittee, removeCommittee, setCouncilAdmin } from "@/db/committee"
 import { getByKeyId } from "@/db/discordLinks"
 import { invalidateCuratorLeaderboardCache } from "@/db/leaderboard"
 import { invalidateCacheForSubmitter } from "@/db/lyrics"
@@ -265,7 +265,7 @@ export const adminRoutes = (env: Env) =>
 				if (!user) {
 					return status(404, buildError(ErrorCode.NOT_FOUND))
 				}
-				await addCommittee(env, body.userId, "admin")
+				await addCommittee(env, body.userId, { actorId: null, source: "admin" })
 				return status(200, { success: true, data: { userId: body.userId } })
 			},
 			{ body: t.Object({ userId: t.Numeric() }) }
@@ -273,10 +273,20 @@ export const adminRoutes = (env: Env) =>
 		.delete(
 			"/committee/:userId",
 			async ({ env, params, status }) => {
-				await removeCommittee(env, params.userId)
+				await removeCommittee(env, params.userId, { actorId: null, source: "admin" })
 				return status(200, { success: true, data: { removed: true } })
 			},
 			{ params: t.Object({ userId: t.Numeric() }) }
+		)
+		.post(
+			"/committee/:userId/admin",
+			async ({ env, params, body, status }) => {
+				if (!(await setCouncilAdmin(env, params.userId, body.admin))) {
+					return status(404, buildError(ErrorCode.NOT_FOUND))
+				}
+				return status(200, { success: true, data: { userId: params.userId, admin: body.admin } })
+			},
+			{ params: t.Object({ userId: t.Numeric() }), body: t.Object({ admin: t.Boolean() }) }
 		)
 		.delete(
 			"/boost/:lyricsId",

@@ -616,12 +616,42 @@ describe("admin committee roster", () => {
 	})
 
 	it("lists the roster rows mapped to camelCase", async () => {
-		const db = makeMockDB([[{ user_id: 5, added_at: 100, added_by: "admin" }]])
+		const db = makeMockDB([[{ user_id: 5, added_at: 100, added_by: "admin", is_admin: true }]])
 		const app = adminRoutes(makeEnv(db, makeMockCache()))
 		const res = await app.handle(get("/admin/committee"))
 		expect(res.status).toBe(200)
 		const data = (await json(res)).data as Record<string, unknown>[]
-		expect(data).toEqual([{ userId: 5, addedAt: 100, addedBy: "admin" }])
+		expect(data).toEqual([{ userId: 5, addedAt: 100, addedBy: "admin", isAdmin: true }])
+	})
+
+	it("flags a member as a council admin", async () => {
+		const db = makeMockDB([{ user_id: 5 }])
+		const app = adminRoutes(makeEnv(db, makeMockCache()))
+		const res = await app.handle(post("/admin/committee/5/admin", { admin: true }))
+		expect(res.status).toBe(200)
+		expect((await json(res)).data).toEqual({ userId: 5, admin: true })
+		const update = db.calls.find((c) => c.sql.includes("SET is_admin"))
+		expect(update?.params).toEqual([true, 5])
+	})
+
+	it("returns 404 when flagging someone outside the council", async () => {
+		const app = adminRoutes(makeEnv(makeMockDB([null]), makeMockCache()))
+		const res = await app.handle(post("/admin/committee/5/admin", { admin: false }))
+		expect(res.status).toBe(404)
+	})
+
+	it("rejects a non-boolean admin flag", async () => {
+		const app = adminRoutes(makeEnv(makeMockDB(), makeMockCache()))
+		const res = await app.handle(post("/admin/committee/5/admin", { admin: "yes" }))
+		expect(res.status).toBe(422)
+	})
+
+	it("rejects the admin flag without a valid admin bearer", async () => {
+		const app = adminRoutes(makeEnv(makeMockDB(), makeMockCache()))
+		const res = await app.handle(
+			post("/admin/committee/5/admin", { admin: true }, { authorization: "Bearer wrong" })
+		)
+		expect(res.status).toBe(401)
 	})
 
 	it("removes a member, writing a DELETE with the user id", async () => {

@@ -125,7 +125,7 @@ describeIntegration("backfill badges (integration)", () => {
 				["c".repeat(64)]
 			)
 			const userId = member.id
-			await addCommittee(env, userId, "admin")
+			await addCommittee(env, userId, { actorId: null, source: "admin" })
 
 			const result = await backfillBadges(env)
 

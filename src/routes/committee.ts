@@ -18,7 +18,7 @@ export const committeeBotRoutes = (env: Env) =>
 				if (!user) {
 					return status(404, buildError(ErrorCode.NOT_FOUND))
 				}
-				await addCommittee(env, user.id, "bot")
+				await addCommittee(env, user.id, { actorId: null, source: "discord" })
 				return status(200, { success: true, data: { keyId: body.keyId } })
 			},
 			{ body: t.Object({ keyId: t.String() }) }
@@ -33,7 +33,7 @@ export const committeeBotRoutes = (env: Env) =>
 				if (!user) {
 					return status(404, buildError(ErrorCode.NOT_FOUND))
 				}
-				await removeCommittee(env, user.id)
+				await removeCommittee(env, user.id, { actorId: null, source: "discord" })
 				return status(200, { success: true })
 			},
 			{ body: t.Object({ keyId: t.String() }) }
