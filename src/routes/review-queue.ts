@@ -10,6 +10,8 @@ import { getUserByKeyId } from "@/db/users"
 import type { Env } from "@/types"
 import { isAuthorizedBot } from "@/utils/bot-auth"
 import { decompress, isCompressed } from "@/utils/compression"
+import { allowCouncilWrite, parseCouncilNote } from "@/utils/council-input"
+import { eitherAuth } from "@/utils/either-auth"
 import { ErrorCode, buildError } from "@/utils/errors"
 import { generatePetName } from "@/utils/petname"
 import { ttmlSignals } from "@/utils/ttml-signals"
@@ -50,6 +52,40 @@ async function signalsFor(content: string): Promise<string[]> {
 		return []
 	}
 }
+
+export const reviewQueueRoutes = (env: Env) =>
+	new Elysia({ prefix: "/lyrics" })
+		.decorate("env", env)
+		.use(eitherAuth)
+		.post("/:id/reject", async ({ params, env, userId, keyId, body, status }) => {
+			const id = Number(params.id)
+			if (!Number.isInteger(id) || id <= 0) return status(400, buildError(ErrorCode.INVALID_ID))
+			const parsed = parseCouncilNote(body)
+			if (!parsed.ok) return status(400, buildError(ErrorCode.INVALID_PAYLOAD))
+			if (!(await allowCouncilWrite(env, keyId)))
+				return status(429, buildError(ErrorCode.RATE_LIMITED))
+			const result = await rejectLyric(env, id, userId, {
+				note: parsed.note ?? undefined,
+				source: "web",
+			})
+			if (!result.ok) {
+				const mapped = REJECT_ERROR[result.reason]
+				return status(mapped.status, buildError(mapped.code))
+			}
+			return { success: true }
+		})
+		.delete("/:id/reject", async ({ params, env, userId, keyId, status }) => {
+			const id = Number(params.id)
+			if (!Number.isInteger(id) || id <= 0) return status(400, buildError(ErrorCode.INVALID_ID))
+			if (!(await allowCouncilWrite(env, keyId)))
+				return status(429, buildError(ErrorCode.RATE_LIMITED))
+			const result = await undoRejection(env, id, userId, "web")
+			if (!result.ok) {
+				const mapped = UNDO_ERROR[result.reason]
+				return status(mapped.status, buildError(mapped.code))
+			}
+			return { success: true }
+		})
 
 export const reviewQueueBotRoutes = (env: Env) =>
 	new Elysia({ prefix: "/lyrics" })
