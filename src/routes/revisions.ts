@@ -185,7 +185,7 @@ export const revisionBotRoutes = (env: Env) =>
 				if (id === null || revId === null) return status(400, buildError(ErrorCode.INVALID_ID))
 				const reviewer = await getUserByKeyId(env, body.keyId)
 				if (!reviewer) return status(403, buildError(ErrorCode.NOT_COMMITTEE))
-				const result = await approveRevision(env, id, revId, reviewer.id)
+				const result = await approveRevision(env, id, revId, reviewer.id, "discord")
 				if (!result.ok) {
 					const mapped = DECISION_ERROR[result.reason]
 					return status(mapped.status, buildError(mapped.code))
@@ -206,7 +206,7 @@ export const revisionBotRoutes = (env: Env) =>
 				const reviewer = await getUserByKeyId(env, body.keyId)
 				if (!reviewer) return status(403, buildError(ErrorCode.NOT_COMMITTEE))
 				const note = body.note?.trim() || null
-				const result = await rejectRevision(env, id, revId, reviewer.id, note)
+				const result = await rejectRevision(env, id, revId, reviewer.id, note, "discord")
 				if (!result.ok) {
 					const mapped = DECISION_ERROR[result.reason]
 					return status(mapped.status, buildError(mapped.code))
