@@ -331,9 +331,9 @@ export async function submitLyrics(
 		base_revision AS (
 			INSERT INTO lyric_revisions
 				(id, lyrics_id, rev_no, lyrics, format, sync_type, language, isrc, album,
-				 content_hash, author_id, status, created_at)
+				 album_known, content_hash, author_id, status, created_at)
 			SELECT ids.revision_id, inserted.id, 1, inserted.lyrics, inserted.format,
-				inserted.sync_type, inserted.language, inserted.isrc, inserted.album, ?,
+				inserted.sync_type, inserted.language, inserted.isrc, inserted.album, TRUE, ?,
 				inserted.submitter_id, 'live', inserted.created_at
 			FROM ids, inserted
 		)

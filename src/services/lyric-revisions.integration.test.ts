@@ -133,7 +133,7 @@ describeIntegration("lyric revisions pipeline (integration)", () => {
 		expect(live.cached_sync).toBe(live.sync_type)
 		expect(live.cached_language).toBe(live.language)
 		expect(live.cached_isrc).toBe(live.isrc)
-		expect(live.cached_album).toBe(live.album)
+		if (live.album_known) expect(live.cached_album).toBe(live.album)
 	}
 
 	it("puts a small edit live and rewrites the lyric", async () => {
@@ -680,6 +680,139 @@ describeIntegration("lyric revisions pipeline (integration)", () => {
 			expect((await liveAlbum()).album).toBe("Sacred Songs")
 		})
 
+		describe("revisions written without an album", () => {
+			const forgetAlbum = (where: string, params: unknown[]) =>
+				db.pool.query(
+					`UPDATE lyric_revisions SET album = NULL, album_known = FALSE WHERE ${where}`,
+					params
+				)
+			const seal = () =>
+				db.pool.query(
+					"UPDATE lyrics SET committee_approved_at = 1700000000, committee_approved_by = $2 WHERE id = $1",
+					[albumLyric, owner]
+				)
+
+			it("regression: keeps the lyric's album when the live revision has none and the body leaves it out", async () => {
+				await forgetAlbum("lyrics_id = $1", [albumLyric])
+				const result = await saveAlbum(lrc(swapWords(LRC, 1)))
+				expect(result).toMatchObject({ ok: true, revision: { status: "live" } })
+				expect(await liveAlbum()).toEqual({ album: "Hymns of Grace", album_norm: "hymns of grace" })
+			})
+
+			it("regression: compares the lyric's album for the no-op check", async () => {
+				await forgetAlbum("lyrics_id = $1", [albumLyric])
+				expect(await saveAlbum(lrc(LRC))).toEqual({ ok: false, reason: "no_changes" })
+				expect(await saveAlbum(lrc(LRC, { album: "Hymns of Grace" }))).toEqual({
+					ok: false,
+					reason: "no_changes",
+				})
+			})
+
+			it("regression: approving such a pending revision keeps the lyric's album", async () => {
+				await seal()
+				const council = await seedCouncilMember(db, "c".repeat(64))
+				const result = await saveAlbum(lrc(swapWords(LRC, 1)))
+				if (!result.ok) throw new Error(result.reason)
+				await forgetAlbum("id = $1", [result.revision.id])
+				await approveRevision(db.env, albumLyric, result.revision.id, council)
+				expect(await liveAlbum()).toEqual({ album: "Hymns of Grace", album_norm: "hymns of grace" })
+			})
+
+			it("still clears the album when approving a revision that cleared it", async () => {
+				await seal()
+				const council = await seedCouncilMember(db, "c".repeat(64))
+				const result = await saveAlbum(lrc(LRC, { album: null }))
+				if (!result.ok) throw new Error(result.reason)
+				await approveRevision(db.env, albumLyric, result.revision.id, council)
+				expect(await liveAlbum()).toEqual({ album: null, album_norm: null })
+			})
+
+			it("keeps the current album when reverting to such a revision", async () => {
+				await forgetAlbum("lyrics_id = $1", [albumLyric])
+				await saveAlbum(lrc(swapWords(LRC, 1), { album: "Sacred Songs" }))
+				const reverted = await revertToRevision(
+					db.env,
+					albumLyric,
+					owner,
+					(await revisionIdOf(albumLyric, 1))!
+				)
+				expect(reverted).toMatchObject({ ok: true, revision: { status: "live" } })
+				expect((await liveAlbum()).album).toBe("Sacred Songs")
+			})
+
+			it("reports the lyric's album in the detail of such a revision", async () => {
+				await forgetAlbum("lyrics_id = $1", [albumLyric])
+				const detail = await getRevisionDetail(
+					db.env,
+					albumLyric,
+					(await revisionIdOf(albumLyric, 1))!
+				)
+				expect(detail?.album).toBe("Hymns of Grace")
+			})
+		})
+
+		describe("council cards", () => {
+			const seal = () =>
+				db.pool.query(
+					"UPDATE lyrics SET committee_approved_at = 1700000000, committee_approved_by = $2 WHERE id = $1",
+					[albumLyric, owner]
+				)
+			async function cardFor(input: RevisionInput) {
+				await seal()
+				const result = await saveAlbum(input)
+				if (!result.ok) throw new Error(result.reason)
+				const card = (await listPendingCards(db.env)).find(
+					(c) => c.revisionId === result.revision.id
+				)
+				if (!card) throw new Error("no card")
+				return { card, revisionId: result.revision.id }
+			}
+
+			it("shows an album-only change", async () => {
+				const { card } = await cardFor(lrc(LRC, { album: "Sacred Songs" }))
+				expect(card.diffPreview).toBe("-[album] Hymns of Grace\n+[album] Sacred Songs")
+				expect(card.diffFull).toContain("-[album] Hymns of Grace\n+[album] Sacred Songs\n")
+			})
+
+			it("shows a language-only change", async () => {
+				const { card } = await cardFor(lrc(LRC, { language: "es" }))
+				expect(card.diffPreview).toBe("-[language] en\n+[language] es")
+			})
+
+			it("shows an ISRC-only change", async () => {
+				const { card } = await cardFor(lrc(LRC, { isrc: "USRC17607839" }))
+				expect(card.diffPreview).toBe("+[isrc] USRC17607839")
+			})
+
+			it("shows a cleared album", async () => {
+				const { card } = await cardFor(lrc(LRC, { album: null }))
+				expect(card.diffPreview).toBe("-[album] Hymns of Grace")
+			})
+
+			it("says timing changed slightly for an edit made only of moves under the minimum", async () => {
+				const { card } = await cardFor(lrc(shiftLrc(LRC, () => 50)))
+				expect(card.diffPreview).toBe("Timing changed slightly, no line moved by 100 ms or more.")
+				expect(card.diffFull).toContain("Timing changed slightly, no line moved by 100 ms or more.")
+			})
+
+			it("shows metadata and lyric changes together", async () => {
+				const { card } = await cardFor(lrc(swapWords(LRC, 1), { album: "Sacred Songs" }))
+				expect(card.diffFull).toContain("-[album] Hymns of Grace\n")
+				expect(card.diffFull).toContain("+[album] Sacred Songs\n")
+				expect(card.diffFull).toContain("+[00:12.00] Amazing grace! How soft the sound")
+			})
+
+			it("shows no album line for a revision written without an album", async () => {
+				const { revisionId } = await cardFor(lrc(swapWords(LRC, 1)))
+				await db.pool.query(
+					"UPDATE lyric_revisions SET album = NULL, album_known = FALSE WHERE id = $1",
+					[revisionId]
+				)
+				const card = (await listPendingCards(db.env)).find((c) => c.revisionId === revisionId)
+				expect(card?.diffFull).not.toContain("[album]")
+			})
+		})
+
 		describe("preview", () => {
 			it("reports the album the save would keep", async () => {
 				expect(await albumCheck(undefined)).toEqual({
@@ -770,6 +903,7 @@ describeIntegration("lyric revisions pipeline (integration)", () => {
 					albumLyric,
 					long,
 				])
+				await db.pool.query("UPDATE lyrics SET album = $2 WHERE id = $1", [albumLyric, long])
 				expect(await saveAlbum(lrc(swapWords(LRC, 1), { album: long }))).toMatchObject({
 					ok: true,
 				})

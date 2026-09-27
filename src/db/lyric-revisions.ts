@@ -24,6 +24,7 @@ export interface RevisionRow {
 	language: string | null
 	isrc: string | null
 	album: string | null
+	album_known: boolean
 	content_hash: string
 	author_id: number | null
 	status: RevisionStatus
@@ -42,6 +43,7 @@ export interface LyricRevisionState {
 	id: number
 	song: string
 	artist: string
+	album: string | null
 	submitter_id: number | null
 	deleted_at: number | null
 	committee_approved_at: number | null
@@ -73,6 +75,10 @@ export interface PendingRevisionRow {
 	lyrics: string
 	format: LyricsFormat
 	pending_reason: PendingReason
+	language: string | null
+	isrc: string | null
+	album: string | null
+	album_known: boolean
 	jev_probability: number | null
 	text_drift: number
 	timing_drift: number
@@ -83,6 +89,9 @@ export interface PendingRevisionRow {
 	live_rev_no: number
 	live_lyrics: string
 	live_format: LyricsFormat
+	live_language: string | null
+	live_isrc: string | null
+	lyric_album: string | null
 	author_key_id: string | null
 	author_nickname: string | null
 }
@@ -94,7 +103,7 @@ export async function loadLyricState(
 ): Promise<LyricRevisionState | null> {
 	return db
 		.prepare(
-			`SELECT id, song, artist, submitter_id, deleted_at,
+			`SELECT id, song, artist, album, submitter_id, deleted_at,
 				committee_approved_at, current_revision_id, anchor_revision_id
 			FROM lyrics WHERE id = ?${lock ? " FOR UPDATE" : ""}`
 		)
@@ -129,9 +138,9 @@ export async function ensureBaseRevision(db: D1Compat, lyricsId: number): Promis
 		const revision = await tx
 			.prepare(
 				`INSERT INTO lyric_revisions
-					(lyrics_id, rev_no, lyrics, format, sync_type, language, isrc, album, content_hash,
-					 author_id, status, created_at)
-				VALUES (?, 1, ?, ?, ?, ?, ?, ?, ?, ?, 'live', ?)
+					(lyrics_id, rev_no, lyrics, format, sync_type, language, isrc, album, album_known,
+					 content_hash, author_id, status, created_at)
+				VALUES (?, 1, ?, ?, ?, ?, ?, ?, TRUE, ?, ?, 'live', ?)
 				RETURNING id`
 			)
 			.bind(
@@ -234,12 +243,12 @@ export async function insertRevision(tx: D1Compat, input: NewRevision): Promise<
 	const row = await tx
 		.prepare(
 			`INSERT INTO lyric_revisions
-				(lyrics_id, rev_no, lyrics, format, sync_type, language, isrc, album, content_hash,
-				 author_id, status, pending_reason, text_drift, timing_drift, jev_probability,
-				 reverts_revision_id)
+				(lyrics_id, rev_no, lyrics, format, sync_type, language, isrc, album, album_known,
+				 content_hash, author_id, status, pending_reason, text_drift, timing_drift,
+				 jev_probability, reverts_revision_id)
 			VALUES (
 				?, (SELECT COALESCE(MAX(rev_no), 0) + 1 FROM lyric_revisions WHERE lyrics_id = ?),
-				?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+				?, ?, ?, ?, ?, ?, TRUE, ?, ?, ?, ?, ?, ?, ?, ?
 			)
 			RETURNING *`
 		)
@@ -275,8 +284,8 @@ export async function setCurrentRevision(tx: D1Compat, revision: RevisionRow): P
 				format = ?,
 				sync_type = ?,
 				isrc = ?,
-				album = ?,
-				album_norm = ?,
+				album = CASE WHEN ? THEN ? ELSE album END,
+				album_norm = CASE WHEN ? THEN ? ELSE album_norm END,
 				language_source = CASE WHEN language IS NOT DISTINCT FROM ? THEN language_source ELSE 'submitter' END,
 				language_detector_version = CASE WHEN language IS NOT DISTINCT FROM ? THEN language_detector_version ELSE NULL END,
 				language = ?,
@@ -290,7 +299,9 @@ export async function setCurrentRevision(tx: D1Compat, revision: RevisionRow): P
 			revision.format,
 			revision.sync_type,
 			revision.isrc,
+			revision.album_known,
 			revision.album,
+			revision.album_known,
 			normalizeAlbum(revision.album),
 			revision.language,
 			revision.language,
@@ -478,9 +489,11 @@ export async function listPendingRevisionRows(
 	const { results } = await db
 		.prepare(
 			`SELECT r.id, r.lyrics_id, r.rev_no, r.lyrics, r.format, r.pending_reason,
+				r.language, r.isrc, r.album, r.album_known,
 				r.jev_probability, r.text_drift, r.timing_drift, r.created_at,
-				l.video_id, l.song, l.artist,
+				l.video_id, l.song, l.artist, l.album AS lyric_album,
 				live.rev_no AS live_rev_no, live.lyrics AS live_lyrics, live.format AS live_format,
+				live.language AS live_language, live.isrc AS live_isrc,
 				u.key_id AS author_key_id, u.nickname AS author_nickname
 			FROM lyric_revisions r
 			JOIN lyrics l ON l.id = r.lyrics_id AND l.deleted_at IS NULL

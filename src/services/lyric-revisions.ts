@@ -44,7 +44,7 @@ import { ErrorCode, buildError } from "@/utils/errors"
 import { type LyricLine, extractComparableLines } from "@/utils/extract-text"
 import { sha256Hex } from "@/utils/hash"
 import { normalizeIsrc } from "@/utils/isrc"
-import { buildDiffRows, diffPreview, showsChanges, unifiedDiff } from "@/utils/lyric-diff"
+import { buildDiffRows, reviewDiff, showsChanges, unifiedDiff } from "@/utils/lyric-diff"
 import { type DriftResult, measureDrift } from "@/utils/lyric-drift"
 import { decideOutcome } from "@/utils/revision-gate"
 import { type ContentValidation, validateLyricContent } from "@/utils/validate-lyrics"
@@ -63,7 +63,7 @@ interface RevertSource {
 	revisionId: number
 	language: string | null
 	isrc: string | null
-	album: string | null
+	album: string | null | undefined
 }
 
 interface Candidate {
@@ -262,7 +262,7 @@ async function assess(
 	const validated = validateLyricContent(input.lyrics, input.format)
 	const language = resolveField(input.language, live.language, revert?.language, acceptLanguage)
 	const isrc = resolveField(input.isrc, live.isrc, revert?.isrc, acceptIsrc)
-	const album = resolveField(input.album, live.album, revert?.album, acceptAlbum)
+	const album = resolveField(input.album, lyric.album, revert?.album, acceptAlbum)
 
 	const comparable = validated.ok ? extractComparableLines(input.lyrics, validated.format) : null
 	const lines = comparable?.filter((line) => line.head === undefined) ?? null
@@ -317,7 +317,7 @@ async function assess(
 		sha256Hex(candidate.content) === live.content_hash &&
 		candidate.language === live.language &&
 		candidate.isrc === live.isrc &&
-		candidate.album === live.album
+		candidate.album === lyric.album
 
 	const anchorLines = await revisionLines(anchor.lyrics, anchor.format)
 	const drift = measureDrift(anchorLines, comparable)
@@ -500,6 +500,7 @@ export async function revertToRevision(
 		return { ok: false, reason: "not_found" }
 	}
 	const content = await decompressIfNeeded(target.lyrics)
+	const album = target.album_known ? target.album : undefined
 	return commitRevision(
 		env,
 		lyricsId,
@@ -509,9 +510,9 @@ export async function revertToRevision(
 			format: target.format,
 			language: target.language,
 			isrc: target.isrc,
-			album: target.album,
+			album,
 		},
-		{ revisionId: target.id, language: target.language, isrc: target.isrc, album: target.album }
+		{ revisionId: target.id, language: target.language, isrc: target.isrc, album }
 	)
 }
 
@@ -532,11 +533,11 @@ export async function withdrawPending(
 	})
 }
 
-async function visibleLyric(env: Env, lyricsId: number): Promise<boolean> {
+async function visibleLyric(env: Env, lyricsId: number): Promise<LyricRevisionState | null> {
 	const lyric = await loadLyricState(env.DB, lyricsId, false)
-	if (!lyric || lyric.deleted_at !== null) return false
+	if (!lyric || lyric.deleted_at !== null) return null
 	if (lyric.current_revision_id === null) await ensureBaseRevision(env.DB, lyricsId)
-	return true
+	return lyric
 }
 
 export async function listRevisions(env: Env, lyricsId: number): Promise<RevisionSummary[] | null> {
@@ -549,7 +550,8 @@ export async function getRevisionDetail(
 	lyricsId: number,
 	revisionId: number
 ): Promise<RevisionDetail | null> {
-	if (!(await visibleLyric(env, lyricsId))) return null
+	const lyric = await visibleLyric(env, lyricsId)
+	if (!lyric) return null
 	const row = await getRevisionRow(env.DB, lyricsId, revisionId)
 	const summary = await getRevisionSummary(env.DB, lyricsId, revisionId)
 	if (!row || !summary) return null
@@ -559,7 +561,7 @@ export async function getRevisionDetail(
 		format: row.format,
 		language: row.language,
 		isrc: row.isrc,
-		album: row.album,
+		album: row.album_known ? row.album : lyric.album,
 	}
 }
 
@@ -642,9 +644,18 @@ export async function listPendingCards(env: Env): Promise<PendingRevisionCard[]>
 	const rows = await listPendingRevisionRows(env.DB, config.revisions.pendingQueueLimit)
 	return Promise.all(
 		rows.map(async (row) => {
-			const full = unifiedDiff(
+			const review = reviewDiff(
 				await revisionLines(row.live_lyrics, row.live_format),
 				await revisionLines(row.lyrics, row.format),
+				[
+					{ field: "language", before: row.live_language, after: row.language },
+					{ field: "isrc", before: row.live_isrc, after: row.isrc },
+					{
+						field: "album",
+						before: row.lyric_album,
+						after: row.album_known ? row.album : row.lyric_album,
+					},
+				],
 				{ before: `rev ${row.live_rev_no}`, after: `rev ${row.rev_no}` }
 			)
 			return {
@@ -662,8 +673,8 @@ export async function listPendingCards(env: Env): Promise<PendingRevisionCard[]>
 				timingDrift: row.timing_drift,
 				author: revisionAuthor(row.author_key_id, row.author_nickname),
 				createdAt: row.created_at,
-				diffPreview: diffPreview(full),
-				diffFull: full,
+				diffPreview: review.preview,
+				diffFull: review.full,
 			}
 		})
 	)

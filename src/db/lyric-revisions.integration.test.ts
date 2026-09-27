@@ -151,6 +151,14 @@ describeIntegration("lyric revisions store (integration)", () => {
 				)
 			).rows
 
+		const albumKnown = async (id: number) =>
+			(
+				await db.pool.query(
+					"SELECT album_known FROM lyric_revisions WHERE lyrics_id = $1 ORDER BY rev_no",
+					[id]
+				)
+			).rows.map((row) => row.album_known)
+
 		async function goLive(id: number, owner: number, album: string | null) {
 			await db.env.DB.transaction(async (tx) => {
 				await retireLiveRevision(tx, id)
@@ -217,10 +225,35 @@ describeIntegration("lyric revisions store (integration)", () => {
 					format: "lrc",
 					videoId: "noalbum0001",
 				})
-				await db.pool.query("ALTER TABLE lyric_revisions DROP COLUMN album")
+				await db.pool.query(
+					"ALTER TABLE lyric_revisions DROP COLUMN album, DROP COLUMN album_known"
+				)
 				await db.pool.query(SCHEMA)
 				expect(await revisionAlbums(withAlbum)).toEqual([{ rev_no: 1, album: "Hymns" }])
 				expect(await revisionAlbums(without)).toEqual([{ rev_no: 1, album: null }])
+				expect(await albumKnown(withAlbum)).toEqual([true])
+				expect(await albumKnown(without)).toEqual([true])
+			})
+
+			it("marks a revision inserted without the album columns as not knowing its album", async () => {
+				const owner = await seedUser(db, "a".repeat(64))
+				const id = await seedLyric(db, owner, { lyrics: LRC, format: "lrc", album: "Hymns" })
+				await db.pool.query(
+					`INSERT INTO lyric_revisions (lyrics_id, rev_no, lyrics, format, sync_type, content_hash,
+						author_id, status)
+					 VALUES ($1, 2, 'x', 'lrc', 'linesync', 'x', $2, 'superseded')`,
+					[id, owner]
+				)
+				expect(await albumKnown(id)).toEqual([true, false])
+			})
+
+			it("marks existing revisions as knowing their album when only that flag is missing", async () => {
+				const owner = await seedUser(db, "a".repeat(64))
+				const id = await seedLyric(db, owner, { lyrics: LRC, format: "lrc", album: "Hymns" })
+				await db.pool.query("ALTER TABLE lyric_revisions DROP COLUMN album_known")
+				await db.pool.query(SCHEMA)
+				expect(await albumKnown(id)).toEqual([true])
+				expect(await revisionAlbums(id)).toEqual([{ rev_no: 1, album: "Hymns" }])
 			})
 
 			it("regression: running the schema again keeps an album a revision cleared", async () => {

@@ -7,6 +7,7 @@ import {
 	buildDiffRows,
 	diffPreview,
 	renderLinesForDiff,
+	reviewDiff,
 	showsChanges,
 	unifiedDiff,
 } from "./lyric-diff"
@@ -514,6 +515,90 @@ describe("minimum timing change", () => {
 			unifiedDiff(before, after, { before: "a", after: "b" })
 			showsChanges(before, after)
 			expect(after).toEqual(snapshot)
+		})
+	})
+})
+
+describe("reviewDiff", () => {
+	const labels = { before: "rev 1", after: "rev 2" }
+	const unchanged = [
+		{ field: "language", before: "en", after: "en" },
+		{ field: "isrc", before: null, after: null },
+		{ field: "album", before: "Hymns", after: "Hymns" },
+	]
+	const shiftedBy = (deltaMs: number) => shiftEvery(base(), deltaMs)
+
+	it("matches the unified diff when only lyric lines changed", () => {
+		const after = edit(base(), 1, { text: "That saved a soul like me!" })
+		const review = reviewDiff(base(), after, unchanged, labels)
+		expect(review.full).toBe(unifiedDiff(base(), after, labels))
+		expect(review.preview).toBe(diffPreview(review.full))
+	})
+
+	it("shows a changed album as labelled lines", () => {
+		const changes = [{ field: "album", before: "Hymns", after: "Sacred Songs" }]
+		const review = reviewDiff(base(), base(), changes, labels)
+		expect(review.preview).toBe("-[album] Hymns\n+[album] Sacred Songs")
+		expect(review.full).toContain("-[album] Hymns\n+[album] Sacred Songs\n")
+	})
+
+	it("shows a set and a cleared field with one side only", () => {
+		const changes = [
+			{ field: "language", before: "en", after: null },
+			{ field: "isrc", before: null, after: "USRC17607839" },
+		]
+		expect(reviewDiff(base(), base(), changes, labels).preview).toBe(
+			"-[language] en\n+[isrc] USRC17607839"
+		)
+	})
+
+	it("says timing changed slightly when every move is under the minimum", () => {
+		const review = reviewDiff(base(), shiftedBy(50), unchanged, labels)
+		expect(review.preview).toBe("Timing changed slightly, no line moved by 100 ms or more.")
+		expect(
+			review.full.endsWith("Timing changed slightly, no line moved by 100 ms or more.\n")
+		).toBe(true)
+	})
+
+	it("shows field changes and the timing line together", () => {
+		const changes = [{ field: "album", before: "Hymns", after: null }]
+		expect(reviewDiff(base(), shiftedBy(50), changes, labels).preview).toBe(
+			"-[album] Hymns\nTiming changed slightly, no line moved by 100 ms or more."
+		)
+	})
+
+	describe("edge cases", () => {
+		it("is empty when nothing changed", () => {
+			expect(reviewDiff(base(), base(), unchanged, labels).preview).toBe("")
+		})
+
+		it("adds no timing line when a move reaches the minimum", () => {
+			const review = reviewDiff(base(), edit(base(), 0, { startMs: 12100 }), unchanged, labels)
+			expect(review.preview).not.toContain("Timing changed slightly")
+			expect(review.preview).toContain("+[00:12.10] Amazing grace! How sweet the sound")
+		})
+
+		it("adds no timing line when text changed alongside small moves", () => {
+			const after = edit(shiftedBy(50), 0, { text: "Amazing grace! How soft the sound" })
+			expect(reviewDiff(base(), after, unchanged, labels).preview).not.toContain("Timing changed")
+		})
+
+		it("is empty for identical untimed lyrics", () => {
+			const plain = base().map((line) => ({ ...line, startMs: null }))
+			expect(reviewDiff(plain, plain, unchanged, labels).preview).toBe("")
+		})
+	})
+
+	describe("invariants", () => {
+		it("never lists an unchanged field", () => {
+			const review = reviewDiff(base(), base().slice(1), unchanged, labels)
+			expect(review.full).not.toContain("[album]")
+			expect(review.full).not.toContain("[language]")
+		})
+
+		it("never uses a dash in the timing line", () => {
+			const { preview } = reviewDiff(base(), shiftedBy(30), unchanged, labels)
+			expect(preview).not.toMatch(/[-\u2013\u2014]/)
 		})
 	})
 })
