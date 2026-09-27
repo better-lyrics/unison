@@ -119,7 +119,7 @@ function buildSearchPath(params: SearchLyricsParams): string {
   return qs.length > 0 ? `/lyrics/search?${qs}` : "/lyrics/search"
 }
 
-async function getJsonWithSignal<T>(path: string, signal?: AbortSignal): Promise<T> {
+export async function getJsonWithSignal<T>(path: string, signal?: AbortSignal): Promise<T> {
   const session = loadStoredSession()
   const init: RequestInit = {}
   if (signal) init.signal = signal
