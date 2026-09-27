@@ -1,3 +1,4 @@
+import { advisoryXactLock } from "@/infra/database"
 import type { Env } from "@/types"
 
 const BACKFILLS = [
@@ -43,10 +44,13 @@ const BACKFILLS = [
 ]
 
 export async function backfillCouncilEvents(env: Env): Promise<number> {
-	let inserted = 0
-	for (const sql of BACKFILLS) {
-		const rows = await env.DB.prepare(sql).bind().all<{ id: number }>()
-		inserted += rows.results.length
-	}
-	return inserted
+	return env.DB.transaction(async (tx) => {
+		await advisoryXactLock(tx, "backfill-council-events")
+		let inserted = 0
+		for (const sql of BACKFILLS) {
+			const rows = await tx.prepare(sql).bind().all<{ id: number }>()
+			inserted += rows.results.length
+		}
+		return inserted
+	})
 }
