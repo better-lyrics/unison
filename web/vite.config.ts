@@ -47,6 +47,7 @@ export default defineConfig({
       // Trailing slash so only the API sub-paths proxy; the bare /exam page route
       // is served by the SPA (dev + prod), matching the API's route precedence.
       "/exam/": "http://localhost:3000",
+      "/committee": "http://localhost:3000",
       "/health": "http://localhost:3000",
     },
   },
