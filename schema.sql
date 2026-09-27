@@ -530,7 +530,7 @@ CREATE TABLE IF NOT EXISTS council_events (
         'applicant_approve', 'applicant_reject')),
     source TEXT NOT NULL CHECK (source IN ('web', 'discord', 'admin')),
     lyrics_id INTEGER REFERENCES lyrics(id) ON DELETE CASCADE,
-    ref_id INTEGER,
+    ref_id BIGINT,
     subject_user_id INTEGER REFERENCES users(id),
     note TEXT,
     created_at INTEGER NOT NULL DEFAULT (EXTRACT(EPOCH FROM NOW())::INTEGER)
@@ -542,7 +542,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_council_events_decision_ref ON council_eve
     WHERE kind IN ('seal', 'unseal', 'reject', 'unreject', 'edit_approve', 'edit_reject');
 
 CREATE TABLE IF NOT EXISTS applicant_opinions (
-    exam_session_id INTEGER NOT NULL REFERENCES exam_session(id) ON DELETE CASCADE,
+    exam_session_id BIGINT NOT NULL REFERENCES exam_session(id) ON DELETE CASCADE,
     user_id INTEGER NOT NULL REFERENCES users(id),
     stance TEXT NOT NULL CHECK (stance IN ('support', 'object')),
     note TEXT,

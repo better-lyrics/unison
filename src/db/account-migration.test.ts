@@ -220,11 +220,15 @@ describe("runMigration (merge case)", () => {
 		if ("error" in result) throw new Error("unexpected error")
 		expect(Object.keys(result.snapshot).sort()).toEqual(
 			[
+				"applicant_opinions",
 				"badge_awards",
 				"boosts",
 				"committee_approvals",
 				"committee_members",
 				"contribution_events",
+				"council_bookmarks",
+				"council_events",
+				"exam_decisions",
 				"discord_links",
 				"lyric_revisions",
 				"lyrics",

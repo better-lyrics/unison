@@ -59,6 +59,7 @@ describeIntegration("account migration (integration)", () => {
 		await pool.query("DELETE FROM lyrics")
 		await pool.query("DELETE FROM discord_links")
 		await wipeCouncilTables(pool)
+		await pool.query("DELETE FROM exam_session WHERE key_id = $1", ["c".repeat(64)])
 		await pool.query("DELETE FROM users")
 		await pool.query("DELETE FROM public_keys")
 	}
@@ -771,6 +772,151 @@ describeIntegration("account migration (integration)", () => {
 
 			expect(await restoreFromSnapshot(env, auditId)).toEqual({ error: "HAS_INTERIM_ACTIVITY" })
 			expect(await boosterOf(lyric)).toEqual({ booster_id: oldId })
+		})
+	})
+
+	describe("council dashboard ownership", () => {
+		async function seedExamSession(keyId: string): Promise<number> {
+			const row = await one<{ id: string }>(
+				"INSERT INTO exam_session (key_id, seed, expires_at, state) VALUES ($1, 1, 2000000000, 'pending_review') RETURNING id",
+				[keyId]
+			)
+			return Number(row.id)
+		}
+
+		async function seedCouncilActivity(memberId: number, otherId: number) {
+			await pool.query(
+				"INSERT INTO committee_members (user_id, added_by, is_admin) VALUES ($1, 'admin', TRUE)",
+				[memberId]
+			)
+			const lyric = await insertLyric(otherId, "vidCouncil")
+			const acted = await one<{ id: number }>(
+				"INSERT INTO council_events (actor_id, kind, source, lyrics_id, ref_id) VALUES ($1, 'reject', 'web', $2, 1) RETURNING id",
+				[memberId, lyric]
+			)
+			const subjected = await one<{ id: number }>(
+				"INSERT INTO council_events (actor_id, kind, source, subject_user_id) VALUES ($1, 'member_add', 'admin', $2) RETURNING id",
+				[otherId, memberId]
+			)
+			const bookmark = await one<{ id: number }>(
+				"INSERT INTO council_bookmarks (user_id, item_type, item_id) VALUES ($1, 'seal', $2) RETURNING id",
+				[memberId, lyric]
+			)
+			const session = await seedExamSession("c".repeat(64))
+			await pool.query(
+				"INSERT INTO applicant_opinions (exam_session_id, user_id, stance) VALUES ($1, $2, 'support')",
+				[session, memberId]
+			)
+			await pool.query("UPDATE exam_session SET decided_by_user_id = $1 WHERE id = $2", [
+				memberId,
+				session,
+			])
+			return { acted: acted.id, subjected: subjected.id, bookmark: bookmark.id, session }
+		}
+
+		const ownerOf = async (ids: Awaited<ReturnType<typeof seedCouncilActivity>>) => ({
+			actor: (
+				await one<{ actor_id: number }>("SELECT actor_id FROM council_events WHERE id = $1", [
+					ids.acted,
+				])
+			).actor_id,
+			subject: (
+				await one<{ subject_user_id: number }>(
+					"SELECT subject_user_id FROM council_events WHERE id = $1",
+					[ids.subjected]
+				)
+			).subject_user_id,
+			bookmark: (
+				await one<{ user_id: number }>("SELECT user_id FROM council_bookmarks WHERE id = $1", [
+					ids.bookmark,
+				])
+			).user_id,
+			opinion: (
+				await one<{ user_id: number }>(
+					"SELECT user_id FROM applicant_opinions WHERE exam_session_id = $1",
+					[ids.session]
+				)
+			).user_id,
+			decider: (
+				await one<{ decided_by_user_id: number }>(
+					"SELECT decided_by_user_id FROM exam_session WHERE id = $1",
+					[ids.session]
+				)
+			).decided_by_user_id,
+		})
+
+		it("regression: merging carries council log, bookmarks, opinions, decisions and the admin flag", async () => {
+			const { oldId, newId } = await seedIdentities()
+			const ids = await seedCouncilActivity(newId, oldId)
+
+			await migrate("sess-council")
+
+			expect(await ownerOf(ids)).toEqual({
+				actor: oldId,
+				subject: oldId,
+				bookmark: oldId,
+				opinion: oldId,
+				decider: oldId,
+			})
+			expect(
+				await one("SELECT is_admin FROM committee_members WHERE user_id = $1", [oldId])
+			).toEqual({ is_admin: true })
+		})
+
+		it("keeps the survivor's opinion when both identities weighed in on one applicant", async () => {
+			const { oldId, newId } = await seedIdentities()
+			const session = await seedExamSession("c".repeat(64))
+			await pool.query(
+				"INSERT INTO applicant_opinions (exam_session_id, user_id, stance) VALUES ($1, $2, 'object'), ($1, $3, 'support')",
+				[session, oldId, newId]
+			)
+
+			await migrate("sess-council-opinions")
+
+			const { rows } = await pool.query("SELECT user_id, stance FROM applicant_opinions")
+			expect(rows).toEqual([{ user_id: oldId, stance: "object" }])
+		})
+
+		it("keeps the admin flag when only the new identity was an admin", async () => {
+			const { oldId, newId } = await seedIdentities()
+			await pool.query(
+				"INSERT INTO committee_members (user_id, is_admin) VALUES ($1, FALSE), ($2, TRUE)",
+				[oldId, newId]
+			)
+			await migrate("sess-council-admin")
+			expect(await one("SELECT user_id, is_admin FROM committee_members", [])).toEqual({
+				user_id: oldId,
+				is_admin: true,
+			})
+		})
+
+		it("restores every council reference and the admin flag on undo", async () => {
+			const { oldId, newId } = await seedIdentities()
+			const ids = await seedCouncilActivity(newId, oldId)
+
+			const auditId = await migrate("sess-council-undo")
+			expect(await restoreFromSnapshot(env, auditId)).toEqual({ restored: true })
+
+			expect(await ownerOf(ids)).toEqual({
+				actor: newId,
+				subject: newId,
+				bookmark: newId,
+				opinion: newId,
+				decider: newId,
+			})
+			expect(
+				await one("SELECT is_admin FROM committee_members WHERE user_id = $1", [newId])
+			).toEqual({ is_admin: true })
+		})
+
+		it("refuses to restore over a council action taken after commit", async () => {
+			const { oldId } = await seedIdentities()
+			const auditId = await migrate("sess-council-interim")
+			await pool.query(
+				"INSERT INTO council_events (actor_id, kind, source, ref_id) VALUES ($1, 'reject', 'web', 77)",
+				[oldId]
+			)
+			expect(await restoreFromSnapshot(env, auditId)).toEqual({ error: "HAS_INTERIM_ACTIVITY" })
 		})
 	})
 })
