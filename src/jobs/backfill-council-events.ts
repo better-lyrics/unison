@@ -1,25 +1,34 @@
 import { advisoryXactLock } from "@/infra/database"
 import type { Env } from "@/types"
 
+const unrecorded = (kinds: string, ref: string) =>
+	`NOT EXISTS (SELECT 1 FROM council_events e WHERE e.kind IN (${kinds}) AND e.ref_id = ${ref})`
+
 const BACKFILLS = [
 	`INSERT INTO council_events (actor_id, kind, source, lyrics_id, ref_id, created_at)
-	 SELECT booster_id, 'seal', 'discord', lyrics_id, id, created_at FROM boosts
+	 SELECT b.booster_id, 'seal', 'discord', b.lyrics_id, b.id, b.created_at FROM boosts b
+	 WHERE ${unrecorded("'seal'", "b.id")}
 	 ON CONFLICT DO NOTHING RETURNING id`,
 	`INSERT INTO council_events (actor_id, kind, source, lyrics_id, ref_id, created_at)
-	 SELECT NULL, 'unseal', 'discord', lyrics_id, id, revoked_at FROM boosts WHERE revoked_at IS NOT NULL
+	 SELECT NULL, 'unseal', 'discord', b.lyrics_id, b.id, b.revoked_at FROM boosts b
+	 WHERE b.revoked_at IS NOT NULL AND ${unrecorded("'unseal'", "b.id")}
 	 ON CONFLICT DO NOTHING RETURNING id`,
 	`INSERT INTO council_events (actor_id, kind, source, lyrics_id, ref_id, note, created_at)
-	 SELECT rejected_by, 'reject', 'discord', lyrics_id, id, note, rejected_at FROM rejections
+	 SELECT r.rejected_by, 'reject', 'discord', r.lyrics_id, r.id, r.note, r.rejected_at FROM rejections r
+	 WHERE ${unrecorded("'reject'", "r.id")}
 	 ON CONFLICT DO NOTHING RETURNING id`,
 	`INSERT INTO council_events (actor_id, kind, source, lyrics_id, ref_id, created_at)
-	 SELECT NULL, 'unreject', 'discord', lyrics_id, id, revoked_at FROM rejections WHERE revoked_at IS NOT NULL
+	 SELECT NULL, 'unreject', 'discord', r.lyrics_id, r.id, r.revoked_at FROM rejections r
+	 WHERE r.revoked_at IS NOT NULL AND ${unrecorded("'unreject'", "r.id")}
 	 ON CONFLICT DO NOTHING RETURNING id`,
 	`INSERT INTO council_events (actor_id, kind, source, lyrics_id, ref_id, note, created_at)
-	 SELECT reviewed_by,
-		CASE WHEN status = 'rejected' THEN 'edit_reject' ELSE 'edit_approve' END,
-		'discord', lyrics_id, id, review_note, reviewed_at
-	 FROM lyric_revisions
-	 WHERE reviewed_by IS NOT NULL AND reviewed_at IS NOT NULL AND status IN ('live', 'past', 'rejected')
+	 SELECT lr.reviewed_by,
+		CASE WHEN lr.status = 'rejected' THEN 'edit_reject' ELSE 'edit_approve' END,
+		'discord', lr.lyrics_id, lr.id, lr.review_note, lr.reviewed_at
+	 FROM lyric_revisions lr
+	 WHERE lr.reviewed_by IS NOT NULL AND lr.reviewed_at IS NOT NULL
+		AND lr.status IN ('live', 'past', 'rejected')
+		AND ${unrecorded("'edit_approve', 'edit_reject'", "lr.id")}
 	 ON CONFLICT DO NOTHING RETURNING id`,
 	`INSERT INTO council_events (actor_id, kind, source, subject_user_id, ref_id, created_at)
 	 SELECT NULL, 'member_add', CASE WHEN c.added_by = 'bot' THEN 'discord' ELSE 'admin' END,
@@ -37,9 +46,7 @@ const BACKFILLS = [
 	 LEFT JOIN discord_links dl ON dl.discord_id = s.decided_by_discord_id
 	 LEFT JOIN users decider ON decider.key_id = dl.key_id
 	 WHERE s.state IN ('approved', 'rejected') AND s.decided_at IS NOT NULL AND s.is_dev = FALSE
-		AND NOT EXISTS (
-			SELECT 1 FROM council_events e
-			WHERE e.kind IN ('applicant_approve', 'applicant_reject') AND e.ref_id = s.id)
+		AND ${unrecorded("'applicant_approve', 'applicant_reject'", "s.id")}
 	 RETURNING id`,
 ]
 

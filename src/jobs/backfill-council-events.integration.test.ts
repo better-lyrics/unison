@@ -107,6 +107,18 @@ describeIntegration("backfillCouncilEvents (integration)", () => {
 			expect(await kinds()).toEqual(before)
 		})
 
+		it("uses no event ids on a run that finds nothing new", async () => {
+			await seedHistory()
+			await backfillCouncilEvents(db.env)
+			const lastId = async () =>
+				Number(
+					(await db.pool.query("SELECT last_value FROM council_events_id_seq")).rows[0].last_value
+				)
+			const before = await lastId()
+			await backfillCouncilEvents(db.env)
+			expect(await lastId()).toBe(before)
+		})
+
 		it("skips a revision that went live without a reviewer", async () => {
 			await seedHistory()
 			await backfillCouncilEvents(db.env)
