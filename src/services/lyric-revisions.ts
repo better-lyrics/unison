@@ -97,6 +97,7 @@ interface Assessment {
 	candidateLines: LyricLine[]
 	liveLines: LyricLine[]
 	liveRevNo: number
+	anchorRevNo: number
 	fieldChanges: FieldChange[]
 }
 
@@ -325,6 +326,7 @@ async function assess(
 				candidateLines: comparable ?? [],
 				liveLines,
 				liveRevNo: live.rev_no,
+				anchorRevNo: anchor.rev_no,
 				fieldChanges,
 			},
 		}
@@ -368,6 +370,7 @@ async function assess(
 			candidateLines: comparable,
 			liveLines,
 			liveRevNo: live.rev_no,
+			anchorRevNo: anchor.rev_no,
 			fieldChanges,
 		},
 	}
@@ -392,6 +395,7 @@ export async function previewRevision(
 				timingOffsetMs: a.drift.timingOffsetMs,
 				textLimit: config.revisions.textDriftLimit,
 				timingLimit: config.revisions.timingDriftLimit,
+				anchorRevNo: a.anchorRevNo,
 			},
 			outcome: a.outcome,
 			noChanges: a.noChanges,

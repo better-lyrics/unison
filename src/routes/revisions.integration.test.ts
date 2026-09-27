@@ -125,7 +125,7 @@ describeIntegration("revision routes (integration)", () => {
 			expect(json.data).toMatchObject({
 				outcome: { goesLive: false, reason: "large_text_drift" },
 				noChanges: false,
-				drift: { textLimit: 0.15, timingLimit: 0.3 },
+				drift: { textLimit: 0.15, timingLimit: 0.3, anchorRevNo: 1 },
 				rateLimit: { lyricRemaining: 5, userRemaining: 20 },
 			})
 			expect(json.data.checks.map((c) => c.field)).toEqual(["lyrics", "language", "isrc", "album"])

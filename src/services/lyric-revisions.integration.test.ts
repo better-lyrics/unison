@@ -1520,6 +1520,33 @@ describeIntegration("lyric revisions pipeline (integration)", () => {
 		})
 
 		describe("against which revision", () => {
+			it("reports the same revision for drift and diff when the anchor is live", async () => {
+				const result = await preview(lrc(swapWords(LRC, 1)))
+				expect(result.drift.anchorRevNo).toBe(1)
+				expect(result.diff.againstRevNo).toBe(1)
+			})
+
+			it("reports the older anchor for drift after a live edit", async () => {
+				await save(lrc(swapWords(LRC, 1)))
+				const result = await preview(lrc(swapWords(LRC, 2)))
+				expect(result.drift.anchorRevNo).toBe(1)
+				expect(result.diff.againstRevNo).toBe(2)
+			})
+
+			it("reports the live anchor for drift while a revision is pending", async () => {
+				await seal(lyricId)
+				await save(lrc(swapWords(LRC, 1)))
+				const result = await preview(lrc(swapWords(LRC, 2)))
+				expect(result.drift.anchorRevNo).toBe(1)
+				expect(result.diff.againstRevNo).toBe(1)
+			})
+
+			it("reports the anchor for drift even when the lyrics do not parse", async () => {
+				await save(lrc(swapWords(LRC, 1)))
+				const result = await preview({ lyrics: "<tt><body><div><p>unclosed", format: "ttml" })
+				expect(result.drift.anchorRevNo).toBe(1)
+			})
+
 			it("compares against the live revision, not the drift anchor, after a live edit", async () => {
 				expect((await save(lrc(swapWords(LRC, 1)))).status).toBe("live")
 				const { diff } = await preview(lrc(swapWords(LRC, 2)))

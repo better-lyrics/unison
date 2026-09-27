@@ -301,6 +301,7 @@ export interface PreviewResult {
 		timingOffsetMs: number
 		textLimit: number
 		timingLimit: number
+		anchorRevNo: number | null
 	}
 	outcome: GateOutcome
 	noChanges: boolean
