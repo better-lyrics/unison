@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs"
 import {
 	type IntegrationDb,
 	describeIntegration,
@@ -23,6 +24,7 @@ import {
 
 const LRC = readRevisionFixture("amazing-grace.lrc")
 const TTML = readRevisionFixture("amazing-grace.ttml")
+const SCHEMA = readFileSync(new URL("../../schema.sql", import.meta.url), "utf-8")
 
 describeIntegration("lyric revisions store (integration)", () => {
 	let db: IntegrationDb
@@ -109,6 +111,7 @@ describeIntegration("lyric revisions store (integration)", () => {
 				syncType: "linesync",
 				language: "ja",
 				isrc: "USRC17607839",
+				album: null,
 				authorId: owner,
 				status: "live",
 				pendingReason: null,
@@ -135,6 +138,103 @@ describeIntegration("lyric revisions store (integration)", () => {
 		})
 		const live = await getRevisionRow(db.env.DB, id, rows[0].current_revision_id)
 		expect(live?.rev_no).toBe(2)
+	})
+
+	describe("album", () => {
+		const liveAlbum = async (id: number) =>
+			(await db.pool.query("SELECT album, album_norm FROM lyrics WHERE id = $1", [id])).rows[0]
+		const revisionAlbums = async (id: number) =>
+			(
+				await db.pool.query(
+					"SELECT rev_no, album FROM lyric_revisions WHERE lyrics_id = $1 ORDER BY rev_no",
+					[id]
+				)
+			).rows
+
+		async function goLive(id: number, owner: number, album: string | null) {
+			await db.env.DB.transaction(async (tx) => {
+				await retireLiveRevision(tx, id)
+				const revision = await insertRevision(tx, {
+					lyricsId: id,
+					content: LRC.replace("wretch", "soul"),
+					format: "lrc",
+					syncType: "linesync",
+					language: "en",
+					isrc: null,
+					album,
+					authorId: owner,
+					status: "live",
+					pendingReason: null,
+					textDrift: 0,
+					timingDrift: 0,
+					jevProbability: null,
+					revertsRevisionId: null,
+				})
+				await setCurrentRevision(tx, revision)
+			})
+		}
+
+		it("gives a new submission's rev 1 the submitted album", async () => {
+			const owner = await seedUser(db, "a".repeat(64))
+			const id = await seedLyric(db, owner, { lyrics: LRC, format: "lrc", album: "Hymns" })
+			expect(await revisionAlbums(id)).toEqual([{ rev_no: 1, album: "Hymns" }])
+		})
+
+		it("materializes rev 1 with the stored album", async () => {
+			const owner = await seedUser(db, "a".repeat(64))
+			const id = await insertLegacyLyric(db, owner, { lyrics: LRC, album: "Old Hymns" })
+			await ensureBaseRevision(db.env.DB, id)
+			expect(await revisionAlbums(id)).toEqual([{ rev_no: 1, album: "Old Hymns" }])
+		})
+
+		it("writes the live revision's album and its search form into the lyric", async () => {
+			const owner = await seedUser(db, "a".repeat(64))
+			const id = await seedLyric(db, owner, { lyrics: LRC, format: "lrc", album: "Hymns" })
+			await goLive(id, owner, "Sacred Songs (Live)")
+			expect(await liveAlbum(id)).toEqual({
+				album: "Sacred Songs (Live)",
+				album_norm: "sacred songs live",
+			})
+		})
+
+		it("clears the lyric's album and its search form when the live revision has none", async () => {
+			const owner = await seedUser(db, "a".repeat(64))
+			const id = await seedLyric(db, owner, { lyrics: LRC, format: "lrc", album: "Hymns" })
+			await goLive(id, owner, null)
+			expect(await liveAlbum(id)).toEqual({ album: null, album_norm: null })
+		})
+
+		describe("migration", () => {
+			it("backfills every existing revision from its lyric when the column is added", async () => {
+				const owner = await seedUser(db, "a".repeat(64))
+				const withAlbum = await seedLyric(db, owner, {
+					lyrics: LRC,
+					format: "lrc",
+					album: "Hymns",
+				})
+				const without = await seedLyric(db, owner, {
+					lyrics: LRC,
+					format: "lrc",
+					videoId: "noalbum0001",
+				})
+				await db.pool.query("ALTER TABLE lyric_revisions DROP COLUMN album")
+				await db.pool.query(SCHEMA)
+				expect(await revisionAlbums(withAlbum)).toEqual([{ rev_no: 1, album: "Hymns" }])
+				expect(await revisionAlbums(without)).toEqual([{ rev_no: 1, album: null }])
+			})
+
+			it("regression: running the schema again keeps an album a revision cleared", async () => {
+				const owner = await seedUser(db, "a".repeat(64))
+				const id = await seedLyric(db, owner, { lyrics: LRC, format: "lrc", album: "Hymns" })
+				await goLive(id, owner, null)
+				await db.pool.query("UPDATE lyrics SET album = 'Hymns' WHERE id = $1", [id])
+				await db.pool.query(SCHEMA)
+				expect(await revisionAlbums(id)).toEqual([
+					{ rev_no: 1, album: "Hymns" },
+					{ rev_no: 2, album: null },
+				])
+			})
+		})
 	})
 
 	describe("edge cases", () => {
@@ -202,6 +302,7 @@ describeIntegration("lyric revisions store (integration)", () => {
 						syncType: "linesync",
 						language: "en",
 						isrc: null,
+						album: null,
 						authorId: owner,
 						status: "live",
 						pendingReason: null,
@@ -227,6 +328,7 @@ describeIntegration("lyric revisions store (integration)", () => {
 						syncType: "linesync",
 						language: "en",
 						isrc: null,
+						album: null,
 						authorId: owner,
 						status: "pending",
 						pendingReason: "large_text_drift",

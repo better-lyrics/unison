@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { normalize, normalizeArtist, normalizeSong } from "./normalize"
+import { normalize, normalizeAlbum, normalizeArtist, normalizeSong } from "./normalize"
 
 describe("normalize", () => {
 	describe("happy paths", () => {
@@ -110,5 +110,30 @@ describe("normalizeArtist", () => {
 
 	it("preserves a Japanese artist name (regression: issue #54)", () => {
 		expect(normalizeArtist("なきそ")).toBe("なきそ")
+	})
+})
+
+describe("normalizeAlbum", () => {
+	it("normalizes an album name for search", () => {
+		expect(normalizeAlbum("Rodeo (Deluxe)")).toBe("rodeo deluxe")
+	})
+
+	describe("edge cases", () => {
+		it("has no normalized form for a missing album", () => {
+			expect(normalizeAlbum(null)).toBeNull()
+			expect(normalizeAlbum("")).toBeNull()
+		})
+
+		it("keeps an album made only of symbols as an empty string", () => {
+			expect(normalizeAlbum("!!!")).toBe("")
+		})
+	})
+
+	describe("invariants", () => {
+		it("matches normalize for any present album", () => {
+			for (const album of ["Beyoncé", "今すぐ輪廻", "  Spaced   Out  "]) {
+				expect(normalizeAlbum(album)).toBe(normalize(album))
+			}
+		})
 	})
 })

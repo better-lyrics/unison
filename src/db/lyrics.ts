@@ -23,7 +23,7 @@ import {
 } from "@/utils/exploration"
 import { extractPlainText } from "@/utils/extract-text"
 import { sha256Hex } from "@/utils/hash"
-import { normalize, normalizeArtist, normalizeSong } from "@/utils/normalize"
+import { normalize, normalizeAlbum, normalizeArtist, normalizeSong } from "@/utils/normalize"
 
 const log = new Logger("db")
 const cacheLog = new Logger("cache")
@@ -270,7 +270,7 @@ export async function submitLyrics(
 	const plainText = extractPlainText(submission.lyrics, submission.format)
 	const songNorm = normalizeSong(submission.song)
 	const artistNorm = normalizeArtist(submission.artist)
-	const albumNorm = submission.album ? normalize(submission.album) : null
+	const albumNorm = normalizeAlbum(submission.album ?? null)
 
 	// Check per-user-per-video variant cap
 	const variantCount = await env.DB.prepare(
@@ -326,15 +326,15 @@ export async function submitLyrics(
 			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, to_tsvector('simple', ?), ?, ?, ${
 				languageDetectionAttemptedAt === "NOW" ? "NOW()" : "NULL"
 			}, (SELECT lyric_id FROM ids), (SELECT revision_id FROM ids), (SELECT revision_id FROM ids))
-			RETURNING id, lyrics, format, sync_type, language, isrc, submitter_id, created_at
+			RETURNING id, lyrics, format, sync_type, language, isrc, album, submitter_id, created_at
 		),
 		base_revision AS (
 			INSERT INTO lyric_revisions
-				(id, lyrics_id, rev_no, lyrics, format, sync_type, language, isrc, content_hash,
-				 author_id, status, created_at)
+				(id, lyrics_id, rev_no, lyrics, format, sync_type, language, isrc, album,
+				 content_hash, author_id, status, created_at)
 			SELECT ids.revision_id, inserted.id, 1, inserted.lyrics, inserted.format,
-				inserted.sync_type, inserted.language, inserted.isrc, ?, inserted.submitter_id,
-				'live', inserted.created_at
+				inserted.sync_type, inserted.language, inserted.isrc, inserted.album, ?,
+				inserted.submitter_id, 'live', inserted.created_at
 			FROM ids, inserted
 		)
 		SELECT id FROM inserted

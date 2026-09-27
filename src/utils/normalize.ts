@@ -39,3 +39,7 @@ export function normalizeArtist(artist: string): string {
 			.replace(/\s*&\s*/g, " and ") // Normalize ampersand
 	)
 }
+
+export function normalizeAlbum(album: string | null): string | null {
+	return album ? normalize(album) : null
+}

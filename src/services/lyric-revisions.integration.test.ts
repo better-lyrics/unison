@@ -1,3 +1,4 @@
+import { config } from "@/config"
 import type { JevCheckInput, JevGate } from "@/services/jev-gate"
 import {
 	type IntegrationDb,
@@ -25,6 +26,7 @@ import {
 	type RevisionInput,
 	approveRevision,
 	diffRevisions,
+	getRevisionDetail,
 	listPendingCards,
 	listRevisions,
 	previewRevision,
@@ -96,12 +98,16 @@ describeIntegration("lyric revisions pipeline (integration)", () => {
 		}
 	}
 
-	async function revisionId(revNo: number): Promise<number> {
+	async function revisionIdOf(lyricsId: number, revNo: number): Promise<number | undefined> {
 		const { rows } = await db.pool.query<{ id: number }>(
 			"SELECT id FROM lyric_revisions WHERE lyrics_id = $1 AND rev_no = $2",
-			[lyricId, revNo]
+			[lyricsId, revNo]
 		)
-		return rows[0].id
+		return rows[0]?.id
+	}
+
+	async function revisionId(revNo: number): Promise<number> {
+		return (await revisionIdOf(lyricId, revNo))!
 	}
 
 	async function expectInvariants(): Promise<void> {
@@ -115,7 +121,7 @@ describeIntegration("lyric revisions pipeline (integration)", () => {
 		expect(counts[0].pending).toBeLessThanOrEqual(1)
 		const { rows } = await db.pool.query(
 			`SELECT l.lyrics AS cached, l.format AS cached_format, l.sync_type AS cached_sync,
-				l.language AS cached_language, l.isrc AS cached_isrc, r.*
+				l.language AS cached_language, l.isrc AS cached_isrc, l.album AS cached_album, r.*
 			 FROM lyrics l JOIN lyric_revisions r ON r.id = l.current_revision_id
 			 WHERE l.id = $1 AND r.status = 'live'`,
 			[lyricId]
@@ -127,6 +133,7 @@ describeIntegration("lyric revisions pipeline (integration)", () => {
 		expect(live.cached_sync).toBe(live.sync_type)
 		expect(live.cached_language).toBe(live.language)
 		expect(live.cached_isrc).toBe(live.isrc)
+		expect(live.cached_album).toBe(live.album)
 	}
 
 	it("puts a small edit live and rewrites the lyric", async () => {
@@ -557,6 +564,248 @@ describeIntegration("lyric revisions pipeline (integration)", () => {
 				expect(
 					await saveRevision(db.env, lyricId, owner, lrc(LRC, { isrc: "us-rc1-76-07839" }))
 				).toEqual({ ok: false, reason: "no_changes" })
+			})
+		})
+	})
+
+	describe("album in the body", () => {
+		const MAX = config.validation.album.maxLength
+		let albumLyric: number
+		const saveAlbum = (input: RevisionInput, env: Env = db.env) =>
+			saveRevision(env, albumLyric, owner, input)
+		const liveAlbum = async () =>
+			(await db.pool.query("SELECT album, album_norm FROM lyrics WHERE id = $1", [albumLyric]))
+				.rows[0]
+		const albumCheck = async (album: string | null | undefined) => {
+			const result = await previewRevision(db.env, albumLyric, owner, lrc(LRC, { album }))
+			if (!result.ok) throw new Error(result.reason)
+			return result.preview.checks.find((check) => check.field === "album")
+		}
+
+		beforeEach(async () => {
+			albumLyric = await seedLyric(db, owner, {
+				lyrics: LRC,
+				format: "lrc",
+				videoId: "albumlyric1",
+				album: "Hymns of Grace",
+			})
+		})
+
+		it("sets an album sent with a value and trims it", async () => {
+			const result = await saveAlbum(lrc(LRC, { album: "  Sacred Songs (Live)  " }))
+			expect(result).toMatchObject({ ok: true, revision: { status: "live" } })
+			expect(await liveAlbum()).toEqual({
+				album: "Sacred Songs (Live)",
+				album_norm: "sacred songs live",
+			})
+		})
+
+		it("keeps the current album when the body leaves it out", async () => {
+			await saveAlbum(lrc(swapWords(LRC, 1)))
+			expect((await liveAlbum()).album).toBe("Hymns of Grace")
+		})
+
+		it("clears an album sent as null, an empty string, or only spaces", async () => {
+			for (const cleared of [null, "", "   "]) {
+				await db.pool.query(
+					"UPDATE lyric_revisions SET album = 'Hymns of Grace' WHERE lyrics_id = $1",
+					[albumLyric]
+				)
+				await db.pool.query("UPDATE lyrics SET album = 'Hymns of Grace' WHERE id = $1", [
+					albumLyric,
+				])
+				expect(await saveAlbum(lrc(LRC, { album: cleared }))).toMatchObject({ ok: true })
+				expect(await liveAlbum()).toEqual({ album: null, album_norm: null })
+			}
+		})
+
+		it("stores the album on the revision and returns it in the detail", async () => {
+			const result = await saveAlbum(lrc(LRC, { album: "Sacred Songs" }))
+			if (!result.ok) throw new Error(result.reason)
+			const detail = await getRevisionDetail(db.env, albumLyric, result.revision.id)
+			expect(detail?.album).toBe("Sacred Songs")
+			const first = await getRevisionDetail(
+				db.env,
+				albumLyric,
+				(await revisionIdOf(albumLyric, 1))!
+			)
+			expect(first?.album).toBe("Hymns of Grace")
+		})
+
+		it("puts an album-only change live with zero drift and without asking Jev", async () => {
+			const calls: unknown[] = []
+			const gate: JevGate = {
+				check: async (input) => {
+					calls.push(input)
+					return { flagged: true, probability: 0.99 }
+				},
+			}
+			const result = await saveAlbum(lrc(LRC, { album: "Sacred Songs" }), { ...db.env, JEV: gate })
+			expect(result).toMatchObject({
+				ok: true,
+				revision: { status: "live", textDrift: 0, timingDrift: 0 },
+			})
+			expect(calls).toHaveLength(0)
+		})
+
+		it("clears the cache for the lyric's videos when an album change goes live", async () => {
+			db.cache.store.set("v:albumlyric1", "{}")
+			await saveAlbum(lrc(LRC, { album: "Sacred Songs" }))
+			expect(db.cache.store.has("v:albumlyric1")).toBe(false)
+		})
+
+		it("reverts to the target revision's album", async () => {
+			await saveAlbum(lrc(LRC, { album: "Sacred Songs" }))
+			const reverted = await revertToRevision(
+				db.env,
+				albumLyric,
+				owner,
+				(await revisionIdOf(albumLyric, 1))!
+			)
+			expect(reverted).toMatchObject({ ok: true, revision: { status: "live", revertsRevNo: 1 } })
+			expect((await liveAlbum()).album).toBe("Hymns of Grace")
+		})
+
+		it("holds an album change on a sealed lyric until the council approves it", async () => {
+			await db.pool.query(
+				"UPDATE lyrics SET committee_approved_at = 1700000000, committee_approved_by = $2 WHERE id = $1",
+				[albumLyric, owner]
+			)
+			const council = await seedCouncilMember(db, "c".repeat(64))
+			const result = await saveAlbum(lrc(LRC, { album: "Sacred Songs" }))
+			if (!result.ok) throw new Error(result.reason)
+			expect(result.revision).toMatchObject({ status: "pending", pendingReason: "sealed" })
+			expect((await liveAlbum()).album).toBe("Hymns of Grace")
+			await approveRevision(db.env, albumLyric, result.revision.id, council)
+			expect((await liveAlbum()).album).toBe("Sacred Songs")
+		})
+
+		describe("preview", () => {
+			it("reports the album the save would keep", async () => {
+				expect(await albumCheck(undefined)).toEqual({
+					field: "album",
+					status: "ok",
+					message: "Album: Hymns of Grace.",
+				})
+			})
+
+			it("reports a cleared album", async () => {
+				expect(await albumCheck(null)).toEqual({
+					field: "album",
+					status: "ok",
+					message: "No album set.",
+				})
+			})
+
+			it("reports an album over the length limit as bad", async () => {
+				expect(await albumCheck("x".repeat(MAX + 1))).toEqual({
+					field: "album",
+					status: "bad",
+					message: `Album names can be up to ${MAX} characters.`,
+				})
+			})
+
+			it("lists the album check after the ISRC check", async () => {
+				const result = await previewRevision(db.env, albumLyric, owner, lrc(LRC))
+				if (!result.ok) throw new Error(result.reason)
+				expect(result.preview.checks.map((check) => check.field)).toEqual([
+					"lyrics",
+					"language",
+					"isrc",
+					"album",
+				])
+			})
+		})
+
+		describe("no-op check", () => {
+			it("is a no-op when the body sends the current album back", async () => {
+				expect(await saveAlbum(lrc(LRC, { album: "Hymns of Grace" }))).toEqual({
+					ok: false,
+					reason: "no_changes",
+				})
+			})
+
+			it("is a no-op when the current album comes back with extra spaces", async () => {
+				expect(await saveAlbum(lrc(LRC, { album: "  Hymns of Grace " }))).toEqual({
+					ok: false,
+					reason: "no_changes",
+				})
+			})
+
+			it("is a no-op when clearing an album that is already empty", async () => {
+				await saveAlbum(lrc(LRC, { album: null }))
+				expect(await saveAlbum(lrc(LRC, { album: "" }))).toEqual({
+					ok: false,
+					reason: "no_changes",
+				})
+			})
+
+			it("counts a case-only album change as a change", async () => {
+				expect(await saveAlbum(lrc(LRC, { album: "hymns of grace" }))).toMatchObject({ ok: true })
+			})
+		})
+
+		describe("edge cases", () => {
+			it("accepts an album at exactly the length limit", async () => {
+				expect(await saveAlbum(lrc(LRC, { album: "x".repeat(MAX) }))).toMatchObject({ ok: true })
+			})
+
+			it("measures the limit after trimming", async () => {
+				expect(await saveAlbum(lrc(LRC, { album: ` ${"x".repeat(MAX)} ` }))).toMatchObject({
+					ok: true,
+				})
+			})
+
+			it("keeps unicode album names intact", async () => {
+				await saveAlbum(lrc(LRC, { album: "今すぐ輪廻 (Beyoncé Remix)" }))
+				expect(await liveAlbum()).toEqual({
+					album: "今すぐ輪廻 (Beyoncé Remix)",
+					album_norm: "今すぐ輪廻 beyonce remix",
+				})
+			})
+
+			it("accepts an over-long album while it stays the current one", async () => {
+				const long = "x".repeat(MAX + 5)
+				await db.pool.query("UPDATE lyric_revisions SET album = $2 WHERE lyrics_id = $1", [
+					albumLyric,
+					long,
+				])
+				expect(await saveAlbum(lrc(swapWords(LRC, 1), { album: long }))).toMatchObject({
+					ok: true,
+				})
+			})
+		})
+
+		describe("error paths", () => {
+			it("rejects an album over the length limit with a hint and saves nothing", async () => {
+				expect(await saveAlbum(lrc(swapWords(LRC, 1), { album: "x".repeat(MAX + 1) }))).toEqual({
+					ok: false,
+					reason: "invalid",
+					code: "INVALID_PAYLOAD",
+					hint: `Album names can be up to ${MAX} characters.`,
+				})
+				expect((await liveAlbum()).album).toBe("Hymns of Grace")
+			})
+		})
+
+		describe("cross-field", () => {
+			it("changes the album, language, ISRC and lyrics together in one revision", async () => {
+				const result = await saveAlbum(
+					lrc(swapWords(LRC, 1), { album: "Sacred Songs", language: "es", isrc: "USRC17607839" })
+				)
+				if (!result.ok) throw new Error(result.reason)
+				const detail = await getRevisionDetail(db.env, albumLyric, result.revision.id)
+				expect(detail).toMatchObject({
+					album: "Sacred Songs",
+					language: "es",
+					isrc: "USRC17607839",
+					lyrics: swapWords(LRC, 1),
+				})
+			})
+
+			it("keeps the album when only the language changes", async () => {
+				await saveAlbum(lrc(LRC, { language: "es" }))
+				expect((await liveAlbum()).album).toBe("Hymns of Grace")
 			})
 		})
 	})

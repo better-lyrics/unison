@@ -267,12 +267,13 @@ export interface RevisionDetail extends RevisionSummary {
 	format: LyricsFormat
 	language: string | null
 	isrc: string | null
+	album: string | null
 }
 
 export type CheckStatus = "ok" | "warn" | "bad"
 
 export interface FieldCheck {
-	field: "lyrics" | "language" | "isrc"
+	field: "lyrics" | "language" | "isrc" | "album"
 	status: CheckStatus
 	message: string
 	line?: number

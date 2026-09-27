@@ -11,6 +11,7 @@ import type {
 import { compress, decompressIfNeeded, isCompressed } from "@/utils/compression"
 import { extractPlainText } from "@/utils/extract-text"
 import { sha256Hex } from "@/utils/hash"
+import { normalizeAlbum } from "@/utils/normalize"
 import { generatePetName } from "@/utils/petname"
 
 export interface RevisionRow {
@@ -22,6 +23,7 @@ export interface RevisionRow {
 	sync_type: SyncType
 	language: string | null
 	isrc: string | null
+	album: string | null
 	content_hash: string
 	author_id: number | null
 	status: RevisionStatus
@@ -54,6 +56,7 @@ export interface NewRevision {
 	syncType: SyncType
 	language: string | null
 	isrc: string | null
+	album: string | null
 	authorId: number
 	status: "live" | "pending"
 	pendingReason: PendingReason | null
@@ -103,7 +106,7 @@ export async function ensureBaseRevision(db: D1Compat, lyricsId: number): Promis
 	await db.transaction(async (tx) => {
 		const lyric = await tx
 			.prepare(
-				`SELECT lyrics, format, sync_type, language, isrc, submitter_id, created_at,
+				`SELECT lyrics, format, sync_type, language, isrc, album, submitter_id, created_at,
 					current_revision_id
 				FROM lyrics WHERE id = ? FOR UPDATE`
 			)
@@ -114,6 +117,7 @@ export async function ensureBaseRevision(db: D1Compat, lyricsId: number): Promis
 				sync_type: SyncType
 				language: string | null
 				isrc: string | null
+				album: string | null
 				submitter_id: number | null
 				created_at: number
 				current_revision_id: number | null
@@ -125,9 +129,9 @@ export async function ensureBaseRevision(db: D1Compat, lyricsId: number): Promis
 		const revision = await tx
 			.prepare(
 				`INSERT INTO lyric_revisions
-					(lyrics_id, rev_no, lyrics, format, sync_type, language, isrc, content_hash,
+					(lyrics_id, rev_no, lyrics, format, sync_type, language, isrc, album, content_hash,
 					 author_id, status, created_at)
-				VALUES (?, 1, ?, ?, ?, ?, ?, ?, ?, 'live', ?)
+				VALUES (?, 1, ?, ?, ?, ?, ?, ?, ?, ?, 'live', ?)
 				RETURNING id`
 			)
 			.bind(
@@ -137,6 +141,7 @@ export async function ensureBaseRevision(db: D1Compat, lyricsId: number): Promis
 				lyric.sync_type,
 				lyric.language,
 				lyric.isrc,
+				lyric.album,
 				sha256Hex(content),
 				lyric.submitter_id,
 				lyric.created_at
@@ -229,11 +234,12 @@ export async function insertRevision(tx: D1Compat, input: NewRevision): Promise<
 	const row = await tx
 		.prepare(
 			`INSERT INTO lyric_revisions
-				(lyrics_id, rev_no, lyrics, format, sync_type, language, isrc, content_hash, author_id,
-				 status, pending_reason, text_drift, timing_drift, jev_probability, reverts_revision_id)
+				(lyrics_id, rev_no, lyrics, format, sync_type, language, isrc, album, content_hash,
+				 author_id, status, pending_reason, text_drift, timing_drift, jev_probability,
+				 reverts_revision_id)
 			VALUES (
 				?, (SELECT COALESCE(MAX(rev_no), 0) + 1 FROM lyric_revisions WHERE lyrics_id = ?),
-				?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+				?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
 			)
 			RETURNING *`
 		)
@@ -245,6 +251,7 @@ export async function insertRevision(tx: D1Compat, input: NewRevision): Promise<
 			input.syncType,
 			input.language,
 			input.isrc,
+			input.album,
 			sha256Hex(input.content),
 			input.authorId,
 			input.status,
@@ -268,6 +275,8 @@ export async function setCurrentRevision(tx: D1Compat, revision: RevisionRow): P
 				format = ?,
 				sync_type = ?,
 				isrc = ?,
+				album = ?,
+				album_norm = ?,
 				language_source = CASE WHEN language IS NOT DISTINCT FROM ? THEN language_source ELSE 'submitter' END,
 				language_detector_version = CASE WHEN language IS NOT DISTINCT FROM ? THEN language_detector_version ELSE NULL END,
 				language = ?,
@@ -281,6 +290,8 @@ export async function setCurrentRevision(tx: D1Compat, revision: RevisionRow): P
 			revision.format,
 			revision.sync_type,
 			revision.isrc,
+			revision.album,
+			normalizeAlbum(revision.album),
 			revision.language,
 			revision.language,
 			revision.language,

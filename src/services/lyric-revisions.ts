@@ -56,12 +56,14 @@ export interface RevisionInput {
 	format: LyricsFormat
 	language?: string | null
 	isrc?: string | null
+	album?: string | null
 }
 
 interface RevertSource {
 	revisionId: number
 	language: string | null
 	isrc: string | null
+	album: string | null
 }
 
 interface Candidate {
@@ -70,6 +72,7 @@ interface Candidate {
 	syncType: RevisionRow["sync_type"]
 	language: string | null
 	isrc: string | null
+	album: string | null
 }
 
 interface Assessment {
@@ -111,6 +114,7 @@ class UncheckedLiveEdit extends Error {}
 const NOT_SAVABLE: GateOutcome = { goesLive: false, reason: null }
 const LANGUAGE_HINT = "Pick a language from the list."
 const ISRC_HINT = "An ISRC looks like USRC17607839."
+const ALBUM_HINT = `Album names can be up to ${config.validation.album.maxLength} characters.`
 
 async function revisionLines(stored: string, format: LyricsFormat): Promise<LyricLine[]> {
 	try {
@@ -123,33 +127,40 @@ async function revisionLines(stored: string, format: LyricsFormat): Promise<Lyri
 
 const joinText = (lines: LyricLine[]): string => lines.map((line) => line.text).join("\n")
 
-function resolveLanguage(
+interface ResolvedField {
+	value: string | null
+	valid: boolean
+}
+
+function resolveField(
 	requested: string | null | undefined,
 	current: string | null,
-	revert: RevertSource | null
-): { value: string | null; valid: boolean } {
+	reverted: string | null | undefined,
+	accept: (value: string) => ResolvedField
+): ResolvedField {
 	if (requested === undefined) return { value: current, valid: true }
 	const value = requested?.trim() || null
-	if (value === null || value === current || value === revert?.language) {
-		return { value, valid: true }
-	}
-	return { value, valid: config.revisions.languages.has(value) }
+	if (value === null || value === current || value === reverted) return { value, valid: true }
+	return accept(value)
 }
 
-function resolveIsrc(
-	requested: string | null | undefined,
-	current: string | null,
-	revert: RevertSource | null
-): { value: string | null; valid: boolean } {
-	if (requested === undefined) return { value: current, valid: true }
-	const raw = requested?.trim() || null
-	if (raw === null || raw === current || raw === revert?.isrc) return { value: raw, valid: true }
-	const normalized = normalizeIsrc(raw)
-	return normalized ? { value: normalized, valid: true } : { value: raw, valid: false }
+const acceptLanguage = (value: string): ResolvedField => ({
+	value,
+	valid: config.revisions.languages.has(value),
+})
+
+function acceptIsrc(value: string): ResolvedField {
+	const normalized = normalizeIsrc(value)
+	return normalized ? { value: normalized, valid: true } : { value, valid: false }
 }
+
+const acceptAlbum = (value: string): ResolvedField => ({
+	value,
+	valid: value.length <= config.validation.album.maxLength,
+})
 
 async function languageCheck(
-	language: { value: string | null; valid: boolean },
+	language: ResolvedField,
 	plainText: string | null
 ): Promise<FieldCheck> {
 	if (!language.valid) {
@@ -172,7 +183,7 @@ async function languageCheck(
 	return { field: "language", status: "ok", message: `Language: ${language.value}.` }
 }
 
-function isrcCheck(isrc: { value: string | null; valid: boolean }): FieldCheck {
+function isrcCheck(isrc: ResolvedField): FieldCheck {
 	if (!isrc.valid) {
 		return { field: "isrc", status: "bad", message: ISRC_HINT }
 	}
@@ -183,14 +194,27 @@ function isrcCheck(isrc: { value: string | null; valid: boolean }): FieldCheck {
 	}
 }
 
+function albumCheck(album: ResolvedField): FieldCheck {
+	if (!album.valid) {
+		return { field: "album", status: "bad", message: ALBUM_HINT }
+	}
+	return {
+		field: "album",
+		status: "ok",
+		message: album.value ? `Album: ${album.value}.` : "No album set.",
+	}
+}
+
 function firstFailure(
 	validated: ContentValidation,
-	language: { valid: boolean },
-	isrc: { valid: boolean }
+	language: ResolvedField,
+	isrc: ResolvedField,
+	album: ResolvedField
 ): Assessment["failure"] {
 	if (!validated.ok) return { code: validated.code, hint: validated.hint }
 	if (!language.valid) return { code: ErrorCode.INVALID_PAYLOAD, hint: LANGUAGE_HINT }
 	if (!isrc.valid) return { code: ErrorCode.INVALID_PAYLOAD, hint: ISRC_HINT }
+	if (!album.valid) return { code: ErrorCode.INVALID_PAYLOAD, hint: ALBUM_HINT }
 	return null
 }
 
@@ -236,8 +260,9 @@ async function assess(
 
 	const rateLimit = await remainingEdits(db, lyricsId, userId)
 	const validated = validateLyricContent(input.lyrics, input.format)
-	const language = resolveLanguage(input.language, live.language, revert)
-	const isrc = resolveIsrc(input.isrc, live.isrc, revert)
+	const language = resolveField(input.language, live.language, revert?.language, acceptLanguage)
+	const isrc = resolveField(input.isrc, live.isrc, revert?.isrc, acceptIsrc)
+	const album = resolveField(input.album, live.album, revert?.album, acceptAlbum)
 
 	const comparable = validated.ok ? extractComparableLines(input.lyrics, validated.format) : null
 	const lines = comparable?.filter((line) => line.head === undefined) ?? null
@@ -256,9 +281,10 @@ async function assess(
 				},
 		await languageCheck(language, lines ? joinText(lines) : null),
 		isrcCheck(isrc),
+		albumCheck(album),
 	]
 
-	const failure = firstFailure(validated, language, isrc)
+	const failure = firstFailure(validated, language, isrc, album)
 
 	if (!validated.ok || !lines || !comparable || failure) {
 		return {
@@ -285,11 +311,13 @@ async function assess(
 		syncType: validated.syncType,
 		language: language.value,
 		isrc: isrc.value,
+		album: album.value,
 	}
 	const noChanges =
 		sha256Hex(candidate.content) === live.content_hash &&
 		candidate.language === live.language &&
-		candidate.isrc === live.isrc
+		candidate.isrc === live.isrc &&
+		candidate.album === live.album
 
 	const anchorLines = await revisionLines(anchor.lyrics, anchor.format)
 	const drift = measureDrift(anchorLines, comparable)
@@ -433,6 +461,7 @@ async function commitAssessed(
 			syncType: a.candidate.syncType,
 			language: a.candidate.language,
 			isrc: a.candidate.isrc,
+			album: a.candidate.album,
 			authorId: userId,
 			status: a.outcome.goesLive ? "live" : "pending",
 			pendingReason: a.outcome.reason,
@@ -475,8 +504,14 @@ export async function revertToRevision(
 		env,
 		lyricsId,
 		userId,
-		{ lyrics: content, format: target.format, language: target.language, isrc: target.isrc },
-		{ revisionId: target.id, language: target.language, isrc: target.isrc }
+		{
+			lyrics: content,
+			format: target.format,
+			language: target.language,
+			isrc: target.isrc,
+			album: target.album,
+		},
+		{ revisionId: target.id, language: target.language, isrc: target.isrc, album: target.album }
 	)
 }
 
@@ -524,6 +559,7 @@ export async function getRevisionDetail(
 		format: row.format,
 		language: row.language,
 		isrc: row.isrc,
+		album: row.album,
 	}
 }
 
