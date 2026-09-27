@@ -8,7 +8,7 @@ import { VariantMetadata, VariantMetadataSkeleton } from "@/components/VariantMe
 import { VoteControls } from "@/components/VoteControls"
 import { YouTubeMusicIcon } from "@/components/icons/YouTubeMusicIcon"
 import { Bone } from "@/components/skeleton"
-import { useLyricsVariant, useLyricsVariants } from "@/hooks/useLyricsVariants"
+import { useLyricsVariant, useLyricsVariants } from "@/hooks/useLyricsData"
 import { useYouTubePlayer } from "@/hooks/useYouTubePlayer"
 import { cn } from "@/lib/cn"
 import { downloadTextFile } from "@/lib/download"

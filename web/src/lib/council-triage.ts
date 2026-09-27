@@ -1,5 +1,10 @@
 import type { BookmarkView, EditItem, QueueItem } from "./council-types"
 
+export type BookmarkState =
+  | { kind: "mine" }
+  | { kind: "open"; capped: boolean; cap: number }
+  | { kind: "other"; holder: string }
+
 export interface TriageGroups<T> {
   mine: T[]
   open: T[]

@@ -5,7 +5,7 @@ import { pushToast } from "@/lib/toast"
 import type { VariantFull, VariantSummary } from "@/lib/types"
 import { useMutation, useQueryClient } from "@tanstack/react-query"
 import { useCallback } from "react"
-import { lyricsKeys } from "./useLyricsVariants"
+import { lyricsKeys } from "./useLyricsData"
 
 export type ReportReason = "wrong_song" | "bad_sync" | "offensive" | "spam" | "other"
 

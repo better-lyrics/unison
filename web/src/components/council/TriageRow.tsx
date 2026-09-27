@@ -2,6 +2,7 @@ import { SongThumbnail } from "@/components/SongThumbnail"
 import { UserAvatar } from "@/components/UserAvatar"
 import { VariantBadge } from "@/components/VariantBadge"
 import { tagClass } from "@/components/ui"
+import type { Bookmarkable, Triage } from "@/hooks/useTriage"
 import { cn } from "@/lib/cn"
 import { reasonLabel, reasonMetric } from "@/lib/council-reasons"
 import type { BookmarkView, EditItem, QueueItem } from "@/lib/council-types"
@@ -12,46 +13,42 @@ import { Link } from "react-router-dom"
 
 const SOON_SEC = 12 * 3600
 
-interface TriageRowProps {
+interface TriageRowProps<T extends Bookmarkable & { videoId: string; song: string }> {
+  triage: Triage<T>
   itemKey: string
-  href: string
-  selected: boolean
-  videoId: string
+  item: T
   title: string
   sub: string
   meta: ReactNode
   end: ReactNode
-  heldByOther: boolean
-  toggle: ReactNode
 }
 
-export function TriageRow({
+export function TriageRow<T extends Bookmarkable & { videoId: string; song: string }>({
+  triage,
   itemKey,
-  href,
-  selected,
-  videoId,
+  item,
   title,
   sub,
   meta,
   end,
-  heldByOther,
-  toggle,
-}: TriageRowProps) {
+}: TriageRowProps<T>) {
+  const selected = triage.selectedKey === itemKey
+  const heldByOther = triage.heldByOther(item)
   return (
     <li className="relative">
       <Link
-        to={href}
+        to={triage.hrefFor(itemKey)}
         replace
         data-key={itemKey}
         aria-current={selected ? "true" : undefined}
         className={cn(
           "flex w-full items-center gap-3 rounded-[10px] bg-white/[0.02] py-3 pl-3.5 text-left transition-[background-color,opacity] duration-150 hover:bg-unison-bg-hover",
-          toggle ? "pr-[54px]" : "pr-3.5",
+          heldByOther ? "pr-3.5" : "pr-[54px]",
           selected && "bg-unison-bg-hover shadow-inset-rim",
           heldByOther && !selected && "opacity-60 hover:opacity-100",
         )}
       >
-        <SongThumbnail videoId={videoId} className="size-11" />
+        <SongThumbnail videoId={item.videoId} className="size-11" />
         <div className="min-w-0 flex-1">
           <div className="truncate text-sm leading-tight font-medium">{title}</div>
           <div className="mt-px truncate text-xs leading-tight text-unison-text-secondary">{sub}</div>
@@ -59,7 +56,16 @@ export function TriageRow({
         </div>
         <div className="flex shrink-0 flex-col items-end gap-1">{end}</div>
       </Link>
-      {toggle ? <div className="absolute top-1/2 right-3.5 -translate-y-1/2">{toggle}</div> : null}
+      {heldByOther ? null : (
+        <div className="absolute top-1/2 right-3.5 -translate-y-1/2">
+          <BookmarkToggle
+            on={item.bookmark !== null}
+            song={item.song}
+            disabled={triage.bookmarkPending}
+            onToggle={() => triage.toggleBookmark(item)}
+          />
+        </div>
+      )}
     </li>
   )
 }

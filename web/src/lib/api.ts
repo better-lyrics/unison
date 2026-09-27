@@ -1,5 +1,6 @@
 import { loadStoredSession } from "./auth"
 import { AUTHED_FETCH_ERRORS, authedFetch } from "./authedFetch"
+import type { RevisionDiff, RevisionSummary } from "./revision-types"
 import { IS_SPA_EXPANSION_SEED } from "./seed-flag"
 import type {
   ApiEnvelope,
@@ -162,6 +163,18 @@ export async function fetchLyricsVariant(
   if (IS_SPA_EXPANSION_SEED) return (await import("./dev-seed-spa-expansion")).seedLyricsVariant(id)
   const variant = await getJsonWithSignal<VariantFull>(`/lyrics/${id}`, opts.signal)
   return { variant }
+}
+
+export function fetchRevisionDiff(lyricsId: number, revisionId: number, signal?: AbortSignal): Promise<RevisionDiff> {
+  return getJsonWithSignal(`/lyrics/${lyricsId}/revisions/${revisionId}/diff`, signal)
+}
+
+export async function fetchRevisions(lyricsId: number, signal?: AbortSignal): Promise<RevisionSummary[]> {
+  const { revisions } = await getJsonWithSignal<{ revisions: RevisionSummary[] }>(
+    `/lyrics/${lyricsId}/revisions`,
+    signal,
+  )
+  return revisions
 }
 
 export async function fetchArtwork(videoId: string, size?: number): Promise<string | null> {

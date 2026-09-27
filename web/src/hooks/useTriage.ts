@@ -1,9 +1,11 @@
-import { groupByBookmark, neighbour, splitNew } from "@/lib/council-triage"
+import { type BookmarkState, groupByBookmark, neighbour, splitNew } from "@/lib/council-triage"
 import type { BookmarkItemType, BookmarkView } from "@/lib/council-types"
 import { useEffect, useRef, useState } from "react"
 import { useSearchParams } from "react-router-dom"
+import { useCouncilEdits, useCouncilOverview, useCouncilQueue } from "./useCouncilData"
 import { useBookmarkToggle } from "./useCouncilMutations"
 import { useCouncilShortcuts } from "./useCouncilShortcuts"
+import { useStoredState } from "./useStoredState"
 
 export interface TriageEntry {
   key: string
@@ -11,7 +13,7 @@ export interface TriageEntry {
   itemId: number
 }
 
-type Bookmarkable = { bookmark: BookmarkView | null }
+export type Bookmarkable = { bookmark: BookmarkView | null }
 
 interface UseTriageOptions<T> {
   all: T[] | undefined
@@ -68,6 +70,26 @@ export function useTriage<T extends Bookmarkable>({ all, shown, entry, meKeyId, 
     if (selectedKey === null) select(firstKey)
   })
 
+  const [autoAdvance, setAutoAdvance] = useStoredState<"on" | "off">("council.autoAdvance", "on")
+  const afterDecision = (key: string) => {
+    const at = order.indexOf(key)
+    select(autoAdvance === "on" ? (order[at + 1] ?? order[at - 1] ?? null) : null)
+  }
+
+  const queue = useCouncilQueue().data
+  const edits = useCouncilEdits().data?.items
+  const cap = useCouncilOverview().data?.me.bookmarkCap ?? null
+  const held = groupByBookmark<{ bookmark: BookmarkView | null }>([...(queue ?? []), ...(edits ?? [])], meKeyId, now)
+    .mine.length
+
+  const bookmarkState = (item: T): BookmarkState => {
+    const b = item.bookmark
+    if (b !== null && b.expiresAt > now) {
+      return b.holder.keyId === meKeyId ? { kind: "mine" } : { kind: "other", holder: b.holder.displayName }
+    }
+    return { kind: "open", capped: cap !== null && held >= cap, cap: cap ?? 0 }
+  }
+
   const toggleBookmark = (item: T) => {
     const e = entry(item)
     bookmark.mutate({ itemType: e.itemType, itemId: e.itemId, bookmark: item.bookmark, meKeyId })
@@ -99,13 +121,16 @@ export function useTriage<T extends Bookmarkable>({ all, shown, entry, meKeyId, 
     selectedItem,
     select,
     hrefFor,
-    nextAfter: (key: string) => {
-      const at = order.indexOf(key)
-      return order[at + 1] ?? order[at - 1] ?? null
-    },
+    afterDecision,
+    autoAdvance: autoAdvance === "on",
+    setAutoAdvance: (on: boolean) => setAutoAdvance(on ? "on" : "off"),
+    cap,
+    bookmarkState,
     searchRef,
     toggleBookmark,
     heldByOther,
     bookmarkPending: bookmark.isPending,
   }
 }
+
+export type Triage<T extends Bookmarkable> = ReturnType<typeof useTriage<T>>

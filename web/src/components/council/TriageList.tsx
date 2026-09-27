@@ -1,23 +1,21 @@
+import { EmptyState } from "@/components/EmptyState"
 import { Kbd } from "@/components/Kbd"
+import { Bone, skeletonKeys } from "@/components/skeleton"
+import type { Bookmarkable, Triage } from "@/hooks/useTriage"
 import { cn } from "@/lib/cn"
 import { IconArrowUp, IconBookmark, IconChevronDown } from "@tabler/icons-react"
+import { IconPointer } from "@tabler/icons-react"
 import type { ReactNode } from "react"
 import { Switch } from "./Switch"
 
-interface TriageListProps {
+interface TriageListProps<T extends Bookmarkable> {
   label: string
+  triage: Triage<T>
+  row: (item: T) => ReactNode
+  noun: [string, string]
   tools?: ReactNode
-  mine: ReactNode[]
-  open: ReactNode[]
-  others: ReactNode[]
-  cap: number | null
   openAside?: string
-  othersOpen: boolean
-  onToggleOthers: () => void
-  fresh: { count: number; noun: [string, string]; onShow: () => void }
   empty: ReactNode | null
-  autoAdvance: boolean
-  onAutoAdvance: (on: boolean) => void
 }
 
 const HEAD =
@@ -26,8 +24,21 @@ const ROWS = "flex flex-col gap-1.5"
 const COUNT = "font-mono tracking-normal"
 const ASIDE = "ml-auto text-[11px] normal-case tracking-normal"
 
-export function TriageList(props: TriageListProps) {
-  const { label, tools, mine, open, others, cap, openAside, othersOpen, onToggleOthers, fresh, empty } = props
+export function TriageList<T extends Bookmarkable>({
+  label,
+  triage,
+  row,
+  noun,
+  tools,
+  openAside,
+  empty,
+}: TriageListProps<T>) {
+  const mine = triage.mine.map(row)
+  const open = triage.open.map(row)
+  const others = triage.others.map(row)
+  const { cap, othersOpen } = triage
+  const onToggleOthers = () => triage.setOthersOpen(!othersOpen)
+  const fresh = { count: triage.fresh.length, onShow: triage.revealFresh }
   return (
     <div className="flex min-h-0 flex-col triage:sticky triage:top-[calc(var(--app-header-h)+2rem)] triage:max-h-[calc(100dvh-var(--app-header-h)-4rem)]">
       {tools ? <div className="flex flex-col gap-2.5 pb-4">{tools}</div> : null}
@@ -39,7 +50,7 @@ export function TriageList(props: TriageListProps) {
             className="sticky top-0 z-[2] mx-auto mt-1 mb-2 flex w-max cursor-pointer items-center gap-1.5 rounded-full bg-unison-text px-3 py-[5px] text-xs font-semibold text-unison-bg shadow-[0_8px_20px_rgba(0,0,0,0.45)] transition-[opacity,scale] active:scale-[0.96]"
           >
             <IconArrowUp aria-hidden className="size-3" stroke={2} />
-            {fresh.count} new {fresh.count === 1 ? fresh.noun[0] : fresh.noun[1]}
+            {fresh.count} new {fresh.count === 1 ? noun[0] : noun[1]}
           </button>
         ) : null}
         {empty ?? (
@@ -94,7 +105,7 @@ export function TriageList(props: TriageListProps) {
         )}
       </div>
       <div className="flex items-center justify-between gap-2 pt-2 text-xs text-unison-text-muted">
-        <Switch checked={props.autoAdvance} onChange={props.onAutoAdvance}>
+        <Switch checked={triage.autoAdvance} onChange={triage.setAutoAdvance}>
           Open the next item after a decision
         </Switch>
         <span className="flex gap-1">
@@ -112,5 +123,26 @@ export function TriageShell({ list, detail }: { list: ReactNode; detail: ReactNo
       {list}
       <div className="min-w-0">{detail}</div>
     </div>
+  )
+}
+
+export function TriageListSkeleton() {
+  return (
+    <div className="flex flex-col gap-1.5">
+      <Bone className="mb-4 h-8 w-full" />
+      {skeletonKeys("row", 6).map((key) => (
+        <Bone key={key} className="h-[70px] w-full rounded-[10px]" />
+      ))}
+    </div>
+  )
+}
+
+export function NothingSelected() {
+  return (
+    <EmptyState
+      icon={<IconPointer className="size-5" stroke={1.5} />}
+      title="Nothing selected"
+      hint="Pick an item from the list, or press J to start at the top."
+    />
   )
 }

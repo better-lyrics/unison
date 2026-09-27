@@ -138,3 +138,6 @@ export function PersonCard({
     </div>
   )
 }
+
+export const historyItemClass =
+  "relative pb-3.5 pl-5 text-[13px] leading-normal text-unison-text-secondary before:absolute before:top-[7px] before:left-[3px] before:size-[7px] before:rounded-full before:bg-unison-text-muted before:content-['']"

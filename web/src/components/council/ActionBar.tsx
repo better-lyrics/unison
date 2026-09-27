@@ -1,15 +1,11 @@
 import { Kbd } from "@/components/Kbd"
 import { buttonClass } from "@/components/ui"
 import { useCouncilShortcuts } from "@/hooks/useCouncilShortcuts"
+import type { BookmarkState } from "@/lib/council-triage"
 import { type Icon, IconBookmark, IconBookmarkFilled, IconX } from "@tabler/icons-react"
 import { type ReactNode, useId, useRef, useState } from "react"
 
 const NOTE_MAX = 300
-
-export type BookmarkState =
-  | { kind: "mine" }
-  | { kind: "open"; capped: boolean; cap: number }
-  | { kind: "other"; holder: string }
 
 interface ActionBarProps {
   bookmark: BookmarkState
