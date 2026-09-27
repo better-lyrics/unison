@@ -1,5 +1,6 @@
 import { createBookmark } from "@/db/council-bookmarks"
 import type { EditItem, EditThresholds } from "@/db/council-edits"
+import { type CouncilEvent, recordCouncilEvent } from "@/db/council-events"
 import type { QueueItem } from "@/db/council-queue"
 import { saveRevision } from "@/services/lyric-revisions"
 import {
@@ -276,6 +277,99 @@ describeIntegration("council dashboard routes (integration)", () => {
 
 		it("refuses a wrong bot secret", async () => {
 			expect((await botCall("nope")).status).toBe(401)
+		})
+	})
+
+	describe("GET /committee/events", () => {
+		type Page = { events: CouncilEvent[]; nextCursor: string | null }
+
+		beforeEach(async () => {
+			await recordCouncilEvent(db.env.DB, {
+				actorId: mira,
+				kind: "seal",
+				source: "web",
+				lyricsId: lyricId,
+				refId: 1,
+				at: 100,
+			})
+			await recordCouncilEvent(db.env.DB, {
+				actorId: ola,
+				kind: "reject",
+				source: "discord",
+				lyricsId: lyricId,
+				refId: 2,
+				at: 200,
+			})
+			await recordCouncilEvent(db.env.DB, {
+				actorId: ola,
+				kind: "edit_approve",
+				source: "web",
+				lyricsId: lyricId,
+				refId: 3,
+				at: 300,
+			})
+			await recordCouncilEvent(db.env.DB, {
+				actorId: admin,
+				kind: "member_add",
+				source: "web",
+				subjectUserId: ola,
+				at: 400,
+			})
+			await recordCouncilEvent(db.env.DB, {
+				actorId: mira,
+				kind: "bookmark",
+				source: "web",
+				lyricsId: lyricId,
+				refId: 5,
+				at: 500,
+			})
+		})
+
+		it("lists the log newest first without bookmarks", async () => {
+			const res = await call<Page>("GET", "/committee/events", { token: "mira" })
+			expect(res.status).toBe(200)
+			expect(res.json.data.events.map((e) => e.kind)).toEqual([
+				"member_add",
+				"edit_approve",
+				"reject",
+				"seal",
+			])
+		})
+
+		it("filters by group, actor and lyric, and includes bookmarks on request", async () => {
+			const kinds = async (qs: string) =>
+				(
+					await call<Page>("GET", `/committee/events?${qs}`, { token: "mira" })
+				).json.data.events.map((e) => e.kind)
+			expect(await kinds("kind=seals")).toEqual(["seal"])
+			expect(await kinds("kind=rejections")).toEqual(["reject"])
+			expect(await kinds("kind=edits")).toEqual(["edit_approve"])
+			expect(await kinds("kind=membership")).toEqual(["member_add"])
+			expect(await kinds(`actor=${OLA}`)).toEqual(["edit_approve", "reject"])
+			expect(await kinds(`lyric=${lyricId}&includeBookmarks=1`)).toEqual([
+				"bookmark",
+				"edit_approve",
+				"reject",
+				"seal",
+			])
+		})
+
+		it("pages with a cursor", async () => {
+			const first = await call<Page>("GET", "/committee/events?limit=2", { token: "mira" })
+			expect(first.json.data.events).toHaveLength(2)
+			const second = await call<Page>(
+				"GET",
+				`/committee/events?limit=2&cursor=${encodeURIComponent(first.json.data.nextCursor ?? "")}`,
+				{ token: "mira" }
+			)
+			expect(second.json.data.events.map((e) => e.kind)).toEqual(["reject", "seal"])
+		})
+
+		it("refuses an unknown group and a bad lyric id", async () => {
+			expect(
+				(await call("GET", "/committee/events?kind=everything", { token: "mira" })).status
+			).toBe(400)
+			expect((await call("GET", "/committee/events?lyric=abc", { token: "mira" })).status).toBe(400)
 		})
 	})
 })

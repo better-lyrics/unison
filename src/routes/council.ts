@@ -1,13 +1,15 @@
+import { config } from "@/config"
 import { isCommittee, isCouncilAdmin } from "@/db/committee"
 import { type BookmarkItemType, createBookmark, releaseBookmark } from "@/db/council-bookmarks"
 import { listCouncilEdits } from "@/db/council-edits"
+import { type CouncilEventKind, listCouncilEvents } from "@/db/council-events"
 import { listCouncilQueue, toQueueBookmark } from "@/db/council-queue"
 import { getCuratorTierMap } from "@/db/leaderboard"
 import type { Env } from "@/types"
 import { allowCouncilWrite } from "@/utils/council-input"
 import { eitherAuth } from "@/utils/either-auth"
 import { ErrorCode, buildError } from "@/utils/errors"
-import { Elysia } from "elysia"
+import { Elysia, t } from "elysia"
 
 function parseBookmarkBody(
 	body: Record<string, unknown>
@@ -21,6 +23,13 @@ function parseBookmarkBody(
 function parseId(raw: string): number | null {
 	const id = Number(raw)
 	return Number.isInteger(id) && id > 0 ? id : null
+}
+
+const EVENT_GROUPS: Record<string, CouncilEventKind[]> = {
+	seals: ["seal", "unseal"],
+	rejections: ["reject", "unreject"],
+	edits: ["edit_approve", "edit_reject"],
+	membership: ["member_add", "member_remove", "applicant_approve", "applicant_reject"],
 }
 
 export const councilRoutes = (env: Env) =>
@@ -82,3 +91,41 @@ export const councilRoutes = (env: Env) =>
 					)
 				: status(404, buildError(ErrorCode.NOT_FOUND))
 		})
+		.get(
+			"/events",
+			async ({ env, query, status }) => {
+				const kinds =
+					query.kind === undefined
+						? undefined
+						: Object.hasOwn(EVENT_GROUPS, query.kind)
+							? EVENT_GROUPS[query.kind]
+							: null
+				if (query.kind !== undefined && !kinds)
+					return status(400, buildError(ErrorCode.INVALID_PAYLOAD))
+				const lyricsId = query.lyric === undefined ? undefined : parseId(query.lyric)
+				if (lyricsId === null) return status(400, buildError(ErrorCode.INVALID_ID))
+				const limit = Math.min(
+					config.council.eventsPageSize,
+					Math.max(1, Number(query.limit) || config.council.eventsPageSize)
+				)
+				const page = await listCouncilEvents(env, {
+					kinds,
+					actorKeyId: query.actor,
+					lyricsId,
+					includeBookmarks: query.includeBookmarks === "1",
+					cursor: query.cursor,
+					limit,
+				})
+				return { success: true, data: page }
+			},
+			{
+				query: t.Object({
+					kind: t.Optional(t.String()),
+					actor: t.Optional(t.String({ maxLength: 128 })),
+					lyric: t.Optional(t.String()),
+					includeBookmarks: t.Optional(t.String()),
+					cursor: t.Optional(t.String({ maxLength: 64 })),
+					limit: t.Optional(t.String()),
+				}),
+			}
+		)
