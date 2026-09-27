@@ -9,7 +9,7 @@ import {
 	toBookmarkView,
 } from "@/db/council-bookmarks"
 import { listCouncilEdits } from "@/db/council-edits"
-import { type CouncilEventKind, listCouncilEvents } from "@/db/council-events"
+import { type CouncilEventKind, listCouncilEvents, parseEventsCursor } from "@/db/council-events"
 import { listCouncilQueue } from "@/db/council-queue"
 import { getCouncilOverview, getCouncilRoster } from "@/db/council-stats"
 import { getSessionById, recordDecision } from "@/db/exam"
@@ -125,6 +125,8 @@ export const councilRoutes = (env: Env) =>
 				if (kinds === null) return status(400, buildError(ErrorCode.INVALID_PAYLOAD))
 				const lyricsId = query.lyric === undefined ? undefined : parseId(query.lyric)
 				if (lyricsId === null) return status(400, buildError(ErrorCode.INVALID_ID))
+				const cursor = query.cursor === undefined ? undefined : parseEventsCursor(query.cursor)
+				if (cursor === null) return status(400, buildError(ErrorCode.INVALID_PAYLOAD))
 				const limit = Math.min(
 					config.council.eventsPageSize,
 					Math.max(1, Number(query.limit) || config.council.eventsPageSize)
@@ -134,7 +136,7 @@ export const councilRoutes = (env: Env) =>
 					actorKeyId: query.actor,
 					lyricsId,
 					includeBookmarks: query.includeBookmarks === "1",
-					cursor: query.cursor,
+					cursor,
 					limit,
 				})
 				return { success: true, data: page }
@@ -225,13 +227,19 @@ export const councilRoutes = (env: Env) =>
 				if (!(await allowCouncilWrite(env, keyId)))
 					return status(429, buildError(ErrorCode.RATE_LIMITED))
 				const session = await getSessionById(env, id)
-				if (!session || !(await recordDecision(env, id, decision, { source: "web", userId }))) {
-					return status(404, buildError(ErrorCode.EXAM_SESSION_NOT_FOUND))
-				}
-				if (decision === "approve") {
-					const applicant = await getOrCreateUser(env, session.keyId)
-					await addCommittee(env, applicant.id, { actorId: userId, source: "web" })
-				}
+				const decided =
+					session !== null &&
+					(await env.DB.transaction(async (tx) => {
+						const txEnv = { ...env, DB: tx }
+						if (!(await recordDecision(txEnv, id, decision, { source: "web", userId })))
+							return false
+						if (decision === "approve") {
+							const applicant = await getOrCreateUser(txEnv, session.keyId)
+							await addCommittee(txEnv, applicant.id, { actorId: userId, source: "web" })
+						}
+						return true
+					}))
+				if (!decided) return status(404, buildError(ErrorCode.EXAM_SESSION_NOT_FOUND))
 				return { success: true }
 			}
 		)

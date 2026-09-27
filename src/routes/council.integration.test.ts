@@ -376,6 +376,15 @@ describeIntegration("council dashboard routes (integration)", () => {
 			).toBe(400)
 			expect((await call("GET", "/committee/events?lyric=abc", { token: "mira" })).status).toBe(400)
 		})
+
+		it("refuses a malformed cursor", async () => {
+			for (const cursor of ["abc", ":", "1:", "1:2:3", "1.5:2", "-1:2", "1e3:2"]) {
+				const res = await call("GET", `/committee/events?cursor=${encodeURIComponent(cursor)}`, {
+					token: "mira",
+				})
+				expect([cursor, res.status]).toEqual([cursor, 400])
+			}
+		})
 	})
 
 	describe("GET /committee/overview", () => {
@@ -561,6 +570,37 @@ describeIntegration("council dashboard routes (integration)", () => {
 				"DELETE FROM committee_members WHERE user_id = (SELECT id FROM users WHERE key_id = $1)",
 				[APPLICANT]
 			)
+		})
+
+		it("regression: leaves the applicant pending when adding to the council fails", async () => {
+			await db.pool.query(
+				"CREATE FUNCTION refuse_member() RETURNS trigger AS $$ BEGIN RAISE EXCEPTION 'refused'; END $$ LANGUAGE plpgsql"
+			)
+			await db.pool.query(
+				"CREATE TRIGGER refuse_member BEFORE INSERT ON committee_members FOR EACH ROW EXECUTE FUNCTION refuse_member()"
+			)
+			try {
+				const res = await new Elysia().use(councilRoutes(db.env)).handle(
+					new Request(`http://localhost/committee/applicants/${session}/decision`, {
+						method: "POST",
+						headers: { "content-type": "application/json", authorization: "Bearer admin" },
+						body: JSON.stringify({ decision: "approve" }),
+					})
+				)
+				expect(res.status).toBe(500)
+			} finally {
+				await db.pool.query("DROP TRIGGER refuse_member ON committee_members")
+				await db.pool.query("DROP FUNCTION refuse_member()")
+			}
+			const { rows } = await db.pool.query("SELECT state FROM exam_session WHERE id = $1", [
+				session,
+			])
+			expect(rows[0].state).toBe("pending_review")
+			const events = await db.pool.query(
+				"SELECT 1 FROM council_events WHERE kind = 'applicant_approve' AND ref_id = $1",
+				[session]
+			)
+			expect(events.rows).toEqual([])
 		})
 
 		it("refuses a decision from a non-admin, a bad decision and a decided applicant", async () => {

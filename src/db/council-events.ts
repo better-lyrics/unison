@@ -63,7 +63,7 @@ export interface ListCouncilEventsOptions {
 	actorKeyId?: string
 	lyricsId?: number
 	includeBookmarks: boolean
-	cursor?: string
+	cursor?: EventsCursor
 	limit: number
 }
 
@@ -87,11 +87,14 @@ export async function recordCouncilEvent(db: D1Compat, e: CouncilEventInput): Pr
 		.run()
 }
 
-function parseCursor(cursor: string | undefined): { at: number; id: number } | null {
-	if (!cursor) return null
-	const [at, id] = cursor.split(":").map(Number)
-	if (!Number.isInteger(at) || !Number.isInteger(id)) return null
-	return { at, id }
+export interface EventsCursor {
+	at: number
+	id: number
+}
+
+export function parseEventsCursor(cursor: string): EventsCursor | null {
+	const match = /^(\d+):(\d+)$/.exec(cursor)
+	return match ? { at: Number(match[1]), id: Number(match[2]) } : null
 }
 
 interface EventRow {
@@ -128,10 +131,9 @@ export async function listCouncilEvents(
 		where.push("e.lyrics_id = ?")
 		params.push(opts.lyricsId)
 	}
-	const cursor = parseCursor(opts.cursor)
-	if (cursor) {
+	if (opts.cursor) {
 		where.push("(e.created_at, e.id) < (?, ?)")
-		params.push(cursor.at, cursor.id)
+		params.push(opts.cursor.at, opts.cursor.id)
 	}
 	const rows = await env.DB.prepare(
 		`SELECT e.id, e.kind, e.source, e.created_at, e.note, e.actor_id, e.subject_user_id,

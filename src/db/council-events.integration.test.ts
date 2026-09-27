@@ -9,7 +9,7 @@ import {
 import { readRevisionFixture } from "@/test/lyric-fixtures"
 import { generatePetName } from "@/utils/petname"
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest"
-import { listCouncilEvents, recordCouncilEvent } from "./council-events"
+import { listCouncilEvents, parseEventsCursor, recordCouncilEvent } from "./council-events"
 import { resolvePeople } from "./users"
 
 const ACTOR_KEY = "a1".repeat(32)
@@ -42,6 +42,8 @@ describeIntegration("council event log (integration)", () => {
 
 	const list = (opts: Partial<Parameters<typeof listCouncilEvents>[1]> = {}) =>
 		listCouncilEvents(db.env, { includeBookmarks: false, limit: 50, ...opts })
+	const nextPage = (page: { nextCursor: string | null }) =>
+		page.nextCursor === null ? undefined : (parseEventsCursor(page.nextCursor) ?? undefined)
 
 	async function seedBoost(boosterId: number): Promise<number> {
 		const { rows } = await db.pool.query<{ id: number }>(
@@ -118,7 +120,7 @@ describeIntegration("council event log (integration)", () => {
 				})
 			}
 			const first = await list({ limit: 2 })
-			const second = await list({ limit: 2, cursor: first.nextCursor ?? undefined })
+			const second = await list({ limit: 2, cursor: nextPage(first) })
 			expect([...first.events, ...second.events].map((e) => e.id).sort()).toHaveLength(3)
 			expect(second.nextCursor).toBeNull()
 		})
@@ -135,8 +137,9 @@ describeIntegration("council event log (integration)", () => {
 			const first = await list({ limit: 2 })
 			expect(first.events).toHaveLength(2)
 			expect(first.nextCursor).not.toBeNull()
-			const second = await list({ limit: 2, cursor: first.nextCursor ?? undefined })
-			const third = await list({ limit: 2, cursor: second.nextCursor ?? undefined })
+			expect(nextPage(first)).toBeDefined()
+			const second = await list({ limit: 2, cursor: nextPage(first) })
+			const third = await list({ limit: 2, cursor: nextPage(second) })
 			expect(third.nextCursor).toBeNull()
 			const ids = [...first.events, ...second.events, ...third.events].map((e) => e.id)
 			expect(new Set(ids).size).toBe(5)

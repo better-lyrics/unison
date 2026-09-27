@@ -604,9 +604,9 @@ export async function recordDecision(
 						.first<{ user_id: number | string; discord_id: string | null }>()
 				: await tx
 						.prepare(
-							"SELECT u.id AS user_id, ? AS discord_id FROM discord_links dl JOIN users u ON u.key_id = dl.key_id WHERE dl.discord_id = ?"
+							"SELECT u.id AS user_id, dl.discord_id FROM discord_links dl JOIN users u ON u.key_id = dl.key_id WHERE dl.discord_id = ?"
 						)
-						.bind(decider.discordId, decider.discordId)
+						.bind(decider.discordId)
 						.first<{ user_id: number | string; discord_id: string | null }>()
 		const deciderUserId = who ? Number(who.user_id) : null
 		const deciderDiscordId =
