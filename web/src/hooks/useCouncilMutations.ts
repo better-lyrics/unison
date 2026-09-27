@@ -2,14 +2,25 @@ import { clearStoredSession } from "@/lib/auth"
 import { AUTHED_FETCH_ERRORS, AuthedFetchError } from "@/lib/authedFetch"
 import {
   createBookmark,
+  decideApplicant,
   decideEdit,
   rejectLyric,
   releaseBookmark,
   sealLyric,
+  setApplicantOpinion,
   undoRejectLyric,
   unsealLyric,
 } from "@/lib/council-api"
-import type { BookmarkItemType, BookmarkView, EditItem, EditsPayload, QueueItem } from "@/lib/council-types"
+import type {
+  ApplicantView,
+  BookmarkItemType,
+  BookmarkView,
+  CouncilPerson,
+  EditItem,
+  EditsPayload,
+  OpinionStance,
+  QueueItem,
+} from "@/lib/council-types"
 import { pushToast } from "@/lib/toast"
 import { type QueryClient, useMutation, useQueryClient } from "@tanstack/react-query"
 import { councilKeys } from "./useCouncilData"
@@ -172,6 +183,55 @@ export function useCouncilDecision() {
           : undefined,
       })
     },
+    onSettled: () => refreshCouncil(client),
+  })
+}
+
+export function withOpinion(applicant: ApplicantView, me: CouncilPerson, stance: OpinionStance | null): ApplicantView {
+  const others = (people: CouncilPerson[]) => people.filter((p) => p.keyId !== me.keyId)
+  const support = others(applicant.opinions.support)
+  const object = others(applicant.opinions.object)
+  if (stance === "support") support.push(me)
+  if (stance === "object") object.push(me)
+  return { ...applicant, opinions: { ...applicant.opinions, support, object, mine: stance } }
+}
+
+const APPLICANTS_PREFIX = ["council", "applicants"] as const
+
+export function useApplicantOpinion(me: CouncilPerson) {
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: ({ applicant, stance }: { applicant: ApplicantView; stance: OpinionStance | null }) =>
+      setApplicantOpinion(applicant.applicantId, stance),
+    onMutate: async ({ applicant, stance }) => {
+      await client.cancelQueries({ queryKey: APPLICANTS_PREFIX })
+      const snapshot = client.getQueriesData<ApplicantView[]>({ queryKey: APPLICANTS_PREFIX })
+      client.setQueriesData<ApplicantView[]>({ queryKey: APPLICANTS_PREFIX }, (list) =>
+        list?.map((a) => (a.applicantId === applicant.applicantId ? withOpinion(a, me, stance) : a)),
+      )
+      return { snapshot }
+    },
+    onError: (error, _, context) => {
+      for (const [key, data] of context?.snapshot ?? []) client.setQueryData(key, data)
+      councilErrorToast(error, "save your opinion")
+    },
+    onSettled: () => client.invalidateQueries({ queryKey: APPLICANTS_PREFIX }),
+  })
+}
+
+export function useApplicantDecision() {
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: ({ applicant, decision }: { applicant: ApplicantView; decision: "approve" | "reject" }) =>
+      decideApplicant(applicant.applicantId, decision),
+    onSuccess: (_, { applicant, decision }) => {
+      const name = applicant.person?.displayName ?? applicant.displayName
+      pushToast({
+        kind: "info",
+        message: decision === "approve" ? `Added ${name} to the council` : `Turned down ${name}`,
+      })
+    },
+    onError: (error) => councilErrorToast(error, "record the decision"),
     onSettled: () => refreshCouncil(client),
   })
 }

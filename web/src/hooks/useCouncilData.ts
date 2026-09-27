@@ -76,6 +76,7 @@ export function useCouncilApplicants(includeBelowCutoff = false) {
     queryFn: ({ signal }) => fetchCouncilApplicants(includeBelowCutoff, signal),
     enabled: role !== null,
     staleTime: 60_000,
+    placeholderData: keepPreviousData,
   })
 }
 
