@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { ttmlSignals } from "./ttml-signals"
+import { labelSignals, signalLabel, ttmlSignals } from "./ttml-signals"
 
 const NS = 'xmlns="http://www.w3.org/ns/ttml" xmlns:ttm="http://www.w3.org/ns/ttml#metadata"'
 const doc = (body: string) => `<tt ${NS}><body><div>${body}</div></body></tt>`
@@ -135,6 +135,41 @@ describe("ttmlSignals", () => {
 
 		it("never throws on arbitrary non-TTML input", () => {
 			expect(() => ttmlSignals("not xml at all { } <<<")).not.toThrow()
+		})
+	})
+})
+
+describe("signalLabel", () => {
+	it("names every signal in plain words", () => {
+		expect(signalLabel("line-synced")).toBe("Line-synced, not word-by-word")
+		expect(signalLabel("not-sentence-case")).toBe("Capitalization")
+		expect(signalLabel("handoff-candidate")).toBe("Mid-line voice change")
+	})
+
+	describe("edge cases", () => {
+		it("falls back to the code for a signal it does not know", () => {
+			expect(signalLabel("brand-new-signal")).toBe("brand-new-signal")
+		})
+	})
+})
+
+describe("labelSignals", () => {
+	it("pairs each code with its label in the given order", () => {
+		expect(labelSignals(["not-sentence-case", "line-synced"])).toEqual([
+			{ code: "not-sentence-case", label: "Capitalization" },
+			{ code: "line-synced", label: "Line-synced, not word-by-word" },
+		])
+	})
+
+	describe("edge cases", () => {
+		it("returns an empty list for no signals", () => {
+			expect(labelSignals([])).toEqual([])
+		})
+
+		it("keeps an unknown code as its own label", () => {
+			expect(labelSignals(["brand-new-signal"])).toEqual([
+				{ code: "brand-new-signal", label: "brand-new-signal" },
+			])
 		})
 	})
 })

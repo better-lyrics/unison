@@ -1,10 +1,19 @@
+import { type CouncilSource, recordCouncilEvent } from "@/db/council-events"
 import type { Env } from "@/types"
 
 export interface CommitteeMember {
 	userId: number
 	addedAt: number
 	addedBy: string | null
+	isAdmin: boolean
 }
+
+export interface MembershipAudit {
+	actorId: number | null
+	source: CouncilSource
+}
+
+const ADDED_BY: Record<CouncilSource, string> = { discord: "bot", admin: "admin", web: "web" }
 
 export async function isCommittee(env: Env, userId: number): Promise<boolean> {
 	const row = await env.DB.prepare("SELECT 1 AS one FROM committee_members WHERE user_id = ?")
@@ -13,28 +22,93 @@ export async function isCommittee(env: Env, userId: number): Promise<boolean> {
 	return row !== null
 }
 
-export async function addCommittee(env: Env, userId: number, addedBy: string): Promise<void> {
-	await env.DB.prepare(
-		"INSERT INTO committee_members (user_id, added_by) VALUES (?, ?) ON CONFLICT (user_id) DO NOTHING"
+export async function isCouncilAdmin(env: Env, userId: number): Promise<boolean> {
+	const row = await env.DB.prepare(
+		"SELECT 1 AS one FROM committee_members WHERE user_id = ? AND is_admin"
 	)
-		.bind(userId, addedBy)
-		.run()
+		.bind(userId)
+		.first<{ one: number }>()
+	return row !== null
 }
 
-export async function removeCommittee(env: Env, userId: number): Promise<void> {
-	await env.DB.prepare("DELETE FROM committee_members WHERE user_id = ?").bind(userId).run()
+export async function getCouncilRole(env: Env, keyId: string): Promise<{ admin: boolean } | null> {
+	const row = await env.DB.prepare(
+		"SELECT c.is_admin FROM committee_members c JOIN users u ON u.id = c.user_id WHERE u.key_id = ?"
+	)
+		.bind(keyId)
+		.first<{ is_admin: boolean }>()
+	return row ? { admin: row.is_admin } : null
+}
+
+export async function setCouncilAdmin(env: Env, userId: number, admin: boolean): Promise<boolean> {
+	const row = await env.DB.prepare(
+		"UPDATE committee_members SET is_admin = ? WHERE user_id = ? RETURNING user_id"
+	)
+		.bind(admin, userId)
+		.first<{ user_id: number }>()
+	return row !== null
+}
+
+export async function addCommittee(
+	env: Env,
+	userId: number,
+	audit: MembershipAudit
+): Promise<void> {
+	await env.DB.transaction(async (tx) => {
+		const inserted = await tx
+			.prepare(
+				"INSERT INTO committee_members (user_id, added_by) VALUES (?, ?) ON CONFLICT (user_id) DO NOTHING RETURNING user_id"
+			)
+			.bind(userId, ADDED_BY[audit.source])
+			.first<{ user_id: number }>()
+		if (!inserted) return
+		await recordCouncilEvent(tx, {
+			actorId: audit.actorId,
+			kind: "member_add",
+			source: audit.source,
+			subjectUserId: userId,
+			refId: userId,
+		})
+	})
+}
+
+export async function removeCommittee(
+	env: Env,
+	userId: number,
+	audit: MembershipAudit
+): Promise<void> {
+	await env.DB.transaction(async (tx) => {
+		const removed = await tx
+			.prepare("DELETE FROM committee_members WHERE user_id = ? RETURNING user_id")
+			.bind(userId)
+			.first<{ user_id: number }>()
+		if (!removed) return
+		await recordCouncilEvent(tx, {
+			actorId: audit.actorId,
+			kind: "member_remove",
+			source: audit.source,
+			subjectUserId: userId,
+			refId: userId,
+		})
+	})
 }
 
 export async function listCommittee(env: Env): Promise<CommitteeMember[]> {
 	const res = await env.DB.prepare(
-		"SELECT user_id, added_at, added_by FROM committee_members ORDER BY added_at DESC"
+		"SELECT user_id, added_at, added_by, is_admin FROM committee_members ORDER BY added_at DESC"
 	)
 		.bind()
-		.all<{ user_id: number | string; added_at: number | string; added_by: string | null }>()
+		.all<{
+			user_id: number | string
+			added_at: number | string
+			added_by: string | null
+			is_admin: boolean
+		}>()
 	return res.results.map((row) => ({
 		userId: Number(row.user_id),
 		addedAt: Number(row.added_at),
 		addedBy: row.added_by,
+		isAdmin: row.is_admin,
 	}))
 }
 

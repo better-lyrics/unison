@@ -17,6 +17,7 @@ import {
 } from "@/services/lyric-revisions"
 import type { Env, LyricsFormat } from "@/types"
 import { isAuthorizedBot } from "@/utils/bot-auth"
+import { allowCouncilWrite, parseCouncilNote } from "@/utils/council-input"
 import { eitherAuth } from "@/utils/either-auth"
 import { ErrorCode, type SubmissionErrorBody, buildError } from "@/utils/errors"
 import { Elysia, t } from "elysia"
@@ -165,6 +166,34 @@ export const revisionRoutes = (env: Env) =>
 			}
 			return { success: true, data: { revision: result.revision } }
 		})
+		.post("/:id/revisions/:revId/approve", async ({ params, env, userId, keyId, status }) => {
+			const id = parseId(params.id)
+			const revId = parseId(params.revId)
+			if (id === null || revId === null) return status(400, buildError(ErrorCode.INVALID_ID))
+			if (!(await allowCouncilWrite(env, keyId)))
+				return status(429, buildError(ErrorCode.RATE_LIMITED))
+			const result = await approveRevision(env, id, revId, userId, "web")
+			if (!result.ok) {
+				const mapped = DECISION_ERROR[result.reason]
+				return status(mapped.status, buildError(mapped.code))
+			}
+			return { success: true, data: { revision: result.revision } }
+		})
+		.post("/:id/revisions/:revId/reject", async ({ params, env, userId, keyId, body, status }) => {
+			const id = parseId(params.id)
+			const revId = parseId(params.revId)
+			if (id === null || revId === null) return status(400, buildError(ErrorCode.INVALID_ID))
+			const parsed = parseCouncilNote(body)
+			if (!parsed.ok) return status(400, buildError(ErrorCode.INVALID_PAYLOAD))
+			if (!(await allowCouncilWrite(env, keyId)))
+				return status(429, buildError(ErrorCode.RATE_LIMITED))
+			const result = await rejectRevision(env, id, revId, userId, parsed.note, "web")
+			if (!result.ok) {
+				const mapped = DECISION_ERROR[result.reason]
+				return status(mapped.status, buildError(mapped.code))
+			}
+			return { success: true, data: { revision: result.revision } }
+		})
 
 export const revisionBotRoutes = (env: Env) =>
 	new Elysia({ prefix: "/lyrics" })
@@ -186,7 +215,7 @@ export const revisionBotRoutes = (env: Env) =>
 				if (id === null || revId === null) return status(400, buildError(ErrorCode.INVALID_ID))
 				const reviewer = await getUserByKeyId(env, body.keyId)
 				if (!reviewer) return status(403, buildError(ErrorCode.NOT_COMMITTEE))
-				const result = await approveRevision(env, id, revId, reviewer.id)
+				const result = await approveRevision(env, id, revId, reviewer.id, "discord")
 				if (!result.ok) {
 					const mapped = DECISION_ERROR[result.reason]
 					return status(mapped.status, buildError(mapped.code))
@@ -207,7 +236,7 @@ export const revisionBotRoutes = (env: Env) =>
 				const reviewer = await getUserByKeyId(env, body.keyId)
 				if (!reviewer) return status(403, buildError(ErrorCode.NOT_COMMITTEE))
 				const note = body.note?.trim() || null
-				const result = await rejectRevision(env, id, revId, reviewer.id, note)
+				const result = await rejectRevision(env, id, revId, reviewer.id, note, "discord")
 				if (!result.ok) {
 					const mapped = DECISION_ERROR[result.reason]
 					return status(mapped.status, buildError(mapped.code))

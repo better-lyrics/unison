@@ -1,3 +1,4 @@
+import { recordCouncilEvent } from "@/db/council-events"
 import { type D1Compat, advisoryXactLock } from "@/infra/database"
 import type { Env } from "@/types"
 import { hashExamToken } from "@/utils/exam-token"
@@ -575,11 +576,15 @@ async function loadBreakdowns(
 	return map
 }
 
+export type ExamDecider =
+	| { source: "discord"; discordId: string }
+	| { source: "web"; userId: number }
+
 export async function recordDecision(
 	env: Env,
 	applicantId: number,
 	decision: "approve" | "reject",
-	deciderDiscordId: string
+	decider: ExamDecider
 ): Promise<boolean> {
 	const state = decision === "approve" ? "approved" : "rejected"
 	return env.DB.transaction(async (tx) => {
@@ -589,15 +594,44 @@ export async function recordDecision(
 			.first<{ key_id: string }>()
 		if (!target) return false
 		await lockAccountAttempts(tx, target.key_id)
+		const who =
+			decider.source === "web"
+				? await tx
+						.prepare(
+							"SELECT u.id AS user_id, dl.discord_id FROM users u LEFT JOIN discord_links dl ON dl.key_id = u.key_id WHERE u.id = ?"
+						)
+						.bind(decider.userId)
+						.first<{ user_id: number | string; discord_id: string | null }>()
+				: await tx
+						.prepare(
+							"SELECT u.id AS user_id, dl.discord_id FROM discord_links dl JOIN users u ON u.key_id = dl.key_id WHERE dl.discord_id = ?"
+						)
+						.bind(decider.discordId)
+						.first<{ user_id: number | string; discord_id: string | null }>()
+		const deciderUserId = who ? Number(who.user_id) : null
+		const deciderDiscordId =
+			decider.source === "discord" ? decider.discordId : (who?.discord_id ?? null)
 		const row = await tx
 			.prepare(
 				`UPDATE exam_session
-				SET state = ?, decided_at = ?, decided_by_discord_id = ?
+				SET state = ?, decided_at = ?, decided_by_discord_id = ?, decided_by_user_id = ?
 				WHERE id = ? AND state IN ('pending_review', 'failed') AND ${IS_LATEST_ATTEMPT}
 				RETURNING id`
 			)
-			.bind(state, Math.floor(Date.now() / 1000), deciderDiscordId, applicantId)
+			.bind(state, Math.floor(Date.now() / 1000), deciderDiscordId, deciderUserId, applicantId)
 			.first<{ id: number | string }>()
-		return row !== null
+		if (!row) return false
+		const subject = await tx
+			.prepare("SELECT id FROM users WHERE key_id = ?")
+			.bind(target.key_id)
+			.first<{ id: number | string }>()
+		await recordCouncilEvent(tx, {
+			actorId: deciderUserId,
+			kind: decision === "approve" ? "applicant_approve" : "applicant_reject",
+			source: decider.source,
+			subjectUserId: subject ? Number(subject.id) : null,
+			refId: applicantId,
+		})
+		return true
 	})
 }

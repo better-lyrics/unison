@@ -1,5 +1,6 @@
 import { loadStoredSession } from "./auth"
 import { AUTHED_FETCH_ERRORS, authedFetch } from "./authedFetch"
+import type { RevisionDiff, RevisionSummary } from "./revision-types"
 import { IS_SPA_EXPANSION_SEED } from "./seed-flag"
 import type {
   ApiEnvelope,
@@ -19,6 +20,10 @@ import type {
   VariantFull,
   VariantSummary,
 } from "./types"
+
+export function isNotFound(error: unknown): boolean {
+  return error instanceof Error && error.message.startsWith("HTTP 404 ")
+}
 
 async function getJson<T>(path: string): Promise<T> {
   const res = await fetch(path)
@@ -119,7 +124,7 @@ function buildSearchPath(params: SearchLyricsParams): string {
   return qs.length > 0 ? `/lyrics/search?${qs}` : "/lyrics/search"
 }
 
-async function getJsonWithSignal<T>(path: string, signal?: AbortSignal): Promise<T> {
+export async function getJsonWithSignal<T>(path: string, signal?: AbortSignal): Promise<T> {
   const session = loadStoredSession()
   const init: RequestInit = {}
   if (signal) init.signal = signal
@@ -162,6 +167,18 @@ export async function fetchLyricsVariant(
   if (IS_SPA_EXPANSION_SEED) return (await import("./dev-seed-spa-expansion")).seedLyricsVariant(id)
   const variant = await getJsonWithSignal<VariantFull>(`/lyrics/${id}`, opts.signal)
   return { variant }
+}
+
+export function fetchRevisionDiff(lyricsId: number, revisionId: number, signal?: AbortSignal): Promise<RevisionDiff> {
+  return getJsonWithSignal(`/lyrics/${lyricsId}/revisions/${revisionId}/diff`, signal)
+}
+
+export async function fetchRevisions(lyricsId: number, signal?: AbortSignal): Promise<RevisionSummary[]> {
+  const { revisions } = await getJsonWithSignal<{ revisions: RevisionSummary[] }>(
+    `/lyrics/${lyricsId}/revisions`,
+    signal,
+  )
+  return revisions
 }
 
 export async function fetchArtwork(videoId: string, size?: number): Promise<string | null> {

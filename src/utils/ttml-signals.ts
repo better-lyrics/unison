@@ -19,6 +19,9 @@ const BRACKETED_RE = /^\(.*\)$/
 const STRETCH_RE = /(\p{L})\1\1/u
 const BRACKET_PAIR_RE = /\([^)]*\)/g
 
+// Bump when a rule changes so cached signal lists are recomputed.
+export const SIGNALS_VERSION = 1
+
 // Order the reviewer sees; keep firm signals before heuristics.
 const SIGNAL_ORDER = [
 	"line-synced",
@@ -29,6 +32,26 @@ const SIGNAL_ORDER = [
 	"multi-bracket-bg",
 	"handoff-candidate",
 ] as const
+
+const SIGNAL_LABELS: Record<(typeof SIGNAL_ORDER)[number], string> = {
+	"line-synced": "Line-synced, not word-by-word",
+	"filler-line": "Filler or instrumental lines",
+	"stretched-spelling": "Stretched spelling",
+	"unbracketed-bg": "Unbracketed background vocals",
+	"not-sentence-case": "Capitalization",
+	"multi-bracket-bg": "Multiple bracket pairs",
+	"handoff-candidate": "Mid-line voice change",
+}
+
+export function signalLabel(code: string): string {
+	return Object.hasOwn(SIGNAL_LABELS, code)
+		? SIGNAL_LABELS[code as keyof typeof SIGNAL_LABELS]
+		: code
+}
+
+export function labelSignals(codes: string[]): { code: string; label: string }[] {
+	return codes.map((code) => ({ code, label: signalLabel(code) }))
+}
 
 function tagOf(node: Node): string | null {
 	for (const key of Object.keys(node)) {

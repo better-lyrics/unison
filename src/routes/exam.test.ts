@@ -369,12 +369,10 @@ describe("POST /exam/bot/applicants/:id/decision", () => {
 			deciderDiscordId: "admin1",
 		})
 		expect(res.status).toBe(200)
-		expect(vi.mocked(examDb.recordDecision)).toHaveBeenCalledWith(
-			expect.anything(),
-			5,
-			"approve",
-			"admin1"
-		)
+		expect(vi.mocked(examDb.recordDecision)).toHaveBeenCalledWith(expect.anything(), 5, "approve", {
+			source: "discord",
+			discordId: "admin1",
+		})
 	})
 })
 

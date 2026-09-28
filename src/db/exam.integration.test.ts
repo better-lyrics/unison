@@ -255,7 +255,9 @@ describeIntegration("exam data access (integration)", () => {
 			{ keyId: KEY("a"), discordId: "d1", tokenHash: "h", seed: 1, expiresAt: SOON, isDev: false },
 			[1]
 		)
-		expect(await recordDecision(env, session.id, "approve", "admin1")).toBe(false) // still in_progress
+		expect(
+			await recordDecision(env, session.id, "approve", { source: "discord", discordId: "admin1" })
+		).toBe(false) // still in_progress
 		await recordGrade(env, session.id, {
 			state: "pending_review",
 			score: 3,
@@ -264,8 +266,12 @@ describeIntegration("exam data access (integration)", () => {
 			submittedAt: 100,
 			perQuestion: [{ questionId: 1, awardedPoints: 3, maxPoints: 3 }],
 		})
-		expect(await recordDecision(env, session.id, "approve", "admin1")).toBe(true)
-		expect(await recordDecision(env, session.id, "reject", "admin2")).toBe(false) // already decided
+		expect(
+			await recordDecision(env, session.id, "approve", { source: "discord", discordId: "admin1" })
+		).toBe(true)
+		expect(
+			await recordDecision(env, session.id, "reject", { source: "discord", discordId: "admin2" })
+		).toBe(false) // already decided
 		const stored = await getLatestSessionByKeyId(env, KEY("a"))
 		expect(stored?.state).toBe("approved")
 		expect(stored?.decidedByDiscordId).toBe("admin1")
@@ -300,8 +306,12 @@ describeIntegration("exam data access (integration)", () => {
 			await seedBank()
 			const first = await failedAttempt("h1", 100)
 			const retake = await failedAttempt("h2", 200)
-			expect(await recordDecision(env, first.id, "approve", "admin1")).toBe(false)
-			expect(await recordDecision(env, retake.id, "approve", "admin1")).toBe(true)
+			expect(
+				await recordDecision(env, first.id, "approve", { source: "discord", discordId: "admin1" })
+			).toBe(false)
+			expect(
+				await recordDecision(env, retake.id, "approve", { source: "discord", discordId: "admin1" })
+			).toBe(true)
 			expect((await getLatestSessionByKeyId(env, KEY("a")))?.state).toBe("approved")
 		})
 
@@ -320,7 +330,9 @@ describeIntegration("exam data access (integration)", () => {
 				},
 				[2]
 			)
-			expect(await recordDecision(env, first.id, "approve", "admin1")).toBe(false)
+			expect(
+				await recordDecision(env, first.id, "approve", { source: "discord", discordId: "admin1" })
+			).toBe(false)
 			expect(await listApplicants(env, true)).toHaveLength(0)
 		})
 
@@ -349,7 +361,9 @@ describeIntegration("exam data access (integration)", () => {
 				},
 				[2]
 			)
-			expect(await recordDecision(env, mine.id, "approve", "admin1")).toBe(true)
+			expect(
+				await recordDecision(env, mine.id, "approve", { source: "discord", discordId: "admin1" })
+			).toBe(true)
 		})
 	})
 
@@ -434,7 +448,7 @@ describeIntegration("exam data access (integration)", () => {
 				for (const c of ["p", "q", "r", "s", "t", "u", "v", "w"]) {
 					const old = await failOldAttempt(KEY(c), `h-${c}`)
 					const [approved, started] = await Promise.all([
-						recordDecision(env, old.id, "approve", "admin1"),
+						recordDecision(env, old.id, "approve", { source: "discord", discordId: "admin1" }),
 						startAttempt(env, attemptParams(KEY(c), `h2-${c}`), [2], admitByRule),
 					])
 					expect(approved && started.ok).toBe(false)
@@ -479,7 +493,7 @@ describeIntegration("exam data access (integration)", () => {
 		it("keeps an approved applicant's report with its breakdown and decision", async () => {
 			await seedBank()
 			const session = await gradedSession(KEY("a"), "d1", { submittedAt: 100, tokenHash: "h1" })
-			await recordDecision(env, session.id, "approve", "admin1")
+			await recordDecision(env, session.id, "approve", { source: "discord", discordId: "admin1" })
 
 			const [report] = await listApplicantReports(env, "d1")
 			expect(report).toMatchObject({
@@ -530,6 +544,125 @@ describeIntegration("exam data access (integration)", () => {
 				await gradedSession(KEY("b"), "d2", { submittedAt: 100, tokenHash: "h2" })
 				expect(await listApplicantReports(env, "d1")).toEqual([])
 			})
+		})
+	})
+
+	describe("council log", () => {
+		const APPLICANT = KEY("5")
+		const ADMIN = KEY("6")
+		const scopedUsers = [APPLICANT, ADMIN]
+		const cleanup = async () => {
+			await pool.query(
+				"DELETE FROM council_events WHERE actor_id IN (SELECT id FROM users WHERE key_id = ANY($1)) OR subject_user_id IN (SELECT id FROM users WHERE key_id = ANY($1))",
+				[scopedUsers]
+			)
+			await pool.query("DELETE FROM exam_session WHERE key_id = ANY($1)", [scopedUsers])
+			await pool.query("DELETE FROM discord_links WHERE key_id = ANY($1)", [scopedUsers])
+			await pool.query("DELETE FROM users WHERE key_id = ANY($1)", [scopedUsers])
+		}
+		beforeEach(cleanup)
+		afterEach(cleanup)
+
+		async function gradedApplicant(): Promise<{ sessionId: number; applicantId: number }> {
+			await seedBank()
+			const applicant = await pool.query<{ id: number }>(
+				"INSERT INTO users (key_id) VALUES ($1) RETURNING id",
+				[APPLICANT]
+			)
+			const session = await startSession(
+				env,
+				{
+					keyId: APPLICANT,
+					discordId: "d-app",
+					tokenHash: "h-log",
+					seed: 1,
+					expiresAt: SOON,
+					isDev: false,
+				},
+				[1]
+			)
+			await recordGrade(env, session.id, {
+				state: "pending_review",
+				score: 3,
+				maxScore: 3,
+				cutoff: 2.5,
+				submittedAt: 100,
+				perQuestion: [{ questionId: 1, awardedPoints: 3, maxPoints: 3 }],
+			})
+			return { sessionId: session.id, applicantId: applicant.rows[0].id }
+		}
+
+		const events = async () => {
+			const { rows } = await pool.query(
+				"SELECT kind, source, actor_id, subject_user_id, ref_id::int AS ref_id FROM council_events WHERE kind LIKE 'applicant%' AND ref_id IN (SELECT id FROM exam_session WHERE key_id = $1)",
+				[APPLICANT]
+			)
+			return rows
+		}
+
+		it("records a web decision with the admin user and logs it", async () => {
+			const { sessionId, applicantId } = await gradedApplicant()
+			const admin = await pool.query<{ id: number }>(
+				"INSERT INTO users (key_id) VALUES ($1) RETURNING id",
+				[ADMIN]
+			)
+			await pool.query(
+				"INSERT INTO discord_links (discord_id, key_id, discord_username) VALUES ('d-admin', $1, 'admin')",
+				[ADMIN]
+			)
+			expect(
+				await recordDecision(env, sessionId, "approve", { source: "web", userId: admin.rows[0].id })
+			).toBe(true)
+			const { rows } = await pool.query(
+				"SELECT decided_by_user_id, decided_by_discord_id FROM exam_session WHERE id = $1",
+				[sessionId]
+			)
+			expect(rows[0]).toEqual({
+				decided_by_user_id: admin.rows[0].id,
+				decided_by_discord_id: "d-admin",
+			})
+			expect(await events()).toEqual([
+				{
+					kind: "applicant_approve",
+					source: "web",
+					actor_id: admin.rows[0].id,
+					subject_user_id: applicantId,
+					ref_id: sessionId,
+				},
+			])
+		})
+
+		it("resolves a Discord decider to their linked account", async () => {
+			const { sessionId } = await gradedApplicant()
+			const admin = await pool.query<{ id: number }>(
+				"INSERT INTO users (key_id) VALUES ($1) RETURNING id",
+				[ADMIN]
+			)
+			await pool.query(
+				"INSERT INTO discord_links (discord_id, key_id, discord_username) VALUES ('d-admin', $1, 'admin')",
+				[ADMIN]
+			)
+			await recordDecision(env, sessionId, "reject", { source: "discord", discordId: "d-admin" })
+			const [event] = await events()
+			expect(event).toMatchObject({
+				kind: "applicant_reject",
+				source: "discord",
+				actor_id: admin.rows[0].id,
+			})
+		})
+
+		it("logs an unlinked Discord decider without an actor", async () => {
+			const { sessionId } = await gradedApplicant()
+			await recordDecision(env, sessionId, "approve", { source: "discord", discordId: "d-nobody" })
+			const [event] = await events()
+			expect(event.actor_id).toBeNull()
+		})
+
+		it("logs nothing when the decision does not apply", async () => {
+			const { sessionId } = await gradedApplicant()
+			await recordDecision(env, sessionId, "approve", { source: "discord", discordId: "d1" })
+			await recordDecision(env, sessionId, "reject", { source: "discord", discordId: "d1" })
+			expect(await events()).toHaveLength(1)
 		})
 	})
 

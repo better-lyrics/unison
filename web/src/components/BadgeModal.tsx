@@ -1,5 +1,6 @@
 import { resolveBadgeImage, transparentBadgeUrl } from "@/lib/badge-view"
 import { cn } from "@/lib/cn"
+import { titleCase } from "@/lib/format"
 import type { BadgeDef, UserBadge } from "@/lib/types"
 import { IconX } from "@tabler/icons-react"
 import { type ReactNode, useEffect, useRef } from "react"
@@ -20,10 +21,6 @@ interface BadgeModalProps {
 }
 
 const EXIT_FALLBACK_MS = 240
-
-function titleCase(value: string): string {
-  return value.charAt(0).toUpperCase() + value.slice(1)
-}
 
 function formatEarnedAt(earnedAt: number | undefined): string | null {
   if (earnedAt === undefined) return null

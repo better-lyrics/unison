@@ -11,6 +11,7 @@ import { backfillArtwork } from "@/jobs/backfill-artwork"
 import { backfillAvatarPresets } from "@/jobs/backfill-avatar-presets"
 import { backfillBadges } from "@/jobs/backfill-badges"
 import { backfillConfidence } from "@/jobs/backfill-confidence"
+import { backfillCouncilEvents } from "@/jobs/backfill-council-events"
 import { backfillFormatDetection } from "@/jobs/backfill-format-detection"
 import { backfillLanguage } from "@/jobs/backfill-language"
 import { backfillNorms } from "@/jobs/backfill-norms"
@@ -31,6 +32,7 @@ import { avatarRoutes } from "@/routes/avatars"
 import { badgeRoutes } from "@/routes/badges"
 import { committeeBotRoutes } from "@/routes/committee"
 import { compatRoutes } from "@/routes/compat"
+import { councilRoutes } from "@/routes/council"
 import { examRoutes } from "@/routes/exam"
 import { feedRoutes } from "@/routes/feed"
 import { leaderboardRoutes } from "@/routes/leaderboard"
@@ -38,7 +40,7 @@ import { linkRoutes, linkStartRoutes } from "@/routes/links"
 import { lyricsRoutes } from "@/routes/lyrics"
 import { migrationRoutes } from "@/routes/migrations"
 import { requestRoutes } from "@/routes/requests"
-import { reviewQueueBotRoutes } from "@/routes/review-queue"
+import { reviewQueueBotRoutes, reviewQueueRoutes } from "@/routes/review-queue"
 import { revisionBotRoutes, revisionRoutes } from "@/routes/revisions"
 import { translateRoutes } from "@/routes/translate"
 import { userRoutes } from "@/routes/users"
@@ -177,6 +179,8 @@ const app = new Elysia({ adapter: node() })
 	.use(revisionRoutes(env))
 	.use(voteBotRoutes(env))
 	.use(committeeBotRoutes(env))
+	.use(councilRoutes(env))
+	.use(reviewQueueRoutes(env))
 	.use(reviewQueueBotRoutes(env))
 	.use(revisionBotRoutes(env))
 	.use(examRoutes(env))
@@ -214,6 +218,12 @@ backfillTextSearch(env)
 		if (updated > 0) log.info("text search backfill complete", { updated })
 	})
 	.catch((err) => log.error("text search backfill failed", { error: (err as Error).message }))
+
+backfillCouncilEvents(env)
+	.then((inserted) => {
+		if (inserted > 0) log.info("council log backfill complete", { inserted })
+	})
+	.catch((err) => log.error("council log backfill failed", { error: (err as Error).message }))
 
 backfillRevisions(env)
 	.then(({ created, failed }) => {

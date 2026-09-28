@@ -1,7 +1,7 @@
+import type { VariantFull } from "@/lib/types"
 import type { Lyric } from "@braccato/parsers"
 import { cleanup, render } from "@testing-library/react"
 import { afterEach, describe, expect, it, vi } from "vitest"
-import type { VariantFull } from "@/lib/types"
 
 // Registering the custom element needs a layout engine happy-dom does not have. The component's
 // contract with it is the properties and events below, and those are what these exercise.
@@ -79,6 +79,18 @@ describe("LyricsRenderer", () => {
     expect(lyrics?.[0]).toMatchObject({ startTimeMs: 1000, durationMs: 3000, words: "Hold on" })
     expect(lyrics?.[0].parts?.map((p) => p.words)).toEqual(["Hold ", "on"])
     expect(lyrics?.[1]).toMatchObject({ startTimeMs: 5000, words: "to what we made" })
+  })
+
+  it("lets the caller size the element and override the default height", async () => {
+    const Renderer = await importRenderer()
+    const { container } = render(
+      <Renderer variant={makeVariant()} getCurrentTime={zero} getPlaying={stopped} className="h-[360px] max-w-none" />,
+    )
+    const classes = elementIn(container).className.split(" ")
+    expect(classes).toContain("h-[360px]")
+    expect(classes).toContain("max-w-none")
+    expect(classes).not.toContain("h-[576px]")
+    expect(classes).not.toContain("max-w-3xl")
   })
 
   it("parses an lrc variant with the lrc parser rather than guessing at the body", async () => {

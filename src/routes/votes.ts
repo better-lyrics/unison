@@ -168,7 +168,7 @@ export const voteRoutes = (env: Env) =>
 					return status(429, buildError(ErrorCode.RATE_LIMITED))
 				}
 
-				const result = await createBoost(env, userId, id)
+				const result = await createBoost(env, userId, id, "web")
 				if (!result.ok) {
 					const mapped = BOOST_ERROR[result.reason]
 					return status(mapped.status, buildError(mapped.code))
@@ -190,7 +190,7 @@ export const voteRoutes = (env: Env) =>
 					return status(403, buildError(ErrorCode.NOT_COMMITTEE))
 				}
 
-				const result = await revokeBoost(env, userId, id)
+				const result = await revokeBoost(env, userId, id, "web")
 				if (!result.ok) {
 					const mapped = REVOKE_ERROR[result.reason]
 					return status(mapped.status, buildError(mapped.code))
@@ -225,7 +225,7 @@ export const voteBotRoutes = (env: Env) =>
 				if (!user) {
 					return status(404, buildError(ErrorCode.NOT_FOUND))
 				}
-				const result = await createBoost(env, user.id, id)
+				const result = await createBoost(env, user.id, id, "discord")
 				if (!result.ok) {
 					const mapped = BOOST_ERROR[result.reason]
 					return status(mapped.status, buildError(mapped.code))
@@ -248,7 +248,7 @@ export const voteBotRoutes = (env: Env) =>
 				if (!user) {
 					return status(404, buildError(ErrorCode.NOT_FOUND))
 				}
-				const result = await revokeBoost(env, user.id, id)
+				const result = await revokeBoost(env, user.id, id, "discord")
 				if (!result.ok) {
 					const mapped = REVOKE_ERROR[result.reason]
 					return status(mapped.status, buildError(mapped.code))

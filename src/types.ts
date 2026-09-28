@@ -348,6 +348,7 @@ export interface PendingRevisionCard {
 	textDrift: number
 	timingDrift: number
 	author: RevisionAuthor | null
+	authorKeyId: string | null
 	createdAt: number
 	diffPreview: string
 	diffFull: string

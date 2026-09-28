@@ -1,21 +1,21 @@
-import { useQuery } from "@tanstack/react-query"
-import { useCallback, useMemo, useState } from "react"
-import { useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom"
 import { CopyButton } from "@/components/CopyButton"
 import { DownloadButton } from "@/components/DownloadButton"
 import { EmptyState } from "@/components/EmptyState"
 import { LyricsContentSkeleton, LyricsRenderer } from "@/components/LyricsRenderer"
 import { RawLyricsView } from "@/components/RawLyricsView"
-import { Bone } from "@/components/skeleton"
 import { VariantList, VariantListSkeleton } from "@/components/VariantList"
 import { VariantMetadata, VariantMetadataSkeleton } from "@/components/VariantMetadata"
 import { VoteControls } from "@/components/VoteControls"
 import { YouTubeMusicIcon } from "@/components/icons/YouTubeMusicIcon"
+import { Bone } from "@/components/skeleton"
+import { useLyricsVariant, useLyricsVariants } from "@/hooks/useLyricsData"
 import { useYouTubePlayer } from "@/hooks/useYouTubePlayer"
 import { cn } from "@/lib/cn"
-import { fetchLyricsVariant, fetchLyricsVariants } from "@/lib/api"
 import { downloadTextFile } from "@/lib/download"
-import { lyricsFilename, MIME_BY_FORMAT } from "@/lib/lyrics-download"
+import { MIME_BY_FORMAT, lyricsFilename } from "@/lib/lyrics-download"
+import { youTubeMusicUrl } from "@/lib/youtube-music"
+import { useCallback, useMemo, useState } from "react"
+import { useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom"
 
 type Mode = "synced" | "raw"
 
@@ -50,12 +50,7 @@ export function LyricsPage() {
 
   const activatePlayer = useCallback(() => setPlayerActive(true), [])
 
-  const variantsQuery = useQuery({
-    queryKey: ["lyrics", "variants", safeVideoId],
-    queryFn: ({ signal }) => fetchLyricsVariants(safeVideoId, { signal }),
-    enabled: safeVideoId.length > 0,
-    staleTime: 30_000,
-  })
+  const variantsQuery = useLyricsVariants(safeVideoId)
 
   const variants = useMemo(() => variantsQuery.data?.variants ?? [], [variantsQuery.data])
   const requestedId = variantIdParam !== null ? Number(variantIdParam) : null
@@ -64,15 +59,7 @@ export function LyricsPage() {
     return variants[0]?.id
   }, [requestedId, variants])
 
-  const variantQuery = useQuery({
-    queryKey: ["lyrics", "variant", selectedId],
-    queryFn: ({ signal }) => {
-      if (selectedId === undefined) throw new Error("no variant selected")
-      return fetchLyricsVariant(selectedId, { signal })
-    },
-    enabled: selectedId !== undefined,
-    staleTime: 30_000,
-  })
+  const variantQuery = useLyricsVariant(selectedId)
 
   const handleSelect = useCallback(
     (id: number) => {
@@ -146,7 +133,7 @@ export function LyricsPage() {
             <VariantMetadataSkeleton />
           )}
           <a
-            href={`https://music.youtube.com/watch?v=${safeVideoId}`}
+            href={youTubeMusicUrl(safeVideoId)}
             target="_blank"
             rel="noopener noreferrer"
             className="flex items-center justify-center gap-2 rounded-[10px] bg-white/[0.08] px-4 py-3 text-[13px] font-semibold text-unison-text shadow-[0_1px_2px_rgba(0,0,0,0.4),inset_0_1px_0_0_rgba(255,255,255,0.07)] transition-colors hover:bg-white/[0.12] active:translate-y-px"

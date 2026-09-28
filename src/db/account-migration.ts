@@ -30,6 +30,10 @@ export interface MigrationSnapshot {
 	committee_members?: unknown[]
 	boosts?: unknown[]
 	rejections?: unknown[]
+	council_events?: unknown[]
+	council_bookmarks?: unknown[]
+	applicant_opinions?: unknown[]
+	exam_decisions?: unknown[]
 	committee_approvals?: unknown[]
 }
 
@@ -381,6 +385,33 @@ export async function runMigration(
 				"SELECT id, committee_approved_by FROM lyrics WHERE committee_approved_by = ANY(?)",
 				[ids]
 			)
+			snapshot.council_events = await all(
+				tx,
+				"SELECT id, actor_id, subject_user_id FROM council_events WHERE actor_id = ANY(?) OR subject_user_id = ANY(?)",
+				[ids, ids]
+			)
+			snapshot.council_bookmarks = await all(
+				tx,
+				"SELECT id, user_id FROM council_bookmarks WHERE user_id = ANY(?)",
+				[ids]
+			)
+			snapshot.applicant_opinions = await all(
+				tx,
+				"SELECT * FROM applicant_opinions WHERE user_id = ANY(?)",
+				[ids]
+			)
+			snapshot.exam_decisions = await all(
+				tx,
+				"SELECT id, decided_by_user_id FROM exam_session WHERE decided_by_user_id = ANY(?)",
+				[ids]
+			)
+
+			await tx
+				.prepare(
+					"UPDATE committee_members SET is_admin = TRUE WHERE user_id = ? AND EXISTS (SELECT 1 FROM committee_members WHERE user_id = ? AND is_admin)"
+				)
+				.bind(oldId, newId)
+				.run()
 
 			await tx
 				.prepare(
@@ -402,6 +433,32 @@ export async function runMigration(
 				.run()
 			await tx
 				.prepare("UPDATE lyrics SET committee_approved_by = ? WHERE committee_approved_by = ?")
+				.bind(oldId, newId)
+				.run()
+			await tx
+				.prepare("UPDATE council_events SET actor_id = ? WHERE actor_id = ?")
+				.bind(oldId, newId)
+				.run()
+			await tx
+				.prepare("UPDATE council_events SET subject_user_id = ? WHERE subject_user_id = ?")
+				.bind(oldId, newId)
+				.run()
+			await tx
+				.prepare("UPDATE council_bookmarks SET user_id = ? WHERE user_id = ?")
+				.bind(oldId, newId)
+				.run()
+			await tx
+				.prepare(
+					"DELETE FROM applicant_opinions WHERE user_id = ? AND exam_session_id IN (SELECT exam_session_id FROM applicant_opinions WHERE user_id = ?)"
+				)
+				.bind(newId, oldId)
+				.run()
+			await tx
+				.prepare("UPDATE applicant_opinions SET user_id = ? WHERE user_id = ?")
+				.bind(oldId, newId)
+				.run()
+			await tx
+				.prepare("UPDATE exam_session SET decided_by_user_id = ? WHERE decided_by_user_id = ?")
 				.bind(oldId, newId)
 				.run()
 
@@ -673,6 +730,27 @@ interface SnapCommitteeMember {
 	user_id: number
 	added_at: number
 	added_by: string | null
+	is_admin?: boolean
+}
+interface SnapCouncilEvent {
+	id: number
+	actor_id: number | null
+	subject_user_id: number | null
+}
+interface SnapCouncilBookmark {
+	id: number
+	user_id: number
+}
+interface SnapApplicantOpinion {
+	exam_session_id: number | string
+	user_id: number
+	stance: string
+	note: string | null
+	updated_at: number
+}
+interface SnapExamDecision {
+	id: number | string
+	decided_by_user_id: number | null
 }
 interface SnapBoost {
 	id: number
@@ -729,6 +807,12 @@ export async function restoreFromSnapshot(
 		const snapRejectionIds = new Set(snapRejections?.map((r) => r.id))
 		const snapApprovals = snap.committee_approvals as SnapCommitteeApproval[] | undefined
 		const snapApprovalIds = new Set(snapApprovals?.map((a) => a.id))
+		const snapEvents = snap.council_events as SnapCouncilEvent[] | undefined
+		const snapEventIds = new Set(snapEvents?.map((e) => e.id))
+		const snapBookmarks = snap.council_bookmarks as SnapCouncilBookmark[] | undefined
+		const snapBookmarkIds = new Set(snapBookmarks?.map((b) => b.id))
+		const snapOpinions = snap.applicant_opinions as SnapApplicantOpinion[] | undefined
+		const snapDecisions = snap.exam_decisions as SnapExamDecision[] | undefined
 		const currentVotes = await all<{ id: number }>(
 			tx,
 			"SELECT id FROM votes WHERE user_id = ANY(?)",
@@ -774,7 +858,21 @@ export async function restoreFromSnapshot(
 					[ids]
 				)
 			: []
+		const currentEvents = snapEvents
+			? await all<{ id: number }>(
+					tx,
+					"SELECT id FROM council_events WHERE actor_id = ANY(?) OR subject_user_id = ANY(?)",
+					[ids, ids]
+				)
+			: []
+		const currentBookmarks = snapBookmarks
+			? await all<{ id: number }>(tx, "SELECT id FROM council_bookmarks WHERE user_id = ANY(?)", [
+					ids,
+				])
+			: []
 		if (
+			currentEvents.some((e) => !snapEventIds.has(e.id)) ||
+			currentBookmarks.some((b) => !snapBookmarkIds.has(b.id)) ||
 			currentVotes.some((v) => !snapVoteIds.has(v.id)) ||
 			currentReports.some((r) => !snapReportIds.has(r.id)) ||
 			currentLyrics.some((l) => !snapLyricsIds.has(l.id)) ||
@@ -923,8 +1021,10 @@ export async function restoreFromSnapshot(
 			await tx.prepare("DELETE FROM committee_members WHERE user_id = ANY(?)").bind(ids).run()
 			for (const c of snapCommittee) {
 				await tx
-					.prepare("INSERT INTO committee_members (user_id, added_at, added_by) VALUES (?, ?, ?)")
-					.bind(c.user_id, c.added_at, c.added_by)
+					.prepare(
+						"INSERT INTO committee_members (user_id, added_at, added_by, is_admin) VALUES (?, ?, ?, ?)"
+					)
+					.bind(c.user_id, c.added_at, c.added_by, c.is_admin ?? false)
 					.run()
 			}
 		}
@@ -947,6 +1047,39 @@ export async function restoreFromSnapshot(
 			await tx
 				.prepare("UPDATE lyrics SET committee_approved_by = ? WHERE id = ?")
 				.bind(a.committee_approved_by, a.id)
+				.run()
+		}
+
+		for (const e of snapEvents ?? []) {
+			await tx
+				.prepare("UPDATE council_events SET actor_id = ?, subject_user_id = ? WHERE id = ?")
+				.bind(e.actor_id, e.subject_user_id, e.id)
+				.run()
+		}
+
+		for (const b of snapBookmarks ?? []) {
+			await tx
+				.prepare("UPDATE council_bookmarks SET user_id = ? WHERE id = ?")
+				.bind(b.user_id, b.id)
+				.run()
+		}
+
+		if (snapOpinions) {
+			await tx.prepare("DELETE FROM applicant_opinions WHERE user_id = ANY(?)").bind(ids).run()
+			for (const o of snapOpinions) {
+				await tx
+					.prepare(
+						"INSERT INTO applicant_opinions (exam_session_id, user_id, stance, note, updated_at) VALUES (?, ?, ?, ?, ?) ON CONFLICT DO NOTHING"
+					)
+					.bind(o.exam_session_id, o.user_id, o.stance, o.note, o.updated_at)
+					.run()
+			}
+		}
+
+		for (const d of snapDecisions ?? []) {
+			await tx
+				.prepare("UPDATE exam_session SET decided_by_user_id = ? WHERE id = ?")
+				.bind(d.decided_by_user_id, d.id)
 				.run()
 		}
 

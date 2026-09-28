@@ -53,12 +53,59 @@ export async function resolveIdentity(env: Env, keyId: string): Promise<UserIden
 		 WHERE u.key_id = ?`
 	)
 		.bind(keyId)
-		.first<AvatarRow & { nickname: string | null; nickname_lower: string | null }>()
+		.first<IdentityRow>()
+	return identityFromRow(keyId, row)
+}
+
+type IdentityRow = AvatarRow & { nickname: string | null; nickname_lower: string | null }
+
+function identityFromRow(keyId: string, row: IdentityRow | null): UserIdentity {
 	return {
 		displayName: row?.nickname ?? generatePetName(keyId),
 		handle: row?.nickname_lower ?? null,
 		avatarUrl: row ? avatarUrlForRow(row) : null,
 	}
+}
+
+export interface Person extends UserIdentity {
+	userId: number
+	keyId: string
+}
+
+type PersonRow = IdentityRow & { id: number | string; key_id: string }
+
+async function queryPeople(
+	env: Env,
+	column: "id" | "key_id",
+	values: unknown[]
+): Promise<Person[]> {
+	if (values.length === 0) return []
+	const rows = await env.DB.prepare(
+		`SELECT u.id, u.key_id, u.nickname, u.nickname_lower, ${AVATAR_COLUMNS}
+		 FROM users u
+		 ${AVATAR_JOINS}
+		 WHERE u.${column} = ANY(?)`
+	)
+		.bind([...new Set(values)])
+		.all<PersonRow>()
+	return rows.results.map((row) => ({
+		userId: Number(row.id),
+		keyId: row.key_id,
+		...identityFromRow(row.key_id, row),
+	}))
+}
+
+export async function resolvePeople(env: Env, userIds: number[]): Promise<Map<number, Person>> {
+	const people = await queryPeople(env, "id", userIds)
+	return new Map(people.map((p) => [p.userId, p]))
+}
+
+export async function resolvePeopleByKeyIds(
+	env: Env,
+	keyIds: string[]
+): Promise<Map<string, Person>> {
+	const people = await queryPeople(env, "key_id", keyIds)
+	return new Map(people.map((p) => [p.keyId, p]))
 }
 
 export async function resolveDisplayName(env: Env, keyId: string): Promise<string> {

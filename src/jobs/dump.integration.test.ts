@@ -4,6 +4,7 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { D1Compat } from "@/infra/database"
 import { materializeDumpSchema, runPgDump } from "@/jobs/dump"
+import { wipeCouncilTables } from "@/test/integration-harness"
 import type { Env } from "@/types"
 import pg from "pg"
 import { afterAll, beforeAll, describe, expect, it } from "vitest"
@@ -39,6 +40,7 @@ describeIntegration("dump pipeline (integration)", () => {
 		await sourcePool.query("DELETE FROM votes")
 		await sourcePool.query("DELETE FROM reports")
 		await sourcePool.query("DELETE FROM lyrics")
+		await wipeCouncilTables(sourcePool)
 		await sourcePool.query("DELETE FROM users")
 		await sourcePool.query("DELETE FROM public_keys")
 

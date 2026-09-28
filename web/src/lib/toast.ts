@@ -2,16 +2,27 @@ import { useSyncExternalStore } from "react"
 
 export type ToastKind = "info" | "error" | "success"
 
+export interface ToastAction {
+  label: string
+  onAction: () => void
+}
+
 export interface Toast {
   id: string
+  group?: string
   kind: ToastKind
   message: string
+  detail?: string
+  action?: ToastAction
 }
 
 export interface PushToastInput {
   kind: ToastKind
   message: string
+  detail?: string
+  action?: ToastAction
   durationMs?: number
+  group?: string
 }
 
 const DEFAULT_DURATIONS: Record<ToastKind, number> = {
@@ -50,10 +61,20 @@ function nextId(): string {
 
 export function pushToast(input: PushToastInput): string {
   const id = nextId()
-  const toast: Toast = { id, kind: input.kind, message: input.message }
+  if (input.group) {
+    for (const old of toasts.filter((t) => t.group === input.group)) dismissToast(old.id)
+  }
+  const toast: Toast = {
+    id,
+    group: input.group,
+    kind: input.kind,
+    message: input.message,
+    detail: input.detail,
+    action: input.action,
+  }
   toasts = [...toasts, toast]
   emit()
-  const duration = input.durationMs ?? DEFAULT_DURATIONS[input.kind]
+  const duration = input.durationMs ?? (input.action ? 0 : DEFAULT_DURATIONS[input.kind])
   if (duration > 0) {
     const handle = setTimeout(() => {
       timers.delete(id)

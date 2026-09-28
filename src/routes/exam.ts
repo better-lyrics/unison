@@ -227,7 +227,10 @@ export const examRoutes = (env: Env) =>
 				}
 				const id = Number(params.applicantId)
 				if (!Number.isInteger(id)) return status(400, buildError(ErrorCode.INVALID_ID))
-				const ok = await recordDecision(env, id, body.decision, body.deciderDiscordId)
+				const ok = await recordDecision(env, id, body.decision, {
+					source: "discord",
+					discordId: body.deciderDiscordId,
+				})
 				if (!ok) return status(404, buildError(ErrorCode.EXAM_SESSION_NOT_FOUND))
 				return { success: true }
 			},

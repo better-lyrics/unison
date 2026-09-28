@@ -385,6 +385,15 @@ export const config = {
 			"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
 	},
 
+	council: {
+		bookmarkTtlSec: 3 * 24 * 60 * 60,
+		bookmarkCap: 5,
+		queueLimit: 200,
+		eventsPageSize: 50,
+		write: { maxRequests: 60, windowSeconds: 60 },
+		flagsCacheTtlSec: 7 * 24 * 60 * 60,
+	},
+
 	exam: {
 		cutoffPct: 0.85,
 		// >1 makes a wrong seal cost more than a wrong reject; over-sealing is what the exam screens out.

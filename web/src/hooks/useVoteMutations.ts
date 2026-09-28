@@ -1,10 +1,11 @@
-import { useMutation, useQueryClient } from "@tanstack/react-query"
-import { useCallback } from "react"
 import { reportVariant, unvoteVariant, voteVariant } from "@/lib/api"
 import { clearStoredSession } from "@/lib/auth"
 import { AUTHED_FETCH_ERRORS } from "@/lib/authedFetch"
 import { pushToast } from "@/lib/toast"
 import type { VariantFull, VariantSummary } from "@/lib/types"
+import { useMutation, useQueryClient } from "@tanstack/react-query"
+import { useCallback } from "react"
+import { lyricsKeys } from "./useLyricsData"
 
 export type ReportReason = "wrong_song" | "bad_sync" | "offensive" | "spam" | "other"
 
@@ -89,8 +90,8 @@ function handleErrorToast(error: unknown): void {
 export function useVoteMutations(args: UseVoteMutationsArgs): UseVoteMutationsResult {
   const { variantId, videoId } = args
   const queryClient = useQueryClient()
-  const variantsKey = ["lyrics", "variants", videoId] as const
-  const variantKey = ["lyrics", "variant", variantId] as const
+  const variantsKey = lyricsKeys.variants(videoId)
+  const variantKey = lyricsKeys.variant(variantId)
 
   const settle = useCallback(() => {
     queryClient.invalidateQueries({ queryKey: variantsKey })

@@ -2,7 +2,9 @@ import { IconMenu2, IconX } from "@tabler/icons-react"
 import { useEffect, useRef, useState } from "react"
 import { Link, NavLink } from "react-router-dom"
 import { cn } from "@/lib/cn"
+import { type PageWidth, pageWidthClass } from "@/lib/page-width"
 import { BetterLyricsLogo } from "./BetterLyricsLogo"
+import { CouncilNavLink } from "./council/CouncilNavLink"
 import { SearchBar } from "./SearchBar"
 import { SignInControl } from "./SignInControl"
 
@@ -14,7 +16,7 @@ const tabClass = ({ isActive }: { isActive: boolean }) =>
 			: "text-unison-text-secondary hover:text-unison-text hover:bg-unison-bg-hover",
 	)
 
-export function AppHeader() {
+export function AppHeader({ width }: { width: PageWidth }) {
 	const [menuOpen, setMenuOpen] = useState(false)
 	const headerRef = useRef<HTMLElement | null>(null)
 	const closeMenu = () => setMenuOpen(false)
@@ -40,7 +42,12 @@ export function AppHeader() {
 			ref={headerRef}
 			className="sticky top-0 z-10 border-b border-unison-border bg-unison-bg/80 backdrop-blur"
 		>
-			<div className="mx-auto flex max-w-5xl items-center justify-between gap-4 px-6 py-4 sm:grid sm:grid-cols-[auto_auto_1fr_auto] sm:gap-6">
+			<div
+				className={cn(
+					"mx-auto flex items-center justify-between gap-4 py-4 sm:grid sm:grid-cols-[auto_auto_1fr_auto] sm:gap-6",
+					pageWidthClass(width),
+				)}
+			>
 				<Link
 					to="/"
 					aria-label="Unison home"
@@ -56,6 +63,7 @@ export function AppHeader() {
 					<NavLink to="/curators" className={tabClass}>
 						Leaderboard
 					</NavLink>
+					<CouncilNavLink className={tabClass} />
 					<NavLink to="/about" className={tabClass}>
 						About
 					</NavLink>
@@ -104,6 +112,7 @@ export function AppHeader() {
 						<NavLink to="/curators" role="menuitem" onClick={closeMenu} className={tabClass}>
 							Leaderboard
 						</NavLink>
+						<CouncilNavLink role="menuitem" onClick={closeMenu} className={tabClass} />
 						<NavLink to="/about" role="menuitem" onClick={closeMenu} className={tabClass}>
 							About
 						</NavLink>

@@ -57,7 +57,10 @@ describe("POST /committee/bot", () => {
 		const res = await app().handle(bodyReq("POST", { keyId: KEY }))
 		expect(res.status).toBe(200)
 		expect(await res.json()).toEqual({ success: true, data: { keyId: KEY } })
-		expect(vi.mocked(addCommittee)).toHaveBeenCalledWith(expect.anything(), 7, "bot")
+		expect(vi.mocked(addCommittee)).toHaveBeenCalledWith(expect.anything(), 7, {
+			actorId: null,
+			source: "discord",
+		})
 	})
 })
 
@@ -82,7 +85,10 @@ describe("DELETE /committee/bot", () => {
 		const res = await app().handle(bodyReq("DELETE", { keyId: KEY }))
 		expect(res.status).toBe(200)
 		expect(await res.json()).toEqual({ success: true })
-		expect(vi.mocked(removeCommittee)).toHaveBeenCalledWith(expect.anything(), 7)
+		expect(vi.mocked(removeCommittee)).toHaveBeenCalledWith(expect.anything(), 7, {
+			actorId: null,
+			source: "discord",
+		})
 	})
 })
 

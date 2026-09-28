@@ -1,7 +1,8 @@
-import { IconMusic } from "@tabler/icons-react"
 import { Bone, skeletonKeys } from "@/components/skeleton"
 import { formatCompact, formatExact, formatRank } from "@/lib/format"
 import type { SongLeaderboardEntry } from "@/lib/types"
+import { youTubeMusicUrl } from "@/lib/youtube-music"
+import { IconMusic } from "@tabler/icons-react"
 
 interface SongRowProps {
   entry: SongLeaderboardEntry
@@ -14,7 +15,7 @@ export function SongRow({ entry }: SongRowProps) {
   return (
     <li>
       <a
-        href={`https://music.youtube.com/watch?v=${entry.videoId}`}
+        href={youTubeMusicUrl(entry.videoId)}
         target="_blank"
         rel="noopener noreferrer"
         aria-label={`Open ${entry.song} by ${entry.artist} in YouTube Music`}

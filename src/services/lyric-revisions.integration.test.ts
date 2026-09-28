@@ -1,4 +1,6 @@
 import { config } from "@/config"
+import { createBookmark, listActiveBookmarks } from "@/db/council-bookmarks"
+import { listCouncilEvents } from "@/db/council-events"
 import type { JevCheckInput, JevGate } from "@/services/jev-gate"
 import {
 	type IntegrationDb,
@@ -285,7 +287,7 @@ describeIntegration("lyric revisions pipeline (integration)", () => {
 				const { calls, env } = recordingGate(async () => ({ flagged: false, probability: 0.1 }))
 				const interleaved = new InterleavedDb(db.pool, {
 					before: once(async () => {
-						await approveRevision(db.env, lyricId, pending.id, council)
+						await approveRevision(db.env, lyricId, pending.id, council, "discord")
 					}),
 				})
 				const revision = await save(lrc(swapWords(LRC, 16)), { ...env, DB: interleaved })
@@ -678,7 +680,7 @@ describeIntegration("lyric revisions pipeline (integration)", () => {
 			if (!result.ok) throw new Error(result.reason)
 			expect(result.revision).toMatchObject({ status: "pending", pendingReason: "sealed" })
 			expect((await liveAlbum()).album).toBe("Hymns of Grace")
-			await approveRevision(db.env, albumLyric, result.revision.id, council)
+			await approveRevision(db.env, albumLyric, result.revision.id, council, "discord")
 			expect((await liveAlbum()).album).toBe("Sacred Songs")
 		})
 
@@ -716,7 +718,7 @@ describeIntegration("lyric revisions pipeline (integration)", () => {
 				const result = await saveAlbum(lrc(swapWords(LRC, 1)))
 				if (!result.ok) throw new Error(result.reason)
 				await forgetAlbum("id = $1", [result.revision.id])
-				await approveRevision(db.env, albumLyric, result.revision.id, council)
+				await approveRevision(db.env, albumLyric, result.revision.id, council, "discord")
 				expect(await liveAlbum()).toEqual({ album: "Hymns of Grace", album_norm: "hymns of grace" })
 			})
 
@@ -725,7 +727,7 @@ describeIntegration("lyric revisions pipeline (integration)", () => {
 				const council = await seedCouncilMember(db, "c".repeat(64))
 				const result = await saveAlbum(lrc(LRC, { album: null }))
 				if (!result.ok) throw new Error(result.reason)
-				await approveRevision(db.env, albumLyric, result.revision.id, council)
+				await approveRevision(db.env, albumLyric, result.revision.id, council, "discord")
 				expect(await liveAlbum()).toEqual({ album: null, album_norm: null })
 			})
 
@@ -1200,7 +1202,7 @@ describeIntegration("lyric revisions pipeline (integration)", () => {
 		it("approves a pending revision, makes it live, and moves the anchor", async () => {
 			const council = await seedCouncilMember(db, "c".repeat(64))
 			const pending = await save(lrc(swapWords(LRC, 15)))
-			const approved = await approveRevision(db.env, lyricId, pending.id, council)
+			const approved = await approveRevision(db.env, lyricId, pending.id, council, "discord")
 			expect(approved).toMatchObject({
 				ok: true,
 				revision: { status: "live", isAnchor: true, reviewedAt: expect.any(Number) },
@@ -1220,7 +1222,8 @@ describeIntegration("lyric revisions pipeline (integration)", () => {
 				lyricId,
 				pending.id,
 				council,
-				"Keep the hymn text"
+				"Keep the hymn text",
+				"discord"
 			)
 			expect(rejected).toMatchObject({
 				ok: true,
@@ -1229,9 +1232,41 @@ describeIntegration("lyric revisions pipeline (integration)", () => {
 			await expectInvariants()
 		})
 
+		it("logs an approval and lifts the bookmark on the edit", async () => {
+			const council = await seedCouncilMember(db, "c".repeat(64))
+			const holder = await seedCouncilMember(db, "d".repeat(64))
+			const pending = await save(lrc(swapWords(LRC, 15)))
+			expect((await createBookmark(db.env, holder, "edit", pending.id, "web")).ok).toBe(true)
+			await approveRevision(db.env, lyricId, pending.id, council, "web")
+			const { events } = await listCouncilEvents(db.env, { includeBookmarks: false, limit: 10 })
+			expect(events.map((e) => [e.kind, e.source, e.lyric?.id])).toEqual([
+				["edit_approve", "web", lyricId],
+			])
+			expect(await listActiveBookmarks(db.env)).toEqual([])
+		})
+
+		it("logs a rejected edit with its note", async () => {
+			const council = await seedCouncilMember(db, "c".repeat(64))
+			const pending = await save(lrc(swapWords(LRC, 15)))
+			await rejectRevision(db.env, lyricId, pending.id, council, "Keep the hymn text", "discord")
+			const { events } = await listCouncilEvents(db.env, { includeBookmarks: false, limit: 10 })
+			expect(events[0]).toMatchObject({
+				kind: "edit_reject",
+				note: "Keep the hymn text",
+				source: "discord",
+			})
+		})
+
+		it("logs nothing when the decision is refused", async () => {
+			const pending = await save(lrc(swapWords(LRC, 15)))
+			await approveRevision(db.env, lyricId, pending.id, owner, "web")
+			const { events } = await listCouncilEvents(db.env, { includeBookmarks: false, limit: 10 })
+			expect(events).toEqual([])
+		})
+
 		it("refuses a reviewer outside the council", async () => {
 			const pending = await save(lrc(swapWords(LRC, 15)))
-			expect(await approveRevision(db.env, lyricId, pending.id, owner)).toEqual({
+			expect(await approveRevision(db.env, lyricId, pending.id, owner, "discord")).toEqual({
 				ok: false,
 				reason: "not_committee",
 			})
@@ -1241,22 +1276,24 @@ describeIntegration("lyric revisions pipeline (integration)", () => {
 			it("regression: a second decision on the same revision is ALREADY_DECIDED", async () => {
 				const council = await seedCouncilMember(db, "c".repeat(64))
 				const pending = await save(lrc(swapWords(LRC, 15)))
-				await approveRevision(db.env, lyricId, pending.id, council)
-				expect(await approveRevision(db.env, lyricId, pending.id, council)).toEqual({
+				await approveRevision(db.env, lyricId, pending.id, council, "discord")
+				expect(await approveRevision(db.env, lyricId, pending.id, council, "discord")).toEqual({
 					ok: false,
 					reason: "already_decided",
 				})
-				expect(await rejectRevision(db.env, lyricId, pending.id, council, null)).toEqual({
-					ok: false,
-					reason: "already_decided",
-				})
+				expect(await rejectRevision(db.env, lyricId, pending.id, council, null, "discord")).toEqual(
+					{
+						ok: false,
+						reason: "already_decided",
+					}
+				)
 			})
 
 			it("regression: a decision on a superseded or withdrawn revision is STALE", async () => {
 				const council = await seedCouncilMember(db, "c".repeat(64))
 				const first = await save(lrc(swapWords(LRC, 15)))
 				await save(lrc(swapWords(LRC, 16)))
-				expect(await approveRevision(db.env, lyricId, first.id, council)).toEqual({
+				expect(await approveRevision(db.env, lyricId, first.id, council, "discord")).toEqual({
 					ok: false,
 					reason: "stale",
 				})
@@ -1265,10 +1302,12 @@ describeIntegration("lyric revisions pipeline (integration)", () => {
 					"SELECT id FROM lyric_revisions WHERE lyrics_id = $1 AND status = 'withdrawn'",
 					[lyricId]
 				)
-				expect(await rejectRevision(db.env, lyricId, rows[0].id, council, null)).toEqual({
-					ok: false,
-					reason: "stale",
-				})
+				expect(await rejectRevision(db.env, lyricId, rows[0].id, council, null, "discord")).toEqual(
+					{
+						ok: false,
+						reason: "stale",
+					}
+				)
 			})
 
 			it("regression: two council members deciding at once produce exactly one decision", async () => {
@@ -1276,8 +1315,8 @@ describeIntegration("lyric revisions pipeline (integration)", () => {
 				const b = await seedCouncilMember(db, "d".repeat(64))
 				const pending = await save(lrc(swapWords(LRC, 15)))
 				const results = await Promise.all([
-					approveRevision(db.env, lyricId, pending.id, a),
-					rejectRevision(db.env, lyricId, pending.id, b, null),
+					approveRevision(db.env, lyricId, pending.id, a, "discord"),
+					rejectRevision(db.env, lyricId, pending.id, b, null, "discord"),
 				])
 				expect(results.filter((r) => r.ok)).toHaveLength(1)
 				expect(results.filter((r) => !r.ok && r.reason === "already_decided")).toHaveLength(1)
@@ -1370,7 +1409,7 @@ describeIntegration("lyric revisions pipeline (integration)", () => {
 
 			await save(lrc(swapWords(LRC, 2)))
 			const pending = await save(lrc(swapWords(LRC, 15)))
-			await approveRevision(db.env, lyricId, pending.id, council)
+			await approveRevision(db.env, lyricId, pending.id, council, "discord")
 			await revertToRevision(db.env, lyricId, owner, await revisionId(1))
 
 			expect(await snapshot()).toEqual(before)
@@ -1573,7 +1612,7 @@ describeIntegration("lyric revisions pipeline (integration)", () => {
 				await seal(lyricId)
 				const council = await seedCouncilMember(db, "c".repeat(64))
 				const pending = await save(lrc(swapWords(LRC, 1)))
-				await approveRevision(db.env, lyricId, pending.id, council)
+				await approveRevision(db.env, lyricId, pending.id, council, "discord")
 				const { diff } = await preview(lrc(swapWords(LRC, 2)))
 				expect(diff.againstRevNo).toBe(2)
 				expect(changeRows(diff.rows)).toEqual([
@@ -1823,6 +1862,7 @@ describeIntegration("lyric revisions pipeline (integration)", () => {
 				format: "lrc",
 				pendingReason: "large_text_drift",
 				jevProbability: null,
+				authorKeyId: OWNER_KEY,
 			})
 			expect(card.diffFull).toContain("--- rev 1")
 			expect(card.diffPreview.split("\n")).toHaveLength(6)

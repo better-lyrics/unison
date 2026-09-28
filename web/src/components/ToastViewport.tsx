@@ -1,6 +1,6 @@
-import { IconX } from "@tabler/icons-react"
 import { cn } from "@/lib/cn"
 import { type Toast, type ToastKind, dismissToast, useToasts } from "@/lib/toast"
+import { IconX } from "@tabler/icons-react"
 
 const KIND_STYLES: Record<ToastKind, string> = {
   info: "border-unison-border bg-unison-bg-elevated text-unison-text",
@@ -34,7 +34,22 @@ function ToastCard({ toast }: ToastCardProps) {
         KIND_STYLES[toast.kind],
       )}
     >
-      <span className="flex-1 break-words">{toast.message}</span>
+      <span className="flex-1 break-words">
+        {toast.message}
+        {toast.detail ? <span className="mt-0.5 block text-xs opacity-70">{toast.detail}</span> : null}
+      </span>
+      {toast.action ? (
+        <button
+          type="button"
+          onClick={() => {
+            toast.action?.onAction()
+            dismissToast(toast.id)
+          }}
+          className="shrink-0 cursor-pointer rounded px-2 py-0.5 font-semibold transition-colors hover:bg-unison-bg-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-unison-border-strong"
+        >
+          {toast.action.label}
+        </button>
+      ) : null}
       <button
         type="button"
         aria-label="Dismiss notification"

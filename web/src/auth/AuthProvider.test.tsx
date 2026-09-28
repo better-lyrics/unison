@@ -2,9 +2,9 @@ import { STORAGE_KEY, type StoredSession, saveStoredSession } from "@/lib/auth"
 import { BL_EDGE_EXTENSION_ID, BL_EXTENSION_ID } from "@/lib/extension"
 import { IDENTITY_FILE_ERRORS } from "@/lib/identity-file"
 import { identityFile, makeIdentityExport } from "@/test/identity-fixture"
-import { verifySignature } from "../../../src/utils/crypto"
 import { act, cleanup, render, screen, waitFor } from "@testing-library/react"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import { verifySignature } from "../../../src/utils/crypto"
 import { AuthProvider } from "./AuthProvider"
 import { useSession } from "./useSession"
 
@@ -31,6 +31,9 @@ function Probe() {
       ) : null}
       {session.status === "signed-in" ? <span data-testid="name">{session.identity.displayName}</span> : null}
       {session.status === "signed-in" ? <span data-testid="avatar">{session.identity.avatarUrl ?? "none"}</span> : null}
+      {session.status === "signed-in" ? (
+        <span data-testid="council">{JSON.stringify(session.identity.council ?? null)}</span>
+      ) : null}
       {session.status === "error" ? <span data-testid="error">{session.error.message}</span> : null}
       {session.status === "signed-out" || session.status === "error" ? (
         <button type="button" onClick={() => session.signIn()}>
@@ -342,6 +345,34 @@ describe("AuthProvider signIn flow", () => {
       screen.getByText("sign-in").click()
     })
     await waitFor(() => expect(screen.getByTestId("avatar").textContent).toBe(PICKED))
+  })
+
+  it("regression: keeps the council role from a fresh sign-in", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ success: true, data: { nonce: "n1", expiresAt: 1 } }), { status: 200 }),
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ success: true, data: { ...valid, council: { admin: true } } }), { status: 200 }),
+      )
+    vi.stubGlobal("fetch", fetchMock)
+    stubChromePort((msg) => {
+      if (msg.type === "bl-auth-request") {
+        return { ok: true, signedBody: { payload: {}, signature: "", publicKey: {} } }
+      }
+      return { ok: true }
+    })
+    render(
+      <AuthProvider>
+        <Probe />
+      </AuthProvider>,
+    )
+    await waitFor(() => expect(screen.getByText("sign-in")).toBeTruthy())
+    await act(async () => {
+      screen.getByText("sign-in").click()
+    })
+    await waitFor(() => expect(screen.getByTestId("council").textContent).toBe('{"admin":true}'))
   })
 
   it("lands in error state on cancel", async () => {

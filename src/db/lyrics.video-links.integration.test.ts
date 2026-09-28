@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs"
 import { RANKING_EXPR_VARIANT } from "@/db/predicates"
 import { D1Compat } from "@/infra/database"
 import { backfillVideoLinks } from "@/jobs/backfill-video-links"
+import { wipeCouncilTables } from "@/test/integration-harness"
 import type { Env, LyricsRow } from "@/types"
 import { compress } from "@/utils/compression"
 import pg from "pg"
@@ -60,6 +61,7 @@ describeIntegration("video-id lyric lookups route through the link table (integr
 		await pool.query("DELETE FROM votes")
 		await pool.query("DELETE FROM reports")
 		await pool.query("DELETE FROM lyrics")
+		await wipeCouncilTables(pool)
 		await pool.query("DELETE FROM users")
 		await pool.query("DELETE FROM public_keys")
 	}

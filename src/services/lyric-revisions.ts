@@ -1,5 +1,7 @@
 import { config } from "@/config"
 import { isCommittee } from "@/db/committee"
+import { releaseBookmarksForItem } from "@/db/council-bookmarks"
+import { type CouncilSource, recordCouncilEvent } from "@/db/council-events"
 import {
 	type LyricRevisionState,
 	type RevisionRow,
@@ -636,11 +638,18 @@ export async function diffRevisions(
 	}
 }
 
+interface DecisionLog {
+	kind: "edit_approve" | "edit_reject"
+	source: CouncilSource
+	note: string | null
+}
+
 async function decide(
 	env: Env,
 	lyricsId: number,
 	revisionId: number,
 	reviewerId: number,
+	log: DecisionLog,
 	apply: (tx: D1Compat, revision: RevisionRow) => Promise<void>
 ): Promise<DecisionResult> {
 	if (!(await isCommittee(env, reviewerId))) return { ok: false, reason: "not_committee" }
@@ -654,6 +663,15 @@ async function decide(
 		}
 		if (revision.status !== "pending") return { ok: false, reason: "already_decided" }
 		await apply(tx, revision)
+		await recordCouncilEvent(tx, {
+			actorId: reviewerId,
+			kind: log.kind,
+			source: log.source,
+			lyricsId,
+			refId: revision.id,
+			note: log.note,
+		})
+		await releaseBookmarksForItem(tx, "edit", revision.id)
 		const summary = await getRevisionSummary(tx, lyricsId, revisionId)
 		return { ok: true, revision: summary! }
 	})
@@ -663,9 +681,11 @@ export async function approveRevision(
 	env: Env,
 	lyricsId: number,
 	revisionId: number,
-	reviewerId: number
+	reviewerId: number,
+	source: CouncilSource
 ): Promise<DecisionResult> {
-	const result = await decide(env, lyricsId, revisionId, reviewerId, async (tx, revision) => {
+	const log: DecisionLog = { kind: "edit_approve", source, note: null }
+	const result = await decide(env, lyricsId, revisionId, reviewerId, log, async (tx, revision) => {
 		await retireLiveRevision(tx, lyricsId)
 		await recordReview(tx, revision.id, "live", reviewerId, null)
 		await setCurrentRevision(tx, revision)
@@ -680,11 +700,42 @@ export async function rejectRevision(
 	lyricsId: number,
 	revisionId: number,
 	reviewerId: number,
-	note: string | null
+	note: string | null,
+	source: CouncilSource
 ): Promise<DecisionResult> {
-	return decide(env, lyricsId, revisionId, reviewerId, (tx, revision) =>
+	const log: DecisionLog = { kind: "edit_reject", source, note }
+	return decide(env, lyricsId, revisionId, reviewerId, log, (tx, revision) =>
 		recordReview(tx, revision.id, "rejected", reviewerId, note)
 	)
+}
+
+type PendingRow = Awaited<ReturnType<typeof listPendingRevisionRows>>[number]
+
+export type PendingRevisionSummary = Omit<PendingRevisionCard, "diffPreview" | "diffFull">
+
+function pendingSummary(row: PendingRow): PendingRevisionSummary {
+	return {
+		lyricsId: row.lyrics_id,
+		revisionId: row.id,
+		revNo: row.rev_no,
+		liveRevNo: row.live_rev_no,
+		videoId: row.video_id,
+		song: row.song,
+		artist: row.artist,
+		format: row.format,
+		pendingReason: row.pending_reason,
+		jevProbability: row.jev_probability,
+		textDrift: row.text_drift,
+		timingDrift: row.timing_drift,
+		author: revisionAuthor(row.author_key_id, row.author_nickname),
+		authorKeyId: row.author_key_id,
+		createdAt: row.created_at,
+	}
+}
+
+export async function listPendingRevisions(env: Env): Promise<PendingRevisionSummary[]> {
+	const rows = await listPendingRevisionRows(env.DB, config.revisions.pendingQueueLimit)
+	return rows.map(pendingSummary)
 }
 
 export async function listPendingCards(env: Env): Promise<PendingRevisionCard[]> {
@@ -705,24 +756,7 @@ export async function listPendingCards(env: Env): Promise<PendingRevisionCard[]>
 				],
 				{ before: `rev ${row.live_rev_no}`, after: `rev ${row.rev_no}` }
 			)
-			return {
-				lyricsId: row.lyrics_id,
-				revisionId: row.id,
-				revNo: row.rev_no,
-				liveRevNo: row.live_rev_no,
-				videoId: row.video_id,
-				song: row.song,
-				artist: row.artist,
-				format: row.format,
-				pendingReason: row.pending_reason,
-				jevProbability: row.jev_probability,
-				textDrift: row.text_drift,
-				timingDrift: row.timing_drift,
-				author: revisionAuthor(row.author_key_id, row.author_nickname),
-				createdAt: row.created_at,
-				diffPreview: review.preview,
-				diffFull: review.full,
-			}
+			return { ...pendingSummary(row), diffPreview: review.preview, diffFull: review.full }
 		})
 	)
 }

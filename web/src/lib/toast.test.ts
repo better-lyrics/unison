@@ -117,4 +117,71 @@ describe("toast store", () => {
     const b = pushToast({ kind: "info", message: "b" })
     expect(a).not.toBe(b)
   })
+
+  describe("actions", () => {
+    it("keeps a toast with an action until it is dismissed", () => {
+      const { result } = renderHook(() => useToasts())
+      act(() => {
+        pushToast({ kind: "info", message: "Sealed Run Rabbit", action: { label: "Undo", onAction: () => {} } })
+      })
+      act(() => {
+        vi.advanceTimersByTime(60_000)
+      })
+      expect(result.current).toHaveLength(1)
+      expect(result.current[0]?.action?.label).toBe("Undo")
+    })
+
+    it("still honours an explicit duration on an action toast", () => {
+      const { result } = renderHook(() => useToasts())
+      act(() => {
+        pushToast({ kind: "info", message: "x", durationMs: 1000, action: { label: "Undo", onAction: () => {} } })
+      })
+      act(() => {
+        vi.advanceTimersByTime(1000)
+      })
+      expect(result.current).toHaveLength(0)
+    })
+
+    it("carries an optional detail line", () => {
+      const { result } = renderHook(() => useToasts())
+      act(() => {
+        pushToast({ kind: "success", message: "Sealed", detail: "3 seals left this month." })
+      })
+      expect(result.current[0]?.detail).toBe("3 seals left this month.")
+    })
+  })
+
+  describe("groups", () => {
+    it("replaces the previous toast of the same group", () => {
+      const { result } = renderHook(() => useToasts())
+      act(() => {
+        pushToast({
+          kind: "info",
+          message: "Sealed A",
+          group: "decision",
+          action: { label: "Undo", onAction: () => {} },
+        })
+        pushToast({ kind: "info", message: "Other" })
+        pushToast({
+          kind: "info",
+          message: "Rejected B",
+          group: "decision",
+          action: { label: "Undo", onAction: () => {} },
+        })
+      })
+      expect(result.current.map((t) => t.message)).toEqual(["Other", "Rejected B"])
+    })
+
+    it("clears the timer of a replaced toast", () => {
+      const { result } = renderHook(() => useToasts())
+      act(() => {
+        pushToast({ kind: "info", message: "first", group: "g", durationMs: 1000 })
+        pushToast({ kind: "info", message: "second", group: "g", durationMs: 5000 })
+      })
+      act(() => {
+        vi.advanceTimersByTime(1500)
+      })
+      expect(result.current.map((t) => t.message)).toEqual(["second"])
+    })
+  })
 })

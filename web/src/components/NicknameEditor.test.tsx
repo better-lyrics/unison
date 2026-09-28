@@ -1,7 +1,8 @@
-import { act, cleanup, fireEvent, render, screen } from "@testing-library/react"
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { AuthProvider } from "@/auth/AuthProvider"
 import { type StoredSession, saveStoredSession } from "@/lib/auth"
+import { fetchRouter, jsonResponse } from "@/test/fetch-router"
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { NicknameEditor } from "./NicknameEditor"
 
 const valid: StoredSession = {
@@ -11,31 +12,11 @@ const valid: StoredSession = {
   expiresAt: Math.floor(Date.now() / 1000) + 1000,
 }
 
-function jsonResponse(body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } })
-}
-
 function meResponse(): Response {
   return jsonResponse({
     success: true,
     data: { keyId: valid.keyId, displayName: valid.displayName, expiresAt: valid.expiresAt },
   })
-}
-
-interface FetchRoute {
-  match: (url: string, init?: RequestInit) => boolean
-  respond: () => Response | Promise<Response>
-}
-
-function fetchRouter(routes: FetchRoute[]) {
-  const calls: { url: string; init?: RequestInit }[] = []
-  const fn = vi.fn().mockImplementation(async (url: string, init?: RequestInit) => {
-    calls.push({ url, init })
-    const route = routes.find((r) => r.match(url, init))
-    if (!route) throw new Error(`unrouted fetch: ${url}`)
-    return route.respond()
-  })
-  return { fn, calls }
 }
 
 async function flush() {

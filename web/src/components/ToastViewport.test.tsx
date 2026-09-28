@@ -1,6 +1,6 @@
+import { __resetToastStore, pushToast } from "@/lib/toast"
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
-import { __resetToastStore, pushToast } from "@/lib/toast"
 import { ToastViewport } from "./ToastViewport"
 
 beforeEach(() => {
@@ -84,5 +84,22 @@ describe("ToastViewport", () => {
       vi.advanceTimersByTime(3000)
     })
     expect(screen.queryByText("gone")).toBeNull()
+  })
+
+  it("runs the action and dismisses the toast", () => {
+    const onAction = vi.fn()
+    render(<ToastViewport />)
+    act(() => {
+      pushToast({
+        kind: "info",
+        message: "Rejected Sleep Well",
+        detail: "Logged in Activity.",
+        action: { label: "Undo", onAction },
+      })
+    })
+    expect(screen.getByText("Logged in Activity.")).toBeTruthy()
+    fireEvent.click(screen.getByRole("button", { name: "Undo" }))
+    expect(onAction).toHaveBeenCalledTimes(1)
+    expect(screen.queryByText("Rejected Sleep Well")).toBeNull()
   })
 })

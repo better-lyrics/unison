@@ -5,6 +5,8 @@ const compactFormatter = new Intl.NumberFormat("en-US", {
 
 const exactFormatter = new Intl.NumberFormat("en-US")
 
+const shortDateFormatter = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric" })
+
 export function formatRank(rank: number): string {
   return `#${rank}`
 }
@@ -15,6 +17,38 @@ export function formatCompact(n: number): string {
 
 export function formatExact(n: number): string {
   return exactFormatter.format(n)
+}
+
+export function plural(n: number, one: string, many: string): string {
+  return `${n} ${n === 1 ? one : many}`
+}
+
+export function titleCase(value: string): string {
+  return value.charAt(0).toUpperCase() + value.slice(1)
+}
+
+export function formatShortDate(epochSec: number): string {
+  return shortDateFormatter.format(epochSec * 1000)
+}
+
+const MINUTE = 60
+const HOUR = 3600
+const DAY = 86400
+
+export function formatElapsed(seconds: number): string {
+  if (seconds < HOUR) return `${Math.max(1, Math.round(seconds / MINUTE))}m`
+  if (seconds < DAY) return `${Math.round(seconds / HOUR)}h`
+  if (seconds < 14 * DAY) return `${Math.round(seconds / DAY)}d`
+  return `${Math.round(seconds / (7 * DAY))}w`
+}
+
+export function formatRemaining(seconds: number): string {
+  const s = Math.max(0, seconds)
+  const days = Math.floor(s / DAY)
+  const hours = Math.floor((s % DAY) / HOUR)
+  if (days > 0) return `${days}d ${hours}h`
+  if (hours > 0) return `${hours}h`
+  return `${Math.floor(s / MINUTE)}m`
 }
 
 export function formatDuration(seconds: number): string {

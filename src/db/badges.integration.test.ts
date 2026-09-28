@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs"
 import { COMMUNITY_KEY_ID, config } from "@/config"
 import { D1Compat } from "@/infra/database"
+import { wipeCouncilTables } from "@/test/integration-harness"
 import type { Confidence, Env } from "@/types"
 import { levelForXp } from "@/utils/xp"
 import pg from "pg"
@@ -57,6 +58,7 @@ describeIntegration("badges award and read model (integration)", () => {
 		await pool.query("DELETE FROM reports")
 		await pool.query("DELETE FROM lyrics")
 		await pool.query("DELETE FROM discord_links")
+		await wipeCouncilTables(pool)
 		await pool.query("DELETE FROM users")
 		await pool.query("DELETE FROM public_keys")
 	}

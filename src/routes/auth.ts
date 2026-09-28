@@ -1,4 +1,5 @@
 import { config } from "@/config"
+import { getCouncilRole } from "@/db/committee"
 import { clearNickname, resolveIdentity, setNickname } from "@/db/users"
 import type { Env } from "@/types"
 import { signedRequest } from "@/utils/auth"
@@ -12,7 +13,8 @@ const CHALLENGE_PREFIX = "challenge:"
 
 async function sessionIdentity(env: Env, keyId: string) {
 	const { displayName, avatarUrl } = await resolveIdentity(env, keyId)
-	return { keyId, displayName, avatarUrl }
+	const council = await getCouncilRole(env, keyId)
+	return { keyId, displayName, avatarUrl, council }
 }
 
 function generateNonce(): string {

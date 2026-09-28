@@ -1,5 +1,5 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import type { StoredSession } from "@/lib/auth"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 const loadStoredSessionMock = vi.fn<() => StoredSession | null>()
 
@@ -9,12 +9,14 @@ vi.mock("@/lib/auth", () => ({
 
 let authedFetch: typeof import("./authedFetch").authedFetch
 let AUTHED_FETCH_ERRORS: typeof import("./authedFetch").AUTHED_FETCH_ERRORS
+let AuthedFetchError: typeof import("./authedFetch").AuthedFetchError
 
 beforeEach(async () => {
   loadStoredSessionMock.mockReset()
   const mod = await import("./authedFetch")
   authedFetch = mod.authedFetch
   AUTHED_FETCH_ERRORS = mod.AUTHED_FETCH_ERRORS
+  AuthedFetchError = mod.AuthedFetchError
 })
 
 afterEach(() => {
@@ -103,10 +105,7 @@ describe("authedFetch", () => {
 
   it("surfaces the server error message on 409 Already voted", async () => {
     loadStoredSessionMock.mockReturnValue(null)
-    vi.stubGlobal(
-      "fetch",
-      vi.fn().mockResolvedValue(jsonResponse({ success: false, error: "Already voted" }, 409)),
-    )
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse({ success: false, error: "Already voted" }, 409)))
     await expect(authedFetch("/x")).rejects.toThrow("Already voted")
   })
 
@@ -114,6 +113,27 @@ describe("authedFetch", () => {
     loadStoredSessionMock.mockReturnValue(null)
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response("not json", { status: 409 })))
     await expect(authedFetch("/x")).rejects.toThrow(AUTHED_FETCH_ERRORS.CONFLICT)
+  })
+
+  it("keeps the server hint and status on the thrown error", async () => {
+    loadStoredSessionMock.mockReturnValue(null)
+    vi.stubGlobal(
+      "fetch",
+      vi
+        .fn()
+        .mockResolvedValue(
+          jsonResponse({ success: false, error: "Bookmark limit reached", hint: "Release one first." }, 409),
+        ),
+    )
+    const error = await authedFetch("/x").catch((e: unknown) => e)
+    expect(error).toBeInstanceOf(AuthedFetchError)
+    expect(error).toMatchObject({ message: "Bookmark limit reached", hint: "Release one first.", status: 409 })
+  })
+
+  it("has no hint when the server sends none", async () => {
+    loadStoredSessionMock.mockReturnValue(null)
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response("not json", { status: 500 })))
+    await expect(authedFetch("/x")).rejects.toMatchObject({ hint: null, status: 500 })
   })
 
   it("exposes the error code constants", () => {
