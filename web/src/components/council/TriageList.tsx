@@ -3,6 +3,7 @@ import { Kbd } from "@/components/Kbd"
 import { Bone, skeletonKeys } from "@/components/skeleton"
 import type { Bookmarkable, Triage } from "@/hooks/useTriage"
 import { cn } from "@/lib/cn"
+import { plural } from "@/lib/format"
 import { IconArrowUp, IconBookmark, IconChevronDown } from "@tabler/icons-react"
 import { IconPointer } from "@tabler/icons-react"
 import type { ReactNode } from "react"
@@ -52,7 +53,7 @@ export function TriageList<T extends Bookmarkable>({
             className="sticky top-0 z-[2] mx-auto mt-1 mb-2 flex w-max cursor-pointer items-center gap-1.5 rounded-full bg-unison-text px-3 py-[5px] text-xs font-semibold text-unison-bg shadow-[0_8px_20px_rgba(0,0,0,0.45)] transition-[opacity,scale] active:scale-[0.96]"
           >
             <IconArrowUp aria-hidden className="size-3" stroke={2} />
-            {fresh.count} new {fresh.count === 1 ? noun[0] : noun[1]}
+            {plural(fresh.count, `new ${noun[0]}`, `new ${noun[1]}`)}
           </button>
         ) : null}
         {empty ??

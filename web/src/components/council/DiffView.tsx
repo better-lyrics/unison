@@ -1,4 +1,5 @@
 import { cn } from "@/lib/cn"
+import { plural } from "@/lib/format"
 import type { DiffPart, DiffRow, HeadTextRef } from "@/lib/revision-types"
 import type { ReactNode } from "react"
 
@@ -134,7 +135,7 @@ function Rows({ items }: { items: Item[] }) {
           data-row="gap"
           className="bg-white/[0.03] px-3 py-0.5 text-[11px] text-unison-text-muted"
         >
-          {item.gap.count} unchanged {item.gap.count === 1 ? "line" : "lines"}
+          {plural(item.gap.count, "unchanged line", "unchanged lines")}
         </div>
       )
     }
