@@ -6,7 +6,7 @@ import { pickTranslationLanguage, translationLanguages } from "@/lib/lyric-trans
 import type { LyricsFormat, VariantFull } from "@/lib/types"
 import { injectRomanization, injectTranslation } from "@braccato/core"
 import type { BraccatoLyricsElement, LineClickDetail } from "@braccato/core/element"
-import { LRCParser, type LyricParser, PlainParser, TTMLParser } from "@braccato/parsers"
+import { LRCParser, type Lyric, type LyricParser, PlainParser, TTMLParser } from "@braccato/parsers"
 import { useEffect, useMemo, useRef } from "react"
 
 interface LyricsRendererProps {
@@ -24,8 +24,13 @@ const PARSER_BY_FORMAT: Record<LyricsFormat, LyricParser> = {
   plain: PlainParser,
 }
 
-export function parseVariantLyrics(variant: Pick<VariantFull, "format" | "lyrics">) {
-  return PARSER_BY_FORMAT[variant.format].parse(variant.lyrics)
+let lastParse: { format: LyricsFormat; lyrics: string; lines: Lyric[] } | null = null
+
+export function parseVariantLyrics({ format, lyrics }: Pick<VariantFull, "format" | "lyrics">): Lyric[] {
+  if (lastParse?.format !== format || lastParse.lyrics !== lyrics) {
+    lastParse = { format, lyrics, lines: PARSER_BY_FORMAT[format].parse(lyrics) }
+  }
+  return lastParse.lines
 }
 
 export function LyricsRenderer({

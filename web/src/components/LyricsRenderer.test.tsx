@@ -397,6 +397,25 @@ describe("LyricsRenderer", () => {
     })
   })
 
+  describe("parseVariantLyrics", () => {
+    it("hands back the same lines for the same body, so the panel and the renderer parse once", async () => {
+      const { parseVariantLyrics } = await import("./LyricsRenderer")
+      const variant = makeVariant({ lyrics: TRANSLATED_TTML })
+      expect(parseVariantLyrics({ ...variant })).toBe(parseVariantLyrics({ ...variant }))
+    })
+
+    it("parses again when the body or the format changes", async () => {
+      const { parseVariantLyrics } = await import("./LyricsRenderer")
+      const ttml = parseVariantLyrics(makeVariant())
+      const other = parseVariantLyrics(makeVariant({ lyrics: TRANSLATED_TTML }))
+      expect(other).not.toBe(ttml)
+      expect(other[0]).toMatchObject({ words: "愛してる" })
+      const plain = parseVariantLyrics(makeVariant({ format: "plain", lyrics: PLAIN }))
+      const lrc = parseVariantLyrics(makeVariant({ format: "lrc", lyrics: PLAIN }))
+      expect(lrc).not.toBe(plain)
+    })
+  })
+
   describe("regressions", () => {
     it("regression: never asks the element to fetch the body over the network", async () => {
       const Renderer = await importRenderer()
