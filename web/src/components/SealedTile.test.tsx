@@ -127,6 +127,29 @@ describe("SealedTile", () => {
     })
   })
 
+  describe("entrance motion", () => {
+    it("keeps the same link, text and seal when it animates in", () => {
+      const { container } = renderUi(<SealedTile entry={entry()} variant="card" now={NOW} enterIndex={3} />)
+      expect(screen.getByRole("link", { name: "Espresso by Sabrina Carpenter" }).getAttribute("href")).toBe(
+        "/song/HsBfV2A5dUY",
+      )
+      expect(screen.getByText("2d ago")).toBeTruthy()
+      expect(container.querySelector('img[src="/badges/committee/image.svg"]')).not.toBeNull()
+    })
+
+    it("regression: an animated seal takes its tilt from motion, not the rotate class, so it never tilts twice", () => {
+      const { container } = renderUi(<SealedTile entry={entry()} variant="card" now={NOW} enterIndex={0} />)
+      const seal = container.querySelector('img[src="/badges/committee/image.svg"]')
+      expect(seal?.className).not.toContain("-rotate-6")
+    })
+
+    it("a static tile keeps the rotate class on its seal", () => {
+      const { container } = renderUi(<SealedTile entry={entry()} variant="shelf" />)
+      const seal = container.querySelector('img[src="/badges/committee/image.svg"]')
+      expect(seal?.className).toContain("-rotate-6")
+    })
+  })
+
   describe("invariants", () => {
     it("the skeleton is hidden from assistive tech and has no links", () => {
       for (const variant of ["shelf", "card"] as const) {

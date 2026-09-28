@@ -1,3 +1,4 @@
+import { motion } from "motion/react"
 import { Link } from "react-router-dom"
 import { Bone } from "@/components/skeleton"
 import { SongThumbnail } from "@/components/SongThumbnail"
@@ -5,9 +6,14 @@ import { tagClass } from "@/components/ui"
 import { UserAvatar } from "@/components/UserAvatar"
 import { cn } from "@/lib/cn"
 import { formatElapsed } from "@/lib/format"
+import { EASE_OUT, sealStamp, staggerDelay, thudFrom, thudTransition } from "@/lib/motion-variants"
 import type { FeedEntry } from "@/lib/types"
 
 type SealedTileVariant = "shelf" | "card"
+
+const MotionLink = motion.create(Link)
+const cardThud = thudFrom(1.08, 0.03)
+const SEAL_AFTER_LANDING = 0.22
 
 const FRAME: Record<SealedTileVariant, string> = {
   shelf: "flex w-[148px] shrink-0 flex-col gap-2",
@@ -23,12 +29,25 @@ interface SealedTileProps {
   entry: FeedEntry
   variant: SealedTileVariant
   now?: number
+  enterIndex?: number
+  enterDelay?: number
 }
 
-export function SealedTile({ entry, variant, now = Math.floor(Date.now() / 1000) }: SealedTileProps) {
+export function SealedTile({
+  entry,
+  variant,
+  now = Math.floor(Date.now() / 1000),
+  enterIndex,
+  enterDelay = 0,
+}: SealedTileProps) {
   const seal = entry.marks?.find((mark) => mark.type === "seal")
   const isCard = variant === "card"
   const syncLabel = SYNC_LABEL[entry.syncType]
+  const landAt = enterIndex === undefined ? null : enterDelay + staggerDelay(enterIndex)
+  const sealClass = cn(
+    "absolute drop-shadow-[0_2px_6px_rgba(0,0,0,0.5)]",
+    isCard ? "right-2 bottom-2 size-[30px]" : "right-1.5 bottom-1.5 size-[26px]",
+  )
   const submitter = entry.submitter ? (
     <span className="flex min-w-0 items-center gap-1.5 text-[11px] text-unison-text-muted">
       <UserAvatar
@@ -42,25 +61,27 @@ export function SealedTile({ entry, variant, now = Math.floor(Date.now() / 1000)
   ) : null
 
   return (
-    <Link
+    <MotionLink
       to={`/song/${entry.videoId}`}
       aria-label={`${entry.song} by ${entry.artist}`}
       className={cn(FRAME[variant], "group transition-opacity hover:opacity-90")}
+      {...(landAt === null
+        ? {}
+        : {
+            ...cardThud,
+            transition: thudTransition(landAt),
+            whileHover: { y: -2, transition: { duration: 0.15, ease: EASE_OUT } },
+          })}
     >
       <div className="relative">
         <SongThumbnail
           videoId={entry.videoId}
           className={cn("aspect-square w-full", isCard ? "rounded-none" : "rounded-[10px]")}
         />
-        {seal ? (
-          <img
-            src={seal.icon}
-            alt=""
-            className={cn(
-              "absolute -rotate-6 drop-shadow-[0_2px_6px_rgba(0,0,0,0.5)]",
-              isCard ? "right-2 bottom-2 size-[30px]" : "right-1.5 bottom-1.5 size-[26px]",
-            )}
-          />
+        {seal && landAt !== null ? (
+          <motion.img src={seal.icon} alt="" className={sealClass} {...sealStamp(landAt + SEAL_AFTER_LANDING)} />
+        ) : seal ? (
+          <img src={seal.icon} alt="" className={cn(sealClass, "-rotate-6")} />
         ) : null}
       </div>
       <div className={cn("flex min-w-0 flex-col", isCard ? "gap-1.5 px-3 pt-2.5 pb-3" : "gap-1")}>
@@ -84,7 +105,7 @@ export function SealedTile({ entry, variant, now = Math.floor(Date.now() / 1000)
           submitter
         )}
       </div>
-    </Link>
+    </MotionLink>
   )
 }
 
