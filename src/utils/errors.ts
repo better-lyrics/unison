@@ -342,7 +342,7 @@ const TEMPLATES: Record<ErrorCode, Template> = {
 	},
 	REJECT_BLOCKED_BY_SEAL: {
 		error: "Lyric is sealed",
-		hint: "The council sealed this lyric. Remove the seal before rejecting it.",
+		hint: "The council sealed this lyric. Ask the member who sealed it to lift the seal before rejecting it.",
 	},
 	NO_CHANGES: {
 		error: "No changes",

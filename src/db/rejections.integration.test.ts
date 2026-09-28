@@ -416,6 +416,22 @@ describeIntegration("rejections store (integration)", () => {
 				await revokeBoost(env, sealer, id, "web")
 			}
 		})
+
+		it("regression: one member sealing and rejecting the same lyric at once does not deadlock", async () => {
+			const member = await newUser()
+			await addToCommittee(member)
+			const submitter = await newUser()
+
+			for (const videoId of ["vSelfRace1", "vSelfRace2", "vSelfRace3", "vSelfRace4", "vSelfRace5"]) {
+				const id = await insertLyric({ videoId, submitterId: submitter })
+				const [seal, reject] = await Promise.all([
+					createBoost(env, member, id, "web"),
+					rejectLyric(env, id, member, { source: "discord" }),
+				])
+				expect([seal.ok, reject.ok].filter(Boolean)).toHaveLength(1)
+				await revokeBoost(env, member, id, "web")
+			}
+		})
 	})
 
 	describe("undoRejection", () => {
