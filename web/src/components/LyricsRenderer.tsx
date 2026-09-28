@@ -2,7 +2,9 @@ import "@braccato/core/element"
 import braccatoTheme from "@/components/braccato-theme.css?raw"
 import { Bone } from "@/components/skeleton"
 import { cn } from "@/lib/cn"
+import { pickTranslationLanguage, translationLanguages } from "@/lib/lyric-translations"
 import type { LyricsFormat, VariantFull } from "@/lib/types"
+import { injectRomanization, injectTranslation } from "@braccato/core"
 import type { BraccatoLyricsElement, LineClickDetail } from "@braccato/core/element"
 import { LRCParser, type LyricParser, PlainParser, TTMLParser } from "@braccato/parsers"
 import { useEffect, useMemo, useRef } from "react"
@@ -12,6 +14,7 @@ interface LyricsRendererProps {
   getCurrentTime: () => number
   getPlaying: () => boolean
   onLineClick?: (timeSeconds: number) => void
+  translationLang?: string
   className?: string
 }
 
@@ -25,7 +28,14 @@ export function parseVariantLyrics(variant: Pick<VariantFull, "format" | "lyrics
   return PARSER_BY_FORMAT[variant.format].parse(variant.lyrics)
 }
 
-export function LyricsRenderer({ variant, getCurrentTime, getPlaying, onLineClick, className }: LyricsRendererProps) {
+export function LyricsRenderer({
+  variant,
+  getCurrentTime,
+  getPlaying,
+  onLineClick,
+  translationLang,
+  className,
+}: LyricsRendererProps) {
   const elementRef = useRef<BraccatoLyricsElement>(null)
 
   // No duration to hand the parser: the player reports one only once the iframe is ready, and each
@@ -40,10 +50,35 @@ export function LyricsRenderer({ variant, getCurrentTime, getPlaying, onLineClic
     if (el) el.theme = braccatoTheme
   }, [])
 
+  const lang = useMemo(
+    () => pickTranslationLanguage(translationLanguages(lyrics), translationLang),
+    [lyrics, translationLang],
+  )
+
+  // Every rebuild (new lyrics, new theme) drops the lines, so each load hangs the decorations again.
   useEffect(() => {
     const el = elementRef.current
-    if (el) el.lyrics = lyrics
-  }, [lyrics])
+    if (!el) return
+    const decorate = () => {
+      const renderer = el.renderer
+      if (!renderer) return
+      renderer.lines.forEach((line, i) => {
+        const lyric = lyrics[i]
+        if (lyric?.romanization) {
+          injectRomanization(document, line.lyricElement, line, lyric.romanization, lyric.timedRomanization)
+        }
+        const translation = lang ? lyric?.translations?.[lang] : undefined
+        if (translation) injectTranslation(document, line.lyricElement, translation, lang)
+      })
+      renderer.scheduleLyricPositionUpdate(
+        () => el.isConnected,
+        () => {},
+      )
+    }
+    el.addEventListener("braccato:lyrics-loaded", decorate)
+    el.lyrics = lyrics
+    return () => el.removeEventListener("braccato:lyrics-loaded", decorate)
+  }, [lyrics, lang])
 
   useEffect(() => {
     let frameId: number
