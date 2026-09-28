@@ -29,6 +29,46 @@ export function ApplicantCard({ applicant, now, admin, busy, onOpinion, onDecisi
   const { support, object, notes, mine } = applicant.opinions
   const toggle = (stance: OpinionStance) => onOpinion(mine === stance ? null : stance)
   const [confirming, setConfirming] = useState<"approve" | "reject" | null>(null)
+  const decisions = !admin ? null : confirming ? (
+    <div className="flex justify-end gap-2">
+      <button type="button" className={buttonClass("ghost", "sm")} onClick={() => setConfirming(null)}>
+        Cancel
+      </button>
+      <button
+        type="button"
+        disabled={busy}
+        className={buttonClass(confirming === "reject" ? "danger" : "primary", "sm")}
+        onClick={() => {
+          setConfirming(null)
+          onDecision(confirming)
+        }}
+      >
+        {confirming === "reject" ? "Reject" : "Approve"} {name}
+      </button>
+    </div>
+  ) : (
+    <div className="flex justify-end gap-2">
+      {failed ? null : (
+        <button
+          type="button"
+          disabled={busy}
+          className={buttonClass("ghost", "sm")}
+          onClick={() => setConfirming("reject")}
+        >
+          Reject
+        </button>
+      )}
+      <button
+        type="button"
+        disabled={busy}
+        className={buttonClass("primary", "sm")}
+        onClick={() => setConfirming("approve")}
+      >
+        <IconCheck aria-hidden className="size-3.5" stroke={1.75} />
+        Approve and add to council
+      </button>
+    </div>
+  )
 
   return (
     <article aria-label={name} className={cn(cardClass, "flex flex-col gap-[22px] p-6", failed && "opacity-70")}>
@@ -120,7 +160,14 @@ export function ApplicantCard({ applicant, now, admin, busy, onOpinion, onDecisi
       ))}
 
       {failed ? (
-        <p className="text-xs text-unison-text-muted">Below the cutoff. Shown for context only.</p>
+        <>
+          <p className="text-xs text-unison-text-muted">
+            {admin
+              ? "Below the cutoff. You can still approve them as an admin."
+              : "Below the cutoff. Shown for context only."}
+          </p>
+          {decisions}
+        </>
       ) : (
         <>
           <div className="flex flex-wrap items-center gap-2.5 pt-1">
@@ -148,44 +195,7 @@ export function ApplicantCard({ applicant, now, admin, busy, onOpinion, onDecisi
               ))}
             </span>
           </div>
-          {!admin ? null : confirming ? (
-            <div className="flex justify-end gap-2">
-              <button type="button" className={buttonClass("ghost", "sm")} onClick={() => setConfirming(null)}>
-                Cancel
-              </button>
-              <button
-                type="button"
-                disabled={busy}
-                className={buttonClass(confirming === "reject" ? "danger" : "primary", "sm")}
-                onClick={() => {
-                  setConfirming(null)
-                  onDecision(confirming)
-                }}
-              >
-                {confirming === "reject" ? "Reject" : "Approve"} {name}
-              </button>
-            </div>
-          ) : (
-            <div className="flex justify-end gap-2">
-              <button
-                type="button"
-                disabled={busy}
-                className={buttonClass("ghost", "sm")}
-                onClick={() => setConfirming("reject")}
-              >
-                Reject
-              </button>
-              <button
-                type="button"
-                disabled={busy}
-                className={buttonClass("primary", "sm")}
-                onClick={() => setConfirming("approve")}
-              >
-                <IconCheck aria-hidden className="size-3.5" stroke={1.75} />
-                Approve and add to council
-              </button>
-            </div>
-          )}
+          {decisions}
         </>
       )}
     </article>

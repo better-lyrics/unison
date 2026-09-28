@@ -110,9 +110,9 @@ describe("CouncilOverviewPage", () => {
     ).toBe("/council/activity")
   })
 
-  it("switches the decisions chart to my own work", async () => {
+  it("switches the whole page to my own numbers and remembers it", async () => {
     const data = busy()
-    data.myOverview = overview({ decisionsByDay: dayDecisions([[0, 1, 0]]) })
+    data.myOverview = overview({ decisionsByDay: dayDecisions([[0, 1, 0]]), sealRate: 1 })
     const router = stubCouncilApi(data)
     renderCouncil()
     const chart = await screen.findByRole("region", { name: "Decisions, last 30 days" })
@@ -123,7 +123,7 @@ describe("CouncilOverviewPage", () => {
           .map((l) => l.textContent),
       ).toContain("Sealed1"),
     )
-    fireEvent.click(within(chart).getByRole("button", { name: "You" }))
+    fireEvent.click(within(screen.getByRole("group", { name: "Whose numbers" })).getByRole("button", { name: "You" }))
     await waitFor(() =>
       expect(
         within(chart)
@@ -132,7 +132,21 @@ describe("CouncilOverviewPage", () => {
       ).toContain("Sealed0"),
     )
     expect(router.calls.some((c) => c.url === "/committee/overview?scope=me")).toBe(true)
-    expect(within(chart).getByRole("button", { name: "You" }).getAttribute("aria-pressed")).toBe("true")
+    expect(screen.getByText("Your seal rate this month")).toBeTruthy()
+    await waitFor(() =>
+      expect(router.calls.some((c) => c.url.startsWith("/committee/events") && c.url.includes(`actor=${ME.keyId}`))).toBe(
+        true,
+      ),
+    )
+    expect(screen.getByRole("region", { name: "Your activity" })).toBeTruthy()
+    expect(localStorage.getItem("council.overviewScope")).toContain("me")
+  })
+
+  it("links to every seal I placed", async () => {
+    stubCouncilApi(busy())
+    renderCouncil()
+    const link = await screen.findByRole("link", { name: /Your seals/ })
+    expect(link.getAttribute("href")).toBe(`/council/activity?kind=seals&actor=${ME.keyId}`)
   })
 
   it("buckets waiting items and names the oldest", async () => {

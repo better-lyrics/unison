@@ -22,6 +22,14 @@ import { useCouncilContext } from "./context"
 
 type KindFilter = "all" | EventGroup
 
+const KINDS: { value: KindFilter; label: string }[] = [
+  { value: "all", label: "All" },
+  { value: "seals", label: "Seals" },
+  { value: "rejections", label: "Rejections" },
+  { value: "edits", label: "Edits" },
+  { value: "membership", label: "Membership" },
+]
+
 const SOURCE: Record<CouncilSource, { label: string; className: string }> = {
   web: { label: "Web", className: "bg-unison-bg-hover text-unison-text-muted" },
   discord: { label: "Discord", className: "bg-[rgba(88,101,242,0.14)] text-unison-discord" },
@@ -31,19 +39,22 @@ const SOURCE: Record<CouncilSource, { label: string; className: string }> = {
 export function CouncilActivityPage() {
   const { meKeyId } = useCouncilContext()
   const now = Math.floor(Date.now() / 1000)
-  const [kind, setKind] = useState<KindFilter>("all")
   const [params, setParams] = useSearchParams()
   const actor = params.get("actor") ?? ""
-  const setActor = (keyId: string) =>
+  const kindParam = params.get("kind")
+  const kind: KindFilter = KINDS.some((k) => k.value === kindParam) ? (kindParam as KindFilter) : "all"
+  const setParam = (name: string, value: string) =>
     setParams(
       (prev) => {
         const next = new URLSearchParams(prev)
-        if (keyId) next.set("actor", keyId)
-        else next.delete("actor")
+        if (value && value !== "all") next.set(name, value)
+        else next.delete(name)
         return next
       },
       { replace: true },
     )
+  const setActor = (keyId: string) => setParam("actor", keyId)
+  const setKind = (value: KindFilter) => setParam("kind", value)
   const [includeBookmarks, setIncludeBookmarks] = useState(false)
   const members = useCouncilMembers().data
   const log = useCouncilLog({
@@ -58,20 +69,14 @@ export function CouncilActivityPage() {
     <>
       <PageHead
         title="Activity"
-        sub="Every council decision, from the web and from Discord. Undo is available for your own recent decisions."
+        sub="Every council decision, from the web and from Discord. You can undo your own recent ones."
       />
       <div className="mb-3 flex flex-wrap items-center gap-2.5">
         <Segmented
           label="Kind"
           value={kind}
           onChange={setKind}
-          options={[
-            { value: "all", label: "All" },
-            { value: "seals", label: "Seals" },
-            { value: "rejections", label: "Rejections" },
-            { value: "edits", label: "Edits" },
-            { value: "membership", label: "Membership" },
-          ]}
+          options={KINDS}
         />
         <select aria-label="Member" value={actor} onChange={(e) => setActor(e.target.value)} className={fieldClass}>
           <option value="">All members</option>

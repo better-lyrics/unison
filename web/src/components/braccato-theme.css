@@ -9,7 +9,7 @@ blyrics-letter-wave = true;
 
 .blyrics-container {
   --blyrics-font-weight: 600;
-  --blyrics-padding: 1.25rem;
+  --blyrics-padding: var(--unison-lyric-padding, 1.25rem);
   --blyrics-hover-scale: 1.01;
 
   --blyrics-wobble-duration: 1s;

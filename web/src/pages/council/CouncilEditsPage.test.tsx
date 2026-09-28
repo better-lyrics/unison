@@ -176,6 +176,15 @@ describe("CouncilEditsPage", () => {
     await waitFor(() => expect(detail().querySelector("[data-tier='master'] img")).toBeTruthy())
   })
 
+  it("shows the author first, above the drift and the changes", async () => {
+    stubCouncilApi(data(), { admin: false }, routes([]))
+    renderCouncil("/council/edits?item=9001")
+    const author = await within(await screen.findByRole("region", { name: "Details" })).findByText("Author")
+    const follows = (a: Node, b: Node) => Boolean(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING)
+    expect(follows(author, within(detail()).getByText("Text drift"))).toBe(true)
+    expect(follows(author, within(detail()).getByText("Changes"))).toBe(true)
+  })
+
   it("lists the revision history newest first", async () => {
     stubCouncilApi(data(), { admin: false }, routes([]))
     renderCouncil("/council/edits?item=9001")
@@ -183,7 +192,7 @@ describe("CouncilEditsPage", () => {
     expect(detail().textContent).toContain("Rev 3 is live, written by Yes")
   })
 
-  it("approves after confirmation with A twice and opens the next edit", async () => {
+  it("approves after confirmation with A, then Enter, and opens the next edit", async () => {
     const log: string[] = []
     stubCouncilApi(data(), { admin: false }, routes(log))
     renderCouncil("/council/edits?item=9001")
@@ -191,7 +200,7 @@ describe("CouncilEditsPage", () => {
     act(() => void fireEvent.keyDown(window, { key: "a" }))
     expect(detail().textContent).toContain("Approve Rev 4?")
     expect(detail().textContent).toContain("It replaces Rev 3 for every listener right away.")
-    act(() => void fireEvent.keyDown(window, { key: "a" }))
+    act(() => void fireEvent.keyDown(window, { key: "Enter" }))
     await waitFor(() => expect(log).toEqual(["/lyrics/669/revisions/9001/approve {}"]))
     await screen.findByText("Approved the edit to “Isn't She Lovely”")
     expect(screen.queryByRole("button", { name: "Undo" })).toBeNull()
@@ -212,7 +221,7 @@ describe("CouncilEditsPage", () => {
     await waitFor(() => expect(updates().every((n) => n > 0)).toBe(true))
     const before = updates()
     act(() => void fireEvent.keyDown(window, { key: "a" }))
-    act(() => void fireEvent.keyDown(window, { key: "a" }))
+    act(() => void fireEvent.keyDown(window, { key: "Enter" }))
     await waitFor(() => expect(log).toHaveLength(1))
     await waitFor(() => expect(updates().map((n, i) => n > before[i])).toEqual([true, true, true]))
     for (const stop of stops) stop()

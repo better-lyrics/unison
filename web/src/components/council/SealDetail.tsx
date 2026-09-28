@@ -49,7 +49,7 @@ export function SealDetail(props: SealDetailProps) {
             icon: IconRosetteDiscountCheck,
             shortcut: "S",
             confirmTitle: `Seal “${item.song}”?`,
-            confirmBody: `This uses 1 of your ${remaining} remaining seals this month. The lyric gets the council mark and a ranking boost, and the seal shows in public under your name.`,
+            confirmBody: `This uses 1 of your ${remaining} remaining seals this month. The lyric gets the council mark and ranks higher, and your name shows on the seal.`,
             confirmLabel: "Seal lyric",
             unavailable: quota && remaining <= 0 ? `No seals left until ${formatShortDate(quota.resetsAt)}` : null,
           }}
@@ -73,6 +73,23 @@ export function SealDetail(props: SealDetailProps) {
           </>
         }
       />
+      <div>
+        <BlockHead title="Submitter" />
+        {item.submitter ? (
+          <PersonCard
+            person={item.submitter}
+            sub={
+              <>
+                <span className="font-mono">{item.submitter.reputation.toFixed(2)}</span> reputation ·{" "}
+                <span className="font-mono">{item.submitter.submissions}</span> submissions ·{" "}
+                <span className="font-mono">{item.submitter.sealed}</span> sealed before
+              </>
+            }
+          />
+        ) : (
+          <p className="text-[13px] text-unison-text-muted">The submitter account no longer exists.</p>
+        )}
+      </div>
       <BookmarkCallout item={item} meKeyId={props.meKeyId} now={now} />
       <div className="grid grid-cols-2 gap-6 min-[860px]:grid-cols-4">
         <Fact label="Effective score" value={item.score.toFixed(2)} sub="Reputation-weighted" />
@@ -93,7 +110,7 @@ export function SealDetail(props: SealDetailProps) {
         />
       </div>
       <div>
-        <BlockHead title="Automatic checks" aside="Advisory only" />
+        <BlockHead title="Automatic checks" aside="Hints, not rules" />
         <div className="flex flex-wrap gap-1.5">
           {item.flags.length > 0 ? (
             item.flags.map((flag) => (
@@ -110,30 +127,11 @@ export function SealDetail(props: SealDetailProps) {
           )}
         </div>
       </div>
-      <LyricPreview key={item.id} lyricId={item.id} />
+      <LyricPreview key={item.id} lyricId={item.id} videoId={item.videoId} />
       <OtherVariants item={item} />
-      <div className="grid gap-12 min-[860px]:grid-cols-2">
-        <div>
-          <BlockHead title="Submitter" />
-          {item.submitter ? (
-            <PersonCard
-              person={item.submitter}
-              sub={
-                <>
-                  <span className="font-mono">{item.submitter.reputation.toFixed(2)}</span> reputation ·{" "}
-                  <span className="font-mono">{item.submitter.submissions}</span> submissions ·{" "}
-                  <span className="font-mono">{item.submitter.sealed}</span> sealed before
-                </>
-              }
-            />
-          ) : (
-            <p className="text-[13px] text-unison-text-muted">The submitter account no longer exists.</p>
-          )}
-        </div>
-        <div>
-          <BlockHead title="Council history" />
-          <CouncilHistory lyricId={item.id} now={now} />
-        </div>
+      <div>
+        <BlockHead title="Council history" />
+        <CouncilHistory lyricId={item.id} now={now} />
       </div>
     </DetailCard>
   )

@@ -11,7 +11,7 @@ import {
 import { listCouncilEdits } from "@/db/council-edits"
 import { type CouncilEventKind, listCouncilEvents, parseEventsCursor } from "@/db/council-events"
 import { loadPersonDecor } from "@/db/council-person"
-import { listCouncilQueue } from "@/db/council-queue"
+import { listCouncilQueue, listSealableForVideo } from "@/db/council-queue"
 import { getCouncilOverview, getCouncilRoster } from "@/db/council-stats"
 import { getSessionById, recordDecision } from "@/db/exam"
 import { getOrCreateUser, getUserByKeyId } from "@/db/users"
@@ -19,6 +19,7 @@ import type { Env } from "@/types"
 import { allowCouncilWrite, parseCouncilNote } from "@/utils/council-input"
 import { eitherAuth } from "@/utils/either-auth"
 import { ErrorCode, buildError } from "@/utils/errors"
+import { isVideoId } from "@/utils/video-id"
 import { Elysia, t } from "elysia"
 
 function parseBookmarkBody(
@@ -65,6 +66,14 @@ export const councilRoutes = (env: Env) =>
 			return { councilAdmin: await isCouncilAdmin(env, userId) }
 		})
 		.get("/queue", async ({ env }) => ({ success: true, data: await listCouncilQueue(env) }))
+		.get(
+			"/queue/video/:videoId",
+			async ({ env, params, status }) => {
+				if (!isVideoId(params.videoId)) return status(400, buildError(ErrorCode.INVALID_ID))
+				return { success: true, data: await listSealableForVideo(env, params.videoId) }
+			},
+			{ params: t.Object({ videoId: t.String({ maxLength: 32 }) }) }
+		)
 		.get("/edits", async ({ env }) => ({ success: true, data: await listCouncilEdits(env) }))
 		.post("/bookmarks", async ({ env, userId, keyId, body, status }) => {
 			const input = parseBookmarkBody(body)

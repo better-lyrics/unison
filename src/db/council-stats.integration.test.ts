@@ -111,6 +111,19 @@ describeIntegration("council overview stats (integration)", () => {
 			expect(stats.me.medianDecisionHours).toBeCloseTo(20, 5)
 		})
 
+		it("scopes the seal rate and the median to me on request", async () => {
+			await decide(mira, "seal", NOW - 20 * DAY + 10 * HOUR)
+			await decide(ola, "reject", NOW - 20 * DAY + 40 * HOUR)
+			await decide(ola, "reject", NOW - 20 * DAY + 40 * HOUR)
+			const stats = await overview("me")
+			expect(stats.sealRate).toBe(1)
+			expect(stats.medianDecisionHours.current).toBeCloseTo(10, 5)
+			expect(stats.me.medianDecisionHours).toBeCloseTo(10, 5)
+			const council = await overview()
+			expect(council.sealRate).toBeCloseTo(1 / 3, 5)
+			expect(council.medianDecisionHours.current).toBeCloseTo(40, 5)
+		})
+
 		it("splits recent decisions by where they were made", async () => {
 			await decide(mira, "reject", NOW - DAY, "web")
 			await decide(mira, "reject", NOW - DAY, "web")

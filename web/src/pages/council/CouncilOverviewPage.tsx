@@ -26,9 +26,15 @@ import type { DayDecisions } from "@/lib/council-types"
 import { waitBuckets } from "@/lib/council-wait"
 import { formatElapsed } from "@/lib/format"
 import { IconArrowRight, IconCheck, IconClock, IconPencil, IconRosetteDiscountCheck, IconX } from "@tabler/icons-react"
-import { type ReactNode, useState } from "react"
+import type { ReactNode } from "react"
 import { Link } from "react-router-dom"
+import { useStoredState } from "@/hooks/useStoredState"
 import { useCouncilContext } from "./context"
+
+type Scope = "council" | "me"
+
+const asideLinkClass =
+  "inline-flex items-center gap-1 text-[13px] text-unison-text-muted transition-colors hover:text-unison-text"
 
 const WEEK = 7 * 86400
 const headDate = new Intl.DateTimeFormat("en-GB", { weekday: "long", day: "numeric", month: "long" })
@@ -41,7 +47,9 @@ export function CouncilOverviewPage() {
   const queue = useCouncilQueue().data
   const edits = useCouncilEdits().data?.items
   const applicants = useCouncilApplicants().data
-  const stats = useCouncilOverview().data
+  const [scope, setScope] = useStoredState<Scope>("council.overviewScope", "council")
+  const mine = scope === "me"
+  const stats = useCouncilOverview(scope).data
   const open = queue && openItems(queue, now)
   const pending = applicants?.filter((a) => a.state === "pending_review")
   const oldestEdit = edits?.reduce<number | null>(
@@ -67,10 +75,21 @@ export function CouncilOverviewPage() {
           </>
         }
         actions={
-          <Link to="/council/queue" className={buttonClass("primary")}>
-            Start reviewing
-            <Kbd keys={["G", "Q"]} className="text-unison-bg/60" />
-          </Link>
+          <>
+            <Segmented
+              label="Whose numbers"
+              value={scope}
+              onChange={setScope}
+              options={[
+                { value: "council", label: "Council" },
+                { value: "me", label: "You" },
+              ]}
+            />
+            <Link to="/council/queue" className={buttonClass("primary")}>
+              Start reviewing
+              <Kbd keys={["G", "Q"]} className="text-unison-bg/60" />
+            </Link>
+          </>
         }
       />
 
@@ -92,7 +111,7 @@ export function CouncilOverviewPage() {
           }
         />
         <StatTile
-          label="Median time to decision"
+          label={mine ? "Your median time to decision" : "Median time to decision"}
           value={
             stats
               ? stats.medianDecisionHours.current === null
@@ -108,13 +127,13 @@ export function CouncilOverviewPage() {
           }
         />
         <StatTile
-          label="Seal rate this month"
+          label={mine ? "Your seal rate this month" : "Seal rate this month"}
           value={stats ? (stats.sealRate === null ? "None" : `${Math.round(stats.sealRate * 100)}%`) : undefined}
           unit={stats?.sealRate === null ? "" : "of decisions"}
           foot={
             stats ? (
               <span>
-                {stats.sealRate === null ? "No decisions yet" : "Seals mark the exceptional. Keep them rare."}
+                {stats.sealRate === null ? "No decisions yet" : "Save seals for the best lyrics. Keep them rare."}
               </span>
             ) : null
           }
@@ -122,7 +141,7 @@ export function CouncilOverviewPage() {
       </div>
 
       <div className="mt-14 grid gap-14 council:grid-cols-[minmax(0,1.55fr)_minmax(0,1fr)]">
-        <Region title="Needs you" sub="Sorted by urgency. Bookmarks from other members are left out.">
+        <Region title="Needs you" sub="Most urgent first. Other members' bookmarks are left out.">
           {queue && edits && applicants ? (
             <Needs needs={deriveNeeds({ queue, edits, applicants, meKeyId, now })} />
           ) : (
@@ -130,23 +149,23 @@ export function CouncilOverviewPage() {
           )}
         </Region>
         <Region
-          title="Council activity"
+          title={mine ? "Your activity" : "Council activity"}
           aside={
             <Link
-              to="/council/activity"
-              className="inline-flex items-center gap-1 text-[13px] text-unison-text-muted transition-colors hover:text-unison-text"
+              to={mine ? `/council/activity?actor=${meKeyId}` : "/council/activity"}
+              className={asideLinkClass}
             >
               See all
               <IconArrowRight aria-hidden className="size-3" stroke={1.5} />
             </Link>
           }
         >
-          <Feed now={now} />
+          <Feed now={now} actor={mine ? meKeyId : undefined} />
         </Region>
       </div>
 
       <div className="mt-14 grid gap-4 council:grid-cols-[minmax(0,1.55fr)_minmax(0,1fr)]">
-        <DecisionsChart />
+        <DecisionsChart scope={scope} />
         <WaitChart
           items={[
             ...(queue ?? []).map((i) => ({ song: i.song, since: i.createdAt })),
@@ -157,7 +176,20 @@ export function CouncilOverviewPage() {
         />
       </div>
 
-      <Region className="mt-14" title={`Your ${monthName.format(now * 1000)}`} sub="Your own council work this month.">
+      <Region
+        className="mt-14"
+        title={`Your ${monthName.format(now * 1000)}`}
+        sub="Your own council work this month."
+        aside={
+          <Link
+            to={`/council/activity?kind=seals&actor=${meKeyId}`}
+            className={asideLinkClass}
+          >
+            Your seals
+            <IconArrowRight aria-hidden className="size-3" stroke={1.5} />
+          </Link>
+        }
+      >
         {stats ? (
           <div className="flex flex-wrap gap-3">
             <StatPill
@@ -224,7 +256,7 @@ function Needs({ needs }: { needs: ReturnType<typeof deriveNeeds> }) {
       <EmptyState
         icon={<IconCheck className="size-5" stroke={1.5} />}
         title="All caught up"
-        hint="Nothing needs your attention right now. New candidates show up here as they reach the queue."
+        hint="Nothing needs you right now. New candidates show up here when they reach the queue."
       />
     )
   }
@@ -243,8 +275,8 @@ function ListSkeleton() {
 
 const FEED_SIZE = 6
 
-function Feed({ now }: { now: number }) {
-  const events = useCouncilFeed(FEED_SIZE).data?.events
+function Feed({ now, actor }: { now: number; actor?: string }) {
+  const events = useCouncilFeed(FEED_SIZE, actor).data?.events
   if (!events) return <ListSkeleton />
   if (events.length === 0) {
     return <p className="text-[13px] text-unison-text-muted">No council decisions yet.</p>
@@ -282,8 +314,7 @@ const SERIES = [
   { key: "editsReviewed", label: "Edits reviewed", color: TONE_COLOR.edit },
 ] as const
 
-function DecisionsChart() {
-  const [scope, setScope] = useState<"council" | "me">("council")
+function DecisionsChart({ scope }: { scope: Scope }) {
   const days: DayDecisions[] | undefined = useCouncilOverview(scope).data?.decisionsByDay
   const labels = days?.map((d) => chartDay.format(d.day * 1000)) ?? []
   const last = labels.length - 1
@@ -292,18 +323,12 @@ function DecisionsChart() {
       <ChartHead
         id="council-decisions"
         title="Decisions, last 30 days"
-        sub="Every seal, rejection and edit review, from the web and from Discord."
-      >
-        <Segmented
-          label="Whose decisions"
-          value={scope}
-          onChange={setScope}
-          options={[
-            { value: "council", label: "Council" },
-            { value: "me", label: "You" },
-          ]}
-        />
-      </ChartHead>
+        sub={
+          scope === "me"
+            ? "Your seals, rejections and edit reviews, from the web and from Discord."
+            : "Every seal, rejection and edit review, from the web and from Discord."
+        }
+      />
       {days ? (
         <StackedBars
           series={SERIES.map((s) => ({ ...s, values: days.map((d) => d[s.key]) }))}
@@ -336,7 +361,7 @@ function WaitChart({
       <ChartHead
         id="council-waiting"
         title="How long items wait"
-        sub="Open seal candidates and pending edits, by time since they entered."
+        sub="Open seal candidates and edits, by how long they have waited."
       />
       {loaded ? (
         <>
@@ -366,7 +391,7 @@ function WaitChart({
   )
 }
 
-function ChartHead({ id, title, sub, children }: { id: string; title: string; sub: string; children?: ReactNode }) {
+function ChartHead({ id, title, sub }: { id: string; title: string; sub: string }) {
   return (
     <div className="mb-2 flex flex-wrap items-start justify-between gap-3">
       <div>
@@ -375,7 +400,6 @@ function ChartHead({ id, title, sub, children }: { id: string; title: string; su
         </h3>
         <p className="mt-0.5 text-xs text-unison-text-muted">{sub}</p>
       </div>
-      {children}
     </div>
   )
 }

@@ -6,7 +6,7 @@ import { type UseYouTubePlayerResult, __resetForTests, useYouTubePlayer } from "
 interface FakePlayerOptions {
   videoId: string
   playerVars?: Record<string, string | number>
-  events?: { onReady?: () => void }
+  events?: { onReady?: () => void; onStateChange?: (event: { data: number }) => void }
 }
 
 // Models the real YT.Player: methods are NOT attached until the iframe posts
@@ -22,10 +22,12 @@ class FakePlayer {
   pauses = 0
   playerVars?: Record<string, string | number>
   onReady?: () => void
+  onStateChange?: (event: { data: number }) => void
   static instances: FakePlayer[] = []
 
   constructor(_elem: HTMLElement | string, opts: FakePlayerOptions) {
     this.onReady = opts.events?.onReady
+    this.onStateChange = opts.events?.onStateChange
     this.playerVars = opts.playerVars
     FakePlayer.instances.push(this)
   }
@@ -186,6 +188,32 @@ describe("useYouTubePlayer", () => {
     player.state = PlayerState.ENDED
     expect(readPlaying()).toBe(false)
 
+    unmount()
+  })
+
+  it("reports whether the video plays as the player changes state", async () => {
+    installYT()
+    let playing: boolean | null = null
+    function CaptureHarness() {
+      const player = useYouTubePlayer("abc")
+      playing = player.playing
+      return createElement("div", { ref: player.ref })
+    }
+    const { unmount } = render(createElement(CaptureHarness))
+    await act(async () => {
+      await Promise.resolve()
+    })
+    const player = FakePlayer.instances[0]
+    expect(playing).toBe(false)
+    act(() => player.onStateChange?.({ data: PlayerState.PLAYING }))
+    expect(playing).toBe(true)
+    act(() => player.onStateChange?.({ data: PlayerState.BUFFERING }))
+    expect(playing).toBe(true)
+    act(() => player.onStateChange?.({ data: PlayerState.PAUSED }))
+    expect(playing).toBe(false)
+    act(() => player.onStateChange?.({ data: PlayerState.PLAYING }))
+    act(() => player.onStateChange?.({ data: PlayerState.ENDED }))
+    expect(playing).toBe(false)
     unmount()
   })
 

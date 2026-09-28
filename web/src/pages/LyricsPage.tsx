@@ -5,6 +5,7 @@ import { LyricsContentSkeleton, LyricsRenderer } from "@/components/LyricsRender
 import { RawLyricsView } from "@/components/RawLyricsView"
 import { VariantList, VariantListSkeleton } from "@/components/VariantList"
 import { VariantMetadata, VariantMetadataSkeleton } from "@/components/VariantMetadata"
+import { SealLyricButton } from "@/components/council/SealLyricButton"
 import { VoteControls } from "@/components/VoteControls"
 import { YouTubeMusicIcon } from "@/components/icons/YouTubeMusicIcon"
 import { Bone } from "@/components/skeleton"
@@ -111,11 +112,14 @@ export function LyricsPage() {
           ‹ back
         </button>
         {variant && selectedId !== undefined ? (
-          <VoteControls
-            variantId={variant.id}
-            videoId={safeVideoId}
-            variant={{ score: variant.score, userVote: variant.userVote ?? null }}
-          />
+          <div className="flex items-center gap-3">
+            <SealLyricButton videoId={safeVideoId} lyricsId={variant.id} />
+            <VoteControls
+              variantId={variant.id}
+              videoId={safeVideoId}
+              variant={{ score: variant.score, userVote: variant.userVote ?? null }}
+            />
+          </div>
         ) : (
           <Bone className="h-9 w-28 rounded-lg" />
         )}

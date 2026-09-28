@@ -18,12 +18,20 @@ export type Bookmarkable = { bookmark: BookmarkView | null }
 interface UseTriageOptions<T> {
   all: T[] | undefined
   shown: T[]
+  extra?: T[]
   entry: (item: T) => TriageEntry
   meKeyId: string
   now: number
 }
 
-export function useTriage<T extends Bookmarkable>({ all, shown, entry, meKeyId, now }: UseTriageOptions<T>) {
+export function useTriage<T extends Bookmarkable>({
+  all,
+  shown,
+  extra = [],
+  entry,
+  meKeyId,
+  now,
+}: UseTriageOptions<T>) {
   const [params, setParams] = useSearchParams()
   const [othersOpen, setOthersOpen] = useState(false)
   const [known, setKnown] = useState<ReadonlySet<string> | null>(null)
@@ -36,7 +44,7 @@ export function useTriage<T extends Bookmarkable>({ all, shown, entry, meKeyId, 
   }, [known, allKeys])
 
   const fresh = known && allKeys ? splitNew(known, allKeys) : []
-  const visible = known ? shown.filter((item) => known.has(entry(item).key)) : shown
+  const visible = [...(known ? shown.filter((item) => known.has(entry(item).key)) : shown), ...extra]
   const { mine, open, others } = groupByBookmark(visible, meKeyId, now)
   const order = [...mine, ...open, ...(othersOpen ? others : [])].map((item) => entry(item).key)
 

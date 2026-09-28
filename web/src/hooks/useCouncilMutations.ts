@@ -57,7 +57,7 @@ export function patchBookmark(
   bookmark: BookmarkView | null,
 ): void {
   if (itemType === "seal") {
-    client.setQueryData<QueueItem[]>(councilKeys.queue, (items) =>
+    client.setQueriesData<QueueItem[]>({ queryKey: councilKeys.queue }, (items) =>
       items?.map((i) => (i.id === itemId ? { ...i, bookmark } : i)),
     )
   } else {
@@ -178,8 +178,10 @@ export function useCouncilDecision() {
     onMutate: async (decision) => {
       if (isQueueDecision(decision)) {
         await client.cancelQueries({ queryKey: councilKeys.queue })
-        const queue = client.getQueryData<QueueItem[]>(councilKeys.queue)
-        client.setQueryData<QueueItem[]>(councilKeys.queue, (items) => items?.filter((i) => i.id !== decision.item.id))
+        const queue = client.getQueriesData<QueueItem[]>({ queryKey: councilKeys.queue })
+        client.setQueriesData<QueueItem[]>({ queryKey: councilKeys.queue }, (items) =>
+          items?.filter((i) => i.id !== decision.item.id),
+        )
         return { queue }
       }
       await client.cancelQueries({ queryKey: councilKeys.edits })
@@ -192,7 +194,7 @@ export function useCouncilDecision() {
       return { edits }
     },
     onError: (error, decision, snapshot) => {
-      if (snapshot?.queue) client.setQueryData(councilKeys.queue, snapshot.queue)
+      for (const [key, data] of snapshot?.queue ?? []) client.setQueryData(key, data)
       if (snapshot?.edits) client.setQueryData(councilKeys.edits, snapshot.edits)
       councilErrorToast(error, DONE[decision.kind].failed)
     },

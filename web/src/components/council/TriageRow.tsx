@@ -128,12 +128,18 @@ export function BookmarkClaim({ bookmark, now }: { bookmark: BookmarkView; now: 
   )
 }
 
-export function queueRowParts(item: QueueItem, heldByOther: boolean, now: number) {
+export function queueRowParts(item: QueueItem, heldByOther: boolean, now: number, outside = false) {
   return {
     title: item.song,
     sub: [item.artist, item.submitter?.displayName].filter(Boolean).join(" · "),
     meta: (
       <>
+        {outside ? (
+          <>
+            <span className="text-unison-text-secondary">Not in the queue</span>
+            <Sep />
+          </>
+        ) : null}
         <VariantBadge format={item.format} />
         {item.language ? <span>{item.language.toUpperCase()}</span> : null}
         <Sep />

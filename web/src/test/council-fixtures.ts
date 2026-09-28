@@ -216,6 +216,7 @@ export interface CouncilData {
   events: EventsPage
   myOverview?: CouncilOverview
   variants?: VariantFull[]
+  sealable?: Record<string, QueueItem[]>
 }
 
 export function councilData(overrides: Partial<CouncilData> = {}): CouncilData {
@@ -275,6 +276,13 @@ export function stubCouncilApi(
         return variant
           ? jsonResponse({ success: true, data: variant })
           : jsonResponse({ success: false, error: "Not found" }, 404)
+      },
+    },
+    {
+      match: (url) => url.startsWith("/committee/queue/video/"),
+      respond: (url) => {
+        const videoId = decodeURIComponent(url.split("/").pop() ?? "")
+        return jsonResponse({ success: true, data: data.sealable?.[videoId] ?? [] })
       },
     },
     {

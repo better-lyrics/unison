@@ -68,7 +68,7 @@ export async function getCouncilOverview(
 	const today = Math.floor(now / DAY) * DAY
 	const chartStart = today - (CHART_DAYS - 1) * DAY
 	const { monthStart } = monthWindow(now * 1000)
-	const chartActor = opts.scope === "me" ? opts.meId : null
+	const actor = opts.scope === "me" ? opts.meId : null
 
 	const [daily, month, split, current, previous, mine, quota] = await Promise.all([
 		env.DB.prepare(
@@ -77,7 +77,7 @@ export async function getCouncilOverview(
 			 WHERE ${DECIDED} AND e.created_at >= ? AND (?::int IS NULL OR e.actor_id = ?)
 			 GROUP BY 1, 2`
 		)
-			.bind(DECISION_KINDS, chartStart, chartActor, chartActor)
+			.bind(DECISION_KINDS, chartStart, actor, actor)
 			.all<{ day: number | string; kind: string; n: number | string }>(),
 		env.DB.prepare(
 			`SELECT e.kind, e.actor_id = ? AS mine, COUNT(*) AS n
@@ -93,9 +93,9 @@ export async function getCouncilOverview(
 		)
 			.bind(DECISION_KINDS, now - SPLIT_WINDOW)
 			.all<{ source: string; n: number | string }>(),
-		medianHours(env, now - MEDIAN_WINDOW, now, null),
-		medianHours(env, now - 2 * MEDIAN_WINDOW, now - MEDIAN_WINDOW, null),
-		medianHours(env, now - MEDIAN_WINDOW, now, opts.meId),
+		medianHours(env, now - MEDIAN_WINDOW, now, actor),
+		medianHours(env, now - 2 * MEDIAN_WINDOW, now - MEDIAN_WINDOW, actor),
+		actor === null ? medianHours(env, now - MEDIAN_WINDOW, now, opts.meId) : null,
 		getQuota(env, opts.meId),
 	])
 
@@ -116,8 +116,8 @@ export async function getCouncilOverview(
 		month.results
 			.filter((r) => kinds.includes(r.kind) && (!mineOnly || r.mine))
 			.reduce((n, r) => n + Number(r.n), 0)
-	const seals = count(["seal"], false)
-	const rejects = count(["reject"], false)
+	const seals = count(["seal"], actor !== null)
+	const rejects = count(["reject"], actor !== null)
 	const splitOf = (source: string) => Number(split.results.find((r) => r.source === source)?.n ?? 0)
 
 	return {
@@ -129,7 +129,7 @@ export async function getCouncilOverview(
 			quota,
 			rejectsThisMonth: count(["reject"], true),
 			editsThisMonth: count(["edit_approve", "edit_reject"], true),
-			medianDecisionHours: mine,
+			medianDecisionHours: actor === null ? mine : current,
 			bookmarkCap: config.council.bookmarkCap,
 			bookmarkTtlSec: config.council.bookmarkTtlSec,
 		},

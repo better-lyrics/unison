@@ -2,6 +2,8 @@ import { AuthorBadges } from "@/components/AuthorBadges"
 import { Kbd } from "@/components/Kbd"
 import { SongThumbnail } from "@/components/SongThumbnail"
 import { UserAvatar } from "@/components/UserAvatar"
+import { YouTubeMusicIcon } from "@/components/icons/YouTubeMusicIcon"
+import { buttonClass } from "@/components/ui"
 import { cn } from "@/lib/cn"
 import type { CouncilPerson } from "@/lib/council-types"
 import { youTubeMusicUrl } from "@/lib/youtube-music"
@@ -29,7 +31,6 @@ export function DetailHeader({
   artist: string
   chips: ReactNode
 }) {
-  const link = "inline-flex items-center gap-[5px] text-unison-text-muted transition-colors hover:text-unison-text"
   return (
     <div className="flex items-start gap-[22px]">
       <SongThumbnail
@@ -40,13 +41,18 @@ export function DetailHeader({
         <h2 className="text-[26px] leading-[1.2] font-bold tracking-[-0.01em] text-balance">{title}</h2>
         <div className="mt-1 text-sm text-unison-text-secondary">{artist}</div>
         <div className="mt-3 flex flex-wrap gap-1.5">{chips}</div>
-        <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs">
-          <a href={youTubeMusicUrl(videoId)} target="_blank" rel="noreferrer" className={link}>
-            <IconExternalLink aria-hidden className="size-3" stroke={1.5} />
+        <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2">
+          <a href={youTubeMusicUrl(videoId)} target="_blank" rel="noreferrer" className={buttonClass("primary", "sm")}>
+            <YouTubeMusicIcon aria-hidden className="size-4" />
             Open in YouTube Music
             <Kbd keys={["O"]} />
           </a>
-          <a href={`/song/${encodeURIComponent(videoId)}`} target="_blank" rel="noreferrer" className={link}>
+          <a
+            href={`/song/${encodeURIComponent(videoId)}`}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex items-center gap-[5px] text-xs text-unison-text-muted transition-colors hover:text-unison-text"
+          >
             <IconExternalLink aria-hidden className="size-3" stroke={1.5} />
             Song page
           </a>

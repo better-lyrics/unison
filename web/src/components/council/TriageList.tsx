@@ -17,6 +17,7 @@ interface TriageListProps<T extends Bookmarkable> {
   tools?: ReactNode
   openAside?: string
   empty: ReactNode | null
+  noMatch?: string
   flat?: boolean
 }
 
@@ -34,6 +35,7 @@ export function TriageList<T extends Bookmarkable>({
   tools,
   openAside,
   empty,
+  noMatch = "No open items match this filter.",
   flat = false,
 }: TriageListProps<T>) {
   const mine = triage.mine.map(row)
@@ -80,11 +82,7 @@ export function TriageList<T extends Bookmarkable>({
                 {openAside ? <span className={ASIDE}>{openAside}</span> : null}
               </div>
               <ul aria-label={label} className={ROWS}>
-                {open.length > 0 ? (
-                  open
-                ) : (
-                  <li className="px-1 py-2 text-xs text-unison-text-muted">No open items match this filter.</li>
-                )}
+                {open.length > 0 ? open : <li className="px-1 py-2 text-xs text-unison-text-muted">{noMatch}</li>}
               </ul>
               {others.length > 0 ? (
                 <>

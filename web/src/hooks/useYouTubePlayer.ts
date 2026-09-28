@@ -10,13 +10,14 @@ interface YTPlayer {
 }
 
 const YT_STATE_PLAYING = 1
+const YT_STATE_BUFFERING = 3
 
 interface YTPlayerCtorOptions {
   videoId: string
   width?: string | number
   height?: string | number
   playerVars?: Record<string, string | number>
-  events?: { onReady?: () => void }
+  events?: { onReady?: () => void; onStateChange?: (event: { data: number }) => void }
 }
 
 interface YTNamespace {
@@ -85,6 +86,7 @@ export interface UseYouTubePlayerResult {
   ref: (node: HTMLDivElement | null) => void
   getCurrentTime: () => number
   getPlaying: () => boolean
+  playing: boolean
   seekTo: (seconds: number) => void
   play: () => void
   pause: () => void
@@ -97,6 +99,7 @@ export interface UseYouTubePlayerOptions {
 export function useYouTubePlayer(videoId: string | null, options?: UseYouTubePlayerOptions): UseYouTubePlayerResult {
   const [node, setNode] = useState<HTMLDivElement | null>(null)
   const playerRef = useRef<YTPlayer | null>(null)
+  const [playing, setPlaying] = useState(false)
   // YT.Player methods aren't attached until onReady fires; calling one earlier
   // throws. The rAF sync loop polls every frame, so the getters must stay inert
   // until the player is ready or one throw kills the loop permanently.
@@ -139,6 +142,9 @@ export function useYouTubePlayer(videoId: string | null, options?: UseYouTubePla
               pendingPlayRef.current = false
             }
           },
+          onStateChange: ({ data }) => {
+            if (!cancelled && data !== YT_STATE_BUFFERING) setPlaying(data === YT_STATE_PLAYING)
+          },
         },
       })
       playerRef.current = player
@@ -148,6 +154,7 @@ export function useYouTubePlayer(videoId: string | null, options?: UseYouTubePla
     return () => {
       cancelled = true
       readyRef.current = false
+      setPlaying(false)
       pendingSeekRef.current = null
       pendingPlayRef.current = false
       const player = playerRef.current
@@ -195,5 +202,5 @@ export function useYouTubePlayer(videoId: string | null, options?: UseYouTubePla
     return player.getPlayerState() === YT_STATE_PLAYING
   }, [])
 
-  return { ref: setNode, getCurrentTime, getPlaying, seekTo, play, pause }
+  return { ref: setNode, getCurrentTime, getPlaying, playing, seekTo, play, pause }
 }

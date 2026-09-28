@@ -110,6 +110,20 @@ describe("CouncilActivityPage", () => {
     )
   })
 
+  it("opens on the filters in the address", async () => {
+    const router = stubCouncilApi(data())
+    renderCouncil(`/council/activity?kind=seals&actor=${OLA.keyId}`)
+    await waitFor(() => expect(calls(router)).toContain(`/committee/events?kind=seals&actor=${OLA.keyId}`))
+    expect(screen.getByRole("button", { name: "Seals" }).getAttribute("aria-pressed")).toBe("true")
+  })
+
+  it("ignores an unknown kind in the address", async () => {
+    const router = stubCouncilApi(data())
+    renderCouncil("/council/activity?kind=bogus")
+    await waitFor(() => expect(calls(router)).toContain("/committee/events"))
+    expect(screen.getByRole("button", { name: "All" }).getAttribute("aria-pressed")).toBe("true")
+  })
+
   it("loads older activity with the cursor", async () => {
     const router = stubCouncilApi(data(), { admin: false }, [
       {

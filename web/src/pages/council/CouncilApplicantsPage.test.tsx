@@ -167,6 +167,27 @@ describe("CouncilApplicantsPage", () => {
     await waitFor(() => expect(log).toEqual([`/committee/applicants/71/decision {"decision":"reject"}`]))
   })
 
+  it("lets an admin approve a near miss", async () => {
+    const log: string[] = []
+    stubCouncilApi(councilData({ applicants: [golden, noobot] }), { admin: true }, [
+      {
+        match: (url, init) => init?.method === "POST" && url === "/committee/applicants/70/decision",
+        respond: (url, init) => {
+          log.push(`${url} ${init?.body}`)
+          return jsonResponse({ success: true })
+        },
+      },
+    ])
+    renderCouncil("/council/applicants")
+    await screen.findByRole("article", { name: "GoldenKickWhisper" })
+    fireEvent.click(screen.getByRole("switch", { name: "Show near misses" }))
+    const near = await screen.findByRole("article", { name: "NooBot" })
+    expect(within(near).queryByRole("button", { name: "Reject" })).toBeNull()
+    fireEvent.click(within(near).getByRole("button", { name: /Approve and add to council/ }))
+    fireEvent.click(within(near).getByRole("button", { name: "Approve NooBot" }))
+    await waitFor(() => expect(log).toEqual([`/committee/applicants/70/decision {"decision":"approve"}`]))
+  })
+
   it("sends nothing when the admin cancels the confirmation", async () => {
     const log: string[] = []
     stubDecisions(log)

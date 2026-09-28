@@ -1,4 +1,4 @@
-import { useSession } from "@/auth/useSession"
+import { useOptionalSession } from "@/auth/useSession"
 import {
   type EventsQuery,
   fetchCouncilApplicants,
@@ -7,6 +7,7 @@ import {
   fetchCouncilMembers,
   fetchCouncilOverview,
   fetchCouncilQueue,
+  fetchSealableVariants,
 } from "@/lib/council-api"
 import { openItems } from "@/lib/council-triage"
 import type { BookmarkView } from "@/lib/council-types"
@@ -15,6 +16,7 @@ import { keepPreviousData, useInfiniteQuery, useQuery } from "@tanstack/react-qu
 export const councilKeys = {
   all: ["council"] as const,
   queue: ["council", "queue"] as const,
+  sealable: (videoId: string) => ["council", "queue", "video", videoId] as const,
   edits: ["council", "edits"] as const,
   overview: (scope: "council" | "me") => ["council", "overview", scope] as const,
   events: (filters: object) => ["council", "events", filters] as const,
@@ -26,8 +28,8 @@ export const councilKeys = {
 const REFRESH_MS = 60_000
 
 export function useCouncilRole(): { admin: boolean } | null {
-  const session = useSession()
-  return session.status === "signed-in" ? (session.identity.council ?? null) : null
+  const session = useOptionalSession()
+  return session?.status === "signed-in" ? (session.identity.council ?? null) : null
 }
 
 export function useCouncilQueue() {
@@ -37,6 +39,16 @@ export function useCouncilQueue() {
     queryFn: ({ signal }) => fetchCouncilQueue(signal),
     enabled: role !== null,
     refetchInterval: REFRESH_MS,
+    staleTime: 15_000,
+  })
+}
+
+export function useSealableVariants(videoId: string | null) {
+  const role = useCouncilRole()
+  return useQuery({
+    queryKey: councilKeys.sealable(videoId ?? ""),
+    queryFn: ({ signal }) => fetchSealableVariants(videoId ?? "", signal),
+    enabled: role !== null && videoId !== null,
     staleTime: 15_000,
   })
 }
@@ -84,11 +96,11 @@ export function useCouncilApplicants(includeBelowCutoff = false) {
   })
 }
 
-export function useCouncilFeed(limit: number) {
+export function useCouncilFeed(limit: number, actor?: string) {
   const role = useCouncilRole()
   return useQuery({
-    queryKey: councilKeys.events({ limit }),
-    queryFn: ({ signal }) => fetchCouncilEvents({ limit }, signal),
+    queryKey: councilKeys.events({ limit, actor }),
+    queryFn: ({ signal }) => fetchCouncilEvents({ limit, actor }, signal),
     enabled: role !== null,
     refetchInterval: REFRESH_MS,
     staleTime: 15_000,

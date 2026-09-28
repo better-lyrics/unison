@@ -106,6 +106,57 @@ describe("SealDetail", () => {
     ).toBe("https://music.youtube.com/watch?v=SMQpJ9x7zEk")
   })
 
+  it("shows the submitter first, above the numbers and the lyric", async () => {
+    stubCouncilApi(data())
+    renderCouncil("/council/queue?item=722")
+    const submitter = await within(await screen.findByRole("region", { name: "Details" })).findByText("Submitter")
+    const follows = (a: Node, b: Node) => Boolean(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING)
+    expect(follows(submitter, within(detail()).getByText("Effective score"))).toBe(true)
+    expect(follows(submitter, within(detail()).getByText("Lyric preview"))).toBe(true)
+  })
+
+  it("plays the real song in the preview, from the first line", async () => {
+    const players: { videoId: string; seeks: number[]; plays: number; pauses: number; state: number }[] = []
+    class FakePlayer {
+      rec: (typeof players)[number]
+      constructor(_el: HTMLElement, opts: { videoId: string; events?: { onReady?: () => void } }) {
+        this.rec = { videoId: opts.videoId, seeks: [], plays: 0, pauses: 0, state: 2 }
+        players.push(this.rec)
+        queueMicrotask(() => opts.events?.onReady?.())
+      }
+      seekTo(seconds: number) {
+        this.rec.seeks.push(seconds)
+      }
+      playVideo() {
+        this.rec.plays++
+        this.rec.state = 1
+      }
+      pauseVideo() {
+        this.rec.pauses++
+        this.rec.state = 2
+      }
+      getPlayerState() {
+        return this.rec.state
+      }
+      getCurrentTime() {
+        return 0
+      }
+      destroy() {}
+    }
+    vi.stubGlobal("YT", { Player: FakePlayer })
+    stubCouncilApi(data())
+    renderCouncil("/council/queue?item=722")
+    const play = await within(await screen.findByRole("region", { name: "Details" })).findByRole("button", {
+      name: /^Play(?! the)/,
+    })
+    await waitFor(() => expect((play as HTMLButtonElement).disabled).toBe(false))
+    fireEvent.click(play)
+    await waitFor(() => expect(players[0]?.plays).toBe(1))
+    expect(players[0]).toMatchObject({ videoId: "SMQpJ9x7zEk", seeks: [3.5] })
+    press("p")
+    expect(players[0].pauses).toBe(1)
+  })
+
   it("lists automatic flags with their labels", async () => {
     const d = data()
     d.queue = [{ ...story, flags: [{ code: "line-synced", label: "Line-synced, not word-by-word" }] }]
@@ -162,7 +213,7 @@ describe("sealing", () => {
     renderCouncil("/council/queue?item=722")
     await waitFor(() => expect(selected()).toBe("722"))
     press("s")
-    press("s")
+    press("Enter")
     await screen.findByText("Sealed “Story of a Warrior”")
     await waitFor(() => expect(selected()).toBe("1320"))
     press("r")
@@ -172,7 +223,7 @@ describe("sealing", () => {
     expect(screen.getAllByRole("button", { name: "Undo" })).toHaveLength(1)
   })
 
-  it("seals from the keyboard with S twice", async () => {
+  it("seals from the keyboard with S, then Enter to confirm", async () => {
     const log: string[] = []
     const server = data()
     stubCouncilApi(server, { admin: false }, decisionRoutes(log, server))
@@ -180,8 +231,38 @@ describe("sealing", () => {
     await waitFor(() => expect(within(detail()).getByRole("button", { name: /^Seal/ })).toBeTruthy())
     press("s")
     expect(detail().textContent).toContain("Seal “Story of a Warrior”?")
-    press("s")
+    await waitFor(() =>
+      expect(document.activeElement).toBe(within(detail()).getByRole("button", { name: /^Seal lyric/ })),
+    )
+    press("Enter")
     await waitFor(() => expect(log).toEqual(["POST /lyrics/722/boost {}"]))
+  })
+
+  it("regression: Enter on a focused button runs that button, not the seal", async () => {
+    const log: string[] = []
+    const server = data()
+    stubCouncilApi(server, { admin: false }, decisionRoutes(log, server))
+    renderCouncil("/council/queue?item=722")
+    await waitFor(() => expect(within(detail()).getByRole("button", { name: /^Seal/ })).toBeTruthy())
+    press("s")
+    const cancel = within(detail()).getByRole("button", { name: "Cancel" })
+    cancel.focus()
+    act(() => void fireEvent.keyDown(cancel, { key: "Enter" }))
+    await new Promise((resolve) => setTimeout(resolve, 20))
+    expect(log).toEqual([])
+  })
+
+  it("regression: a double tap on S asks but never seals", async () => {
+    const log: string[] = []
+    const server = data()
+    stubCouncilApi(server, { admin: false }, decisionRoutes(log, server))
+    renderCouncil("/council/queue?item=722")
+    await waitFor(() => expect(within(detail()).getByRole("button", { name: /^Seal/ })).toBeTruthy())
+    press("s")
+    press("s")
+    expect(detail().textContent).toContain("Seal “Story of a Warrior”?")
+    await new Promise((resolve) => setTimeout(resolve, 20))
+    expect(log).toEqual([])
   })
 
   it("puts the item back and shows the reason when sealing fails", async () => {
@@ -191,7 +272,7 @@ describe("sealing", () => {
     renderCouncil("/council/queue?item=722")
     await waitFor(() => expect(selected()).toBe("722"))
     press("s")
-    press("s")
+    press("Enter")
     await screen.findByText("Monthly seal quota reached")
     expect(screen.getByText("Wait for Oct 1.")).toBeTruthy()
     await waitFor(() => expect(screen.getByRole("link", { name: /Story of a Warrior/ })).toBeTruthy())
