@@ -87,7 +87,7 @@ describe("SealedPage", () => {
       const spy = stubFeed(() => json({ success: true, data: [sealedEntry(1)] }))
       renderPage()
       await waitFor(() => expect(screen.getByText("Sealed Song 1")).toBeTruthy())
-      fireEvent.click(screen.getByRole("button", { name: "Word synced" }))
+      fireEvent.click(screen.getByRole("button", { name: "Richsynced" }))
       await waitFor(() =>
         expect(feedCalls(spy)).toContain("/feed?sealed=1&sort=recently-sealed&limit=24&syncType=richsync"),
       )
@@ -131,6 +131,15 @@ describe("SealedPage", () => {
   })
 
   describe("regressions", () => {
+    it("regression: the richsync filter and the card chip share one label", async () => {
+      stubFeed(() => json({ success: true, data: [sealedEntry(1)] }))
+      renderPage()
+      await waitFor(() => expect(screen.getByText("Sealed Song 1")).toBeTruthy())
+      expect(screen.getByRole("button", { name: "Richsynced" })).toBeTruthy()
+      expect(screen.getAllByText("Richsynced")).toHaveLength(2)
+      expect(screen.queryByText(/word synced/i)).toBeNull()
+    })
+
     it("regression: a next page that repeats an already shown lyric does not duplicate its card", async () => {
       const first = Array.from({ length: 24 }, (_, i) => sealedEntry(i + 1))
       stubFeed((url) =>

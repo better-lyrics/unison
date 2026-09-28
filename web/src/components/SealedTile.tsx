@@ -20,10 +20,10 @@ const FRAME: Record<SealedTileVariant, string> = {
   card: "flex flex-col overflow-hidden rounded-xl bg-white/[0.02]",
 }
 
-const SYNC_LABEL: Partial<Record<FeedEntry["syncType"], string>> = {
-  richsync: "Word synced",
+export const SYNC_LABEL = {
+  richsync: "Richsynced",
   linesync: "Line synced",
-}
+} as const satisfies Partial<Record<FeedEntry["syncType"], string>>
 
 interface SealedTileProps {
   entry: FeedEntry
@@ -42,7 +42,7 @@ export function SealedTile({
 }: SealedTileProps) {
   const seal = entry.marks?.find((mark) => mark.type === "seal")
   const isCard = variant === "card"
-  const syncLabel = SYNC_LABEL[entry.syncType]
+  const syncLabel = entry.syncType === "plain" ? undefined : SYNC_LABEL[entry.syncType]
   const landAt = enterIndex === undefined ? null : enterDelay + staggerDelay(enterIndex)
   const sealClass = cn(
     "absolute drop-shadow-[0_2px_6px_rgba(0,0,0,0.5)]",
