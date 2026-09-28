@@ -49,7 +49,10 @@ export function SealedShelf() {
 
   return (
     <Shelf>
-      <ul data-testid="sealed-shelf-row" className="flex gap-3.5 overflow-x-auto pb-1.5">
+      <ul
+        data-testid="sealed-shelf-row"
+        className="flex gap-3.5 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+      >
         {data.items.map((entry) => (
           <li key={entry.id} className="shrink-0">
             <SealedTile entry={entry} variant="shelf" />

@@ -100,5 +100,16 @@ describe("SealedShelf", () => {
       expect(row?.className).toContain("overflow-hidden")
       expect(row?.className).not.toContain("overflow-x-auto")
     })
+
+    it("regression: the loaded row scrolls without a visible browser scrollbar or bottom gutter", async () => {
+      stubFetch(() => page([sealedEntry(1)]))
+      const { container } = renderShelf()
+      await waitFor(() => expect(screen.getByText("Sealed Song 1")).toBeTruthy())
+      const row = container.querySelector('[data-testid="sealed-shelf-row"]')
+      expect(row?.className).toContain("overflow-x-auto")
+      expect(row?.className).toContain("[scrollbar-width:none]")
+      expect(row?.className).toContain("[&::-webkit-scrollbar]:hidden")
+      expect(row?.className).not.toMatch(/\bpb-/)
+    })
   })
 })
