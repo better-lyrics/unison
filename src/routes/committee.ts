@@ -1,4 +1,9 @@
-import { addCommittee, listCommitteeKeyIds, removeCommittee } from "@/db/committee"
+import {
+	addCommittee,
+	listCommitteeKeyIds,
+	removeCommittee,
+	syncCouncilAdmins,
+} from "@/db/committee"
 import { listActiveBookmarks } from "@/db/council-bookmarks"
 import { discordIdsByKeyIds } from "@/db/discordLinks"
 import { getUserByKeyId } from "@/db/users"
@@ -47,6 +52,23 @@ export const committeeBotRoutes = (env: Env) =>
 			const keyIds = await listCommitteeKeyIds(env)
 			return status(200, { success: true, data: { keyIds } })
 		})
+		.put(
+			"/bot/admins",
+			async ({ env, headers, body, status }) => {
+				if (!isAuthorizedBot(headers.authorization, env)) {
+					return status(401, buildError(ErrorCode.AUTH_REQUIRED))
+				}
+				const changed = await syncCouncilAdmins(env, body.admins)
+				return status(200, { success: true, data: { changed } })
+			},
+			{
+				body: t.Object({
+					admins: t.Array(t.Object({ keyId: t.String({ maxLength: 128 }), admin: t.Boolean() }), {
+						maxItems: 500,
+					}),
+				}),
+			}
+		)
 		.get("/bookmarks/bot", async ({ env, headers, status }) => {
 			if (!isAuthorizedBot(headers.authorization, env)) {
 				return status(401, buildError(ErrorCode.AUTH_REQUIRED))
