@@ -236,6 +236,63 @@ describe("GET /feed", () => {
 		expect(body.data).toHaveLength(3)
 		expect(body.nextCursor).toBeUndefined()
 	})
+
+	describe("sealed", () => {
+		it("forwards sealed=1 and sort=recently-sealed into the SQL", async () => {
+			const db = makeMockDB([[]])
+			const app = feedRoutes(makeEnv(db))
+
+			const res = await app.handle(
+				new Request("http://localhost/feed?sealed=1&sort=recently-sealed")
+			)
+
+			expect(res.status).toBe(200)
+			const sql = db.calls[0].sql
+			expect(sql).toContain("committee_approved_at IS NOT NULL")
+			expect(sql).toMatch(
+				/\)\s*AS\s+unique_videos\s+ORDER BY\s+committee_approved_at DESC NULLS LAST,\s+id DESC/
+			)
+		})
+
+		it("serves the global sealed list to signed-in callers instead of personalizing it", async () => {
+			const db = makeMockDB([{ id: 42 }, []])
+			const app = feedRoutes(makeEnv(db))
+
+			const res = await app.handle(
+				new Request("http://localhost/feed?sealed=1", { headers: { "x-key-id": "user-key" } })
+			)
+
+			expect(res.status).toBe(200)
+			expect(db.calls[0].sql).toContain("FROM users WHERE key_id = ?")
+			expect(db.calls.some((c) => c.sql.includes("FROM votes v"))).toBe(false)
+			const feedSql = db.calls[1].sql
+			expect(feedSql).toContain("committee_approved_at IS NOT NULL")
+			expect(feedSql).not.toContain("is_personalized")
+		})
+	})
+
+	describe("sealed edge cases", () => {
+		it("ignores sealed=0 and keeps the baseline SQL", async () => {
+			const db = makeMockDB([[]])
+			const app = feedRoutes(makeEnv(db))
+
+			const res = await app.handle(new Request("http://localhost/feed?sealed=0"))
+
+			expect(res.status).toBe(200)
+			expect(db.calls[0].sql).not.toContain("committee_approved_at IS NOT NULL")
+		})
+
+		it("regression: signed-in callers without sealed still get the personalized feed", async () => {
+			const db = makeMockDB([{ id: 42 }, [{ artist_norm: "limbo" }], []])
+			const app = feedRoutes(makeEnv(db))
+
+			await app.handle(
+				new Request("http://localhost/feed", { headers: { "x-key-id": "user-key" } })
+			)
+
+			expect(db.calls[2].sql).toContain("is_personalized")
+		})
+	})
 })
 
 describe("GET /feed marks and submitter", () => {
