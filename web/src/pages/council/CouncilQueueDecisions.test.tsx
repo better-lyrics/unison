@@ -327,7 +327,7 @@ describe("sealing", () => {
     const button = await waitFor(() => within(detail()).getByRole("button", { name: /No seals left until Oct 1/ }))
     expect((button as HTMLButtonElement).disabled).toBe(true)
     fireEvent.mouseEnter(button.closest("[data-unavailable-hint]") as Element)
-    expect((await screen.findByRole("tooltip")).textContent).toContain("Submit lyrics this month")
+    expect((await screen.findByRole("tooltip")).textContent).toContain("Submit lyrics now to get more next month")
     press("s")
     expect(detail().textContent).not.toContain("Seal “Story of a Warrior”?")
   })

@@ -157,7 +157,7 @@ describe("CouncilLayout rail", () => {
     await screen.findByText("seals left", { exact: false })
     fireEvent.mouseEnter(screen.getByTestId("quota-card"))
     expect((await screen.findByRole("tooltip")).textContent).toBe(
-      "None of your August lyrics count, so this month's quota is reduced. Submit lyrics this month to lift next month's. Each month: 6 seals if any of your lyrics from the month before still count (not removed, hidden or rejected), 3 if not, plus 1 for every 2 of those lyrics that got upvoted, up to 12. New members count as active in the month they join and the next.",
+      "None of your August lyrics count, so you have fewer seals this month. Submit lyrics now to get more next month. You get 6 seals a month if at least one of your lyrics from last month still counts (not removed, hidden or rejected), or 3 if none do. Every 2 of those that got upvoted add 1 more, up to 12. New members count as active in the month they join and the next one.",
     )
   })
 
