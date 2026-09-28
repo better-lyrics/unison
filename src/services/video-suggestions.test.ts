@@ -114,6 +114,171 @@ describe("buildSuggestions", () => {
 		})
 	})
 
+	describe("multi-artist lyric credits", () => {
+		const DWAS = {
+			song: "Die With A Smile",
+			artist: "Lady Gaga, Bruno Mars",
+			album: null,
+			duration: 251,
+			videoId: "",
+		}
+
+		function dwas(over: Partial<SongCandidate> & Pick<SongCandidate, "videoId">): SongCandidate {
+			return candidate({
+				title: "Die With A Smile",
+				artist: "Lady Gaga",
+				artists: ["Lady Gaga", "Bruno Mars"],
+				album: "Die With A Smile",
+				durationSeconds: 252,
+				...over,
+			})
+		}
+
+		it("regression: Die With A Smile by Lady Gaga, Bruno Mars returns its videos", () => {
+			const out = buildSuggestions(
+				[
+					dwas({ videoId: "kPa7bsKwL-c" }),
+					dwas({ videoId: "acoustic000", title: "Die With A Smile (Acoustic)" }),
+					dwas({ videoId: "instrument0", title: "Die With A Smile (Instrumental)" }),
+					dwas({ videoId: "cover000000", artist: "Perrie", artists: ["Perrie"] }),
+					dwas({
+						videoId: "cover000001",
+						artist: "Garrett Huffman",
+						artists: ["Garrett Huffman"],
+					}),
+				],
+				DWAS,
+				new Set()
+			)
+			expect(out.map((s) => s.videoId).sort()).toEqual(
+				["acoustic000", "instrument0", "kPa7bsKwL-c"].sort()
+			)
+			expect(out.find((s) => s.videoId === "kPa7bsKwL-c")?.matchScore).toBeCloseTo(0.8)
+		})
+
+		it("keeps a collab credited with a comma, ampersand, x, feat. or with", () => {
+			for (const artist of [
+				"Lady Gaga, Bruno Mars",
+				"Lady Gaga & Bruno Mars",
+				"Lady Gaga x Bruno Mars",
+				"Lady Gaga feat. Bruno Mars",
+				"Lady Gaga with Bruno Mars",
+			]) {
+				const out = buildSuggestions(
+					[dwas({ videoId: "kPa7bsKwL-c" })],
+					{ ...DWAS, artist },
+					new Set()
+				)
+				expect(
+					out.map((s) => s.videoId),
+					artist
+				).toEqual(["kPa7bsKwL-c"])
+			}
+		})
+
+		it("keeps a candidate whose primary artist is the second credited name", () => {
+			const out = buildSuggestions(
+				[
+					candidate({
+						videoId: "stay0000000",
+						title: "STAY",
+						artist: "Justin Bieber",
+						artists: ["Justin Bieber", "The Kid LAROI"],
+						durationSeconds: 141,
+					}),
+				],
+				{
+					song: "STAY",
+					artist: "The Kid LAROI, Justin Bieber",
+					album: null,
+					duration: 141,
+					videoId: "",
+				},
+				new Set()
+			)
+			expect(out.map((s) => s.videoId)).toEqual(["stay0000000"])
+			expect(out[0].matchScore).toBeCloseTo(0.8)
+		})
+
+		it("anchors on a multi-artist candidate so channel ids filter the rest", () => {
+			const out = buildSuggestions(
+				[
+					dwas({ videoId: "kPa7bsKwL-c", artistChannelIds: ["UCgaga", "UCbruno"] }),
+					dwas({ videoId: "acoustic000", artistChannelIds: ["UCgaga", "UCbruno"] }),
+					dwas({
+						videoId: "impostor000",
+						artist: "Lady Gaga",
+						artists: ["Lady Gaga"],
+						artistChannelIds: ["UCimpostor"],
+					}),
+				],
+				DWAS,
+				new Set()
+			)
+			expect(out.map((s) => s.videoId)).toEqual(["kPa7bsKwL-c", "acoustic000"])
+		})
+
+		it("keeps Tyler, The Creator solo and in a collab with Kali Uchis, both ways", () => {
+			const solo = candidate({
+				videoId: "tylersolo00",
+				artist: "Tyler, The Creator",
+				artists: ["Tyler, The Creator"],
+			})
+			const collab = candidate({
+				videoId: "tylercollab",
+				artist: "Tyler, The Creator",
+				artists: ["Tyler, The Creator", "Kali Uchis"],
+			})
+			const kali = candidate({
+				videoId: "kalisolo000",
+				artist: "Kali Uchis",
+				artists: ["Kali Uchis"],
+			})
+			const collabCredit = { ...META, artist: "Tyler, The Creator, Kali Uchis", videoId: "" }
+			const soloCredit = { ...META, artist: "Tyler, The Creator", videoId: "" }
+
+			expect(
+				buildSuggestions([solo, collab, kali], collabCredit, new Set()).map((s) => s.videoId)
+			).toEqual(["tylersolo00", "tylercollab", "kalisolo000"])
+			expect(
+				buildSuggestions([solo, collab, kali], soloCredit, new Set()).map((s) => s.videoId)
+			).toEqual(["tylersolo00", "tylercollab"])
+		})
+
+		it("keeps bands whose names contain separators", () => {
+			for (const band of ["Simon & Garfunkel", "Earth, Wind & Fire", "Tyler, The Creator"]) {
+				const out = buildSuggestions(
+					[candidate({ videoId: "band0000000", artist: band, artists: [band] })],
+					{ ...META, artist: band, videoId: "" },
+					new Set()
+				)
+				expect(
+					out.map((s) => s.videoId),
+					band
+				).toEqual(["band0000000"])
+				expect(out[0].matchScore, band).toBeCloseTo(1)
+			}
+		})
+
+		it("drops a candidate whose name is only a substring of a credited artist", () => {
+			const out = buildSuggestions(
+				[dwas({ videoId: "substring00", artist: "Ga", artists: ["Ga"] })],
+				DWAS,
+				new Set()
+			)
+			expect(out).toEqual([])
+		})
+
+		it("drops an unrelated artist that shares no name with the credit", () => {
+			const out = buildSuggestions(
+				[dwas({ videoId: "cover000000", artist: "Perrie", artists: ["Perrie"] })],
+				DWAS,
+				new Set()
+			)
+			expect(out).toEqual([])
+		})
+	})
+
 	describe("artist channel id matching", () => {
 		it("matches by shared channel id and drops a same-named artist with a different id", () => {
 			const out = buildSuggestions(

@@ -3,7 +3,7 @@ import { type Matched, matchSuggestions } from "@/services/recording-match"
 import { type SongSearch, cachedSongSearch } from "@/services/song-search"
 import type { Env } from "@/types"
 import type { SongCandidate } from "@/utils/innertube"
-import { normalize, normalizeArtist, normalizeSong } from "@/utils/normalize"
+import { creditIncludesArtist, normalize, normalizeArtist, normalizeSong } from "@/utils/normalize"
 
 export type Suggestion = SongCandidate & { matchScore: number }
 export type SuggestedVideo = Matched<Suggestion>
@@ -14,12 +14,9 @@ function stripTopicSuffix(name: string): string {
 	return name.replace(/\s*-\s*topic\s*$/i, "")
 }
 
-function nameMatchesArtist(names: string[], target: string): boolean {
-	if (!target) return true
-	return names.some((raw) => {
-		const n = normalizeArtist(stripTopicSuffix(raw))
-		return n.length > 0 && n === target
-	})
+function sharesCreditedArtist(c: SongCandidate, credit: string): boolean {
+	const names = c.artists.length > 0 ? c.artists : [c.artist]
+	return names.some((name) => creditIncludesArtist(credit, stripTopicSuffix(name)))
 }
 
 export function buildSuggestions(
@@ -28,20 +25,20 @@ export function buildSuggestions(
 	linked: Set<string>
 ): Suggestion[] {
 	const normSong = normalizeSong(meta.song)
-	const normArtist = normalizeArtist(meta.artist)
+	const hasArtist = normalizeArtist(meta.artist).length > 0
 	const normAlbum = meta.album ? normalize(meta.album) : null
 
 	const anchor =
 		candidates.find((c) => c.videoId === meta.videoId) ??
 		candidates.find(
-			(c) => normalizeSong(c.title) === normSong && normalizeArtist(c.artist) === normArtist
+			(c) => normalizeSong(c.title) === normSong && sharesCreditedArtist(c, meta.artist)
 		)
 	const referenceIds = new Set(anchor?.artistChannelIds ?? [])
 
 	const sameArtist = (c: SongCandidate): boolean =>
 		referenceIds.size > 0 && c.artistChannelIds.length > 0
 			? c.artistChannelIds.some((id) => referenceIds.has(id))
-			: nameMatchesArtist(c.artists.length > 0 ? c.artists : [c.artist], normArtist)
+			: !hasArtist || sharesCreditedArtist(c, meta.artist)
 
 	return candidates
 		.filter((c) => c.videoId !== meta.videoId && !linked.has(c.videoId))
@@ -51,7 +48,7 @@ export function buildSuggestions(
 		)
 		.map((c) => {
 			const titleEq = normalizeSong(c.title) === normSong ? 1 : 0
-			const artistEq = normalizeArtist(c.artist) === normArtist ? 1 : 0
+			const artistEq = creditIncludesArtist(meta.artist, stripTopicSuffix(c.artist)) ? 1 : 0
 			const albumEq =
 				normAlbum !== null && c.album !== null && normalize(c.album) === normAlbum ? 1 : 0
 			const matchScore = 0.5 * titleEq + 0.3 * artistEq + 0.2 * albumEq

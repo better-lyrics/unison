@@ -40,6 +40,25 @@ export function normalizeArtist(artist: string): string {
 	)
 }
 
+const CREDIT_SEPARATOR = /\s*[,&;/×]\s*|\s+(?:and|x|feat\.?|ft\.?|featuring|with)\s+/i
+
+function creditSegments(credit: string): string {
+	const segments = credit
+		.split(CREDIT_SEPARATOR)
+		.map(normalize)
+		.filter((s) => s.length > 0)
+	return `|${segments.join("|")}|`
+}
+
+/** Matches whole separator-bounded segments, so "Ga" is not an artist in "Lady Gaga". */
+export function creditIncludesArtist(credit: string, name: string): boolean {
+	const whole = normalizeArtist(name)
+	if (!whole) return false
+	if (whole === normalizeArtist(credit)) return true
+	const nameSegments = creditSegments(name)
+	return nameSegments !== "||" && creditSegments(credit).includes(nameSegments)
+}
+
 export function normalizeAlbum(album: string | null): string | null {
 	return album ? normalize(album) : null
 }
