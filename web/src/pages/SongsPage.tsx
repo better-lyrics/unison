@@ -22,9 +22,6 @@ export function SongsPage() {
         <LeaderboardSection title="Most Wanted">
           <SongRowSkeletonList rows={5} />
         </LeaderboardSection>
-        <LeaderboardSection title="Needs Fixing">
-          <SongRowSkeletonList rows={3} />
-        </LeaderboardSection>
       </div>
     )
   }
@@ -53,28 +50,6 @@ export function SongsPage() {
         ) : (
           <ul className="space-y-2">
             {data.mostWanted.slice(0, MOST_WANTED_PREVIEW).map((entry) => (
-              <SongRow key={entry.videoId} entry={entry} />
-            ))}
-          </ul>
-        )}
-      </LeaderboardSection>
-
-      <LeaderboardSection
-        title="Needs Fixing"
-        subtitle="Songs with synced lyrics but enough bad-sync reports to investigate"
-      >
-        {data.needsFixing.length === 0 ? (
-          signedIn ? (
-            <EmptyState
-              title="Nothing flagged"
-              hint="Notice a song with bad lyric sync? Report it from Better Lyrics."
-            />
-          ) : (
-            <EmptyState title="Nothing flagged" hint="Reports below the threshold do not show up here." />
-          )
-        ) : (
-          <ul className="space-y-2">
-            {data.needsFixing.map((entry) => (
               <SongRow key={entry.videoId} entry={entry} />
             ))}
           </ul>

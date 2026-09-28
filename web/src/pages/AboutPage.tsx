@@ -23,11 +23,9 @@ export function AboutPage() {
       <section className="space-y-3">
         <h2 className="text-lg font-semibold text-unison-text">How the leaderboards work</h2>
         <p className="text-sm leading-relaxed text-unison-text-secondary">
-          Two song boards. Most Wanted is songs nobody's submitted lyrics for yet, ranked by reputation-weighted demand.
-          One request from a long-time contributor outranks a hundred from throwaway accounts, so the top of the board
-          reflects what people actually care about and not who has the most browser tabs open. Needs Fixing is the
-          inverse: songs that already have synced lyrics, but enough listeners flagged the timing for it to be worth a
-          second pass.
+          Most Wanted is songs nobody's submitted lyrics for yet, ranked by reputation-weighted demand. One request from
+          a long-time contributor outranks a hundred from throwaway accounts, so the top of the board reflects what
+          people actually care about and not who has the most browser tabs open.
         </p>
         <p className="text-sm leading-relaxed text-unison-text-secondary">
           The Leaderboard ranks people by submission volume and how much of that work survived voting. Names like
@@ -40,8 +38,8 @@ export function AboutPage() {
         <h2 className="text-lg font-semibold text-unison-text">How to contribute</h2>
         <p className="text-sm leading-relaxed text-unison-text-secondary">
           Install Better Lyrics. With a YT Music song open, the player footer has the buttons you need. Click "Request
-          lyrics" to push a song onto Most Wanted, or report bad sync on a song that already has lyrics to feed it into
-          Needs Fixing. To submit lyrics yourself, click "Submit lyrics with Unison" at the bottom of the page; if you
+          lyrics" to push a song onto Most Wanted, or report bad sync on a song that already has lyrics so it gets a
+          second look. To submit lyrics yourself, click "Submit lyrics with Unison" at the bottom of the page; if you
           don't have a synced version handy,{" "}
           <a
             href="https://composer.boidu.dev"
@@ -62,8 +60,8 @@ export function AboutPage() {
       </section>
 
       <section className="rounded-2xl border border-unison-border/50 bg-[rgba(255,255,255,0.075)] px-3.5 py-2.5 text-sm leading-relaxed text-pretty text-unison-text-secondary">
-        Heads up: without the Better Lyrics extension (Firefox, for example), sign in with your identity file. Export
-        it in Better Lyrics options → Identity → Export Key, then pick Sign in → Upload identity file. Linking Discord
+        Heads up: without the Better Lyrics extension (Firefox, for example), sign in with your identity file. Export it
+        in Better Lyrics options → Identity → Export Key, then pick Sign in → Upload identity file. Linking Discord
         still needs the extension in Chrome or Edge.
       </section>
 

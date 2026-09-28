@@ -44,7 +44,7 @@ afterEach(() => {
 })
 
 describe("SongsPage", () => {
-  it("renders both sections with rows from the API", async () => {
+  it("renders Most Wanted rows and never a Needs Fixing board, even when the API returns entries", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn().mockImplementation((url: string) => {
@@ -86,7 +86,8 @@ describe("SongsPage", () => {
     )
     renderPage()
     await waitFor(() => expect(screen.getByText("Wanted Song")).toBeTruthy())
-    expect(screen.getByText("Fixme Song")).toBeTruthy()
+    expect(screen.queryByText("Fixme Song")).toBeNull()
+    expect(screen.queryByRole("heading", { name: "Needs Fixing" })).toBeNull()
   })
 
   it("shows signed-out empty states when sections are empty and signed-out", async () => {
@@ -106,7 +107,6 @@ describe("SongsPage", () => {
     )
     renderPage()
     await waitFor(() => expect(screen.getByText("Nothing wanted right now")).toBeTruthy())
-    expect(screen.getByText(/Reports below the threshold/i)).toBeTruthy()
   })
 
   it("renders a 'See all' link in the Most Wanted header pointing to /queue", async () => {
@@ -164,7 +164,7 @@ describe("SongsPage", () => {
     expect(seeAll.getAttribute("href")).toBe("/queue")
   })
 
-  it("does not render a 'See all' link in the Needs Fixing header", async () => {
+  it("renders exactly one 'See all' link, for Most Wanted, when nothing is sealed", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn().mockImplementation((url: string) => {
@@ -180,8 +180,7 @@ describe("SongsPage", () => {
       }),
     )
     renderPage()
-    await waitFor(() => expect(screen.getByText("Nothing flagged")).toBeTruthy())
-    expect(screen.queryByRole("link", { name: /needs fixing/i })).toBeNull()
+    await waitFor(() => expect(screen.getByText("Nothing wanted right now")).toBeTruthy())
     const allLinks = screen.queryAllByRole("link", { name: /See all/i })
     expect(allLinks).toHaveLength(1)
     expect(allLinks[0].getAttribute("href")).toBe("/queue")
@@ -214,7 +213,6 @@ describe("SongsPage", () => {
     renderPage()
     await waitFor(() => expect(screen.getByText("Nothing requested right now")).toBeTruthy())
     expect(screen.getByText(/Request lyrics from Better Lyrics/i)).toBeTruthy()
-    expect(screen.getByText(/Report it from Better Lyrics/i)).toBeTruthy()
   })
 
   describe("sealed shelf", () => {
@@ -254,6 +252,7 @@ describe("SongsPage", () => {
       renderPage()
       expect(screen.getByRole("heading", { name: "Sealed by the Council" })).toBeTruthy()
       expect(screen.getByRole("heading", { name: "Most Wanted" })).toBeTruthy()
+      expect(screen.queryByRole("heading", { name: "Needs Fixing" })).toBeNull()
     })
 
     it("regression: a failed sealed feed never hides Most Wanted", async () => {
