@@ -127,6 +127,40 @@ describe("createTypesafeClient", () => {
 			).rejects.toThrow(/timeout|aborted/i)
 		})
 
+		it("aborts when the caller's signal fires before its own timeout", async () => {
+			const seen: AbortSignal[] = []
+			const fetchImpl = ((_url: string, init?: RequestInit) =>
+				new Promise((_resolve, reject) => {
+					if (init?.signal) seen.push(init.signal)
+					init?.signal?.addEventListener("abort", () => reject(init.signal?.reason))
+				})) as typeof fetch
+			const caller = new AbortController()
+			const pending = createTypesafeClient({ apiKey: "k", fetch: fetchImpl }).ask({
+				state: STATE,
+				questions: QUESTIONS,
+				timeoutMs: 60_000,
+				signal: caller.signal,
+			})
+			caller.abort(new DOMException("list deadline", "TimeoutError"))
+			await expect(pending).rejects.toThrow("list deadline")
+			expect(seen[0].aborted).toBe(true)
+		})
+
+		it("still times out on its own when the caller's signal never fires", async () => {
+			const fetchImpl = ((_url: string, init?: RequestInit) =>
+				new Promise((_resolve, reject) => {
+					init?.signal?.addEventListener("abort", () => reject(init.signal?.reason))
+				})) as typeof fetch
+			await expect(
+				createTypesafeClient({ apiKey: "k", fetch: fetchImpl }).ask({
+					state: STATE,
+					questions: QUESTIONS,
+					timeoutMs: 20,
+					signal: new AbortController().signal,
+				})
+			).rejects.toThrow(/timeout|aborted/i)
+		})
+
 		for (const [label, body] of [
 			["no answers field", { model: "jev-1.13.0", usage: {} }],
 			["answers that are not an object", { answers: "yes" }],

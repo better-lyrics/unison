@@ -98,7 +98,8 @@ async function mayCallTypesafe(env: Env, ids: Record<string, unknown>): Promise<
 async function judge(
 	env: Env,
 	lyric: LyricTrack,
-	candidate: SongCandidate
+	candidate: SongCandidate,
+	deadline: AbortSignal
 ): Promise<RecordingMatch | null> {
 	const client = env.TYPESAFE
 	if (!client) return null
@@ -106,11 +107,16 @@ async function judge(
 	try {
 		const cached = await cachedRecordingMatch(env, lyric, candidate)
 		if (cached) return cached
+		if (deadline.aborted) {
+			log.debug("recording match list deadline passed, leaving the suggestion unjudged", ids)
+			return null
+		}
 		if (!(await mayCallTypesafe(env, ids))) return null
 		const answers = await client.ask({
 			state: recordingMatchState(lyric, candidate),
 			questions: QUESTIONS,
 			timeoutMs: config.videoLinking.recordingMatch.timeoutMs,
+			signal: deadline,
 		})
 		const score = readScore(answers, "link", TOP_LEVEL)
 		await env.CACHE.put(cacheKey(lyric, candidate), JSON.stringify({ score }), {
@@ -153,9 +159,10 @@ export async function matchSuggestions<T extends SongCandidate>(
 	lyric: LyricTrack,
 	suggestions: T[]
 ): Promise<Matched<T>[]> {
-	const { maxCandidates, concurrency } = config.videoLinking.recordingMatch
+	const { maxCandidates, concurrency, timeoutMs } = config.videoLinking.recordingMatch
+	const deadline = AbortSignal.timeout(timeoutMs)
 	const judged = await mapWithConcurrency(suggestions.slice(0, maxCandidates), concurrency, (s) =>
-		judge(env, lyric, s)
+		judge(env, lyric, s, deadline)
 	)
 	const rank = (s: Matched<T>) => LEVEL_ORDER[s.match?.level ?? "unjudged"]
 	return suggestions

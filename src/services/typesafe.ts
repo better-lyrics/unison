@@ -6,6 +6,7 @@ export interface TypesafeRequest {
 	state: unknown
 	questions: Readonly<Record<string, unknown>>
 	timeoutMs: number
+	signal?: AbortSignal
 }
 
 export interface TypesafeClient {
@@ -26,7 +27,8 @@ export class TypesafeHttpError extends Error {
 export function createTypesafeClient(options: TypesafeClientOptions): TypesafeClient {
 	const fetchImpl = options.fetch ?? fetch
 	return {
-		async ask({ state, questions, timeoutMs }) {
+		async ask({ state, questions, timeoutMs, signal }) {
+			const timeout = AbortSignal.timeout(timeoutMs)
 			const res = await fetchImpl(config.typesafe.endpoint, {
 				method: "POST",
 				headers: {
@@ -34,7 +36,7 @@ export function createTypesafeClient(options: TypesafeClientOptions): TypesafeCl
 					"content-type": "application/json",
 				},
 				body: JSON.stringify({ state, model: config.typesafe.model, questions }),
-				signal: AbortSignal.timeout(timeoutMs),
+				signal: signal ? AbortSignal.any([timeout, signal]) : timeout,
 			})
 			if (!res.ok) throw new TypesafeHttpError(res.status)
 			const { answers } = (await res.json()) as { answers?: unknown }

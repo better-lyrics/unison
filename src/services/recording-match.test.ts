@@ -358,9 +358,65 @@ describe("matchSuggestions", () => {
 			const { requests, fetchImpl } = fakeTypesafe(scoreByCandidate())
 			const { env } = envWith(fetchImpl)
 			await matchSuggestions(env, LYRIC, [suggest(ALBUM), suggest(REMIX)])
-			expect(timeout.mock.calls).toEqual([[1500], [1500]])
+			expect(config.videoLinking.recordingMatch.timeoutMs).toBe(1500)
+			expect(timeout.mock.calls).toEqual([[1500], [1500], [1500]])
 			expect(requests.every((r) => r.init.signal instanceof AbortSignal)).toBe(true)
 		})
+	})
+
+	describe("list deadline", () => {
+		const ten = Array.from({ length: 10 }, (_, i) =>
+			suggest(candidate({ videoId: `dl${String(i).padStart(9, "0")}`, album: `Deadline ${i}` }))
+		)
+
+		function slowTypesafe(delayMs: (index: number) => number) {
+			let started = 0
+			const requests: string[] = []
+			const fetchImpl = ((_url: string, init?: RequestInit) => {
+				const index = started++
+				requests.push(JSON.parse(String(init?.body)).state.candidate.album)
+				return new Promise<Response>((resolve, reject) => {
+					const timer = setTimeout(
+						() => resolve(Response.json({ answers: { link: { type: "score", score: 1.9 } } })),
+						delayMs(index)
+					)
+					init?.signal?.addEventListener("abort", () => {
+						clearTimeout(timer)
+						reject(init.signal?.reason)
+					})
+				})
+			}) as typeof fetch
+			return { requests, fetchImpl }
+		}
+
+		it("returns within the per-request timeout even when a second round is needed", async () => {
+			const { fetchImpl } = slowTypesafe(() => 1000)
+			const { env, cache } = envWith(fetchImpl)
+			const started = Date.now()
+			const out = await matchSuggestions(env, LYRIC, ten)
+			const elapsed = Date.now() - started
+
+			expect(elapsed).toBeLessThan(1500 + 250)
+			expect(out.slice(0, 5).map((s) => s.match)).toEqual(
+				Array(5).fill({ level: "same", score: 1.9 })
+			)
+			expect(out.slice(5).map((s) => s.match)).toEqual(Array(5).fill(null))
+			const cached = [...cache.store.keys()].filter((k) => k.startsWith("recmatch:v2:"))
+			expect(cached).toHaveLength(5)
+			expect(cache.store.has("recmatch:breaker")).toBe(false)
+		}, 10_000)
+
+		it("does not start a row once the deadline has passed", async () => {
+			const { requests, fetchImpl } = slowTypesafe(() => 60_000)
+			const { env, limiter } = envWith(fetchImpl)
+			const started = Date.now()
+			const out = await matchSuggestions(env, LYRIC, ten)
+
+			expect(Date.now() - started).toBeLessThan(1500 + 250)
+			expect(out.every((s) => s.match === null)).toBe(true)
+			expect(requests).toHaveLength(5)
+			expect(limiter.calls).toHaveLength(5)
+		}, 10_000)
 	})
 
 	describe("edge cases", () => {
