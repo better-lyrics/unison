@@ -6,7 +6,7 @@ import { invalidateCacheForLyric } from "@/db/lyrics"
 import { AUTO_HIDE_PREDICATE_JOINED } from "@/db/predicates"
 import { isUniqueViolation } from "@/infra/database"
 import type { Env } from "@/types"
-import { quotaForBasis } from "@/utils/boost-quota"
+import { type BoostQuotaConfig, quotaForBasis } from "@/utils/boost-quota"
 
 export interface BoostQuota {
 	quota: number
@@ -14,6 +14,7 @@ export interface BoostQuota {
 	remaining: number
 	resetsAt: number
 	basis: { active: boolean; upvotedLyrics: number; bonus: number; monthStart: number }
+	rule: BoostQuotaConfig
 }
 
 export type BoostResult =
@@ -72,13 +73,15 @@ export async function getQuota(env: Env, boosterId: number): Promise<BoostQuota>
 	const used = Number(row?.used ?? 0)
 	const active = Boolean(row?.joined_recently) || Number(row?.lyrics ?? 0) > 0
 	const upvotedLyrics = Number(row?.upvoted ?? 0)
-	const { quota, bonus } = quotaForBasis({ active, upvotedLyrics }, config.gamification.boost.quota)
+	const rule = config.gamification.boost.quota
+	const { quota, bonus } = quotaForBasis({ active, upvotedLyrics }, rule)
 	return {
 		quota,
 		used,
 		remaining: Math.max(0, quota - used),
 		resetsAt,
 		basis: { active, upvotedLyrics, bonus, monthStart: lastMonthStart },
+		rule,
 	}
 }
 

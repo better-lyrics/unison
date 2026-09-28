@@ -1,6 +1,7 @@
 import { EmptyState } from "@/components/EmptyState"
 import { Kbd } from "@/components/Kbd"
 import { StatPill } from "@/components/StatPills"
+import { Tooltip } from "@/components/Tooltip"
 import { UserAvatar } from "@/components/UserAvatar"
 import { Histogram } from "@/components/charts/Histogram"
 import { StackedBars } from "@/components/charts/StackedBars"
@@ -21,6 +22,7 @@ import {
 } from "@/hooks/useCouncilData"
 import { cn } from "@/lib/cn"
 import { deriveNeeds } from "@/lib/council-needs"
+import { quotaExplanation } from "@/lib/council-quota"
 import { openItems } from "@/lib/council-triage"
 import type { DayDecisions } from "@/lib/council-types"
 import { waitBuckets } from "@/lib/council-wait"
@@ -78,6 +80,7 @@ export function CouncilOverviewPage() {
           <>
             <Segmented
               label="Whose numbers"
+              size="md"
               value={scope}
               onChange={setScope}
               options={[
@@ -151,10 +154,7 @@ export function CouncilOverviewPage() {
         <Region
           title={mine ? "Your activity" : "Council activity"}
           aside={
-            <Link
-              to={mine ? `/council/activity?actor=${meKeyId}` : "/council/activity"}
-              className={asideLinkClass}
-            >
+            <Link to={mine ? `/council/activity?actor=${meKeyId}` : "/council/activity"} className={asideLinkClass}>
               See all
               <IconArrowRight aria-hidden className="size-3" stroke={1.5} />
             </Link>
@@ -181,10 +181,7 @@ export function CouncilOverviewPage() {
         title={`Your ${monthName.format(now * 1000)}`}
         sub="Your own council work this month."
         aside={
-          <Link
-            to={`/council/activity?kind=seals&actor=${meKeyId}`}
-            className={asideLinkClass}
-          >
+          <Link to={`/council/activity?kind=seals&actor=${meKeyId}`} className={asideLinkClass}>
             Your seals
             <IconArrowRight aria-hidden className="size-3" stroke={1.5} />
           </Link>
@@ -192,12 +189,16 @@ export function CouncilOverviewPage() {
       >
         {stats ? (
           <div className="flex flex-wrap gap-3">
-            <StatPill
-              icon={IconRosetteDiscountCheck}
-              value={stats.me.quota.used}
-              suffix={`/${stats.me.quota.quota}`}
-              label="seals used"
-            />
+            <Tooltip label={quotaExplanation(stats.me.quota)}>
+              <div data-quota-explained>
+                <StatPill
+                  icon={IconRosetteDiscountCheck}
+                  value={stats.me.quota.used}
+                  suffix={`/${stats.me.quota.quota}`}
+                  label="seals used"
+                />
+              </div>
+            </Tooltip>
             <StatPill icon={IconX} tone="reject" value={stats.me.rejectsThisMonth} label="rejections" />
             <StatPill icon={IconPencil} tone="edit" value={stats.me.editsThisMonth} label="edits reviewed" />
             {stats.me.medianDecisionHours === null ? null : (

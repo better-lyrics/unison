@@ -1,5 +1,14 @@
 import { __resetToastStore } from "@/lib/toast"
-import { ME, NOW, OLA, QUOTA_BASIS, councilData, rosterMember, stubCouncilApi } from "@/test/council-fixtures"
+import {
+  ME,
+  NOW,
+  OLA,
+  QUOTA_BASIS,
+  QUOTA_RULE,
+  councilData,
+  rosterMember,
+  stubCouncilApi,
+} from "@/test/council-fixtures"
 import { jsonResponse } from "@/test/fetch-router"
 import { renderCouncil } from "@/test/render-council"
 import { cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react"
@@ -25,13 +34,13 @@ function data() {
     members: [
       rosterMember(ME, {
         lastActiveAt: NOW - 3600,
-        quota: { quota: 3, used: 1, remaining: 2, resetsAt: NOW, basis: QUOTA_BASIS },
+        quota: { quota: 3, used: 1, remaining: 2, resetsAt: NOW, basis: QUOTA_BASIS, rule: QUOTA_RULE },
       }),
       rosterMember(OLA, {
         isAdmin: true,
         lastActiveAt: NOW - 5 * DAY,
         weekly: [9, 9, 9, 9, 9, 9, 9, 9],
-        quota: { quota: 3, used: 2, remaining: 1, resetsAt: NOW, basis: QUOTA_BASIS },
+        quota: { quota: 3, used: 2, remaining: 1, resetsAt: NOW, basis: QUOTA_BASIS, rule: QUOTA_RULE },
       }),
       rosterMember(ADO, { lastActiveAt: NOW - 23 * DAY, weekly: [2, 1, 0, 0, 0, 0, 0, 0] }),
     ],
@@ -52,8 +61,18 @@ describe("CouncilMembersPage", () => {
     expect(screen.getByRole("img", { name: "2 of 3 seals used" })).toBeTruthy()
     expect(screen.getByText("Inactive 3w")).toBeTruthy()
     expect(
-      screen.getByText("3 council members. Quotas scale with leaderboard tier and reset on the 1st of each month."),
+      screen.getByText("3 council members. Quotas come from each member's lyrics last month and reset on the 1st."),
     ).toBeTruthy()
+  })
+
+  it("explains a member's quota on hover", async () => {
+    stubCouncilApi(data())
+    renderCouncil("/council/members")
+    const pips = await screen.findByRole("img", { name: "2 of 3 seals used" })
+    fireEvent.mouseEnter(pips.closest("[data-quota-explained]") as Element)
+    expect((await screen.findByRole("tooltip")).textContent).toBe(
+      "None of their August lyrics count, so this month's quota is reduced. Each month: 6 seals if you submitted lyrics the month before, 3 if not, plus 1 for every 2 of those lyrics that got upvoted, up to 12. New members get 6 for their first two months.",
+    )
   })
 
   it("sorts by decisions and by seals", async () => {

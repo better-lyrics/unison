@@ -3,6 +3,7 @@ import { VariantBadge } from "@/components/VariantBadge"
 import { useCouncilShortcuts } from "@/hooks/useCouncilShortcuts"
 import { useLyricsVariants } from "@/hooks/useLyricsData"
 import { cn } from "@/lib/cn"
+import { quotaExplanation } from "@/lib/council-quota"
 import type { BookmarkState } from "@/lib/council-triage"
 import type { BoostQuota, QueueItem } from "@/lib/council-types"
 import { formatElapsed, formatRemaining, formatShortDate, titleCase } from "@/lib/format"
@@ -52,6 +53,7 @@ export function SealDetail(props: SealDetailProps) {
             confirmBody: `This uses 1 of your ${remaining} remaining seals this month. The lyric gets the council mark and ranks higher, and your name shows on the seal.`,
             confirmLabel: "Seal lyric",
             unavailable: quota && remaining <= 0 ? `No seals left until ${formatShortDate(quota.resetsAt)}` : null,
+            unavailableHint: quota ? quotaExplanation(quota) : undefined,
           }}
           onPrimary={props.onSeal}
           reject={{ submitLabel: "Reject lyric", hint: "Optional. Shown in the activity log and on the Discord card." }}
