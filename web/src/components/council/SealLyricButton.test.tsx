@@ -78,7 +78,15 @@ describe("SealLyricButton", () => {
   })
 
   it("puts the button back and says why when the seal fails", async () => {
+    let lookups = 0
     stubCouncilApi(councilData({ sealable: { [VIDEO]: [lyric] } }), { admin: false }, [
+      {
+        match: (url) => url === `/committee/queue/video/${VIDEO}`,
+        respond: () => {
+          lookups++
+          return lookups === 1 ? jsonResponse({ success: true, data: [lyric] }) : new Promise<Response>(() => {})
+        },
+      },
       {
         match: (url, init) => init?.method === "POST" && url === "/lyrics/51/boost",
         respond: () => jsonResponse({ success: false, error: "Monthly seal quota reached" }, 409),

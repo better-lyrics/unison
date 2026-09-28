@@ -231,7 +231,9 @@ describe("sealing", () => {
     await waitFor(() => expect(within(detail()).getByRole("button", { name: /^Seal/ })).toBeTruthy())
     press("s")
     expect(detail().textContent).toContain("Seal “Story of a Warrior”?")
-    await waitFor(() => expect(document.activeElement?.textContent).toContain("Seal lyric"))
+    await waitFor(() =>
+      expect(document.activeElement).toBe(within(detail()).getByRole("button", { name: /^Seal lyric/ })),
+    )
     press("Enter")
     await waitFor(() => expect(log).toEqual(["POST /lyrics/722/boost {}"]))
   })
