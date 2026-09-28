@@ -59,11 +59,16 @@ function cacheKey(lyric: LyricTrack, candidate: SongCandidate): string {
 	return `recmatch:${config.videoLinking.recordingMatch.cacheVersion}:${sha256Hex(state)}`
 }
 
+function isSwitchedOff(env: Env): boolean {
+	return env.RECORDING_MATCH_ENABLED === false
+}
+
 export async function cachedRecordingMatch(
 	env: Env,
 	lyric: LyricTrack,
 	candidate: SongCandidate
 ): Promise<RecordingMatch | null> {
+	if (isSwitchedOff(env)) return null
 	const cached = await env.CACHE.get(cacheKey(lyric, candidate))
 	if (!cached) return null
 	try {
@@ -114,7 +119,7 @@ async function judge(
 	deadline: AbortSignal
 ): Promise<RecordingMatch | null> {
 	const client = env.TYPESAFE
-	if (!client) return null
+	if (!client || isSwitchedOff(env)) return null
 	const ids = { lyricsId: lyric.lyricsId, videoId: candidate.videoId }
 	try {
 		const cached = await cachedRecordingMatch(env, lyric, candidate)

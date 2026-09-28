@@ -33,6 +33,7 @@ export interface Env {
 	RAILWAY_PUBLIC_DOMAIN?: string
 	JEV?: JevGate
 	TYPESAFE?: TypesafeClient | null
+	RECORDING_MATCH_ENABLED?: boolean
 }
 
 export interface RateLimiter {

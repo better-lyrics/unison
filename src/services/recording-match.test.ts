@@ -896,6 +896,59 @@ describe("breaker", () => {
 	})
 })
 
+describe("kill switch", () => {
+	function switchedOff(fetchImpl: typeof fetch, cache = makeMemoryCache()) {
+		const reads: string[] = []
+		const writes: string[] = []
+		const get = cache.get
+		const put = cache.put
+		cache.get = async (key: string) => {
+			reads.push(key)
+			return get(key)
+		}
+		cache.put = async (key: string, value: string) => {
+			writes.push(key)
+			await put(key, value)
+		}
+		const { env, limiter } = envWith(fetchImpl, cache)
+		env.RECORDING_MATCH_ENABLED = false
+		return { env, limiter, reads, writes }
+	}
+
+	it("leaves every match null without calls, cache reads or writes, or budget", async () => {
+		const { requests, fetchImpl } = fakeTypesafe(scoreByCandidate())
+		const { env, limiter, reads, writes } = switchedOff(fetchImpl)
+		const input = [suggest(REMIX), suggest(ALBUM), suggest(EDIT)]
+		const out = await matchSuggestions(env, LYRIC, input)
+
+		expect(out).toEqual(input.map((s) => ({ ...s, match: null })))
+		expect(requests).toHaveLength(0)
+		expect(reads).toEqual([])
+		expect(writes).toEqual([])
+		expect(limiter.calls).toEqual([])
+	})
+
+	it("ignores answers cached before it was switched off, at link time too", async () => {
+		const { fetchImpl } = fakeTypesafe(scoreByCandidate())
+		const cache = makeMemoryCache()
+		await matchSuggestions(envWith(fetchImpl, cache).env, LYRIC, [suggest(ALBUM)])
+
+		const { env, reads } = switchedOff(fetchImpl, cache)
+		const [out] = await matchSuggestions(env, LYRIC, [suggest(ALBUM)])
+		expect(out.match).toBeNull()
+		expect(await cachedRecordingMatch(env, LYRIC, ALBUM)).toBeNull()
+		expect(reads).toEqual([])
+	})
+
+	it("matches as usual when the switch is on", async () => {
+		const { fetchImpl } = fakeTypesafe(scoreByCandidate())
+		const { env } = envWith(fetchImpl)
+		env.RECORDING_MATCH_ENABLED = true
+		const [out] = await matchSuggestions(env, LYRIC, [suggest(ALBUM)])
+		expect(out.match).toEqual({ level: "same", score: 1.9 })
+	})
+})
+
 describe("cachedRecordingMatch", () => {
 	it("returns the cached match for a lyric and candidate without calling TypeSafe", async () => {
 		const { requests, fetchImpl } = fakeTypesafe(scoreByCandidate())

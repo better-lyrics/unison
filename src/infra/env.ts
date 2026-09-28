@@ -10,6 +10,7 @@ import { createStorage } from "./storage"
 
 const log = new Logger("env")
 const BOOL_ENV_TRUTHY = new Set(["true", "1", "yes"])
+const BOOL_ENV_FALSY = new Set(["false", "0", "no"])
 
 function readDumpsEnabled(): boolean {
 	const raw = process.env.DUMPS_ENABLED?.trim().toLowerCase() ?? ""
@@ -93,6 +94,16 @@ export function readTypesafeClient(): TypesafeClient | null {
 	return apiKey ? createTypesafeClient({ apiKey }) : null
 }
 
+export function readRecordingMatchEnabled(): boolean {
+	const raw = process.env.RECORDING_MATCH_ENABLED?.trim().toLowerCase() ?? ""
+	if (raw === "" || BOOL_ENV_TRUTHY.has(raw)) return true
+	if (BOOL_ENV_FALSY.has(raw)) return false
+	log.warn("RECORDING_MATCH_ENABLED is set but did not normalize to true or false", {
+		raw: process.env.RECORDING_MATCH_ENABLED,
+	})
+	return true
+}
+
 export function createEnv(): Env {
 	const databaseUrl = process.env.DATABASE_URL
 	if (!databaseUrl) throw new Error("DATABASE_URL is required")
@@ -130,5 +141,6 @@ export function createEnv(): Env {
 		RAILWAY_PUBLIC_DOMAIN: process.env.RAILWAY_PUBLIC_DOMAIN || "",
 		JEV: readJevGate(),
 		TYPESAFE: readTypesafeClient(),
+		RECORDING_MATCH_ENABLED: readRecordingMatchEnabled(),
 	}
 }
