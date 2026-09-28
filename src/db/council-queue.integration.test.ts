@@ -101,6 +101,31 @@ describeIntegration("council seal queue (integration)", () => {
 			expect(item.bookmark?.expiresAt).toBeGreaterThan(item.bookmark?.createdAt ?? 0)
 		})
 
+		it("carries the submitter's and the bookmark holder's real badges", async () => {
+			const id = await candidate("dQw4w9WgXcQ")
+			await db.pool.query(
+				"INSERT INTO badge_awards (user_id, badge_key, tier) VALUES ($1, 'verified-contributor', 3), ($2, 'polyglot', 1)",
+				[submitter, mira]
+			)
+			await createBookmark(db.env, mira, "seal", id, "web")
+			const [item] = await listCouncilQueue(db.env)
+			expect(item.submitter).toMatchObject({
+				badgeCount: 1,
+				topBadge: expect.objectContaining({ key: "verified-contributor", tier: 3 }),
+				featured: [expect.objectContaining({ key: "verified-contributor" })],
+			})
+			expect(item.bookmark?.holder).toMatchObject({
+				badgeCount: 1,
+				topBadge: expect.objectContaining({ key: "polyglot" }),
+			})
+		})
+
+		it("gives a person without badges an empty summary", async () => {
+			await candidate("dQw4w9WgXcQ")
+			const [item] = await listCouncilQueue(db.env)
+			expect(item.submitter).toMatchObject({ badgeCount: 0, topBadge: null, featured: [] })
+		})
+
 		it("counts other variants and filled requests for the song", async () => {
 			const id = await candidate("dQw4w9WgXcQ")
 			await candidate("dQw4w9WgXcQ", { by: other, score: 0.2 })

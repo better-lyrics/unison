@@ -10,10 +10,10 @@ import {
 } from "@/db/council-bookmarks"
 import { listCouncilEdits } from "@/db/council-edits"
 import { type CouncilEventKind, listCouncilEvents, parseEventsCursor } from "@/db/council-events"
+import { loadPersonDecor } from "@/db/council-person"
 import { listCouncilQueue } from "@/db/council-queue"
 import { getCouncilOverview, getCouncilRoster } from "@/db/council-stats"
 import { getSessionById, recordDecision } from "@/db/exam"
-import { getCuratorTierMap } from "@/db/leaderboard"
 import { getOrCreateUser, getUserByKeyId } from "@/db/users"
 import type { Env } from "@/types"
 import { allowCouncilWrite, parseCouncilNote } from "@/utils/council-input"
@@ -74,10 +74,10 @@ export const councilRoutes = (env: Env) =>
 			const result = await createBookmark(env, userId, input.itemType, input.itemId, "web")
 			if (result.ok) {
 				const { itemType, itemId, lyricsId } = result.bookmark
-				const tiers = await getCuratorTierMap(env)
+				const decor = await loadPersonDecor(env, [result.bookmark.holder])
 				return {
 					success: true,
-					data: { ...toBookmarkView(result.bookmark, tiers), itemType, itemId, lyricsId },
+					data: { ...toBookmarkView(result.bookmark, decor), itemType, itemId, lyricsId },
 				}
 			}
 			switch (result.reason) {

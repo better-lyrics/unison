@@ -10,6 +10,7 @@ import type {
   QueueItem,
   RosterMember,
 } from "@/lib/council-types"
+import { seedBadgeCatalogue } from "@/lib/dev-seed"
 import type { VariantFull } from "@/lib/types"
 import { vi } from "vitest"
 import { type FetchRoute, fetchRouter, jsonResponse } from "./fetch-router"
@@ -18,6 +19,8 @@ export const NOW = 1_790_000_000
 const HOUR = 3600
 const DAY = 86400
 
+export const NO_BADGES = { badgeCount: 0, topBadge: null, featured: [] }
+
 export const ME: CouncilPerson = {
   userId: 1,
   keyId: "b0".repeat(32),
@@ -25,6 +28,7 @@ export const ME: CouncilPerson = {
   handle: "boidu",
   avatarUrl: "https://cdn.betterlyrics.org/avatars/face-paint.webp",
   tier: "elite",
+  ...NO_BADGES,
 }
 
 export const OLA: CouncilPerson = {
@@ -34,6 +38,7 @@ export const OLA: CouncilPerson = {
   handle: "olafix52",
   avatarUrl: null,
   tier: "elite",
+  ...NO_BADGES,
 }
 
 export function queueItem(overrides: Partial<QueueItem> = {}): QueueItem {
@@ -61,6 +66,7 @@ export function queueItem(overrides: Partial<QueueItem> = {}): QueueItem {
       handle: null,
       avatarUrl: null,
       tier: "elite",
+      ...NO_BADGES,
       reputation: 1.71,
       submissions: 41,
       sealed: 2,
@@ -270,6 +276,10 @@ export function stubCouncilApi(
           ? jsonResponse({ success: true, data: variant })
           : jsonResponse({ success: false, error: "Not found" }, 404)
       },
+    },
+    {
+      match: (url) => url === "/badges",
+      respond: async () => jsonResponse({ success: true, data: await seedBadgeCatalogue() }),
     },
     {
       match: (url) => url.startsWith("/artwork?"),

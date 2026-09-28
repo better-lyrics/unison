@@ -1,4 +1,4 @@
-import type { Confidence, LyricsFormat, SyncType, TierName } from "./types"
+import type { Confidence, LeaderboardBadge, LyricsFormat, SyncType, TierName } from "./types"
 
 export interface CouncilPerson {
   userId: number
@@ -7,6 +7,9 @@ export interface CouncilPerson {
   handle: string | null
   avatarUrl: string | null
   tier: TierName | null
+  badgeCount: number
+  topBadge: LeaderboardBadge | null
+  featured: LeaderboardBadge[]
 }
 
 export interface BookmarkView {

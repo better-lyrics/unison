@@ -110,10 +110,7 @@ export function EditDetail(props: EditDetailProps) {
           <BlockHead title="Author" />
           {item.author ? (
             <PersonCard
-              keyId={item.author.keyId}
-              name={item.author.displayName}
-              avatarUrl={item.author.avatarUrl}
-              tier={item.author.tier}
+              person={item.author}
               sub={`Submitted Rev ${item.revNo} ${formatElapsed(now - item.createdAt)} ago`}
             />
           ) : (

@@ -157,6 +157,25 @@ describe("CouncilEditsPage", () => {
     expect(detail().querySelector("[data-side='after'] mark")?.textContent).toBe("map")
   })
 
+  it("shows the author's real badges", async () => {
+    const d = data()
+    d.edits.items[0] = {
+      ...d.edits.items[0],
+      author: d.edits.items[0].author && {
+        ...d.edits.items[0].author,
+        tier: "master",
+        featured: [{ key: "prolific", name: "Prolific" }],
+        badgeCount: 2,
+      },
+    }
+    stubCouncilApi(d, { admin: false }, routes([]))
+    renderCouncil("/council/edits?item=9001")
+    expect(
+      await within(await screen.findByRole("region", { name: "Details" })).findByRole("img", { name: "Prolific" }),
+    ).toBeTruthy()
+    await waitFor(() => expect(detail().querySelector("[data-tier='master'] img")).toBeTruthy())
+  })
+
   it("lists the revision history newest first", async () => {
     stubCouncilApi(data(), { admin: false }, routes([]))
     renderCouncil("/council/edits?item=9001")

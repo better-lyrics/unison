@@ -1,4 +1,5 @@
 import { AuthProvider } from "@/auth/AuthProvider"
+import { BadgeCatalogueProvider } from "@/components/BadgeCatalogueContext"
 import { ToastViewport } from "@/components/ToastViewport"
 import { councilRoute } from "@/pages/council/routes"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
@@ -13,8 +14,10 @@ export function renderCouncil(path = "/council", children: RouteObject[] = counc
         path: "/",
         element: (
           <AuthProvider>
-            <Outlet />
-            <ToastViewport />
+            <BadgeCatalogueProvider>
+              <Outlet />
+              <ToastViewport />
+            </BadgeCatalogueProvider>
           </AuthProvider>
         ),
         children: [{ ...councilRoute, children }],

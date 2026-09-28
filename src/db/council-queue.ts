@@ -1,7 +1,6 @@
 import { config } from "@/config"
 import { type BookmarkView, listActiveBookmarks, toBookmarkView } from "@/db/council-bookmarks"
-import { type CouncilPerson, withTier } from "@/db/council-person"
-import { getCuratorTierMap } from "@/db/leaderboard"
+import { type CouncilPerson, loadPersonDecor, toCouncilPerson } from "@/db/council-person"
 import { getSealCandidates } from "@/db/rejections"
 import { ttmlFlagsFor } from "@/db/ttml-flags"
 import { resolvePeople } from "@/db/users"
@@ -58,9 +57,8 @@ export async function listCouncilQueue(env: Env): Promise<QueueItem[]> {
 		),
 	]
 
-	const [people, tiers, bookmarks, variants, fulfilled, stats, flags] = await Promise.all([
+	const [people, bookmarks, variants, fulfilled, stats, flags] = await Promise.all([
 		resolvePeople(env, submitterIds),
-		getCuratorTierMap(env),
 		listActiveBookmarks(env, { itemType: "seal", itemIds: lyricIds }),
 		countByKey(
 			env,
@@ -97,6 +95,7 @@ export async function listCouncilQueue(env: Env): Promise<QueueItem[]> {
 		),
 	])
 
+	const decor = await loadPersonDecor(env, [...people.values(), ...bookmarks.map((b) => b.holder)])
 	const statsById = new Map(stats.results.map((r) => [Number(r.id), r]))
 	const bookmarkByItem = new Map(bookmarks.map((b) => [b.itemId, b]))
 
@@ -123,13 +122,13 @@ export async function listCouncilQueue(env: Env): Promise<QueueItem[]> {
 			flags: labelSignals(flags[i]),
 			submitter: person
 				? {
-						...withTier(person, tiers),
+						...toCouncilPerson(person, decor),
 						reputation: Number(stat?.reputation ?? 0),
 						submissions: Number(stat?.submissions ?? 0),
 						sealed: Number(stat?.sealed ?? 0),
 					}
 				: null,
-			bookmark: bookmark ? toBookmarkView(bookmark, tiers) : null,
+			bookmark: bookmark ? toBookmarkView(bookmark, decor) : null,
 		}
 	})
 }

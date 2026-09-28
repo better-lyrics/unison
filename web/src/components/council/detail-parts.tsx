@@ -1,9 +1,9 @@
+import { AuthorBadges } from "@/components/AuthorBadges"
 import { Kbd } from "@/components/Kbd"
 import { SongThumbnail } from "@/components/SongThumbnail"
-import { TierChip } from "@/components/TierChip"
 import { UserAvatar } from "@/components/UserAvatar"
 import { cn } from "@/lib/cn"
-import type { TierName } from "@/lib/types"
+import type { CouncilPerson } from "@/lib/council-types"
 import { youTubeMusicUrl } from "@/lib/youtube-music"
 import { IconExternalLink } from "@tabler/icons-react"
 import type { ReactNode } from "react"
@@ -105,30 +105,18 @@ export function BlockHead({ title, aside }: { title: string; aside?: ReactNode }
   )
 }
 
-export function PersonCard({
-  keyId,
-  name,
-  avatarUrl,
-  tier,
-  sub,
-}: {
-  keyId: string
-  name: string
-  avatarUrl: string | null
-  tier: TierName | null
-  sub: ReactNode
-}) {
+export function PersonCard({ person, sub }: { person: CouncilPerson; sub: ReactNode }) {
   return (
     <div className="flex items-center gap-3">
       <UserAvatar
-        avatarUrl={avatarUrl}
-        keyId={keyId}
+        avatarUrl={person.avatarUrl}
+        keyId={person.keyId}
         className="size-10 shrink-0 rounded-full object-cover outline outline-1 -outline-offset-1 outline-white/10"
       />
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-2 text-sm font-medium">
-          {name}
-          {tier ? <TierChip tier={tier} /> : null}
+          {person.displayName}
+          <AuthorBadges {...person} />
         </div>
         <div className="mt-[3px] text-xs text-unison-text-muted">{sub}</div>
       </div>

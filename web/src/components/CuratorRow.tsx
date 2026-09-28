@@ -1,13 +1,12 @@
-import { IconBrandDiscordFilled, IconStarFilled } from "@tabler/icons-react"
-import { Link } from "react-router-dom"
-import { useBadgeCatalogueOptional } from "@/components/BadgeCatalogueContext"
 import { MedalRank } from "@/components/MedalRank"
-import { Bone, skeletonKeys } from "@/components/skeleton"
 import { UserAvatar } from "@/components/UserAvatar"
-import { resolveBadgeImage } from "@/lib/badge-view"
+import { Bone, skeletonKeys } from "@/components/skeleton"
+import { useBadgeImage } from "@/hooks/useBadgeImage"
 import { cn } from "@/lib/cn"
 import { formatCompact, formatExact } from "@/lib/format"
 import type { CuratorLeaderboardEntry } from "@/lib/types"
+import { IconBrandDiscordFilled, IconStarFilled } from "@tabler/icons-react"
+import { Link } from "react-router-dom"
 
 interface CuratorRowProps {
   entry: CuratorLeaderboardEntry
@@ -18,12 +17,7 @@ interface CuratorRowProps {
 export function CuratorRow({ entry, isSelf = false, appended = false }: CuratorRowProps) {
   const href = isSelf ? "/me" : `/curator/${entry.keyId}`
 
-  const catalogue = useBadgeCatalogueOptional()
-  const cat = catalogue?.status === "success" ? catalogue.data : null
-  const badgeImage = (key: string, tier?: number) => {
-    const def = cat?.badges.find((d) => d.key === key)
-    return def ? resolveBadgeImage(def, tier, "color") : null
-  }
+  const badgeImage = useBadgeImage()
   const podium = !entry.community && entry.rank >= 1 && entry.rank <= 3
   const rankGem = podium && entry.tier ? badgeImage(entry.tier) : null
   const featuredBadges = entry.featured ?? []

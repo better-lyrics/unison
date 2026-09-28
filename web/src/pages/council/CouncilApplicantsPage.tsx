@@ -24,6 +24,9 @@ export function CouncilApplicantsPage() {
     handle: null,
     avatarUrl: null,
     tier: null,
+    badgeCount: 0,
+    topBadge: null,
+    featured: [],
   }
   const opinion = useApplicantOpinion(me)
   const decision = useApplicantDecision()
