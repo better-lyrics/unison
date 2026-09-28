@@ -246,14 +246,14 @@ function ListSkeleton() {
 const FEED_SIZE = 6
 
 function Feed({ now }: { now: number }) {
-  const events = useCouncilFeed().data?.events
+  const events = useCouncilFeed(FEED_SIZE).data?.events
   if (!events) return <ListSkeleton />
   if (events.length === 0) {
     return <p className="text-[13px] text-unison-text-muted">No council decisions yet.</p>
   }
   return (
     <ul className="flex flex-col">
-      {events.slice(0, FEED_SIZE).map((event) => (
+      {events.map((event) => (
         <li key={event.id} className="flex gap-3 py-2.5 text-[13px] leading-[1.45] text-unison-text-secondary">
           {event.actor ? (
             <UserAvatar

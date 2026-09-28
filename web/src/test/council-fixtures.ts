@@ -240,6 +240,11 @@ export const MEMBER_SESSION: StoredSession = {
   expiresAt: NOW + 1000 * DAY,
 }
 
+function eventsPage(url: string, page: EventsPage): EventsPage {
+  const limit = new URLSearchParams(url.split("?")[1]).get("limit")
+  return limit === null ? page : { ...page, events: page.events.slice(0, Number(limit)) }
+}
+
 export function stubCouncilApi(
   data: CouncilData = councilData(),
   council: { admin: boolean } | null = { admin: false },
@@ -283,7 +288,11 @@ export function stubCouncilApi(
       respond: (url: string) =>
         jsonResponse({
           success: true,
-          data: url.includes("scope=me") ? (data.myOverview ?? data.overview) : data[key],
+          data: url.includes("scope=me")
+            ? (data.myOverview ?? data.overview)
+            : key === "events"
+              ? eventsPage(url, data.events)
+              : data[key],
         }),
     })),
   ])

@@ -84,11 +84,11 @@ export function useCouncilApplicants(includeBelowCutoff = false) {
   })
 }
 
-export function useCouncilFeed() {
+export function useCouncilFeed(limit: number) {
   const role = useCouncilRole()
   return useQuery({
-    queryKey: councilKeys.events({}),
-    queryFn: ({ signal }) => fetchCouncilEvents({}, signal),
+    queryKey: councilKeys.events({ limit }),
+    queryFn: ({ signal }) => fetchCouncilEvents({ limit }, signal),
     enabled: role !== null,
     refetchInterval: REFRESH_MS,
     staleTime: 15_000,

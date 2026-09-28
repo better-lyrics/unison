@@ -95,10 +95,13 @@ describe("CouncilOverviewPage", () => {
   })
 
   it("shows the six latest council decisions and a link to the full log", async () => {
-    stubCouncilApi(busy())
+    const router = stubCouncilApi(busy())
     renderCouncil()
     const feed = await screen.findByRole("region", { name: "Council activity" })
     await waitFor(() => expect(within(feed).getAllByRole("listitem")).toHaveLength(6))
+    expect(router.calls.filter((c) => c.url.startsWith("/committee/events")).map((c) => c.url)).toEqual([
+      "/committee/events?limit=6",
+    ])
     expect(within(feed).getAllByRole("listitem")[0].textContent).toBe("olafix52 sealed Story of a Warrior1h")
     expect(
       within(feed)

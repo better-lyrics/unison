@@ -37,6 +37,7 @@ export interface EventsQuery {
   lyric?: number
   includeBookmarks?: boolean
   cursor?: string
+  limit?: number
 }
 
 export function fetchCouncilEvents(query: EventsQuery, signal?: AbortSignal): Promise<EventsPage> {
@@ -46,6 +47,7 @@ export function fetchCouncilEvents(query: EventsQuery, signal?: AbortSignal): Pr
   if (query.lyric !== undefined) params.set("lyric", String(query.lyric))
   if (query.includeBookmarks) params.set("includeBookmarks", "1")
   if (query.cursor) params.set("cursor", query.cursor)
+  if (query.limit !== undefined) params.set("limit", String(query.limit))
   const qs = params.toString()
   return getJsonWithSignal(qs ? `/committee/events?${qs}` : "/committee/events", signal)
 }
