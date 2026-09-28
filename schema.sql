@@ -493,6 +493,28 @@ CREATE INDEX IF NOT EXISTS idx_lyric_revisions_author_created
 CREATE INDEX IF NOT EXISTS idx_lyric_revisions_pending_created
     ON lyric_revisions(created_at) WHERE status = 'pending';
 
+-- Backfill only on first add, so a rerun never restores an album a revision cleared.
+-- album_known stays FALSE on rows written by code that predates the album column.
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = current_schema()
+            AND table_name = 'lyric_revisions' AND column_name = 'album'
+    ) THEN
+        ALTER TABLE lyric_revisions ADD COLUMN album TEXT;
+        UPDATE lyric_revisions r SET album = l.album FROM lyrics l WHERE l.id = r.lyrics_id;
+    END IF;
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = current_schema()
+            AND table_name = 'lyric_revisions' AND column_name = 'album_known'
+    ) THEN
+        ALTER TABLE lyric_revisions ADD COLUMN album_known BOOLEAN NOT NULL DEFAULT TRUE;
+        ALTER TABLE lyric_revisions ALTER COLUMN album_known SET DEFAULT FALSE;
+    END IF;
+END $$;
+
 ALTER TABLE lyrics ADD COLUMN IF NOT EXISTS current_revision_id INTEGER
     REFERENCES lyric_revisions(id) DEFERRABLE INITIALLY DEFERRED;
 ALTER TABLE lyrics ADD COLUMN IF NOT EXISTS anchor_revision_id INTEGER

@@ -40,10 +40,11 @@ const isOptionalText = (value: unknown): value is string | null | undefined =>
 	value === undefined || value === null || typeof value === "string"
 
 function parseRevisionBody(body: Record<string, unknown>): RevisionInput | null {
-	const { lyrics, format, language, isrc } = body
+	const { lyrics, format, language, isrc, album } = body
 	if (typeof lyrics !== "string" || lyrics.length === 0) return null
-	if (!isLyricsFormat(format) || !isOptionalText(language) || !isOptionalText(isrc)) return null
-	return { lyrics, format, language, isrc }
+	if (!isLyricsFormat(format)) return null
+	if (!isOptionalText(language) || !isOptionalText(isrc) || !isOptionalText(album)) return null
+	return { lyrics, format, language, isrc, album }
 }
 
 type Failure = { status: number; body: SubmissionErrorBody }

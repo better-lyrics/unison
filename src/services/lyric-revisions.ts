@@ -40,13 +40,21 @@ import type {
 	RevisionRateLimit,
 	RevisionSummary,
 } from "@/types"
+import { ALBUM_HINT, isValidAlbum } from "@/utils/album"
 import { decompressIfNeeded } from "@/utils/compression"
 import { detectLanguage } from "@/utils/detect-language"
 import { ErrorCode, buildError } from "@/utils/errors"
 import { type LyricLine, extractComparableLines } from "@/utils/extract-text"
 import { sha256Hex } from "@/utils/hash"
 import { normalizeIsrc } from "@/utils/isrc"
-import { buildDiffRows, diffPreview, renderLinesForDiff, unifiedDiff } from "@/utils/lyric-diff"
+import {
+	type FieldChange,
+	buildDiffRows,
+	buildFieldRows,
+	reviewDiff,
+	showsChanges,
+	unifiedDiff,
+} from "@/utils/lyric-diff"
 import { type DriftResult, measureDrift } from "@/utils/lyric-drift"
 import { decideOutcome } from "@/utils/revision-gate"
 import { type ContentValidation, validateLyricContent } from "@/utils/validate-lyrics"
@@ -58,12 +66,14 @@ export interface RevisionInput {
 	format: LyricsFormat
 	language?: string | null
 	isrc?: string | null
+	album?: string | null
 }
 
 interface RevertSource {
 	revisionId: number
 	language: string | null
 	isrc: string | null
+	album: string | null | undefined
 }
 
 interface Candidate {
@@ -72,6 +82,7 @@ interface Candidate {
 	syncType: RevisionRow["sync_type"]
 	language: string | null
 	isrc: string | null
+	album: string | null
 }
 
 interface Assessment {
@@ -86,6 +97,10 @@ interface Assessment {
 	rateLimit: RevisionRateLimit
 	anchorLines: LyricLine[]
 	candidateLines: LyricLine[]
+	liveLines: LyricLine[]
+	liveRevNo: number
+	anchorRevNo: number
+	fieldChanges: FieldChange[]
 }
 
 type AccessFailure = { ok: false; reason: "not_found" | "not_owner" }
@@ -125,33 +140,37 @@ async function revisionLines(stored: string, format: LyricsFormat): Promise<Lyri
 
 const joinText = (lines: LyricLine[]): string => lines.map((line) => line.text).join("\n")
 
-function resolveLanguage(
+interface ResolvedField {
+	value: string | null
+	valid: boolean
+}
+
+function resolveField(
 	requested: string | null | undefined,
 	current: string | null,
-	revert: RevertSource | null
-): { value: string | null; valid: boolean } {
+	reverted: string | null | undefined,
+	accept: (value: string) => ResolvedField
+): ResolvedField {
 	if (requested === undefined) return { value: current, valid: true }
 	const value = requested?.trim() || null
-	if (value === null || value === current || value === revert?.language) {
-		return { value, valid: true }
-	}
-	return { value, valid: config.revisions.languages.has(value) }
+	if (value === null || value === current || value === reverted) return { value, valid: true }
+	return accept(value)
 }
 
-function resolveIsrc(
-	requested: string | null | undefined,
-	current: string | null,
-	revert: RevertSource | null
-): { value: string | null; valid: boolean } {
-	if (requested === undefined) return { value: current, valid: true }
-	const raw = requested?.trim() || null
-	if (raw === null || raw === current || raw === revert?.isrc) return { value: raw, valid: true }
-	const normalized = normalizeIsrc(raw)
-	return normalized ? { value: normalized, valid: true } : { value: raw, valid: false }
+const acceptLanguage = (value: string): ResolvedField => ({
+	value,
+	valid: config.revisions.languages.has(value),
+})
+
+function acceptIsrc(value: string): ResolvedField {
+	const normalized = normalizeIsrc(value)
+	return normalized ? { value: normalized, valid: true } : { value, valid: false }
 }
+
+const acceptAlbum = (value: string): ResolvedField => ({ value, valid: isValidAlbum(value) })
 
 async function languageCheck(
-	language: { value: string | null; valid: boolean },
+	language: ResolvedField,
 	plainText: string | null
 ): Promise<FieldCheck> {
 	if (!language.valid) {
@@ -174,7 +193,7 @@ async function languageCheck(
 	return { field: "language", status: "ok", message: `Language: ${language.value}.` }
 }
 
-function isrcCheck(isrc: { value: string | null; valid: boolean }): FieldCheck {
+function isrcCheck(isrc: ResolvedField): FieldCheck {
 	if (!isrc.valid) {
 		return { field: "isrc", status: "bad", message: ISRC_HINT }
 	}
@@ -185,14 +204,27 @@ function isrcCheck(isrc: { value: string | null; valid: boolean }): FieldCheck {
 	}
 }
 
+function albumCheck(album: ResolvedField): FieldCheck {
+	if (!album.valid) {
+		return { field: "album", status: "bad", message: ALBUM_HINT }
+	}
+	return {
+		field: "album",
+		status: "ok",
+		message: album.value ? `Album: ${album.value}.` : "No album set.",
+	}
+}
+
 function firstFailure(
 	validated: ContentValidation,
-	language: { valid: boolean },
-	isrc: { valid: boolean }
+	language: ResolvedField,
+	isrc: ResolvedField,
+	album: ResolvedField
 ): Assessment["failure"] {
 	if (!validated.ok) return { code: validated.code, hint: validated.hint }
 	if (!language.valid) return { code: ErrorCode.INVALID_PAYLOAD, hint: LANGUAGE_HINT }
 	if (!isrc.valid) return { code: ErrorCode.INVALID_PAYLOAD, hint: ISRC_HINT }
+	if (!album.valid) return { code: ErrorCode.INVALID_PAYLOAD, hint: ALBUM_HINT }
 	return null
 }
 
@@ -238,8 +270,10 @@ async function assess(
 
 	const rateLimit = await remainingEdits(db, lyricsId, userId)
 	const validated = validateLyricContent(input.lyrics, input.format)
-	const language = resolveLanguage(input.language, live.language, revert)
-	const isrc = resolveIsrc(input.isrc, live.isrc, revert)
+	const current = { language: live.language, isrc: live.isrc, album: lyric.album }
+	const language = resolveField(input.language, current.language, revert?.language, acceptLanguage)
+	const isrc = resolveField(input.isrc, current.isrc, revert?.isrc, acceptIsrc)
+	const album = resolveField(input.album, current.album, revert?.album, acceptAlbum)
 
 	const comparable = validated.ok ? extractComparableLines(input.lyrics, validated.format) : null
 	const lines = comparable?.filter((line) => line.head === undefined) ?? null
@@ -258,9 +292,24 @@ async function assess(
 				},
 		await languageCheck(language, lines ? joinText(lines) : null),
 		isrcCheck(isrc),
+		albumCheck(album),
 	]
 
-	const failure = firstFailure(validated, language, isrc)
+	const failure = firstFailure(validated, language, isrc, album)
+	const anchorLines = comparable ? await revisionLines(anchor.lyrics, anchor.format) : []
+	const liveLines =
+		comparable && live.id !== anchor.id
+			? await revisionLines(live.lyrics, live.format)
+			: anchorLines
+	const fieldChanges = (
+		[
+			["language", current.language, language],
+			["isrc", current.isrc, isrc],
+			["album", current.album, album],
+		] as const
+	)
+		.filter(([, , resolved]) => resolved.valid)
+		.map(([field, before, resolved]): FieldChange => ({ field, before, after: resolved.value }))
 
 	if (!validated.ok || !lines || !comparable || failure) {
 		return {
@@ -275,8 +324,12 @@ async function assess(
 				jevProbability: null,
 				outcome: NOT_SAVABLE,
 				rateLimit,
-				anchorLines: [],
-				candidateLines: [],
+				anchorLines,
+				candidateLines: comparable ?? [],
+				liveLines,
+				liveRevNo: live.rev_no,
+				anchorRevNo: anchor.rev_no,
+				fieldChanges,
 			},
 		}
 	}
@@ -287,13 +340,14 @@ async function assess(
 		syncType: validated.syncType,
 		language: language.value,
 		isrc: isrc.value,
+		album: album.value,
 	}
 	const noChanges =
 		sha256Hex(candidate.content) === live.content_hash &&
-		candidate.language === live.language &&
-		candidate.isrc === live.isrc
+		candidate.language === current.language &&
+		candidate.isrc === current.isrc &&
+		candidate.album === current.album
 
-	const anchorLines = await revisionLines(anchor.lyrics, anchor.format)
 	const drift = measureDrift(anchorLines, comparable)
 	const outcome = decideOutcome({
 		sealed: lyric.committee_approved_at !== null,
@@ -316,6 +370,10 @@ async function assess(
 			rateLimit,
 			anchorLines,
 			candidateLines: comparable,
+			liveLines,
+			liveRevNo: live.rev_no,
+			anchorRevNo: anchor.rev_no,
+			fieldChanges,
 		},
 	}
 }
@@ -339,10 +397,17 @@ export async function previewRevision(
 				timingOffsetMs: a.drift.timingOffsetMs,
 				textLimit: config.revisions.textDriftLimit,
 				timingLimit: config.revisions.timingDriftLimit,
+				anchorRevNo: a.anchorRevNo,
 			},
 			outcome: a.outcome,
 			noChanges: a.noChanges,
 			rateLimit: a.rateLimit,
+			diff: {
+				rows: a.noChanges
+					? []
+					: [...buildDiffRows(a.liveLines, a.candidateLines), ...buildFieldRows(a.fieldChanges)],
+				againstRevNo: a.liveRevNo,
+			},
 		},
 	}
 }
@@ -355,7 +420,7 @@ const needsJev = (a: Assessment): boolean =>
 	!a.noChanges &&
 	a.outcome.goesLive &&
 	hasRoom(a.rateLimit) &&
-	renderLinesForDiff(a.anchorLines) !== renderLinesForDiff(a.candidateLines)
+	showsChanges(a.anchorLines, a.candidateLines)
 
 // Runs before the row lock so a slow TypeSafe call never holds it.
 async function checkWithJev(
@@ -435,6 +500,7 @@ async function commitAssessed(
 			syncType: a.candidate.syncType,
 			language: a.candidate.language,
 			isrc: a.candidate.isrc,
+			album: a.candidate.album,
 			authorId: userId,
 			status: a.outcome.goesLive ? "live" : "pending",
 			pendingReason: a.outcome.reason,
@@ -473,12 +539,19 @@ export async function revertToRevision(
 		return { ok: false, reason: "not_found" }
 	}
 	const content = await decompressIfNeeded(target.lyrics)
+	const album = target.album_known ? target.album : undefined
 	return commitRevision(
 		env,
 		lyricsId,
 		userId,
-		{ lyrics: content, format: target.format, language: target.language, isrc: target.isrc },
-		{ revisionId: target.id, language: target.language, isrc: target.isrc }
+		{
+			lyrics: content,
+			format: target.format,
+			language: target.language,
+			isrc: target.isrc,
+			album,
+		},
+		{ revisionId: target.id, language: target.language, isrc: target.isrc, album }
 	)
 }
 
@@ -499,11 +572,11 @@ export async function withdrawPending(
 	})
 }
 
-async function visibleLyric(env: Env, lyricsId: number): Promise<boolean> {
+async function visibleLyric(env: Env, lyricsId: number): Promise<LyricRevisionState | null> {
 	const lyric = await loadLyricState(env.DB, lyricsId, false)
-	if (!lyric || lyric.deleted_at !== null) return false
+	if (!lyric || lyric.deleted_at !== null) return null
 	if (lyric.current_revision_id === null) await ensureBaseRevision(env.DB, lyricsId)
-	return true
+	return lyric
 }
 
 export async function listRevisions(env: Env, lyricsId: number): Promise<RevisionSummary[] | null> {
@@ -516,7 +589,8 @@ export async function getRevisionDetail(
 	lyricsId: number,
 	revisionId: number
 ): Promise<RevisionDetail | null> {
-	if (!(await visibleLyric(env, lyricsId))) return null
+	const lyric = await visibleLyric(env, lyricsId)
+	if (!lyric) return null
 	const row = await getRevisionRow(env.DB, lyricsId, revisionId)
 	const summary = await getRevisionSummary(env.DB, lyricsId, revisionId)
 	if (!row || !summary) return null
@@ -526,6 +600,7 @@ export async function getRevisionDetail(
 		format: row.format,
 		language: row.language,
 		isrc: row.isrc,
+		album: row.album_known ? row.album : lyric.album,
 	}
 }
 
@@ -544,11 +619,21 @@ export async function diffRevisions(
 			: await getRevisionRow(env.DB, lyricsId, againstId)
 	if (againstId !== null && !base) return null
 	if (!base) return { rows: [], againstRevNo: null }
+	const albumKnown = base.album_known && target.album_known
 	return {
-		rows: buildDiffRows(
-			await revisionLines(base.lyrics, base.format),
-			await revisionLines(target.lyrics, target.format)
-		),
+		rows: [
+			...buildDiffRows(
+				await revisionLines(base.lyrics, base.format),
+				await revisionLines(target.lyrics, target.format)
+			),
+			...buildFieldRows([
+				{ field: "language", before: base.language, after: target.language },
+				{ field: "isrc", before: base.isrc, after: target.isrc },
+				...(albumKnown
+					? [{ field: "album" as const, before: base.album, after: target.album }]
+					: []),
+			]),
+		],
 		againstRevNo: base.rev_no,
 	}
 }
@@ -657,12 +742,21 @@ export async function listPendingCards(env: Env): Promise<PendingRevisionCard[]>
 	const rows = await listPendingRevisionRows(env.DB, config.revisions.pendingQueueLimit)
 	return Promise.all(
 		rows.map(async (row) => {
-			const full = unifiedDiff(
+			const review = reviewDiff(
 				await revisionLines(row.live_lyrics, row.live_format),
 				await revisionLines(row.lyrics, row.format),
+				[
+					{ field: "language", before: row.live_language, after: row.language },
+					{ field: "isrc", before: row.live_isrc, after: row.isrc },
+					{
+						field: "album",
+						before: row.lyric_album,
+						after: row.album_known ? row.album : row.lyric_album,
+					},
+				],
 				{ before: `rev ${row.live_rev_no}`, after: `rev ${row.rev_no}` }
 			)
-			return { ...pendingSummary(row), diffPreview: diffPreview(full), diffFull: full }
+			return { ...pendingSummary(row), diffPreview: review.preview, diffFull: review.full }
 		})
 	)
 }

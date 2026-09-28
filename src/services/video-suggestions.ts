@@ -1,10 +1,12 @@
 import { isWithinDurationDelta, listVideoLinks } from "@/db/video-links"
+import { type Matched, matchSuggestions } from "@/services/recording-match"
 import { type SongSearch, cachedSongSearch } from "@/services/song-search"
 import type { Env } from "@/types"
 import type { SongCandidate } from "@/utils/innertube"
 import { normalize, normalizeArtist, normalizeSong } from "@/utils/normalize"
 
 export type Suggestion = SongCandidate & { matchScore: number }
+export type SuggestedVideo = Matched<Suggestion>
 
 const VIDEO_TYPE_RANK: Record<SongCandidate["videoType"], number> = { song: 0, video: 1 }
 
@@ -62,7 +64,7 @@ export function buildSuggestions(
 }
 
 export type SuggestResult =
-	| { ok: true; suggestions: Suggestion[] }
+	| { ok: true; suggestions: SuggestedVideo[] }
 	| { ok: false; reason: "not_found" | "not_owner" }
 
 type Deps = { search?: SongSearch }
@@ -79,9 +81,9 @@ export async function suggestVideosForSong(
 	env: Env,
 	meta: SongForSuggestions,
 	deps: Deps = {}
-): Promise<Suggestion[]> {
+): Promise<SuggestedVideo[]> {
 	const candidates = await cachedSongSearch(env, meta, deps.search)
-	return buildSuggestions(
+	const suggestions = buildSuggestions(
 		candidates,
 		{
 			song: meta.song,
@@ -92,6 +94,7 @@ export async function suggestVideosForSong(
 		},
 		new Set()
 	)
+	return matchSuggestions(env, { title: meta.song, artist: meta.artist }, suggestions)
 }
 
 type VariantRow = {
@@ -134,5 +137,12 @@ export async function suggestVideosForVariant(
 		linked
 	)
 
-	return { ok: true, suggestions }
+	return {
+		ok: true,
+		suggestions: await matchSuggestions(
+			env,
+			{ title: row.song, artist: row.artist, lyricsId },
+			suggestions
+		),
+	}
 }

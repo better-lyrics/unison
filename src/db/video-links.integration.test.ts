@@ -1,6 +1,10 @@
 import { readFileSync } from "node:fs"
 import { config } from "@/config"
 import { D1Compat } from "@/infra/database"
+import { Logger } from "@/infra/logger"
+import { matchSuggestions } from "@/services/recording-match"
+import { createTypesafeClient } from "@/services/typesafe"
+import { makeMemoryCache, makeOpenLimiter } from "@/test/integration-harness"
 import type { Env } from "@/types"
 import type { SongCandidate } from "@/utils/innertube"
 import pg from "pg"
@@ -255,6 +259,92 @@ describeIntegration("video link service (integration)", () => {
 			})
 			expect(res.ok).toBe(true)
 			if (res.ok) expect(res.videos.map((v) => v.videoId)).toContain(TARGET)
+		})
+	})
+
+	describe("recording match log", () => {
+		const hit = searchHit(TARGET, 180)
+
+		function matchEnv() {
+			const calls: string[] = []
+			const fetchImpl = (async (url: string) => {
+				calls.push(String(url))
+				return Response.json({ answers: { link: { type: "score", score: 1.62 } } })
+			}) as typeof fetch
+			const withCache = {
+				...env,
+				CACHE: makeMemoryCache(),
+				RATE_LIMITER: makeOpenLimiter(),
+				TYPESAFE: createTypesafeClient({ apiKey: "k", fetch: fetchImpl }),
+			} as unknown as Env
+			return { calls, withCache }
+		}
+
+		const matchLogs = (info: ReturnType<typeof vi.spyOn>) =>
+			info.mock.calls.filter(([message]) => message === "linked video recording match")
+
+		it("logs the cached level when a suggested video is linked", async () => {
+			const { calls, withCache } = matchEnv()
+			await matchSuggestions(withCache, { title: "Song", artist: "Artist" }, [hit])
+			expect(calls).toHaveLength(1)
+
+			const info = vi.spyOn(Logger.prototype, "info")
+			const res = await linkVideoForOwner(withCache, lyricId, owner, TARGET, {
+				search: async () => [hit],
+			})
+
+			expect(res.ok).toBe(true)
+			expect(matchLogs(info)).toEqual([
+				[
+					"linked video recording match",
+					{ lyricsId: lyricId, videoId: TARGET, level: "same", score: 1.62 },
+				],
+			])
+			expect(calls).toHaveLength(1)
+			info.mockRestore()
+		})
+
+		it("logs nothing and asks nothing when no match is cached", async () => {
+			const { calls, withCache } = matchEnv()
+			const info = vi.spyOn(Logger.prototype, "info")
+			const res = await linkVideoForOwner(withCache, lyricId, owner, TARGET, {
+				search: async () => [hit],
+			})
+			expect(res.ok).toBe(true)
+			expect(matchLogs(info)).toEqual([])
+			expect(calls).toHaveLength(0)
+			info.mockRestore()
+		})
+
+		it("logs nothing for a pasted id the search did not return", async () => {
+			const { withCache } = matchEnv()
+			const info = vi.spyOn(Logger.prototype, "info")
+			const res = await linkVideoForOwner(withCache, lyricId, owner, TARGET, match)
+			expect(res.ok).toBe(true)
+			expect(matchLogs(info)).toEqual([])
+			info.mockRestore()
+		})
+
+		it("logs nothing when the video was already linked", async () => {
+			const { withCache } = matchEnv()
+			await matchSuggestions(withCache, { title: "Song", artist: "Artist" }, [hit])
+			await linkVideoForOwner(withCache, lyricId, owner, TARGET, { search: async () => [hit] })
+			const info = vi.spyOn(Logger.prototype, "info")
+			await linkVideoForOwner(withCache, lyricId, owner, TARGET, { search: async () => [hit] })
+			expect(matchLogs(info)).toEqual([])
+			info.mockRestore()
+		})
+
+		it("logs nothing when the link is refused", async () => {
+			const { withCache } = matchEnv()
+			await matchSuggestions(withCache, { title: "Song", artist: "Artist" }, [hit])
+			const info = vi.spyOn(Logger.prototype, "info")
+			const res = await linkVideoForOwner(withCache, lyricId, stranger, TARGET, {
+				search: async () => [hit],
+			})
+			expect(res).toEqual({ ok: false, reason: "not_owner" })
+			expect(matchLogs(info)).toEqual([])
+			info.mockRestore()
 		})
 	})
 

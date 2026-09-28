@@ -11,10 +11,16 @@ export const config = {
 		maxVariantsPerUserPerVideo: 3,
 	},
 
+	typesafe: {
+		endpoint: "https://api.typesafe.ai/v1/systemone",
+		model: "jev-latest",
+	},
+
 	revisions: {
 		textDriftLimit: 0.15,
 		timingDriftLimit: 0.3,
 		timingLineThresholdMs: 1000,
+		minTimingChangeMs: 100,
 		perLyricPerWindow: 5,
 		perUserPerWindow: 20,
 		windowSeconds: 24 * 60 * 60,
@@ -23,8 +29,6 @@ export const config = {
 		diffPreviewLines: 6,
 		pendingQueueLimit: 50,
 		preview: { maxRequests: 60, windowSeconds: 60 },
-		jevEndpoint: "https://api.typesafe.ai/v1/systemone",
-		jevModel: "jev-latest",
 		jevFlagThreshold: 0.8,
 		jevTimeoutMs: 3000,
 		jevLyricContextChars: 12_000, // ~3k tokens of lyrics for Jev; longer songs are trimmed around the edit
@@ -77,6 +81,16 @@ export const config = {
 		durationDeltaSeconds: 2,
 		suggestionCacheTtlSeconds: 60 * 60 * 6,
 		emptySuggestionCacheTtlSeconds: 60 * 30,
+		recordingMatch: {
+			timeoutMs: 1500,
+			maxCandidates: 10,
+			concurrency: 5,
+			cacheTtlSeconds: 60 * 60 * 24 * 30,
+			cacheVersion: "v2", // bump when the question text or state shape changes
+			budget: { maxRequests: 300, windowSeconds: 60 },
+			dailyBudget: { maxRequests: 20_000, windowSeconds: 60 * 60 * 24 },
+			breakerSeconds: 30,
+		},
 	},
 
 	moderation: {

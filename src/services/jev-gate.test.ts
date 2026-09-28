@@ -322,6 +322,23 @@ describe("jevLyricContext", () => {
 		})
 	})
 
+	describe("regressions", () => {
+		it("regression: centres on a real edit when every line also moved under the minimum", () => {
+			const live = Array.from({ length: 400 }, (_, i) => ({
+				text: `Line ${i + 1} of a long song that keeps going`,
+				startMs: i * 1000 + 5,
+			}))
+			const edited = live.map((line, i) => ({
+				text: i === 299 ? "A real edit on line three hundred" : line.text,
+				startMs: line.startMs + 7,
+			}))
+			expect(renderLinesForDiff(live).length).toBeGreaterThan(config.revisions.jevLyricContextChars)
+			const context = jevLyricContext(live, edited)
+			expect(context).toContain(renderLinesForDiff([live[299]]))
+			expect(context.startsWith("[... earlier lines omitted ...]\n")).toBe(true)
+		})
+	})
+
 	describe("invariants", () => {
 		it("never cuts a line in half", () => {
 			const live = longSong(20)

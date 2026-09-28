@@ -1,7 +1,8 @@
 import { config } from "@/config"
 import { Logger } from "@/infra/logger"
+import { type TypesafeClientOptions, createTypesafeClient, readNoul } from "@/services/typesafe"
 import type { LyricLine } from "@/utils/extract-text"
-import { renderLinesForDiff } from "@/utils/lyric-diff"
+import { renderLinesForDiff, withoutSmallMoves } from "@/utils/lyric-diff"
 
 const log = new Logger("jev")
 
@@ -71,7 +72,7 @@ export function jevLyricContext(
 
 	const { first, last } = changedRegion(
 		rows,
-		edited.map((line) => renderLinesForDiff([line]))
+		withoutSmallMoves(current, edited).map((line) => renderLinesForDiff([line]))
 	)
 	let budget = maxChars - EARLIER_OMITTED.length - LATER_OMITTED.length
 	let lo = first
@@ -151,47 +152,25 @@ const SIGNALS = {
 
 type SignalId = keyof typeof SIGNALS
 
-export interface TypesafeJevOptions {
-	apiKey: string
-	fetch?: typeof fetch
-}
-
-function readProbability(answers: unknown, id: SignalId): number {
-	const answer = (answers as Record<string, { noul?: unknown }> | undefined)?.[id]
-	const noul = answer?.noul
-	if (typeof noul !== "number" || !(noul >= 0 && noul <= 1)) {
-		throw new Error(`TypeSafe answer for ${id} is missing or out of range`)
-	}
-	return noul
-}
+export type TypesafeJevOptions = TypesafeClientOptions
 
 export function createTypesafeJevGate(options: TypesafeJevOptions): JevGate {
-	const fetchImpl = options.fetch ?? fetch
+	const client = createTypesafeClient(options)
 	return {
 		async check(input) {
-			const res = await fetchImpl(config.revisions.jevEndpoint, {
-				method: "POST",
-				headers: {
-					authorization: `Bearer ${options.apiKey}`,
-					"content-type": "application/json",
+			const answers = await client.ask({
+				state: {
+					song: input.song,
+					artist: input.artist,
+					lyrics: input.lyrics,
+					diff: input.diff,
+					legend: LEGEND,
 				},
-				body: JSON.stringify({
-					state: {
-						song: input.song,
-						artist: input.artist,
-						lyrics: input.lyrics,
-						diff: input.diff,
-						legend: LEGEND,
-					},
-					model: config.revisions.jevModel,
-					questions: SIGNALS,
-				}),
-				signal: AbortSignal.timeout(config.revisions.jevTimeoutMs),
+				questions: SIGNALS,
+				timeoutMs: config.revisions.jevTimeoutMs,
 			})
-			if (!res.ok) throw new Error(`TypeSafe returned ${res.status}`)
-			const { answers } = (await res.json()) as { answers?: unknown }
 			const probability = Math.max(
-				...(Object.keys(SIGNALS) as SignalId[]).map((id) => readProbability(answers, id))
+				...(Object.keys(SIGNALS) as SignalId[]).map((id) => readNoul(answers, id))
 			)
 			return { flagged: probability >= config.revisions.jevFlagThreshold, probability }
 		},

@@ -42,6 +42,14 @@ export function makeMemoryCache() {
 
 export type MemoryCache = ReturnType<typeof makeMemoryCache>
 
+export function makeOpenLimiter() {
+	return {
+		async limit() {
+			return { success: true }
+		},
+	}
+}
+
 export interface IntegrationDb {
 	pool: pg.Pool
 	cache: MemoryCache
@@ -54,11 +62,7 @@ export async function openIntegrationDb(): Promise<IntegrationDb> {
 	const pool = new pg.Pool({ connectionString: url })
 	await pool.query(readFileSync(new URL("../../schema.sql", import.meta.url), "utf-8"))
 	const cache = makeMemoryCache()
-	const limiter = {
-		async limit() {
-			return { success: true }
-		},
-	}
+	const limiter = makeOpenLimiter()
 	const env = {
 		DB: new D1Compat(pool),
 		CACHE: cache,
@@ -151,7 +155,13 @@ export function seedSession(db: IntegrationDb, token: string, keyId: string): vo
 export async function seedLyric(
 	db: IntegrationDb,
 	submitterId: number,
-	opts: { lyrics: string; format: LyricsFormat; videoId?: string; language?: string }
+	opts: {
+		lyrics: string
+		format: LyricsFormat
+		videoId?: string
+		language?: string
+		album?: string
+	}
 ): Promise<number> {
 	const validated = validateLyricContent(opts.lyrics, opts.format)
 	if (!validated.ok) throw new Error(`fixture failed validation: ${validated.code}`)
@@ -161,6 +171,7 @@ export async function seedLyric(
 			videoId: opts.videoId ?? "HsBfV2A5dUY",
 			song: "Amazing Grace",
 			artist: "Traditional",
+			album: opts.album,
 			duration: 90,
 			lyrics: opts.lyrics,
 			format: validated.format,
@@ -183,6 +194,7 @@ export async function insertLegacyLyric(
 		format?: LyricsFormat
 		syncType?: "richsync" | "linesync" | "plain"
 		language?: string | null
+		album?: string
 		deleted?: boolean
 	}
 ): Promise<number> {
@@ -190,9 +202,9 @@ export async function insertLegacyLyric(
 	const { rows } = await db.pool.query<{ id: number }>(
 		`INSERT INTO lyrics (video_id, song, artist, duration, song_norm, artist_norm, lyrics,
 			format, sync_type, language, submitter_id, created_at, updated_at,
-			deleted_at, deleted_by_user_id, deleted_by_role)
+			deleted_at, deleted_by_user_id, deleted_by_role, album)
 		 VALUES ($1, 'Amazing Grace', 'Traditional', 90, 'amazing grace', 'traditional', $2,
-			$3, $4, $5, $6, 1700000000, 1700000000, $7, $8, $9)
+			$3, $4, $5, $6, 1700000000, 1700000000, $7, $8, $9, $10)
 		 RETURNING id`,
 		[
 			`legacy${legacySeq}`,
@@ -204,6 +216,7 @@ export async function insertLegacyLyric(
 			opts.deleted ? 1700000100 : null,
 			opts.deleted ? submitterId : null,
 			opts.deleted ? "submitter" : null,
+			opts.album ?? null,
 		]
 	)
 	return rows[0].id

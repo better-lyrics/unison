@@ -1,4 +1,5 @@
-import { makeMemoryCache } from "@/test/integration-harness"
+import { createTypesafeClient } from "@/services/typesafe"
+import { makeMemoryCache, makeOpenLimiter } from "@/test/integration-harness"
 import type { Env } from "@/types"
 import type { SongCandidate } from "@/utils/innertube"
 import { describe, expect, it, vi } from "vitest"
@@ -389,7 +390,7 @@ describe("suggestVideosForSong", () => {
 					candidates,
 					{ ...SONG, album: "After Hours", videoId: "dQw4w9WgXcQ" },
 					new Set()
-				)
+				).map((s) => ({ ...s, match: null }))
 			)
 		})
 
@@ -400,5 +401,96 @@ describe("suggestVideosForSong", () => {
 			await suggestVideosForSong(e, { ...SONG, videoId: "fHI8X4OXluQ" }, { search })
 			expect(search).toHaveBeenCalledTimes(1)
 		})
+	})
+})
+
+describe("suggestVideosForSong recording match", () => {
+	const SONG = {
+		song: "Blinding Lights",
+		artist: "The Weeknd",
+		duration: 200,
+		album: "After Hours",
+	}
+	const REMIX = candidate({
+		videoId: "0YNwMWaGpEA",
+		title: "Blinding Lights (Chromatics Remix)",
+		album: "Blinding Lights (Chromatics Remix)",
+	})
+	const ALBUM = candidate({ videoId: "fHI8X4OXluQ" })
+	const MUSIC_VIDEO = candidate({ videoId: "4NRXx6U8ABQ", videoType: "video", album: null })
+
+	function typesafe(scores: Record<string, number>) {
+		const states: Array<{ lyric_track: { title: string }; candidate: { title: string } }> = []
+		const fetchImpl = (async (_url: string, init?: RequestInit) => {
+			const { state } = JSON.parse(String(init?.body))
+			states.push(state)
+			return Response.json({
+				answers: { link: { type: "score", score: scores[state.candidate.title] } },
+			})
+		}) as typeof fetch
+		return { states, client: createTypesafeClient({ apiKey: "k", fetch: fetchImpl }) }
+	}
+
+	it("returns a match on each suggestion, same above different", async () => {
+		const { client } = typesafe({
+			"Blinding Lights": 1.9,
+			"Blinding Lights (Chromatics Remix)": 0.1,
+		})
+		const env = {
+			CACHE: makeMemoryCache(),
+			RATE_LIMITER: makeOpenLimiter(),
+			TYPESAFE: client,
+		} as unknown as Env
+		const out = await suggestVideosForSong(env, SONG, {
+			search: async () => [REMIX, ALBUM, MUSIC_VIDEO],
+		})
+		expect(out.map((s) => [s.videoId, s.match])).toEqual([
+			["fHI8X4OXluQ", { level: "same", score: 1.9 }],
+			["4NRXx6U8ABQ", { level: "same", score: 1.9 }],
+			["0YNwMWaGpEA", { level: "different", score: 0.1 }],
+		])
+	})
+
+	it("judges against the raw lyric title, not the normalized one", async () => {
+		const { states, client } = typesafe({ "Blinding Lights": 1.9 })
+		const env = {
+			CACHE: makeMemoryCache(),
+			RATE_LIMITER: makeOpenLimiter(),
+			TYPESAFE: client,
+		} as unknown as Env
+		await suggestVideosForSong(
+			env,
+			{ ...SONG, song: "Blinding Lights (Remastered)" },
+			{ search: async () => [ALBUM] }
+		)
+		expect(states.map((s) => s.lyric_track.title)).toEqual(["Blinding Lights (Remastered)"])
+	})
+
+	it("leaves match null and keeps today's order when TypeSafe is not configured", async () => {
+		const env = { CACHE: makeMemoryCache() } as unknown as Env
+		const out = await suggestVideosForSong(env, SONG, {
+			search: async () => [REMIX, ALBUM],
+		})
+		expect(out.map((s) => [s.videoId, s.match])).toEqual([
+			["fHI8X4OXluQ", null],
+			["0YNwMWaGpEA", null],
+		])
+	})
+
+	it("only judges candidates that survive the suggestion filters", async () => {
+		const { states, client } = typesafe({ "Blinding Lights": 1.9 })
+		const env = {
+			CACHE: makeMemoryCache(),
+			RATE_LIMITER: makeOpenLimiter(),
+			TYPESAFE: client,
+		} as unknown as Env
+		await suggestVideosForSong(env, SONG, {
+			search: async () => [
+				ALBUM,
+				candidate({ videoId: "other000000", artist: "Someone", artists: ["Someone"] }),
+				candidate({ videoId: "long0000000", durationSeconds: 400 }),
+			],
+		})
+		expect(states).toHaveLength(1)
 	})
 })

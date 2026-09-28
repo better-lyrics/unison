@@ -70,7 +70,7 @@ export const DERIVATIONS: Record<string, Evaluator> = {
 	prolific: async (env, userId) => {
 		const count = await scalar(
 			env,
-			"SELECT COUNT(*) AS n FROM lyrics WHERE submitter_id = ? AND deleted_at IS NULL AND reputation_penalized = FALSE",
+			"SELECT COUNT(DISTINCT video_id) AS n FROM lyrics WHERE submitter_id = ? AND deleted_at IS NULL AND reputation_penalized = FALSE",
 			userId
 		)
 		return tiered(count, thresholdsFor("prolific"))

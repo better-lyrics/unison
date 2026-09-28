@@ -1,3 +1,4 @@
+import { config } from "@/config"
 import { lyricsRoutes } from "@/routes/lyrics"
 import { reviewQueueBotRoutes } from "@/routes/review-queue"
 import { videoLinkRoutes } from "@/routes/video-links"
@@ -124,11 +125,92 @@ describeIntegration("revision routes (integration)", () => {
 			expect(json.data).toMatchObject({
 				outcome: { goesLive: false, reason: "large_text_drift" },
 				noChanges: false,
-				drift: { textLimit: 0.15, timingLimit: 0.3 },
+				drift: { textLimit: 0.15, timingLimit: 0.3, anchorRevNo: 1 },
 				rateLimit: { lyricRemaining: 5, userRemaining: 20 },
 			})
-			expect(json.data.checks.map((c) => c.field)).toEqual(["lyrics", "language", "isrc"])
+			expect(json.data.checks.map((c) => c.field)).toEqual(["lyrics", "language", "isrc", "album"])
 			expect((await listRevisions()).json.data.revisions).toHaveLength(1)
+		})
+
+		it("returns the preview diff against the live revision with field rows last", async () => {
+			const { status, json } = await call<PreviewResult>(
+				"POST",
+				`/lyrics/${lyricId}/revisions/preview`,
+				{
+					token: "owner-token",
+					body: {
+						lyrics: swapWords(LRC, 1),
+						format: "lrc",
+						language: "es",
+						isrc: "USRC17607839",
+						album: "Sacred Songs",
+					},
+				}
+			)
+			expect(status).toBe(200)
+			expect(json.data.noChanges).toBe(false)
+			expect(json.data.diff).toEqual({
+				rows: [
+					{
+						kind: "word",
+						lineNo: 1,
+						startMs: 12000,
+						parts: [
+							["=", "Amazing grace! How "],
+							["-", "sweet"],
+							["+", "soft"],
+							["=", " the sound"],
+						],
+					},
+					{ kind: "same", lineNo: 2, startMs: 16000, text: "That saved a wretch like me!" },
+					{ kind: "same", lineNo: 3, startMs: 20000, text: "I once was lost, but now am found;" },
+					{ kind: "gap", count: 13 },
+					{ kind: "field", field: "language", before: "en", after: "es" },
+					{ kind: "field", field: "isrc", before: null, after: "USRC17607839" },
+					{ kind: "field", field: "album", before: null, after: "Sacred Songs" },
+				],
+				againstRevNo: 1,
+			})
+		})
+
+		it("returns an empty preview diff when nothing changed", async () => {
+			const { json } = await call<PreviewResult>("POST", `/lyrics/${lyricId}/revisions/preview`, {
+				token: "owner-token",
+				body: { lyrics: LRC, format: "lrc", language: "en" },
+			})
+			expect(json.data.noChanges).toBe(true)
+			expect(json.data.diff).toEqual({ rows: [], againstRevNo: 1 })
+		})
+
+		it("returns only field rows in the preview diff when the lyrics do not parse", async () => {
+			const { status, json } = await call<PreviewResult>(
+				"POST",
+				`/lyrics/${lyricId}/revisions/preview`,
+				{
+					token: "owner-token",
+					body: { lyrics: "<tt><body><div><p>unclosed", format: "ttml", language: "es" },
+				}
+			)
+			expect(status).toBe(200)
+			expect(json.data.diff).toEqual({
+				rows: [{ kind: "field", field: "language", before: "en", after: "es" }],
+				againstRevNo: 1,
+			})
+		})
+
+		it("returns history diff field rows with the same shape as the preview", async () => {
+			await call<Saved>("POST", `/lyrics/${lyricId}/revisions`, {
+				token: "owner-token",
+				body: { lyrics: LRC, format: "lrc", language: "es" },
+			})
+			const [latest] = (await listRevisions()).json.data.revisions
+			const diff = await call<RevisionDiff>("GET", `/lyrics/${lyricId}/revisions/${latest.id}/diff`)
+			expect(diff.json.data.rows.at(-1)).toEqual({
+				kind: "field",
+				field: "language",
+				before: "en",
+				after: "es",
+			})
 		})
 
 		it("lists, reads, and diffs revisions without auth", async () => {
@@ -137,7 +219,12 @@ describeIntegration("revision routes (integration)", () => {
 			expect(list.status).toBe(200)
 			const [latest] = list.json.data.revisions
 			const detail = await call<RevisionDetail>("GET", `/lyrics/${lyricId}/revisions/${latest.id}`)
-			expect(detail.json.data).toMatchObject({ revNo: 2, format: "lrc", language: "en" })
+			expect(detail.json.data).toMatchObject({
+				revNo: 2,
+				format: "lrc",
+				language: "en",
+				album: null,
+			})
 			expect(detail.json.data.lyrics).toBe(swapWords(LRC, 1))
 			const diff = await call<RevisionDiff>("GET", `/lyrics/${lyricId}/revisions/${latest.id}/diff`)
 			expect(diff.json.data.againstRevNo).toBe(1)
@@ -246,6 +333,63 @@ describeIntegration("revision routes (integration)", () => {
 			})
 			expect(cleared.status).toBe(200)
 			expect(await liveMetadata()).toEqual({ language: "en", isrc: null })
+		})
+	})
+
+	describe("album", () => {
+		const liveAlbum = async () =>
+			(await db.pool.query("SELECT album FROM lyrics WHERE id = $1", [lyricId])).rows[0].album
+		const saveBody = (body: Record<string, unknown>) =>
+			call<Saved>("POST", `/lyrics/${lyricId}/revisions`, { token: "owner-token", body })
+
+		it("sets, keeps, and clears the album through the body", async () => {
+			expect((await saveBody({ lyrics: LRC, format: "lrc", album: " Hymns " })).status).toBe(200)
+			expect(await liveAlbum()).toBe("Hymns")
+
+			expect((await saveBody({ lyrics: swapWords(LRC, 1), format: "lrc" })).status).toBe(200)
+			expect(await liveAlbum()).toBe("Hymns")
+
+			expect(
+				(await saveBody({ lyrics: swapWords(LRC, 1), format: "lrc", album: null })).status
+			).toBe(200)
+			expect(await liveAlbum()).toBeNull()
+		})
+
+		it("returns the album in the revision detail", async () => {
+			const saved = await saveBody({ lyrics: LRC, format: "lrc", album: "Hymns" })
+			const detail = await call<RevisionDetail>(
+				"GET",
+				`/lyrics/${lyricId}/revisions/${saved.json.data.revision.id}`
+			)
+			expect(detail.json.data.album).toBe("Hymns")
+		})
+
+		describe("error paths", () => {
+			it("rejects an album that is not a string or null", async () => {
+				for (const album of [42, true, ["Hymns"], { name: "Hymns" }]) {
+					const { status, json } = await saveBody({
+						lyrics: swapWords(LRC, 1),
+						format: "lrc",
+						album,
+					})
+					expect([status, json.code]).toEqual([400, "INVALID_PAYLOAD"])
+				}
+			})
+
+			it("rejects an over-long album with a hint", async () => {
+				const max = config.validation.album.maxLength
+				const { status, json } = await saveBody({
+					lyrics: swapWords(LRC, 1),
+					format: "lrc",
+					album: "x".repeat(max + 1),
+				})
+				expect([status, json.code, json.hint]).toEqual([
+					400,
+					"INVALID_PAYLOAD",
+					`Album names must be a single line of up to ${max} characters.`,
+				])
+				expect((await listRevisions()).json.data.revisions).toHaveLength(1)
+			})
 		})
 	})
 
