@@ -213,7 +213,7 @@ describe("sealing", () => {
     renderCouncil("/council/queue?item=722")
     await waitFor(() => expect(selected()).toBe("722"))
     press("s")
-    press("s")
+    press("Enter")
     await screen.findByText("Sealed “Story of a Warrior”")
     await waitFor(() => expect(selected()).toBe("1320"))
     press("r")
@@ -223,7 +223,7 @@ describe("sealing", () => {
     expect(screen.getAllByRole("button", { name: "Undo" })).toHaveLength(1)
   })
 
-  it("seals from the keyboard with S twice", async () => {
+  it("seals from the keyboard with S, then Enter to confirm", async () => {
     const log: string[] = []
     const server = data()
     stubCouncilApi(server, { admin: false }, decisionRoutes(log, server))
@@ -231,8 +231,21 @@ describe("sealing", () => {
     await waitFor(() => expect(within(detail()).getByRole("button", { name: /^Seal/ })).toBeTruthy())
     press("s")
     expect(detail().textContent).toContain("Seal “Story of a Warrior”?")
-    press("s")
+    press("Enter")
     await waitFor(() => expect(log).toEqual(["POST /lyrics/722/boost {}"]))
+  })
+
+  it("regression: a double tap on S asks but never seals", async () => {
+    const log: string[] = []
+    const server = data()
+    stubCouncilApi(server, { admin: false }, decisionRoutes(log, server))
+    renderCouncil("/council/queue?item=722")
+    await waitFor(() => expect(within(detail()).getByRole("button", { name: /^Seal/ })).toBeTruthy())
+    press("s")
+    press("s")
+    expect(detail().textContent).toContain("Seal “Story of a Warrior”?")
+    await new Promise((resolve) => setTimeout(resolve, 20))
+    expect(log).toEqual([])
   })
 
   it("puts the item back and shows the reason when sealing fails", async () => {
@@ -242,7 +255,7 @@ describe("sealing", () => {
     renderCouncil("/council/queue?item=722")
     await waitFor(() => expect(selected()).toBe("722"))
     press("s")
-    press("s")
+    press("Enter")
     await screen.findByText("Monthly seal quota reached")
     expect(screen.getByText("Wait for Oct 1.")).toBeTruthy()
     await waitFor(() => expect(screen.getByRole("link", { name: /Story of a Warrior/ })).toBeTruthy())

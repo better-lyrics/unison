@@ -43,10 +43,16 @@ export function ActionBar(props: ActionBarProps) {
 
   useCouncilShortcuts({
     [primaryKey]: () => {
-      if (busy || primary.unavailable) return
-      if (mode === "confirm") props.onPrimary()
-      else setMode("confirm")
+      if (busy || primary.unavailable || mode === "confirm") return
+      setMode("confirm")
     },
+    ...(mode === "confirm"
+      ? {
+          Enter: () => {
+            if (!busy) props.onPrimary()
+          },
+        }
+      : {}),
     r: () => {
       if (busy) return
       setMode("reject")
@@ -115,7 +121,7 @@ export function ActionBar(props: ActionBarProps) {
           <button type="button" disabled={busy} className={buttonClass("primary", "sm")} onClick={props.onPrimary}>
             <PrimaryIcon aria-hidden className="size-3.5" stroke={1.75} />
             {primary.confirmLabel}
-            <Kbd keys={[primary.shortcut]} className="text-unison-bg/60" />
+            <Kbd keys={["Enter"]} className="text-unison-bg/60" />
           </button>
         </div>
       </div>
