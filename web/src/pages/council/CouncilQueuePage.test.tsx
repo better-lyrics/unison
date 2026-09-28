@@ -81,6 +81,14 @@ describe("CouncilQueuePage list", () => {
     expect(titles(openList())).toEqual(["Im Sorry Mom", "Catch Catch", "Run Rabbit"])
   })
 
+  it("shows only the candidates with no automatic flags", async () => {
+    stubCouncilApi(busy())
+    renderCouncil("/council/queue")
+    await waitFor(() => expect(titles(openList())).toHaveLength(3))
+    fireEvent.click(screen.getByRole("button", { name: "No flags" }))
+    expect(titles(openList())).toEqual(["Catch Catch", "Run Rabbit"])
+  })
+
   it("focuses the search with the slash key", async () => {
     stubCouncilApi(busy())
     renderCouncil("/council/queue")
@@ -93,6 +101,50 @@ describe("CouncilQueuePage list", () => {
     stubCouncilApi(councilData())
     renderCouncil("/council/queue")
     await screen.findByText("The seal queue is clear")
+  })
+})
+
+describe("CouncilQueuePage song link", () => {
+  const LINK = "https://music.youtube.com/watch?v=Lnk0000001A&si=x"
+  function linked() {
+    const inQueue = queueItem({ id: 50, videoId: "Lnk0000001A", song: "Linked Song" })
+    const outside = queueItem({ id: 51, videoId: "Lnk0000001A", song: "Linked Song", score: 0.3 })
+    return councilData({
+      queue: [inQueue, queueItem({ id: 60, videoId: "Other000001", song: "Other Song" })],
+      sealable: [inQueue, outside],
+    })
+  }
+  const search = (value: string) =>
+    fireEvent.change(screen.getByRole("searchbox", { name: "Search this list" }), { target: { value } })
+
+  it("lists every sealable variant of a pasted song, marking the ones outside the queue", async () => {
+    stubCouncilApi(linked())
+    renderCouncil("/council/queue")
+    await waitFor(() => expect(titles(openList())).toHaveLength(2))
+    search(LINK)
+    await waitFor(() => expect(titles(openList())).toEqual(["Linked Song", "Linked Song"]))
+    const rows = within(openList()).getAllByRole("link")
+    expect(rows[0].textContent).not.toContain("Not in the queue")
+    expect(rows[1].textContent).toContain("Not in the queue")
+    fireEvent.click(rows[1])
+    await waitFor(() => expect(selected()).toBe("51"))
+    expect(screen.getByRole("button", { name: /^Seal/ })).toBeTruthy()
+  })
+
+  it("says so when no variant of the pasted song can be sealed", async () => {
+    stubCouncilApi(councilData({ queue: [queueItem({ id: 60, videoId: "Other000001" })] }))
+    renderCouncil("/council/queue")
+    await waitFor(() => expect(titles(openList())).toHaveLength(1))
+    search("Nope0000001")
+    expect(await screen.findByText(/No variant of this song can be sealed/)).toBeTruthy()
+  })
+
+  it("finds a pasted song while the queue itself is empty", async () => {
+    stubCouncilApi(councilData({ sealable: [queueItem({ id: 70, videoId: "Lnk0000001A", song: "Lone Song" })] }))
+    renderCouncil("/council/queue")
+    await screen.findByText("The seal queue is clear")
+    search(LINK)
+    await waitFor(() => expect(titles(openList())).toEqual(["Lone Song"]))
   })
 })
 

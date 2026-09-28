@@ -26,6 +26,10 @@ export function fetchCouncilQueue(signal?: AbortSignal): Promise<QueueItem[]> {
   return getJsonWithSignal("/committee/queue", signal)
 }
 
+export function fetchSealableVariants(videoId: string, signal?: AbortSignal): Promise<QueueItem[]> {
+  return getJsonWithSignal(`/committee/queue/video/${encodeURIComponent(videoId)}`, signal)
+}
+
 export function fetchCouncilEdits(signal?: AbortSignal): Promise<EditsPayload> {
   return getJsonWithSignal("/committee/edits", signal)
 }

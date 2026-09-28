@@ -80,6 +80,17 @@ export function EditDetail(props: EditDetailProps) {
           </>
         }
       />
+      <div>
+        <BlockHead title="Author" />
+        {item.author ? (
+          <PersonCard
+            person={item.author}
+            sub={`Submitted Rev ${item.revNo} ${formatElapsed(now - item.createdAt)} ago`}
+          />
+        ) : (
+          <p className="text-[13px] text-unison-text-muted">The author account no longer exists.</p>
+        )}
+      </div>
       <Callout icon={<ReasonIcon aria-hidden className="mt-0.5 size-4 shrink-0" stroke={1.5} />}>
         <b>Why this needs you.</b> {reasonWhy(item.pendingReason, thresholds)}
       </Callout>
@@ -105,22 +116,9 @@ export function EditDetail(props: EditDetailProps) {
         />
         <Changes item={item} mode={mode} />
       </div>
-      <div className="grid gap-12 min-[860px]:grid-cols-2">
-        <div>
-          <BlockHead title="Author" />
-          {item.author ? (
-            <PersonCard
-              person={item.author}
-              sub={`Submitted Rev ${item.revNo} ${formatElapsed(now - item.createdAt)} ago`}
-            />
-          ) : (
-            <p className="text-[13px] text-unison-text-muted">The author account no longer exists.</p>
-          )}
-        </div>
-        <div>
-          <BlockHead title="Revision history" />
-          <RevisionHistory lyricsId={item.lyricsId} now={now} />
-        </div>
+      <div>
+        <BlockHead title="Revision history" />
+        <RevisionHistory lyricsId={item.lyricsId} now={now} />
       </div>
     </DetailCard>
   )

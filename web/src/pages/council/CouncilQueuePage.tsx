@@ -5,11 +5,12 @@ import { Segmented } from "@/components/council/Segmented"
 import { NothingSelected, TriageList, TriageListSkeleton, TriageShell } from "@/components/council/TriageList"
 import { TriageRow, queueRowParts } from "@/components/council/TriageRow"
 import { PageHead } from "@/components/council/headings"
-import { useCouncilOverview, useCouncilQueue } from "@/hooks/useCouncilData"
+import { useCouncilOverview, useCouncilQueue, useSealableVariants } from "@/hooks/useCouncilData"
 import { useCouncilDecision } from "@/hooks/useCouncilMutations"
 import { useTriage } from "@/hooks/useTriage"
 import { type QueueFilter, type QueueSort, filterQueue, languageFilters, sortQueue } from "@/lib/council-triage"
 import type { QueueItem } from "@/lib/council-types"
+import { videoIdFromInput } from "@/lib/youtube-music"
 import { IconCheck } from "@tabler/icons-react"
 import { useState } from "react"
 import { useCouncilContext } from "./context"
@@ -25,8 +26,13 @@ export function CouncilQueuePage() {
   const [text, setText] = useState("")
   const [sort, setSort] = useState<QueueSort>("top")
   const [filter, setFilter] = useState<QueueFilter>("all")
+  const linkedVideo = videoIdFromInput(text)
+  const sealable = useSealableVariants(linkedVideo).data
+  const queued = new Set(queue?.map((item) => item.id))
+  const outside = linkedVideo && queue ? (sealable ?? []).filter((item) => !queued.has(item.id)) : []
   const shown = sortQueue(filterQueue(queue ?? [], { text, filter }), sort)
-  const triage = useTriage({ all: queue, shown, entry, meKeyId, now })
+  const extra = filterQueue(outside, { text, filter })
+  const triage = useTriage({ all: queue, shown, extra, entry, meKeyId, now })
   const selected = triage.selectedItem
 
   const row = (item: QueueItem) => (
@@ -35,7 +41,7 @@ export function CouncilQueuePage() {
       triage={triage}
       itemKey={entry(item).key}
       item={item}
-      {...queueRowParts(item, triage.heldByOther(item), now)}
+      {...queueRowParts(item, triage.heldByOther(item), now, !queued.has(item.id))}
     />
   )
 
@@ -58,9 +64,10 @@ export function CouncilQueuePage() {
                   <div className="flex items-center gap-2">
                     <ListSearch
                       ref={triage.searchRef}
+                      className="flex-1"
                       value={text}
                       onChange={setText}
-                      placeholder="Filter by song, artist, submitter"
+                      placeholder="Filter, or paste a song link"
                     />
                     <select
                       aria-label="Sort"
@@ -81,6 +88,7 @@ export function CouncilQueuePage() {
                       options={[
                         { value: "all", label: "All" },
                         { value: "flags", label: "Has flags" },
+                        { value: "clean", label: "No flags" },
                         ...languageFilters(queue).map((language) => ({
                           value: language,
                           label: language.toUpperCase(),
@@ -90,8 +98,13 @@ export function CouncilQueuePage() {
                   </div>
                 </>
               }
+              noMatch={
+                linkedVideo && sealable
+                  ? "No variant of this song can be sealed. It is sealed, rejected, hidden or not rated well enough."
+                  : undefined
+              }
               empty={
-                queue.length === 0 ? (
+                queue.length === 0 && !linkedVideo ? (
                   <EmptyState
                     icon={<IconCheck className="size-5" stroke={1.5} />}
                     title="The seal queue is clear"

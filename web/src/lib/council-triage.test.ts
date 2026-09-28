@@ -88,6 +88,17 @@ describe("filterQueue", () => {
     expect(filterQueue(items, { text: "", filter: "flags" }).map((i) => i.id)).toEqual([2])
   })
 
+  it("keeps only items with no automatic flags", () => {
+    expect(filterQueue(items, { text: "", filter: "clean" }).map((i) => i.id)).toEqual([1, 3])
+  })
+
+  it("matches a pasted song link or video id", () => {
+    const song = [queueItem({ id: 7, videoId: "Lnk0000001A" }), queueItem({ id: 8, videoId: "Other000001" })]
+    const link = "https://music.youtube.com/watch?v=Lnk0000001A"
+    expect(filterQueue(song, { text: link, filter: "all" }).map((i) => i.id)).toEqual([7])
+    expect(filterQueue(song, { text: "Lnk0000001A", filter: "all" }).map((i) => i.id)).toEqual([7])
+  })
+
   it("keeps only one language", () => {
     expect(filterQueue(items, { text: "", filter: "ko" }).map((i) => i.id)).toEqual([1])
   })

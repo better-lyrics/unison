@@ -73,6 +73,23 @@ export function SealDetail(props: SealDetailProps) {
           </>
         }
       />
+      <div>
+        <BlockHead title="Submitter" />
+        {item.submitter ? (
+          <PersonCard
+            person={item.submitter}
+            sub={
+              <>
+                <span className="font-mono">{item.submitter.reputation.toFixed(2)}</span> reputation ·{" "}
+                <span className="font-mono">{item.submitter.submissions}</span> submissions ·{" "}
+                <span className="font-mono">{item.submitter.sealed}</span> sealed before
+              </>
+            }
+          />
+        ) : (
+          <p className="text-[13px] text-unison-text-muted">The submitter account no longer exists.</p>
+        )}
+      </div>
       <BookmarkCallout item={item} meKeyId={props.meKeyId} now={now} />
       <div className="grid grid-cols-2 gap-6 min-[860px]:grid-cols-4">
         <Fact label="Effective score" value={item.score.toFixed(2)} sub="Reputation-weighted" />
@@ -110,30 +127,11 @@ export function SealDetail(props: SealDetailProps) {
           )}
         </div>
       </div>
-      <LyricPreview key={item.id} lyricId={item.id} />
+      <LyricPreview key={item.id} lyricId={item.id} videoId={item.videoId} />
       <OtherVariants item={item} />
-      <div className="grid gap-12 min-[860px]:grid-cols-2">
-        <div>
-          <BlockHead title="Submitter" />
-          {item.submitter ? (
-            <PersonCard
-              person={item.submitter}
-              sub={
-                <>
-                  <span className="font-mono">{item.submitter.reputation.toFixed(2)}</span> reputation ·{" "}
-                  <span className="font-mono">{item.submitter.submissions}</span> submissions ·{" "}
-                  <span className="font-mono">{item.submitter.sealed}</span> sealed before
-                </>
-              }
-            />
-          ) : (
-            <p className="text-[13px] text-unison-text-muted">The submitter account no longer exists.</p>
-          )}
-        </div>
-        <div>
-          <BlockHead title="Council history" />
-          <CouncilHistory lyricId={item.id} now={now} />
-        </div>
+      <div>
+        <BlockHead title="Council history" />
+        <CouncilHistory lyricId={item.id} now={now} />
       </div>
     </DetailCard>
   )

@@ -1,4 +1,5 @@
 import { Kbd } from "@/components/Kbd"
+import { cn } from "@/lib/cn"
 import { IconSearch } from "@tabler/icons-react"
 import type { Ref } from "react"
 
@@ -7,11 +8,17 @@ interface ListSearchProps {
   onChange: (value: string) => void
   placeholder: string
   ref?: Ref<HTMLInputElement>
+  className?: string
 }
 
-export function ListSearch({ value, onChange, placeholder, ref }: ListSearchProps) {
+export function ListSearch({ value, onChange, placeholder, ref, className }: ListSearchProps) {
   return (
-    <label className="flex h-8 flex-1 items-center gap-2 rounded-md border border-unison-border bg-unison-bg-elevated px-2.5 transition-colors focus-within:border-unison-border-strong hover:border-unison-border-strong">
+    <label
+      className={cn(
+        "flex h-8 items-center gap-2 rounded-md border border-unison-border bg-unison-bg-elevated px-2.5 transition-colors focus-within:border-unison-border-strong hover:border-unison-border-strong",
+        className,
+      )}
+    >
       <IconSearch aria-hidden className="size-3.5 text-unison-text opacity-50" stroke={1.5} />
       <input
         ref={ref}

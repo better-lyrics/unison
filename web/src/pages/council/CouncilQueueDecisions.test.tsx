@@ -106,6 +106,57 @@ describe("SealDetail", () => {
     ).toBe("https://music.youtube.com/watch?v=SMQpJ9x7zEk")
   })
 
+  it("shows the submitter first, above the numbers and the lyric", async () => {
+    stubCouncilApi(data())
+    renderCouncil("/council/queue?item=722")
+    const submitter = await within(await screen.findByRole("region", { name: "Details" })).findByText("Submitter")
+    const follows = (a: Node, b: Node) => Boolean(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING)
+    expect(follows(submitter, within(detail()).getByText("Effective score"))).toBe(true)
+    expect(follows(submitter, within(detail()).getByText("Lyric preview"))).toBe(true)
+  })
+
+  it("plays the real song in the preview, from the first line", async () => {
+    const players: { videoId: string; seeks: number[]; plays: number; pauses: number; state: number }[] = []
+    class FakePlayer {
+      rec: (typeof players)[number]
+      constructor(_el: HTMLElement, opts: { videoId: string; events?: { onReady?: () => void } }) {
+        this.rec = { videoId: opts.videoId, seeks: [], plays: 0, pauses: 0, state: 2 }
+        players.push(this.rec)
+        queueMicrotask(() => opts.events?.onReady?.())
+      }
+      seekTo(seconds: number) {
+        this.rec.seeks.push(seconds)
+      }
+      playVideo() {
+        this.rec.plays++
+        this.rec.state = 1
+      }
+      pauseVideo() {
+        this.rec.pauses++
+        this.rec.state = 2
+      }
+      getPlayerState() {
+        return this.rec.state
+      }
+      getCurrentTime() {
+        return 0
+      }
+      destroy() {}
+    }
+    vi.stubGlobal("YT", { Player: FakePlayer })
+    stubCouncilApi(data())
+    renderCouncil("/council/queue?item=722")
+    const play = await within(await screen.findByRole("region", { name: "Details" })).findByRole("button", {
+      name: /^Play(?! the)/,
+    })
+    await waitFor(() => expect((play as HTMLButtonElement).disabled).toBe(false))
+    fireEvent.click(play)
+    await waitFor(() => expect(players[0]?.plays).toBe(1))
+    expect(players[0]).toMatchObject({ videoId: "SMQpJ9x7zEk", seeks: [3.5] })
+    press("p")
+    expect(players[0].pauses).toBe(1)
+  })
+
   it("lists automatic flags with their labels", async () => {
     const d = data()
     d.queue = [{ ...story, flags: [{ code: "line-synced", label: "Line-synced, not word-by-word" }] }]

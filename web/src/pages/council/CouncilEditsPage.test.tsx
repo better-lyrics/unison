@@ -176,6 +176,15 @@ describe("CouncilEditsPage", () => {
     await waitFor(() => expect(detail().querySelector("[data-tier='master'] img")).toBeTruthy())
   })
 
+  it("shows the author first, above the drift and the changes", async () => {
+    stubCouncilApi(data(), { admin: false }, routes([]))
+    renderCouncil("/council/edits?item=9001")
+    const author = await within(await screen.findByRole("region", { name: "Details" })).findByText("Author")
+    const follows = (a: Node, b: Node) => Boolean(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING)
+    expect(follows(author, within(detail()).getByText("Text drift"))).toBe(true)
+    expect(follows(author, within(detail()).getByText("Changes"))).toBe(true)
+  })
+
   it("lists the revision history newest first", async () => {
     stubCouncilApi(data(), { admin: false }, routes([]))
     renderCouncil("/council/edits?item=9001")
