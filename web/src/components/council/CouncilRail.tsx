@@ -1,4 +1,5 @@
 import { Kbd } from "@/components/Kbd"
+import { Tooltip } from "@/components/Tooltip"
 import {
   useCouncilApplicants,
   useCouncilEdits,
@@ -7,10 +8,10 @@ import {
   useCouncilQueue,
 } from "@/hooks/useCouncilData"
 import { cn } from "@/lib/cn"
+import { quotaBasisText } from "@/lib/council-quota"
 import { groupByBookmark, openItems } from "@/lib/council-triage"
 import type { BoostQuota, EditItem, QueueItem } from "@/lib/council-types"
-import { formatShortDate, titleCase } from "@/lib/format"
-import type { TierName } from "@/lib/types"
+import { formatShortDate } from "@/lib/format"
 import {
   type Icon,
   IconBookmark,
@@ -169,45 +170,46 @@ function RailFootButton({
 
 function QuotaCard() {
   const overview = useCouncilOverview().data
-  const me = useCouncilMembers().data?.find((m) => m.isYou)
   if (!overview) return null
-  return <QuotaRingCard quota={overview.me.quota} tier={me?.tier ?? null} />
+  return <QuotaRingCard quota={overview.me.quota} />
 }
 
 const RING_RADIUS = 15
 const RING_LENGTH = 2 * Math.PI * RING_RADIUS
 
-function QuotaRingCard({ quota, tier }: { quota: BoostQuota; tier: TierName | null }) {
+function QuotaRingCard({ quota }: { quota: BoostQuota }) {
   const spent = quota.quota === 0 ? 1 : quota.used / quota.quota
   return (
-    <div
-      data-testid="quota-card"
-      className="hidden items-center gap-3 rounded-xl bg-white/[0.02] p-3.5 shadow-inset-rim council:flex"
-    >
-      <svg width="40" height="40" viewBox="0 0 40 40" className="-rotate-90" aria-hidden="true">
-        <circle cx="20" cy="20" r={RING_RADIUS} fill="none" stroke="rgba(255,255,255,0.1)" strokeWidth="3.5" />
-        <circle
-          cx="20"
-          cy="20"
-          r={RING_RADIUS}
-          fill="none"
-          stroke="var(--color-unison-medal-gold)"
-          strokeWidth="3.5"
-          strokeLinecap="round"
-          strokeDasharray={RING_LENGTH}
-          strokeDashoffset={RING_LENGTH * Math.min(1, spent)}
-          className="transition-[stroke-dashoffset] duration-600 ease-[cubic-bezier(0.2,0,0,1)]"
-        />
-      </svg>
-      <div>
-        <b className="block text-[13px] font-semibold">
-          <span className="font-mono tabular-nums">{quota.remaining}</span> of{" "}
-          <span className="font-mono tabular-nums">{quota.quota}</span> seals left
-        </b>
-        <small className="mt-0.5 block text-[11px] text-unison-text-muted">
-          {tier ? titleCase(tier) : "Monthly"} quota · resets {formatShortDate(quota.resetsAt)}
-        </small>
+    <Tooltip label={quotaBasisText(quota)}>
+      <div
+        data-testid="quota-card"
+        className="hidden items-center gap-3 rounded-xl bg-white/[0.02] p-3.5 shadow-inset-rim council:flex"
+      >
+        <svg width="40" height="40" viewBox="0 0 40 40" className="-rotate-90" aria-hidden="true">
+          <circle cx="20" cy="20" r={RING_RADIUS} fill="none" stroke="rgba(255,255,255,0.1)" strokeWidth="3.5" />
+          <circle
+            cx="20"
+            cy="20"
+            r={RING_RADIUS}
+            fill="none"
+            stroke="var(--color-unison-medal-gold)"
+            strokeWidth="3.5"
+            strokeLinecap="round"
+            strokeDasharray={RING_LENGTH}
+            strokeDashoffset={RING_LENGTH * Math.min(1, spent)}
+            className="transition-[stroke-dashoffset] duration-600 ease-[cubic-bezier(0.2,0,0,1)]"
+          />
+        </svg>
+        <div>
+          <b className="block text-[13px] font-semibold">
+            <span className="font-mono tabular-nums">{quota.remaining}</span> of{" "}
+            <span className="font-mono tabular-nums">{quota.quota}</span> seals left
+          </b>
+          <small className="mt-0.5 block text-[11px] text-unison-text-muted">
+            Monthly quota · resets {formatShortDate(quota.resetsAt)}
+          </small>
+        </div>
       </div>
-    </div>
+    </Tooltip>
   )
 }

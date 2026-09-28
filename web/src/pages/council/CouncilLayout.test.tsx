@@ -142,13 +142,23 @@ describe("CouncilLayout rail", () => {
     )
   })
 
-  it("shows the seals left this month, my tier and the reset day", async () => {
+  it("shows the seals left this month and the reset day", async () => {
     stubCouncilApi()
     renderCouncil()
     await screen.findByText("seals left", { exact: false })
     const card = screen.getByTestId("quota-card")
     expect(card.textContent).toContain("2 of 3 seals left")
-    expect(card.textContent).toContain("Elite quota · resets Oct 1")
+    expect(card.textContent).toContain("Monthly quota · resets Oct 1")
+  })
+
+  it("explains how the quota was worked out on hover", async () => {
+    stubCouncilApi()
+    renderCouncil()
+    await screen.findByText("seals left", { exact: false })
+    fireEvent.mouseEnter(screen.getByTestId("quota-card"))
+    expect((await screen.findByRole("tooltip")).textContent).toBe(
+      "None of your August lyrics count, so this month's quota is reduced. Submit lyrics this month to lift next month's.",
+    )
   })
 
   describe("edge cases", () => {

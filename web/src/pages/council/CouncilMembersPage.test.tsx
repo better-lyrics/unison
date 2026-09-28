@@ -1,5 +1,5 @@
 import { __resetToastStore } from "@/lib/toast"
-import { ME, NOW, OLA, councilData, rosterMember, stubCouncilApi } from "@/test/council-fixtures"
+import { ME, NOW, OLA, QUOTA_BASIS, councilData, rosterMember, stubCouncilApi } from "@/test/council-fixtures"
 import { jsonResponse } from "@/test/fetch-router"
 import { renderCouncil } from "@/test/render-council"
 import { cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react"
@@ -23,12 +23,15 @@ afterEach(() => {
 function data() {
   return councilData({
     members: [
-      rosterMember(ME, { lastActiveAt: NOW - 3600, quota: { quota: 3, used: 1, remaining: 2, resetsAt: NOW } }),
+      rosterMember(ME, {
+        lastActiveAt: NOW - 3600,
+        quota: { quota: 3, used: 1, remaining: 2, resetsAt: NOW, basis: QUOTA_BASIS },
+      }),
       rosterMember(OLA, {
         isAdmin: true,
         lastActiveAt: NOW - 5 * DAY,
         weekly: [9, 9, 9, 9, 9, 9, 9, 9],
-        quota: { quota: 3, used: 2, remaining: 1, resetsAt: NOW },
+        quota: { quota: 3, used: 2, remaining: 1, resetsAt: NOW, basis: QUOTA_BASIS },
       }),
       rosterMember(ADO, { lastActiveAt: NOW - 23 * DAY, weekly: [2, 1, 0, 0, 0, 0, 0, 0] }),
     ],

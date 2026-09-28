@@ -190,8 +190,7 @@ export const config = {
 			lyricist: { topPercent: 20 },
 		},
 		boost: {
-			quotaBase: 2,
-			quotaPerTier: 2,
+			quota: { base: 6, inactive: 3, max: 12, upvotedLyricsPerSeal: 2 },
 			rankingBonus: 1.5,
 		},
 		featured: { maxSlots: 5 },

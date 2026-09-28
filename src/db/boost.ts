@@ -2,17 +2,18 @@ import { config } from "@/config"
 import { isCommittee } from "@/db/committee"
 import { releaseBookmarksForItem } from "@/db/council-bookmarks"
 import { type CouncilSource, recordCouncilEvent } from "@/db/council-events"
-import { getCuratorRank } from "@/db/leaderboard"
 import { invalidateCacheForLyric } from "@/db/lyrics"
+import { AUTO_HIDE_PREDICATE_JOINED } from "@/db/predicates"
 import { isUniqueViolation } from "@/infra/database"
 import type { Env } from "@/types"
-import { quotaForTier } from "@/utils/boost-quota"
+import { quotaForBasis } from "@/utils/boost-quota"
 
 export interface BoostQuota {
 	quota: number
 	used: number
 	remaining: number
 	resetsAt: number
+	basis: { active: boolean; upvotedLyrics: number; bonus: number; monthStart: number }
 }
 
 export type BoostResult =
@@ -31,31 +32,54 @@ export type BoostResult =
 
 export type RevokeResult = { ok: true } | { ok: false; reason: "not_found" | "forbidden" }
 
-export function monthWindow(at = Date.now()): { monthStart: number; resetsAt: number } {
+export function monthWindow(at = Date.now()): {
+	lastMonthStart: number
+	monthStart: number
+	resetsAt: number
+} {
 	const now = new Date(at)
 	const year = now.getUTCFullYear()
 	const month = now.getUTCMonth()
 	return {
+		lastMonthStart: Math.floor(Date.UTC(year, month - 1, 1) / 1000),
 		monthStart: Math.floor(Date.UTC(year, month, 1) / 1000),
 		resetsAt: Math.floor(Date.UTC(year, month + 1, 1) / 1000),
 	}
 }
 
 export async function getQuota(env: Env, boosterId: number): Promise<BoostQuota> {
-	const userRow = await env.DB.prepare("SELECT key_id FROM users WHERE id = ?")
-		.bind(boosterId)
-		.first<{ key_id: string }>()
-	const tier = userRow ? ((await getCuratorRank(env, userRow.key_id))?.tier ?? null) : null
-	const quota = quotaForTier(tier, config.gamification.boost)
-
-	const { monthStart, resetsAt } = monthWindow()
-	const countRow = await env.DB.prepare(
-		"SELECT COUNT(*) AS n FROM boosts WHERE booster_id = ? AND revoked_at IS NULL AND created_at >= ?"
+	const { lastMonthStart, monthStart, resetsAt } = monthWindow()
+	const row = await env.DB.prepare(
+		`SELECT
+		   (SELECT COUNT(*) FROM boosts
+		     WHERE booster_id = ? AND revoked_at IS NULL AND created_at >= ?) AS used,
+		   EXISTS (SELECT 1 FROM committee_members WHERE user_id = ? AND added_at >= ?) AS joined_recently,
+		   COUNT(l.id) AS lyrics,
+		   COUNT(l.id) FILTER (WHERE l.effective_score > 0) AS upvoted
+		 FROM lyrics l
+		 WHERE l.submitter_id = ? AND l.created_at >= ? AND l.created_at < ?
+		   AND l.deleted_at IS NULL
+		   AND NOT ${AUTO_HIDE_PREDICATE_JOINED}
+		   AND NOT EXISTS (SELECT 1 FROM rejections rj WHERE rj.lyrics_id = l.id AND rj.revoked_at IS NULL)`
 	)
-		.bind(boosterId, monthStart)
-		.first<{ n: number | string }>()
-	const used = Number(countRow?.n ?? 0)
-	return { quota, used, remaining: Math.max(0, quota - used), resetsAt }
+		.bind(boosterId, monthStart, boosterId, lastMonthStart, boosterId, lastMonthStart, monthStart)
+		.first<{
+			used: number | string
+			joined_recently: boolean
+			lyrics: number | string
+			upvoted: number | string
+		}>()
+	const used = Number(row?.used ?? 0)
+	const active = Boolean(row?.joined_recently) || Number(row?.lyrics ?? 0) > 0
+	const upvotedLyrics = Number(row?.upvoted ?? 0)
+	const { quota, bonus } = quotaForBasis({ active, upvotedLyrics }, config.gamification.boost.quota)
+	return {
+		quota,
+		used,
+		remaining: Math.max(0, quota - used),
+		resetsAt,
+		basis: { active, upvotedLyrics, bonus, monthStart: lastMonthStart },
+	}
 }
 
 export async function createBoost(
@@ -103,8 +127,8 @@ export async function createBoost(
 				return { ok: false, reason: "rejected" }
 			}
 
-			const { quota, used, resetsAt } = await getQuota(txEnv, boosterId)
-			if (used >= quota) {
+			const before = await getQuota(txEnv, boosterId)
+			if (before.used >= before.quota) {
 				return { ok: false, reason: "over_quota" }
 			}
 
@@ -137,10 +161,10 @@ export async function createBoost(
 			})
 			await releaseBookmarksForItem(tx, "seal", lyricsId)
 
-			const usedAfter = used + 1
+			const used = before.used + 1
 			return {
 				ok: true,
-				quota: { quota, used: usedAfter, remaining: Math.max(0, quota - usedAfter), resetsAt },
+				quota: { ...before, used, remaining: Math.max(0, before.quota - used) },
 			}
 		})
 	} catch (err) {

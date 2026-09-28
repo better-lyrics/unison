@@ -16,6 +16,7 @@ import { vi } from "vitest"
 import { type FetchRoute, fetchRouter, jsonResponse } from "./fetch-router"
 
 export const NOW = 1_790_000_000
+export const QUOTA_BASIS = { active: false, upvotedLyrics: 0, bonus: 0, monthStart: Date.UTC(2026, 7, 1) / 1000 }
 const HOUR = 3600
 const DAY = 86400
 
@@ -108,7 +109,7 @@ export function overview(overrides: Partial<CouncilOverview> = {}): CouncilOverv
     sealRate: 0.3,
     sourceSplit: { web: 12, discord: 20 },
     me: {
-      quota: { quota: 3, used: 1, remaining: 2, resetsAt: Date.UTC(2026, 9, 1, 12) / 1000 },
+      quota: { quota: 3, used: 1, remaining: 2, resetsAt: Date.UTC(2026, 9, 1, 12) / 1000, basis: QUOTA_BASIS },
       rejectsThisMonth: 6,
       editsThisMonth: 9,
       medianDecisionHours: 18,
@@ -125,7 +126,7 @@ export function rosterMember(person: CouncilPerson, overrides: Partial<RosterMem
     isYou: person.keyId === ME.keyId,
     isAdmin: false,
     addedAt: NOW - 90 * DAY,
-    quota: { quota: 3, used: 1, remaining: 2, resetsAt: NOW + 3 * DAY },
+    quota: { quota: 3, used: 1, remaining: 2, resetsAt: NOW + 3 * DAY, basis: QUOTA_BASIS },
     sealsThisMonth: 1,
     rejectsThisMonth: 6,
     editsThisMonth: 9,
