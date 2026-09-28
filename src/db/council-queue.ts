@@ -6,7 +6,7 @@ import { getSealCandidates } from "@/db/rejections"
 import { ttmlFlagsFor } from "@/db/ttml-flags"
 import { resolvePeople } from "@/db/users"
 import type { Confidence, Env, LyricsFormat, SyncType } from "@/types"
-import { signalLabel } from "@/utils/ttml-signals"
+import { labelSignals } from "@/utils/ttml-signals"
 
 export interface QueueSubmitter extends CouncilPerson {
 	reputation: number
@@ -120,7 +120,7 @@ export async function listCouncilQueue(env: Env): Promise<QueueItem[]> {
 			createdAt: Number(c.created_at),
 			variants: variants.get(c.video_id) ?? 1,
 			requestsFilled: fulfilled.get(String(c.id)) ?? 0,
-			flags: flags[i].map((code) => ({ code, label: signalLabel(code) })),
+			flags: labelSignals(flags[i]),
 			submitter: person
 				? {
 						...withTier(person, tiers),

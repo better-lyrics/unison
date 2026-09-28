@@ -49,6 +49,10 @@ export function signalLabel(code: string): string {
 		: code
 }
 
+export function labelSignals(codes: string[]): { code: string; label: string }[] {
+	return codes.map((code) => ({ code, label: signalLabel(code) }))
+}
+
 function tagOf(node: Node): string | null {
 	for (const key of Object.keys(node)) {
 		if (key !== ":@" && key !== "#text") return key

@@ -14,6 +14,7 @@ import { allowCouncilWrite, parseCouncilNote } from "@/utils/council-input"
 import { eitherAuth } from "@/utils/either-auth"
 import { ErrorCode, buildError } from "@/utils/errors"
 import { generatePetName } from "@/utils/petname"
+import { labelSignals } from "@/utils/ttml-signals"
 import { Elysia, t } from "elysia"
 
 const DEFAULT_LIMIT = 10
@@ -104,10 +105,8 @@ export const reviewQueueBotRoutes = (env: Env) =>
 								: null,
 						}
 						if (c.format !== "ttml") return base
-						return {
-							...base,
-							ttmlSignals: await ttmlFlagsFor(env, c.id, c.current_revision_id),
-						}
+						const ttmlSignals = await ttmlFlagsFor(env, c.id, c.current_revision_id)
+						return { ...base, ttmlSignals, ttmlFlags: labelSignals(ttmlSignals) }
 					})
 				)
 

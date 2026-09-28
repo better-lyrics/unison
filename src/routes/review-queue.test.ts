@@ -4,6 +4,7 @@ import { makeMemoryCache } from "@/test/integration-harness"
 import type { Env } from "@/types"
 import { isAuthorizedBot } from "@/utils/bot-auth"
 import { compress } from "@/utils/compression"
+import { signalLabel } from "@/utils/ttml-signals"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 import { reviewQueueBotRoutes } from "./review-queue"
 
@@ -121,11 +122,15 @@ describe("GET /lyrics/queue/bot", () => {
 		])
 		const res = await app(new Map([[1, await compress(ttml)]])).handle(getReq())
 		const body = (await res.json()) as {
-			data: { id: number; ttmlSignals?: string[] }[]
+			data: { id: number; ttmlSignals?: string[]; ttmlFlags?: { code: string; label: string }[] }[]
 		}
 		expect(body.data[0].ttmlSignals).toContain("line-synced")
 		expect(body.data[0].ttmlSignals).toContain("not-sentence-case")
+		expect(body.data[0].ttmlFlags).toEqual(
+			body.data[0].ttmlSignals?.map((code) => ({ code, label: signalLabel(code) }))
+		)
 		expect(body.data[1]).not.toHaveProperty("ttmlSignals")
+		expect(body.data[1]).not.toHaveProperty("ttmlFlags")
 	})
 
 	it("returns an empty data array when nothing is eligible", async () => {
