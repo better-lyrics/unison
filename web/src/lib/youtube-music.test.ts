@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest"
+import { isVideoId } from "../../../src/utils/video-id"
 import { videoIdFromInput, youTubeMusicUrl } from "./youtube-music"
 
 describe("youTubeMusicUrl", () => {
@@ -55,5 +56,12 @@ describe("videoIdFromInput", () => {
       expect(videoIdFromInput("https://music.youtube.com/watch?v=short")).toBeNull()
       expect(videoIdFromInput("https://music.youtube.com/browse/UC123")).toBeNull()
     })
+  })
+})
+
+describe("invariants", () => {
+  it("accepts a bare id exactly when the server does", () => {
+    const samples = ["dQw4w9WgXcQ", "a-b_c123456", "short", "dQw4w9WgXcQx", "dQw4w9WgXc!", "", "never gonna"]
+    for (const sample of samples) expect(videoIdFromInput(sample) === sample).toBe(isVideoId(sample))
   })
 })

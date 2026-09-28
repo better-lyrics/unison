@@ -118,6 +118,7 @@ describeIntegration("council overview stats (integration)", () => {
 			const stats = await overview("me")
 			expect(stats.sealRate).toBe(1)
 			expect(stats.medianDecisionHours.current).toBeCloseTo(10, 5)
+			expect(stats.me.medianDecisionHours).toBeCloseTo(10, 5)
 			const council = await overview()
 			expect(council.sealRate).toBeCloseTo(1 / 3, 5)
 			expect(council.medianDecisionHours.current).toBeCloseTo(40, 5)

@@ -56,6 +56,41 @@ describe("SealLyricButton", () => {
     await screen.findByText("Sealed “Linked Song”")
   })
 
+  it("drops the button as soon as the seal is sent", async () => {
+    let release: () => void = () => {}
+    const held = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    stubCouncilApi(councilData({ sealable: [lyric] }), { admin: false }, [
+      {
+        match: (url, init) => init?.method === "POST" && url === "/lyrics/51/boost",
+        respond: async () => {
+          await held
+          return jsonResponse({ success: true })
+        },
+      },
+    ])
+    renderButton()
+    fireEvent.click(await screen.findByRole("button", { name: /^Seal/ }))
+    fireEvent.click(screen.getByRole("button", { name: "Seal lyric" }))
+    await waitFor(() => expect(screen.queryByRole("button", { name: /^Seal/ })).toBeNull())
+    release()
+  })
+
+  it("puts the button back and says why when the seal fails", async () => {
+    stubCouncilApi(councilData({ sealable: [lyric] }), { admin: false }, [
+      {
+        match: (url, init) => init?.method === "POST" && url === "/lyrics/51/boost",
+        respond: () => jsonResponse({ success: false, error: "Monthly seal quota reached" }, 409),
+      },
+    ])
+    renderButton()
+    fireEvent.click(await screen.findByRole("button", { name: /^Seal/ }))
+    fireEvent.click(screen.getByRole("button", { name: "Seal lyric" }))
+    await screen.findByText("Monthly seal quota reached")
+    expect(await screen.findByRole("button", { name: /^Seal/ })).toBeTruthy()
+  })
+
   it("sends nothing when the member cancels", async () => {
     const log: string[] = []
     stubCouncilApi(councilData({ sealable: [lyric] }), { admin: false }, [sealRoute(log)])

@@ -33,6 +33,9 @@ import { useCouncilContext } from "./context"
 
 type Scope = "council" | "me"
 
+const asideLinkClass =
+  "inline-flex items-center gap-1 text-[13px] text-unison-text-muted transition-colors hover:text-unison-text"
+
 const WEEK = 7 * 86400
 const headDate = new Intl.DateTimeFormat("en-GB", { weekday: "long", day: "numeric", month: "long" })
 const monthName = new Intl.DateTimeFormat("en-GB", { month: "long" })
@@ -150,7 +153,7 @@ export function CouncilOverviewPage() {
           aside={
             <Link
               to={mine ? `/council/activity?actor=${meKeyId}` : "/council/activity"}
-              className="inline-flex items-center gap-1 text-[13px] text-unison-text-muted transition-colors hover:text-unison-text"
+              className={asideLinkClass}
             >
               See all
               <IconArrowRight aria-hidden className="size-3" stroke={1.5} />
@@ -180,7 +183,7 @@ export function CouncilOverviewPage() {
         aside={
           <Link
             to={`/council/activity?kind=seals&actor=${meKeyId}`}
-            className="inline-flex items-center gap-1 text-[13px] text-unison-text-muted transition-colors hover:text-unison-text"
+            className={asideLinkClass}
           >
             Your seals
             <IconArrowRight aria-hidden className="size-3" stroke={1.5} />
@@ -388,7 +391,7 @@ function WaitChart({
   )
 }
 
-function ChartHead({ id, title, sub, children }: { id: string; title: string; sub: string; children?: ReactNode }) {
+function ChartHead({ id, title, sub }: { id: string; title: string; sub: string }) {
   return (
     <div className="mb-2 flex flex-wrap items-start justify-between gap-3">
       <div>
@@ -397,7 +400,6 @@ function ChartHead({ id, title, sub, children }: { id: string; title: string; su
         </h3>
         <p className="mt-0.5 text-xs text-unison-text-muted">{sub}</p>
       </div>
-      {children}
     </div>
   )
 }
