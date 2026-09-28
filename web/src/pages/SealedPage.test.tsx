@@ -74,10 +74,13 @@ describe("SealedPage", () => {
       expect(screen.getByText("2 sealed")).toBeTruthy()
     })
 
-    it("links How to submit to the docs", async () => {
+    it("sends How to submit to the submission tutorial in a new tab", async () => {
       stubFeed(() => json({ success: true, data: [] }))
       renderPage()
-      expect(screen.getByRole("link", { name: "How to submit" }).getAttribute("href")).toBe("/docs")
+      const link = screen.getByRole("link", { name: "How to submit" })
+      expect(link.getAttribute("href")).toBe("https://www.youtube.com/watch?v=to138zXZ0nc")
+      expect(link.getAttribute("target")).toBe("_blank")
+      expect(link.getAttribute("rel")).toBe("noopener noreferrer")
     })
 
     it("writes the sync filter to the URL and refetches", async () => {

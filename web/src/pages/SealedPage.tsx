@@ -1,7 +1,7 @@
 import { useInfiniteQuery } from "@tanstack/react-query"
 import { MotionConfig, motion } from "motion/react"
 import { useMemo, useRef } from "react"
-import { Link, useSearchParams } from "react-router-dom"
+import { useSearchParams } from "react-router-dom"
 import { EmptyState } from "@/components/EmptyState"
 import { SealedTile, SealedTileSkeleton } from "@/components/SealedTile"
 import { Segmented } from "@/components/council/Segmented"
@@ -13,6 +13,7 @@ import { EASE_OUT, thudFrom, thudTransition } from "@/lib/motion-variants"
 import type { SealedSort, SealedSyncFilter } from "@/lib/types"
 
 const PAGE_LIMIT = 24
+const SUBMIT_TUTORIAL_URL = "https://www.youtube.com/watch?v=to138zXZ0nc"
 const GRID = "grid grid-cols-[repeat(auto-fill,minmax(180px,1fr))] gap-4"
 const HERO_SEAL_AT = 0.1
 const HERO_TEXT_AT = 0.3
@@ -105,9 +106,14 @@ export function SealedPage() {
             </p>
           </motion.div>
           <motion.div className="shrink-0" {...heroAction} transition={thudTransition(HERO_ACTION_AT)}>
-            <Link to="/docs" className={cn(buttonClass("primary", "sm"), "w-full")}>
+            <a
+              href={SUBMIT_TUTORIAL_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className={cn(buttonClass("primary", "sm"), "w-full")}
+            >
               How to submit
-            </Link>
+            </a>
           </motion.div>
         </section>
 
