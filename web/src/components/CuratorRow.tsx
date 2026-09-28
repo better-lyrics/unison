@@ -1,3 +1,4 @@
+import { BadgeStrip } from "@/components/AuthorBadges"
 import { MedalRank } from "@/components/MedalRank"
 import { UserAvatar } from "@/components/UserAvatar"
 import { Bone, skeletonKeys } from "@/components/skeleton"
@@ -20,9 +21,6 @@ export function CuratorRow({ entry, isSelf = false, appended = false }: CuratorR
   const badgeImage = useBadgeImage()
   const podium = !entry.community && entry.rank >= 1 && entry.rank <= 3
   const rankGem = podium && entry.tier ? badgeImage(entry.tier) : null
-  const featuredBadges = entry.featured ?? []
-  const topBadgeImage = entry.topBadge ? badgeImage(entry.topBadge.key, entry.topBadge.tier) : null
-  const extraBadges = (entry.badgeCount ?? 0) - 1
 
   return (
     <li data-self={isSelf || undefined} className={cn(appended && "!mt-4")}>
@@ -66,34 +64,13 @@ export function CuratorRow({ entry, isSelf = false, appended = false }: CuratorR
         <div className="min-w-0 flex-1">
           <p className="flex items-center gap-2 truncate text-sm font-medium text-unison-text">
             <span className="truncate">{entry.displayName}</span>
-            {featuredBadges.length > 0 ? (
-              <span className="inline-flex shrink-0 items-center gap-1">
-                {featuredBadges.map((badge) => {
-                  const img = badgeImage(badge.key, badge.tier)
-                  return img ? (
-                    <img
-                      key={badge.key}
-                      src={img}
-                      alt={badge.name}
-                      title={badge.name}
-                      className="size-4 object-contain"
-                    />
-                  ) : null
-                })}
-              </span>
-            ) : topBadgeImage ? (
-              <span className="inline-flex shrink-0 items-center gap-1">
-                <img
-                  src={topBadgeImage}
-                  alt={entry.topBadge?.name ?? ""}
-                  title={entry.topBadge?.name}
-                  className="size-4 object-contain"
-                />
-                {extraBadges > 0 ? (
-                  <span className="text-[10px] font-medium text-unison-text-muted">+{extraBadges}</span>
-                ) : null}
-              </span>
-            ) : null}
+            <BadgeStrip
+              size="sm"
+              featured={entry.featured ?? []}
+              topBadge={entry.topBadge ?? null}
+              badgeCount={entry.badgeCount ?? 0}
+              className="shrink-0"
+            />
             {isSelf ? (
               <span className="shrink-0 rounded bg-unison-text px-1.5 py-0.5 text-[10px] font-semibold tracking-wider text-unison-bg">
                 You

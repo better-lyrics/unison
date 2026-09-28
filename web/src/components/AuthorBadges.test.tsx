@@ -6,7 +6,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { cleanup, render, screen, waitFor } from "@testing-library/react"
 import type { ComponentProps } from "react"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
-import { AuthorBadges } from "./AuthorBadges"
+import { AuthorBadges, BadgeStrip } from "./AuthorBadges"
 
 let catalogue: BadgeCatalogue
 
@@ -67,5 +67,20 @@ describe("AuthorBadges", () => {
       const { container } = renderBadges({ ...none, tier: "elite" }, false)
       expect(container.querySelector("[data-tier='elite']")?.textContent).toBe("Elite")
     })
+  })
+})
+
+describe("BadgeStrip", () => {
+  it("renders compact badges for dense rows", async () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    render(
+      <QueryClientProvider client={client}>
+        <BadgeCatalogueProvider>
+          <BadgeStrip size="sm" featured={[{ key: "prolific", name: "Prolific" }]} topBadge={null} badgeCount={1} />
+        </BadgeCatalogueProvider>
+      </QueryClientProvider>,
+    )
+    const img = await screen.findByRole("img", { name: "Prolific" })
+    expect(img.getAttribute("class")).toContain("size-4")
   })
 })
