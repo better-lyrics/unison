@@ -101,7 +101,7 @@ export function readRecordingMatchEnabled(): boolean {
 	log.warn("RECORDING_MATCH_ENABLED is set but did not normalize to true or false", {
 		raw: process.env.RECORDING_MATCH_ENABLED,
 	})
-	return true
+	return false
 }
 
 export function createEnv(): Env {

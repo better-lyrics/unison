@@ -87,10 +87,10 @@ describe("readRecordingMatchEnabled", () => {
 		}
 	})
 
-	it("stays enabled and warns for an unrecognized value", () => {
+	it("turns matching off and warns for an unrecognized value, so a kill switch never fails open", () => {
 		const warn = vi.spyOn(Logger.prototype, "warn")
 		vi.stubEnv("RECORDING_MATCH_ENABLED", "off-ish")
-		expect(readRecordingMatchEnabled()).toBe(true)
+		expect(readRecordingMatchEnabled()).toBe(false)
 		expect(warn).toHaveBeenCalledWith(
 			"RECORDING_MATCH_ENABLED is set but did not normalize to true or false",
 			{ raw: "off-ish" }
