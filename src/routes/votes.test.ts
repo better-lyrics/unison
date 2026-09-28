@@ -526,6 +526,7 @@ const BOOST_QUOTA = {
 	remaining: 5,
 	resetsAt: 4102444800,
 	basis: { active: true, upvotedLyrics: 1, bonus: 0, monthStart: 4097174400 },
+	rule: { base: 6, inactive: 3, max: 12, upvotedLyricsPerSeal: 2 },
 }
 
 function seedBoostAuth(userId = 7): { env: Env; app: ReturnType<typeof voteRoutes> } {

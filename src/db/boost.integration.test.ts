@@ -429,6 +429,18 @@ describeIntegration("boost store (integration)", () => {
 			})
 		})
 
+		it("reports the rule the quota was worked out with", async () => {
+			const member = await newUser()
+			await addVeteran(member)
+
+			expect((await getQuota(env, member)).rule).toEqual({
+				base: 6,
+				inactive: 3,
+				max: 12,
+				upvotedLyricsPerSeal: 2,
+			})
+		})
+
 		it("drops a member with no lyrics last month to the inactive quota", async () => {
 			const member = await newUser()
 			await addVeteran(member)

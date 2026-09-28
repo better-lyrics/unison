@@ -1,4 +1,5 @@
 import { TierChip } from "@/components/TierChip"
+import { Tooltip } from "@/components/Tooltip"
 import { UserAvatar } from "@/components/UserAvatar"
 import { Sparkline } from "@/components/charts/Sparkline"
 import { PageHead } from "@/components/council/headings"
@@ -8,6 +9,7 @@ import { useBadgeImage } from "@/hooks/useBadgeImage"
 import { useCouncilMembers, useCouncilRole } from "@/hooks/useCouncilData"
 import { useAddMember, useRemoveMember } from "@/hooks/useCouncilMutations"
 import { cn } from "@/lib/cn"
+import { quotaExplanation } from "@/lib/council-quota"
 import { type RosterSort, isInactive, parseMemberInput, sortRoster } from "@/lib/council-roster"
 import type { RosterMember } from "@/lib/council-types"
 import { formatElapsed } from "@/lib/format"
@@ -45,8 +47,8 @@ export function CouncilMembersPage() {
         title="Members"
         sub={
           members
-            ? `${members.length} council members. Quotas scale with leaderboard tier and reset on the 1st of each month.`
-            : "Quotas scale with leaderboard tier and reset on the 1st of each month."
+            ? `${members.length} council members. Quotas come from each member's lyrics last month and reset on the 1st.`
+            : "Quotas come from each member's lyrics last month and reset on the 1st."
         }
         actions={
           admin && !adding ? (
@@ -157,26 +159,28 @@ function MemberRow({
         )}
       </td>
       <td>
-        <div className="flex items-center gap-2.5">
-          <span
-            role="img"
-            aria-label={`${member.quota.used} of ${member.quota.quota} seals used`}
-            className="flex gap-0.5"
-          >
-            {skeletonKeys("pip", member.quota.quota).map((key, i) => (
-              <i
-                key={key}
-                className={cn(
-                  "h-1.5 w-2.5 rounded-[2px]",
-                  i < member.quota.used ? "bg-unison-medal-gold" : "bg-white/10",
-                )}
-              />
-            ))}
-          </span>
-          <span className="font-mono text-[11px] text-unison-text-muted">
-            {member.quota.used}/{member.quota.quota}
-          </span>
-        </div>
+        <Tooltip label={quotaExplanation(member.quota, member.isYou ? "you" : "member")}>
+          <div data-quota-explained className="inline-flex items-center gap-2.5">
+            <span
+              role="img"
+              aria-label={`${member.quota.used} of ${member.quota.quota} seals used`}
+              className="flex gap-0.5"
+            >
+              {skeletonKeys("pip", member.quota.quota).map((key, i) => (
+                <i
+                  key={key}
+                  className={cn(
+                    "h-1.5 w-2.5 rounded-[2px]",
+                    i < member.quota.used ? "bg-unison-medal-gold" : "bg-white/10",
+                  )}
+                />
+              ))}
+            </span>
+            <span className="font-mono text-[11px] text-unison-text-muted">
+              {member.quota.used}/{member.quota.quota}
+            </span>
+          </div>
+        </Tooltip>
       </td>
       <td className="text-right font-mono">{member.rejectsThisMonth}</td>
       <td className="text-right font-mono">{member.editsThisMonth}</td>

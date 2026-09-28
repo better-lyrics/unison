@@ -1,4 +1,5 @@
 import { Kbd } from "@/components/Kbd"
+import { Tooltip } from "@/components/Tooltip"
 import { buttonClass } from "@/components/ui"
 import { useCouncilShortcuts } from "@/hooks/useCouncilShortcuts"
 import type { BookmarkState } from "@/lib/council-triage"
@@ -19,6 +20,7 @@ interface ActionBarProps {
     confirmBody: ReactNode
     confirmLabel: string
     unavailable: string | null
+    unavailableHint?: string
   }
   onPrimary: () => void
   reject: { submitLabel: string; hint: string }
@@ -140,6 +142,18 @@ export function ActionBar(props: ActionBarProps) {
     )
   } else {
     const PrimaryIcon = primary.icon
+    const primaryButton = (
+      <button
+        type="button"
+        disabled={busy || primary.unavailable !== null}
+        className={buttonClass("primary", "sm")}
+        onClick={askConfirm}
+      >
+        <PrimaryIcon aria-hidden className="size-3.5" stroke={1.75} />
+        {primary.unavailable ?? primary.label}
+        {primary.unavailable ? null : <Kbd keys={[primary.shortcut]} className="text-unison-bg/60" />}
+      </button>
+    )
     body = (
       <div className="flex items-center gap-2">
         <BookmarkButton state={bookmark} pending={props.bookmarkPending} onClick={props.onBookmark} />
@@ -162,16 +176,15 @@ export function ActionBar(props: ActionBarProps) {
           Reject
           <Kbd keys={["R"]} />
         </button>
-        <button
-          type="button"
-          disabled={busy || primary.unavailable !== null}
-          className={buttonClass("primary", "sm")}
-          onClick={askConfirm}
-        >
-          <PrimaryIcon aria-hidden className="size-3.5" stroke={1.75} />
-          {primary.unavailable ?? primary.label}
-          {primary.unavailable ? null : <Kbd keys={[primary.shortcut]} className="text-unison-bg/60" />}
-        </button>
+        {primary.unavailable && primary.unavailableHint ? (
+          <Tooltip label={primary.unavailableHint}>
+            <span data-unavailable-hint className="inline-flex [&>button]:pointer-events-none">
+              {primaryButton}
+            </span>
+          </Tooltip>
+        ) : (
+          primaryButton
+        )}
       </div>
     )
   }

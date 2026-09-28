@@ -134,9 +134,9 @@ describe("CouncilOverviewPage", () => {
     expect(router.calls.some((c) => c.url === "/committee/overview?scope=me")).toBe(true)
     expect(screen.getByText("Your seal rate this month")).toBeTruthy()
     await waitFor(() =>
-      expect(router.calls.some((c) => c.url.startsWith("/committee/events") && c.url.includes(`actor=${ME.keyId}`))).toBe(
-        true,
-      ),
+      expect(
+        router.calls.some((c) => c.url.startsWith("/committee/events") && c.url.includes(`actor=${ME.keyId}`)),
+      ).toBe(true),
     )
     expect(screen.getByRole("region", { name: "Your activity" })).toBeTruthy()
     expect(localStorage.getItem("council.overviewScope")).toContain("me")
@@ -165,6 +165,15 @@ describe("CouncilOverviewPage", () => {
     expect(month.textContent).toContain("rejections")
     expect(month.textContent).toContain("edits reviewed")
     expect(month.textContent).toContain("your median decision time")
+  })
+
+  it("explains my seal quota on hover", async () => {
+    stubCouncilApi(busy())
+    renderCouncil()
+    const month = await screen.findByRole("region", { name: /^Your / })
+    const pill = await waitFor(() => within(month).getByText("seals used"))
+    fireEvent.mouseEnter(pill.closest("[data-quota-explained]") as Element)
+    expect((await screen.findByRole("tooltip")).textContent).toContain("Each month: 6 seals")
   })
 
   describe("edge cases", () => {

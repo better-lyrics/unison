@@ -8,7 +8,7 @@ import {
   useCouncilQueue,
 } from "@/hooks/useCouncilData"
 import { cn } from "@/lib/cn"
-import { quotaBasisText } from "@/lib/council-quota"
+import { quotaExplanation } from "@/lib/council-quota"
 import { groupByBookmark, openItems } from "@/lib/council-triage"
 import type { BoostQuota, EditItem, QueueItem } from "@/lib/council-types"
 import { formatShortDate } from "@/lib/format"
@@ -180,7 +180,7 @@ const RING_LENGTH = 2 * Math.PI * RING_RADIUS
 function QuotaRingCard({ quota }: { quota: BoostQuota }) {
   const spent = quota.quota === 0 ? 1 : quota.used / quota.quota
   return (
-    <Tooltip label={quotaBasisText(quota)}>
+    <Tooltip label={quotaExplanation(quota)}>
       <div
         data-testid="quota-card"
         className="hidden items-center gap-3 rounded-xl bg-white/[0.02] p-3.5 shadow-inset-rim council:flex"

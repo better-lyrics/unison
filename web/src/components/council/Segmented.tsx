@@ -1,15 +1,20 @@
 const GROUP = "inline-flex flex-wrap rounded-lg bg-white/[0.02] p-0.5 shadow-[inset_0_0_0_1px_var(--color-unison-border)]"
 const SEGMENT =
-  "cursor-pointer rounded-md px-2.5 py-1 text-xs font-medium text-unison-text-muted transition-colors hover:text-unison-text aria-pressed:bg-unison-bg-hover aria-pressed:text-unison-text aria-pressed:shadow-inset-rim"
+  "cursor-pointer rounded-md font-medium text-unison-text-muted transition-colors hover:text-unison-text aria-pressed:bg-unison-bg-hover aria-pressed:text-unison-text aria-pressed:shadow-inset-rim"
+const SEGMENT_SIZES = {
+  sm: "px-2.5 py-1 text-xs",
+  md: "px-3 py-1.5 text-sm",
+}
 
 interface SegmentedProps<T extends string> {
   label: string
   value: T
   options: { value: T; label: string }[]
   onChange: (value: T) => void
+  size?: keyof typeof SEGMENT_SIZES
 }
 
-export function Segmented<T extends string>({ label, value, options, onChange }: SegmentedProps<T>) {
+export function Segmented<T extends string>({ label, value, options, onChange, size = "sm" }: SegmentedProps<T>) {
   return (
     <fieldset aria-label={label} className={GROUP}>
       {options.map((option) => (
@@ -18,7 +23,7 @@ export function Segmented<T extends string>({ label, value, options, onChange }:
           type="button"
           aria-pressed={option.value === value}
           onClick={() => onChange(option.value)}
-          className={SEGMENT}
+          className={`${SEGMENT} ${SEGMENT_SIZES[size]}`}
         >
           {option.label}
         </button>
@@ -41,7 +46,7 @@ export function ToggleSegments({ label, options }: ToggleSegmentsProps) {
           type="button"
           aria-pressed={option.pressed}
           onClick={option.onToggle}
-          className={SEGMENT}
+          className={`${SEGMENT} ${SEGMENT_SIZES.sm}`}
         >
           {option.label}
         </button>
