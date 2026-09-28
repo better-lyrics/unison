@@ -30,24 +30,35 @@ type ParsedNode = Record<string, unknown>
 
 const LRC_TIMING_TAGS = new RegExp(`${LRC_WORD_TAG.source}|${LRC_LINE_TAG.source}`, "g")
 
+const isBackgroundVocal = (el: ParsedNode): boolean =>
+	(el[":@"] as ParsedNode | undefined)?.["@_role"] === "x-bg"
+
 // Concatenate all text within a node tree, preserving whitespace between spans
 function concatText(nodes: unknown[]): string {
 	let result = ""
+	let separateNext = false
 	for (const node of nodes) {
 		if (typeof node !== "object" || node === null) continue
 		const el = node as ParsedNode
 
+		let text = ""
 		if ("#text" in el && typeof el["#text"] === "string") {
-			result += el["#text"]
+			text += el["#text"]
 		}
 
 		for (const key of Object.keys(el)) {
 			if (key === "#text" || key === ":@") continue
 			const child = el[key]
 			if (Array.isArray(child)) {
-				result += concatText(child)
+				text += concatText(child)
 			}
 		}
+
+		if (!text) continue
+		const background = isBackgroundVocal(el)
+		if ((background || separateNext) && /\S$/.test(result) && /^\S/.test(text)) result += " "
+		result += text
+		separateNext = background
 	}
 	return result
 }

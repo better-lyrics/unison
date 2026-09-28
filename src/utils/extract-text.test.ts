@@ -316,6 +316,46 @@ describe("extractLines", () => {
 		})
 	})
 
+	describe("background vocals", () => {
+		const line = (inner: string): string =>
+			`<tt xmlns="http://www.w3.org/ns/ttml" xmlns:ttm="http://www.w3.org/ns/ttml#metadata"><body><div><p begin="1.000" end="4.000">${inner}</p></div></body></tt>`
+
+		it("regression: separates a background part that directly follows the main text", () => {
+			const ttml = line(
+				'<span begin="1.000" end="2.000">my baby</span><span ttm:role="x-bg"><span begin="2.000" end="3.000">(Try to understand just what you)</span></span>'
+			)
+			expect(extractLines(ttml, "ttml")).toEqual([
+				{ text: "my baby (Try to understand just what you)", startMs: 1000 },
+			])
+		})
+
+		it("separates a background part that comes before the main text", () => {
+			const ttml = line(
+				'<span ttm:role="x-bg"><span begin="1.000" end="1.500">(Oh)</span></span><span begin="1.500" end="2.000">baby</span>'
+			)
+			expect(extractLines(ttml, "ttml")[0].text).toBe("(Oh) baby")
+		})
+
+		it("keeps a single space when the source already has one", () => {
+			const ttml = line(
+				'<span begin="1.000" end="2.000">you</span> <span ttm:role="x-bg"><span begin="2.000" end="3.000">(Oh)</span></span> <span begin="3.000" end="4.000">now</span>'
+			)
+			expect(extractLines(ttml, "ttml")[0].text).toBe("you (Oh) now")
+		})
+
+		it("does not split syllables inside a background part", () => {
+			const ttml = line(
+				'<span begin="1.000" end="2.000">through</span><span ttm:role="x-bg"><span begin="2.000" end="2.500">(No-</span><span begin="2.500" end="3.000">no)</span></span>'
+			)
+			expect(extractLines(ttml, "ttml")[0].text).toBe("through (No-no)")
+		})
+
+		it("leaves a line that is only a background part unpadded", () => {
+			const ttml = line('<span ttm:role="x-bg"><span begin="1.000" end="2.000">(Oh)</span></span>')
+			expect(extractLines(ttml, "ttml")[0].text).toBe("(Oh)")
+		})
+	})
+
 	describe("invariants", () => {
 		it("joins to the same TTML search text extractPlainText produced before", () => {
 			const ttml = fixture("amazing-grace.ttml")
