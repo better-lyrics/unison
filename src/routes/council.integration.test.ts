@@ -108,6 +108,42 @@ describeIntegration("council dashboard routes (integration)", () => {
 		})
 	})
 
+	describe("GET /committee/queue/video/:videoId", () => {
+		it("lists every sealable variant of a song, in the queue or not", async () => {
+			const second = await seedLyric(db, submitter, {
+				lyrics: LRC,
+				format: "lrc",
+				videoId: "dQw4w9WgXcQ",
+			})
+			await db.pool.query("UPDATE lyrics SET effective_score = 0.2 WHERE id = $1", [second])
+			const res = await call<QueueItem[]>("GET", "/committee/queue/video/dQw4w9WgXcQ", {
+				token: "mira",
+			})
+			expect(res.status).toBe(200)
+			expect(res.json.data.map((i) => i.id)).toEqual([lyricId, second])
+			expect(res.json.data[1].submitter?.keyId).toBe(SUBMITTER)
+		})
+
+		it("returns nothing for a song with no sealable variant", async () => {
+			await db.pool.query("UPDATE lyrics SET committee_approved_at = 1 WHERE id = $1", [lyricId])
+			const res = await call<QueueItem[]>("GET", "/committee/queue/video/dQw4w9WgXcQ", {
+				token: "mira",
+			})
+			expect(res.json.data).toEqual([])
+		})
+
+		it("rejects a malformed video id", async () => {
+			const res = await call("GET", "/committee/queue/video/not-a-video-id", { token: "mira" })
+			expect(res.status).toBe(400)
+		})
+
+		it("is for council members only", async () => {
+			seedSession(db, "stranger", STRANGER)
+			const res = await call("GET", "/committee/queue/video/dQw4w9WgXcQ", { token: "stranger" })
+			expect(res.status).toBe(403)
+		})
+	})
+
 	describe("GET /committee/edits", () => {
 		async function pendingEdit(): Promise<number> {
 			await db.pool.query("UPDATE lyrics SET committee_approved_at = 1 WHERE id = $1", [lyricId])

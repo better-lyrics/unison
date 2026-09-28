@@ -1,7 +1,7 @@
 import { config } from "@/config"
 import { type BookmarkView, listActiveBookmarks, toBookmarkView } from "@/db/council-bookmarks"
 import { type CouncilPerson, loadPersonDecor, toCouncilPerson } from "@/db/council-person"
-import { getSealCandidates } from "@/db/rejections"
+import { type SealCandidate, getSealCandidates, getSealableVariants } from "@/db/rejections"
 import { ttmlFlagsFor } from "@/db/ttml-flags"
 import { resolvePeople } from "@/db/users"
 import type { Confidence, Env, LyricsFormat, SyncType } from "@/types"
@@ -47,6 +47,14 @@ export async function listCouncilQueue(env: Env): Promise<QueueItem[]> {
 		limit: config.council.queueLimit,
 		sort: "top-rated",
 	})
+	return buildQueueItems(env, candidates)
+}
+
+export async function listSealableForVideo(env: Env, videoId: string): Promise<QueueItem[]> {
+	return buildQueueItems(env, await getSealableVariants(env, videoId))
+}
+
+async function buildQueueItems(env: Env, candidates: SealCandidate[]): Promise<QueueItem[]> {
 	if (candidates.length === 0) return []
 
 	const videoIds = [...new Set(candidates.map((c) => c.video_id))]

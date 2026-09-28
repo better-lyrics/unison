@@ -9,7 +9,7 @@ import type pg from "pg"
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest"
 import { createBookmark, listActiveBookmarks } from "./council-bookmarks"
 import { listCouncilEvents } from "./council-events"
-import { getSealCandidates, rejectLyric, undoRejection } from "./rejections"
+import { getSealCandidates, getSealableVariants, rejectLyric, undoRejection } from "./rejections"
 
 const kid = (n: number): string => n.toString(16).padStart(64, "0")
 const NOW = Math.floor(Date.now() / 1000)
@@ -105,6 +105,54 @@ describeIntegration("rejections store (integration)", () => {
 	}
 
 	beforeEach(() => wipeRevisionData(db))
+
+	describe("getSealableVariants", () => {
+		it("returns every eligible variant of one song, best first", async () => {
+			const low = await insertLyric({ videoId: "song1", effectiveScore: 0.2 })
+			const high = await insertLyric({ videoId: "song1", effectiveScore: 0.9 })
+			await insertLyric({ videoId: "other", effectiveScore: 0.95 })
+
+			const rows = await getSealableVariants(env, "song1")
+			expect(rows.map((r) => r.id)).toEqual([high, low])
+		})
+
+		it("applies the same rules as the queue", async () => {
+			const u = await newUser()
+			await insertLyric({ videoId: "mixed", committeeApprovedAt: NOW })
+			await insertLyric({ videoId: "mixed", deletedById: u })
+			await insertLyric({ videoId: "mixed", effectiveScore: 0 })
+			await insertLyric({
+				videoId: "mixed",
+				effectiveScore: 0.9,
+				voteCount: 2,
+				downvotes: 2,
+				createdAt: NOW - 4 * 86400,
+			})
+			const council = await newUser()
+			await addToCommittee(council)
+			await insertLyric({ videoId: "mixed", submitterId: council })
+			const rejected = await insertLyric({ videoId: "mixed" })
+			await rejectLyric(env, rejected, council, { source: "web" })
+			const keep = await insertLyric({ videoId: "mixed" })
+
+			const rows = await getSealableVariants(env, "mixed")
+			expect(rows.map((r) => r.id)).toEqual([keep])
+		})
+
+		it("includes a variant linked to the song from another video", async () => {
+			const linked = await insertLyric({ videoId: "homeVideo0", effectiveScore: 0.5 })
+			await pool.query("INSERT INTO lyrics_video_ids (lyrics_id, video_id) VALUES ($1, $2)", [
+				linked,
+				"altVideo00",
+			])
+			const rows = await getSealableVariants(env, "altVideo00")
+			expect(rows.map((r) => r.id)).toEqual([linked])
+		})
+
+		it("returns [] for an unknown song", async () => {
+			expect(await getSealableVariants(env, "nothing0000")).toEqual([])
+		})
+	})
 
 	describe("getSealCandidates", () => {
 		it("returns an eligible candidate with submitter display info", async () => {

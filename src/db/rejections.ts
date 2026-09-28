@@ -6,6 +6,7 @@ import {
 	AUTO_HIDE_PREDICATE_JOINED,
 	RANKING_EXPR_JOINED,
 	UNDECIDED_LYRIC_JOINED,
+	videoServesExpr,
 } from "@/db/predicates"
 import { isUniqueViolation } from "@/infra/database"
 import type { Confidence, Env, LyricsFormat, SyncType } from "@/types"
@@ -39,6 +40,16 @@ export type RejectResult =
 
 export type UndoRejectResult = { ok: true } | { ok: false; reason: "not_committee" | "not_found" }
 
+const CANDIDATE_COLUMNS = `l.id, l.video_id, l.song, l.artist, l.format, l.score, l.effective_score,
+	l.vote_count, l.submitter_id, u.key_id AS submitter_key_id,
+	u.nickname AS submitter_nickname, l.upvotes, l.downvotes, l.confidence, l.language,
+	l.sync_type, l.created_at, l.current_revision_id`
+
+const SEAL_ELIGIBLE_JOINED = `${UNDECIDED_LYRIC_JOINED}
+	AND l.effective_score > 0
+	AND NOT ${AUTO_HIDE_PREDICATE_JOINED}
+	AND NOT EXISTS (SELECT 1 FROM committee_members c WHERE c.user_id = l.submitter_id)`
+
 export async function getSealCandidates(
 	env: Env,
 	opts: { limit: number; sort: QueueSort }
@@ -53,19 +64,10 @@ export async function getSealCandidates(
 			submitter_key_id, submitter_nickname, effective_score, upvotes, downvotes, confidence,
 			language, sync_type, created_at, current_revision_id
 		FROM (
-			SELECT DISTINCT ON (l.video_id)
-				l.id, l.video_id, l.song, l.artist, l.format, l.score, l.effective_score,
-				l.vote_count, l.submitter_id, u.key_id AS submitter_key_id,
-				u.nickname AS submitter_nickname, l.upvotes, l.downvotes, l.confidence, l.language,
-				l.sync_type, l.created_at, l.current_revision_id
+			SELECT DISTINCT ON (l.video_id) ${CANDIDATE_COLUMNS}
 			FROM lyrics l
 			LEFT JOIN users u ON u.id = l.submitter_id
-			WHERE ${UNDECIDED_LYRIC_JOINED}
-				AND l.effective_score > 0
-				AND NOT ${AUTO_HIDE_PREDICATE_JOINED}
-				AND NOT EXISTS (
-					SELECT 1 FROM committee_members c WHERE c.user_id = l.submitter_id
-				)
+			WHERE ${SEAL_ELIGIBLE_JOINED}
 			ORDER BY l.video_id, ${RANKING_EXPR_JOINED} DESC
 		) AS unique_videos
 		ORDER BY ${orderBy}
@@ -73,6 +75,19 @@ export async function getSealCandidates(
 	`
 
 	const result = await env.DB.prepare(sql).bind(opts.limit).all<SealCandidate>()
+	return result.results
+}
+
+export async function getSealableVariants(env: Env, videoId: string): Promise<SealCandidate[]> {
+	const result = await env.DB.prepare(
+		`SELECT ${CANDIDATE_COLUMNS}
+		 FROM lyrics l
+		 LEFT JOIN users u ON u.id = l.submitter_id
+		 WHERE ${videoServesExpr("l.")} AND ${SEAL_ELIGIBLE_JOINED}
+		 ORDER BY ${RANKING_EXPR_JOINED} DESC`
+	)
+		.bind(videoId, videoId)
+		.all<SealCandidate>()
 	return result.results
 }
 
