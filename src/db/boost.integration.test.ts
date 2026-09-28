@@ -454,6 +454,18 @@ describeIntegration("boost store (integration)", () => {
 			expect(quota.basis.upvotedLyrics).toBe(0)
 		})
 
+		it("gives a member who joined last month the base quota", async () => {
+			const member = await newUser()
+			await pool.query(
+				"INSERT INTO committee_members (user_id, added_by, added_at) VALUES ($1, 'test', $2)",
+				[member, lastMonth]
+			)
+
+			const quota = await getQuota(env, member)
+			expect(quota.quota).toBe(6)
+			expect(quota.basis.active).toBe(true)
+		})
+
 		it("gives a member who joined this month the base quota", async () => {
 			const member = await newUser()
 			await addToCommittee(member)

@@ -157,7 +157,7 @@ describe("CouncilLayout rail", () => {
     await screen.findByText("seals left", { exact: false })
     fireEvent.mouseEnter(screen.getByTestId("quota-card"))
     expect((await screen.findByRole("tooltip")).textContent).toBe(
-      "No lyrics in August, so this month's quota is reduced. Submit lyrics this month to lift next month's.",
+      "None of your August lyrics count, so this month's quota is reduced. Submit lyrics this month to lift next month's.",
     )
   })
 

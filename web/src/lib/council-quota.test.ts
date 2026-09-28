@@ -24,7 +24,7 @@ describe("quotaBasisText", () => {
 
   it("explains the reduced quota after a month without lyrics", () => {
     expect(quotaBasisText(quota(3, { active: false }))).toBe(
-      "No lyrics in August, so this month's quota is reduced. Submit lyrics this month to lift next month's.",
+      "None of your August lyrics count, so this month's quota is reduced. Submit lyrics this month to lift next month's.",
     )
   })
 
@@ -44,7 +44,9 @@ describe("quotaBasisText", () => {
 
     it("names the counted month in UTC across a year boundary", () => {
       const december = Date.UTC(2025, 11, 1) / 1000
-      expect(quotaBasisText(quota(3, { active: false, monthStart: december }))).toContain("No lyrics in December")
+      expect(quotaBasisText(quota(3, { active: false, monthStart: december }))).toContain(
+        "None of your December lyrics count",
+      )
     })
 
     it("reads the capped quota", () => {
