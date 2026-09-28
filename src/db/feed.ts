@@ -18,6 +18,14 @@ const FEED_COLUMNS = `
 	committee_approved_at, committee_approved_by
 `
 
+function globalFeedCacheKey(limit: number, filters: FeedFilters): string | null {
+	if (!hasAnyFilter(filters)) return `feed:global:${limit}`
+	const { sealed, sort, sortDir, ...rest } = filters
+	const onlySealed = sealed && Object.values(rest).every((value) => value === undefined)
+	if (!onlySealed || sortDir === "asc") return null
+	return `feed:sealed:${sort ?? "default"}:${limit}`
+}
+
 export async function getGlobalFeed(
 	env: Env,
 	limit: number,
@@ -27,10 +35,9 @@ export async function getGlobalFeed(
 ): Promise<FeedItem[]> {
 	const hasOffset = offset !== undefined && offset > 0
 	const hasExclusions = excludeIds && excludeIds.length > 0
-	const cacheEligible = !hasOffset && !hasExclusions && !hasAnyFilter(filters)
+	const cacheKey = !hasOffset && !hasExclusions ? globalFeedCacheKey(limit, filters) : null
 
-	if (cacheEligible) {
-		const cacheKey = `feed:global:${limit}`
+	if (cacheKey) {
 		const cached = await env.CACHE.get(cacheKey)
 		if (cached) {
 			try {
@@ -74,8 +81,7 @@ export async function getGlobalFeed(
 		.bind(...params)
 		.all<FeedItem>()
 
-	if (cacheEligible) {
-		const cacheKey = `feed:global:${limit}`
+	if (cacheKey) {
 		env.CACHE.put(cacheKey, JSON.stringify(result.results), {
 			expirationTtl: config.feed.globalCacheTtl,
 		}).catch((err) => log.error("failed to cache global feed", { error: String(err) }))
