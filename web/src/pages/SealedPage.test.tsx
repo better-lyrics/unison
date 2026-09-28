@@ -130,6 +130,24 @@ describe("SealedPage", () => {
     })
   })
 
+  describe("regressions", () => {
+    it("regression: a next page that repeats an already shown lyric does not duplicate its card", async () => {
+      const first = Array.from({ length: 24 }, (_, i) => sealedEntry(i + 1))
+      stubFeed((url) =>
+        url.includes("cursor=24")
+          ? json({ success: true, data: [sealedEntry(24), sealedEntry(25)] })
+          : json({ success: true, data: first, nextCursor: 24 }),
+      )
+      const { container } = renderPage()
+      await waitFor(() => expect(screen.getByText("Sealed Song 24")).toBeTruthy())
+      fireEvent.click(screen.getByRole("button", { name: "Load more" }))
+      await waitFor(() => expect(screen.getByText("Sealed Song 25")).toBeTruthy())
+      expect(screen.getAllByText("Sealed Song 24")).toHaveLength(1)
+      expect(container.querySelectorAll('[data-testid="sealed-grid"] > li')).toHaveLength(25)
+      expect(screen.getByText("25 sealed")).toBeTruthy()
+    })
+  })
+
   describe("edge cases", () => {
     it("shows the intro, filters and skeleton cards while loading", () => {
       stubFeed(() => new Promise(() => {}))

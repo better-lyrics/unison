@@ -11,6 +11,7 @@ import { fetchSealed } from "@/lib/api"
 import { cn } from "@/lib/cn"
 import { EASE_OUT, thudFrom, thudTransition } from "@/lib/motion-variants"
 import type { SealedSort, SealedSyncFilter } from "@/lib/types"
+import { uniqueById } from "@/lib/unique-by-id"
 
 const PAGE_LIMIT = 24
 const SUBMIT_TUTORIAL_URL = "https://www.youtube.com/watch?v=to138zXZ0nc"
@@ -74,7 +75,7 @@ export function SealedPage() {
     getNextPageParam: (last) => last.nextCursor ?? undefined,
   })
 
-  const entries = useMemo(() => data?.pages.flatMap((page) => page.items) ?? [], [data])
+  const entries = useMemo(() => uniqueById(data?.pages.flatMap((page) => page.items) ?? []), [data])
   const mountedAt = useRef(performance.now())
   const cardsDelay = Math.max(0, CARDS_AFTER_HERO - (performance.now() - mountedAt.current) / 1000)
 
