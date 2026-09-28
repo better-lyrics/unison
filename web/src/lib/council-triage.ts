@@ -47,19 +47,29 @@ export function sortQueue(items: QueueItem[], sort: QueueSort): QueueItem[] {
   return [...items].sort(SORTS[sort])
 }
 
-export type QueueFilter = "all" | "flags" | "clean" | (string & {})
+export type FlagFilter = "any" | "flagged" | "clean"
+
+export interface QueueFilters {
+  flags: FlagFilter
+  languages: string[]
+}
+
+export const NO_FILTERS: QueueFilters = { flags: "any", languages: [] }
 
 function matches(text: string, ...fields: (string | null | undefined)[]): boolean {
   const needle = text.trim().toLocaleLowerCase()
   return needle === "" || fields.some((f) => f?.toLocaleLowerCase().includes(needle))
 }
 
-export function filterQueue(items: QueueItem[], { text, filter }: { text: string; filter: QueueFilter }): QueueItem[] {
+export function filterQueue(
+  items: QueueItem[],
+  { text, flags, languages }: { text: string } & QueueFilters,
+): QueueItem[] {
   const videoId = videoIdFromInput(text)
   return items.filter((item) => {
-    if (filter === "flags" && item.flags.length === 0) return false
-    if (filter === "clean" && item.flags.length > 0) return false
-    if (filter !== "all" && filter !== "flags" && filter !== "clean" && item.language !== filter) return false
+    if (flags === "flagged" && item.flags.length === 0) return false
+    if (flags === "clean" && item.flags.length > 0) return false
+    if (languages.length > 0 && !languages.includes(item.language ?? "")) return false
     return item.videoId === videoId || matches(text, item.song, item.artist, item.submitter?.displayName)
   })
 }
