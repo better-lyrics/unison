@@ -38,7 +38,13 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
-function lastCall(): { url: string; method: string; body: unknown; auth: string | null } {
+function lastCall(): {
+  url: string
+  method: string
+  body: unknown
+  auth: string | null
+  contentType: string | null
+} {
   const [input, init] = vi.mocked(fetch).mock.calls.at(-1) as [string, RequestInit | undefined]
   const headers = new Headers(init?.headers)
   return {
@@ -46,6 +52,7 @@ function lastCall(): { url: string; method: string; body: unknown; auth: string 
     method: init?.method ?? "GET",
     body: init?.body ? JSON.parse(init.body as string) : undefined,
     auth: headers.get("authorization"),
+    contentType: headers.get("content-type"),
   }
 }
 
@@ -125,5 +132,24 @@ describe("council writes", () => {
       }),
     )
     await expect(createBookmark("seal", 1)).rejects.toThrow("Bookmark limit reached")
+  })
+})
+
+describe("regressions", () => {
+  it("sends no JSON content type on a DELETE without a body, which the server rejects as a bad parse", async () => {
+    for (const call of [
+      () => releaseBookmark(3),
+      () => unsealLyric(5),
+      () => undoRejectLyric(5),
+      () => removeCouncilMember("abc"),
+    ]) {
+      await call()
+      expect(lastCall()).toMatchObject({ method: "DELETE", contentType: null, body: undefined })
+    }
+  })
+
+  it("still labels a write that has a body as JSON", async () => {
+    await createBookmark("seal", 1)
+    expect(lastCall().contentType).toBe("application/json")
   })
 })

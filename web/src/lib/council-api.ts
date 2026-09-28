@@ -18,8 +18,7 @@ const JSON_HEADERS = { "content-type": "application/json" }
 function send<T>(path: string, method: string, body?: unknown): Promise<T> {
   return authedFetch<T>(path, {
     method,
-    headers: JSON_HEADERS,
-    body: body === undefined ? undefined : JSON.stringify(body),
+    ...(body === undefined ? {} : { headers: JSON_HEADERS, body: JSON.stringify(body) }),
   })
 }
 
