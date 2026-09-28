@@ -1,8 +1,7 @@
 import { config } from "@/config"
 import { type OpinionStance, listOpinions } from "@/db/applicant-opinions"
-import { type CouncilPerson, withTier } from "@/db/council-person"
+import { type CouncilPerson, loadPersonDecor, toCouncilPerson } from "@/db/council-person"
 import { type Applicant, listApplicants } from "@/db/exam"
-import { getCuratorTierMap } from "@/db/leaderboard"
 import { resolvePeople, resolvePeopleByKeyIds } from "@/db/users"
 import type { Env } from "@/types"
 import { retakeAvailableAt } from "@/utils/exam-retake"
@@ -30,12 +29,11 @@ export async function listCouncilApplicants(
 ): Promise<ApplicantView[]> {
 	const applicants = await listApplicants(env, opts.includeBelowCutoff)
 	if (applicants.length === 0) return []
-	const [opinions, tiers, applicantPeople] = await Promise.all([
+	const [opinions, applicantPeople] = await Promise.all([
 		listOpinions(
 			env,
 			applicants.map((a) => a.applicantId)
 		),
-		getCuratorTierMap(env),
 		resolvePeopleByKeyIds(
 			env,
 			applicants.map((a) => a.keyId)
@@ -45,9 +43,10 @@ export async function listCouncilApplicants(
 		env,
 		[...opinions.values()].flat().map((o) => o.userId)
 	)
+	const decor = await loadPersonDecor(env, [...voters.values(), ...applicantPeople.values()])
 	const voter = (userId: number) => {
 		const person = voters.get(userId)
-		return person ? withTier(person, tiers) : null
+		return person ? toCouncilPerson(person, decor) : null
 	}
 
 	return applicants.map(({ decidedByDiscordId: _decider, ...a }) => {
@@ -57,7 +56,7 @@ export async function listCouncilApplicants(
 		const person = applicantPeople.get(a.keyId)
 		return {
 			...a,
-			person: person ? withTier(person, tiers) : null,
+			person: person ? toCouncilPerson(person, decor) : null,
 			retakeAt: retakeAvailableAt(a, config.exam.retakeCooldownSec),
 			opinions: {
 				support: stance("support"),

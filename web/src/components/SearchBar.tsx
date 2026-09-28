@@ -201,11 +201,7 @@ export function SearchBar({ compact = false }: SearchBarProps) {
             onKeyDown: onInputKeyDown,
           })}
         />
-        {value.length === 0 ? (
-          <span className="shrink-0 text-unison-text-muted">
-            <Kbd keys={["Mod", "/"]} />
-          </span>
-        ) : null}
+        {value.length === 0 ? <Kbd keys={["Mod", "/"]} className="shrink-0 text-unison-text-muted" /> : null}
         {compact ? (
           <button
             type="button"

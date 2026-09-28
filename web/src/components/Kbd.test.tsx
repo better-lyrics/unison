@@ -26,3 +26,18 @@ describe("Kbd", () => {
     expect(container.textContent).toBe("⇧")
   })
 })
+
+describe("placement", () => {
+  it("regression: takes colour and spacing on its own flex root, so no inline wrapper shifts it off centre", () => {
+    const { container } = render(<Kbd keys={["/"]} className="ml-auto text-unison-text-muted" />)
+    const root = container.firstElementChild as HTMLElement
+    expect(root.className).toContain("inline-flex")
+    expect(root.className).toContain("ml-auto")
+    expect(root.className).toContain("text-unison-text-muted")
+  })
+
+  it("keeps the base layout without a class", () => {
+    const { container } = render(<Kbd keys={["K"]} />)
+    expect((container.firstElementChild as HTMLElement).className).toBe("inline-flex items-center gap-0.5")
+  })
+})

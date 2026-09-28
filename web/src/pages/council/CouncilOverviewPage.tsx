@@ -69,9 +69,7 @@ export function CouncilOverviewPage() {
         actions={
           <Link to="/council/queue" className={buttonClass("primary")}>
             Start reviewing
-            <span className="text-unison-bg/60">
-              <Kbd keys={["G", "Q"]} />
-            </span>
+            <Kbd keys={["G", "Q"]} className="text-unison-bg/60" />
           </Link>
         }
       />

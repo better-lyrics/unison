@@ -1,7 +1,6 @@
 import { config } from "@/config"
 import { type BookmarkView, listActiveBookmarks, toBookmarkView } from "@/db/council-bookmarks"
-import { type CouncilPerson, withTier } from "@/db/council-person"
-import { getCuratorTierMap } from "@/db/leaderboard"
+import { type CouncilPerson, loadPersonDecor, toCouncilPerson } from "@/db/council-person"
 import { resolvePeopleByKeyIds } from "@/db/users"
 import { type PendingRevisionSummary, listPendingRevisions } from "@/services/lyric-revisions"
 import type { Env } from "@/types"
@@ -21,22 +20,22 @@ export async function listCouncilEdits(
 	env: Env
 ): Promise<{ items: EditItem[]; thresholds: EditThresholds }> {
 	const cards = await listPendingRevisions(env)
-	const [people, tiers, bookmarks] = await Promise.all([
+	const [people, bookmarks] = await Promise.all([
 		resolvePeopleByKeyIds(
 			env,
 			cards.flatMap((c) => (c.authorKeyId ? [c.authorKeyId] : []))
 		),
-		getCuratorTierMap(env),
 		listActiveBookmarks(env, { itemType: "edit", itemIds: cards.map((c) => c.revisionId) }),
 	])
+	const decor = await loadPersonDecor(env, [...people.values(), ...bookmarks.map((b) => b.holder)])
 	const bookmarkByItem = new Map(bookmarks.map((b) => [b.itemId, b]))
 	const items = cards.map(({ author: _author, authorKeyId, ...card }) => {
 		const person = authorKeyId ? people.get(authorKeyId) : undefined
 		const bookmark = bookmarkByItem.get(card.revisionId)
 		return {
 			...card,
-			author: person ? withTier(person, tiers) : null,
-			bookmark: bookmark ? toBookmarkView(bookmark, tiers) : null,
+			author: person ? toCouncilPerson(person, decor) : null,
+			bookmark: bookmark ? toBookmarkView(bookmark, decor) : null,
 		}
 	})
 	return {

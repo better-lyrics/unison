@@ -117,10 +117,7 @@ export function SealDetail(props: SealDetailProps) {
           <BlockHead title="Submitter" />
           {item.submitter ? (
             <PersonCard
-              keyId={item.submitter.keyId}
-              name={item.submitter.displayName}
-              avatarUrl={item.submitter.avatarUrl}
-              tier={item.submitter.tier}
+              person={item.submitter}
               sub={
                 <>
                   <span className="font-mono">{item.submitter.reputation.toFixed(2)}</span> reputation ·{" "}

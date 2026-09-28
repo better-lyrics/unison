@@ -196,6 +196,22 @@ describeIntegration("council overview stats (integration)", () => {
 			expect(members[1].weekly.every((n) => n === 0)).toBe(true)
 		})
 
+		it("carries each member's real badges", async () => {
+			await db.pool.query("DELETE FROM badge_awards WHERE user_id = ANY($1)", [[mira, ola]])
+			await db.pool.query(
+				"INSERT INTO badge_awards (user_id, badge_key, tier) VALUES ($1, 'verified-contributor', 2)",
+				[mira]
+			)
+			const members = await roster()
+			expect(members[0]).toMatchObject({
+				keyId: MIRA,
+				badgeCount: 1,
+				featured: [expect.objectContaining({ key: "verified-contributor" })],
+			})
+			expect(members[1]).toMatchObject({ keyId: OLA, badgeCount: 0, topBadge: null, featured: [] })
+			await db.pool.query("DELETE FROM badge_awards WHERE user_id = $1", [mira])
+		})
+
 		it("counts only the last seven days in the weekly breakdown", async () => {
 			await decide(mira, "reject", NOW - 8 * DAY)
 			await decide(mira, "edit_reject", NOW - DAY)

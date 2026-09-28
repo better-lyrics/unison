@@ -1,8 +1,7 @@
 import { config } from "@/config"
 import { type BoostQuota, getQuota, monthWindow } from "@/db/boost"
 import { DECISION_KINDS, UNDONE_EXPR } from "@/db/council-events"
-import { type CouncilPerson, withTier } from "@/db/council-person"
-import { getCuratorTierMap } from "@/db/leaderboard"
+import { type CouncilPerson, loadPersonDecor, toCouncilPerson } from "@/db/council-person"
 import { resolvePeople } from "@/db/users"
 import type { Env } from "@/types"
 
@@ -168,9 +167,8 @@ export async function getCouncilRoster(
 	const ids = members.results.map((m) => Number(m.user_id))
 	if (ids.length === 0) return []
 
-	const [people, tiers, month, weekly, lastActive, quotas] = await Promise.all([
+	const [people, month, weekly, lastActive, quotas] = await Promise.all([
 		resolvePeople(env, ids),
-		getCuratorTierMap(env),
 		env.DB.prepare(
 			`SELECT e.actor_id, e.kind, COUNT(*) AS n FROM council_events e
 			 WHERE ${DECIDED} AND e.created_at >= ? AND e.actor_id = ANY(?)
@@ -199,6 +197,7 @@ export async function getCouncilRoster(
 		Promise.all(ids.map((id) => getQuota(env, id))),
 	])
 
+	const decor = await loadPersonDecor(env, [...people.values()])
 	return members.results.flatMap((m, i) => {
 		const userId = Number(m.user_id)
 		const person = people.get(userId)
@@ -221,7 +220,7 @@ export async function getCouncilRoster(
 		const last = lastActive.results.find((r) => Number(r.actor_id) === userId)
 		return [
 			{
-				...withTier(person, tiers),
+				...toCouncilPerson(person, decor),
 				isYou: userId === opts.meId,
 				isAdmin: m.is_admin,
 				addedAt: Number(m.added_at),

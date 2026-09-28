@@ -115,9 +115,7 @@ export function ActionBar(props: ActionBarProps) {
           <button type="button" disabled={busy} className={buttonClass("primary", "sm")} onClick={props.onPrimary}>
             <PrimaryIcon aria-hidden className="size-3.5" stroke={1.75} />
             {primary.confirmLabel}
-            <span className="text-unison-bg/60">
-              <Kbd keys={[primary.shortcut]} />
-            </span>
+            <Kbd keys={[primary.shortcut]} className="text-unison-bg/60" />
           </button>
         </div>
       </div>
@@ -154,11 +152,7 @@ export function ActionBar(props: ActionBarProps) {
         >
           <PrimaryIcon aria-hidden className="size-3.5" stroke={1.75} />
           {primary.unavailable ?? primary.label}
-          {primary.unavailable ? null : (
-            <span className="text-unison-bg/60">
-              <Kbd keys={[primary.shortcut]} />
-            </span>
-          )}
+          {primary.unavailable ? null : <Kbd keys={[primary.shortcut]} className="text-unison-bg/60" />}
         </button>
       </div>
     )

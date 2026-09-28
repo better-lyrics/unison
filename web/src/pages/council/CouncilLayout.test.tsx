@@ -48,14 +48,14 @@ describe("CouncilLayout gate", () => {
     renderCouncil()
     await screen.findByText("Not signed in")
     expect(screen.queryByRole("navigation", { name: "Council sections" })).toBeNull()
-    expect(router.calls).toHaveLength(0)
+    expect(router.calls.filter((c) => c.url.startsWith("/committee"))).toEqual([])
   })
 
   it("tells a signed-in non-member the dashboard is for the council", async () => {
     const router = stubCouncilApi(councilData(), null)
     renderCouncil()
     await screen.findByText("Council members only")
-    expect(router.calls.map((c) => c.url)).toEqual(["/auth/me"])
+    expect(router.calls.map((c) => c.url).filter((url) => url !== "/badges")).toEqual(["/auth/me"])
   })
 
   it("shows a busy skeleton while the session loads", async () => {

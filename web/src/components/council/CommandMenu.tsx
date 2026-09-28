@@ -128,9 +128,7 @@ function MenuBody({ inputRef, onClose }: { inputRef: React.RefObject<HTMLInputEl
           }}
           className="flex-1 border-0 bg-transparent text-[15px] outline-none placeholder:text-unison-text-muted"
         />
-        <span className="text-unison-text-muted">
-          <Kbd keys={["Escape"]} />
-        </span>
+        <Kbd keys={["Escape"]} className="text-unison-text-muted" />
       </div>
       <div
         id={listId}

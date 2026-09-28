@@ -1,4 +1,4 @@
-import { TierChip } from "@/components/TierChip"
+import { AuthorBadges } from "@/components/AuthorBadges"
 import { UserAvatar } from "@/components/UserAvatar"
 import { buttonClass } from "@/components/ui"
 import { cn } from "@/lib/cn"
@@ -41,7 +41,7 @@ export function ApplicantCard({ applicant, now, admin, busy, onOpinion, onDecisi
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2 text-sm font-medium">
             {name}
-            {applicant.person?.tier ? <TierChip tier={applicant.person.tier} /> : null}
+            {applicant.person ? <AuthorBadges {...applicant.person} /> : null}
           </div>
           <div className="mt-[3px] text-xs text-unison-text-muted">
             {applicant.submittedAt === null

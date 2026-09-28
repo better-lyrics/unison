@@ -1,12 +1,11 @@
 import { config } from "@/config"
 import { isCommittee } from "@/db/committee"
 import { type CouncilSource, recordCouncilEvent } from "@/db/council-events"
-import { type CouncilPerson, withTier } from "@/db/council-person"
+import { type CouncilPerson, type PersonDecor, toCouncilPerson } from "@/db/council-person"
 import { UNDECIDED_LYRIC_JOINED } from "@/db/predicates"
 import { type Person, resolvePeople } from "@/db/users"
 import { type D1Compat, advisoryXactLock } from "@/infra/database"
 import type { Env } from "@/types"
-import type { TierName } from "@/utils/tiers"
 
 export type BookmarkItemType = "seal" | "edit"
 
@@ -27,13 +26,10 @@ export interface BookmarkView {
 	expiresAt: number
 }
 
-export function toBookmarkView(
-	bookmark: ActiveBookmark,
-	tiers: Map<string, TierName | null>
-): BookmarkView {
+export function toBookmarkView(bookmark: ActiveBookmark, decor: PersonDecor): BookmarkView {
 	return {
 		id: bookmark.id,
-		holder: withTier(bookmark.holder, tiers),
+		holder: toCouncilPerson(bookmark.holder, decor),
 		createdAt: bookmark.createdAt,
 		expiresAt: bookmark.expiresAt,
 	}

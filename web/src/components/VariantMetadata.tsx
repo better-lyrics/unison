@@ -1,16 +1,14 @@
-import { IconPlayerPlayFilled } from "@tabler/icons-react"
-import { AnimatePresence, MotionConfig, motion } from "motion/react"
-import { Link } from "react-router-dom"
-import { useBadgeCatalogueOptional } from "@/components/BadgeCatalogueContext"
-import { Bone } from "@/components/skeleton"
-import { TierChip } from "@/components/TierChip"
+import { AuthorBadges } from "@/components/AuthorBadges"
 import { Tooltip } from "@/components/Tooltip"
-import { useArtwork, youtubeThumbnailFallbackUrl, youtubeThumbnailUrl } from "@/lib/artwork"
 import { UserAvatar } from "@/components/UserAvatar"
-import { resolveBadgeImage } from "@/lib/badge-view"
+import { Bone } from "@/components/skeleton"
+import { useArtwork, youtubeThumbnailFallbackUrl, youtubeThumbnailUrl } from "@/lib/artwork"
 import { cn } from "@/lib/cn"
 import { LAYOUT_TRANSITION } from "@/lib/motion-variants"
 import type { Mark, VariantFull } from "@/lib/types"
+import { IconPlayerPlayFilled } from "@tabler/icons-react"
+import { AnimatePresence, MotionConfig, motion } from "motion/react"
+import { Link } from "react-router-dom"
 
 const SYNC_TIP: Record<string, string> = {
   richsync: "Word-by-word synced lyrics that highlight as the song plays.",
@@ -137,17 +135,7 @@ function Pill({ tip, gold, children }: { tip: string; gold?: boolean; children: 
 
 function SubmitterRow({ variant }: { variant: VariantFull }) {
   const s = variant.submitter
-  const catalogue = useBadgeCatalogueOptional()
-  const cat = catalogue?.status === "success" ? catalogue.data : null
-  const badgeImage = (key: string, tier?: number) => {
-    const def = cat?.badges.find((d) => d.key === key)
-    return def ? resolveBadgeImage(def, tier, "color") : null
-  }
   if (!s) return null
-  const gemSrc = s.tier ? badgeImage(s.tier) : null
-  const featured = s.featured ?? []
-  const topBadgeSrc = s.topBadge ? badgeImage(s.topBadge.key, s.topBadge.tier) : null
-  const extra = s.badgeCount - 1
 
   return (
     <Link to={`/curator/${s.keyId}`} className="flex cursor-pointer flex-col gap-2.5">
@@ -167,30 +155,7 @@ function SubmitterRow({ variant }: { variant: VariantFull }) {
           </span>
         </Tooltip>
       </div>
-      {s.tier || featured.length > 0 || topBadgeSrc ? (
-        <div className="flex flex-wrap items-center gap-2">
-          {s.tier ? <TierChip tier={s.tier} gemSrc={gemSrc ?? undefined} /> : null}
-          {featured.length > 0 ? (
-            <span className="inline-flex items-center gap-1.5">
-              {featured.map((b) => {
-                const img = badgeImage(b.key, b.tier)
-                return img ? (
-                  <Tooltip key={b.key} label={b.name}>
-                    <img src={img} alt={b.name} className="size-5 object-contain" />
-                  </Tooltip>
-                ) : null
-              })}
-            </span>
-          ) : topBadgeSrc ? (
-            <span className="inline-flex items-center gap-1.5">
-              <img src={topBadgeSrc} alt={s.topBadge?.name ?? ""} className="size-5" />
-              {extra > 0 ? (
-                <span className="font-mono text-[11px] font-semibold text-unison-text-muted">+{extra}</span>
-              ) : null}
-            </span>
-          ) : null}
-        </div>
-      ) : null}
+      <AuthorBadges tier={s.tier} featured={s.featured ?? []} topBadge={s.topBadge} badgeCount={s.badgeCount} />
     </Link>
   )
 }

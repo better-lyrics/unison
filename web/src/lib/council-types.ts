@@ -1,12 +1,18 @@
-import type { Confidence, LyricsFormat, SyncType, TierName } from "./types"
+import type { Confidence, LeaderboardBadge, LyricsFormat, SyncType, TierName } from "./types"
 
-export interface CouncilPerson {
+export interface Person {
   userId: number
   keyId: string
   displayName: string
   handle: string | null
   avatarUrl: string | null
+}
+
+export interface CouncilPerson extends Person {
   tier: TierName | null
+  badgeCount: number
+  topBadge: LeaderboardBadge | null
+  featured: LeaderboardBadge[]
 }
 
 export interface BookmarkView {
@@ -110,8 +116,8 @@ export interface CouncilEvent {
   at: number
   note: string | null
   undone: boolean
-  actor: Omit<CouncilPerson, "tier"> | null
-  subject: Omit<CouncilPerson, "tier"> | null
+  actor: Person | null
+  subject: Person | null
   lyric: { id: number; videoId: string; song: string; artist: string } | null
 }
 
