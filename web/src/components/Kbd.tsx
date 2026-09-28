@@ -1,3 +1,4 @@
+import { cn } from "@/lib/cn"
 import { formatKey } from "@/lib/format-key"
 import { isMac as platformIsMac } from "@/lib/platform"
 import { IconCommand } from "@tabler/icons-react"
@@ -6,11 +7,12 @@ import { Fragment } from "react"
 interface KbdProps {
   keys: string[]
   isMac?: boolean
+  className?: string
 }
 
-export function Kbd({ keys, isMac = platformIsMac }: KbdProps) {
+export function Kbd({ keys, isMac = platformIsMac, className }: KbdProps) {
   return (
-    <span className="inline-flex items-center gap-0.5">
+    <span className={cn("inline-flex items-center gap-0.5", className)}>
       {keys.map((key) => (
         <span
           key={key}
@@ -23,9 +25,17 @@ export function Kbd({ keys, isMac = platformIsMac }: KbdProps) {
   )
 }
 
-export function KeySteps({ keys, word }: { keys: string[]; word: "then" | "or" }) {
+export function KeySteps({
+  keys,
+  word,
+  className,
+}: {
+  keys: string[]
+  word: "then" | "or"
+  className?: string
+}) {
   return (
-    <span className="inline-flex items-center gap-1">
+    <span className={cn("inline-flex items-center gap-1", className)}>
       {keys.map((key, i) => (
         <Fragment key={key}>
           {i > 0 ? <span className="text-[10px]">{word}</span> : null}

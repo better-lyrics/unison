@@ -54,7 +54,7 @@ export function ShortcutsSheet({ open, onOpenChange }: { open: boolean; onOpenCh
                   className="flex items-center justify-between py-[5px] text-[13px] text-unison-text-secondary"
                 >
                   <dt>{label}</dt>
-                  <dd className="text-unison-text-muted">
+                  <dd className="flex text-unison-text-muted">
                     {steps ? <KeySteps keys={keys} word={steps} /> : <Kbd keys={keys} />}
                   </dd>
                 </div>

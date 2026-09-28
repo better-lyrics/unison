@@ -1,6 +1,6 @@
 import { cleanup, render } from "@testing-library/react"
 import { afterEach, describe, expect, it } from "vitest"
-import { Kbd } from "./Kbd"
+import { Kbd, KeySteps } from "./Kbd"
 
 afterEach(cleanup)
 
@@ -24,5 +24,28 @@ describe("Kbd", () => {
   it("renders the formatted symbol for a named key", () => {
     const { container } = render(<Kbd keys={["Shift"]} isMac />)
     expect(container.textContent).toBe("⇧")
+  })
+})
+
+describe("placement", () => {
+  it("regression: takes colour and spacing on its own flex root, so no inline wrapper shifts it off centre", () => {
+    const { container } = render(<Kbd keys={["/"]} className="ml-auto text-unison-text-muted" />)
+    const root = container.firstElementChild as HTMLElement
+    expect(root.className).toContain("inline-flex")
+    expect(root.className).toContain("ml-auto")
+    expect(root.className).toContain("text-unison-text-muted")
+  })
+
+  it("does the same for a key sequence", () => {
+    const { container } = render(<KeySteps keys={["G", "Q"]} word="then" className="text-unison-bg/60" />)
+    const root = container.firstElementChild as HTMLElement
+    expect(root.className).toContain("inline-flex")
+    expect(root.className).toContain("text-unison-bg/60")
+    expect(root.textContent).toBe("GthenQ")
+  })
+
+  it("keeps the base layout without a class", () => {
+    const { container } = render(<Kbd keys={["K"]} />)
+    expect((container.firstElementChild as HTMLElement).className).toBe("inline-flex items-center gap-0.5")
   })
 })

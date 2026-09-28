@@ -25,9 +25,7 @@ export function ListSearch({ value, onChange, placeholder, ref }: ListSearchProp
         placeholder={placeholder}
         className="min-w-0 flex-1 border-0 bg-transparent text-[13px] outline-none placeholder:text-unison-text-muted [&::-webkit-search-cancel-button]:hidden"
       />
-      <span className="text-unison-text-muted">
-        <Kbd keys={["/"]} />
-      </span>
+      <Kbd keys={["/"]} className="text-unison-text-muted" />
     </label>
   )
 }

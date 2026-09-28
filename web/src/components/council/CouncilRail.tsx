@@ -162,9 +162,7 @@ function RailFootButton({
     >
       <FootIcon aria-hidden className="size-3.5" stroke={1.5} />
       {label}
-      <span className="ml-auto">
-        <Kbd keys={keys} />
-      </span>
+      <Kbd keys={keys} className="ml-auto" />
     </button>
   )
 }
