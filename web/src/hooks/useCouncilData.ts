@@ -1,4 +1,4 @@
-import { useSession } from "@/auth/useSession"
+import { useOptionalSession } from "@/auth/useSession"
 import {
   type EventsQuery,
   fetchCouncilApplicants,
@@ -28,8 +28,8 @@ export const councilKeys = {
 const REFRESH_MS = 60_000
 
 export function useCouncilRole(): { admin: boolean } | null {
-  const session = useSession()
-  return session.status === "signed-in" ? (session.identity.council ?? null) : null
+  const session = useOptionalSession()
+  return session?.status === "signed-in" ? (session.identity.council ?? null) : null
 }
 
 export function useCouncilQueue() {
