@@ -27,7 +27,12 @@ export function SongsPage() {
   }
 
   if (status === "error") {
-    return <EmptyState title="Could not load leaderboard" hint={error.message} />
+    return (
+      <div className="space-y-8">
+        <SealedShelf />
+        <EmptyState title="Could not load leaderboard" hint={error.message} />
+      </div>
+    )
   }
 
   return (

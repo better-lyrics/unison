@@ -255,6 +255,22 @@ describe("SongsPage", () => {
       expect(screen.queryByRole("heading", { name: "Needs Fixing" })).toBeNull()
     })
 
+    it("keeps the shelf when the leaderboard fails", async () => {
+      vi.stubGlobal(
+        "fetch",
+        vi.fn().mockImplementation((url: string) => {
+          if (url === "/leaderboard/songs") return Promise.resolve(jsonResponse({ success: false, error: "boom" }, 500))
+          if (url.startsWith("/feed")) return Promise.resolve(jsonResponse({ success: true, data: [sealed] }))
+          if (url.startsWith("/artwork"))
+            return Promise.resolve(jsonResponse({ success: true, data: { artworkUrl: null } }))
+          return Promise.reject(new Error(`unexpected url ${url}`))
+        }),
+      )
+      renderPage()
+      await waitFor(() => expect(screen.getByText("Could not load leaderboard")).toBeTruthy())
+      await waitFor(() => expect(screen.getByText("Sealed Grace")).toBeTruthy())
+    })
+
     it("regression: a failed sealed feed never hides Most Wanted", async () => {
       vi.stubGlobal(
         "fetch",
