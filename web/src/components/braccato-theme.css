@@ -9,6 +9,7 @@ blyrics-letter-wave = true;
 
 .blyrics-container {
   --blyrics-font-weight: 600;
+  --blyrics-translated-font-size: calc(var(--blyrics-font-size) * 0.6);
   --blyrics-padding: var(--unison-lyric-padding, 1.25rem);
   --blyrics-hover-scale: 1.01;
 
