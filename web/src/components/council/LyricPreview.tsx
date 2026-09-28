@@ -1,11 +1,12 @@
 import { Kbd } from "@/components/Kbd"
-import { LyricsRenderer, parseVariantLyrics } from "@/components/LyricsRenderer"
+import { LyricsPanel } from "@/components/LyricsPanel"
+import { parseVariantLyrics } from "@/components/LyricsRenderer"
+import { VariantCover } from "@/components/VariantMetadata"
 import { Bone } from "@/components/skeleton"
 import { buttonClass } from "@/components/ui"
 import { useCouncilShortcuts } from "@/hooks/useCouncilShortcuts"
 import { useLyricsVariant } from "@/hooks/useLyricsData"
 import { useYouTubePlayer } from "@/hooks/useYouTubePlayer"
-import { youtubeThumbnailFallbackUrl } from "@/lib/artwork"
 import { IconPlayerPauseFilled, IconPlayerPlayFilled } from "@tabler/icons-react"
 import { useMemo, useState } from "react"
 import { BlockHead } from "./detail-parts"
@@ -44,42 +45,26 @@ export function LyricPreview({ lyricId, videoId }: { lyricId: number; videoId: s
           </button>
         }
       />
-      <div className="grid gap-3 min-[1180px]:grid-cols-[minmax(0,1fr)_240px]">
-        <div className="overflow-hidden rounded-[10px] bg-black/[0.18] shadow-[inset_0_0_0_1px_var(--color-unison-border)]">
+      <div className="grid items-start gap-4 min-[1180px]:grid-cols-[minmax(0,200px)_minmax(0,1fr)]">
+        <div className="overflow-hidden rounded-xl border border-unison-border bg-unison-bg-elevated">
           {variant ? (
-            <LyricsRenderer
+            <VariantCover
               variant={variant}
-              getCurrentTime={player.getCurrentTime}
-              getPlaying={player.getPlaying}
-              onLineClick={playFrom}
-              className="h-[360px] max-w-none px-6 [--blyrics-font-size:1.25rem] [--unison-lyric-padding:0.5rem]"
+              playerRef={player.ref}
+              playerActive={active}
+              onActivatePlayer={() => playFrom(start)}
             />
           ) : (
-            <Bone className="h-[360px] w-full rounded-none" />
+            <Bone className="aspect-square w-full rounded-none" />
           )}
         </div>
-        <div className="aspect-video self-start overflow-hidden rounded-[10px] bg-black shadow-[inset_0_0_0_1px_var(--color-unison-border)]">
-          {active ? (
-            <div ref={player.ref} className="size-full" />
-          ) : (
-            <button
-              type="button"
-              aria-label="Play the song from the first line"
-              onClick={() => playFrom(start)}
-              disabled={!variant}
-              className="group relative grid size-full place-items-center"
-            >
-              <img
-                src={youtubeThumbnailFallbackUrl(videoId)}
-                alt=""
-                className="absolute inset-0 size-full object-cover opacity-60 transition-opacity group-hover:opacity-80"
-              />
-              <span className="relative grid size-10 place-items-center rounded-full bg-black/60 text-white">
-                <IconPlayerPlayFilled aria-hidden className="size-4" />
-              </span>
-            </button>
-          )}
-        </div>
+        <LyricsPanel
+          variant={variant}
+          getCurrentTime={player.getCurrentTime}
+          getPlaying={player.getPlaying}
+          onLineClick={playFrom}
+          lyricsClassName="h-[440px] [--blyrics-font-size:1.5rem]"
+        />
       </div>
     </div>
   )

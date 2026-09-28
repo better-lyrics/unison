@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest"
 import {
   filterEdits,
   filterQueue,
+  NO_FILTERS,
   groupByBookmark,
   languageFilters,
   neighbour,
@@ -79,46 +80,61 @@ describe("filterQueue", () => {
   ]
 
   it("matches song, artist and submitter without case", () => {
-    expect(filterQueue(items, { text: "yena", filter: "all" }).map((i) => i.id)).toEqual([1])
-    expect(filterQueue(items, { text: "WALKER", filter: "all" }).map((i) => i.id)).toEqual([3])
-    expect(filterQueue(items, { text: "sigmaviolin", filter: "all" }).map((i) => i.id)).toEqual([1, 2, 3])
+    expect(filterQueue(items, { text: "yena", ...NO_FILTERS }).map((i) => i.id)).toEqual([1])
+    expect(filterQueue(items, { text: "WALKER", ...NO_FILTERS }).map((i) => i.id)).toEqual([3])
+    expect(filterQueue(items, { text: "sigmaviolin", ...NO_FILTERS }).map((i) => i.id)).toEqual([1, 2, 3])
   })
 
   it("keeps only items with automatic flags", () => {
-    expect(filterQueue(items, { text: "", filter: "flags" }).map((i) => i.id)).toEqual([2])
+    expect(filterQueue(items, { text: "", ...NO_FILTERS, flags: "flagged" }).map((i) => i.id)).toEqual([2])
   })
 
   it("keeps only items with no automatic flags", () => {
-    expect(filterQueue(items, { text: "", filter: "clean" }).map((i) => i.id)).toEqual([1, 3])
+    expect(filterQueue(items, { text: "", ...NO_FILTERS, flags: "clean" }).map((i) => i.id)).toEqual([1, 3])
   })
 
   it("matches a pasted song link or video id", () => {
     const song = [queueItem({ id: 7, videoId: "Lnk0000001A" }), queueItem({ id: 8, videoId: "Other000001" })]
     const link = "https://music.youtube.com/watch?v=Lnk0000001A"
-    expect(filterQueue(song, { text: link, filter: "all" }).map((i) => i.id)).toEqual([7])
-    expect(filterQueue(song, { text: "Lnk0000001A", filter: "all" }).map((i) => i.id)).toEqual([7])
+    expect(filterQueue(song, { text: link, ...NO_FILTERS }).map((i) => i.id)).toEqual([7])
+    expect(filterQueue(song, { text: "Lnk0000001A", ...NO_FILTERS }).map((i) => i.id)).toEqual([7])
+  })
+
+  it("keeps any of several languages", () => {
+    const mixed = [...items, queueItem({ id: 5, language: "ja" })]
+    expect(filterQueue(mixed, { text: "", ...NO_FILTERS, languages: ["ko", "ja"] }).map((i) => i.id)).toEqual([1, 5])
+  })
+
+  it("combines the flag filter with languages and text", () => {
+    const mixed = [
+      ...items,
+      queueItem({ id: 6, song: "Hana", language: "ko", flags: [{ code: "filler-line", label: "Filler" }] }),
+    ]
+    expect(filterQueue(mixed, { text: "", flags: "flagged", languages: ["ko"] }).map((i) => i.id)).toEqual([6])
+    expect(filterQueue(mixed, { text: "", flags: "clean", languages: ["ko"] }).map((i) => i.id)).toEqual([1])
+    expect(filterQueue(mixed, { text: "catch", flags: "flagged", languages: ["ko"] })).toEqual([])
   })
 
   it("keeps only one language", () => {
-    expect(filterQueue(items, { text: "", filter: "ko" }).map((i) => i.id)).toEqual([1])
+    expect(filterQueue(items, { text: "", ...NO_FILTERS, languages: ["ko"] }).map((i) => i.id)).toEqual([1])
   })
 
   describe("edge cases", () => {
     it("ignores surrounding whitespace in the search", () => {
-      expect(filterQueue(items, { text: "  alone ", filter: "all" }).map((i) => i.id)).toEqual([3])
+      expect(filterQueue(items, { text: "  alone ", ...NO_FILTERS }).map((i) => i.id)).toEqual([3])
     })
 
     it("matches accented and non-Latin text", () => {
       const sesi = queueItem({ id: 9, artist: "eńau, Ari Lesmana" })
       const korean = queueItem({ id: 10, song: "사랑" })
-      expect(filterQueue([sesi, korean], { text: "eńau", filter: "all" }).map((i) => i.id)).toEqual([9])
-      expect(filterQueue([sesi, korean], { text: "사랑", filter: "all" }).map((i) => i.id)).toEqual([10])
+      expect(filterQueue([sesi, korean], { text: "eńau", ...NO_FILTERS }).map((i) => i.id)).toEqual([9])
+      expect(filterQueue([sesi, korean], { text: "사랑", ...NO_FILTERS }).map((i) => i.id)).toEqual([10])
     })
 
     it("handles an item without a submitter or language", () => {
       const bare = queueItem({ id: 4, submitter: null, language: null })
-      expect(filterQueue([bare], { text: "sigma", filter: "all" })).toEqual([])
-      expect(filterQueue([bare], { text: "", filter: "en" })).toEqual([])
+      expect(filterQueue([bare], { text: "sigma", ...NO_FILTERS })).toEqual([])
+      expect(filterQueue([bare], { text: "", ...NO_FILTERS, languages: ["en"] })).toEqual([])
     })
   })
 })

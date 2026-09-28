@@ -13,6 +13,7 @@ import {
 	listCommitteeKeyIds,
 	removeCommittee,
 	setCouncilAdmin,
+	syncCouncilAdmins,
 } from "./committee"
 import { listCouncilEvents } from "./council-events"
 
@@ -113,6 +114,68 @@ describeIntegration("committee roster (integration)", () => {
 			expect(roster).toHaveLength(1)
 			expect(roster[0].userId).toBe(userId)
 			expect(roster[0].addedBy).toBe("admin")
+		})
+	})
+
+	describe("syncCouncilAdmins", () => {
+		const admin = async (userId: number) =>
+			(
+				await one<{ is_admin: boolean }>(
+					"SELECT is_admin FROM committee_members WHERE user_id = $1",
+					[userId]
+				)
+			).is_admin
+
+		it("sets each listed member's admin flag and reports how many changed", async () => {
+			const a = await insertUser("a".repeat(64))
+			const b = await insertUser("b".repeat(64))
+			await addCommittee(env, a, { actorId: null, source: "admin" })
+			await addCommittee(env, b, { actorId: null, source: "admin" })
+			await setCouncilAdmin(env, b, true)
+			const changed = await syncCouncilAdmins(env, [
+				{ keyId: "a".repeat(64), admin: true },
+				{ keyId: "b".repeat(64), admin: false },
+			])
+			expect(changed).toBe(2)
+			expect(await admin(a)).toBe(true)
+			expect(await admin(b)).toBe(false)
+		})
+
+		describe("edge cases", () => {
+			it("changes nothing for an empty list", async () => {
+				expect(await syncCouncilAdmins(env, [])).toBe(0)
+			})
+
+			it("ignores keys that are not on the council or do not exist", async () => {
+				const c = await insertUser("c".repeat(64))
+				const changed = await syncCouncilAdmins(env, [
+					{ keyId: "c".repeat(64), admin: true },
+					{ keyId: "d".repeat(64), admin: true },
+				])
+				expect(changed).toBe(0)
+				expect(await isCouncilAdmin(env, c)).toBe(false)
+				expect(await isCommittee(env, c)).toBe(false)
+			})
+
+			it("leaves members that are not listed alone", async () => {
+				const a = await insertUser("a".repeat(64))
+				const b = await insertUser("b".repeat(64))
+				await addCommittee(env, a, { actorId: null, source: "admin" })
+				await addCommittee(env, b, { actorId: null, source: "admin" })
+				await setCouncilAdmin(env, b, true)
+				await syncCouncilAdmins(env, [{ keyId: "a".repeat(64), admin: true }])
+				expect(await admin(b)).toBe(true)
+			})
+		})
+
+		describe("invariants", () => {
+			it("counts only real changes, so a repeat sync reports 0", async () => {
+				const a = await insertUser("a".repeat(64))
+				await addCommittee(env, a, { actorId: null, source: "admin" })
+				const entries = [{ keyId: "a".repeat(64), admin: true }]
+				expect(await syncCouncilAdmins(env, entries)).toBe(1)
+				expect(await syncCouncilAdmins(env, entries)).toBe(0)
+			})
 		})
 	})
 

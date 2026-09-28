@@ -49,6 +49,26 @@ export async function setCouncilAdmin(env: Env, userId: number, admin: boolean):
 	return row !== null
 }
 
+export async function syncCouncilAdmins(
+	env: Env,
+	entries: { keyId: string; admin: boolean }[]
+): Promise<number> {
+	if (entries.length === 0) return 0
+	const res = await env.DB.prepare(
+		`UPDATE committee_members c SET is_admin = v.admin
+		 FROM unnest(?::text[], ?::boolean[]) AS v(key_id, admin)
+		 JOIN users u ON u.key_id = v.key_id
+		 WHERE c.user_id = u.id AND c.is_admin IS DISTINCT FROM v.admin
+		 RETURNING c.user_id`
+	)
+		.bind(
+			entries.map((e) => e.keyId),
+			entries.map((e) => e.admin)
+		)
+		.all<{ user_id: number }>()
+	return res.results.length
+}
+
 export async function addCommittee(
 	env: Env,
 	userId: number,

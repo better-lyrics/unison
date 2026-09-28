@@ -1,4 +1,9 @@
-import { addCommittee, listCommitteeKeyIds, removeCommittee } from "@/db/committee"
+import {
+	addCommittee,
+	listCommitteeKeyIds,
+	removeCommittee,
+	syncCouncilAdmins,
+} from "@/db/committee"
 import { getUserByKeyId } from "@/db/users"
 import type { Env } from "@/types"
 import { isAuthorizedBot } from "@/utils/bot-auth"
@@ -11,6 +16,7 @@ vi.mock("@/db/committee", () => ({
 	addCommittee: vi.fn(),
 	removeCommittee: vi.fn(),
 	listCommitteeKeyIds: vi.fn(),
+	syncCouncilAdmins: vi.fn(),
 }))
 
 const KEY = "k".repeat(64)
@@ -105,5 +111,50 @@ describe("GET /committee/bot", () => {
 		const res = await app().handle(getReq())
 		expect(res.status).toBe(200)
 		expect(await res.json()).toEqual({ success: true, data: { keyIds: [KEY, "a".repeat(64)] } })
+	})
+})
+
+describe("PUT /committee/bot/admins", () => {
+	const adminsReq = (body: unknown) =>
+		new Request("http://localhost/committee/bot/admins", {
+			method: "PUT",
+			headers: { authorization: "Bearer secret", "content-type": "application/json" },
+			body: JSON.stringify(body),
+		})
+
+	it("rejects a bad bot secret with 401", async () => {
+		vi.mocked(isAuthorizedBot).mockReturnValue(false)
+		const res = await app().handle(adminsReq({ admins: [{ keyId: KEY, admin: true }] }))
+		expect(res.status).toBe(401)
+		expect(vi.mocked(syncCouncilAdmins)).not.toHaveBeenCalled()
+	})
+
+	it("applies the admin flags and reports how many changed", async () => {
+		vi.mocked(isAuthorizedBot).mockReturnValue(true)
+		vi.mocked(syncCouncilAdmins).mockResolvedValue(1)
+		const admins = [
+			{ keyId: KEY, admin: true },
+			{ keyId: "a".repeat(64), admin: false },
+		]
+		const res = await app().handle(adminsReq({ admins }))
+		expect(res.status).toBe(200)
+		expect(await res.json()).toEqual({ success: true, data: { changed: 1 } })
+		expect(vi.mocked(syncCouncilAdmins)).toHaveBeenCalledWith(expect.anything(), admins)
+	})
+
+	describe("edge cases", () => {
+		it("rejects a body without a boolean admin flag", async () => {
+			vi.mocked(isAuthorizedBot).mockReturnValue(true)
+			const res = await app().handle(adminsReq({ admins: [{ keyId: KEY, admin: "yes" }] }))
+			expect(res.status).toBe(422)
+			expect(vi.mocked(syncCouncilAdmins)).not.toHaveBeenCalled()
+		})
+
+		it("accepts an empty list", async () => {
+			vi.mocked(isAuthorizedBot).mockReturnValue(true)
+			vi.mocked(syncCouncilAdmins).mockResolvedValue(0)
+			const res = await app().handle(adminsReq({ admins: [] }))
+			expect(res.status).toBe(200)
+		})
 	})
 })

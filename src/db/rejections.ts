@@ -78,6 +78,19 @@ export async function getSealCandidates(
 	return result.results
 }
 
+export async function getSealCandidatesByIds(env: Env, ids: number[]): Promise<SealCandidate[]> {
+	if (ids.length === 0) return []
+	const result = await env.DB.prepare(
+		`SELECT ${CANDIDATE_COLUMNS}
+		 FROM lyrics l
+		 LEFT JOIN users u ON u.id = l.submitter_id
+		 WHERE l.id = ANY(?) AND ${SEAL_ELIGIBLE_JOINED}`
+	)
+		.bind(ids)
+		.all<SealCandidate>()
+	return result.results
+}
+
 export async function getSealableVariants(env: Env, videoId: string): Promise<SealCandidate[]> {
 	const result = await env.DB.prepare(
 		`SELECT ${CANDIDATE_COLUMNS}

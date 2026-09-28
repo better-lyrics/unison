@@ -1,14 +1,22 @@
 import { EmptyState } from "@/components/EmptyState"
 import { ListSearch, fieldClass } from "@/components/council/ListSearch"
 import { SealDetail } from "@/components/council/SealDetail"
-import { Segmented } from "@/components/council/Segmented"
+import { ToggleSegments } from "@/components/council/Segmented"
 import { NothingSelected, TriageList, TriageListSkeleton, TriageShell } from "@/components/council/TriageList"
 import { TriageRow, queueRowParts } from "@/components/council/TriageRow"
 import { PageHead } from "@/components/council/headings"
 import { useCouncilOverview, useCouncilQueue, useSealableVariants } from "@/hooks/useCouncilData"
 import { useCouncilDecision } from "@/hooks/useCouncilMutations"
 import { useTriage } from "@/hooks/useTriage"
-import { type QueueFilter, type QueueSort, filterQueue, languageFilters, sortQueue } from "@/lib/council-triage"
+import {
+  type FlagFilter,
+  NO_FILTERS,
+  type QueueFilters,
+  type QueueSort,
+  filterQueue,
+  languageFilters,
+  sortQueue,
+} from "@/lib/council-triage"
 import type { QueueItem } from "@/lib/council-types"
 import { videoIdFromInput } from "@/lib/youtube-music"
 import { IconCheck } from "@tabler/icons-react"
@@ -25,21 +33,35 @@ export function CouncilQueuePage() {
   const decision = useCouncilDecision()
   const [text, setText] = useState("")
   const [sort, setSort] = useState<QueueSort>("top")
-  const [filter, setFilter] = useState<QueueFilter>("all")
+  const [filters, setFilters] = useState<QueueFilters>(NO_FILTERS)
   const linkedVideo = videoIdFromInput(text)
   const sealable = useSealableVariants(linkedVideo).data
   const queued = new Set(queue?.map((item) => item.id))
   const linked = new Set(linkedVideo ? sealable?.map((item) => item.id) : [])
   const outside = linkedVideo && queue ? (sealable ?? []).filter((item) => !queued.has(item.id)) : []
-  const matched = filterQueue(queue ?? [], { text, filter })
+  const matched = filterQueue(queue ?? [], { text, ...filters })
   const linkedInQueue = filterQueue(
     (queue ?? []).filter((item) => linked.has(item.id) && !matched.includes(item)),
-    { text: "", filter },
+    { text: "", ...filters },
   )
   const shown = sortQueue([...matched, ...linkedInQueue], sort)
-  const extra = filterQueue(outside, { text: "", filter })
+  const extra = filterQueue(outside, { text: "", ...filters })
   const triage = useTriage({ all: queue, shown, extra, entry, meKeyId, now })
   const selected = triage.selectedItem
+
+  const flagOption = (flags: FlagFilter, label: string) => ({
+    key: flags,
+    label,
+    pressed: filters.flags === flags,
+    onToggle: () => setFilters((f) => ({ ...f, flags: f.flags === flags ? "any" : flags })),
+  })
+  const toggleLanguage = (language: string) =>
+    setFilters((f) => ({
+      ...f,
+      languages: f.languages.includes(language)
+        ? f.languages.filter((l) => l !== language)
+        : [...f.languages, language],
+    }))
 
   const row = (item: QueueItem) => (
     <TriageRow
@@ -87,17 +109,22 @@ export function CouncilQueuePage() {
                     </select>
                   </div>
                   <div>
-                    <Segmented
+                    <ToggleSegments
                       label="Filter"
-                      value={filter}
-                      onChange={setFilter}
                       options={[
-                        { value: "all", label: "All" },
-                        { value: "flags", label: "Has flags" },
-                        { value: "clean", label: "No flags" },
+                        {
+                          key: "all",
+                          label: "All",
+                          pressed: filters.flags === "any" && filters.languages.length === 0,
+                          onToggle: () => setFilters(NO_FILTERS),
+                        },
+                        flagOption("flagged", "Has flags"),
+                        flagOption("clean", "No flags"),
                         ...languageFilters(queue).map((language) => ({
-                          value: language,
+                          key: language,
                           label: language.toUpperCase(),
+                          pressed: filters.languages.includes(language),
+                          onToggle: () => toggleLanguage(language),
                         })),
                       ]}
                     />
