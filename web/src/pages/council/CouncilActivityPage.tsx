@@ -69,7 +69,7 @@ export function CouncilActivityPage() {
     <>
       <PageHead
         title="Activity"
-        sub="Every council decision, from the web and from Discord. Undo is available for your own recent decisions."
+        sub="Every council decision, from the web and from Discord. You can undo your own recent ones."
       />
       <div className="mb-3 flex flex-wrap items-center gap-2.5">
         <Segmented

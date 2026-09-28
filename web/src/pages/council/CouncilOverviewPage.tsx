@@ -130,7 +130,7 @@ export function CouncilOverviewPage() {
           foot={
             stats ? (
               <span>
-                {stats.sealRate === null ? "No decisions yet" : "Seals mark the exceptional. Keep them rare."}
+                {stats.sealRate === null ? "No decisions yet" : "Save seals for the best lyrics. Keep them rare."}
               </span>
             ) : null
           }
@@ -138,7 +138,7 @@ export function CouncilOverviewPage() {
       </div>
 
       <div className="mt-14 grid gap-14 council:grid-cols-[minmax(0,1.55fr)_minmax(0,1fr)]">
-        <Region title="Needs you" sub="Sorted by urgency. Bookmarks from other members are left out.">
+        <Region title="Needs you" sub="Most urgent first. Other members' bookmarks are left out.">
           {queue && edits && applicants ? (
             <Needs needs={deriveNeeds({ queue, edits, applicants, meKeyId, now })} />
           ) : (
@@ -253,7 +253,7 @@ function Needs({ needs }: { needs: ReturnType<typeof deriveNeeds> }) {
       <EmptyState
         icon={<IconCheck className="size-5" stroke={1.5} />}
         title="All caught up"
-        hint="Nothing needs your attention right now. New candidates show up here as they reach the queue."
+        hint="Nothing needs you right now. New candidates show up here when they reach the queue."
       />
     )
   }
@@ -358,7 +358,7 @@ function WaitChart({
       <ChartHead
         id="council-waiting"
         title="How long items wait"
-        sub="Open seal candidates and pending edits, by time since they entered."
+        sub="Open seal candidates and edits, by how long they have waited."
       />
       {loaded ? (
         <>

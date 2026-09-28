@@ -49,7 +49,7 @@ export function CouncilQueuePage() {
     <>
       <PageHead
         title="Seal queue"
-        sub="Top-ranked variant per song with a positive score, not yet sealed or rejected. Seals are for the exceptional."
+        sub="The best-rated lyric for each song that nobody has sealed or rejected yet. Paste a song link to find one that is not listed."
       />
       <TriageShell
         list={
@@ -100,7 +100,7 @@ export function CouncilQueuePage() {
               }
               noMatch={
                 linkedVideo && sealable
-                  ? "No variant of this song can be sealed. It is sealed, rejected, hidden or not rated well enough."
+                  ? "Nothing to seal for this song. Its lyrics are already sealed, rejected, hidden or not rated well enough yet."
                   : undefined
               }
               empty={

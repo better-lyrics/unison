@@ -49,7 +49,7 @@ export function SealDetail(props: SealDetailProps) {
             icon: IconRosetteDiscountCheck,
             shortcut: "S",
             confirmTitle: `Seal “${item.song}”?`,
-            confirmBody: `This uses 1 of your ${remaining} remaining seals this month. The lyric gets the council mark and a ranking boost, and the seal shows in public under your name.`,
+            confirmBody: `This uses 1 of your ${remaining} remaining seals this month. The lyric gets the council mark and ranks higher, and your name shows on the seal.`,
             confirmLabel: "Seal lyric",
             unavailable: quota && remaining <= 0 ? `No seals left until ${formatShortDate(quota.resetsAt)}` : null,
           }}
@@ -110,7 +110,7 @@ export function SealDetail(props: SealDetailProps) {
         />
       </div>
       <div>
-        <BlockHead title="Automatic checks" aside="Advisory only" />
+        <BlockHead title="Automatic checks" aside="Hints, not rules" />
         <div className="flex flex-wrap gap-1.5">
           {item.flags.length > 0 ? (
             item.flags.map((flag) => (

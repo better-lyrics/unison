@@ -136,7 +136,7 @@ describe("CouncilQueuePage song link", () => {
     renderCouncil("/council/queue")
     await waitFor(() => expect(titles(openList())).toHaveLength(1))
     search("Nope0000001")
-    expect(await screen.findByText(/No variant of this song can be sealed/)).toBeTruthy()
+    expect(await screen.findByText(/Nothing to seal for this song/)).toBeTruthy()
   })
 
   it("finds a pasted song while the queue itself is empty", async () => {

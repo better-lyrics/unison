@@ -94,7 +94,7 @@ export function deriveNeeds({ queue, edits, applicants, meKeyId, now }: NeedsInp
       kind: "applicants",
       tone: "plain",
       title: `${plural(undecided, "applicant needs", "applicants need")} your opinion`,
-      sub: "Admins decide. Your support or objection is shown on each card.",
+      sub: "An admin makes the final call. Your support or objection shows on each card.",
       to: "/council/applicants",
     })
   }

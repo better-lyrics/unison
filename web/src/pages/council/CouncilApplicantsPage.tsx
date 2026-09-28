@@ -36,7 +36,7 @@ export function CouncilApplicantsPage() {
     <>
       <PageHead
         title="Applicants"
-        sub="People who passed the entry exam. Give your opinion. Admins make the final call and butler grants the role."
+        sub="People who passed the entry exam. Say whether you back them. An admin makes the call, and butler hands out the Discord role."
         actions={
           <span className="text-xs text-unison-text-muted">
             <Switch checked={nearMisses} onChange={setNearMisses}>
