@@ -127,4 +127,16 @@ describe("ShortcutsSheet", () => {
     press("q")
     expect(where()).toBe("/council")
   })
+
+  it("regression: keeps page shortcuts off while a dialog is open, even before focus moves into it", async () => {
+    stubCouncilApi(data())
+    renderCouncil("/council", probes)
+    await screen.findByRole("navigation", { name: "Council sections" })
+    press("?", { shiftKey: true })
+    await screen.findByRole("dialog", { name: "Keyboard shortcuts" })
+    act(() => (document.activeElement as HTMLElement | null)?.blur())
+    press("g")
+    press("q")
+    expect(where()).toBe("/council")
+  })
 })

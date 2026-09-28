@@ -24,7 +24,9 @@ function run(name: string, event: KeyboardEvent): boolean {
 function onKeyDown(event: KeyboardEvent) {
   if (event.repeat) return
   const key = event.key.length === 1 ? event.key.toLowerCase() : event.key
-  const inDialog = document.activeElement?.closest("dialog, [role='dialog']") != null
+  const inDialog =
+    document.activeElement?.closest("dialog, [role='dialog']") != null ||
+    document.querySelector("[aria-modal='true']") != null
   if ((event.metaKey || event.ctrlKey) && !event.altKey) {
     const name = `mod+${key}`
     if (!inDialog || DIALOG_KEYS.has(name)) run(name, event)
