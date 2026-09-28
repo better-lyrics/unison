@@ -1,3 +1,4 @@
+import { config } from "@/config"
 import {
 	type IntegrationDb,
 	describeIntegration,
@@ -189,6 +190,38 @@ describeIntegration("council seal queue (integration)", () => {
 	})
 
 	describe("regressions", () => {
+		it("keeps a bookmarked candidate that fell below the queue cut-off", async () => {
+			const council = config.council as { queueLimit: number }
+			const limit = council.queueLimit
+			council.queueLimit = 1
+			try {
+				await candidate("aaaaaaaaaaa", { score: 0.95 })
+				const held = await candidate("bbbbbbbbbbb", { score: 0.4 })
+				await createBookmark(db.env, mira, "seal", held, "web")
+				const items = await listCouncilQueue(db.env)
+				expect(items.map((i) => i.id)).toContain(held)
+				expect(items.find((i) => i.id === held)?.bookmark?.holder.keyId).toBe(MIRA)
+				expect(items).toHaveLength(2)
+			} finally {
+				council.queueLimit = limit
+			}
+		})
+
+		it("drops a bookmarked lyric once it can no longer be sealed", async () => {
+			const council = config.council as { queueLimit: number }
+			const limit = council.queueLimit
+			council.queueLimit = 1
+			try {
+				await candidate("aaaaaaaaaaa", { score: 0.95 })
+				const held = await candidate("bbbbbbbbbbb", { score: 0.4 })
+				await createBookmark(db.env, mira, "seal", held, "web")
+				await db.pool.query("UPDATE lyrics SET effective_score = 0 WHERE id = $1", [held])
+				expect((await listCouncilQueue(db.env)).map((i) => i.id)).not.toContain(held)
+			} finally {
+				council.queueLimit = limit
+			}
+		})
+
 		it("ignores automatic checks cached before the signal rules changed", async () => {
 			const id = await candidate("dQw4w9WgXcQ", { ttml: true })
 			const { rows } = await db.pool.query<{ current_revision_id: number | null }>(

@@ -1,7 +1,12 @@
 import { config } from "@/config"
 import { type BookmarkView, listActiveBookmarks, toBookmarkView } from "@/db/council-bookmarks"
 import { type CouncilPerson, loadPersonDecor, toCouncilPerson } from "@/db/council-person"
-import { type SealCandidate, getSealCandidates, getSealableVariants } from "@/db/rejections"
+import {
+	type SealCandidate,
+	getSealCandidates,
+	getSealCandidatesByIds,
+	getSealableVariants,
+} from "@/db/rejections"
 import { ttmlFlagsFor } from "@/db/ttml-flags"
 import { resolvePeople } from "@/db/users"
 import type { Confidence, Env, LyricsFormat, SyncType } from "@/types"
@@ -43,11 +48,16 @@ async function countByKey(env: Env, sql: string, keys: unknown[]): Promise<Map<s
 }
 
 export async function listCouncilQueue(env: Env): Promise<QueueItem[]> {
-	const candidates = await getSealCandidates(env, {
-		limit: config.council.queueLimit,
-		sort: "top-rated",
-	})
-	return buildQueueItems(env, candidates)
+	const [top, held] = await Promise.all([
+		getSealCandidates(env, { limit: config.council.queueLimit, sort: "top-rated" }),
+		listActiveBookmarks(env, { itemType: "seal" }),
+	])
+	const shown = new Set(top.map((c) => c.id))
+	const below = await getSealCandidatesByIds(
+		env,
+		held.map((b) => b.itemId).filter((id) => !shown.has(id))
+	)
+	return buildQueueItems(env, [...top, ...below])
 }
 
 export async function listSealableForVideo(env: Env, videoId: string): Promise<QueueItem[]> {
