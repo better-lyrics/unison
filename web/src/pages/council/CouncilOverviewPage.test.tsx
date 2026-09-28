@@ -173,7 +173,7 @@ describe("CouncilOverviewPage", () => {
     const month = await screen.findByRole("region", { name: /^Your / })
     const pill = await waitFor(() => within(month).getByText("seals used"))
     fireEvent.mouseEnter(pill.closest("[data-quota-explained]") as Element)
-    expect((await screen.findByRole("tooltip")).textContent).toContain("Each month: 6 seals")
+    expect((await screen.findByRole("tooltip")).textContent).toContain("You get 6 seals a month")
   })
 
   describe("edge cases", () => {
