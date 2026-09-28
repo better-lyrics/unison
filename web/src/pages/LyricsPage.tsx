@@ -1,8 +1,6 @@
-import { CopyButton } from "@/components/CopyButton"
-import { DownloadButton } from "@/components/DownloadButton"
 import { EmptyState } from "@/components/EmptyState"
-import { LyricsContentSkeleton, LyricsRenderer } from "@/components/LyricsRenderer"
-import { RawLyricsView } from "@/components/RawLyricsView"
+import { LyricsContentSkeleton } from "@/components/LyricsRenderer"
+import { LyricsPanel } from "@/components/LyricsPanel"
 import { VariantList, VariantListSkeleton } from "@/components/VariantList"
 import { VariantMetadata, VariantMetadataSkeleton } from "@/components/VariantMetadata"
 import { SealLyricButton } from "@/components/council/SealLyricButton"
@@ -11,22 +9,13 @@ import { YouTubeMusicIcon } from "@/components/icons/YouTubeMusicIcon"
 import { Bone } from "@/components/skeleton"
 import { useLyricsVariant, useLyricsVariants } from "@/hooks/useLyricsData"
 import { useYouTubePlayer } from "@/hooks/useYouTubePlayer"
-import { cn } from "@/lib/cn"
-import { downloadTextFile } from "@/lib/download"
-import { MIME_BY_FORMAT, lyricsFilename } from "@/lib/lyrics-download"
 import { youTubeMusicUrl } from "@/lib/youtube-music"
 import { useCallback, useMemo, useState } from "react"
 import { useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom"
 
-type Mode = "synced" | "raw"
-
-const HEADER_ACTION_CLASS =
-  "inline-flex cursor-pointer items-center gap-1.5 rounded-md border border-unison-border bg-unison-bg-elevated px-2 py-1 text-xs text-unison-text-secondary transition-colors hover:border-unison-border-strong hover:bg-unison-bg-hover hover:text-unison-text"
-
 export function LyricsPage() {
   const { videoId } = useParams<{ videoId: string }>()
   const [params, setParams] = useSearchParams()
-  const [mode, setMode] = useState<Mode>("synced")
   const [playerActive, setPlayerActive] = useState(false)
   const variantIdParam = params.get("variantId")
   const navigate = useNavigate()
@@ -81,12 +70,6 @@ export function LyricsPage() {
     },
     [seekTo, play],
   )
-
-  const handleDownload = useCallback(() => {
-    const v = variantQuery.data?.variant
-    if (!v) return
-    downloadTextFile(lyricsFilename(v), v.lyrics, MIME_BY_FORMAT[v.format])
-  }, [variantQuery.data])
 
   if (!videoId) return <EmptyState title="No video specified" />
 
@@ -147,62 +130,12 @@ export function LyricsPage() {
           </a>
         </div>
         <div className="space-y-4">
-          <div className="overflow-hidden rounded-lg border border-unison-border bg-unison-bg-elevated">
-            <div className="flex items-center justify-between border-b border-unison-border/60 px-3 py-2">
-              <fieldset className="inline-flex rounded-md border border-unison-border bg-unison-bg p-0.5">
-                <legend className="sr-only">Lyrics display mode</legend>
-                <button
-                  type="button"
-                  onClick={() => setMode("synced")}
-                  className={cn(
-                    "cursor-pointer rounded px-3 py-1 text-xs font-medium transition-colors",
-                    mode === "synced"
-                      ? "bg-unison-bg-hover text-unison-text"
-                      : "text-unison-text-muted hover:text-unison-text",
-                  )}
-                >
-                  Synced
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setMode("raw")}
-                  className={cn(
-                    "cursor-pointer rounded px-3 py-1 text-xs font-medium transition-colors",
-                    mode === "raw"
-                      ? "bg-unison-bg-hover text-unison-text"
-                      : "text-unison-text-muted hover:text-unison-text",
-                  )}
-                >
-                  Raw
-                </button>
-              </fieldset>
-              {variant ? (
-                <div className="flex items-center gap-2">
-                  <DownloadButton
-                    onClick={handleDownload}
-                    className={HEADER_ACTION_CLASS}
-                    iconClassName="size-3.5"
-                    withText
-                  />
-                  <CopyButton text={variant.lyrics} className={HEADER_ACTION_CLASS} iconClassName="size-3.5" withText />
-                </div>
-              ) : null}
-            </div>
-            <div className="p-4">
-              {variantQuery.isLoading || !variant ? (
-                <LyricsContentSkeleton />
-              ) : mode === "synced" ? (
-                <LyricsRenderer
-                  variant={variant}
-                  getCurrentTime={getCurrentTime}
-                  getPlaying={getPlaying}
-                  onLineClick={handleLineClick}
-                />
-              ) : (
-                <RawLyricsView body={variant.lyrics} format={variant.format} />
-              )}
-            </div>
-          </div>
+          <LyricsPanel
+            variant={variantQuery.isLoading ? undefined : variant}
+            getCurrentTime={getCurrentTime}
+            getPlaying={getPlaying}
+            onLineClick={handleLineClick}
+          />
           <VariantList variants={variants} selectedId={selectedId ?? -1} onSelect={handleSelect} />
         </div>
       </div>

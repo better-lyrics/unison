@@ -65,7 +65,7 @@ interface CoverProps {
   onActivatePlayer?: () => void
 }
 
-function Cover({ variant, playerRef, playerActive, onActivatePlayer }: CoverProps) {
+export function VariantCover({ variant, playerRef, playerActive, onActivatePlayer }: CoverProps) {
   const { data: art } = useArtwork(variant.videoId)
 
   if (playerActive) {
@@ -231,7 +231,7 @@ interface VariantMetadataProps {
 export function VariantMetadata({ variant, playerRef, playerActive, onActivatePlayer }: VariantMetadataProps) {
   return (
     <aside className="overflow-hidden rounded-xl border border-unison-border bg-unison-bg-elevated">
-      <Cover variant={variant} playerRef={playerRef} playerActive={playerActive} onActivatePlayer={onActivatePlayer} />
+      <VariantCover variant={variant} playerRef={playerRef} playerActive={playerActive} onActivatePlayer={onActivatePlayer} />
       <div
         className={cn(
           "border-t px-4 pt-1.5 pb-4 transition-colors duration-300",
