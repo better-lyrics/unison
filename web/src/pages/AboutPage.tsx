@@ -1,3 +1,4 @@
+import { COMPOSER_URL } from "@/lib/composer"
 import { Link } from "react-router-dom"
 
 export function AboutPage() {
@@ -42,7 +43,7 @@ export function AboutPage() {
           second look. To submit lyrics yourself, click "Submit lyrics with Unison" at the bottom of the page; if you
           don't have a synced version handy,{" "}
           <a
-            href="https://composer.boidu.dev"
+            href={COMPOSER_URL}
             target="_blank"
             rel="noopener noreferrer"
             className="text-unison-text transition-colors hover:text-unison-text-secondary"
@@ -132,7 +133,7 @@ export function AboutPage() {
           </a>
           <span className="px-1.5 opacity-60">·</span>
           <a
-            href="https://composer.boidu.dev"
+            href={COMPOSER_URL}
             target="_blank"
             rel="noopener noreferrer"
             className="text-unison-text transition-colors hover:text-unison-text-secondary"

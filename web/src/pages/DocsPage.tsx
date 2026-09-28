@@ -1,4 +1,5 @@
 import { CodeBlock, CodeLangProvider, type CodeTab, CodeTabs } from "@/components/CodeBlock"
+import { COMPOSER_URL } from "@/lib/composer"
 import type { ReactNode } from "react"
 
 const BASE_URL = "https://unison.boidu.dev"
@@ -347,7 +348,7 @@ export function DocsPage() {
             </a>
             <span className="px-1.5 opacity-60">·</span>
             <a
-              href="https://composer.boidu.dev"
+              href={COMPOSER_URL}
               target="_blank"
               rel="noopener noreferrer"
               className="text-unison-text transition-colors hover:text-unison-text-secondary"

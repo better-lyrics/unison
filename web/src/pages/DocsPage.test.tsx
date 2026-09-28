@@ -18,6 +18,13 @@ afterEach(() => {
 })
 
 describe("DocsPage", () => {
+  it("links Composer on its betterlyrics.org host", () => {
+    renderPage()
+    expect(screen.getByRole("link", { name: "Composer" }).getAttribute("href")).toBe(
+      "https://composer.betterlyrics.org",
+    )
+  })
+
   it("documents the base URL and the primary fetch endpoint", () => {
     renderPage()
     expect(screen.getAllByText("https://unison.boidu.dev").length).toBeGreaterThan(0)

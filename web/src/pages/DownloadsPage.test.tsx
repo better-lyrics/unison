@@ -42,6 +42,19 @@ afterEach(() => {
 })
 
 describe("DownloadsPage", () => {
+  it("links Composer on its betterlyrics.org host", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockImplementation((url: string) => {
+        if (url === "https://unison-dumps.boidu.dev/dumps/manifest.json") return Promise.resolve(jsonResponse(manifest))
+        return Promise.reject(new Error(`unexpected url ${url}`))
+      }),
+    )
+    renderPage()
+    const composer = await waitFor(() => screen.getByRole("link", { name: "Composer" }))
+    expect(composer.getAttribute("href")).toBe("https://composer.betterlyrics.org")
+  })
+
   it("renders the CTA linking to latest_url after the manifest loads", async () => {
     vi.stubGlobal(
       "fetch",
