@@ -4,6 +4,7 @@ import { EventSentence } from "@/components/council/EventSentence"
 import { fieldClass } from "@/components/council/ListSearch"
 import { Segmented } from "@/components/council/Segmented"
 import { Switch } from "@/components/council/Switch"
+import { TONE_COLOR } from "@/components/council/decision-tone"
 import { BlockHead } from "@/components/council/detail-parts"
 import { PageHead, cardClass } from "@/components/council/headings"
 import { Bone, skeletonKeys } from "@/components/skeleton"
@@ -205,9 +206,9 @@ function LogItem({
 }
 
 const WEEK_SERIES = [
-  { key: "sealed", label: "Sealed", color: "var(--color-council-seal)" },
-  { key: "rejected", label: "Rejected", color: "var(--color-council-reject)" },
-  { key: "edits", label: "Edits", color: "var(--color-council-edit)" },
+  { key: "sealed", label: "Sealed", color: TONE_COLOR.seal },
+  { key: "rejected", label: "Rejected", color: TONE_COLOR.reject },
+  { key: "edits", label: "Edits", color: TONE_COLOR.edit },
 ] as const
 
 function WeekAside({

@@ -1,6 +1,6 @@
 import { ME, NOW, OLA, councilEvent } from "@/test/council-fixtures"
 import { describe, expect, it } from "vitest"
-import { canUndo, groupByDay } from "./council-activity"
+import { EVENT_WORDS, canUndo, groupByDay } from "./council-activity"
 
 const HOUR = 3600
 const DAY = 86400
@@ -61,6 +61,31 @@ describe("canUndo", () => {
 
     it("needs a lyric to undo against", () => {
       expect(canUndo(councilEvent({ kind: "seal", actor: mine, lyric: null }), ME.keyId, NOW)).toBe(false)
+    })
+  })
+})
+
+describe("EVENT_WORDS", () => {
+  it("reads every lyric decision as a sentence and on the lyric itself", () => {
+    expect(`boidu ${EVENT_WORDS.reject.verb} Run Rabbit`).toBe("boidu rejected Run Rabbit")
+    expect(`boidu ${EVENT_WORDS.reject.onOwnLyric}`).toBe("boidu rejected it")
+    expect(`boidu ${EVENT_WORDS.member_add.verb} Ola ${EVENT_WORDS.member_add.after}`).toBe(
+      "boidu added Ola to the council",
+    )
+  })
+
+  describe("invariants", () => {
+    it("gives a tone only to decisions that show on a lyric's history", () => {
+      for (const words of Object.values(EVENT_WORDS)) {
+        if (words.tone) expect(words.onOwnLyric).toBeTruthy()
+      }
+    })
+
+    it("shows only lyric decisions on a lyric's history", () => {
+      const onLyric = Object.entries(EVENT_WORDS)
+        .filter(([, w]) => w.onOwnLyric)
+        .map(([kind]) => kind)
+      expect(onLyric).toEqual(["seal", "unseal", "reject", "unreject", "edit_approve", "edit_reject"])
     })
   })
 })

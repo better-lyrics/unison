@@ -8,6 +8,7 @@ import { EventSentence } from "@/components/council/EventSentence"
 import { NeedsList } from "@/components/council/NeedsList"
 import { Segmented } from "@/components/council/Segmented"
 import { StatTile } from "@/components/council/StatTile"
+import { TONE_COLOR } from "@/components/council/decision-tone"
 import { PageHead, SectionHead, cardClass } from "@/components/council/headings"
 import { Bone, skeletonKeys } from "@/components/skeleton"
 import { buttonClass } from "@/components/ui"
@@ -278,9 +279,9 @@ function Feed({ now }: { now: number }) {
 }
 
 const SERIES = [
-  { key: "sealed", label: "Sealed", color: "var(--color-council-seal)" },
-  { key: "rejected", label: "Rejected", color: "var(--color-council-reject)" },
-  { key: "editsReviewed", label: "Edits reviewed", color: "var(--color-council-edit)" },
+  { key: "sealed", label: "Sealed", color: TONE_COLOR.seal },
+  { key: "rejected", label: "Rejected", color: TONE_COLOR.reject },
+  { key: "editsReviewed", label: "Edits reviewed", color: TONE_COLOR.edit },
 ] as const
 
 function DecisionsChart() {
@@ -346,7 +347,7 @@ function WaitChart({
               items.map((i) => i.since),
               now,
             )}
-            color="var(--color-council-edit)"
+            color={TONE_COLOR.edit}
             ariaLabel="Histogram of waiting time"
           />
           <p className="mt-2 text-xs text-unison-text-muted">
