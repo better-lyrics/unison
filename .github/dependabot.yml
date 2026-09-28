@@ -4,6 +4,9 @@ updates:
     directory: "/web"
     schedule:
       interval: daily
+    cooldown:
+      default-days: 3
+      exclude: ["@braccato/*"]
     allow:
       - dependency-name: "@braccato/*"
     groups:
