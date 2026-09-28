@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest"
 import {
 	collapseWhitespace,
+	creditIncludesArtist,
 	normalize,
 	normalizeAlbum,
 	normalizeArtist,
@@ -116,6 +117,157 @@ describe("normalizeArtist", () => {
 
 	it("preserves a Japanese artist name (regression: issue #54)", () => {
 		expect(normalizeArtist("なきそ")).toBe("なきそ")
+	})
+})
+
+describe("creditIncludesArtist", () => {
+	describe("happy paths", () => {
+		it("finds each artist of a comma credit", () => {
+			expect(creditIncludesArtist("Lady Gaga, Bruno Mars", "Lady Gaga")).toBe(true)
+			expect(creditIncludesArtist("Lady Gaga, Bruno Mars", "Bruno Mars")).toBe(true)
+		})
+
+		it("finds each artist of an ampersand credit", () => {
+			expect(creditIncludesArtist("Lady Gaga & Bruno Mars", "Lady Gaga")).toBe(true)
+			expect(creditIncludesArtist("Lady Gaga & Bruno Mars", "Bruno Mars")).toBe(true)
+		})
+
+		it("finds the second-billed artist of a collab", () => {
+			expect(creditIncludesArtist("The Kid LAROI, Justin Bieber", "Justin Bieber")).toBe(true)
+			expect(creditIncludesArtist("The Kid LAROI, Justin Bieber", "The Kid LAROI")).toBe(true)
+		})
+
+		it("finds a featured artist and the lead of a feat. credit", () => {
+			for (const credit of [
+				"Drake feat. Rihanna",
+				"Drake ft. Rihanna",
+				"Drake featuring Rihanna",
+				"Drake with Rihanna",
+				"Drake x Rihanna",
+				"Drake X Rihanna",
+				"Drake and Rihanna",
+				"Drake / Rihanna",
+				"Drake; Rihanna",
+			]) {
+				expect(creditIncludesArtist(credit, "Drake"), credit).toBe(true)
+				expect(creditIncludesArtist(credit, "Rihanna"), credit).toBe(true)
+			}
+		})
+
+		it("finds each artist of a multiplication sign credit", () => {
+			expect(creditIncludesArtist("YOASOBI × Ado", "Ado")).toBe(true)
+			expect(creditIncludesArtist("YOASOBI×Ado", "YOASOBI")).toBe(true)
+		})
+
+		it("matches a single artist credited alone", () => {
+			expect(creditIncludesArtist("The Weeknd", "The Weeknd")).toBe(true)
+		})
+	})
+
+	describe("names that contain separators", () => {
+		it("finds Tyler, The Creator solo and in a collab", () => {
+			expect(creditIncludesArtist("Tyler, The Creator", "Tyler, The Creator")).toBe(true)
+			expect(creditIncludesArtist("Tyler, The Creator, Kali Uchis", "Tyler, The Creator")).toBe(
+				true
+			)
+			expect(creditIncludesArtist("Tyler, The Creator, Kali Uchis", "Kali Uchis")).toBe(true)
+			expect(creditIncludesArtist("Kali Uchis, Tyler, The Creator", "Tyler, The Creator")).toBe(
+				true
+			)
+			expect(creditIncludesArtist("Kali Uchis & Tyler, The Creator", "Tyler, The Creator")).toBe(
+				true
+			)
+		})
+
+		it("matches Simon & Garfunkel however the ampersand is written", () => {
+			expect(creditIncludesArtist("Simon & Garfunkel", "Simon & Garfunkel")).toBe(true)
+			expect(creditIncludesArtist("Simon & Garfunkel", "Simon and Garfunkel")).toBe(true)
+			expect(creditIncludesArtist("Simon and Garfunkel", "Simon & Garfunkel")).toBe(true)
+		})
+
+		it("matches Earth, Wind & Fire with or without its comma", () => {
+			expect(creditIncludesArtist("Earth, Wind & Fire", "Earth, Wind & Fire")).toBe(true)
+			expect(creditIncludesArtist("Earth, Wind & Fire", "Earth Wind and Fire")).toBe(true)
+			expect(creditIncludesArtist("Earth, Wind & Fire, The Emotions", "Earth, Wind & Fire")).toBe(
+				true
+			)
+		})
+	})
+
+	describe("negatives", () => {
+		it("rejects an unrelated artist", () => {
+			expect(creditIncludesArtist("Lady Gaga, Bruno Mars", "Perrie")).toBe(false)
+			expect(creditIncludesArtist("Lady Gaga, Bruno Mars", "Garrett Huffman")).toBe(false)
+		})
+
+		it("rejects a name that is only a substring inside a word", () => {
+			expect(creditIncludesArtist("Lady Gaga, Bruno Mars", "Ga")).toBe(false)
+			expect(creditIncludesArtist("Anastasia", "Sia")).toBe(false)
+		})
+
+		it("rejects a name that covers only part of a segment", () => {
+			expect(creditIncludesArtist("Lady Gaga, Bruno Mars", "Lady")).toBe(false)
+			expect(creditIncludesArtist("Lady Gaga, Bruno Mars", "Gaga, Bruno")).toBe(false)
+		})
+
+		it("does not split on x, and or with inside a word or at the edges", () => {
+			expect(creditIncludesArtist("Alex Warren", "Warren")).toBe(false)
+			expect(creditIncludesArtist("Brandy", "Br")).toBe(false)
+			expect(creditIncludesArtist("Withered Hand", "Hand")).toBe(false)
+			expect(creditIncludesArtist("Malcolm X", "Malcolm")).toBe(false)
+			expect(creditIncludesArtist("X Ambassadors", "Ambassadors")).toBe(false)
+		})
+
+		it("regression: known false positive, a separator-bounded fragment matches", () => {
+			expect(creditIncludesArtist("Tyler, The Creator", "Tyler")).toBe(true)
+		})
+	})
+
+	describe("edge cases", () => {
+		it("rejects an empty or blank name", () => {
+			expect(creditIncludesArtist("Lady Gaga", "")).toBe(false)
+			expect(creditIncludesArtist("Lady Gaga", "   ")).toBe(false)
+			expect(creditIncludesArtist("Lady Gaga", "!!!")).toBe(false)
+		})
+
+		it("rejects any name against an empty credit", () => {
+			expect(creditIncludesArtist("", "Lady Gaga")).toBe(false)
+			expect(creditIncludesArtist("", "")).toBe(false)
+		})
+
+		it("ignores case, diacritics, punctuation and extra whitespace", () => {
+			expect(creditIncludesArtist("BEYONCÉ,   JAY-Z", "Beyonce")).toBe(true)
+			expect(creditIncludesArtist("Beyoncé, JAY-Z", "jay z")).toBe(false)
+			expect(creditIncludesArtist("Beyoncé, JAY-Z", "JAYZ")).toBe(true)
+		})
+
+		it("ignores leading, trailing and doubled separators", () => {
+			expect(creditIncludesArtist(", Lady Gaga,, Bruno Mars &", "Bruno Mars")).toBe(true)
+		})
+
+		it("keeps non-Latin names (regression: issue #54)", () => {
+			expect(creditIncludesArtist("なきそ, 初音ミク", "初音ミク")).toBe(true)
+			expect(creditIncludesArtist("なきそ, 初音ミク", "ミク")).toBe(false)
+		})
+	})
+
+	describe("invariants", () => {
+		it("always includes a credit in itself", () => {
+			for (const credit of [
+				"Lady Gaga, Bruno Mars",
+				"Tyler, The Creator",
+				"Earth, Wind & Fire",
+				"Drake feat. Rihanna",
+				"なきそ",
+			]) {
+				expect(creditIncludesArtist(credit, credit), credit).toBe(true)
+			}
+		})
+
+		it("leaves normalizeArtist unchanged for a multi-artist credit", () => {
+			expect(normalizeArtist("Lady Gaga, Bruno Mars")).toBe("lady gaga bruno mars")
+			expect(normalizeArtist("Drake feat. Rihanna")).toBe("drake")
+		})
 	})
 })
 
