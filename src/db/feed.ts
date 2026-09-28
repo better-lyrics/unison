@@ -18,12 +18,25 @@ const FEED_COLUMNS = `
 	committee_approved_at, committee_approved_by
 `
 
+const GLOBAL_FEED_PREFIX = "feed:global:"
+const SEALED_FEED_PREFIX = "feed:sealed:"
+
+export async function evictFeedCaches(env: Env): Promise<number> {
+	let cleared = 0
+	for (const prefix of [GLOBAL_FEED_PREFIX, SEALED_FEED_PREFIX]) {
+		const keys = await env.CACHE.keys(`${prefix}*`)
+		for (const key of keys) await env.CACHE.delete(key)
+		cleared += keys.length
+	}
+	return cleared
+}
+
 function globalFeedCacheKey(limit: number, filters: FeedFilters): string | null {
-	if (!hasAnyFilter(filters)) return `feed:global:${limit}`
+	if (!hasAnyFilter(filters)) return `${GLOBAL_FEED_PREFIX}${limit}`
 	const { sealed, sort, sortDir, ...rest } = filters
 	const onlySealed = sealed && Object.values(rest).every((value) => value === undefined)
 	if (!onlySealed || sortDir === "asc") return null
-	return `feed:sealed:${sort ?? "default"}:${limit}`
+	return `${SEALED_FEED_PREFIX}${sort ?? "default"}:${limit}`
 }
 
 export async function getGlobalFeed(

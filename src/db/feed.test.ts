@@ -1,6 +1,6 @@
 import type { Env } from "@/types"
 import { afterEach, describe, expect, it, vi } from "vitest"
-import { getGlobalFeed, getMySubmissions, getPersonalizedFeed } from "./feed"
+import { evictFeedCaches, getGlobalFeed, getMySubmissions, getPersonalizedFeed } from "./feed"
 import { AUTO_HIDE_PREDICATE } from "./predicates"
 
 // -- Mocks -----------------------------------------------------------------
@@ -622,5 +622,66 @@ describe("feed queries filter deleted rows", () => {
 		const feedSql = db.calls[1].sql
 		expect(artistSql).not.toMatch(/deleted_at\s+IS\s+NULL/i)
 		expect(feedSql).toMatch(/deleted_at\s+IS\s+NULL/i)
+	})
+})
+
+describe("evictFeedCaches", () => {
+	function keyedCache(keys: string[]) {
+		const store = new Set(keys)
+		const deleted: string[] = []
+		return {
+			deleted,
+			store,
+			cache: {
+				async get() {
+					return null
+				},
+				async put() {},
+				async delete(key: string) {
+					deleted.push(key)
+					store.delete(key)
+				},
+				async keys(pattern: string) {
+					const prefix = pattern.replace(/\*$/, "")
+					return [...store].filter((k) => k.startsWith(prefix))
+				},
+			},
+		}
+	}
+
+	it("deletes every global and sealed feed page", async () => {
+		const { cache, deleted } = keyedCache([
+			"feed:global:20",
+			"feed:sealed:default:12",
+			"feed:sealed:top-rated:24",
+		])
+		await evictFeedCaches(createEnv(createMockDB(), cache as unknown as MockCache))
+		expect(deleted.sort()).toEqual([
+			"feed:global:20",
+			"feed:sealed:default:12",
+			"feed:sealed:top-rated:24",
+		])
+	})
+
+	it("leaves every other key alone", async () => {
+		const { cache, store } = keyedCache([
+			"v:abc",
+			"feed:mine:1",
+			"leaderboard:songs",
+			"feed:global:20",
+		])
+		await evictFeedCaches(createEnv(createMockDB(), cache as unknown as MockCache))
+		expect([...store].sort()).toEqual(["feed:mine:1", "leaderboard:songs", "v:abc"])
+	})
+
+	it("returns how many keys it cleared", async () => {
+		const { cache } = keyedCache(["feed:global:20", "feed:sealed:default:12", "v:abc"])
+		expect(await evictFeedCaches(createEnv(createMockDB(), cache as unknown as MockCache))).toBe(2)
+	})
+
+	it("is a no-op on an empty cache", async () => {
+		const { cache, deleted } = keyedCache([])
+		await evictFeedCaches(createEnv(createMockDB(), cache as unknown as MockCache))
+		expect(deleted).toEqual([])
 	})
 })
