@@ -19,7 +19,7 @@ export const NOW = 1_790_000_000
 const HOUR = 3600
 const DAY = 86400
 
-export const NO_BADGES = { badgeCount: 0, topBadge: null, featured: [] }
+const NO_BADGES = { badgeCount: 0, topBadge: null, featured: [] }
 
 export const ME: CouncilPerson = {
   userId: 1,

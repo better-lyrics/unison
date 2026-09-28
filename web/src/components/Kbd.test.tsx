@@ -1,6 +1,6 @@
 import { cleanup, render } from "@testing-library/react"
 import { afterEach, describe, expect, it } from "vitest"
-import { Kbd, KeySteps } from "./Kbd"
+import { Kbd } from "./Kbd"
 
 afterEach(cleanup)
 
@@ -34,14 +34,6 @@ describe("placement", () => {
     expect(root.className).toContain("inline-flex")
     expect(root.className).toContain("ml-auto")
     expect(root.className).toContain("text-unison-text-muted")
-  })
-
-  it("does the same for a key sequence", () => {
-    const { container } = render(<KeySteps keys={["G", "Q"]} word="then" className="text-unison-bg/60" />)
-    const root = container.firstElementChild as HTMLElement
-    expect(root.className).toContain("inline-flex")
-    expect(root.className).toContain("text-unison-bg/60")
-    expect(root.textContent).toBe("GthenQ")
   })
 
   it("keeps the base layout without a class", () => {

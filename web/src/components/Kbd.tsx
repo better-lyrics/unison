@@ -25,17 +25,9 @@ export function Kbd({ keys, isMac = platformIsMac, className }: KbdProps) {
   )
 }
 
-export function KeySteps({
-  keys,
-  word,
-  className,
-}: {
-  keys: string[]
-  word: "then" | "or"
-  className?: string
-}) {
+export function KeySteps({ keys, word }: { keys: string[]; word: "then" | "or" }) {
   return (
-    <span className={cn("inline-flex items-center gap-1", className)}>
+    <span className="inline-flex items-center gap-1">
       {keys.map((key, i) => (
         <Fragment key={key}>
           {i > 0 ? <span className="text-[10px]">{word}</span> : null}
