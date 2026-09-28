@@ -21,6 +21,10 @@ import type {
   VariantSummary,
 } from "./types"
 
+export function isNotFound(error: unknown): boolean {
+  return error instanceof Error && error.message.startsWith("HTTP 404 ")
+}
+
 async function getJson<T>(path: string): Promise<T> {
   const res = await fetch(path)
   if (!res.ok) throw new Error(`HTTP ${res.status} for ${path}`)

@@ -1,4 +1,4 @@
-import { fetchUserByHandle } from "@/lib/api"
+import { fetchUserByHandle, isNotFound } from "@/lib/api"
 import { clearStoredSession } from "@/lib/auth"
 import { AUTHED_FETCH_ERRORS, AuthedFetchError } from "@/lib/authedFetch"
 import {
@@ -281,8 +281,10 @@ export function useAddMember() {
           ? input.value
           : await fetchUserByHandle(input.value).then(
               (user) => user.keyId,
-              () => {
-                throw new Error(`No account uses the handle ${input.value}`)
+              (error) => {
+                throw new Error(
+                  isNotFound(error) ? `No account uses the handle ${input.value}` : AUTHED_FETCH_ERRORS.REQUEST_FAILED,
+                )
               },
             )
       await addCouncilMember(keyId)

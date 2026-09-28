@@ -115,6 +115,21 @@ describe("CouncilMembersPage", () => {
     await screen.findByText("No account uses the handle nobody")
   })
 
+  it("regression: does not blame the handle when the lookup itself fails", async () => {
+    stubCouncilApi(data(), { admin: true }, [
+      {
+        match: (url) => url.startsWith("/users/by-handle/"),
+        respond: () => jsonResponse({ success: false, error: "Internal error" }, 500),
+      },
+    ])
+    renderCouncil("/council/members")
+    fireEvent.click(await screen.findByRole("button", { name: /Add member/ }))
+    fireEvent.change(screen.getByLabelText("Handle or key id"), { target: { value: "susiisthebest" } })
+    fireEvent.click(screen.getByRole("button", { name: "Add to council" }))
+    await screen.findByText("Could not add the member. Try again.")
+    expect(screen.queryByText(/No account uses the handle/)).toBeNull()
+  })
+
   it("removes a member after a confirmation, never myself", async () => {
     const log: string[] = []
     stubCouncilApi(data(), { admin: true }, [
