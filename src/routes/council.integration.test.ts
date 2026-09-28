@@ -179,6 +179,11 @@ describeIntegration("council dashboard routes (integration)", () => {
 		}
 
 		it("bookmarks and releases a seal candidate", async () => {
+			await db.pool.query("DELETE FROM badge_awards WHERE user_id = $1", [mira])
+			await db.pool.query(
+				"INSERT INTO badge_awards (user_id, badge_key, tier) VALUES ($1, 'polyglot', 1)",
+				[mira]
+			)
 			const created = await call<Bookmark>("POST", "/committee/bookmarks", {
 				token: "mira",
 				body: { itemType: "seal", itemId: lyricId },
@@ -190,10 +195,10 @@ describeIntegration("council dashboard routes (integration)", () => {
 				holder: { keyId: MIRA },
 			})
 			expect(created.json.data.holder).toMatchObject({
-				badgeCount: 0,
-				topBadge: null,
-				featured: [],
+				badgeCount: 1,
+				topBadge: expect.objectContaining({ key: "polyglot" }),
 			})
+			await db.pool.query("DELETE FROM badge_awards WHERE user_id = $1", [mira])
 			const released = await call("DELETE", `/committee/bookmarks/${created.json.data.id}`, {
 				token: "mira",
 			})

@@ -17,14 +17,18 @@ const STRIP_SIZES = {
   md: { gap: "gap-1.5", icon: "size-5", count: "font-mono text-[11px] font-semibold" },
 }
 
-export function BadgeStrip({ featured, topBadge, badgeCount, size = "md", className }: BadgeStripProps) {
+function useStripImages(featured: LeaderboardBadge[], topBadge: LeaderboardBadge | null) {
   const badgeImage = useBadgeImage()
-  const sizes = STRIP_SIZES[size]
   const shown = featured.length > 0 ? featured : topBadge ? [topBadge] : []
-  const images = shown.flatMap((b) => {
+  return shown.flatMap((b) => {
     const src = badgeImage(b.key, b.tier)
     return src ? [{ badge: b, src }] : []
   })
+}
+
+export function BadgeStrip({ featured, topBadge, badgeCount, size = "md", className }: BadgeStripProps) {
+  const images = useStripImages(featured, topBadge)
+  const sizes = STRIP_SIZES[size]
   if (images.length === 0) return null
   const extra = featured.length > 0 ? 0 : badgeCount - 1
   return (
@@ -48,12 +52,12 @@ interface AuthorBadgesProps {
 
 export function AuthorBadges({ tier, featured, topBadge, badgeCount }: AuthorBadgesProps) {
   const badgeImage = useBadgeImage()
-  const strip = <BadgeStrip featured={featured} topBadge={topBadge} badgeCount={badgeCount} />
-  if (!tier && featured.length === 0 && !topBadge) return null
+  const hasStrip = useStripImages(featured, topBadge).length > 0
+  if (!tier && !hasStrip) return null
   return (
     <span className="inline-flex flex-wrap items-center gap-2">
       {tier ? <TierChip tier={tier} gemSrc={badgeImage(tier) ?? undefined} /> : null}
-      {strip}
+      {hasStrip ? <BadgeStrip featured={featured} topBadge={topBadge} badgeCount={badgeCount} /> : null}
     </span>
   )
 }

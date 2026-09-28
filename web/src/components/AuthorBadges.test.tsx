@@ -63,6 +63,14 @@ describe("AuthorBadges", () => {
       expect(container.textContent).toBe("")
     })
 
+    it("regression: leaves no empty box while a top badge image is still loading", () => {
+      const { container } = renderBadges(
+        { ...none, topBadge: { key: "polyglot", name: "Polyglot", tier: 1 }, badgeCount: 2 },
+        false,
+      )
+      expect(container.innerHTML).toBe("")
+    })
+
     it("still names the tier before the catalogue loads", () => {
       const { container } = renderBadges({ ...none, tier: "elite" }, false)
       expect(container.querySelector("[data-tier='elite']")?.textContent).toBe("Elite")
