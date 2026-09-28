@@ -182,6 +182,7 @@ describe("CouncilApplicantsPage", () => {
     await screen.findByRole("article", { name: "GoldenKickWhisper" })
     fireEvent.click(screen.getByRole("switch", { name: "Show near misses" }))
     const near = await screen.findByRole("article", { name: "NooBot" })
+    expect(within(near).queryByRole("button", { name: "Reject" })).toBeNull()
     fireEvent.click(within(near).getByRole("button", { name: /Approve and add to council/ }))
     fireEvent.click(within(near).getByRole("button", { name: "Approve NooBot" }))
     await waitFor(() => expect(log).toEqual([`/committee/applicants/70/decision {"decision":"approve"}`]))

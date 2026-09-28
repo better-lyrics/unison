@@ -231,8 +231,23 @@ describe("sealing", () => {
     await waitFor(() => expect(within(detail()).getByRole("button", { name: /^Seal/ })).toBeTruthy())
     press("s")
     expect(detail().textContent).toContain("Seal “Story of a Warrior”?")
+    await waitFor(() => expect(document.activeElement?.textContent).toContain("Seal lyric"))
     press("Enter")
     await waitFor(() => expect(log).toEqual(["POST /lyrics/722/boost {}"]))
+  })
+
+  it("regression: Enter on a focused button runs that button, not the seal", async () => {
+    const log: string[] = []
+    const server = data()
+    stubCouncilApi(server, { admin: false }, decisionRoutes(log, server))
+    renderCouncil("/council/queue?item=722")
+    await waitFor(() => expect(within(detail()).getByRole("button", { name: /^Seal/ })).toBeTruthy())
+    press("s")
+    const cancel = within(detail()).getByRole("button", { name: "Cancel" })
+    cancel.focus()
+    act(() => void fireEvent.keyDown(cancel, { key: "Enter" }))
+    await new Promise((resolve) => setTimeout(resolve, 20))
+    expect(log).toEqual([])
   })
 
   it("regression: a double tap on S asks but never seals", async () => {

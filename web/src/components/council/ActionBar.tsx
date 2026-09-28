@@ -34,6 +34,11 @@ export function ActionBar(props: ActionBarProps) {
   const [note, setNote] = useState("")
   const noteId = useId()
   const noteRef = useRef<HTMLTextAreaElement>(null)
+  const confirmRef = useRef<HTMLButtonElement>(null)
+  const askConfirm = () => {
+    setMode("confirm")
+    requestAnimationFrame(() => confirmRef.current?.focus())
+  }
   const primaryKey = primary.shortcut.toLowerCase()
 
   const submitReject = () => {
@@ -44,11 +49,12 @@ export function ActionBar(props: ActionBarProps) {
   useCouncilShortcuts({
     [primaryKey]: () => {
       if (busy || primary.unavailable || mode === "confirm") return
-      setMode("confirm")
+      askConfirm()
     },
     ...(mode === "confirm"
       ? {
-          Enter: () => {
+          Enter: (event: KeyboardEvent) => {
+            if (event.target instanceof Element && event.target.closest("button, a")) return false
             if (!busy) props.onPrimary()
           },
         }
@@ -118,7 +124,13 @@ export function ActionBar(props: ActionBarProps) {
           <button type="button" className={buttonClass("ghost", "sm")} onClick={() => setMode("idle")}>
             Cancel
           </button>
-          <button type="button" disabled={busy} className={buttonClass("primary", "sm")} onClick={props.onPrimary}>
+          <button
+            ref={confirmRef}
+            type="button"
+            disabled={busy}
+            className={buttonClass("primary", "sm")}
+            onClick={props.onPrimary}
+          >
             <PrimaryIcon aria-hidden className="size-3.5" stroke={1.75} />
             {primary.confirmLabel}
             <Kbd keys={["Enter"]} className="text-unison-bg/60" />
@@ -154,7 +166,7 @@ export function ActionBar(props: ActionBarProps) {
           type="button"
           disabled={busy || primary.unavailable !== null}
           className={buttonClass("primary", "sm")}
-          onClick={() => setMode("confirm")}
+          onClick={askConfirm}
         >
           <PrimaryIcon aria-hidden className="size-3.5" stroke={1.75} />
           {primary.unavailable ?? primary.label}

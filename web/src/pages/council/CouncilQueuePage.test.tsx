@@ -111,7 +111,7 @@ describe("CouncilQueuePage song link", () => {
     const outside = queueItem({ id: 51, videoId: "Lnk0000001A", song: "Linked Song", score: 0.3 })
     return councilData({
       queue: [inQueue, queueItem({ id: 60, videoId: "Other000001", song: "Other Song" })],
-      sealable: [inQueue, outside],
+      sealable: { Lnk0000001A: [inQueue, outside] },
     })
   }
   const search = (value: string) =>
@@ -131,6 +131,21 @@ describe("CouncilQueuePage song link", () => {
     expect(screen.getByRole("button", { name: /^Seal/ })).toBeTruthy()
   })
 
+  it("regression: finds lyrics linked to the pasted song from another video", async () => {
+    const queued = queueItem({ id: 80, videoId: "Home0000001", song: "Linked Home" })
+    const outside = queueItem({ id: 81, videoId: "Home0000002", song: "Linked Away" })
+    stubCouncilApi(
+      councilData({
+        queue: [queued, queueItem({ id: 60, videoId: "Other000001", song: "Other Song" })],
+        sealable: { Lnk0000001A: [queued, outside] },
+      }),
+    )
+    renderCouncil("/council/queue")
+    await waitFor(() => expect(titles(openList())).toHaveLength(2))
+    search(LINK)
+    await waitFor(() => expect(titles(openList())).toEqual(["Linked Home", "Linked Away"]))
+  })
+
   it("says so when no variant of the pasted song can be sealed", async () => {
     stubCouncilApi(councilData({ queue: [queueItem({ id: 60, videoId: "Other000001" })] }))
     renderCouncil("/council/queue")
@@ -140,7 +155,9 @@ describe("CouncilQueuePage song link", () => {
   })
 
   it("finds a pasted song while the queue itself is empty", async () => {
-    stubCouncilApi(councilData({ sealable: [queueItem({ id: 70, videoId: "Lnk0000001A", song: "Lone Song" })] }))
+    stubCouncilApi(
+      councilData({ sealable: { Lnk0000001A: [queueItem({ id: 70, videoId: "Lnk0000001A", song: "Lone Song" })] } }),
+    )
     renderCouncil("/council/queue")
     await screen.findByText("The seal queue is clear")
     search(LINK)

@@ -48,14 +48,16 @@ export function ApplicantCard({ applicant, now, admin, busy, onOpinion, onDecisi
     </div>
   ) : (
     <div className="flex justify-end gap-2">
-      <button
-        type="button"
-        disabled={busy}
-        className={buttonClass("ghost", "sm")}
-        onClick={() => setConfirming("reject")}
-      >
-        Reject
-      </button>
+      {failed ? null : (
+        <button
+          type="button"
+          disabled={busy}
+          className={buttonClass("ghost", "sm")}
+          onClick={() => setConfirming("reject")}
+        >
+          Reject
+        </button>
+      )}
       <button
         type="button"
         disabled={busy}

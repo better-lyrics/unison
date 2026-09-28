@@ -47,7 +47,7 @@ function sealRoute(log: string[]) {
 describe("SealLyricButton", () => {
   it("seals the lyric after a confirmation", async () => {
     const log: string[] = []
-    stubCouncilApi(councilData({ sealable: [lyric] }), { admin: false }, [sealRoute(log)])
+    stubCouncilApi(councilData({ sealable: { [VIDEO]: [lyric] } }), { admin: false }, [sealRoute(log)])
     renderButton()
     fireEvent.click(await screen.findByRole("button", { name: /^Seal/ }))
     expect(log).toEqual([])
@@ -61,7 +61,7 @@ describe("SealLyricButton", () => {
     const held = new Promise<void>((resolve) => {
       release = resolve
     })
-    stubCouncilApi(councilData({ sealable: [lyric] }), { admin: false }, [
+    stubCouncilApi(councilData({ sealable: { [VIDEO]: [lyric] } }), { admin: false }, [
       {
         match: (url, init) => init?.method === "POST" && url === "/lyrics/51/boost",
         respond: async () => {
@@ -78,7 +78,7 @@ describe("SealLyricButton", () => {
   })
 
   it("puts the button back and says why when the seal fails", async () => {
-    stubCouncilApi(councilData({ sealable: [lyric] }), { admin: false }, [
+    stubCouncilApi(councilData({ sealable: { [VIDEO]: [lyric] } }), { admin: false }, [
       {
         match: (url, init) => init?.method === "POST" && url === "/lyrics/51/boost",
         respond: () => jsonResponse({ success: false, error: "Monthly seal quota reached" }, 409),
@@ -93,7 +93,7 @@ describe("SealLyricButton", () => {
 
   it("sends nothing when the member cancels", async () => {
     const log: string[] = []
-    stubCouncilApi(councilData({ sealable: [lyric] }), { admin: false }, [sealRoute(log)])
+    stubCouncilApi(councilData({ sealable: { [VIDEO]: [lyric] } }), { admin: false }, [sealRoute(log)])
     renderButton()
     fireEvent.click(await screen.findByRole("button", { name: /^Seal/ }))
     fireEvent.click(screen.getByRole("button", { name: "Cancel" }))
@@ -103,14 +103,14 @@ describe("SealLyricButton", () => {
 
   describe("edge cases", () => {
     it("shows nothing for a lyric that cannot be sealed", async () => {
-      const router = stubCouncilApi(councilData({ sealable: [lyric] }))
+      const router = stubCouncilApi(councilData({ sealable: { [VIDEO]: [lyric] } }))
       renderButton(99)
       await waitFor(() => expect(router.calls.some((c) => c.url === `/committee/queue/video/${VIDEO}`)).toBe(true))
       expect(screen.queryByRole("button", { name: /^Seal/ })).toBeNull()
     })
 
     it("asks the server nothing for a visitor who is not on the council", async () => {
-      const router = stubCouncilApi(councilData({ sealable: [lyric] }), null)
+      const router = stubCouncilApi(councilData({ sealable: { [VIDEO]: [lyric] } }), null)
       renderButton()
       await waitFor(() => expect(router.calls.some((c) => c.url === "/auth/me")).toBe(true))
       expect(router.calls.some((c) => c.url.startsWith("/committee/"))).toBe(false)

@@ -29,9 +29,15 @@ export function CouncilQueuePage() {
   const linkedVideo = videoIdFromInput(text)
   const sealable = useSealableVariants(linkedVideo).data
   const queued = new Set(queue?.map((item) => item.id))
+  const linked = new Set(linkedVideo ? sealable?.map((item) => item.id) : [])
   const outside = linkedVideo && queue ? (sealable ?? []).filter((item) => !queued.has(item.id)) : []
-  const shown = sortQueue(filterQueue(queue ?? [], { text, filter }), sort)
-  const extra = filterQueue(outside, { text, filter })
+  const matched = filterQueue(queue ?? [], { text, filter })
+  const linkedInQueue = filterQueue(
+    (queue ?? []).filter((item) => linked.has(item.id) && !matched.includes(item)),
+    { text: "", filter },
+  )
+  const shown = sortQueue([...matched, ...linkedInQueue], sort)
+  const extra = filterQueue(outside, { text: "", filter })
   const triage = useTriage({ all: queue, shown, extra, entry, meKeyId, now })
   const selected = triage.selectedItem
 
