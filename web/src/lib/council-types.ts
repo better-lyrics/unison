@@ -133,6 +133,7 @@ export interface BoostQuota {
   used: number
   remaining: number
   resetsAt: number
+  basis: { active: boolean; upvotedLyrics: number; bonus: number; monthStart: number }
 }
 
 export interface DayDecisions {

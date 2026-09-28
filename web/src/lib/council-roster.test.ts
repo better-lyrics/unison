@@ -1,4 +1,4 @@
-import { ME, NOW, OLA, rosterMember } from "@/test/council-fixtures"
+import { ME, NOW, OLA, QUOTA_BASIS, rosterMember } from "@/test/council-fixtures"
 import { describe, expect, it } from "vitest"
 import { isInactive, parseMemberInput, sortRoster } from "./council-roster"
 
@@ -10,18 +10,18 @@ describe("sortRoster", () => {
     {
       lastActiveAt: null,
       weekly: [0, 0, 0, 0, 0, 0, 0, 0],
-      quota: { quota: 3, used: 0, remaining: 3, resetsAt: NOW },
+      quota: { quota: 3, used: 0, remaining: 3, resetsAt: NOW, basis: QUOTA_BASIS },
     },
   )
   const busy = rosterMember(OLA, {
     lastActiveAt: NOW - 5 * DAY,
     weekly: [9, 9, 9, 9, 9, 9, 9, 9],
-    quota: { quota: 3, used: 1, remaining: 2, resetsAt: NOW },
+    quota: { quota: 3, used: 1, remaining: 2, resetsAt: NOW, basis: QUOTA_BASIS },
   })
   const recent = rosterMember(ME, {
     lastActiveAt: NOW - 60,
     weekly: [1, 0, 0, 0, 0, 0, 0, 1],
-    quota: { quota: 3, used: 3, remaining: 0, resetsAt: NOW },
+    quota: { quota: 3, used: 3, remaining: 0, resetsAt: NOW, basis: QUOTA_BASIS },
   })
   const names = (rows: ReturnType<typeof sortRoster>) => rows.map((r) => r.displayName)
 
