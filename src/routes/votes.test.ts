@@ -520,7 +520,13 @@ describe("signed-envelope path regression", () => {
 	})
 })
 
-const BOOST_QUOTA = { quota: 2, used: 1, remaining: 1, resetsAt: 4102444800 }
+const BOOST_QUOTA = {
+	quota: 6,
+	used: 1,
+	remaining: 5,
+	resetsAt: 4102444800,
+	basis: { active: true, upvotedLyrics: 1, bonus: 0, monthStart: 4097174400 },
+}
 
 function seedBoostAuth(userId = 7): { env: Env; app: ReturnType<typeof voteRoutes> } {
 	const keyId = "a".repeat(64)
