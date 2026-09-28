@@ -1,10 +1,11 @@
-import { IconCheck, IconCopy, IconDownload } from "@tabler/icons-react"
-import { Fragment, type ReactNode, useState } from "react"
 import { Bone } from "@/components/skeleton"
 import { useAsyncData } from "@/hooks/useAsyncData"
 import { fetchDumpManifest } from "@/lib/api"
+import { COMPOSER_URL } from "@/lib/composer"
 import { formatExact, formatRelativeTime } from "@/lib/format"
 import type { DumpManifest } from "@/lib/types"
+import { IconCheck, IconCopy, IconDownload } from "@tabler/icons-react"
+import { Fragment, type ReactNode, useState } from "react"
 
 const FALLBACK_LATEST_URL = "https://unison-dumps.boidu.dev/dumps/latest.dump"
 const ATTRIBUTION = "Lyrics from Unison (https://unison.boidu.dev)"
@@ -260,7 +261,7 @@ function DownloadsFooter() {
         </a>
         <span className="px-1.5 opacity-60">·</span>
         <a
-          href="https://composer.boidu.dev"
+          href={COMPOSER_URL}
           target="_blank"
           rel="noopener noreferrer"
           className="text-unison-text transition-colors hover:text-unison-text-secondary"

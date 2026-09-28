@@ -1,4 +1,5 @@
 import { config } from "@/config"
+import { evictFeedCaches } from "@/db/feed"
 import { recordFulfillment } from "@/db/fulfillments"
 import {
 	AUTO_HIDE_PREDICATE,
@@ -497,10 +498,7 @@ export async function invalidateCacheForSubmitter(env: Env, keyId: string): Prom
 
 export async function invalidateCacheAfterDelete(env: Env, lyricsId: number): Promise<void> {
 	await invalidateCacheForLyric(env, lyricsId)
-	const feedKeys = await env.CACHE.keys("feed:global:*")
-	for (const key of feedKeys) {
-		await env.CACHE.delete(key)
-	}
+	await evictFeedCaches(env)
 }
 
 export type SoftDeleteResult =

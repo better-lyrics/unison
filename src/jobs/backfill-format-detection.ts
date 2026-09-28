@@ -1,3 +1,4 @@
+import { evictFeedCaches } from "@/db/feed"
 import { Logger } from "@/infra/logger"
 import type { Env, LyricsFormat } from "@/types"
 import { decompress, isCompressed } from "@/utils/compression"
@@ -94,15 +95,12 @@ export async function backfillFormatDetection(
 	}
 
 	if (changed > 0) {
-		const feedKeys = await env.CACHE.keys("feed:global:*")
-		for (const key of feedKeys) {
-			await env.CACHE.delete(key)
-		}
+		const feedKeysCleared = await evictFeedCaches(env)
 		log.info("format backfill complete", {
 			scanned,
 			changed,
 			byTransition: Object.fromEntries(byTransition),
-			feedKeysCleared: feedKeys.length,
+			feedKeysCleared,
 		})
 	} else {
 		log.info("format backfill complete", { scanned, changed })

@@ -1,22 +1,14 @@
-import { Link } from "react-router-dom"
 import { useSession } from "@/auth/useSession"
 import { EmptyState } from "@/components/EmptyState"
-import { LeaderboardSection } from "@/components/LeaderboardSection"
+import { LeaderboardSection, SeeAllLink } from "@/components/LeaderboardSection"
+import { SealedShelf } from "@/components/SealedShelf"
 import { SongRow, SongRowSkeletonList } from "@/components/SongRow"
 import { useAsyncData } from "@/hooks/useAsyncData"
 import { fetchSongLeaderboard } from "@/lib/api"
 
 const MOST_WANTED_PREVIEW = 10
 
-const mostWantedAction = (
-  <Link
-    to="/queue"
-    className="text-sm text-unison-text-muted transition-colors hover:text-unison-text"
-    aria-label="See all most wanted songs"
-  >
-    See all →
-  </Link>
-)
+const mostWantedAction = <SeeAllLink to="/queue" label="See all most wanted songs" />
 
 export function SongsPage() {
   const session = useSession()
@@ -26,22 +18,26 @@ export function SongsPage() {
   if (status === "loading") {
     return (
       <div className="space-y-8">
+        <SealedShelf />
         <LeaderboardSection title="Most Wanted">
           <SongRowSkeletonList rows={5} />
-        </LeaderboardSection>
-        <LeaderboardSection title="Needs Fixing">
-          <SongRowSkeletonList rows={3} />
         </LeaderboardSection>
       </div>
     )
   }
 
   if (status === "error") {
-    return <EmptyState title="Could not load leaderboard" hint={error.message} />
+    return (
+      <div className="space-y-8">
+        <SealedShelf />
+        <EmptyState title="Could not load leaderboard" hint={error.message} />
+      </div>
+    )
   }
 
   return (
     <div className="space-y-8">
+      <SealedShelf />
       <LeaderboardSection
         title="Most Wanted"
         subtitle="Songs missing synced lyrics, ranked by reputation-weighted demand"
@@ -59,28 +55,6 @@ export function SongsPage() {
         ) : (
           <ul className="space-y-2">
             {data.mostWanted.slice(0, MOST_WANTED_PREVIEW).map((entry) => (
-              <SongRow key={entry.videoId} entry={entry} />
-            ))}
-          </ul>
-        )}
-      </LeaderboardSection>
-
-      <LeaderboardSection
-        title="Needs Fixing"
-        subtitle="Songs with synced lyrics but enough bad-sync reports to investigate"
-      >
-        {data.needsFixing.length === 0 ? (
-          signedIn ? (
-            <EmptyState
-              title="Nothing flagged"
-              hint="Notice a song with bad lyric sync? Report it from Better Lyrics."
-            />
-          ) : (
-            <EmptyState title="Nothing flagged" hint="Reports below the threshold do not show up here." />
-          )
-        ) : (
-          <ul className="space-y-2">
-            {data.needsFixing.map((entry) => (
               <SongRow key={entry.videoId} entry={entry} />
             ))}
           </ul>

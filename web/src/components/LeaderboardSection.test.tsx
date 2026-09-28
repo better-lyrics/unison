@@ -15,6 +15,22 @@ describe("LeaderboardSection", () => {
     expect(screen.getByRole("heading", { name: "Most Wanted", level: 2 })).toBeTruthy()
   })
 
+  it("accepts a node as the title and names the heading by its text", () => {
+    render(
+      <LeaderboardSection
+        title={
+          <span>
+            <img src="/badges/committee/image.svg" alt="" />
+            Sealed by the Council
+          </span>
+        }
+      >
+        <p>child</p>
+      </LeaderboardSection>,
+    )
+    expect(screen.getByRole("heading", { name: "Sealed by the Council", level: 2 })).toBeTruthy()
+  })
+
   it("renders the subtitle when provided", () => {
     render(
       <LeaderboardSection title="Most Wanted" subtitle="A descriptive line">

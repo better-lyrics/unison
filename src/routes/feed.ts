@@ -56,9 +56,10 @@ export const feedRoutes = (env: Env) =>
 
 				const filters = parseFeedFilters(query)
 
-				const items = feedUserId
-					? await getPersonalizedFeed(env, feedUserId, limit, offset, filters)
-					: await getGlobalFeed(env, limit, offset, undefined, filters)
+				const items =
+					feedUserId && !filters.sealed
+						? await getPersonalizedFeed(env, feedUserId, limit, offset, filters)
+						: await getGlobalFeed(env, limit, offset, undefined, filters)
 
 				const nextCursor = items.length === limit ? offset + items.length : undefined
 
@@ -99,6 +100,7 @@ export const feedRoutes = (env: Env) =>
 					format: t.Optional(t.String()),
 					tier: t.Optional(t.String()),
 					language: t.Optional(t.String()),
+					sealed: t.Optional(t.String()),
 				}),
 			}
 		)

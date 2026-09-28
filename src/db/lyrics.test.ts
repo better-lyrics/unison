@@ -918,6 +918,20 @@ describe("invalidateCacheAfterDelete", () => {
 		expect(cache.deleteCalls).toContain("feed:global:50")
 		expect(cache.deleteCalls).not.toContain("unrelated:key")
 	})
+
+	it("regression: also evicts the cached sealed feed pages so a deleted sealed lyric leaves the shelf", async () => {
+		const db = createMockDB([[{ video_id: "abc123" }]])
+		const cache = createMockCache({
+			"feed:sealed:recently-sealed:12": "feed",
+			"feed:sealed:top-rated:24": "feed",
+		})
+		const env = createEnv(db, cache)
+
+		await invalidateCacheAfterDelete(env, 42)
+
+		expect(cache.deleteCalls).toContain("feed:sealed:recently-sealed:12")
+		expect(cache.deleteCalls).toContain("feed:sealed:top-rated:24")
+	})
 })
 
 describe("invalidateCacheForSubmitter", () => {

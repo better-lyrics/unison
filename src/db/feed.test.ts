@@ -1,6 +1,6 @@
 import type { Env } from "@/types"
 import { afterEach, describe, expect, it, vi } from "vitest"
-import { getGlobalFeed, getMySubmissions, getPersonalizedFeed } from "./feed"
+import { evictFeedCaches, getGlobalFeed, getMySubmissions, getPersonalizedFeed } from "./feed"
 import { AUTO_HIDE_PREDICATE } from "./predicates"
 
 // -- Mocks -----------------------------------------------------------------
@@ -227,6 +227,104 @@ describe("getGlobalFeed", () => {
 
 		expect(db.calls).toHaveLength(0)
 		expect(result).toEqual([{ id: 1 }])
+	})
+
+	describe("sealed cache", () => {
+		it("caches page 0 of the sealed feed under a key per sort and limit", async () => {
+			const { cache, gets, puts } = createRecordingCache()
+			await getGlobalFeed(createEnv(createMockDB([[{ id: 1 }]]), cache), 12, 0, undefined, {
+				sealed: true,
+				sort: "recently-sealed",
+			})
+			await flushMicrotasks()
+			expect(gets).toEqual(["feed:sealed:recently-sealed:12"])
+			expect(puts).toEqual(["feed:sealed:recently-sealed:12"])
+		})
+
+		it("names the default sort in the key when no sort is given", async () => {
+			const { cache, gets } = createRecordingCache()
+			await getGlobalFeed(createEnv(createMockDB([[]]), cache), 12, 0, undefined, { sealed: true })
+			expect(gets).toEqual(["feed:sealed:default:12"])
+		})
+
+		it("keeps sortDir=desc on the same key as no sortDir", async () => {
+			const { cache, gets } = createRecordingCache()
+			await getGlobalFeed(createEnv(createMockDB([[]]), cache), 12, 0, undefined, {
+				sealed: true,
+				sort: "top-rated",
+				sortDir: "desc",
+			})
+			expect(gets).toEqual(["feed:sealed:top-rated:12"])
+		})
+
+		it("serves a cached sealed page without touching the DB", async () => {
+			const cache: MockCache = {
+				async get(key: string) {
+					return key === "feed:sealed:default:12" ? JSON.stringify([{ id: 9 }]) : null
+				},
+				async put() {},
+				async delete() {},
+			}
+			const db = createMockDB([])
+			const result = await getGlobalFeed(createEnv(db, cache), 12, 0, undefined, { sealed: true })
+			expect(db.calls).toHaveLength(0)
+			expect(result).toEqual([{ id: 9 }])
+		})
+	})
+
+	describe("sealed cache edge cases", () => {
+		it("does not cache sealed pages after page 0", async () => {
+			const { cache, gets, puts } = createRecordingCache()
+			await getGlobalFeed(createEnv(createMockDB([[]]), cache), 12, 12, undefined, {
+				sealed: true,
+			})
+			await flushMicrotasks()
+			expect(gets).toEqual([])
+			expect(puts).toEqual([])
+		})
+
+		it("does not cache sealed queries that also filter by syncType", async () => {
+			const { cache, gets } = createRecordingCache()
+			await getGlobalFeed(createEnv(createMockDB([[]]), cache), 12, 0, undefined, {
+				sealed: true,
+				syncType: "richsync",
+			})
+			expect(gets).toEqual([])
+		})
+
+		it("does not cache sealed queries with sortDir=asc", async () => {
+			const { cache, gets } = createRecordingCache()
+			await getGlobalFeed(createEnv(createMockDB([[]]), cache), 12, 0, undefined, {
+				sealed: true,
+				sort: "top-rated",
+				sortDir: "asc",
+			})
+			expect(gets).toEqual([])
+		})
+
+		it("does not cache sealed queries with exclusions", async () => {
+			const { cache, gets } = createRecordingCache()
+			await getGlobalFeed(createEnv(createMockDB([[]]), cache), 12, 0, [3], { sealed: true })
+			expect(gets).toEqual([])
+		})
+	})
+
+	describe("sealed cache regressions", () => {
+		it("regression: a non-sealed sort still skips the cache", async () => {
+			const { cache, gets } = createRecordingCache()
+			await getGlobalFeed(createEnv(createMockDB([[]]), cache), 12, 0, undefined, {
+				sort: "recently-sealed",
+			})
+			expect(gets).toEqual([])
+		})
+
+		it("regression: the sealed query keeps the seal predicate in the inner WHERE", async () => {
+			const db = createMockDB([[]])
+			await getGlobalFeed(createEnv(db), 12, 0, undefined, { sealed: true })
+			const sql = db.calls[0]?.sql ?? ""
+			const inner = sql.slice(sql.indexOf("WHERE"), sql.indexOf(") AS unique_videos"))
+			expect(inner).toContain("committee_approved_at IS NOT NULL")
+		})
 	})
 })
 
@@ -524,5 +622,66 @@ describe("feed queries filter deleted rows", () => {
 		const feedSql = db.calls[1].sql
 		expect(artistSql).not.toMatch(/deleted_at\s+IS\s+NULL/i)
 		expect(feedSql).toMatch(/deleted_at\s+IS\s+NULL/i)
+	})
+})
+
+describe("evictFeedCaches", () => {
+	function keyedCache(keys: string[]) {
+		const store = new Set(keys)
+		const deleted: string[] = []
+		return {
+			deleted,
+			store,
+			cache: {
+				async get() {
+					return null
+				},
+				async put() {},
+				async delete(key: string) {
+					deleted.push(key)
+					store.delete(key)
+				},
+				async keys(pattern: string) {
+					const prefix = pattern.replace(/\*$/, "")
+					return [...store].filter((k) => k.startsWith(prefix))
+				},
+			},
+		}
+	}
+
+	it("deletes every global and sealed feed page", async () => {
+		const { cache, deleted } = keyedCache([
+			"feed:global:20",
+			"feed:sealed:default:12",
+			"feed:sealed:top-rated:24",
+		])
+		await evictFeedCaches(createEnv(createMockDB(), cache as unknown as MockCache))
+		expect(deleted.sort()).toEqual([
+			"feed:global:20",
+			"feed:sealed:default:12",
+			"feed:sealed:top-rated:24",
+		])
+	})
+
+	it("leaves every other key alone", async () => {
+		const { cache, store } = keyedCache([
+			"v:abc",
+			"feed:mine:1",
+			"leaderboard:songs",
+			"feed:global:20",
+		])
+		await evictFeedCaches(createEnv(createMockDB(), cache as unknown as MockCache))
+		expect([...store].sort()).toEqual(["feed:mine:1", "leaderboard:songs", "v:abc"])
+	})
+
+	it("returns how many keys it cleared", async () => {
+		const { cache } = keyedCache(["feed:global:20", "feed:sealed:default:12", "v:abc"])
+		expect(await evictFeedCaches(createEnv(createMockDB(), cache as unknown as MockCache))).toBe(2)
+	})
+
+	it("is a no-op on an empty cache", async () => {
+		const { cache, deleted } = keyedCache([])
+		await evictFeedCaches(createEnv(createMockDB(), cache as unknown as MockCache))
+		expect(deleted).toEqual([])
 	})
 })

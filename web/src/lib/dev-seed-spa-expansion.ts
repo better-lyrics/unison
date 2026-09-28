@@ -1,8 +1,12 @@
 import type {
+  FeedEntry,
   LyricsFormat,
   LyricsSearchHit,
   Mark,
+  Page,
   QueueEntry,
+  SealedSort,
+  SealedSyncFilter,
   SongLeaderboardEntry,
   SongsLeaderboardResponse,
   SyncType,
@@ -717,6 +721,52 @@ export async function seedQueue(opts: { cursor?: string }): Promise<{
   const nextStart = start + QUEUE_PAGE_SIZE
   const nextCursor = nextStart < SEED_QUEUE_ENTRIES.length ? `page-${page + 1}` : null
   return { items: slice.map((entry) => ({ ...entry })), nextCursor }
+}
+
+const SEED_SEAL: Omit<Mark, "at"> = {
+  type: "seal",
+  label: "Better Lyrics Council Approved (BLCA)",
+  icon: "/badges/committee/image.svg",
+}
+
+function sealedEntries(): FeedEntry[] {
+  const now = Math.floor(Date.now() / 1000)
+  return topVariantPerVideo().map((v, i) => {
+    const seal = v.marks?.find((m) => m.type === "seal") ?? { ...SEED_SEAL, at: now - (i + 1) * 86400 }
+    return {
+      id: v.id,
+      videoId: v.videoId,
+      song: v.song,
+      artist: v.artist,
+      syncType: v.syncType,
+      createdAt: seal.at ?? now,
+      marks: [seal, ...(v.marks ?? []).filter((m) => m.type !== "seal")],
+      submitter: v.submitter,
+    }
+  })
+}
+
+export async function seedSealed(opts: {
+  sort: SealedSort
+  limit: number
+  syncType?: SealedSyncFilter
+  cursor?: string
+}): Promise<Page<FeedEntry>> {
+  await delay(150)
+  const effective = new Map(corpus.map((v) => [v.id, v.effectiveScore]))
+  const sealAt = (e: FeedEntry) => e.marks?.find((m) => m.type === "seal")?.at ?? 0
+  const matching = sealedEntries()
+    .filter((e) => !opts.syncType || e.syncType === opts.syncType)
+    .sort((a, b) =>
+      opts.sort === "top-rated" ? (effective.get(b.id) ?? 0) - (effective.get(a.id) ?? 0) : sealAt(b) - sealAt(a),
+    )
+  const page = parseCursor(opts.cursor)
+  const start = page * opts.limit
+  const nextStart = start + opts.limit
+  return {
+    items: matching.slice(start, nextStart),
+    nextCursor: nextStart < matching.length ? `page-${page + 1}` : null,
+  }
 }
 
 function parseCursor(cursor?: string): number {

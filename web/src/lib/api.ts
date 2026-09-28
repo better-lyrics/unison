@@ -9,8 +9,12 @@ import type {
   BadgeCatalogue,
   CuratorsLeaderboardResponse,
   DumpManifest,
+  FeedEntry,
   LyricsSearchHit,
+  Page,
   QueueEntry,
+  SealedSort,
+  SealedSyncFilter,
   SongsLeaderboardResponse,
   SubmissionSort,
   SubmissionSyncType,
@@ -233,21 +237,34 @@ export async function reportVariant(
 
 const QUEUE_PAGE_LIMIT = 50
 
-export async function fetchQueue(
-  opts: { cursor?: string; signal?: AbortSignal } = {},
-): Promise<{ items: QueueEntry[]; nextCursor: string | null }> {
+export async function fetchQueue(opts: { cursor?: string; signal?: AbortSignal } = {}): Promise<Page<QueueEntry>> {
   if (IS_SPA_EXPANSION_SEED) return (await import("./dev-seed-spa-expansion")).seedQueue({ cursor: opts.cursor })
   const search = new URLSearchParams()
   search.set("cursor", opts.cursor ?? "")
   search.set("limit", String(QUEUE_PAGE_LIMIT))
-  const path = `/leaderboard/songs?${search.toString()}`
-  const res = await fetch(path, opts.signal ? { signal: opts.signal } : undefined)
-  if (!res.ok) {
-    await unwrapMutationError(res)
-  }
-  const body = (await res.json()) as ApiEnvelope<QueueEntry[]> & { nextCursor?: string | null }
+  return getPage<QueueEntry>(`/leaderboard/songs?${search.toString()}`, opts.signal)
+}
+
+export async function fetchSealed(opts: {
+  sort: SealedSort
+  limit: number
+  syncType?: SealedSyncFilter
+  cursor?: string
+  signal?: AbortSignal
+}): Promise<Page<FeedEntry>> {
+  if (IS_SPA_EXPANSION_SEED) return (await import("./dev-seed-spa-expansion")).seedSealed(opts)
+  const search = new URLSearchParams({ sealed: "1", sort: opts.sort, limit: String(opts.limit) })
+  if (opts.syncType) search.set("syncType", opts.syncType)
+  if (opts.cursor) search.set("cursor", opts.cursor)
+  return getPage<FeedEntry>(`/feed?${search.toString()}`, opts.signal)
+}
+
+async function getPage<T>(path: string, signal?: AbortSignal): Promise<Page<T>> {
+  const res = await fetch(path, signal ? { signal } : undefined)
+  if (!res.ok) await unwrapMutationError(res)
+  const body = (await res.json()) as ApiEnvelope<T[]> & { nextCursor?: string | number | null }
   if (!body.success) throw new Error(body.error)
-  return { items: body.data, nextCursor: body.nextCursor ?? null }
+  return { items: body.data, nextCursor: body.nextCursor == null ? null : String(body.nextCursor) }
 }
 
 const DUMP_MANIFEST_URL = "https://unison-dumps.boidu.dev/dumps/manifest.json"

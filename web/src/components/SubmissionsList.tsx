@@ -1,3 +1,4 @@
+import { uniqueById } from "@/lib/unique-by-id"
 import { keepPreviousData, useInfiniteQuery } from "@tanstack/react-query"
 import { CollapsibleSection } from "@/components/CollapsibleSection"
 import { EmptyState } from "@/components/EmptyState"
@@ -60,8 +61,7 @@ function CuratorSubmissions({ keyId }: SubmissionsListProps) {
   })
 
   const visible = useMemo(() => {
-    const seen = new Set<number>()
-    return (data?.pages.flatMap((page) => page.submissions) ?? []).filter((s) => !seen.has(s.id) && seen.add(s.id))
+    return uniqueById(data?.pages.flatMap((page) => page.submissions) ?? [])
   }, [data])
 
   if (status === "pending") {

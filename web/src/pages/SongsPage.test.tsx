@@ -1,3 +1,4 @@
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { cleanup, render, screen, waitFor } from "@testing-library/react"
 import { MemoryRouter } from "react-router-dom"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
@@ -21,9 +22,11 @@ function jsonResponse(body: unknown, status = 200): Response {
 function renderPage() {
   return render(
     <MemoryRouter>
-      <AuthProvider>
-        <SongsPage />
-      </AuthProvider>
+      <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+        <AuthProvider>
+          <SongsPage />
+        </AuthProvider>
+      </QueryClientProvider>
     </MemoryRouter>,
   )
 }
@@ -41,7 +44,7 @@ afterEach(() => {
 })
 
 describe("SongsPage", () => {
-  it("renders both sections with rows from the API", async () => {
+  it("renders Most Wanted rows and never a Needs Fixing board, even when the API returns entries", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn().mockImplementation((url: string) => {
@@ -83,7 +86,8 @@ describe("SongsPage", () => {
     )
     renderPage()
     await waitFor(() => expect(screen.getByText("Wanted Song")).toBeTruthy())
-    expect(screen.getByText("Fixme Song")).toBeTruthy()
+    expect(screen.queryByText("Fixme Song")).toBeNull()
+    expect(screen.queryByRole("heading", { name: "Needs Fixing" })).toBeNull()
   })
 
   it("shows signed-out empty states when sections are empty and signed-out", async () => {
@@ -103,7 +107,6 @@ describe("SongsPage", () => {
     )
     renderPage()
     await waitFor(() => expect(screen.getByText("Nothing wanted right now")).toBeTruthy())
-    expect(screen.getByText(/Reports below the threshold/i)).toBeTruthy()
   })
 
   it("renders a 'See all' link in the Most Wanted header pointing to /queue", async () => {
@@ -161,7 +164,7 @@ describe("SongsPage", () => {
     expect(seeAll.getAttribute("href")).toBe("/queue")
   })
 
-  it("does not render a 'See all' link in the Needs Fixing header", async () => {
+  it("renders exactly one 'See all' link, for Most Wanted, when nothing is sealed", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn().mockImplementation((url: string) => {
@@ -177,8 +180,7 @@ describe("SongsPage", () => {
       }),
     )
     renderPage()
-    await waitFor(() => expect(screen.getByText("Nothing flagged")).toBeTruthy())
-    expect(screen.queryByRole("link", { name: /needs fixing/i })).toBeNull()
+    await waitFor(() => expect(screen.getByText("Nothing wanted right now")).toBeTruthy())
     const allLinks = screen.queryAllByRole("link", { name: /See all/i })
     expect(allLinks).toHaveLength(1)
     expect(allLinks[0].getAttribute("href")).toBe("/queue")
@@ -211,6 +213,76 @@ describe("SongsPage", () => {
     renderPage()
     await waitFor(() => expect(screen.getByText("Nothing requested right now")).toBeTruthy())
     expect(screen.getByText(/Request lyrics from Better Lyrics/i)).toBeTruthy()
-    expect(screen.getByText(/Report it from Better Lyrics/i)).toBeTruthy()
+  })
+
+  describe("sealed shelf", () => {
+    const emptyBoard = () => jsonResponse({ success: true, data: { mostWanted: [], needsFixing: [] } })
+    const sealed = {
+      id: 5,
+      videoId: "HsBfV2A5dUY",
+      song: "Sealed Grace",
+      artist: "Traditional",
+      syncType: "richsync",
+      createdAt: 1_760_000_000,
+      marks: [{ type: "seal", label: "BLCA", icon: "/badges/committee/image.svg", at: 1_760_000_000 }],
+    }
+
+    it("shows the shelf above Most Wanted", async () => {
+      vi.stubGlobal(
+        "fetch",
+        vi.fn().mockImplementation((url: string) => {
+          if (url === "/leaderboard/songs") return Promise.resolve(emptyBoard())
+          if (url.startsWith("/feed")) return Promise.resolve(jsonResponse({ success: true, data: [sealed] }))
+          if (url.startsWith("/artwork"))
+            return Promise.resolve(jsonResponse({ success: true, data: { artworkUrl: null } }))
+          return Promise.reject(new Error(`unexpected url ${url}`))
+        }),
+      )
+      renderPage()
+      await waitFor(() => expect(screen.getByText("Sealed Grace")).toBeTruthy())
+      const headings = screen.getAllByRole("heading", { level: 2 }).map((h) => h.textContent)
+      expect(headings.indexOf("Sealed by the Council")).toBeLessThan(headings.indexOf("Most Wanted"))
+    })
+
+    it("shows the shelf skeleton while the page loads", () => {
+      vi.stubGlobal(
+        "fetch",
+        vi.fn().mockImplementation(() => new Promise(() => {})),
+      )
+      renderPage()
+      expect(screen.getByRole("heading", { name: "Sealed by the Council" })).toBeTruthy()
+      expect(screen.getByRole("heading", { name: "Most Wanted" })).toBeTruthy()
+      expect(screen.queryByRole("heading", { name: "Needs Fixing" })).toBeNull()
+    })
+
+    it("keeps the shelf when the leaderboard fails", async () => {
+      vi.stubGlobal(
+        "fetch",
+        vi.fn().mockImplementation((url: string) => {
+          if (url === "/leaderboard/songs") return Promise.resolve(jsonResponse({ success: false, error: "boom" }, 500))
+          if (url.startsWith("/feed")) return Promise.resolve(jsonResponse({ success: true, data: [sealed] }))
+          if (url.startsWith("/artwork"))
+            return Promise.resolve(jsonResponse({ success: true, data: { artworkUrl: null } }))
+          return Promise.reject(new Error(`unexpected url ${url}`))
+        }),
+      )
+      renderPage()
+      await waitFor(() => expect(screen.getByText("Could not load leaderboard")).toBeTruthy())
+      await waitFor(() => expect(screen.getByText("Sealed Grace")).toBeTruthy())
+    })
+
+    it("regression: a failed sealed feed never hides Most Wanted", async () => {
+      vi.stubGlobal(
+        "fetch",
+        vi.fn().mockImplementation((url: string) => {
+          if (url === "/leaderboard/songs") return Promise.resolve(emptyBoard())
+          if (url.startsWith("/feed")) return Promise.resolve(jsonResponse({ success: false, error: "boom" }, 500))
+          return Promise.reject(new Error(`unexpected url ${url}`))
+        }),
+      )
+      renderPage()
+      await waitFor(() => expect(screen.getByText("Nothing wanted right now")).toBeTruthy())
+      await waitFor(() => expect(screen.queryByRole("heading", { name: "Sealed by the Council" })).toBeNull())
+    })
   })
 })

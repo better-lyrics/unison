@@ -1,7 +1,8 @@
 import type { ReactNode } from "react"
+import { Link } from "react-router-dom"
 
 interface LeaderboardSectionProps {
-  title: string
+  title: ReactNode
   subtitle?: string
   action?: ReactNode
   children: ReactNode
@@ -19,5 +20,17 @@ export function LeaderboardSection({ title, subtitle, action, children }: Leader
       </header>
       {children}
     </section>
+  )
+}
+
+export function SeeAllLink({ to, label }: { to: string; label: string }) {
+  return (
+    <Link
+      to={to}
+      className="text-sm text-unison-text-muted transition-colors hover:text-unison-text"
+      aria-label={label}
+    >
+      See all →
+    </Link>
   )
 }

@@ -5,6 +5,7 @@ import {
 	hasAnyFilter,
 	parseFeedFilters,
 } from "./feed-filters"
+import { AUTO_HIDE_PREDICATE } from "./predicates"
 
 describe("parseFeedFilters", () => {
 	it("returns empty filters when no params present", () => {
@@ -101,6 +102,18 @@ describe("parseFeedFilters", () => {
 		} as { sort?: string; extra?: string; anotherUnknown?: string }
 		expect(parseFeedFilters(input)).toEqual({ sort: "newest" })
 	})
+
+	it("reads sealed=1 as true", () => {
+		expect(parseFeedFilters({ sealed: "1" })).toEqual({ sealed: true })
+	})
+
+	it.each([["0"], ["true"], [""], ["yes"]])("drops sealed=%s", (sealed) => {
+		expect(parseFeedFilters({ sealed })).toEqual({})
+	})
+
+	it("accepts recently-sealed as a sort", () => {
+		expect(parseFeedFilters({ sort: "recently-sealed" })).toEqual({ sort: "recently-sealed" })
+	})
 })
 
 describe("hasAnyFilter", () => {
@@ -137,6 +150,14 @@ describe("hasAnyFilter", () => {
 
 	it("returns true when only language is set", () => {
 		expect(hasAnyFilter({ language: "ja" })).toBe(true)
+	})
+
+	it("returns true when only sealed is set", () => {
+		expect(hasAnyFilter({ sealed: true })).toBe(true)
+	})
+
+	it("returns false when sealed is explicitly false", () => {
+		expect(hasAnyFilter({ sealed: false })).toBe(false)
 	})
 
 	it("returns true when sort=default is combined with a concrete filter", () => {
@@ -283,6 +304,28 @@ describe("buildFilterFragments", () => {
 		expect(out.params).toEqual(["richsync", "ja"])
 		expect(out.conditions).toHaveLength(3)
 	})
+
+	it("emits the seal and not-auto-hidden fragments with no params when sealed", () => {
+		expect(buildFilterFragments({ sealed: true })).toEqual({
+			conditions: ["committee_approved_at IS NOT NULL", `NOT ${AUTO_HIDE_PREDICATE}`],
+			params: [],
+		})
+	})
+
+	it("keeps params aligned when sealed is combined with syncType and language", () => {
+		const out = buildFilterFragments({ sealed: true, syncType: "richsync", language: "ja" })
+		expect(out.conditions).toEqual([
+			"sync_type = ?",
+			"language = ?",
+			"committee_approved_at IS NOT NULL",
+			`NOT ${AUTO_HIDE_PREDICATE}`,
+		])
+		expect(out.params).toEqual(["richsync", "ja"])
+	})
+
+	it("emits nothing for sealed=false", () => {
+		expect(buildFilterFragments({ sealed: false })).toEqual({ conditions: [], params: [] })
+	})
 })
 
 describe("buildOrderByClause", () => {
@@ -353,6 +396,22 @@ describe("buildOrderByClause", () => {
 		const clause = buildOrderByClause({ sort: "most-voted", sortDir: "asc" }, DEFAULT)
 		const parts = clause.split(",").map((s) => s.trim())
 		expect(parts[1]).toBe("id ASC")
+	})
+
+	it("maps recently-sealed desc to committee_approved_at DESC NULLS LAST, id DESC", () => {
+		expect(buildOrderByClause({ sort: "recently-sealed" }, DEFAULT)).toBe(
+			"committee_approved_at DESC NULLS LAST, id DESC"
+		)
+	})
+
+	it("maps recently-sealed asc to committee_approved_at ASC NULLS LAST, id ASC", () => {
+		expect(buildOrderByClause({ sort: "recently-sealed", sortDir: "asc" }, DEFAULT)).toBe(
+			"committee_approved_at ASC NULLS LAST, id ASC"
+		)
+	})
+
+	it("regression: newest keeps created_at with no NULLS clause", () => {
+		expect(buildOrderByClause({ sort: "newest" }, DEFAULT)).toBe("created_at DESC, id DESC")
 	})
 
 	it("uses id DESC as the final tiebreaker for desc sorts", () => {

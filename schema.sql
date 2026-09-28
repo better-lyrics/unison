@@ -367,6 +367,9 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_rejections_active
 
 ALTER TABLE lyrics ADD COLUMN IF NOT EXISTS committee_approved_at INTEGER;
 ALTER TABLE lyrics ADD COLUMN IF NOT EXISTS committee_approved_by INTEGER REFERENCES users(id);
+CREATE INDEX IF NOT EXISTS idx_lyrics_sealed
+    ON lyrics(committee_approved_at DESC)
+    WHERE committee_approved_at IS NOT NULL AND deleted_at IS NULL;
 
 ALTER TABLE users ADD COLUMN IF NOT EXISTS featured_badges TEXT;
 
