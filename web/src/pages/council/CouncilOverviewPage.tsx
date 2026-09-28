@@ -26,9 +26,12 @@ import type { DayDecisions } from "@/lib/council-types"
 import { waitBuckets } from "@/lib/council-wait"
 import { formatElapsed } from "@/lib/format"
 import { IconArrowRight, IconCheck, IconClock, IconPencil, IconRosetteDiscountCheck, IconX } from "@tabler/icons-react"
-import { type ReactNode, useState } from "react"
+import type { ReactNode } from "react"
 import { Link } from "react-router-dom"
+import { useStoredState } from "@/hooks/useStoredState"
 import { useCouncilContext } from "./context"
+
+type Scope = "council" | "me"
 
 const WEEK = 7 * 86400
 const headDate = new Intl.DateTimeFormat("en-GB", { weekday: "long", day: "numeric", month: "long" })
@@ -41,7 +44,9 @@ export function CouncilOverviewPage() {
   const queue = useCouncilQueue().data
   const edits = useCouncilEdits().data?.items
   const applicants = useCouncilApplicants().data
-  const stats = useCouncilOverview().data
+  const [scope, setScope] = useStoredState<Scope>("council.overviewScope", "council")
+  const mine = scope === "me"
+  const stats = useCouncilOverview(scope).data
   const open = queue && openItems(queue, now)
   const pending = applicants?.filter((a) => a.state === "pending_review")
   const oldestEdit = edits?.reduce<number | null>(
@@ -67,10 +72,21 @@ export function CouncilOverviewPage() {
           </>
         }
         actions={
-          <Link to="/council/queue" className={buttonClass("primary")}>
-            Start reviewing
-            <Kbd keys={["G", "Q"]} className="text-unison-bg/60" />
-          </Link>
+          <>
+            <Segmented
+              label="Whose numbers"
+              value={scope}
+              onChange={setScope}
+              options={[
+                { value: "council", label: "Council" },
+                { value: "me", label: "You" },
+              ]}
+            />
+            <Link to="/council/queue" className={buttonClass("primary")}>
+              Start reviewing
+              <Kbd keys={["G", "Q"]} className="text-unison-bg/60" />
+            </Link>
+          </>
         }
       />
 
@@ -92,7 +108,7 @@ export function CouncilOverviewPage() {
           }
         />
         <StatTile
-          label="Median time to decision"
+          label={mine ? "Your median time to decision" : "Median time to decision"}
           value={
             stats
               ? stats.medianDecisionHours.current === null
@@ -108,7 +124,7 @@ export function CouncilOverviewPage() {
           }
         />
         <StatTile
-          label="Seal rate this month"
+          label={mine ? "Your seal rate this month" : "Seal rate this month"}
           value={stats ? (stats.sealRate === null ? "None" : `${Math.round(stats.sealRate * 100)}%`) : undefined}
           unit={stats?.sealRate === null ? "" : "of decisions"}
           foot={
@@ -130,10 +146,10 @@ export function CouncilOverviewPage() {
           )}
         </Region>
         <Region
-          title="Council activity"
+          title={mine ? "Your activity" : "Council activity"}
           aside={
             <Link
-              to="/council/activity"
+              to={mine ? `/council/activity?actor=${meKeyId}` : "/council/activity"}
               className="inline-flex items-center gap-1 text-[13px] text-unison-text-muted transition-colors hover:text-unison-text"
             >
               See all
@@ -141,12 +157,12 @@ export function CouncilOverviewPage() {
             </Link>
           }
         >
-          <Feed now={now} />
+          <Feed now={now} actor={mine ? meKeyId : undefined} />
         </Region>
       </div>
 
       <div className="mt-14 grid gap-4 council:grid-cols-[minmax(0,1.55fr)_minmax(0,1fr)]">
-        <DecisionsChart />
+        <DecisionsChart scope={scope} />
         <WaitChart
           items={[
             ...(queue ?? []).map((i) => ({ song: i.song, since: i.createdAt })),
@@ -157,7 +173,20 @@ export function CouncilOverviewPage() {
         />
       </div>
 
-      <Region className="mt-14" title={`Your ${monthName.format(now * 1000)}`} sub="Your own council work this month.">
+      <Region
+        className="mt-14"
+        title={`Your ${monthName.format(now * 1000)}`}
+        sub="Your own council work this month."
+        aside={
+          <Link
+            to={`/council/activity?kind=seals&actor=${meKeyId}`}
+            className="inline-flex items-center gap-1 text-[13px] text-unison-text-muted transition-colors hover:text-unison-text"
+          >
+            Your seals
+            <IconArrowRight aria-hidden className="size-3" stroke={1.5} />
+          </Link>
+        }
+      >
         {stats ? (
           <div className="flex flex-wrap gap-3">
             <StatPill
@@ -243,8 +272,8 @@ function ListSkeleton() {
 
 const FEED_SIZE = 6
 
-function Feed({ now }: { now: number }) {
-  const events = useCouncilFeed(FEED_SIZE).data?.events
+function Feed({ now, actor }: { now: number; actor?: string }) {
+  const events = useCouncilFeed(FEED_SIZE, actor).data?.events
   if (!events) return <ListSkeleton />
   if (events.length === 0) {
     return <p className="text-[13px] text-unison-text-muted">No council decisions yet.</p>
@@ -282,8 +311,7 @@ const SERIES = [
   { key: "editsReviewed", label: "Edits reviewed", color: TONE_COLOR.edit },
 ] as const
 
-function DecisionsChart() {
-  const [scope, setScope] = useState<"council" | "me">("council")
+function DecisionsChart({ scope }: { scope: Scope }) {
   const days: DayDecisions[] | undefined = useCouncilOverview(scope).data?.decisionsByDay
   const labels = days?.map((d) => chartDay.format(d.day * 1000)) ?? []
   const last = labels.length - 1
@@ -292,18 +320,12 @@ function DecisionsChart() {
       <ChartHead
         id="council-decisions"
         title="Decisions, last 30 days"
-        sub="Every seal, rejection and edit review, from the web and from Discord."
-      >
-        <Segmented
-          label="Whose decisions"
-          value={scope}
-          onChange={setScope}
-          options={[
-            { value: "council", label: "Council" },
-            { value: "me", label: "You" },
-          ]}
-        />
-      </ChartHead>
+        sub={
+          scope === "me"
+            ? "Your seals, rejections and edit reviews, from the web and from Discord."
+            : "Every seal, rejection and edit review, from the web and from Discord."
+        }
+      />
       {days ? (
         <StackedBars
           series={SERIES.map((s) => ({ ...s, values: days.map((d) => d[s.key]) }))}
