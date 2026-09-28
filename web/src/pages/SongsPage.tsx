@@ -1,22 +1,14 @@
-import { Link } from "react-router-dom"
 import { useSession } from "@/auth/useSession"
 import { EmptyState } from "@/components/EmptyState"
-import { LeaderboardSection } from "@/components/LeaderboardSection"
+import { LeaderboardSection, SeeAllLink } from "@/components/LeaderboardSection"
+import { SealedShelf } from "@/components/SealedShelf"
 import { SongRow, SongRowSkeletonList } from "@/components/SongRow"
 import { useAsyncData } from "@/hooks/useAsyncData"
 import { fetchSongLeaderboard } from "@/lib/api"
 
 const MOST_WANTED_PREVIEW = 10
 
-const mostWantedAction = (
-  <Link
-    to="/queue"
-    className="text-sm text-unison-text-muted transition-colors hover:text-unison-text"
-    aria-label="See all most wanted songs"
-  >
-    See all →
-  </Link>
-)
+const mostWantedAction = <SeeAllLink to="/queue" label="See all most wanted songs" />
 
 export function SongsPage() {
   const session = useSession()
@@ -26,6 +18,7 @@ export function SongsPage() {
   if (status === "loading") {
     return (
       <div className="space-y-8">
+        <SealedShelf />
         <LeaderboardSection title="Most Wanted">
           <SongRowSkeletonList rows={5} />
         </LeaderboardSection>
@@ -42,6 +35,7 @@ export function SongsPage() {
 
   return (
     <div className="space-y-8">
+      <SealedShelf />
       <LeaderboardSection
         title="Most Wanted"
         subtitle="Songs missing synced lyrics, ranked by reputation-weighted demand"

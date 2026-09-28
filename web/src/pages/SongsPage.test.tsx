@@ -1,3 +1,4 @@
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { cleanup, render, screen, waitFor } from "@testing-library/react"
 import { MemoryRouter } from "react-router-dom"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
@@ -21,9 +22,11 @@ function jsonResponse(body: unknown, status = 200): Response {
 function renderPage() {
   return render(
     <MemoryRouter>
-      <AuthProvider>
-        <SongsPage />
-      </AuthProvider>
+      <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+        <AuthProvider>
+          <SongsPage />
+        </AuthProvider>
+      </QueryClientProvider>
     </MemoryRouter>,
   )
 }
@@ -212,5 +215,59 @@ describe("SongsPage", () => {
     await waitFor(() => expect(screen.getByText("Nothing requested right now")).toBeTruthy())
     expect(screen.getByText(/Request lyrics from Better Lyrics/i)).toBeTruthy()
     expect(screen.getByText(/Report it from Better Lyrics/i)).toBeTruthy()
+  })
+
+  describe("sealed shelf", () => {
+    const emptyBoard = () => jsonResponse({ success: true, data: { mostWanted: [], needsFixing: [] } })
+    const sealed = {
+      id: 5,
+      videoId: "HsBfV2A5dUY",
+      song: "Sealed Grace",
+      artist: "Traditional",
+      syncType: "richsync",
+      createdAt: 1_760_000_000,
+      marks: [{ type: "seal", label: "BLCA", icon: "/badges/committee/image.svg", at: 1_760_000_000 }],
+    }
+
+    it("shows the shelf above Most Wanted", async () => {
+      vi.stubGlobal(
+        "fetch",
+        vi.fn().mockImplementation((url: string) => {
+          if (url === "/leaderboard/songs") return Promise.resolve(emptyBoard())
+          if (url.startsWith("/feed")) return Promise.resolve(jsonResponse({ success: true, data: [sealed] }))
+          if (url.startsWith("/artwork"))
+            return Promise.resolve(jsonResponse({ success: true, data: { artworkUrl: null } }))
+          return Promise.reject(new Error(`unexpected url ${url}`))
+        }),
+      )
+      renderPage()
+      await waitFor(() => expect(screen.getByText("Sealed Grace")).toBeTruthy())
+      const headings = screen.getAllByRole("heading", { level: 2 }).map((h) => h.textContent)
+      expect(headings.indexOf("Sealed by the Council")).toBeLessThan(headings.indexOf("Most Wanted"))
+    })
+
+    it("shows the shelf skeleton while the page loads", () => {
+      vi.stubGlobal(
+        "fetch",
+        vi.fn().mockImplementation(() => new Promise(() => {})),
+      )
+      renderPage()
+      expect(screen.getByRole("heading", { name: "Sealed by the Council" })).toBeTruthy()
+      expect(screen.getByRole("heading", { name: "Most Wanted" })).toBeTruthy()
+    })
+
+    it("regression: a failed sealed feed never hides Most Wanted", async () => {
+      vi.stubGlobal(
+        "fetch",
+        vi.fn().mockImplementation((url: string) => {
+          if (url === "/leaderboard/songs") return Promise.resolve(emptyBoard())
+          if (url.startsWith("/feed")) return Promise.resolve(jsonResponse({ success: false, error: "boom" }, 500))
+          return Promise.reject(new Error(`unexpected url ${url}`))
+        }),
+      )
+      renderPage()
+      await waitFor(() => expect(screen.getByText("Nothing wanted right now")).toBeTruthy())
+      await waitFor(() => expect(screen.queryByRole("heading", { name: "Sealed by the Council" })).toBeNull())
+    })
   })
 })
