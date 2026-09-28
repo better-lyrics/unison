@@ -1,8 +1,12 @@
 import { config } from "@/config"
 import { invalidateCache, invalidateCacheForLyric } from "@/db/lyrics"
+import { Logger } from "@/infra/logger"
+import { cachedRecordingMatch } from "@/services/recording-match"
 import { type SongSearch, findSongCandidate } from "@/services/song-search"
 import type { Env } from "@/types"
-import { getVideoDurationSeconds } from "@/utils/innertube"
+import { type SongCandidate, getVideoDurationSeconds } from "@/utils/innertube"
+
+const log = new Logger("db")
 
 export type VideoLink = { videoId: string; isPrimary: boolean }
 
@@ -74,6 +78,17 @@ async function isLinked(env: Env, lyricsId: number, videoId: string): Promise<bo
 	return row !== null
 }
 
+async function logCachedMatch(env: Env, row: LinkTarget, hit: SongCandidate): Promise<void> {
+	const match = await cachedRecordingMatch(env, { title: row.song, artist: row.artist }, hit)
+	if (!match) return
+	log.info("linked video recording match", {
+		lyricsId: row.id,
+		videoId: hit.videoId,
+		level: match.level,
+		score: match.score,
+	})
+}
+
 type LinkDeps = {
 	search?: SongSearch
 	getDuration?: (videoId: string) => Promise<number | null>
@@ -123,6 +138,7 @@ export async function linkVideoForOwner(
 	if (!linked) return { ok: false, reason: "cap_reached" }
 
 	await invalidateCacheForLyric(env, lyricsId)
+	if (hit) await logCachedMatch(env, row, hit)
 
 	return { ok: true, videos: await listVideoLinks(env, lyricsId) }
 }

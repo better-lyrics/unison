@@ -1,6 +1,8 @@
 import { readFileSync } from "node:fs"
 import { config } from "@/config"
 import { D1Compat } from "@/infra/database"
+import { createTypesafeClient } from "@/services/typesafe"
+import { makeMemoryCache, makeOpenLimiter } from "@/test/integration-harness"
 import type { Env } from "@/types"
 import type { SongCandidate } from "@/utils/innertube"
 import pg from "pg"
@@ -141,6 +143,60 @@ describeIntegration("video suggestions (integration)", () => {
 		expect(exact.matchScore).toBeCloseTo(1)
 		expect(exact.videoType).toBe("song")
 		expect(res.suggestions.find((s) => s.videoId === "videoclip01")?.videoType).toBe("video")
+	})
+
+	describe("recording match", () => {
+		function typesafeEnv(scores: Record<string, number>) {
+			const states: Array<{ lyric_track: { title: string; artist: string } }> = []
+			const fetchImpl = (async (_url: string, init?: RequestInit) => {
+				const { state } = JSON.parse(String(init?.body))
+				states.push(state)
+				const score = scores[`${state.candidate.kind}`]
+				return score === undefined
+					? new Response("unavailable", { status: 503 })
+					: Response.json({ answers: { link: { type: "score", score } } })
+			}) as typeof fetch
+			const matchEnv = {
+				...env,
+				CACHE: makeMemoryCache(),
+				RATE_LIMITER: makeOpenLimiter(),
+				TYPESAFE: createTypesafeClient({ apiKey: "k", fetch: fetchImpl }),
+			} as unknown as Env
+			return { states, matchEnv }
+		}
+
+		it("judges each suggestion against the variant's own title and artist", async () => {
+			const { states, matchEnv } = typesafeEnv({ "audio track": 1.88, "video upload": 0.2 })
+			const res = await suggestVideosForVariant(matchEnv, lyricId, owner, { search })
+			expect(res.ok).toBe(true)
+			if (!res.ok) return
+			expect(res.suggestions.map((s) => [s.videoId, s.match])).toEqual([
+				["exactmatch1", { level: "same", score: 1.88 }],
+				["videoclip01", { level: "different", score: 0.2 }],
+			])
+			expect(states.map((s) => s.lyric_track)).toEqual([
+				{ title: "Blinding Lights", artist: "The Weeknd" },
+				{ title: "Blinding Lights", artist: "The Weeknd" },
+			])
+		})
+
+		it("fails open per row and still answers the request", async () => {
+			const { matchEnv } = typesafeEnv({ "audio track": 1.88 })
+			const res = await suggestVideosForVariant(matchEnv, lyricId, owner, { search })
+			expect(res.ok).toBe(true)
+			if (!res.ok) return
+			expect(res.suggestions.map((s) => [s.videoId, s.match])).toEqual([
+				["exactmatch1", { level: "same", score: 1.88 }],
+				["videoclip01", null],
+			])
+		})
+
+		it("returns match null everywhere when TypeSafe is not configured", async () => {
+			const res = await suggestVideosForVariant(env, lyricId, owner, { search })
+			expect(res.ok).toBe(true)
+			if (!res.ok) return
+			expect(res.suggestions.map((s) => s.match)).toEqual([null, null])
+		})
 	})
 
 	describe("ownership", () => {

@@ -43,3 +43,7 @@ export function normalizeArtist(artist: string): string {
 export function normalizeAlbum(album: string | null): string | null {
 	return album ? normalize(album) : null
 }
+
+export function collapseWhitespace(input: string): string {
+	return input.replace(/\s+/g, " ").trim()
+}
