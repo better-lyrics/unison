@@ -8,6 +8,7 @@ import { Segmented } from "@/components/council/Segmented"
 import { Bone, skeletonKeys } from "@/components/skeleton"
 import { buttonClass } from "@/components/ui"
 import { fetchSealed } from "@/lib/api"
+import { cn } from "@/lib/cn"
 import { EASE_OUT, thudFrom, thudTransition } from "@/lib/motion-variants"
 import type { SealedSort, SealedSyncFilter } from "@/lib/types"
 
@@ -15,8 +16,10 @@ const PAGE_LIMIT = 24
 const GRID = "grid grid-cols-[repeat(auto-fill,minmax(180px,1fr))] gap-4"
 const HERO_SEAL_AT = 0.1
 const HERO_TEXT_AT = 0.3
-const CARDS_AFTER_HERO = 0.45
+const HERO_ACTION_AT = 0.45
+const CARDS_AFTER_HERO = 0.6
 const heroSeal = thudFrom(2.6)
+const heroAction = thudFrom(1.25, 0.06)
 
 type SyncChoice = SealedSyncFilter | "all"
 
@@ -101,9 +104,11 @@ export function SealedPage() {
               timed.
             </p>
           </motion.div>
-          <Link to="/docs" className={buttonClass("primary", "sm")}>
-            How to submit
-          </Link>
+          <motion.div className="shrink-0" {...heroAction} transition={thudTransition(HERO_ACTION_AT)}>
+            <Link to="/docs" className={cn(buttonClass("primary", "sm"), "w-full")}>
+              How to submit
+            </Link>
+          </motion.div>
         </section>
 
         <div className="flex flex-wrap items-center gap-3">
