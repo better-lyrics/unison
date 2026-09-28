@@ -36,7 +36,7 @@ export interface SealCandidate {
 
 export type RejectResult =
 	| { ok: true }
-	| { ok: false; reason: "not_committee" | "lyric_not_found" | "already_rejected" }
+	| { ok: false; reason: "not_committee" | "lyric_not_found" | "already_rejected" | "sealed" }
 
 export type UndoRejectResult = { ok: true } | { ok: false; reason: "not_committee" | "not_found" }
 
@@ -123,7 +123,14 @@ export async function rejectLyric(
 
 	const now = Math.floor(Date.now() / 1000)
 	try {
-		await env.DB.transaction(async (tx) => {
+		return await env.DB.transaction(async (tx): Promise<RejectResult> => {
+			const lyric = await tx
+				.prepare("SELECT committee_approved_at FROM lyrics WHERE id = ? FOR UPDATE")
+				.bind(lyricsId)
+				.first<{ committee_approved_at: number | null }>()
+			if (lyric?.committee_approved_at != null) {
+				return { ok: false, reason: "sealed" }
+			}
 			const row = await tx
 				.prepare(
 					"INSERT INTO rejections (lyrics_id, rejected_by, rejected_at, note) VALUES (?, ?, ?, ?) RETURNING id"
@@ -140,6 +147,7 @@ export async function rejectLyric(
 				at: now,
 			})
 			await releaseBookmarksForItem(tx, "seal", lyricsId)
+			return { ok: true }
 		})
 	} catch (err) {
 		if (isUniqueViolation(err)) {
@@ -147,7 +155,6 @@ export async function rejectLyric(
 		}
 		throw err
 	}
-	return { ok: true }
 }
 
 export async function undoRejection(

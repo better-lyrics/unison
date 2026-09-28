@@ -24,6 +24,7 @@ const BOOST_ERROR: Record<
 	target_committee: { status: 400, code: ErrorCode.BOOST_TARGET_COMMITTEE },
 	over_quota: { status: 429, code: ErrorCode.BOOST_QUOTA_EXCEEDED },
 	already_boosted: { status: 409, code: ErrorCode.BOOST_ALREADY_ACTIVE },
+	rejected: { status: 409, code: ErrorCode.SEAL_BLOCKED_BY_REJECTION },
 }
 
 const REVOKE_ERROR: Record<

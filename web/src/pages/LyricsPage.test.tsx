@@ -35,7 +35,10 @@ vi.mock("@/hooks/useYouTubePlayer", () => ({
   }),
 }))
 
-vi.mock("@/components/LyricsRenderer", () => ({
+vi.mock("@braccato/core/element", () => ({}))
+
+vi.mock("@/components/LyricsRenderer", async (importOriginal) => ({
+  parseVariantLyrics: (await importOriginal<typeof import("@/components/LyricsRenderer")>()).parseVariantLyrics,
   LyricsRenderer: (props: { variant: VariantFull; onLineClick?: (s: number) => void }) => {
     lastLineClick = props.onLineClick ?? null
     return <div data-testid="lyrics-renderer">{`variant:${props.variant.id}`}</div>

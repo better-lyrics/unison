@@ -26,13 +26,49 @@ const LRC = "[ar:Beach House]\n[ti:Space Song]\n[00:01.00]Fall back into place\n
 
 const PLAIN = "Fall back into place\nBlack out the sun"
 
+const TRANSLATED_TTML = `<tt xmlns="http://www.w3.org/ns/ttml" xmlns:itunes="http://music.apple.com/lyric-ttml-internal" xml:lang="ja">
+  <head><metadata><iTunesMetadata xmlns="http://music.apple.com/lyric-ttml-internal">
+    <translations>
+      <translation type="subtitle" xml:lang="en"><text for="L1">I love you</text><text for="L2">Goodbye</text></translation>
+      <translation type="subtitle" xml:lang="es"><text for="L1">Te quiero</text></translation>
+    </translations>
+    <transliterations>
+      <transliteration xml:lang="ja-Latn"><text for="L1">aishiteru</text></transliteration>
+    </transliterations>
+  </iTunesMetadata></metadata></head>
+  <body dur="00:00:12.000"><div>
+    <p begin="00:00:01.000" end="00:00:04.000" itunes:key="L1">愛してる</p>
+    <p begin="00:00:05.000" end="00:00:08.000" itunes:key="L2">さよなら</p>
+  </div></body>
+</tt>`
+
 type LyricsElement = HTMLElement & {
   lyrics?: Lyric[] | null
   theme?: string
   currentTime?: number
   playing?: boolean
-  renderer?: { noteUserScroll: () => void } | null
+  renderer?: { noteUserScroll: () => void } | FakeRenderer | null
 }
+
+interface FakeRenderer {
+  noteUserScroll: () => void
+  lines: { lyricElement: HTMLElement }[]
+  scheduleLyricPositionUpdate: ReturnType<typeof vi.fn>
+}
+
+function buildLines(el: LyricsElement, count: number): FakeRenderer {
+  const renderer: FakeRenderer = {
+    noteUserScroll: () => {},
+    lines: Array.from({ length: count }, () => ({ lyricElement: document.createElement("div") })),
+    scheduleLyricPositionUpdate: vi.fn(),
+  }
+  el.renderer = renderer
+  el.dispatchEvent(new CustomEvent("braccato:lyrics-loaded"))
+  return renderer
+}
+
+const decoration = (line: { lyricElement: HTMLElement }, kind: "translated" | "romanized") =>
+  line.lyricElement.querySelector(`.blyrics--${kind}`)?.textContent ?? null
 
 function makeVariant(overrides: Partial<VariantFull> = {}): VariantFull {
   return {
@@ -162,6 +198,78 @@ describe("LyricsRenderer", () => {
     expect(noteUserScroll).toHaveBeenCalledTimes(1)
   })
 
+  describe("submitted translations", () => {
+    it("hangs the first submitted translation and the romanisation under each line they cover", async () => {
+      const Renderer = await importRenderer()
+      const { container } = render(
+        <Renderer variant={makeVariant({ lyrics: TRANSLATED_TTML })} getCurrentTime={zero} getPlaying={stopped} />,
+      )
+      const renderer = buildLines(elementIn(container), 2)
+      expect(renderer.lines.map((line) => decoration(line, "translated"))).toEqual(["I love you", "Goodbye"])
+      expect(renderer.lines.map((line) => decoration(line, "romanized"))).toEqual(["aishiteru", null])
+      expect(renderer.scheduleLyricPositionUpdate).toHaveBeenCalledTimes(1)
+    })
+
+    it("shows the picked language instead of the first", async () => {
+      const Renderer = await importRenderer()
+      const { container } = render(
+        <Renderer
+          variant={makeVariant({ lyrics: TRANSLATED_TTML })}
+          translationLang="es"
+          getCurrentTime={zero}
+          getPlaying={stopped}
+        />,
+      )
+      const renderer = buildLines(elementIn(container), 2)
+      expect(renderer.lines.map((line) => decoration(line, "translated"))).toEqual(["Te quiero", null])
+      expect(renderer.lines.map((line) => decoration(line, "romanized"))).toEqual(["aishiteru", null])
+    })
+
+    it("decorates the lines of every rebuild with the language picked last", async () => {
+      const Renderer = await importRenderer()
+      const variant = makeVariant({ lyrics: TRANSLATED_TTML })
+      const { container, rerender } = render(<Renderer variant={variant} getCurrentTime={zero} getPlaying={stopped} />)
+      const el = elementIn(container)
+      buildLines(el, 2)
+      rerender(<Renderer variant={variant} translationLang="es" getCurrentTime={zero} getPlaying={stopped} />)
+      const rebuilt = buildLines(el, 2)
+      expect(decoration(rebuilt.lines[0], "translated")).toBe("Te quiero")
+    })
+
+    describe("edge cases", () => {
+      it("adds nothing to lyrics submitted without translations", async () => {
+        const Renderer = await importRenderer()
+        const { container } = render(<Renderer variant={makeVariant()} getCurrentTime={zero} getPlaying={stopped} />)
+        const renderer = buildLines(elementIn(container), 2)
+        expect(renderer.lines.map((line) => line.lyricElement.childElementCount)).toEqual([0, 0])
+      })
+
+      it("falls back to the first language when the picked one is not in the file", async () => {
+        const Renderer = await importRenderer()
+        const { container } = render(
+          <Renderer
+            variant={makeVariant({ lyrics: TRANSLATED_TTML })}
+            translationLang="fr"
+            getCurrentTime={zero}
+            getPlaying={stopped}
+          />,
+        )
+        const renderer = buildLines(elementIn(container), 2)
+        expect(decoration(renderer.lines[0], "translated")).toBe("I love you")
+      })
+
+      it("survives a load event while the element is between renderers", async () => {
+        const Renderer = await importRenderer()
+        const { container } = render(
+          <Renderer variant={makeVariant({ lyrics: TRANSLATED_TTML })} getCurrentTime={zero} getPlaying={stopped} />,
+        )
+        const el = elementIn(container)
+        el.renderer = null
+        expect(() => el.dispatchEvent(new CustomEvent("braccato:lyrics-loaded"))).not.toThrow()
+      })
+    })
+  })
+
   describe("edge cases", () => {
     it("forwards a line click at the very start of the song", async () => {
       const Renderer = await importRenderer()
@@ -286,6 +394,25 @@ describe("LyricsRenderer", () => {
       await nextFrame()
       await nextFrame()
       expect(getCurrentTime).not.toHaveBeenCalled()
+    })
+  })
+
+  describe("parseVariantLyrics", () => {
+    it("hands back the same lines for the same body, so the panel and the renderer parse once", async () => {
+      const { parseVariantLyrics } = await import("./LyricsRenderer")
+      const variant = makeVariant({ lyrics: TRANSLATED_TTML })
+      expect(parseVariantLyrics({ ...variant })).toBe(parseVariantLyrics({ ...variant }))
+    })
+
+    it("parses again when the body or the format changes", async () => {
+      const { parseVariantLyrics } = await import("./LyricsRenderer")
+      const ttml = parseVariantLyrics(makeVariant())
+      const other = parseVariantLyrics(makeVariant({ lyrics: TRANSLATED_TTML }))
+      expect(other).not.toBe(ttml)
+      expect(other[0]).toMatchObject({ words: "愛してる" })
+      const plain = parseVariantLyrics(makeVariant({ format: "plain", lyrics: PLAIN }))
+      const lrc = parseVariantLyrics(makeVariant({ format: "lrc", lyrics: PLAIN }))
+      expect(lrc).not.toBe(plain)
     })
   })
 

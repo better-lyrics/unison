@@ -9,6 +9,7 @@ blyrics-letter-wave = true;
 
 .blyrics-container {
   --blyrics-font-weight: 600;
+  --blyrics-translated-font-size: max(1rem, calc(var(--blyrics-font-size) * 0.6));
   --blyrics-padding: var(--unison-lyric-padding, 1.25rem);
   --blyrics-hover-scale: 1.01;
 
@@ -136,6 +137,10 @@ blyrics-letter-wave = true;
 .blyrics-container > div:hover {
   transform: scale(var(--blyrics-hover-scale));
   transition: transform 0.3s ease;
+}
+
+.blyrics-container .blyrics--romanized {
+  padding: 0.2em 0.55em;
 }
 
 .blyrics-background-lyric {
