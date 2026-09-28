@@ -98,16 +98,23 @@ function scoreByCandidate(overrides: Record<string, Reply> = {}) {
 	}
 }
 
-function countingLimiter(allow = Number.POSITIVE_INFINITY) {
+const RESET_SECONDS = 4321
+
+function countingLimiter(allow: number | Record<string, number> = Number.POSITIVE_INFINITY) {
 	const calls: Array<{ key: string; maxRequests?: number; windowSeconds?: number }> = []
 	const counts = new Map<string, number>()
+	const allowed = (key: string) =>
+		typeof allow === "number" ? allow : (allow[key] ?? Number.POSITIVE_INFINITY)
 	return {
 		calls,
 		async limit(opts: { key: string; maxRequests?: number; windowSeconds?: number }) {
 			calls.push(opts)
 			const count = (counts.get(opts.key) ?? 0) + 1
 			counts.set(opts.key, count)
-			return { success: count <= Math.min(allow, opts.maxRequests ?? 10) }
+			return {
+				success: count <= Math.min(allowed(opts.key), opts.maxRequests ?? 10),
+				resetSeconds: RESET_SECONDS,
+			}
 		},
 	}
 }
@@ -415,7 +422,7 @@ describe("matchSuggestions", () => {
 			expect(Date.now() - started).toBeLessThan(1500 + 250)
 			expect(out.every((s) => s.match === null)).toBe(true)
 			expect(requests).toHaveLength(5)
-			expect(limiter.calls).toHaveLength(5)
+			expect(limiter.calls.filter((c) => c.key === "recmatch:budget")).toHaveLength(5)
 		}, 10_000)
 	})
 
@@ -669,10 +676,83 @@ describe("budget", () => {
 			maxRequests: 300,
 			windowSeconds: 60,
 		})
-		expect(limiter.calls).toEqual([
-			{ key: "recmatch:budget", maxRequests: 300, windowSeconds: 60 },
-			{ key: "recmatch:budget", maxRequests: 300, windowSeconds: 60 },
-		])
+		const minute = { key: "recmatch:budget", maxRequests: 300, windowSeconds: 60 }
+		const daily = { key: "recmatch:daily", maxRequests: 20000, windowSeconds: 86400 }
+		expect(limiter.calls.filter((c) => c.key === minute.key)).toEqual([minute, minute])
+		expect(limiter.calls.filter((c) => c.key === daily.key)).toEqual([daily, daily])
+	})
+
+	describe("daily ceiling", () => {
+		it("is configured at 20000 uncached calls per day", () => {
+			expect(config.videoLinking.recordingMatch.dailyBudget).toEqual({
+				maxRequests: 20000,
+				windowSeconds: 86400,
+			})
+		})
+
+		it("leaves rows unjudged without calling TypeSafe once the day is spent", async () => {
+			const { requests, fetchImpl } = fakeTypesafe(scoreByCandidate())
+			const { env, cache } = envWith(
+				fetchImpl,
+				makeMemoryCache(),
+				countingLimiter({ "recmatch:daily": 1 })
+			)
+			const out = await matchSuggestions(env, LYRIC, [
+				suggest(ALBUM),
+				suggest(REMIX),
+				suggest(EDIT),
+			])
+			expect(requests).toHaveLength(1)
+			expect(out.filter((s) => s.match === null)).toHaveLength(2)
+			expect([...cache.store.keys()].filter((k) => k.startsWith("recmatch:v2:"))).toHaveLength(1)
+		})
+
+		it("does not touch the daily ceiling when the minute budget is spent", async () => {
+			const { requests, fetchImpl } = fakeTypesafe(scoreByCandidate())
+			const limiter = countingLimiter({ "recmatch:budget": 0 })
+			const { env } = envWith(fetchImpl, makeMemoryCache(), limiter)
+			await matchSuggestions(env, LYRIC, [suggest(ALBUM), suggest(REMIX)])
+			expect(requests).toHaveLength(0)
+			expect(limiter.calls.map((c) => c.key)).toEqual(["recmatch:budget", "recmatch:budget"])
+		})
+
+		it("warns once per window, holding the flag until the window resets", async () => {
+			const warn = vi.spyOn(Logger.prototype, "warn")
+			const flags: Array<{ key: string; ttl: number }> = []
+			const cache = makeMemoryCache()
+			const setNX = cache.setNX
+			cache.setNX = async (key: string, value: string, ttl?: number) => {
+				flags.push({ key, ttl: ttl ?? -1 })
+				return setNX(key, value)
+			}
+			const { fetchImpl } = fakeTypesafe(scoreByCandidate())
+			const { env } = envWith(fetchImpl, cache, countingLimiter({ "recmatch:daily": 0 }))
+
+			await matchSuggestions(env, LYRIC, [suggest(ALBUM), suggest(REMIX), suggest(EDIT)])
+			await matchSuggestions(env, LYRIC, [suggest(ALBUM), suggest(REMIX)])
+
+			const dailyWarns = warn.mock.calls.filter(
+				([message]) => message === "recording match daily budget spent"
+			)
+			expect(dailyWarns).toHaveLength(1)
+			expect(flags[0]).toEqual({ key: "recmatch:daily:warned", ttl: RESET_SECONDS })
+		})
+
+		it("warns again in a later window once the flag has expired", async () => {
+			const warn = vi.spyOn(Logger.prototype, "warn")
+			const { fetchImpl } = fakeTypesafe(scoreByCandidate())
+			const { env, cache } = envWith(
+				fetchImpl,
+				makeMemoryCache(),
+				countingLimiter({ "recmatch:daily": 0 })
+			)
+			await matchSuggestions(env, LYRIC, [suggest(ALBUM)])
+			cache.store.delete("recmatch:daily:warned")
+			await matchSuggestions(env, LYRIC, [suggest(ALBUM)])
+			expect(
+				warn.mock.calls.filter(([message]) => message === "recording match daily budget spent")
+			).toHaveLength(2)
+		})
 	})
 
 	it("leaves rows unjudged without calling TypeSafe once the budget is spent", async () => {

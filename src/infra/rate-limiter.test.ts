@@ -14,7 +14,7 @@ function fakeRedis() {
 			const count = (counts.get(key) ?? 0) + 1
 			counts.set(key, count)
 			if (!ttls.has(key)) ttls.set(key, Number(window))
-			return count
+			return [count, ttls.get(key)]
 		},
 	}
 }
@@ -60,6 +60,13 @@ describe("RedisRateLimiter", () => {
 		expect(script).toMatch(/EXPIRE/)
 	})
 
+	it("reports how long until the window resets", async () => {
+		const redis = fakeRedis()
+		redis.ttls.set("rl:k", 42)
+		const rl = new RedisRateLimiter(redis as never, 10, 60)
+		expect(await rl.limit({ key: "k" })).toEqual({ success: true, resetSeconds: 42 })
+	})
+
 	describe("error paths", () => {
 		it("fails open when redis throws", async () => {
 			const broken = {
@@ -68,7 +75,7 @@ describe("RedisRateLimiter", () => {
 				},
 			}
 			const rl = new RedisRateLimiter(broken as never, 10, 60)
-			expect(await rl.limit({ key: "k" })).toEqual({ success: true })
+			expect(await rl.limit({ key: "k" })).toEqual({ success: true, resetSeconds: 60 })
 		})
 	})
 })

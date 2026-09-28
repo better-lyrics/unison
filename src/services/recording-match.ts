@@ -76,6 +76,8 @@ export async function cachedRecordingMatch(
 
 const BREAKER_KEY = "recmatch:breaker"
 const BUDGET_KEY = "recmatch:budget"
+const DAILY_BUDGET_KEY = "recmatch:daily"
+const DAILY_WARNED_KEY = "recmatch:daily:warned"
 const BACK_OFF_STATUSES = new Set([429, 529])
 
 function shouldBackOff(err: unknown): boolean {
@@ -87,12 +89,22 @@ async function mayCallTypesafe(env: Env, ids: Record<string, unknown>): Promise<
 		log.debug("recording match backing off, leaving the suggestion unjudged", ids)
 		return false
 	}
-	const { success } = await env.RATE_LIMITER.limit({
+	const minute = await env.RATE_LIMITER.limit({
 		key: BUDGET_KEY,
 		...config.videoLinking.recordingMatch.budget,
 	})
-	if (!success) log.warn("recording match budget spent, leaving the suggestion unjudged", ids)
-	return success
+	if (!minute.success) {
+		log.warn("recording match budget spent, leaving the suggestion unjudged", ids)
+		return false
+	}
+	const { dailyBudget } = config.videoLinking.recordingMatch
+	const day = await env.RATE_LIMITER.limit({ key: DAILY_BUDGET_KEY, ...dailyBudget })
+	if (day.success) return true
+	const flagSeconds = day.resetSeconds > 0 ? day.resetSeconds : dailyBudget.windowSeconds
+	if (await env.CACHE.setNX(DAILY_WARNED_KEY, "1", flagSeconds)) {
+		log.warn("recording match daily budget spent", { ...ids, ...dailyBudget })
+	}
+	return false
 }
 
 async function judge(

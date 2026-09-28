@@ -25,7 +25,7 @@ describeIntegration("RedisRateLimiter (integration)", () => {
 
 	it("arms the window expiry on the first hit", async () => {
 		const rl = new RedisRateLimiter(redis, 3, 60)
-		expect(await rl.limit({ key: key("first") })).toEqual({ success: true })
+		expect(await rl.limit({ key: key("first") })).toEqual({ success: true, resetSeconds: 60 })
 		const ttl = await redis.ttl(`rl:${key("first")}`)
 		expect(ttl).toBeGreaterThan(0)
 		expect(ttl).toBeLessThanOrEqual(60)
@@ -46,13 +46,20 @@ describeIntegration("RedisRateLimiter (integration)", () => {
 		expect(await redis.pttl(`rl:${key("fixed")}`)).toBeLessThanOrEqual(30_000)
 	})
 
+	it("reports the time left in the current window", async () => {
+		const rl = new RedisRateLimiter(redis, 10, 60)
+		await rl.limit({ key: key("reset") })
+		await redis.expire(`rl:${key("reset")}`, 17)
+		expect(await rl.limit({ key: key("reset") })).toEqual({ success: true, resetSeconds: 17 })
+	})
+
 	describe("regressions", () => {
 		it("regression: a counter left without an expiry gets one on the next hit", async () => {
 			await redis.set(`rl:${key("stuck")}`, "500")
 			expect(await redis.ttl(`rl:${key("stuck")}`)).toBe(-1)
 
 			const rl = new RedisRateLimiter(redis, 300, 60)
-			expect(await rl.limit({ key: key("stuck") })).toEqual({ success: false })
+			expect(await rl.limit({ key: key("stuck") })).toEqual({ success: false, resetSeconds: 60 })
 			const ttl = await redis.ttl(`rl:${key("stuck")}`)
 			expect(ttl).toBeGreaterThan(0)
 			expect(ttl).toBeLessThanOrEqual(60)

@@ -9,7 +9,7 @@ local count = redis.call("INCR", KEYS[1])
 if redis.call("TTL", KEYS[1]) < 0 then
 	redis.call("EXPIRE", KEYS[1], ARGV[1])
 end
-return count
+return { count, redis.call("TTL", KEYS[1]) }
 `
 
 export class RedisRateLimiter {
@@ -27,19 +27,22 @@ export class RedisRateLimiter {
 		key: string
 		maxRequests?: number
 		windowSeconds?: number
-	}): Promise<{ success: boolean }> {
+	}): Promise<{ success: boolean; resetSeconds: number }> {
 		const max = opts.maxRequests ?? this.maxRequests
 		const window = opts.windowSeconds ?? this.windowSeconds
 		const redisKey = `rl:${opts.key}`
 		try {
-			const count = Number(await this.redis.eval(COUNT_IN_WINDOW, 1, redisKey, window))
-			return { success: count <= max }
+			const [count, ttl] = (await this.redis.eval(COUNT_IN_WINDOW, 1, redisKey, window)) as [
+				number,
+				number,
+			]
+			return { success: Number(count) <= max, resetSeconds: Number(ttl) }
 		} catch (err) {
 			log.warn("rate-limit check failed, allowing request", {
 				key: opts.key,
 				error: (err as Error).message,
 			})
-			return { success: true }
+			return { success: true, resetSeconds: window }
 		}
 	}
 }

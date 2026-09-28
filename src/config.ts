@@ -88,6 +88,7 @@ export const config = {
 			cacheTtlSeconds: 60 * 60 * 24 * 30,
 			cacheVersion: "v2", // bump when the question text or state shape changes
 			budget: { maxRequests: 300, windowSeconds: 60 },
+			dailyBudget: { maxRequests: 20_000, windowSeconds: 60 * 60 * 24 },
 			breakerSeconds: 30,
 		},
 	},
