@@ -145,6 +145,25 @@ export interface Mark {
   at?: number
 }
 
+export interface FeedEntry {
+  id: number
+  videoId: string
+  song: string
+  artist: string
+  syncType: SyncType
+  createdAt: number
+  marks?: Mark[]
+  submitter?: MarkActor
+}
+
+export type SealedSort = "recently-sealed" | "top-rated"
+export type SealedSyncFilter = "richsync" | "linesync"
+
+export interface Page<T> {
+  items: T[]
+  nextCursor: string | null
+}
+
 export interface VariantSummary {
   id: number
   videoId: string

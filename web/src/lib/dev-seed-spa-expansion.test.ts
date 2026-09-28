@@ -7,6 +7,7 @@ import {
   seedLyricsVariants,
   seedQueue,
   seedReport,
+  seedSealed,
   seedSearch,
   seedSongs,
   seedUnvote,
@@ -252,5 +253,40 @@ describe("seedReport", () => {
   it("resolves without throwing for a known variant", async () => {
     const sample = SEED_LYRICS_CORPUS[0]
     await expect(seedReport(sample.id, "spam")).resolves.toBeUndefined()
+  })
+})
+
+describe("seedSealed", () => {
+  it("returns only entries that carry a seal mark", async () => {
+    const { items } = await seedSealed({ sort: "recently-sealed", limit: 50 })
+    expect(items.length).toBeGreaterThan(0)
+    for (const item of items) {
+      expect(item.marks?.some((m) => m.type === "seal")).toBe(true)
+    }
+  })
+
+  it("returns one entry per video", async () => {
+    const { items } = await seedSealed({ sort: "recently-sealed", limit: 50 })
+    expect(new Set(items.map((i) => i.videoId)).size).toBe(items.length)
+  })
+
+  it("orders recently-sealed by seal time, newest first", async () => {
+    const { items } = await seedSealed({ sort: "recently-sealed", limit: 50 })
+    const times = items.map((i) => i.marks?.find((m) => m.type === "seal")?.at ?? 0)
+    expect(times).toEqual([...times].sort((a, b) => b - a))
+  })
+
+  it("filters by syncType", async () => {
+    const { items } = await seedSealed({ sort: "recently-sealed", limit: 50, syncType: "richsync" })
+    expect(items.every((i) => i.syncType === "richsync")).toBe(true)
+  })
+
+  it("pages with page-N cursors and ends with a null cursor", async () => {
+    const all = await seedSealed({ sort: "recently-sealed", limit: 50 })
+    const first = await seedSealed({ sort: "recently-sealed", limit: 2 })
+    expect(first.items).toHaveLength(Math.min(2, all.items.length))
+    const second = await seedSealed({ sort: "recently-sealed", limit: 2, cursor: first.nextCursor ?? undefined })
+    expect(second.items[0]?.id).toBe(all.items[2]?.id)
+    expect(all.nextCursor).toBeNull()
   })
 })

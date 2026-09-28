@@ -13,6 +13,7 @@ import {
   fetchLyricsVariant,
   fetchLyricsVariants,
   fetchQueue,
+  fetchSealed,
   fetchSongLeaderboard,
   fetchUserRank,
   fetchUserSubmissions,
@@ -510,6 +511,76 @@ describe("reportVariant", () => {
       new Response(JSON.stringify({ success: false, error: "boom" }), { status: 500 }),
     )
     await expect(reportVariant(3, "spam")).rejects.toThrow("boom")
+  })
+})
+
+describe("fetchSealed", () => {
+  function mockPage(body: unknown, status = 200) {
+    return vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(new Response(JSON.stringify(body), { status }))
+  }
+
+  describe("happy path", () => {
+    it("requests the sealed feed with sort and limit", async () => {
+      const spy = mockPage({ success: true, data: [] })
+      const result = await fetchSealed({ sort: "recently-sealed", limit: 12 })
+      expect(getCallUrl(spy)).toBe("/feed?sealed=1&sort=recently-sealed&limit=12")
+      expect(result).toEqual({ items: [], nextCursor: null })
+    })
+
+    it("adds syncType and cursor when given", async () => {
+      const spy = mockPage({ success: true, data: [], nextCursor: 48 })
+      await fetchSealed({ sort: "top-rated", syncType: "richsync", cursor: "24", limit: 24 })
+      expect(getCallUrl(spy)).toBe("/feed?sealed=1&sort=top-rated&limit=24&syncType=richsync&cursor=24")
+    })
+
+    it("returns the feed entries as items", async () => {
+      const entry = {
+        id: 7,
+        videoId: "HsBfV2A5dUY",
+        song: "Amazing Grace",
+        artist: "Traditional",
+        syncType: "richsync",
+        createdAt: 1700000000,
+        marks: [{ type: "seal", label: "BLCA", icon: "/badges/committee/image.svg", at: 1700000500 }],
+      }
+      mockPage({ success: true, data: [entry], nextCursor: 1 })
+      const result = await fetchSealed({ sort: "recently-sealed", limit: 1 })
+      expect(result.items).toEqual([entry])
+    })
+  })
+
+  describe("edge cases", () => {
+    it("turns a numeric nextCursor into a string", async () => {
+      mockPage({ success: true, data: [], nextCursor: 48 })
+      const result = await fetchSealed({ sort: "recently-sealed", limit: 24 })
+      expect(result.nextCursor).toBe("48")
+    })
+
+    it("treats a zero nextCursor as a real cursor", async () => {
+      mockPage({ success: true, data: [], nextCursor: 0 })
+      const result = await fetchSealed({ sort: "recently-sealed", limit: 24 })
+      expect(result.nextCursor).toBe("0")
+    })
+
+    it("forwards the abort signal", async () => {
+      const spy = mockPage({ success: true, data: [] })
+      const controller = new AbortController()
+      await fetchSealed({ sort: "recently-sealed", limit: 12, signal: controller.signal })
+      const init = (spy.mock.calls[0] as unknown[])[1] as RequestInit | undefined
+      expect(init?.signal).toBe(controller.signal)
+    })
+  })
+
+  describe("error paths", () => {
+    it("throws the server error message on a failed envelope", async () => {
+      mockPage({ success: false, error: "nope" })
+      await expect(fetchSealed({ sort: "recently-sealed", limit: 12 })).rejects.toThrow("nope")
+    })
+
+    it("throws on a non-ok response", async () => {
+      mockPage({ success: false, error: "boom" }, 500)
+      await expect(fetchSealed({ sort: "recently-sealed", limit: 12 })).rejects.toThrow("boom")
+    })
   })
 })
 
