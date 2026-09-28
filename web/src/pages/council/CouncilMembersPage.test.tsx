@@ -71,7 +71,7 @@ describe("CouncilMembersPage", () => {
     const pips = await screen.findByRole("img", { name: "2 of 3 seals used" })
     fireEvent.mouseEnter(pips.closest("[data-quota-explained]") as Element)
     expect((await screen.findByRole("tooltip")).textContent).toBe(
-      "None of their August lyrics count, so this month's quota is reduced. Each month: 6 seals if you submitted lyrics the month before, 3 if not, plus 1 for every 2 of those lyrics that got upvoted, up to 12. New members get 6 for their first two months.",
+      "None of their August lyrics count, so this month's quota is reduced. Each month: 6 seals if any of your lyrics from the month before still count (not removed, hidden or rejected), 3 if not, plus 1 for every 2 of those lyrics that got upvoted, up to 12. New members count as active in the month they join and the next.",
     )
   })
 

@@ -21,7 +21,7 @@ export function quotaBasisText({ quota, basis }: BoostQuota, subject: Subject = 
 
 export function quotaRuleText({ rule }: BoostQuota): string {
   const every = rule.upvotedLyricsPerSeal === 1 ? "every lyric" : `every ${rule.upvotedLyricsPerSeal} of those lyrics`
-  return `Each month: ${rule.base} seals if you submitted lyrics the month before, ${rule.inactive} if not, plus 1 for ${every} that got upvoted, up to ${rule.max}. New members get ${rule.base} for their first two months.`
+  return `Each month: ${rule.base} seals if any of your lyrics from the month before still count (not removed, hidden or rejected), ${rule.inactive} if not, plus 1 for ${every} that got upvoted, up to ${rule.max}. New members count as active in the month they join and the next.`
 }
 
 export function quotaExplanation(quota: BoostQuota, subject: Subject = "you"): string {

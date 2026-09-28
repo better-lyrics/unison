@@ -178,7 +178,7 @@ export function ActionBar(props: ActionBarProps) {
         </button>
         {primary.unavailable && primary.unavailableHint ? (
           <Tooltip label={primary.unavailableHint}>
-            <span data-unavailable-hint className="inline-flex">
+            <span data-unavailable-hint className="inline-flex [&>button]:pointer-events-none">
               {primaryButton}
             </span>
           </Tooltip>

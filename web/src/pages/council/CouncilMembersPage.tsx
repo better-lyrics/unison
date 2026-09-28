@@ -160,7 +160,7 @@ function MemberRow({
       </td>
       <td>
         <Tooltip label={quotaExplanation(member.quota, member.isYou ? "you" : "member")}>
-          <div data-quota-explained className="flex items-center gap-2.5">
+          <div data-quota-explained className="inline-flex items-center gap-2.5">
             <span
               role="img"
               aria-label={`${member.quota.used} of ${member.quota.quota} seals used`}

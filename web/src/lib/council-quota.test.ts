@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest"
 import { quotaBasisText, quotaExplanation, quotaRuleText } from "./council-quota"
+import { QUOTA_RULE } from "@/test/council-fixtures"
 import type { BoostQuota } from "./council-types"
 
 const AUGUST = Date.UTC(2026, 7, 1) / 1000
@@ -12,12 +13,12 @@ function quota(q: number, basis: Partial<BoostQuota["basis"]>): BoostQuota {
     remaining: q,
     resetsAt: RESETS,
     basis: { active: true, upvotedLyrics: 0, bonus: 0, monthStart: AUGUST, ...basis },
-    rule: { base: 6, inactive: 3, max: 12, upvotedLyricsPerSeal: 2 },
+    rule: QUOTA_RULE,
   }
 }
 
 const RULE =
-  "Each month: 6 seals if you submitted lyrics the month before, 3 if not, plus 1 for every 2 of those lyrics that got upvoted, up to 12. New members get 6 for their first two months."
+  "Each month: 6 seals if any of your lyrics from the month before still count (not removed, hidden or rejected), 3 if not, plus 1 for every 2 of those lyrics that got upvoted, up to 12. New members count as active in the month they join and the next."
 
 describe("quotaBasisText", () => {
   it("splits the base from the earned seals", () => {
@@ -85,7 +86,7 @@ describe("quotaRuleText", () => {
     it("follows a changed rule instead of fixed numbers", () => {
       const changed = { ...quota(5, {}), rule: { base: 5, inactive: 2, max: 9, upvotedLyricsPerSeal: 3 } }
       expect(quotaRuleText(changed)).toBe(
-        "Each month: 5 seals if you submitted lyrics the month before, 2 if not, plus 1 for every 3 of those lyrics that got upvoted, up to 9. New members get 5 for their first two months.",
+        "Each month: 5 seals if any of your lyrics from the month before still count (not removed, hidden or rejected), 2 if not, plus 1 for every 3 of those lyrics that got upvoted, up to 9. New members count as active in the month they join and the next.",
       )
     })
 
@@ -107,5 +108,32 @@ describe("quotaExplanation", () => {
     expect(quotaExplanation(quota(3, { active: false }), "member")).toBe(
       `None of their August lyrics count, so this month's quota is reduced. ${RULE}`,
     )
+  })
+})
+
+describe("invariants", () => {
+  const cases = [
+    quota(3, { active: false }),
+    quota(6, {}),
+    quota(8, { upvotedLyrics: 4, bonus: 2 }),
+    quota(12, { upvotedLyrics: 20, bonus: 6 }),
+  ]
+
+  it("states the same rule whoever it is about", () => {
+    for (const q of cases) expect(quotaRuleText(q)).toBe(RULE)
+  })
+
+  it("is always the basis followed by the rule", () => {
+    for (const q of cases) {
+      for (const subject of ["you", "member"] as const) {
+        expect(quotaExplanation(q, subject)).toBe(`${quotaBasisText(q, subject)} ${quotaRuleText(q)}`)
+      }
+    }
+  })
+
+  it("names the base as the quota minus the bonus", () => {
+    for (const q of cases.filter((c) => c.basis.active)) {
+      expect(quotaBasisText(q)).toMatch(new RegExp(`^${q.quota - q.basis.bonus} base`))
+    }
   })
 })
