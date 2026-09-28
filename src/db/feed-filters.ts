@@ -1,4 +1,6 @@
-export type FeedSort = "default" | "newest" | "top-rated" | "most-voted"
+import { AUTO_HIDE_PREDICATE } from "@/db/predicates"
+
+export type FeedSort = "default" | "newest" | "top-rated" | "most-voted" | "recently-sealed"
 export type FeedSortDir = "desc" | "asc"
 export type FeedSyncType = "richsync" | "linesync" | "plain"
 export type FeedFormat = "lrc" | "ttml" | "plain"
@@ -11,9 +13,16 @@ export interface FeedFilters {
 	format?: FeedFormat
 	tier?: FeedTier
 	language?: string
+	sealed?: boolean
 }
 
-const SORT_VALUES = new Set<FeedSort>(["default", "newest", "top-rated", "most-voted"])
+const SORT_VALUES = new Set<FeedSort>([
+	"default",
+	"newest",
+	"top-rated",
+	"most-voted",
+	"recently-sealed",
+])
 const SORT_DIR_VALUES = new Set<FeedSortDir>(["desc", "asc"])
 const SYNC_TYPE_VALUES = new Set<FeedSyncType>(["richsync", "linesync", "plain"])
 const FORMAT_VALUES = new Set<FeedFormat>(["lrc", "ttml", "plain"])
@@ -26,6 +35,7 @@ interface RawQuery {
 	format?: string
 	tier?: string
 	language?: string
+	sealed?: string
 }
 
 export function parseFeedFilters(query: RawQuery): FeedFilters {
@@ -51,12 +61,16 @@ export function parseFeedFilters(query: RawQuery): FeedFilters {
 	if (query.language) {
 		out.language = query.language
 	}
+	if (query.sealed === "1") {
+		out.sealed = true
+	}
 
 	return out
 }
 
 export function hasAnyFilter(filters: FeedFilters): boolean {
-	if (filters.syncType || filters.format || filters.tier || filters.language) return true
+	if (filters.syncType || filters.format || filters.tier || filters.language || filters.sealed)
+		return true
 	if (filters.sort && filters.sort !== "default") return true
 	return false
 }
@@ -87,6 +101,9 @@ export function buildFilterFragments(filters: FeedFilters): FilterFragments {
 		conditions.push("language = ?")
 		params.push(filters.language)
 	}
+	if (filters.sealed) {
+		conditions.push("committee_approved_at IS NOT NULL", `NOT ${AUTO_HIDE_PREDICATE}`)
+	}
 
 	return { conditions, params }
 }
@@ -95,6 +112,7 @@ const SORT_COLUMN: Record<Exclude<FeedSort, "default">, string> = {
 	newest: "created_at",
 	"top-rated": "effective_score",
 	"most-voted": "vote_count",
+	"recently-sealed": "committee_approved_at",
 }
 
 export function buildOrderByClause(filters: FeedFilters, defaultExpr: string): string {
@@ -105,5 +123,6 @@ export function buildOrderByClause(filters: FeedFilters, defaultExpr: string): s
 	// so many entries tie at the top. Break those ties by vote_count so well-voted
 	// lyrics outrank brand-new single-vote uploads under "Top Rated".
 	const tiebreak = filters.sort === "top-rated" ? `vote_count ${dir}, ` : ""
-	return `${column} ${dir}, ${tiebreak}id ${dir}`
+	const nulls = filters.sort === "recently-sealed" ? " NULLS LAST" : ""
+	return `${column} ${dir}${nulls}, ${tiebreak}id ${dir}`
 }
