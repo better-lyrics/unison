@@ -147,13 +147,14 @@ describeIntegration("committee roster (integration)", () => {
 			})
 
 			it("ignores keys that are not on the council or do not exist", async () => {
-				await insertUser("c".repeat(64))
+				const c = await insertUser("c".repeat(64))
 				const changed = await syncCouncilAdmins(env, [
 					{ keyId: "c".repeat(64), admin: true },
 					{ keyId: "d".repeat(64), admin: true },
 				])
 				expect(changed).toBe(0)
-				expect(await isCouncilAdmin(env, 0)).toBe(false)
+				expect(await isCouncilAdmin(env, c)).toBe(false)
+				expect(await isCommittee(env, c)).toBe(false)
 			})
 
 			it("leaves members that are not listed alone", async () => {

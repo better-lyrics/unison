@@ -1,5 +1,10 @@
 import { config } from "@/config"
-import { type BookmarkView, listActiveBookmarks, toBookmarkView } from "@/db/council-bookmarks"
+import {
+	type ActiveBookmark,
+	type BookmarkView,
+	listActiveBookmarks,
+	toBookmarkView,
+} from "@/db/council-bookmarks"
 import { type CouncilPerson, loadPersonDecor, toCouncilPerson } from "@/db/council-person"
 import {
 	type SealCandidate,
@@ -57,14 +62,24 @@ export async function listCouncilQueue(env: Env): Promise<QueueItem[]> {
 		env,
 		held.map((b) => b.itemId).filter((id) => !shown.has(id))
 	)
-	return buildQueueItems(env, [...top, ...below])
+	return buildQueueItems(env, [...top, ...below], held)
 }
 
 export async function listSealableForVideo(env: Env, videoId: string): Promise<QueueItem[]> {
-	return buildQueueItems(env, await getSealableVariants(env, videoId))
+	const candidates = await getSealableVariants(env, videoId)
+	if (candidates.length === 0) return []
+	const held = await listActiveBookmarks(env, {
+		itemType: "seal",
+		itemIds: candidates.map((c) => c.id),
+	})
+	return buildQueueItems(env, candidates, held)
 }
 
-async function buildQueueItems(env: Env, candidates: SealCandidate[]): Promise<QueueItem[]> {
+async function buildQueueItems(
+	env: Env,
+	candidates: SealCandidate[],
+	bookmarks: ActiveBookmark[]
+): Promise<QueueItem[]> {
 	if (candidates.length === 0) return []
 
 	const videoIds = [...new Set(candidates.map((c) => c.video_id))]
@@ -75,9 +90,8 @@ async function buildQueueItems(env: Env, candidates: SealCandidate[]): Promise<Q
 		),
 	]
 
-	const [people, bookmarks, variants, fulfilled, stats, flags] = await Promise.all([
+	const [people, variants, fulfilled, stats, flags] = await Promise.all([
 		resolvePeople(env, submitterIds),
-		listActiveBookmarks(env, { itemType: "seal", itemIds: lyricIds }),
 		countByKey(
 			env,
 			"SELECT video_id AS k, COUNT(*) AS n FROM lyrics WHERE deleted_at IS NULL AND video_id = ANY(?) GROUP BY video_id",
