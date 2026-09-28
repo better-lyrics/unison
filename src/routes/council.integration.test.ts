@@ -143,6 +143,26 @@ describeIntegration("council dashboard routes (integration)", () => {
 			expect(item).not.toHaveProperty("diffFull")
 		})
 
+		it("carries the author's and the bookmark holder's real badges", async () => {
+			const revisionId = await pendingEdit()
+			await db.pool.query("DELETE FROM badge_awards WHERE user_id = ANY($1)", [[submitter, ola]])
+			await db.pool.query(
+				"INSERT INTO badge_awards (user_id, badge_key, tier) VALUES ($1, 'verified-contributor', 3), ($2, 'polyglot', 1)",
+				[submitter, ola]
+			)
+			await createBookmark(db.env, ola, "edit", revisionId, "web")
+			const res = await call<{ items: EditItem[] }>("GET", "/committee/edits", { token: "mira" })
+			const [item] = res.json.data.items
+			expect(item.author).toMatchObject({
+				badgeCount: 1,
+				topBadge: expect.objectContaining({ key: "verified-contributor", tier: 3 }),
+			})
+			expect(item.bookmark?.holder).toMatchObject({
+				topBadge: expect.objectContaining({ key: "polyglot" }),
+			})
+			await db.pool.query("DELETE FROM badge_awards WHERE user_id = ANY($1)", [[submitter, ola]])
+		})
+
 		it("returns no items when nothing is pending", async () => {
 			const res = await call<{ items: EditItem[] }>("GET", "/committee/edits", { token: "mira" })
 			expect(res.json.data.items).toEqual([])
@@ -168,6 +188,11 @@ describeIntegration("council dashboard routes (integration)", () => {
 				itemType: "seal",
 				itemId: lyricId,
 				holder: { keyId: MIRA },
+			})
+			expect(created.json.data.holder).toMatchObject({
+				badgeCount: 0,
+				topBadge: null,
+				featured: [],
 			})
 			const released = await call("DELETE", `/committee/bookmarks/${created.json.data.id}`, {
 				token: "mira",
@@ -506,6 +531,25 @@ describeIntegration("council dashboard routes (integration)", () => {
 
 		const applicants = async (token: string, qs = "") =>
 			(await call<ApplicantView[]>("GET", `/committee/applicants${qs}`, { token })).json.data
+
+		it("shows each opinion giver's real badges", async () => {
+			await db.pool.query("DELETE FROM badge_awards WHERE user_id = $1", [ola])
+			await db.pool.query(
+				"INSERT INTO badge_awards (user_id, badge_key, tier) VALUES ($1, 'polyglot', 1)",
+				[ola]
+			)
+			await call("PUT", `/committee/applicants/${session}/opinion`, {
+				token: "ola",
+				body: { stance: "object" },
+			})
+			const [a] = await applicants("mira")
+			expect(a.opinions.object[0]).toMatchObject({
+				keyId: OLA,
+				badgeCount: 1,
+				topBadge: expect.objectContaining({ key: "polyglot" }),
+			})
+			await db.pool.query("DELETE FROM badge_awards WHERE user_id = $1", [ola])
+		})
 
 		it("lists applicants with opinions and my stance", async () => {
 			await call("PUT", `/committee/applicants/${session}/opinion`, {
