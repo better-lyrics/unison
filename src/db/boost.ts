@@ -26,6 +26,7 @@ export type BoostResult =
 				| "target_committee"
 				| "over_quota"
 				| "already_boosted"
+				| "rejected"
 	  }
 
 export type RevokeResult = { ok: true } | { ok: false; reason: "not_found" | "forbidden" }
@@ -92,6 +93,15 @@ export async function createBoost(
 		result = await env.DB.transaction(async (tx): Promise<BoostResult> => {
 			const txEnv = { ...env, DB: tx }
 			await tx.prepare("SELECT id FROM users WHERE id = ? FOR UPDATE").bind(boosterId).run()
+			await tx.prepare("SELECT id FROM lyrics WHERE id = ? FOR UPDATE").bind(lyricsId).run()
+
+			const rejected = await tx
+				.prepare("SELECT 1 AS one FROM rejections WHERE lyrics_id = ? AND revoked_at IS NULL")
+				.bind(lyricsId)
+				.first<{ one: number }>()
+			if (rejected) {
+				return { ok: false, reason: "rejected" }
+			}
 
 			const { quota, used, resetsAt } = await getQuota(txEnv, boosterId)
 			if (used >= quota) {

@@ -65,6 +65,8 @@ export const ErrorCode = {
 	BOOST_ALREADY_ACTIVE: "BOOST_ALREADY_ACTIVE",
 	BOOST_NOT_OWNER: "BOOST_NOT_OWNER",
 	REJECT_ALREADY_ACTIVE: "REJECT_ALREADY_ACTIVE",
+	SEAL_BLOCKED_BY_REJECTION: "SEAL_BLOCKED_BY_REJECTION",
+	REJECT_BLOCKED_BY_SEAL: "REJECT_BLOCKED_BY_SEAL",
 	NO_CHANGES: "NO_CHANGES",
 	ALREADY_DECIDED: "ALREADY_DECIDED",
 	STALE: "STALE",
@@ -333,6 +335,14 @@ const TEMPLATES: Record<ErrorCode, Template> = {
 	REJECT_ALREADY_ACTIVE: {
 		error: "Already rejected",
 		hint: "This lyric already has an active council rejection.",
+	},
+	SEAL_BLOCKED_BY_REJECTION: {
+		error: "Lyric is rejected",
+		hint: "The council rejected this lyric. Undo the rejection before sealing it.",
+	},
+	REJECT_BLOCKED_BY_SEAL: {
+		error: "Lyric is sealed",
+		hint: "The council sealed this lyric. Remove the seal before rejecting it.",
 	},
 	NO_CHANGES: {
 		error: "No changes",

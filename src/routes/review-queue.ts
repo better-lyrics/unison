@@ -27,6 +27,7 @@ const REJECT_ERROR: Record<
 	not_committee: { status: 403, code: ErrorCode.NOT_COMMITTEE },
 	lyric_not_found: { status: 404, code: ErrorCode.NOT_FOUND },
 	already_rejected: { status: 409, code: ErrorCode.REJECT_ALREADY_ACTIVE },
+	sealed: { status: 409, code: ErrorCode.REJECT_BLOCKED_BY_SEAL },
 }
 
 const UNDO_ERROR: Record<

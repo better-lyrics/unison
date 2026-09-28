@@ -581,6 +581,14 @@ describe("POST /lyrics/:id/boost", () => {
 		expect(((await res.json()) as { code: string }).code).toBe("BOOST_ALREADY_ACTIVE")
 	})
 
+	it("maps rejected to 409 SEAL_BLOCKED_BY_REJECTION", async () => {
+		const { app } = seedBoostAuth()
+		vi.mocked(createBoost).mockResolvedValue({ ok: false, reason: "rejected" })
+		const res = await app.handle(boostReq(5, "POST", { authorization: "Bearer tok" }))
+		expect(res.status).toBe(409)
+		expect(((await res.json()) as { code: string }).code).toBe("SEAL_BLOCKED_BY_REJECTION")
+	})
+
 	it("rejects with 429 RATE_LIMITED before calling createBoost", async () => {
 		const { env, app } = seedBoostAuth()
 		env.RATE_LIMITER = {

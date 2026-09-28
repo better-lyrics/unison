@@ -7,6 +7,7 @@ import {
 import type { Env } from "@/types"
 import type pg from "pg"
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest"
+import { createBoost, revokeBoost } from "./boost"
 import { createBookmark, listActiveBookmarks } from "./council-bookmarks"
 import { listCouncilEvents } from "./council-events"
 import { getSealCandidates, getSealableVariants, rejectLyric, undoRejection } from "./rejections"
@@ -373,6 +374,47 @@ describeIntegration("rejections store (integration)", () => {
 				ok: false,
 				reason: "already_rejected",
 			})
+		})
+
+		it("sealed when the lyric carries an active seal", async () => {
+			const reviewer = await newUser()
+			await addToCommittee(reviewer)
+			const id = await insertLyric({ videoId: "vSealed", submitterId: await newUser() })
+			expect((await createBoost(env, reviewer, id, "web")).ok).toBe(true)
+
+			expect(await rejectLyric(env, id, reviewer, { source: "discord" })).toEqual({
+				ok: false,
+				reason: "sealed",
+			})
+			expect(await activeRejection(id)).toBeUndefined()
+		})
+
+		it("rejects once the seal is revoked", async () => {
+			const reviewer = await newUser()
+			await addToCommittee(reviewer)
+			const id = await insertLyric({ videoId: "vUnsealed", submitterId: await newUser() })
+			await createBoost(env, reviewer, id, "web")
+			await revokeBoost(env, reviewer, id, "web")
+
+			expect(await rejectLyric(env, id, reviewer, { source: "discord" })).toEqual({ ok: true })
+		})
+
+		it("regression: a simultaneous seal and rejection leave exactly one decision", async () => {
+			const sealer = await newUser()
+			await addToCommittee(sealer)
+			const rejecter = await newUser()
+			await addToCommittee(rejecter)
+			const submitter = await newUser()
+
+			for (const videoId of ["vRace1", "vRace2", "vRace3", "vRace4", "vRace5"]) {
+				const id = await insertLyric({ videoId, submitterId: submitter })
+				const [seal, reject] = await Promise.all([
+					createBoost(env, sealer, id, "web"),
+					rejectLyric(env, id, rejecter, { source: "web" }),
+				])
+				expect([seal.ok, reject.ok].filter(Boolean)).toHaveLength(1)
+				await revokeBoost(env, sealer, id, "web")
+			}
 		})
 	})
 

@@ -161,6 +161,37 @@ describeIntegration("boost store (integration)", () => {
 			const result = await createBoost(env, booster, l3, "web")
 			expect(result).toEqual({ ok: false, reason: "over_quota" })
 		})
+
+		it("rejected when the lyric has an active council rejection", async () => {
+			const booster = await newUser()
+			await addToCommittee(booster)
+			const submitter = await newUser()
+			const lyricsId = await insertLyric(submitter, "vidRej")
+			await pool.query(
+				"INSERT INTO rejections (lyrics_id, rejected_by, rejected_at) VALUES ($1, $2, 1)",
+				[lyricsId, booster]
+			)
+
+			expect(await createBoost(env, booster, lyricsId, "web")).toEqual({
+				ok: false,
+				reason: "rejected",
+			})
+			expect(await activeBoostRow(lyricsId)).toBeUndefined()
+			expect((await lyricMirror(lyricsId)).committee_approved_at).toBeNull()
+		})
+
+		it("seals once the rejection is undone", async () => {
+			const booster = await newUser()
+			await addToCommittee(booster)
+			const submitter = await newUser()
+			const lyricsId = await insertLyric(submitter, "vidUndone")
+			await pool.query(
+				"INSERT INTO rejections (lyrics_id, rejected_by, rejected_at, revoked_at) VALUES ($1, $2, 1, 2)",
+				[lyricsId, booster]
+			)
+
+			expect((await createBoost(env, booster, lyricsId, "web")).ok).toBe(true)
+		})
 	})
 
 	describe("happy path", () => {

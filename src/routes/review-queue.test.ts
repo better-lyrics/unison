@@ -209,6 +209,15 @@ describe("POST /lyrics/:id/reject/bot", () => {
 		expect(((await res.json()) as { code: string }).code).toBe("REJECT_ALREADY_ACTIVE")
 	})
 
+	it("returns 409 when the lyric is sealed", async () => {
+		vi.mocked(isAuthorizedBot).mockReturnValue(true)
+		vi.mocked(getUserByKeyId).mockResolvedValue(reviewer)
+		vi.mocked(rejectLyric).mockResolvedValue({ ok: false, reason: "sealed" })
+		const res = await app().handle(bodyReq("POST", "1", { keyId: KEY }))
+		expect(res.status).toBe(409)
+		expect(((await res.json()) as { code: string }).code).toBe("REJECT_BLOCKED_BY_SEAL")
+	})
+
 	it("records the rejection and forwards the note", async () => {
 		vi.mocked(isAuthorizedBot).mockReturnValue(true)
 		vi.mocked(getUserByKeyId).mockResolvedValue(reviewer)
