@@ -9,7 +9,7 @@ import { useStoredState } from "./useStoredState"
 
 export interface TriageEntry {
   key: string
-  itemType: BookmarkItemType
+  itemType: BookmarkItemType | null
   itemId: number
 }
 
@@ -100,6 +100,7 @@ export function useTriage<T extends Bookmarkable>({
 
   const toggleBookmark = (item: T) => {
     const e = entry(item)
+    if (e.itemType === null) return
     bookmark.mutate({ itemType: e.itemType, itemId: e.itemId, bookmark: item.bookmark, meKeyId })
   }
 

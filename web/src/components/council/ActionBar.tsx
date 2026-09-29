@@ -9,9 +9,9 @@ import { type ReactNode, useId, useRef, useState } from "react"
 const NOTE_MAX = 300
 
 interface ActionBarProps {
-  bookmark: BookmarkState
-  onBookmark: () => void
-  bookmarkPending: boolean
+  bookmark?: BookmarkState
+  onBookmark?: () => void
+  bookmarkPending?: boolean
   primary: {
     label: string
     icon: Icon
@@ -156,9 +156,11 @@ export function ActionBar(props: ActionBarProps) {
     )
     body = (
       <div className="flex items-center gap-2">
-        <BookmarkButton state={bookmark} pending={props.bookmarkPending} onClick={props.onBookmark} />
+        {bookmark && props.onBookmark ? (
+          <BookmarkButton state={bookmark} pending={props.bookmarkPending ?? false} onClick={props.onBookmark} />
+        ) : null}
         <span className="flex-1" />
-        {bookmark.kind === "other" ? (
+        {bookmark?.kind === "other" ? (
           <span className="text-xs text-unison-text-muted">
             You can still decide. {bookmark.holder} will see your decision.
           </span>
