@@ -46,6 +46,21 @@ function cleanSpanText(input: string): string {
 	return unescapeHtml(input.replace(/<[^>]*>/g, "")).trim()
 }
 
+// lyrics_translate rejects region and script subtags with HTTP 400, except zh-Hant.
+export function toLyricsTranslateLang(tag: string): string {
+	if (!/[-_]/.test(tag)) return tag
+	let requested: Intl.Locale
+	try {
+		requested = new Intl.Locale(tag.replace(/_/g, "-")).maximize()
+	} catch {
+		return tag
+	}
+	const primary = tag.split(/[-_]/)[0].toLowerCase()
+	const collapsed =
+		requested.language === "zh" ? (requested.script === "Hant" ? "zh-Hant" : "zh") : primary
+	return new Intl.Locale(collapsed).maximize().script === requested.script ? collapsed : tag
+}
+
 export function buildLyricsTranslateUrl(from: string, to: string, lines: string[]): string {
 	const enc = encodeURIComponent(lines.join("\n"))
 	const asyncParam = `lyrics_partial:,lyrics_full:${enc},title:idk,lang_code_from:${encodeURIComponent(

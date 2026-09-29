@@ -5,6 +5,7 @@ import {
 	UnparseableResponseError,
 	buildLyricsTranslateUrl,
 	parseLyricsTranslateResponse,
+	toLyricsTranslateLang,
 } from "./google-translate"
 
 function fixture(name: string): string {
@@ -319,6 +320,92 @@ describe("buildLyricsTranslateUrl", () => {
 		const url = buildLyricsTranslateUrl("zh", "en", ["hello, world"])
 		expect(url).toContain("lyrics_full:hello%2C%20world,title:idk")
 		expect(url).not.toContain("hello, world")
+	})
+})
+
+describe("toLyricsTranslateLang", () => {
+	it("maps Traditional Chinese regions and scripts to zh-Hant", () => {
+		for (const tag of ["zh-TW", "zh-HK", "zh-MO", "zh-Hant", "zh-Hant-TW", "zh-Hant-HK"]) {
+			expect(toLyricsTranslateLang(tag)).toBe("zh-Hant")
+		}
+	})
+
+	it("maps Simplified Chinese regions and scripts to zh", () => {
+		for (const tag of ["zh-CN", "zh-SG", "zh-Hans", "zh-Hans-CN"]) {
+			expect(toLyricsTranslateLang(tag)).toBe("zh")
+		}
+	})
+
+	it("drops a region the upstream rejects when the script is unchanged", () => {
+		expect(toLyricsTranslateLang("pt-BR")).toBe("pt")
+		expect(toLyricsTranslateLang("pt-PT")).toBe("pt")
+		expect(toLyricsTranslateLang("en-US")).toBe("en")
+		expect(toLyricsTranslateLang("es-419")).toBe("es")
+		expect(toLyricsTranslateLang("ja-JP")).toBe("ja")
+	})
+
+	describe("edge cases", () => {
+		it("leaves bare codes untouched, including ones Intl would rewrite", () => {
+			for (const tag of ["en", "zh", "he", "iw", "tl", "fil", "jw", "mni", "yue"]) {
+				expect(toLyricsTranslateLang(tag)).toBe(tag)
+			}
+		})
+
+		it("handles mixed case and underscore separators", () => {
+			expect(toLyricsTranslateLang("ZH-tw")).toBe("zh-Hant")
+			expect(toLyricsTranslateLang("zh-hant")).toBe("zh-Hant")
+			expect(toLyricsTranslateLang("zh_TW")).toBe("zh-Hant")
+			expect(toLyricsTranslateLang("zh_CN")).toBe("zh")
+		})
+
+		it("keeps the client's primary subtag instead of an Intl-canonicalized alias", () => {
+			expect(toLyricsTranslateLang("jw-ID")).toBe("jw")
+			expect(toLyricsTranslateLang("iw-IL")).toBe("iw")
+			expect(toLyricsTranslateLang("tl-PH")).toBe("tl")
+			expect(toLyricsTranslateLang("cmn-TW")).toBe("zh-Hant")
+		})
+
+		it("keeps a tag whose script the bare language would lose", () => {
+			expect(toLyricsTranslateLang("sr-Latn")).toBe("sr-Latn")
+			expect(toLyricsTranslateLang("mni-Mtei")).toBe("mni-Mtei")
+			expect(toLyricsTranslateLang("pa-Arab")).toBe("pa-Arab")
+			expect(toLyricsTranslateLang("zh-Latn")).toBe("zh-Latn")
+		})
+
+		it("returns malformed tags unchanged", () => {
+			for (const tag of ["", "x-foo", "!!", "zh--TW", "-"]) {
+				expect(toLyricsTranslateLang(tag)).toBe(tag)
+			}
+		})
+	})
+
+	describe("regressions", () => {
+		it("regression: does not send zh-TW, which the upstream answers with HTTP 400", () => {
+			const url = buildLyricsTranslateUrl("en", toLyricsTranslateLang("zh-TW"), ["hi"])
+			expect(url).toContain("lang_code_to:zh-Hant,")
+			expect(url).not.toContain("zh-TW")
+		})
+
+		it("regression: does not send zh-CN or zh-Hans, which the upstream answers with HTTP 400", () => {
+			expect(toLyricsTranslateLang("zh-CN")).not.toBe("zh-CN")
+			expect(toLyricsTranslateLang("zh-Hans")).not.toBe("zh-Hans")
+		})
+	})
+
+	describe("invariants", () => {
+		const tags = ["zh-TW", "zh-CN", "zh-Hant-TW", "pt-BR", "en-US", "sr-Latn", "mni-Mtei", "en", "x-foo"]
+
+		it("is idempotent", () => {
+			for (const tag of tags) {
+				const once = toLyricsTranslateLang(tag)
+				expect(toLyricsTranslateLang(once)).toBe(once)
+			}
+		})
+
+		it("never turns Traditional into Simplified or the reverse", () => {
+			expect(toLyricsTranslateLang("zh-TW")).not.toBe("zh")
+			expect(toLyricsTranslateLang("zh-CN")).not.toBe("zh-Hant")
+		})
 	})
 })
 
