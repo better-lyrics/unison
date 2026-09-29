@@ -270,13 +270,6 @@ export async function submitLyrics(
 ): Promise<{ id: number; created: boolean }> {
 	const compressedLyrics = await compress(submission.lyrics)
 	const plainText = extractPlainText(submission.lyrics, submission.format)
-	const approved = await approvedMetadata(env, submission.videoId)
-	const song = approved?.song ?? submission.song.trim()
-	const artist = approved?.artist ?? submission.artist.trim()
-	const album = approved ? approved.album : submission.album?.trim() || null
-	const songNorm = normalizeSong(song)
-	const artistNorm = normalizeArtist(artist)
-	const albumNorm = normalizeAlbum(album)
 
 	// Check per-user-per-video variant cap
 	const variantCount = await env.DB.prepare(
@@ -295,6 +288,14 @@ export async function submitLyrics(
 		})
 		return { id: -1, created: false }
 	}
+
+	const approved = await approvedMetadata(env, submission.videoId)
+	const song = approved?.song ?? submission.song.trim()
+	const artist = approved?.artist ?? submission.artist.trim()
+	const album = approved ? approved.album : submission.album?.trim() || null
+	const songNorm = normalizeSong(song)
+	const artistNorm = normalizeArtist(artist)
+	const albumNorm = normalizeAlbum(album)
 
 	let language: string | null
 	let languageSource: "submitter" | "detector"

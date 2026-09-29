@@ -237,6 +237,7 @@ describe("POST /lyrics/submit syncType override", () => {
 			{ key_id: keyId, public_key: JSON.stringify(publicJwk), created_at: 0 }, // getPublicKey
 			{ id: 7, key_id: keyId }, // getOrCreateUser
 			{ count: 0 }, // variant cap check
+			null, // approvedMetadata
 			{ id: 99 }, // INSERT RETURNING id
 		])
 		const env = makeEnv(db)
@@ -303,6 +304,7 @@ describe("POST /lyrics/submit syncType override", () => {
 			{ key_id: keyId, public_key: JSON.stringify(publicJwk), created_at: 0 },
 			{ id: 7, key_id: keyId },
 			{ count: 0 },
+			null,
 			{ id: 99 },
 		])
 		const env = makeEnv(db)
@@ -333,6 +335,7 @@ describe("POST /lyrics/submit syncType override", () => {
 			{ key_id: keyId, public_key: JSON.stringify(publicJwk), created_at: 0 },
 			{ id: 7, key_id: keyId },
 			{ count: 0 },
+			null,
 			{ id: 99 },
 		])
 		const env = makeEnv(db)
@@ -813,6 +816,7 @@ function seedSubmitDB(keyId: string, publicJwk: JsonWebKey) {
 		{ key_id: keyId, public_key: JSON.stringify(publicJwk), created_at: 0 },
 		{ id: 7, key_id: keyId },
 		{ count: 0 },
+		null,
 		{ id: 99 },
 	])
 }
@@ -1349,6 +1353,7 @@ describe("POST /lyrics/submit album validation", () => {
 			{ key_id: keyId, public_key: JSON.stringify(publicJwk), created_at: 0 },
 			{ id: 7, key_id: keyId },
 			{ count: 0 },
+			null,
 			{ id: 99 },
 		])
 		const app = lyricsRoutes(makeEnv(db))
