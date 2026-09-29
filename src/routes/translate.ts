@@ -16,6 +16,7 @@ import {
 	type ParsedTranslation,
 	UnparseableResponseError,
 	fetchLyricsTranslation,
+	toLyricsTranslateLang,
 } from "@/utils/google-translate"
 import { readRateLimit } from "@/utils/read-rate-limit"
 import { Elysia, t } from "elysia"
@@ -77,12 +78,12 @@ export const translateRoutes = (env: Env) => {
 			if (detected.language) {
 				from = detected.language
 			} else if (body.from) {
-				from = body.from
+				from = toLyricsTranslateLang(body.from)
 			} else {
 				return status(400, { success: false, error: "Could not detect source language" })
 			}
 
-			const to = body.to
+			const to = toLyricsTranslateLang(body.to)
 			if (from === to) {
 				return {
 					lines: body.lines.map(() => ({

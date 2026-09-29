@@ -265,6 +265,64 @@ describe("POST /translate", () => {
 		expect(insert?.params[7]).toBe(true)
 	})
 
+	it("sends zh-Hant upstream and caches under it when the client asks for zh-TW", async () => {
+		const routes = await loadFreshRoutes()
+		const fetchSpy = vi.fn(
+			async (_url: string, _init?: RequestInit) =>
+				new Response(fixture("zh-en-single-line"), {
+					status: 200,
+					headers: { version: "v-1" },
+				})
+		)
+		vi.stubGlobal("fetch", fetchSpy)
+		const db = makeMockDB([null])
+		const app = routes(makeEnv(db))
+
+		const res = await post(app, { lines: ["你好世界"], to: "zh-TW", from: "zh" })
+
+		expect(res.status).toBe(200)
+		expect(fetchSpy).toHaveBeenCalledTimes(1)
+		expect(fetchSpy.mock.calls[0][0]).toContain("lang_code_to:zh-Hant,")
+		expect(fetchSpy.mock.calls[0][0]).not.toContain("zh-TW")
+		const lookup = db.calls[0]
+		expect(lookup.params[2]).toBe("zh-Hant")
+		const insert = db.calls.find((c) => INSERT_RE.test(c.sql))
+		expect(insert?.params[2]).toBe("zh-Hant")
+	})
+
+	it("treats zh-CN as the detected zh source and skips the upstream", async () => {
+		const routes = await loadFreshRoutes()
+		const fetchSpy = vi.fn(async () => new Response("nope", { status: 400 }))
+		vi.stubGlobal("fetch", fetchSpy)
+		const db = makeMockDB([])
+		const app = routes(makeEnv(db))
+
+		const res = await post(app, { lines: ["你好世界"], to: "zh-CN", from: "zh" })
+
+		expect(res.status).toBe(200)
+		const json = (await res.json()) as TranslateOk
+		expect(json.lines).toEqual([{ translation: null, romanization: null, needsTranslation: false }])
+		expect(fetchSpy).not.toHaveBeenCalled()
+	})
+
+	it("regression: a region-tagged target no longer reaches the upstream verbatim", async () => {
+		const routes = await loadFreshRoutes()
+		const fetchSpy = vi.fn(
+			async (_url: string, _init?: RequestInit) =>
+				new Response(fixture("ja-en-no-romanization"), {
+					status: 200,
+					headers: { version: "v-1" },
+				})
+		)
+		vi.stubGlobal("fetch", fetchSpy)
+		const db = makeMockDB([null])
+		const app = routes(makeEnv(db))
+
+		await post(app, { lines: ["夜に駆ける", "君の名は"], to: "en-US", from: "ja" })
+
+		expect(fetchSpy.mock.calls[0][0]).toContain("lang_code_to:en,")
+	})
+
 	it("stores has_romanization false when the upstream returns no romanization", async () => {
 		const routes = await loadFreshRoutes()
 		const fetchSpy = vi.fn(
