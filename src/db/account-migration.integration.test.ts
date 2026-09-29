@@ -909,6 +909,76 @@ describeIntegration("account migration (integration)", () => {
 			).toEqual({ is_admin: true })
 		})
 
+		async function seedMetadataProposal(proposerId: number, lyricOwnerId: number) {
+			const lyric = await insertLyric(lyricOwnerId, "vidMetadata")
+			const row = await one<{ id: number }>(
+				`INSERT INTO metadata_proposals
+					(video_id, lyrics_id, proposer_id, song, artist, before_song, before_artist)
+					VALUES ('vidMetadata', $1, $2, 'New', 'Artist', 'Song', 'Artist') RETURNING id`,
+				[lyric, proposerId]
+			)
+			return row.id
+		}
+
+		const votesOn = async (proposalId: number) =>
+			(
+				await pool.query(
+					"SELECT voter_id, approve FROM metadata_votes WHERE proposal_id = $1 ORDER BY voter_id",
+					[proposalId]
+				)
+			).rows
+
+		it("regression: merging carries metadata proposals and votes to the survivor", async () => {
+			const { oldId, newId } = await seedIdentities()
+			const proposal = await seedMetadataProposal(newId, oldId)
+			await pool.query(
+				"INSERT INTO metadata_votes (proposal_id, voter_id, approve) VALUES ($1, $2, TRUE)",
+				[proposal, newId]
+			)
+
+			await migrate("sess-metadata")
+
+			expect(
+				await one("SELECT proposer_id FROM metadata_proposals WHERE id = $1", [proposal])
+			).toEqual({ proposer_id: oldId })
+			expect(await votesOn(proposal)).toEqual([{ voter_id: oldId, approve: true }])
+		})
+
+		it("keeps the survivor's vote when both identities voted on one proposal", async () => {
+			const { oldId, newId } = await seedIdentities()
+			const proposal = await seedMetadataProposal(oldId, oldId)
+			await pool.query(
+				"INSERT INTO metadata_votes (proposal_id, voter_id, approve) VALUES ($1, $2, FALSE), ($1, $3, TRUE)",
+				[proposal, oldId, newId]
+			)
+
+			await migrate("sess-metadata-votes")
+
+			expect(await votesOn(proposal)).toEqual([{ voter_id: oldId, approve: false }])
+		})
+
+		it("restores metadata proposals and votes on undo", async () => {
+			const { oldId, newId } = await seedIdentities()
+			const proposal = await seedMetadataProposal(newId, oldId)
+			await pool.query(
+				"INSERT INTO metadata_votes (proposal_id, voter_id, approve) VALUES ($1, $2, TRUE), ($1, $3, TRUE)",
+				[proposal, oldId, newId]
+			)
+
+			const auditId = await migrate("sess-metadata-undo")
+			expect(await restoreFromSnapshot(env, auditId)).toEqual({ restored: true })
+
+			expect(
+				await one("SELECT proposer_id FROM metadata_proposals WHERE id = $1", [proposal])
+			).toEqual({ proposer_id: newId })
+			expect(await votesOn(proposal)).toEqual(
+				[
+					{ voter_id: oldId, approve: true },
+					{ voter_id: newId, approve: true },
+				].sort((a, b) => a.voter_id - b.voter_id)
+			)
+		})
+
 		it("refuses to restore over a council action taken after commit", async () => {
 			const { oldId } = await seedIdentities()
 			const auditId = await migrate("sess-council-interim")
