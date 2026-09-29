@@ -305,6 +305,39 @@ describe("POST /translate", () => {
 		expect(fetchSpy).not.toHaveBeenCalled()
 	})
 
+	it("keeps bare targets on their existing cache key", async () => {
+		const routes = await loadFreshRoutes()
+		const fetchSpy = vi.fn(
+			async () =>
+				new Response(fixture("zh-en-single-line"), {
+					status: 200,
+					headers: { version: "v-1" },
+				})
+		)
+		vi.stubGlobal("fetch", fetchSpy)
+		const db = makeMockDB([null])
+		const app = routes(makeEnv(db))
+
+		await post(app, { lines: ["你好世界"], to: "en", from: "zh" })
+
+		expect(db.calls[0].params[2]).toBe("en")
+		expect(db.calls.find((c) => INSERT_RE.test(c.sql))?.params[2]).toBe("en")
+	})
+
+	it("normalizes a region-tagged from when detection cannot name the language", async () => {
+		const routes = await loadFreshRoutes()
+		const fetchSpy = vi.fn(async () => new Response("nope", { status: 400 }))
+		vi.stubGlobal("fetch", fetchSpy)
+		const db = makeMockDB([])
+		const app = routes(makeEnv(db))
+
+		const res = await post(app, { lines: ["ok"], to: "pt", from: "pt-BR" })
+
+		const json = (await res.json()) as TranslateOk
+		expect(json.detectedLang).toBe("pt")
+		expect(fetchSpy).not.toHaveBeenCalled()
+	})
+
 	it("regression: a region-tagged target no longer reaches the upstream verbatim", async () => {
 		const routes = await loadFreshRoutes()
 		const fetchSpy = vi.fn(

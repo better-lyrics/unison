@@ -358,6 +358,13 @@ describe("toLyricsTranslateLang", () => {
 			expect(toLyricsTranslateLang("zh_CN")).toBe("zh")
 		})
 
+		it("keeps the client's primary subtag instead of an Intl-canonicalized alias", () => {
+			expect(toLyricsTranslateLang("jw-ID")).toBe("jw")
+			expect(toLyricsTranslateLang("iw-IL")).toBe("iw")
+			expect(toLyricsTranslateLang("tl-PH")).toBe("tl")
+			expect(toLyricsTranslateLang("cmn-TW")).toBe("zh-Hant")
+		})
+
 		it("keeps a tag whose script the bare language would lose", () => {
 			expect(toLyricsTranslateLang("sr-Latn")).toBe("sr-Latn")
 			expect(toLyricsTranslateLang("mni-Mtei")).toBe("mni-Mtei")

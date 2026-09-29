@@ -55,8 +55,9 @@ export function toLyricsTranslateLang(tag: string): string {
 	} catch {
 		return tag
 	}
+	const primary = tag.split(/[-_]/)[0].toLowerCase()
 	const collapsed =
-		requested.language === "zh" && requested.script === "Hant" ? "zh-Hant" : requested.language
+		requested.language === "zh" ? (requested.script === "Hant" ? "zh-Hant" : "zh") : primary
 	return new Intl.Locale(collapsed).maximize().script === requested.script ? collapsed : tag
 }
 
