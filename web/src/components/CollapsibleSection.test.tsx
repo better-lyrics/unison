@@ -47,6 +47,20 @@ describe("CollapsibleSection", () => {
     expect(screen.getByText("body content")).toBeTruthy()
   })
 
+  it("makes the collapsed body inert so its controls cannot take focus", () => {
+    render(
+      <CollapsibleSection title="Badges" defaultOpen={false}>
+        <button type="button">inside</button>
+      </CollapsibleSection>,
+    )
+    const toggle = screen.getByRole("button", { name: "Badges" })
+    const body = document.getElementById(toggle.getAttribute("aria-controls") as string)
+    expect(body?.hasAttribute("inert")).toBe(true)
+
+    fireEvent.click(toggle)
+    expect(body?.hasAttribute("inert")).toBe(false)
+  })
+
   it("links the toggle to the body region via aria-controls", () => {
     render(
       <CollapsibleSection title="Badges">

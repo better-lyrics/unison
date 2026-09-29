@@ -90,6 +90,7 @@ export function CollapsibleSection({
       <div
         id={bodyId}
         ref={wrapRef}
+        inert={!open}
         style={{ height: height === "auto" ? undefined : height, overflow: height === "auto" ? undefined : "hidden" }}
         className="transition-[height] duration-300 ease-[cubic-bezier(0.2,0,0,1)] motion-reduce:transition-none"
       >
