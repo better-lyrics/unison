@@ -552,7 +552,8 @@ CREATE TABLE IF NOT EXISTS council_events (
     kind TEXT NOT NULL CHECK (kind IN (
         'seal', 'unseal', 'reject', 'unreject', 'edit_approve', 'edit_reject',
         'bookmark', 'release', 'member_add', 'member_remove',
-        'applicant_approve', 'applicant_reject')),
+        'applicant_approve', 'applicant_reject',
+        'metadata_propose', 'metadata_approve', 'metadata_reject')),
     source TEXT NOT NULL CHECK (source IN ('web', 'discord', 'admin')),
     lyrics_id INTEGER REFERENCES lyrics(id) ON DELETE CASCADE,
     ref_id BIGINT,
@@ -576,3 +577,50 @@ CREATE TABLE IF NOT EXISTS applicant_opinions (
 );
 
 ALTER TABLE exam_session ADD COLUMN IF NOT EXISTS decided_by_user_id INTEGER REFERENCES users(id);
+
+-- ---- council metadata edits ----
+
+-- The inline CHECK above only reaches new databases, so existing ones get it replaced once.
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint
+        WHERE conname = 'council_events_kind_check'
+            AND pg_get_constraintdef(oid) LIKE '%metadata_propose%'
+    ) THEN
+        ALTER TABLE council_events DROP CONSTRAINT IF EXISTS council_events_kind_check;
+        ALTER TABLE council_events ADD CONSTRAINT council_events_kind_check CHECK (kind IN (
+            'seal', 'unseal', 'reject', 'unreject', 'edit_approve', 'edit_reject',
+            'bookmark', 'release', 'member_add', 'member_remove',
+            'applicant_approve', 'applicant_reject',
+            'metadata_propose', 'metadata_approve', 'metadata_reject'));
+    END IF;
+END $$;
+
+CREATE TABLE IF NOT EXISTS metadata_proposals (
+    id SERIAL PRIMARY KEY,
+    video_id TEXT NOT NULL,
+    lyrics_id INTEGER NOT NULL REFERENCES lyrics(id) ON DELETE CASCADE,
+    proposer_id INTEGER NOT NULL REFERENCES users(id),
+    song TEXT NOT NULL,
+    artist TEXT NOT NULL,
+    album TEXT,
+    before_song TEXT NOT NULL,
+    before_artist TEXT NOT NULL,
+    before_album TEXT,
+    status TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open', 'passed', 'rejected')),
+    created_at INTEGER NOT NULL DEFAULT (EXTRACT(EPOCH FROM NOW())::INTEGER),
+    decided_at INTEGER
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_metadata_proposals_one_open
+    ON metadata_proposals(video_id) WHERE status = 'open';
+CREATE INDEX IF NOT EXISTS idx_metadata_proposals_passed
+    ON metadata_proposals(video_id, decided_at DESC) WHERE status = 'passed';
+
+CREATE TABLE IF NOT EXISTS metadata_votes (
+    proposal_id INTEGER NOT NULL REFERENCES metadata_proposals(id) ON DELETE CASCADE,
+    voter_id INTEGER NOT NULL REFERENCES users(id),
+    approve BOOLEAN NOT NULL,
+    created_at INTEGER NOT NULL DEFAULT (EXTRACT(EPOCH FROM NOW())::INTEGER),
+    PRIMARY KEY (proposal_id, voter_id)
+);
