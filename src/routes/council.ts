@@ -39,7 +39,7 @@ function parseId(raw: string): number | null {
 const EVENT_GROUPS: Record<string, CouncilEventKind[]> = {
 	seals: ["seal", "unseal"],
 	rejections: ["reject", "unreject"],
-	edits: ["edit_approve", "edit_reject"],
+	edits: ["edit_approve", "edit_reject", "metadata_propose", "metadata_approve", "metadata_reject"],
 	membership: ["member_add", "member_remove", "applicant_approve", "applicant_reject"],
 }
 

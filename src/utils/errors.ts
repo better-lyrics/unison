@@ -68,6 +68,7 @@ export const ErrorCode = {
 	SEAL_BLOCKED_BY_REJECTION: "SEAL_BLOCKED_BY_REJECTION",
 	REJECT_BLOCKED_BY_SEAL: "REJECT_BLOCKED_BY_SEAL",
 	NO_CHANGES: "NO_CHANGES",
+	PROPOSAL_OPEN: "PROPOSAL_OPEN",
 	ALREADY_DECIDED: "ALREADY_DECIDED",
 	STALE: "STALE",
 	EXAM_TOKEN_INVALID: "EXAM_TOKEN_INVALID",
@@ -343,6 +344,10 @@ const TEMPLATES: Record<ErrorCode, Template> = {
 	REJECT_BLOCKED_BY_SEAL: {
 		error: "Lyric is sealed",
 		hint: "The council sealed this lyric. Ask the member who sealed it to lift the seal before rejecting it.",
+	},
+	PROPOSAL_OPEN: {
+		error: "Proposal already open",
+		hint: "This song already has an open details proposal. Vote on it in the council dashboard.",
 	},
 	NO_CHANGES: {
 		error: "No changes",

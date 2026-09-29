@@ -391,6 +391,7 @@ export const config = {
 		eventsPageSize: 50,
 		write: { maxRequests: 60, windowSeconds: 60 },
 		flagsCacheTtlSec: 7 * 24 * 60 * 60,
+		metadataApprovals: 3,
 	},
 
 	exam: {
