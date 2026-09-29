@@ -6,6 +6,7 @@ import {
   createBookmark,
   decideApplicant,
   decideEdit,
+  proposeMetadata,
   rejectLyric,
   releaseBookmark,
   removeCouncilMember,
@@ -256,6 +257,15 @@ export function useApplicantOpinion(me: CouncilPerson) {
       councilErrorToast(error, "save your opinion")
     },
     onSettled: () => client.invalidateQueries({ queryKey: APPLICANTS_PREFIX }),
+  })
+}
+
+export function useProposeMetadata() {
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: proposeMetadata,
+    onError: (error) => councilErrorToast(error, "propose the details"),
+    onSettled: () => refreshCouncil(client),
   })
 }
 
