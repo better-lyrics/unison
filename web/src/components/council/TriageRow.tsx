@@ -4,8 +4,9 @@ import { VariantBadge } from "@/components/VariantBadge"
 import { tagClass } from "@/components/ui"
 import type { Bookmarkable, Triage } from "@/hooks/useTriage"
 import { cn } from "@/lib/cn"
+import { changedFields } from "@/lib/council-metadata"
 import { reasonLabel, reasonMetric } from "@/lib/council-reasons"
-import type { BookmarkView, EditItem, QueueItem } from "@/lib/council-types"
+import type { BookmarkView, EditItem, MetadataItem, QueueItem } from "@/lib/council-types"
 import { formatElapsed, formatRemaining } from "@/lib/format"
 import { IconAlertTriangle, IconBookmark, IconBookmarkFilled } from "@tabler/icons-react"
 import type { ReactNode } from "react"
@@ -21,6 +22,7 @@ interface TriageRowProps<T extends Bookmarkable & { videoId: string; song: strin
   sub: string
   meta: ReactNode
   end: ReactNode
+  bookmarkable?: boolean
 }
 
 export function TriageRow<T extends Bookmarkable & { videoId: string; song: string }>({
@@ -31,9 +33,11 @@ export function TriageRow<T extends Bookmarkable & { videoId: string; song: stri
   sub,
   meta,
   end,
+  bookmarkable = true,
 }: TriageRowProps<T>) {
   const selected = triage.selectedKey === itemKey
   const heldByOther = triage.heldByOther(item)
+  const showToggle = bookmarkable && !heldByOther
   return (
     <li className="relative">
       <Link
@@ -43,7 +47,7 @@ export function TriageRow<T extends Bookmarkable & { videoId: string; song: stri
         aria-current={selected ? "true" : undefined}
         className={cn(
           "flex w-full items-center gap-3 rounded-[10px] bg-white/[0.02] py-3 pl-3.5 text-left transition-[background-color,opacity] duration-150 hover:bg-unison-bg-hover",
-          heldByOther ? "pr-3.5" : "pr-[54px]",
+          showToggle ? "pr-[54px]" : "pr-3.5",
           selected && "bg-unison-bg-hover shadow-inset-rim",
           heldByOther && !selected && "opacity-60 hover:opacity-100",
         )}
@@ -56,7 +60,7 @@ export function TriageRow<T extends Bookmarkable & { videoId: string; song: stri
         </div>
         <div className="flex shrink-0 flex-col items-end gap-1">{end}</div>
       </Link>
-      {heldByOther ? null : (
+      {showToggle ? (
         <div className="absolute top-1/2 right-3.5 -translate-y-1/2">
           <BookmarkToggle
             on={triage.bookmarkState(item).kind === "mine"}
@@ -65,7 +69,7 @@ export function TriageRow<T extends Bookmarkable & { videoId: string; song: stri
             onToggle={() => triage.toggleBookmark(item)}
           />
         </div>
-      )}
+      ) : null}
     </li>
   )
 }
@@ -165,6 +169,25 @@ export function queueRowParts(item: QueueItem, heldByOther: boolean, now: number
           <span className="font-mono text-[11px] text-unison-text-muted tabular-nums">{item.voteCount} votes</span>
         </>
       ),
+  }
+}
+
+export function metadataRowParts(item: MetadataItem, needed: number, now: number) {
+  return {
+    title: item.song,
+    sub: [item.artist, item.proposer?.displayName].filter(Boolean).join(" · "),
+    meta: (
+      <>
+        <span className={tagClass}>{changedFields(item).join(", ")}</span>
+        <Sep />
+        <span>{formatElapsed(now - item.createdAt)}</span>
+      </>
+    ),
+    end: (
+      <span className="font-mono text-[11px] text-unison-text-muted">
+        {item.approvers.length} of {needed}
+      </span>
+    ),
   }
 }
 

@@ -4,6 +4,7 @@ import {
   useCouncilApplicants,
   useCouncilEdits,
   useCouncilMembers,
+  useCouncilMetadata,
   useCouncilOverview,
   useCouncilQueue,
 } from "@/hooks/useCouncilData"
@@ -22,11 +23,12 @@ import {
   IconPencil,
   IconRosetteDiscountCheck,
   IconSchool,
+  IconTags,
   IconUsers,
 } from "@tabler/icons-react"
 import { NavLink } from "react-router-dom"
 
-type SectionId = "overview" | "queue" | "edits" | "bookmarks" | "applicants" | "activity" | "members"
+type SectionId = "overview" | "queue" | "edits" | "metadata" | "bookmarks" | "applicants" | "activity" | "members"
 
 interface Section {
   id: SectionId
@@ -39,6 +41,7 @@ export const COUNCIL_SECTIONS: Section[] = [
   { id: "overview", to: "/council", label: "Overview", icon: IconLayoutDashboard },
   { id: "queue", to: "/council/queue", label: "Seal queue", icon: IconRosetteDiscountCheck },
   { id: "edits", to: "/council/edits", label: "Edits", icon: IconPencil },
+  { id: "metadata", to: "/council/metadata", label: "Details", icon: IconTags },
   { id: "bookmarks", to: "/council/bookmarks", label: "Bookmarks", icon: IconBookmark },
   { id: "applicants", to: "/council/applicants", label: "Applicants", icon: IconSchool },
   { id: "activity", to: "/council/activity", label: "Activity", icon: IconHistory },
@@ -54,6 +57,7 @@ function useSectionCounts(meKeyId: string): Partial<Record<SectionId, SectionCou
   const now = Math.floor(Date.now() / 1000)
   const queue = useCouncilQueue().data
   const edits = useCouncilEdits().data
+  const metadata = useCouncilMetadata().data
   const overview = useCouncilOverview().data
   const applicants = useCouncilApplicants().data
   const members = useCouncilMembers().data
@@ -65,6 +69,7 @@ function useSectionCounts(meKeyId: string): Partial<Record<SectionId, SectionCou
       hot: edits.items.some((e) => e.pendingReason === "sealed"),
     }
   }
+  if (metadata) counts.metadata = { value: String(metadata.items.length) }
   if (queue && edits && overview) {
     const mine = groupByBookmark<QueueItem | EditItem>([...queue, ...edits.items], meKeyId, now).mine.length
     counts.bookmarks = { value: `${mine}/${overview.me.bookmarkCap}` }

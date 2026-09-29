@@ -83,6 +83,7 @@ describe("CouncilLayout rail", () => {
       "/council",
       "/council/queue",
       "/council/edits",
+      "/council/metadata",
       "/council/bookmarks",
       "/council/applicants",
       "/council/activity",
