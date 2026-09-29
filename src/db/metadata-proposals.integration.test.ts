@@ -12,7 +12,8 @@ import { readRevisionFixture } from "@/test/lyric-fixtures"
 import type { MetadataInput } from "@/utils/metadata-input"
 import { normalizeAlbum, normalizeArtist, normalizeSong } from "@/utils/normalize"
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest"
-import { approvedMetadata, castVote, createProposal, listOpenProposals } from "./metadata-proposals"
+import { approvedMetadata } from "./approved-metadata"
+import { castVote, createProposal, listOpenProposals } from "./metadata-proposals"
 
 const VIDEO = "HsBfV2A5dUY"
 const OTHER_VIDEO = "dQw4w9WgXcQ"
@@ -324,6 +325,41 @@ describeIntegration("metadata proposals (integration)", () => {
 				song: "Second",
 				artist: PROPOSED.artist,
 				album: null,
+			})
+		})
+	})
+
+	describe("new variants after a pass", () => {
+		it("take the approved details instead of the submitted ones", async () => {
+			const id = await propose()
+			await castVote(db.env, id, second, true, null)
+			await castVote(db.env, id, third, true, null)
+			const later = await seedUser(db, kid(9))
+			const created = await seedLyric(db, later, { lyrics: LRC, format: "lrc", videoId: VIDEO })
+			expect((await rows()).find((r) => r.id === created)).toMatchObject({
+				song: PROPOSED.song,
+				artist: PROPOSED.artist,
+				album: PROPOSED.album,
+				song_norm: normalizeSong(PROPOSED.song),
+				artist_norm: normalizeArtist(PROPOSED.artist),
+				album_norm: normalizeAlbum(PROPOSED.album),
+			})
+		})
+
+		it("keep the submitted details when nothing passed", async () => {
+			const id = await propose()
+			await castVote(db.env, id, second, false, null)
+			const later = await seedUser(db, kid(9))
+			const created = await seedLyric(db, later, {
+				lyrics: LRC,
+				format: "lrc",
+				videoId: VIDEO,
+				album: "Hymns",
+			})
+			expect((await rows()).find((r) => r.id === created)).toMatchObject({
+				song: "Amazing Grace",
+				artist: "Traditional",
+				album: "Hymns",
 			})
 		})
 	})

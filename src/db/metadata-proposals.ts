@@ -1,16 +1,11 @@
 import { config } from "@/config"
+import type { SongMetadata } from "@/db/approved-metadata"
 import { isCommittee } from "@/db/committee"
 import { recordCouncilEvent } from "@/db/council-events"
 import { type D1Compat, isUniqueViolation } from "@/infra/database"
 import type { Env } from "@/types"
 import type { MetadataInput } from "@/utils/metadata-input"
 import { normalizeAlbum, normalizeArtist, normalizeSong } from "@/utils/normalize"
-
-export interface SongMetadata {
-	song: string
-	artist: string
-	album: string | null
-}
 
 export interface OpenProposal {
 	id: number
@@ -181,16 +176,6 @@ export async function castVote(
 			.run()
 		return { ok: true, status: "passed", lyricIds }
 	})
-}
-
-export async function approvedMetadata(env: Env, videoId: string): Promise<SongMetadata | null> {
-	return env.DB.prepare(
-		`SELECT song, artist, album FROM metadata_proposals
-			WHERE video_id = ? AND status = 'passed'
-			ORDER BY decided_at DESC, id DESC LIMIT 1`
-	)
-		.bind(videoId)
-		.first<SongMetadata>()
 }
 
 export async function listOpenProposals(env: Env): Promise<OpenProposal[]> {
