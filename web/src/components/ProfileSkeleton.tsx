@@ -7,15 +7,11 @@ function Block({ className }: { className?: string }) {
   return <div className={cn(shimmer, "rounded-md", className)} />
 }
 
-// Mirrors an OwnerControls LeaderboardSection: title + subtitle header, then a card.
-function ControlSectionSkeleton({ card }: { card: string }) {
+function CollapsedSectionSkeleton() {
   return (
-    <div className="space-y-3">
-      <div className="space-y-1.5">
-        <Block className="h-5 w-24" />
-        <Block className="h-3 w-56" />
-      </div>
-      <Block className={cn("w-full rounded-lg", card)} />
+    <div className="flex h-7 items-center gap-2">
+      <Block className="size-4" />
+      <Block className="h-[18px] w-28" />
     </div>
   )
 }
@@ -48,9 +44,9 @@ function OwnerBlockSkeleton() {
           </div>
         </div>
       </div>
-      <ControlSectionSkeleton card="h-[254px]" />
-      <ControlSectionSkeleton card="h-[168px]" />
-      <ControlSectionSkeleton card="h-[124px]" />
+      <CollapsedSectionSkeleton />
+      <CollapsedSectionSkeleton />
+      <CollapsedSectionSkeleton />
     </div>
   )
 }

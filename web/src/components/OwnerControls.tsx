@@ -1,9 +1,10 @@
 import { useSession } from "@/auth/useSession"
 import { AvatarPicker } from "@/components/AvatarPicker"
+import { CollapsibleSection } from "@/components/CollapsibleSection"
 import { DiscordSection } from "@/components/DiscordSection"
-import { LeaderboardSection } from "@/components/LeaderboardSection"
 import { NicknameEditor } from "@/components/NicknameEditor"
 import { type DiscordLink, useDiscordLink } from "@/hooks/useDiscordLink"
+import type { ReactNode } from "react"
 
 // The signed-in owner's editing controls, shown on their own profile wherever it renders.
 export function OwnerControls() {
@@ -25,15 +26,24 @@ export function OwnerControls() {
 
   return (
     <>
-      <LeaderboardSection title="Profile picture" subtitle="Pick how you appear across Unison.">
+      <OwnerSection title="Profile picture" subtitle="Pick how you appear across Unison.">
         <AvatarPicker discord={link} />
-      </LeaderboardSection>
-      <LeaderboardSection title="Nickname" subtitle="How you appear across Unison.">
+      </OwnerSection>
+      <OwnerSection title="Nickname" subtitle="How you appear across Unison.">
         <NicknameEditor />
-      </LeaderboardSection>
-      <LeaderboardSection title="Discord" subtitle="Link your account for leaderboard roles.">
+      </OwnerSection>
+      <OwnerSection title="Discord" subtitle="Link your account for leaderboard roles.">
         <DiscordSection link={link} />
-      </LeaderboardSection>
+      </OwnerSection>
     </>
+  )
+}
+
+function OwnerSection({ title, subtitle, children }: { title: string; subtitle: string; children: ReactNode }) {
+  return (
+    <CollapsibleSection title={title} defaultOpen={false}>
+      <p className="mb-3 text-xs text-unison-text-muted">{subtitle}</p>
+      {children}
+    </CollapsibleSection>
   )
 }
