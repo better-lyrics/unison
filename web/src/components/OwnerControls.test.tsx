@@ -1,9 +1,9 @@
-import { act, cleanup, render, screen, waitFor } from "@testing-library/react"
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { AuthProvider } from "@/auth/AuthProvider"
 import { useSession } from "@/auth/useSession"
 import { clearAsyncDataCache } from "@/hooks/useAsyncData"
 import { saveStoredSession } from "@/lib/auth"
+import { act, cleanup, render, screen, waitFor } from "@testing-library/react"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { OwnerControls } from "./OwnerControls"
 
 const KEY = "k".repeat(64)
@@ -88,6 +88,14 @@ afterEach(() => {
 })
 
 describe("OwnerControls", () => {
+  it("starts every section collapsed", () => {
+    stubServer({ avatarUrl: null })
+    renderControls()
+    for (const name of ["Profile picture", "Nickname", "Discord"]) {
+      expect(screen.getByRole("button", { name }).getAttribute("aria-expanded")).toBe("false")
+    }
+  })
+
   it("reads the Discord link once for both the picker and the Discord section", async () => {
     const calls = stubServer({ avatarUrl: null })
     renderControls()
