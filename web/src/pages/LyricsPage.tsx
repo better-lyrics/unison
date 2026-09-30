@@ -99,6 +99,7 @@ export function LyricsPage() {
           <div className="flex items-center gap-3">
             <EditMetadataButton
               videoId={safeVideoId}
+              lyricsId={variant.id}
               current={{ song: variant.song, artist: variant.artist, album: variant.album ?? null }}
             />
             <SealLyricButton videoId={safeVideoId} lyricsId={variant.id} />

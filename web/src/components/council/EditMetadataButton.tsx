@@ -9,19 +9,25 @@ import { useId, useState } from "react"
 import { Link } from "react-router-dom"
 import { CouncilOverlay } from "./CouncilOverlay"
 
-const DEFAULT_NEEDED = 3
-
 const inputClass =
   "w-full rounded-md border border-unison-border bg-unison-bg px-3 py-2 text-sm text-unison-text focus:border-unison-border-strong focus:outline-none disabled:opacity-60"
 const labelClass = "text-[10px] uppercase tracking-wider text-unison-text-muted"
 
-export function EditMetadataButton({ videoId, current }: { videoId: string; current: SongMetadata }) {
+export function EditMetadataButton({
+  videoId,
+  lyricsId,
+  current,
+}: {
+  videoId: string
+  lyricsId: number
+  current: SongMetadata
+}) {
   const role = useCouncilRole()
   const metadata = useCouncilMetadata().data
   const [open, setOpen] = useState(false)
-  if (role === null) return null
+  if (role === null || !metadata) return null
 
-  const openProposal = metadata?.items.find((item) => item.videoId === videoId)
+  const openProposal = metadata.items.find((item) => item.videoId === videoId)
   if (openProposal) {
     return (
       <Link to={`/council/metadata?item=${openProposal.id}`} className={buttonClass("ghost", "sm")}>
@@ -40,8 +46,9 @@ export function EditMetadataButton({ videoId, current }: { videoId: string; curr
       {open ? (
         <MetadataDialog
           videoId={videoId}
+          lyricsId={lyricsId}
           current={current}
-          needed={metadata?.needed ?? DEFAULT_NEEDED}
+          needed={metadata.needed}
           onClose={() => setOpen(false)}
         />
       ) : null}
@@ -51,11 +58,13 @@ export function EditMetadataButton({ videoId, current }: { videoId: string; curr
 
 function MetadataDialog({
   videoId,
+  lyricsId,
   current,
   needed,
   onClose,
 }: {
   videoId: string
+  lyricsId: number
   current: SongMetadata
   needed: number
   onClose: () => void
@@ -72,7 +81,7 @@ function MetadataDialog({
 
   const submit = () =>
     propose.mutate(
-      { videoId, ...next },
+      { videoId, lyricsId, ...next },
       {
         onSuccess: () => {
           pushToast({

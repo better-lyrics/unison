@@ -26,7 +26,7 @@ function renderButton() {
     <QueryClientProvider client={client}>
       <MemoryRouter>
         <AuthProvider>
-          <EditMetadataButton videoId={VIDEO} current={CURRENT} />
+          <EditMetadataButton videoId={VIDEO} lyricsId={51} current={CURRENT} />
           <ToastViewport />
         </AuthProvider>
       </MemoryRouter>
@@ -64,7 +64,7 @@ describe("EditMetadataButton", () => {
 
     await waitFor(() =>
       expect(log.map((body) => JSON.parse(body))).toEqual([
-        { videoId: VIDEO, song: "Linked Song", artist: "Some Artist", album: "First Album" },
+        { videoId: VIDEO, lyricsId: 51, song: "Linked Song", artist: "Some Artist", album: "First Album" },
       ]),
     )
     await screen.findByText("Proposed new details. 2 more approvals needed.")

@@ -45,7 +45,7 @@ export async function fetchCouncilMetadata(signal?: AbortSignal): Promise<Metada
   return { ...payload, items: payload.items.map((item) => ({ ...item, bookmark: null })) }
 }
 
-export function proposeMetadata(input: SongMetadata & { videoId: string }): Promise<{ id: number }> {
+export function proposeMetadata(input: SongMetadata & { videoId: string; lyricsId: number }): Promise<{ id: number }> {
   return send("/committee/metadata", "POST", input)
 }
 
