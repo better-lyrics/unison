@@ -56,6 +56,8 @@ export function canUndo(event: CouncilEvent, meKeyId: string, now: number): bool
     (event.kind === "seal" || event.kind === "reject") &&
     event.actor?.keyId === meKeyId &&
     !event.undone &&
+    event.active &&
+    event.refId !== null &&
     event.lyric !== null &&
     now - event.at <= UNDO_WINDOW_SEC
   )

@@ -1,12 +1,7 @@
 import { config } from "@/config"
 import { createBookmark, listActiveBookmarks } from "@/db/council-bookmarks"
 import { listCouncilEvents } from "@/db/council-events"
-import {
-	getSealCandidates,
-	getSealableVariants,
-	rejectLyric,
-	undoRejection,
-} from "@/db/rejections"
+import { getSealCandidates, getSealableVariants, rejectLyric, undoRejection } from "@/db/rejections"
 import type { JevCheckInput, JevGate } from "@/services/jev-gate"
 import {
 	type IntegrationDb,
@@ -31,7 +26,7 @@ import { extractComparableLines } from "@/utils/extract-text"
 import { sha256Hex } from "@/utils/hash"
 import { buildDiffRows } from "@/utils/lyric-diff"
 import { shiftTtml } from "@/utils/ttml-timing"
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest"
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest"
 import {
 	type RevisionInput,
 	approveRevision,
@@ -1927,10 +1922,13 @@ describeIntegration("lyric revisions pipeline (integration)", () => {
 			await db.pool.query("UPDATE lyrics SET effective_score = 1 WHERE id = $1", [lyricId])
 		})
 
-		async function reject(note = "Second verse runs 400 ms late.") {
-			expect(await rejectLyric(db.env, lyricId, council, { note, source: "web" })).toEqual({
-				ok: true,
-			})
+		async function reject(
+			note = "Second verse runs 400 ms late.",
+			by: number = council
+		): Promise<number> {
+			const result = await rejectLyric(db.env, lyricId, by, { note, source: "web" })
+			if (!result.ok) throw new Error(`reject failed: ${result.reason}`)
+			return result.rejectionId
 		}
 
 		async function rejections() {
@@ -1946,9 +1944,11 @@ describeIntegration("lyric revisions pipeline (integration)", () => {
 			(await getSealableVariants(db.env, HOME_VIDEO)).map((row) => row.id)
 
 		const events = async () =>
-			(await listCouncilEvents(db.env, { includeBookmarks: false, limit: 50 })).events.map(
-				(e) => [e.kind, e.undone]
-			)
+			(await listCouncilEvents(db.env, { includeBookmarks: false, limit: 50 })).events.map((e) => [
+				e.kind,
+				e.undone,
+				e.active,
+			])
 
 		describe("happy paths", () => {
 			it("lapses the rejection when a saved edit changes the lyrics and goes live", async () => {
@@ -1990,6 +1990,16 @@ describeIntegration("lyric revisions pipeline (integration)", () => {
 				expect(await sealable()).toEqual([lyricId])
 			})
 
+			it("lapses the rejection for a timing-only edit", async () => {
+				await reject()
+
+				const revision = await save(lrc(shiftLrc(LRC, () => 1500)))
+
+				expect(revision.status).toBe("live")
+				expect((await rejections())[0].revoke_reason).toBe("edited")
+				expect(await sealable()).toEqual([lyricId])
+			})
+
 			it("counts a revert to different lyrics as an edit", async () => {
 				await save(lrc(swapWords(LRC, 2)))
 				await reject()
@@ -2015,6 +2025,23 @@ describeIntegration("lyric revisions pipeline (integration)", () => {
 				expect(await sealable()).toEqual([])
 			})
 
+			it("keeps the rejection for a whitespace-only edit", async () => {
+				await reject()
+
+				const revision = await save(lrc(`${LRC.replace("wretch", "wretch   ")}\n\n`))
+
+				expect(revision.status).toBe("live")
+				expect((await rejections())[0].revoked_at).toBeNull()
+				expect(await sealable()).toEqual([])
+			})
+
+			it("keeps the rejection for timing moves under the visible minimum", async () => {
+				await reject()
+				const revision = await save(lrc(shiftLrc(LRC, () => 50)))
+				expect(revision.status).toBe("live")
+				expect((await rejections())[0].revoked_at).toBeNull()
+			})
+
 			it("keeps the rejection for an album-only edit", async () => {
 				await reject()
 				await save(lrc(LRC, { album: "Hymns of Faith" }))
@@ -2036,7 +2063,7 @@ describeIntegration("lyric revisions pipeline (integration)", () => {
 
 			it("leaves an already revoked rejection untouched", async () => {
 				await reject()
-				expect(await undoRejection(db.env, lyricId, council, "web")).toEqual({ ok: true })
+				expect(await undoRejection(db.env, lyricId, council, "web", null)).toEqual({ ok: true })
 				await db.pool.query("UPDATE rejections SET revoked_at = 1700000000 WHERE lyrics_id = $1", [
 					lyricId,
 				])
@@ -2065,7 +2092,18 @@ describeIntegration("lyric revisions pipeline (integration)", () => {
 			it("writes no council event and leaves the rejection not undone", async () => {
 				await reject()
 				await save(lrc(swapWords(LRC, 2)))
-				expect(await events()).toEqual([["reject", false]])
+				expect(await events()).toEqual([["reject", false, false]])
+			})
+
+			it("stamps the lapse with the app clock", async () => {
+				await reject()
+				const clock = vi.spyOn(Date, "now").mockReturnValue(1_800_000_000_000)
+				try {
+					await save(lrc(swapWords(LRC, 2)))
+				} finally {
+					clock.mockRestore()
+				}
+				expect((await rejections())[0].revoked_at).toBe(1_800_000_000)
 			})
 
 			it("writes only the approval event when a council approval lapses it", async () => {
@@ -2073,8 +2111,8 @@ describeIntegration("lyric revisions pipeline (integration)", () => {
 				const pending = await save(lrc(swapWords(LRC, 15)))
 				await approveRevision(db.env, lyricId, pending.id, council, "web")
 				expect(await events()).toEqual([
-					["edit_approve", false],
-					["reject", false],
+					["edit_approve", false, false],
+					["reject", false, false],
 				])
 			})
 		})
@@ -2089,6 +2127,32 @@ describeIntegration("lyric revisions pipeline (integration)", () => {
 				await save(lrc(swapWords(LRC, 2)))
 
 				expect(await queued()).toEqual([lyricId])
+			})
+
+			it("regression: undoing the first rejection after a lapse and a re-rejection leaves the second active", async () => {
+				const leo = await seedCouncilMember(db, "d".repeat(64))
+				const first = await reject()
+				await save(lrc(swapWords(LRC, 2)))
+				await reject("Still late in the second verse.", leo)
+				const { events: log } = await listCouncilEvents(db.env, {
+					includeBookmarks: false,
+					limit: 50,
+				})
+				const firstEvent = log.find((e) => e.kind === "reject" && e.refId === first)
+
+				expect(firstEvent).toMatchObject({ active: false, undone: false })
+				expect(await undoRejection(db.env, lyricId, council, "web", firstEvent!.refId)).toEqual({
+					ok: false,
+					reason: "not_found",
+				})
+				expect(await rejections()).toEqual([
+					expect.objectContaining({ rejected_by: council, revoke_reason: "edited" }),
+					expect.objectContaining({ rejected_by: leo, revoked_at: null, revoke_reason: null }),
+				])
+				expect(await events()).toEqual([
+					["reject", false, true],
+					["reject", false, false],
+				])
 			})
 		})
 	})

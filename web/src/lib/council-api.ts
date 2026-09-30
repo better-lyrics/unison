@@ -105,12 +105,13 @@ export function unsealLyric(lyricsId: number): Promise<void> {
   return send(`/lyrics/${lyricsId}/boost`, "DELETE")
 }
 
-export function rejectLyric(lyricsId: number, note: string | null): Promise<void> {
-  return send(`/lyrics/${lyricsId}/reject`, "POST", { note })
+export async function rejectLyric(lyricsId: number, note: string | null): Promise<number> {
+  const { rejectionId } = await send<{ rejectionId: number }>(`/lyrics/${lyricsId}/reject`, "POST", { note })
+  return rejectionId
 }
 
-export function undoRejectLyric(lyricsId: number): Promise<void> {
-  return send(`/lyrics/${lyricsId}/reject`, "DELETE")
+export function undoRejectLyric(lyricsId: number, rejectionId: number): Promise<void> {
+  return send(`/lyrics/${lyricsId}/reject?rejection=${rejectionId}`, "DELETE")
 }
 
 export function decideEdit(

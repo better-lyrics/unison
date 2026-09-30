@@ -98,12 +98,19 @@ describe("council writes", () => {
     expect(lastCall()).toMatchObject({ url: "/lyrics/5/boost", method: "DELETE" })
     await rejectLyric(5, "late chorus")
     expect(lastCall()).toMatchObject({ url: "/lyrics/5/reject", method: "POST", body: { note: "late chorus" } })
-    await undoRejectLyric(5)
-    expect(lastCall()).toMatchObject({ url: "/lyrics/5/reject", method: "DELETE" })
+    await undoRejectLyric(5, 11)
+    expect(lastCall()).toMatchObject({ url: "/lyrics/5/reject?rejection=11", method: "DELETE" })
     await decideEdit(5, 9, "approve")
     expect(lastCall()).toMatchObject({ url: "/lyrics/5/revisions/9/approve", method: "POST" })
     await decideEdit(5, 9, "reject", "keep the hymn")
     expect(lastCall()).toMatchObject({ url: "/lyrics/5/revisions/9/reject", body: { note: "keep the hymn" } })
+  })
+
+  it("returns the id of the rejection the server recorded", async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(
+      new Response(JSON.stringify({ success: true, data: { rejectionId: 11 } }), { status: 200 }),
+    )
+    expect(await rejectLyric(5, null)).toBe(11)
   })
 
   it("sends bookmark, opinion and membership writes", async () => {
@@ -140,7 +147,7 @@ describe("regressions", () => {
     for (const call of [
       () => releaseBookmark(3),
       () => unsealLyric(5),
-      () => undoRejectLyric(5),
+      () => undoRejectLyric(5, 11),
       () => removeCouncilMember("abc"),
     ]) {
       await call()

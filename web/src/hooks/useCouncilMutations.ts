@@ -121,23 +121,27 @@ const DONE: Record<Decision["kind"], { message: string; undo?: string; failed: s
   "reject-edit": { message: "Rejected the edit to", failed: "reject the edit" },
 }
 
-function send(decision: Decision): Promise<void> {
-  switch (decision.kind) {
-    case "seal":
-      return sealLyric(decision.item.id)
-    case "reject":
-      return rejectLyric(decision.item.id, decision.note)
-    case "approve-edit":
-      return decideEdit(decision.item.lyricsId, decision.item.revisionId, "approve")
-    case "reject-edit":
-      return decideEdit(decision.item.lyricsId, decision.item.revisionId, "reject", decision.note)
-  }
-}
+type Undo = () => Promise<void>
 
-function undoOf(decision: Decision): (() => Promise<void>) | null {
-  if (decision.kind === "seal") return () => unsealLyric(decision.item.id)
-  if (decision.kind === "reject") return () => undoRejectLyric(decision.item.id)
-  return null
+async function send(decision: Decision): Promise<Undo | null> {
+  switch (decision.kind) {
+    case "seal": {
+      const lyricsId = decision.item.id
+      await sealLyric(lyricsId)
+      return () => unsealLyric(lyricsId)
+    }
+    case "reject": {
+      const lyricsId = decision.item.id
+      const rejectionId = await rejectLyric(lyricsId, decision.note)
+      return () => undoRejectLyric(lyricsId, rejectionId)
+    }
+    case "approve-edit":
+      await decideEdit(decision.item.lyricsId, decision.item.revisionId, "approve")
+      return null
+    case "reject-edit":
+      await decideEdit(decision.item.lyricsId, decision.item.revisionId, "reject", decision.note)
+      return null
+  }
 }
 
 export function useUndoDecision() {
@@ -145,7 +149,9 @@ export function useUndoDecision() {
   return useMutation({
     mutationFn: (event: CouncilEvent) => {
       if (!event.lyric) throw new Error(AUTHED_FETCH_ERRORS.REQUEST_FAILED)
-      return event.kind === "seal" ? unsealLyric(event.lyric.id) : undoRejectLyric(event.lyric.id)
+      if (event.kind === "seal") return unsealLyric(event.lyric.id)
+      if (event.refId === null) throw new Error(AUTHED_FETCH_ERRORS.REQUEST_FAILED)
+      return undoRejectLyric(event.lyric.id, event.refId)
     },
     onSuccess: (_, event) => {
       const verb = event.kind === "seal" ? DONE.seal.undo : DONE.reject.undo
@@ -201,9 +207,8 @@ export function useCouncilDecision() {
       if (snapshot?.edits) client.setQueryData(councilKeys.edits, snapshot.edits)
       councilErrorToast(error, DONE[decision.kind].failed)
     },
-    onSuccess: (_, decision) => {
+    onSuccess: (undo, decision) => {
       const done = DONE[decision.kind]
-      const undo = undoOf(decision)
       pushToast({
         kind: "info",
         group: DECISION_TOAST,

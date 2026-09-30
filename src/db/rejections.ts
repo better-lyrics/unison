@@ -35,7 +35,7 @@ export interface SealCandidate {
 }
 
 export type RejectResult =
-	| { ok: true }
+	| { ok: true; rejectionId: number }
 	| { ok: false; reason: "not_committee" | "lyric_not_found" | "already_rejected" | "sealed" }
 
 export type UndoRejectResult = { ok: true } | { ok: false; reason: "not_committee" | "not_found" }
@@ -147,7 +147,7 @@ export async function rejectLyric(
 				at: now,
 			})
 			await releaseBookmarksForItem(tx, "seal", lyricsId)
-			return { ok: true }
+			return { ok: true, rejectionId: Number(row?.id) }
 		})
 	} catch (err) {
 		if (isUniqueViolation(err)) {
@@ -161,7 +161,8 @@ export async function undoRejection(
 	env: Env,
 	lyricsId: number,
 	userId: number,
-	source: CouncilSource
+	source: CouncilSource,
+	rejectionId: number | null
 ): Promise<UndoRejectResult> {
 	if (!(await isCommittee(env, userId))) {
 		return { ok: false, reason: "not_committee" }
@@ -169,12 +170,16 @@ export async function undoRejection(
 
 	const now = Math.floor(Date.now() / 1000)
 	return env.DB.transaction(async (tx): Promise<UndoRejectResult> => {
+		// An unnamed undo after an edit lapse could hit a newer rejection than the one the caller saw.
 		const revoked = await tx
 			.prepare(
 				`UPDATE rejections SET revoked_at = ?, revoke_reason = 'undo'
-				 WHERE lyrics_id = ? AND revoked_at IS NULL RETURNING id`
+				 WHERE lyrics_id = ? AND revoked_at IS NULL
+				   AND (id = ? OR (?::int IS NULL AND NOT EXISTS (
+				     SELECT 1 FROM rejections lapsed WHERE lapsed.lyrics_id = ? AND lapsed.revoke_reason = 'edited')))
+				 RETURNING id`
 			)
-			.bind(now, lyricsId)
+			.bind(now, lyricsId, rejectionId, rejectionId, lyricsId)
 			.first<{ id: number | string }>()
 		if (!revoked) {
 			return { ok: false, reason: "not_found" }
@@ -195,10 +200,8 @@ export async function undoRejection(
 export async function lapseRejectionForEdit(tx: D1Compat, lyricsId: number): Promise<void> {
 	await tx
 		.prepare(
-			`UPDATE rejections
-			SET revoked_at = EXTRACT(EPOCH FROM NOW())::INTEGER, revoke_reason = 'edited'
-			WHERE lyrics_id = ? AND revoked_at IS NULL`
+			"UPDATE rejections SET revoked_at = ?, revoke_reason = 'edited' WHERE lyrics_id = ? AND revoked_at IS NULL"
 		)
-		.bind(lyricsId)
+		.bind(Math.floor(Date.now() / 1000), lyricsId)
 		.run()
 }

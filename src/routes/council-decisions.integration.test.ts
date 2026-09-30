@@ -97,14 +97,31 @@ describeIntegration("council decisions from the web (integration)", () => {
 			expect((await log())[0].note).toBeNull()
 		})
 
-		it("undoes a rejection", async () => {
-			await call("POST", `/lyrics/${lyricId}/reject`, { token: "council-token", body: {} })
-			const res = await call("DELETE", `/lyrics/${lyricId}/reject`, {
+		it("undoes the rejection it names", async () => {
+			const rejected = await call<{ rejectionId: number }>("POST", `/lyrics/${lyricId}/reject`, {
 				token: "council-token",
 				body: {},
 			})
+			expect(rejected.json.data.rejectionId).toEqual(expect.any(Number))
+			const res = await call(
+				"DELETE",
+				`/lyrics/${lyricId}/reject?rejection=${rejected.json.data.rejectionId}`,
+				{ token: "council-token", body: {} }
+			)
 			expect(res.status).toBe(200)
 			expect((await log()).map((e) => e.kind)).toEqual(["unreject", "reject"])
+		})
+
+		it("refuses an undo that names no rejection", async () => {
+			await call("POST", `/lyrics/${lyricId}/reject`, { token: "council-token", body: {} })
+			for (const query of ["", "?rejection=", "?rejection=abc", "?rejection=0"]) {
+				const res = await call("DELETE", `/lyrics/${lyricId}/reject${query}`, {
+					token: "council-token",
+					body: {},
+				})
+				expect(res.status).toBe(400)
+			}
+			expect((await log()).map((e) => e.kind)).toEqual(["reject"])
 		})
 
 		it("maps a second rejection to 409", async () => {
@@ -127,8 +144,12 @@ describeIntegration("council decisions from the web (integration)", () => {
 				(await call("POST", "/lyrics/abc/reject", { token: "council-token", body: {} })).status
 			).toBe(400)
 			expect(
-				(await call("DELETE", `/lyrics/${lyricId}/reject`, { token: "council-token", body: {} }))
-					.status
+				(
+					await call("DELETE", `/lyrics/${lyricId}/reject?rejection=999999`, {
+						token: "council-token",
+						body: {},
+					})
+				).status
 			).toBe(404)
 		})
 

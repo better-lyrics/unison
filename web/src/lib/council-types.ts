@@ -144,6 +144,8 @@ export interface CouncilEvent {
   at: number
   note: string | null
   undone: boolean
+  active: boolean
+  refId: number | null
   actor: Person | null
   subject: Person | null
   lyric: { id: number; videoId: string; song: string; artist: string } | null

@@ -221,10 +221,10 @@ describe("POST /lyrics/:id/reject/bot", () => {
 	it("records the rejection and forwards the note", async () => {
 		vi.mocked(isAuthorizedBot).mockReturnValue(true)
 		vi.mocked(getUserByKeyId).mockResolvedValue(reviewer)
-		vi.mocked(rejectLyric).mockResolvedValue({ ok: true })
+		vi.mocked(rejectLyric).mockResolvedValue({ ok: true, rejectionId: 31 })
 		const res = await app().handle(bodyReq("POST", "42", { keyId: KEY, note: "bad sync" }))
 		expect(res.status).toBe(200)
-		expect(await res.json()).toEqual({ success: true })
+		expect(await res.json()).toEqual({ success: true, data: { rejectionId: 31 } })
 		expect(vi.mocked(rejectLyric)).toHaveBeenCalledWith(expect.anything(), 42, 7, {
 			note: "bad sync",
 			source: "discord",
@@ -270,6 +270,15 @@ describe("DELETE /lyrics/:id/reject/bot", () => {
 		const res = await app().handle(bodyReq("DELETE", "9", { keyId: KEY }))
 		expect(res.status).toBe(200)
 		expect(await res.json()).toEqual({ success: true })
-		expect(vi.mocked(undoRejection)).toHaveBeenCalledWith(expect.anything(), 9, 7, "discord")
+		expect(vi.mocked(undoRejection)).toHaveBeenCalledWith(expect.anything(), 9, 7, "discord", null)
+	})
+
+	it("undoes only the rejection the bot names", async () => {
+		vi.mocked(isAuthorizedBot).mockReturnValue(true)
+		vi.mocked(getUserByKeyId).mockResolvedValue(reviewer)
+		vi.mocked(undoRejection).mockResolvedValue({ ok: true })
+		const res = await app().handle(bodyReq("DELETE", "9", { keyId: KEY, rejectionId: 31 }))
+		expect(res.status).toBe(200)
+		expect(vi.mocked(undoRejection)).toHaveBeenCalledWith(expect.anything(), 9, 7, "discord", 31)
 	})
 })

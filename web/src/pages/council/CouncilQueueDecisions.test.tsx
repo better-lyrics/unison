@@ -53,12 +53,14 @@ const detail = () => screen.getByRole("region", { name: "Details" })
 const selected = () => document.querySelector("[aria-current='true'][data-key]")?.getAttribute("data-key")
 const press = (key: string, init: KeyboardEventInit = {}) => act(() => void fireEvent.keyDown(window, { key, ...init }))
 
+const rejectionIdFor = (lyricsId: number) => 5000 + lyricsId
+
 function decisionRoutes(log: string[], server: CouncilData, opts: { fail?: boolean } = {}) {
   const removed = new Map<number, QueueItem>()
   return [
     {
       match: (url: string, init?: RequestInit) =>
-        /^\/lyrics\/\d+\/(boost|reject)$/.test(url) && init?.method !== undefined,
+        /^\/lyrics\/\d+\/(boost|reject)(\?rejection=\d+)?$/.test(url) && init?.method !== undefined,
       respond: (url: string, init?: RequestInit) => {
         log.push(`${init?.method} ${url} ${init?.body ?? ""}`.trim())
         if (opts.fail)
@@ -68,6 +70,7 @@ function decisionRoutes(log: string[], server: CouncilData, opts: { fail?: boole
           const item = server.queue.find((i) => i.id === id)
           if (item) removed.set(id, item)
           server.queue = server.queue.filter((i) => i.id !== id)
+          if (url.endsWith("/reject")) return jsonResponse({ success: true, data: { rejectionId: rejectionIdFor(id) } })
         } else {
           const item = removed.get(id)
           if (item) server.queue = [...server.queue, item]
@@ -353,7 +356,7 @@ describe("rejecting", () => {
     await screen.findByText("Nothing selected")
     const toast = await screen.findByText("Rejected “Story of a Warrior”")
     fireEvent.click(within(toast.closest("output") as HTMLElement).getByRole("button", { name: "Undo" }))
-    await waitFor(() => expect(log).toContain("DELETE /lyrics/722/reject"))
+    await waitFor(() => expect(log).toContain(`DELETE /lyrics/722/reject?rejection=${rejectionIdFor(722)}`))
   })
 
   it("sends no note for an empty reason and cancels with Escape", async () => {
