@@ -1,3 +1,4 @@
+import { lapseRejectionForEdit } from "@/db/rejections"
 import { type D1Compat, advisoryXactLock } from "@/infra/database"
 import type {
 	LyricsFormat,
@@ -276,6 +277,17 @@ export async function insertRevision(tx: D1Compat, input: NewRevision): Promise<
 
 // The only writer of the lyrics content columns once a lyric has revisions.
 export async function setCurrentRevision(tx: D1Compat, revision: RevisionRow): Promise<void> {
+	const replaced = await tx
+		.prepare(
+			`SELECT r.content_hash FROM lyrics l
+			JOIN lyric_revisions r ON r.id = l.current_revision_id
+			WHERE l.id = ?`
+		)
+		.bind(revision.lyrics_id)
+		.first<{ content_hash: string }>()
+	if (replaced && replaced.content_hash !== revision.content_hash) {
+		await lapseRejectionForEdit(tx, revision.lyrics_id)
+	}
 	const content = await decompressIfNeeded(revision.lyrics)
 	await tx
 		.prepare(

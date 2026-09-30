@@ -364,6 +364,9 @@ CREATE TABLE IF NOT EXISTS rejections (
 );
 CREATE UNIQUE INDEX IF NOT EXISTS idx_rejections_active
     ON rejections(lyrics_id) WHERE revoked_at IS NULL;
+-- NULL on a revoked row is a legacy undo; 'edited' lapses when the lyrics change, not a council action.
+ALTER TABLE rejections ADD COLUMN IF NOT EXISTS revoke_reason TEXT
+    CHECK (revoke_reason IN ('undo', 'edited'));
 
 ALTER TABLE lyrics ADD COLUMN IF NOT EXISTS committee_approved_at INTEGER;
 ALTER TABLE lyrics ADD COLUMN IF NOT EXISTS committee_approved_by INTEGER REFERENCES users(id);

@@ -37,11 +37,13 @@ export const EDIT_DECISION_KINDS: CouncilEventKind[] = [
 	"metadata_reject",
 ]
 
+const REJECTION_UNDONE = "r.revoked_at IS NOT NULL AND r.revoke_reason IS DISTINCT FROM 'edited'"
+
 export const UNDONE_EXPR = `CASE
 	WHEN e.kind = 'seal' THEN EXISTS (
 		SELECT 1 FROM boosts b WHERE b.id = e.ref_id AND b.revoked_at IS NOT NULL)
 	WHEN e.kind = 'reject' THEN EXISTS (
-		SELECT 1 FROM rejections r WHERE r.id = e.ref_id AND r.revoked_at IS NOT NULL)
+		SELECT 1 FROM rejections r WHERE r.id = e.ref_id AND ${REJECTION_UNDONE})
 	ELSE FALSE
 END`
 
@@ -220,7 +222,7 @@ const HISTORY_BACKFILLS = [
 	 ON CONFLICT DO NOTHING RETURNING id`,
 	`INSERT INTO council_events (actor_id, kind, source, lyrics_id, ref_id, created_at)
 	 SELECT NULL, 'unreject', 'discord', r.lyrics_id, r.id, r.revoked_at FROM rejections r
-	 WHERE r.revoked_at IS NOT NULL AND ${unrecorded("'unreject'", "r.id")}
+	 WHERE ${REJECTION_UNDONE} AND ${unrecorded("'unreject'", "r.id")}
 	 ON CONFLICT DO NOTHING RETURNING id`,
 	`INSERT INTO council_events (actor_id, kind, source, lyrics_id, ref_id, note, created_at)
 	 SELECT lr.reviewed_by,

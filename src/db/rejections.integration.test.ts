@@ -480,6 +480,36 @@ describeIntegration("rejections store (integration)", () => {
 			)
 			expect(Number(count.n)).toBe(2)
 		})
+
+		it("records the revoke as an undo", async () => {
+			const reviewer = await newUser()
+			await addToCommittee(reviewer)
+			const id = await insertLyric({ videoId: "vReason" })
+			await rejectLyric(env, id, reviewer, { source: "web" })
+			await undoRejection(env, id, reviewer, "web")
+
+			const row = await one<{ revoke_reason: string | null }>(
+				"SELECT revoke_reason FROM rejections WHERE lyrics_id = $1",
+				[id]
+			)
+			expect(row.revoke_reason).toBe("undo")
+		})
+
+		describe("error paths", () => {
+			it("refuses an unknown revoke reason", async () => {
+				const reviewer = await newUser()
+				await addToCommittee(reviewer)
+				const id = await insertLyric({ videoId: "vBadReason" })
+				await rejectLyric(env, id, reviewer, { source: "web" })
+
+				await expect(
+					pool.query(
+						"UPDATE rejections SET revoked_at = 1, revoke_reason = 'expired' WHERE lyrics_id = $1",
+						[id]
+					)
+				).rejects.toThrow(/check constraint/)
+			})
+		})
 	})
 
 	describe("council log", () => {

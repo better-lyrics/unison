@@ -1,6 +1,12 @@
 import { config } from "@/config"
 import { createBookmark, listActiveBookmarks } from "@/db/council-bookmarks"
 import { listCouncilEvents } from "@/db/council-events"
+import {
+	getSealCandidates,
+	getSealableVariants,
+	rejectLyric,
+	undoRejection,
+} from "@/db/rejections"
 import type { JevCheckInput, JevGate } from "@/services/jev-gate"
 import {
 	type IntegrationDb,
@@ -1910,6 +1916,180 @@ describeIntegration("lyric revisions pipeline (integration)", () => {
 				[revision.id]
 			)
 			expect(rows[0].content_hash).toBe(sha256Hex(edited))
+		})
+	})
+
+	describe("council rejection lapse", () => {
+		let council: number
+
+		beforeEach(async () => {
+			council = await seedCouncilMember(db, "c".repeat(64))
+			await db.pool.query("UPDATE lyrics SET effective_score = 1 WHERE id = $1", [lyricId])
+		})
+
+		async function reject(note = "Second verse runs 400 ms late.") {
+			expect(await rejectLyric(db.env, lyricId, council, { note, source: "web" })).toEqual({
+				ok: true,
+			})
+		}
+
+		async function rejections() {
+			const { rows } = await db.pool.query(
+				`SELECT rejected_by, note, revoked_at, revoke_reason FROM rejections
+				 WHERE lyrics_id = $1 ORDER BY id`,
+				[lyricId]
+			)
+			return rows
+		}
+
+		const sealable = async () =>
+			(await getSealableVariants(db.env, HOME_VIDEO)).map((row) => row.id)
+
+		const events = async () =>
+			(await listCouncilEvents(db.env, { includeBookmarks: false, limit: 50 })).events.map(
+				(e) => [e.kind, e.undone]
+			)
+
+		describe("happy paths", () => {
+			it("lapses the rejection when a saved edit changes the lyrics and goes live", async () => {
+				await reject()
+				expect(await sealable()).toEqual([])
+
+				const revision = await save(lrc(swapWords(LRC, 2)))
+
+				expect(revision.status).toBe("live")
+				expect(await rejections()).toEqual([
+					expect.objectContaining({ revoked_at: expect.any(Number), revoke_reason: "edited" }),
+				])
+				expect(await sealable()).toEqual([lyricId])
+			})
+
+			it("lets the council reject the edited lyric again", async () => {
+				await reject()
+				await save(lrc(swapWords(LRC, 2)))
+
+				await reject("Still late in the second verse.")
+
+				expect(await sealable()).toEqual([])
+				expect((await rejections()).map((r) => [r.note, r.revoke_reason])).toEqual([
+					["Second verse runs 400 ms late.", "edited"],
+					["Still late in the second verse.", null],
+				])
+			})
+
+			it("lapses the rejection when the council approves a pending edit that changes the lyrics", async () => {
+				await reject()
+				const pending = await save(lrc(swapWords(LRC, 15)))
+				expect(pending.status).toBe("pending")
+				expect((await rejections())[0].revoked_at).toBeNull()
+
+				const approved = await approveRevision(db.env, lyricId, pending.id, council, "web")
+
+				expect(approved.ok).toBe(true)
+				expect((await rejections())[0].revoke_reason).toBe("edited")
+				expect(await sealable()).toEqual([lyricId])
+			})
+
+			it("counts a revert to different lyrics as an edit", async () => {
+				await save(lrc(swapWords(LRC, 2)))
+				await reject()
+
+				const reverted = await revertToRevision(db.env, lyricId, owner, await revisionId(1))
+
+				expect(reverted.ok).toBe(true)
+				expect((await rejections())[0].revoke_reason).toBe("edited")
+				expect(await sealable()).toEqual([lyricId])
+			})
+		})
+
+		describe("edge cases", () => {
+			it("keeps the rejection for a metadata-only edit", async () => {
+				await reject()
+
+				const revision = await save(lrc(LRC, { language: "es", isrc: "USRC17607839" }))
+
+				expect(revision.status).toBe("live")
+				expect(await rejections()).toEqual([
+					expect.objectContaining({ revoked_at: null, revoke_reason: null }),
+				])
+				expect(await sealable()).toEqual([])
+			})
+
+			it("keeps the rejection for an album-only edit", async () => {
+				await reject()
+				await save(lrc(LRC, { album: "Hymns of Faith" }))
+				expect((await rejections())[0].revoked_at).toBeNull()
+			})
+
+			it("keeps the rejection while a text edit waits for review", async () => {
+				await reject()
+				await save(lrc(swapWords(LRC, 15)))
+				expect((await rejections())[0].revoked_at).toBeNull()
+				expect(await sealable()).toEqual([])
+			})
+
+			it("changes nothing for a lyric without a rejection", async () => {
+				await save(lrc(swapWords(LRC, 2)))
+				expect(await rejections()).toEqual([])
+				expect(await sealable()).toEqual([lyricId])
+			})
+
+			it("leaves an already revoked rejection untouched", async () => {
+				await reject()
+				expect(await undoRejection(db.env, lyricId, council, "web")).toEqual({ ok: true })
+				await db.pool.query("UPDATE rejections SET revoked_at = 1700000000 WHERE lyrics_id = $1", [
+					lyricId,
+				])
+
+				await save(lrc(swapWords(LRC, 2)))
+
+				expect(await rejections()).toEqual([
+					expect.objectContaining({ revoked_at: 1700000000, revoke_reason: "undo" }),
+				])
+			})
+		})
+
+		describe("invariants", () => {
+			it("keeps the rejection row as history", async () => {
+				await reject()
+				await save(lrc(swapWords(LRC, 2)))
+				expect(await rejections()).toEqual([
+					expect.objectContaining({
+						rejected_by: council,
+						note: "Second verse runs 400 ms late.",
+						revoke_reason: "edited",
+					}),
+				])
+			})
+
+			it("writes no council event and leaves the rejection not undone", async () => {
+				await reject()
+				await save(lrc(swapWords(LRC, 2)))
+				expect(await events()).toEqual([["reject", false]])
+			})
+
+			it("writes only the approval event when a council approval lapses it", async () => {
+				await reject()
+				const pending = await save(lrc(swapWords(LRC, 15)))
+				await approveRevision(db.env, lyricId, pending.id, council, "web")
+				expect(await events()).toEqual([
+					["edit_approve", false],
+					["reject", false],
+				])
+			})
+		})
+
+		describe("regressions", () => {
+			it("regression: a rejected lyric returns to the seal queue after its submitter fixes the lyrics", async () => {
+				await reject()
+				const queued = async () =>
+					(await getSealCandidates(db.env, { limit: 25, sort: "top-rated" })).map((r) => r.id)
+				expect(await queued()).toEqual([])
+
+				await save(lrc(swapWords(LRC, 2)))
+
+				expect(await queued()).toEqual([lyricId])
+			})
 		})
 	})
 })
