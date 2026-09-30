@@ -2,6 +2,7 @@ import { FeaturedBadgeEditor } from "@/components/FeaturedBadgeEditor"
 import type { BadgeCatalogue, BadgeDef, UserGamification } from "@/lib/types"
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react"
 import { MotionGlobalConfig } from "motion/react"
+import type { ReactElement } from "react"
 import { afterEach, describe, expect, it, vi } from "vitest"
 
 // Force motion to settle enter/exit instantly so AnimatePresence unmounts removed tiles in the
@@ -86,13 +87,37 @@ function addTile(name: string): HTMLElement {
 function unfeatureButton(name: string): HTMLElement {
   return screen.getByRole("button", { name: new RegExp(`unfeature ${name}`, "i") })
 }
+function sectionHeader(): HTMLElement {
+  return screen.getByRole("button", { name: "Featured badges" })
+}
+
+// The section starts collapsed and inert, so open it the way an owner would before editing.
+function renderExpanded(ui: ReactElement) {
+  const result = render(ui)
+  fireEvent.click(sectionHeader())
+  expect(sectionHeader().getAttribute("aria-expanded")).toBe("true")
+  return result
+}
+
 function saveButton(): HTMLElement {
   return screen.getByRole("button", { name: "Save" })
 }
 
 describe("FeaturedBadgeEditor", () => {
+  it("starts collapsed and opens from its header", () => {
+    render(<FeaturedBadgeEditor gamification={gamification()} catalogue={catalogue()} onSaved={vi.fn()} />)
+    const header = sectionHeader()
+    const body = document.getElementById(header.getAttribute("aria-controls") ?? "")
+    expect(header.getAttribute("aria-expanded")).toBe("false")
+    expect(body?.hasAttribute("inert")).toBe(true)
+
+    fireEvent.click(header)
+    expect(header.getAttribute("aria-expanded")).toBe("true")
+    expect(body?.hasAttribute("inert")).toBe(false)
+  })
+
   it("puts featured badges in the strip and only unfeatured earned badges in the add grid", () => {
-    render(
+    renderExpanded(
       <FeaturedBadgeEditor
         gamification={gamification({ featured: ["most-loved"] })}
         catalogue={catalogue()}
@@ -108,7 +133,7 @@ describe("FeaturedBadgeEditor", () => {
   })
 
   it("does not offer locked badges anywhere", () => {
-    render(<FeaturedBadgeEditor gamification={gamification()} catalogue={catalogue()} onSaved={vi.fn()} />)
+    renderExpanded(<FeaturedBadgeEditor gamification={gamification()} catalogue={catalogue()} onSaved={vi.fn()} />)
     expect(screen.queryByRole("button", { name: "Polyglot" })).toBeNull()
     expect(screen.queryByRole("button", { name: /polyglot/i })).toBeNull()
   })
@@ -119,7 +144,7 @@ describe("FeaturedBadgeEditor", () => {
     vi.stubGlobal("fetch", fetchMock)
     const onSaved = vi.fn()
 
-    render(<FeaturedBadgeEditor gamification={gamification()} catalogue={catalogue()} onSaved={onSaved} />)
+    renderExpanded(<FeaturedBadgeEditor gamification={gamification()} catalogue={catalogue()} onSaved={onSaved} />)
 
     expect(saveButton().hasAttribute("disabled")).toBe(true)
     fireEvent.click(addTile("Sharp Ear"))
@@ -138,7 +163,7 @@ describe("FeaturedBadgeEditor", () => {
     const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ success: true, data: gamification() }))
     vi.stubGlobal("fetch", fetchMock)
 
-    render(
+    renderExpanded(
       <FeaturedBadgeEditor
         gamification={gamification({ featured: ["most-loved", "sharp-ear"] })}
         catalogue={catalogue()}
@@ -157,7 +182,7 @@ describe("FeaturedBadgeEditor", () => {
     const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ success: true, data: gamification() }))
     vi.stubGlobal("fetch", fetchMock)
 
-    render(
+    renderExpanded(
       <FeaturedBadgeEditor
         gamification={gamification({ featured: ["most-loved", "sharp-ear"] })}
         catalogue={catalogue()}
@@ -180,7 +205,7 @@ describe("FeaturedBadgeEditor", () => {
   })
 
   it("disables the add grid when the featured cap is reached", () => {
-    render(
+    renderExpanded(
       <FeaturedBadgeEditor
         gamification={gamification({ featured: ["most-loved", "sharp-ear"] })}
         catalogue={catalogue(2)}
@@ -199,7 +224,7 @@ describe("FeaturedBadgeEditor", () => {
     vi.stubGlobal("fetch", fetchMock)
     const onSaved = vi.fn()
 
-    render(<FeaturedBadgeEditor gamification={gamification()} catalogue={catalogue()} onSaved={onSaved} />)
+    renderExpanded(<FeaturedBadgeEditor gamification={gamification()} catalogue={catalogue()} onSaved={onSaved} />)
 
     fireEvent.click(addTile("Sharp Ear"))
     fireEvent.click(saveButton())
@@ -210,7 +235,7 @@ describe("FeaturedBadgeEditor", () => {
   })
 
   it("reverts pending edits on reset", () => {
-    render(<FeaturedBadgeEditor gamification={gamification()} catalogue={catalogue()} onSaved={vi.fn()} />)
+    renderExpanded(<FeaturedBadgeEditor gamification={gamification()} catalogue={catalogue()} onSaved={vi.fn()} />)
     fireEvent.click(addTile("Sharp Ear"))
     expect(saveButton().hasAttribute("disabled")).toBe(false)
     fireEvent.click(screen.getByRole("button", { name: "Reset" }))

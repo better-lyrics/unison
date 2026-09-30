@@ -161,6 +161,7 @@ export function FeaturedBadgeEditor({ gamification, catalogue, onSaved }: Featur
   return (
     <CollapsibleSection
       title="Featured badges"
+      defaultOpen={false}
       testId="featured-badge-editor"
       summary={<span className="text-xs text-unison-text-muted">{selection.length} featured</span>}
     >
