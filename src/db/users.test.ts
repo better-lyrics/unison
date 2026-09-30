@@ -260,8 +260,8 @@ describe("nickname mutations invalidate the per-video lyrics cache", () => {
 		expect(deleteCalls).toContain("v:vA")
 		expect(deleteCalls).toContain("v:vB")
 		expect(db.calls[0].sql).toMatch(/^UPDATE users SET nickname/)
-		expect(db.calls[1].sql).toMatch(/SELECT\s+DISTINCT\s+l\.video_id/i)
-		expect(db.calls[1].params).toEqual(["k1"])
+		expect(db.calls[1].sql).toMatch(/UNION\s+SELECT\s+link\.video_id/i)
+		expect(db.calls[1].params).toEqual(["k1", "k1"])
 	})
 
 	it("setNickname TAKEN path does not run the SELECT or invalidate any key", async () => {
@@ -295,7 +295,7 @@ describe("nickname mutations invalidate the per-video lyrics cache", () => {
 		await setNickname(env, "k1", "Alex")
 
 		expect(db.calls[0].sql).toMatch(/^UPDATE users/)
-		expect(db.calls[1].sql).toMatch(/^SELECT DISTINCT/)
+		expect(db.calls[1].sql).toMatch(/^SELECT l\.video_id/)
 	})
 
 	it("clearNickname deletes v:<videoId> for each of the user's submissions", async () => {
@@ -307,7 +307,7 @@ describe("nickname mutations invalidate the per-video lyrics cache", () => {
 
 		expect(deleteCalls).toContain("v:vX")
 		expect(db.calls[0].sql).toMatch(/^UPDATE users SET nickname = NULL/)
-		expect(db.calls[1].sql).toMatch(/SELECT\s+DISTINCT\s+l\.video_id/i)
+		expect(db.calls[1].sql).toMatch(/UNION\s+SELECT\s+link\.video_id/i)
 	})
 
 	it("clearNickname with no submissions runs the SELECT", async () => {

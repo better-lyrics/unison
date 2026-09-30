@@ -11,6 +11,7 @@ import {
 	restoreFromSnapshot,
 	runMigration,
 } from "@/db/account-migration"
+import { setBanned } from "@/db/bans"
 import { revokeBoostByAdmin } from "@/db/boost"
 import { addCommittee, listCommittee, removeCommittee, setCouncilAdmin } from "@/db/committee"
 import { getByKeyId } from "@/db/discordLinks"
@@ -64,6 +65,7 @@ const bodyCommit = t.Optional(
 	})
 )
 const paramsId = t.Object({ id: t.Numeric() })
+const paramsKeyId = t.Object({ keyId: t.String({ minLength: 1 }) })
 
 const RUN_ERROR: Record<MigrationRunError["error"], { httpStatus: number; code: ErrorCode }> = {
 	SAME_KEY: { httpStatus: 409, code: ErrorCode.MIGRATION_SAME_KEY },
@@ -253,6 +255,28 @@ export const adminRoutes = (env: Env) =>
 				return status(200, { success: true, data: { ...rest, hasSnapshot: snapshot !== null } })
 			},
 			{ params: paramsId }
+		)
+		.put(
+			"/users/:keyId/ban",
+			async ({ env, params, status }) => {
+				if (!(await setBanned(env, params.keyId, true))) {
+					return status(404, buildError(ErrorCode.NOT_FOUND))
+				}
+				log.info("user banned", { keyId: params.keyId })
+				return status(200, { success: true, data: { keyId: params.keyId, banned: true } })
+			},
+			{ params: paramsKeyId }
+		)
+		.delete(
+			"/users/:keyId/ban",
+			async ({ env, params, status }) => {
+				if (!(await setBanned(env, params.keyId, false))) {
+					return status(404, buildError(ErrorCode.NOT_FOUND))
+				}
+				log.info("user unbanned", { keyId: params.keyId })
+				return status(200, { success: true, data: { keyId: params.keyId, banned: false } })
+			},
+			{ params: paramsKeyId }
 		)
 		.get("/committee", async ({ env, status }) => {
 			const rows = await listCommittee(env)
