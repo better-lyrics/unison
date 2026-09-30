@@ -2,6 +2,7 @@ import { config } from "@/config"
 import type { SongMetadata } from "@/db/approved-metadata"
 import { isCommittee } from "@/db/committee"
 import { recordCouncilEvent } from "@/db/council-events"
+import { videoServesExpr } from "@/db/predicates"
 import { type D1Compat, isUniqueViolation } from "@/infra/database"
 import type { Env } from "@/types"
 import type { MetadataInput } from "@/utils/metadata-input"
@@ -41,10 +42,9 @@ export async function createProposal(
 	if (!(await isCommittee(env, proposerId))) return { ok: false, reason: "not_committee" }
 	const current = await env.DB.prepare(
 		`SELECT id, song, artist, album FROM lyrics
-			WHERE video_id = ? AND deleted_at IS NULL
-			ORDER BY effective_score DESC, id ASC LIMIT 1`
+			WHERE id = ? AND deleted_at IS NULL AND ${videoServesExpr()}`
 	)
-		.bind(input.videoId)
+		.bind(input.lyricsId, input.videoId, input.videoId)
 		.first<{ id: number; song: string; artist: string; album: string | null }>()
 	if (!current) return { ok: false, reason: "not_found" }
 	if (sameMetadata(input, current)) return { ok: false, reason: "no_changes" }
@@ -94,7 +94,7 @@ async function rewriteVideo(tx: D1Compat, videoId: string, next: SongMetadata): 
 		.prepare(
 			`UPDATE lyrics SET song = ?, artist = ?, album = ?,
 				song_norm = ?, artist_norm = ?, album_norm = ?
-				WHERE video_id = ? RETURNING id`
+				WHERE ${videoServesExpr()} RETURNING id`
 		)
 		.bind(
 			next.song,
@@ -103,6 +103,7 @@ async function rewriteVideo(tx: D1Compat, videoId: string, next: SongMetadata): 
 			normalizeSong(next.song),
 			normalizeArtist(next.artist),
 			normalizeAlbum(next.album),
+			videoId,
 			videoId
 		)
 		.all<{ id: number }>()

@@ -123,7 +123,13 @@ export const councilRoutes = (env: Env) =>
 				await Promise.all(result.lyricIds.map((lyricsId) => invalidateCacheForLyric(env, lyricsId)))
 				await evictFeedCaches(env)
 			}
-			return { success: true, data: result }
+			return {
+				success: true,
+				data:
+					result.status === "open"
+						? { status: result.status, approvals: result.approvals }
+						: { status: result.status },
+			}
 		})
 		.post("/bookmarks", async ({ env, userId, keyId, body, status }) => {
 			const input = parseBookmarkBody(body)

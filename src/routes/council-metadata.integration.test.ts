@@ -22,7 +22,7 @@ const SUBMITTER = "a5".repeat(32)
 const VIDEO = "dQw4w9WgXcQ"
 const LRC = readRevisionFixture("amazing-grace.lrc")
 
-const PROPOSAL = {
+const PROPOSAL_FIELDS = {
 	videoId: VIDEO,
 	song: "Amazing Grace (My Chains Are Gone)",
 	artist: "Chris Tomlin",
@@ -38,6 +38,8 @@ interface Envelope<T> {
 
 describeIntegration("council metadata routes (integration)", () => {
 	let db: IntegrationDb
+	let lyricsId: number
+	let PROPOSAL: typeof PROPOSAL_FIELDS & { lyricsId: number }
 
 	beforeAll(async () => {
 		db = await openIntegrationDb()
@@ -55,7 +57,8 @@ describeIntegration("council metadata routes (integration)", () => {
 		await seedCouncilMember(db, KAI)
 		await seedUser(db, STRANGER)
 		const submitter = await seedUser(db, SUBMITTER)
-		await seedLyric(db, submitter, { lyrics: LRC, format: "lrc", videoId: VIDEO })
+		lyricsId = await seedLyric(db, submitter, { lyrics: LRC, format: "lrc", videoId: VIDEO })
+		PROPOSAL = { ...PROPOSAL_FIELDS, lyricsId }
 		seedSession(db, "mira", MIRA)
 		seedSession(db, "ola", OLA)
 		seedSession(db, "kai", KAI)
@@ -143,7 +146,7 @@ describeIntegration("council metadata routes (integration)", () => {
 		it("refuses values that change nothing", async () => {
 			const res = await call("POST", "/committee/metadata", {
 				token: "mira",
-				body: { videoId: VIDEO, song: "Amazing Grace", artist: "Traditional" },
+				body: { videoId: VIDEO, lyricsId, song: "Amazing Grace", artist: "Traditional" },
 			})
 			expect(res.status).toBe(409)
 			expect(res.json.code).toBe("NO_CHANGES")
@@ -159,8 +162,9 @@ describeIntegration("council metadata routes (integration)", () => {
 		})
 
 		it.each([
-			["a missing artist", { videoId: VIDEO, song: "S" }],
-			["a bad video id", { ...PROPOSAL, videoId: "nope" }],
+			["a missing artist", { videoId: VIDEO, lyricsId: 1, song: "S" }],
+			["a bad video id", { ...PROPOSAL_FIELDS, lyricsId: 1, videoId: "nope" }],
+			["a missing lyric id", PROPOSAL_FIELDS],
 			["an empty body", {}],
 		])("refuses %s", async (_, body) => {
 			const res = await call("POST", "/committee/metadata", { token: "mira", body })
@@ -185,7 +189,7 @@ describeIntegration("council metadata routes (integration)", () => {
 
 			const res = await vote(id, "kai", { approve: true })
 			expect(res.status).toBe(200)
-			expect(res.json.data.status).toBe("passed")
+			expect(res.json.data).toEqual({ status: "passed" })
 			const row = await db.pool.query(
 				"SELECT song, artist, album FROM lyrics WHERE video_id = $1",
 				[VIDEO]

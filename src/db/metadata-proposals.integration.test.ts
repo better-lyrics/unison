@@ -20,7 +20,7 @@ const OTHER_VIDEO = "dQw4w9WgXcQ"
 const LRC = readRevisionFixture("amazing-grace.lrc")
 const kid = (n: number): string => n.toString(16).padStart(64, "0")
 
-const PROPOSED: MetadataInput = {
+const PROPOSED: Omit<MetadataInput, "lyricsId"> = {
 	videoId: VIDEO,
 	song: "Amazing Grace (My Chains Are Gone)",
 	artist: "Chris Tomlin",
@@ -35,6 +35,7 @@ describeIntegration("metadata proposals (integration)", () => {
 	let third: number
 	let fourth: number
 	let outsider: number
+	let seeded: number
 
 	const rows = async (videoId = VIDEO) =>
 		(
@@ -68,8 +69,14 @@ describeIntegration("metadata proposals (integration)", () => {
 			)
 		).rows
 
-	const propose = async (input: MetadataInput = PROPOSED) => {
-		const result = await createProposal(db.env, proposer, input)
+	const withLyric = (input: Partial<MetadataInput> = {}): MetadataInput => ({
+		...PROPOSED,
+		lyricsId: seeded,
+		...input,
+	})
+
+	const propose = async (input: Partial<MetadataInput> = {}) => {
+		const result = await createProposal(db.env, proposer, withLyric(input))
 		if (!result.ok) throw new Error(`proposal failed: ${result.reason}`)
 		return result.id
 	}
@@ -90,7 +97,7 @@ describeIntegration("metadata proposals (integration)", () => {
 		third = await seedCouncilMember(db, kid(4))
 		fourth = await seedCouncilMember(db, kid(5))
 		outsider = await seedUser(db, kid(6))
-		await seedLyric(db, submitter, { lyrics: LRC, format: "lrc", videoId: VIDEO })
+		seeded = await seedLyric(db, submitter, { lyrics: LRC, format: "lrc", videoId: VIDEO })
 	})
 
 	describe("createProposal", () => {
@@ -121,35 +128,34 @@ describeIntegration("metadata proposals (integration)", () => {
 		})
 
 		it("refuses a proposal that changes nothing", async () => {
-			const result = await createProposal(db.env, proposer, {
-				videoId: VIDEO,
-				song: "Amazing Grace",
-				artist: "Traditional",
-				album: null,
-			})
+			const result = await createProposal(
+				db.env,
+				proposer,
+				withLyric({ song: "Amazing Grace", artist: "Traditional", album: null })
+			)
 			expect(result).toEqual({ ok: false, reason: "no_changes" })
 		})
 
 		it("refuses a video with no live lyric", async () => {
-			const result = await createProposal(db.env, proposer, { ...PROPOSED, videoId: OTHER_VIDEO })
+			const result = await createProposal(db.env, proposer, withLyric({ videoId: OTHER_VIDEO }))
 			expect(result).toEqual({ ok: false, reason: "not_found" })
 		})
 
 		it("refuses a second open proposal for the same video", async () => {
 			await propose()
-			const result = await createProposal(db.env, second, { ...PROPOSED, artist: "Someone" })
+			const result = await createProposal(db.env, second, withLyric({ artist: "Someone" }))
 			expect(result).toEqual({ ok: false, reason: "open" })
 		})
 
 		it("refuses a user who is not on the council", async () => {
-			const result = await createProposal(db.env, outsider, PROPOSED)
+			const result = await createProposal(db.env, outsider, withLyric())
 			expect(result).toEqual({ ok: false, reason: "not_committee" })
 		})
 
 		it("allows a new proposal once the previous one closed", async () => {
 			const first = await propose()
 			await castVote(db.env, first, second, false, null)
-			const again = await createProposal(db.env, second, PROPOSED)
+			const again = await createProposal(db.env, second, withLyric())
 			expect(again.ok).toBe(true)
 		})
 	})
@@ -272,6 +278,87 @@ describeIntegration("metadata proposals (integration)", () => {
 		})
 	})
 
+	describe("linked videos", () => {
+		const link = (lyricsId: number, videoId: string) =>
+			db.pool.query("INSERT INTO lyrics_video_ids (lyrics_id, video_id) VALUES ($1, $2)", [
+				lyricsId,
+				videoId,
+			])
+
+		it("regression: proposes on a video served only through a linked lyric", async () => {
+			const linked = (await rows())[0].id
+			await link(linked, OTHER_VIDEO)
+			const result = await createProposal(db.env, proposer, {
+				...PROPOSED,
+				videoId: OTHER_VIDEO,
+				lyricsId: linked,
+			})
+			expect(result.ok).toBe(true)
+		})
+
+		it("regression: rewrites home and linked variants shown on the same page", async () => {
+			const home = await seedLyric(db, submitter, {
+				lyrics: LRC,
+				format: "lrc",
+				videoId: OTHER_VIDEO,
+			})
+			const linked = (await rows())[0].id
+			await link(linked, OTHER_VIDEO)
+			const created = await createProposal(db.env, proposer, {
+				...PROPOSED,
+				videoId: OTHER_VIDEO,
+				lyricsId: home,
+			})
+			if (!created.ok) throw new Error(created.reason)
+			await castVote(db.env, created.id, second, true, null)
+			const passed = await castVote(db.env, created.id, third, true, null)
+			expect(passed).toEqual({
+				ok: true,
+				status: "passed",
+				lyricIds: expect.arrayContaining([home, linked]),
+			})
+			const songs = await db.pool.query("SELECT song FROM lyrics WHERE id = ANY($1)", [
+				[home, linked],
+			])
+			expect(songs.rows.map((r) => r.song)).toEqual([PROPOSED.song, PROPOSED.song])
+		})
+
+		it("regression: compares against the variant the proposer is viewing", async () => {
+			const other = await seedUser(db, kid(10))
+			const viewed = await seedLyric(db, other, { lyrics: LRC, format: "lrc", videoId: VIDEO })
+			await db.pool.query("UPDATE lyrics SET song = 'Grace', artist = 'Someone' WHERE id = $1", [
+				viewed,
+			])
+			const result = await createProposal(db.env, proposer, {
+				videoId: VIDEO,
+				lyricsId: viewed,
+				song: "Amazing Grace",
+				artist: "Traditional",
+				album: null,
+			})
+			if (!result.ok) throw new Error(result.reason)
+			const stored = await db.pool.query(
+				"SELECT before_song, before_artist, lyrics_id FROM metadata_proposals WHERE id = $1",
+				[result.id]
+			)
+			expect(stored.rows[0]).toEqual({
+				before_song: "Grace",
+				before_artist: "Someone",
+				lyrics_id: viewed,
+			})
+		})
+
+		it("refuses a lyric that the video does not serve", async () => {
+			const elsewhere = await seedLyric(db, submitter, {
+				lyrics: LRC,
+				format: "lrc",
+				videoId: OTHER_VIDEO,
+			})
+			const result = await createProposal(db.env, proposer, withLyric({ lyricsId: elsewhere }))
+			expect(result).toEqual({ ok: false, reason: "not_found" })
+		})
+	})
+
 	describe("invariants", () => {
 		it("counts a repeated approval once", async () => {
 			const id = await propose()
@@ -366,10 +453,14 @@ describeIntegration("metadata proposals (integration)", () => {
 
 	describe("listOpenProposals", () => {
 		it("lists only open proposals with their approvers", async () => {
-			await seedLyric(db, submitter, { lyrics: LRC, format: "lrc", videoId: OTHER_VIDEO })
+			const otherLyric = await seedLyric(db, submitter, {
+				lyrics: LRC,
+				format: "lrc",
+				videoId: OTHER_VIDEO,
+			})
 			const open = await propose()
 			await castVote(db.env, open, second, true, null)
-			const closed = await propose({ ...PROPOSED, videoId: OTHER_VIDEO })
+			const closed = await propose({ videoId: OTHER_VIDEO, lyricsId: otherLyric })
 			await castVote(db.env, closed, third, false, null)
 
 			const list = await listOpenProposals(db.env)

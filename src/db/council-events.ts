@@ -30,6 +30,13 @@ export const DECISION_KINDS: CouncilEventKind[] = [
 	"metadata_reject",
 ]
 
+export const EDIT_DECISION_KINDS: CouncilEventKind[] = [
+	"edit_approve",
+	"edit_reject",
+	"metadata_approve",
+	"metadata_reject",
+]
+
 export const UNDONE_EXPR = `CASE
 	WHEN e.kind = 'seal' THEN EXISTS (
 		SELECT 1 FROM boosts b WHERE b.id = e.ref_id AND b.revoked_at IS NOT NULL)

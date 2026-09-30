@@ -173,6 +173,49 @@ describeIntegration("council overview stats (integration)", () => {
 		})
 	})
 
+	describe("metadata votes", () => {
+		const proposalAt = async (at: number) => {
+			const row = await db.pool.query<{ id: number }>(
+				`INSERT INTO metadata_proposals
+					(video_id, lyrics_id, proposer_id, song, artist, before_song, before_artist, status, created_at)
+					VALUES ('HsBfV2A5dUY', $1, $2, 'New', 'Artist', 'Amazing Grace', 'Traditional', 'rejected', $3)
+					RETURNING id`,
+				[lyricId, ola, at]
+			)
+			return row.rows[0].id
+		}
+
+		const vote = (kind: "metadata_approve" | "metadata_reject", refId: number, at: number) =>
+			recordCouncilEvent(db.env.DB, {
+				actorId: mira,
+				kind,
+				source: "web",
+				lyricsId: lyricId,
+				refId,
+				at,
+			})
+
+		it("regression: measures the wait from the proposal, not from the lyric", async () => {
+			const proposal = await proposalAt(NOW - 5 * HOUR)
+			await vote("metadata_approve", proposal, NOW - HOUR)
+			const stats = await overview("me")
+			expect(stats.medianDecisionHours.current).toBeCloseTo(4, 5)
+			expect(stats.me.medianDecisionHours).toBeCloseTo(4, 5)
+		})
+
+		it("regression: counts metadata votes as edits in every stat", async () => {
+			await vote("metadata_approve", await proposalAt(NOW - 2 * HOUR), NOW - HOUR)
+			await vote("metadata_reject", await proposalAt(NOW - 2 * HOUR), NOW - HOUR)
+			const stats = await overview()
+			expect(stats.me.editsThisMonth).toBe(2)
+			const members = await getCouncilRoster(db.env, { meId: mira, now: NOW })
+			expect(members[0]).toMatchObject({
+				editsThisMonth: 2,
+				lastWeek: { sealed: 0, rejected: 0, edits: 2 },
+			})
+		})
+	})
+
 	describe("roster", () => {
 		const roster = () => getCouncilRoster(db.env, { meId: mira, now: NOW })
 
