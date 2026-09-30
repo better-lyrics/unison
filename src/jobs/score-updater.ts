@@ -41,7 +41,7 @@ export async function recalculateScore(env: Env, lyricsId: number): Promise<void
 		SELECT v.vote, u.reputation, u.avg_vote, v.is_self_vote
 		FROM votes v
 		JOIN users u ON v.user_id = u.id
-		WHERE v.lyrics_id = ?
+		WHERE v.lyrics_id = ? AND u.banned_at IS NULL
 	`)
 		.bind(lyricsId)
 		.all<VoteWithUser>()

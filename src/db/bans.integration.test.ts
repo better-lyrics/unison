@@ -1,8 +1,14 @@
 import { setBanned } from "@/db/bans"
 import { getGlobalFeed } from "@/db/feed"
-import { findByVideoId, findVariantsByVideoId, searchByQuery, submitLyrics } from "@/db/lyrics"
+import {
+	findByVideoId,
+	findVariantsByVideoId,
+	getLyricsById,
+	searchByQuery,
+	submitLyrics,
+} from "@/db/lyrics"
 import { castVote } from "@/db/votes"
-import { updateScores } from "@/jobs/score-updater"
+import { recalculateScore, updateScores } from "@/jobs/score-updater"
 import {
 	type IntegrationDb,
 	describeIntegration,
@@ -124,7 +130,56 @@ describeIntegration("shadowban (integration)", () => {
 		})
 	})
 
+	describe("direct reads", () => {
+		it("regression: a banned lyric is not readable by its id", async () => {
+			const banned = await seedUser(BANNED_KEY)
+			const lyric = await submit(banned)
+			await setBanned(db.env, BANNED_KEY, true)
+
+			expect(await getLyricsById(db.env, lyric)).toBeNull()
+		})
+
+		it("keeps other lyrics readable by id", async () => {
+			await seedUser(BANNED_KEY)
+			const other = await seedUser(OTHER_KEY)
+			const lyric = await submit(other)
+			await setBanned(db.env, BANNED_KEY, true)
+
+			expect((await getLyricsById(db.env, lyric))?.id).toBe(lyric)
+		})
+	})
+
 	describe("votes", () => {
+		it("regression: votes cast before the ban stop counting once banned", async () => {
+			const banned = await seedUser(BANNED_KEY)
+			const other = await seedUser(OTHER_KEY)
+			const lyric = await submit(other)
+			await castVote(db.env, lyric, banned, 1)
+			await recalculateScore(db.env, lyric)
+			const before = await db.pool.query("SELECT vote_count FROM lyrics WHERE id = $1", [lyric])
+			expect(before.rows[0].vote_count).toBe(1)
+
+			await setBanned(db.env, BANNED_KEY, true)
+
+			const after = await db.pool.query(
+				"SELECT vote_count, effective_score FROM lyrics WHERE id = $1",
+				[lyric]
+			)
+			expect(after.rows[0]).toEqual({ vote_count: 0, effective_score: 0 })
+		})
+
+		it("unban counts the old votes again", async () => {
+			const banned = await seedUser(BANNED_KEY)
+			const other = await seedUser(OTHER_KEY)
+			const lyric = await submit(other)
+			await castVote(db.env, lyric, banned, 1)
+			await setBanned(db.env, BANNED_KEY, true)
+			await setBanned(db.env, BANNED_KEY, false)
+
+			const row = await db.pool.query("SELECT vote_count FROM lyrics WHERE id = $1", [lyric])
+			expect(row.rows[0].vote_count).toBe(1)
+		})
+
 		it("accepts a banned user's vote without recording it", async () => {
 			const banned = await seedUser(BANNED_KEY)
 			const other = await seedUser(OTHER_KEY)

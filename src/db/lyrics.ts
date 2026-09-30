@@ -450,7 +450,7 @@ export async function searchBySongArtist(
 
 export async function getLyricsById(env: Env, id: number): Promise<LyricsRow | null> {
 	const result = await env.DB.prepare(
-		`${LYRICS_WITH_SUBMITTER} WHERE l.id = ? AND l.deleted_at IS NULL`
+		`${LYRICS_WITH_SUBMITTER} WHERE l.id = ? AND l.deleted_at IS NULL AND NOT ${BANNED_SUBMITTER_PREDICATE_JOINED}`
 	)
 		.bind(id)
 		.first<LyricsRow>()
