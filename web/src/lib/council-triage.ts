@@ -1,4 +1,4 @@
-import type { BookmarkView, EditItem, QueueItem } from "./council-types"
+import type { BookmarkView, EditItem, MetadataItem, QueueItem } from "./council-types"
 import { videoIdFromInput } from "./youtube-music"
 
 export type BookmarkState =
@@ -88,6 +88,14 @@ export function languageFilters(items: QueueItem[]): string[] {
 export function filterEdits(items: EditItem[], text: string): EditItem[] {
   return items
     .filter((e) => matches(text, e.song, e.artist, e.author?.displayName))
+    .sort((a, b) => a.createdAt - b.createdAt)
+}
+
+export function filterMetadata(items: MetadataItem[], text: string): MetadataItem[] {
+  return items
+    .filter((m) =>
+      matches(text, m.song, m.artist, m.proposed.song, m.proposed.artist, m.proposed.album, m.proposer?.displayName),
+    )
     .sort((a, b) => a.createdAt - b.createdAt)
 }
 

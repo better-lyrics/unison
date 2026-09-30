@@ -1,6 +1,6 @@
 import { config } from "@/config"
 import { type BoostQuota, getQuota, monthWindow } from "@/db/boost"
-import { DECISION_KINDS, UNDONE_EXPR } from "@/db/council-events"
+import { DECISION_KINDS, EDIT_DECISION_KINDS, UNDONE_EXPR } from "@/db/council-events"
 import { type CouncilPerson, loadPersonDecor, toCouncilPerson } from "@/db/council-person"
 import { resolvePeople } from "@/db/users"
 import type { Env } from "@/types"
@@ -36,6 +36,7 @@ const DECIDED = `e.kind = ANY(?) AND NOT (${UNDONE_EXPR})`
 
 const WAIT_SECONDS = `e.created_at - CASE
 	WHEN e.kind IN ('edit_approve', 'edit_reject') THEN (SELECT r.created_at FROM lyric_revisions r WHERE r.id = e.ref_id)
+	WHEN e.kind IN ('metadata_approve', 'metadata_reject') THEN (SELECT p.created_at FROM metadata_proposals p WHERE p.id = e.ref_id)
 	ELSE (SELECT l.created_at FROM lyrics l WHERE l.id = e.lyrics_id)
 END`
 
@@ -128,7 +129,7 @@ export async function getCouncilOverview(
 		me: {
 			quota,
 			rejectsThisMonth: count(["reject"], true),
-			editsThisMonth: count(["edit_approve", "edit_reject"], true),
+			editsThisMonth: count(EDIT_DECISION_KINDS, true),
 			medianDecisionHours: actor === null ? mine : current,
 			bookmarkCap: config.council.bookmarkCap,
 			bookmarkTtlSec: config.council.bookmarkTtlSec,
@@ -227,7 +228,7 @@ export async function getCouncilRoster(
 				quota: quotas[i],
 				sealsThisMonth: kinds(["seal"]),
 				rejectsThisMonth: kinds(["reject"]),
-				editsThisMonth: kinds(["edit_approve", "edit_reject"]),
+				editsThisMonth: kinds(EDIT_DECISION_KINDS),
 				lastActiveAt: last ? Number(last.at) : null,
 				weekly: buckets,
 				lastWeek,

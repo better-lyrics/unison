@@ -6,6 +6,7 @@ import {
   createBookmark,
   decideApplicant,
   decideEdit,
+  proposeMetadata,
   rejectLyric,
   releaseBookmark,
   removeCouncilMember,
@@ -13,6 +14,7 @@ import {
   setApplicantOpinion,
   undoRejectLyric,
   unsealLyric,
+  voteMetadata,
 } from "@/lib/council-api"
 import type { MemberInput } from "@/lib/council-roster"
 import type {
@@ -23,6 +25,7 @@ import type {
   CouncilPerson,
   EditItem,
   EditsPayload,
+  MetadataItem,
   OpinionStance,
   QueueItem,
 } from "@/lib/council-types"
@@ -254,6 +257,35 @@ export function useApplicantOpinion(me: CouncilPerson) {
       councilErrorToast(error, "save your opinion")
     },
     onSettled: () => client.invalidateQueries({ queryKey: APPLICANTS_PREFIX }),
+  })
+}
+
+export function useProposeMetadata() {
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: proposeMetadata,
+    onError: (error) => councilErrorToast(error, "propose the details"),
+    onSettled: () => refreshCouncil(client),
+  })
+}
+
+export function useMetadataVote() {
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: ({ item, approve, note }: { item: MetadataItem; approve: boolean; note: string | null }) =>
+      voteMetadata(item.id, approve, note),
+    onSuccess: (_, { item, approve }) => {
+      pushToast({
+        kind: "info",
+        group: DECISION_TOAST,
+        message: `${approve ? "Approved" : "Rejected"} new details for “${item.song}”`,
+      })
+    },
+    onError: (error) => councilErrorToast(error, "record your vote"),
+    onSettled: (_, __, { item }) => {
+      refreshCouncil(client)
+      client.invalidateQueries({ queryKey: lyricsKeys.variants(item.videoId) })
+    },
   })
 }
 

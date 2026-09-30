@@ -1611,6 +1611,7 @@ describe("submitLyrics fulfillment integration", () => {
 	it("records a fulfillment for synced submissions with live demand", async () => {
 		const db = createMockDB([
 			{ count: 0 },
+			null,
 			{ id: 555 },
 			null, // INSERT INTO lyrics_video_ids (primary link)
 			{ key_id: "k1" },
@@ -1632,7 +1633,7 @@ describe("submitLyrics fulfillment integration", () => {
 	})
 
 	it("skips fulfillment for plain submissions", async () => {
-		const db = createMockDB([{ count: 0 }, { id: 556 }])
+		const db = createMockDB([{ count: 0 }, null, { id: 556 }])
 		const cache = createMockCache()
 		const env = createEnv(db, cache)
 
@@ -1645,6 +1646,7 @@ describe("submitLyrics fulfillment integration", () => {
 	it("skips fulfillment when a prior synced variant exists", async () => {
 		const db = createMockDB([
 			{ count: 0 },
+			null,
 			{ id: 557 },
 			null, // INSERT INTO lyrics_video_ids (primary link)
 			{ key_id: "k1" },
@@ -1668,7 +1670,7 @@ describe("submitLyrics language detection", () => {
 	})
 
 	it("uses submitter-provided language and marks the source as 'submitter'", async () => {
-		const db = createMockDB([{ count: 0 }, { id: 1001 }])
+		const db = createMockDB([{ count: 0 }, null, { id: 1001 }])
 		const cache = createMockCache()
 		const env = createEnv(db, cache)
 		const fetchSpy = vi.fn()
@@ -1686,7 +1688,7 @@ describe("submitLyrics language detection", () => {
 	})
 
 	it("detects the language in-process when the submitter omits it", async () => {
-		const db = createMockDB([{ count: 0 }, { id: 1002 }])
+		const db = createMockDB([{ count: 0 }, null, { id: 1002 }])
 		const cache = createMockCache()
 		const env = createEnv(db, cache)
 
@@ -1710,7 +1712,7 @@ describe("submitLyrics language detection", () => {
 	})
 
 	it("stamps null language with the current version when the text is undetectable", async () => {
-		const db = createMockDB([{ count: 0 }, { id: 1003 }])
+		const db = createMockDB([{ count: 0 }, null, { id: 1003 }])
 		const cache = createMockCache()
 		const env = createEnv(db, cache)
 

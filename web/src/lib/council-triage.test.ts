@@ -1,7 +1,8 @@
-import { ME, NOW, OLA, bookmarkBy, editItem, queueItem } from "@/test/council-fixtures"
+import { ME, NOW, OLA, bookmarkBy, editItem, metadataItem, queueItem } from "@/test/council-fixtures"
 import { describe, expect, it } from "vitest"
 import {
   filterEdits,
+  filterMetadata,
   filterQueue,
   NO_FILTERS,
   groupByBookmark,
@@ -158,6 +159,26 @@ describe("filterEdits", () => {
     expect(filterEdits([newer, older], "").map((e) => e.revisionId)).toEqual([2, 1])
     expect(filterEdits([newer, older], "alone").map((e) => e.revisionId)).toEqual([2])
     expect(filterEdits([newer, older], "yes").map((e) => e.revisionId)).toEqual([2, 1])
+  })
+})
+
+describe("filterMetadata", () => {
+  it("matches song, artist, proposed values and proposer and lists the oldest first", () => {
+    const newer = metadataItem({ id: 1, createdAt: NOW - HOUR })
+    const older = metadataItem({
+      id: 2,
+      createdAt: NOW - 9 * HOUR,
+      proposed: { song: "Alone", artist: "Heart", album: null },
+      proposer: { ...OLA, displayName: "Kai" },
+    })
+    expect(filterMetadata([newer, older], "").map((e) => e.id)).toEqual([2, 1])
+    expect(filterMetadata([newer, older], "heart").map((e) => e.id)).toEqual([2])
+    expect(filterMetadata([newer, older], "kai").map((e) => e.id)).toEqual([2])
+    expect(filterMetadata([newer, older], "  STEVIE ").map((e) => e.id)).toEqual([2, 1])
+  })
+
+  it("returns an empty list for no items", () => {
+    expect(filterMetadata([], "x")).toEqual([])
   })
 })
 

@@ -88,6 +88,31 @@ export interface EditThresholds {
   jevFlag: number
 }
 
+export interface SongMetadata {
+  song: string
+  artist: string
+  album: string | null
+}
+
+export interface MetadataItem {
+  id: number
+  videoId: string
+  lyricsId: number
+  song: string
+  artist: string
+  proposed: SongMetadata
+  before: SongMetadata
+  proposer: CouncilPerson | null
+  approvers: CouncilPerson[]
+  createdAt: number
+  bookmark: null
+}
+
+export interface MetadataPayload {
+  items: MetadataItem[]
+  needed: number
+}
+
 export interface EditsPayload {
   items: EditItem[]
   thresholds: EditThresholds
@@ -106,6 +131,9 @@ export type CouncilEventKind =
   | "member_remove"
   | "applicant_approve"
   | "applicant_reject"
+  | "metadata_propose"
+  | "metadata_approve"
+  | "metadata_reject"
 
 export type CouncilSource = "web" | "discord" | "admin"
 

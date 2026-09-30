@@ -33,6 +33,8 @@ export interface MigrationSnapshot {
 	council_events?: unknown[]
 	council_bookmarks?: unknown[]
 	applicant_opinions?: unknown[]
+	metadata_proposals?: unknown[]
+	metadata_votes?: unknown[]
 	exam_decisions?: unknown[]
 	committee_approvals?: unknown[]
 }
@@ -400,6 +402,16 @@ export async function runMigration(
 				"SELECT * FROM applicant_opinions WHERE user_id = ANY(?)",
 				[ids]
 			)
+			snapshot.metadata_proposals = await all(
+				tx,
+				"SELECT id, proposer_id FROM metadata_proposals WHERE proposer_id = ANY(?)",
+				[ids]
+			)
+			snapshot.metadata_votes = await all(
+				tx,
+				"SELECT * FROM metadata_votes WHERE voter_id = ANY(?)",
+				[ids]
+			)
 			snapshot.exam_decisions = await all(
 				tx,
 				"SELECT id, decided_by_user_id FROM exam_session WHERE decided_by_user_id = ANY(?)",
@@ -459,6 +471,20 @@ export async function runMigration(
 				.run()
 			await tx
 				.prepare("UPDATE exam_session SET decided_by_user_id = ? WHERE decided_by_user_id = ?")
+				.bind(oldId, newId)
+				.run()
+			await tx
+				.prepare("UPDATE metadata_proposals SET proposer_id = ? WHERE proposer_id = ?")
+				.bind(oldId, newId)
+				.run()
+			await tx
+				.prepare(
+					"DELETE FROM metadata_votes WHERE voter_id = ? AND proposal_id IN (SELECT proposal_id FROM metadata_votes WHERE voter_id = ?)"
+				)
+				.bind(newId, oldId)
+				.run()
+			await tx
+				.prepare("UPDATE metadata_votes SET voter_id = ? WHERE voter_id = ?")
 				.bind(oldId, newId)
 				.run()
 
@@ -748,6 +774,16 @@ interface SnapApplicantOpinion {
 	note: string | null
 	updated_at: number
 }
+interface SnapMetadataProposal {
+	id: number
+	proposer_id: number
+}
+interface SnapMetadataVote {
+	proposal_id: number
+	voter_id: number
+	approve: boolean
+	created_at: number
+}
 interface SnapExamDecision {
 	id: number | string
 	decided_by_user_id: number | null
@@ -813,6 +849,8 @@ export async function restoreFromSnapshot(
 		const snapBookmarkIds = new Set(snapBookmarks?.map((b) => b.id))
 		const snapOpinions = snap.applicant_opinions as SnapApplicantOpinion[] | undefined
 		const snapDecisions = snap.exam_decisions as SnapExamDecision[] | undefined
+		const snapProposals = snap.metadata_proposals as SnapMetadataProposal[] | undefined
+		const snapMetadataVotes = snap.metadata_votes as SnapMetadataVote[] | undefined
 		const currentVotes = await all<{ id: number }>(
 			tx,
 			"SELECT id FROM votes WHERE user_id = ANY(?)",
@@ -1072,6 +1110,25 @@ export async function restoreFromSnapshot(
 						"INSERT INTO applicant_opinions (exam_session_id, user_id, stance, note, updated_at) VALUES (?, ?, ?, ?, ?) ON CONFLICT DO NOTHING"
 					)
 					.bind(o.exam_session_id, o.user_id, o.stance, o.note, o.updated_at)
+					.run()
+			}
+		}
+
+		for (const p of snapProposals ?? []) {
+			await tx
+				.prepare("UPDATE metadata_proposals SET proposer_id = ? WHERE id = ?")
+				.bind(p.proposer_id, p.id)
+				.run()
+		}
+
+		if (snapMetadataVotes) {
+			await tx.prepare("DELETE FROM metadata_votes WHERE voter_id = ANY(?)").bind(ids).run()
+			for (const v of snapMetadataVotes) {
+				await tx
+					.prepare(
+						"INSERT INTO metadata_votes (proposal_id, voter_id, approve, created_at) VALUES (?, ?, ?, ?) ON CONFLICT DO NOTHING"
+					)
+					.bind(v.proposal_id, v.voter_id, v.approve, v.created_at)
 					.run()
 			}
 		}

@@ -7,6 +7,8 @@ import type {
   EditItem,
   EditsPayload,
   EventsPage,
+  MetadataItem,
+  MetadataPayload,
   QueueItem,
   RosterMember,
 } from "@/lib/council-types"
@@ -94,6 +96,23 @@ export function editItem(overrides: Partial<EditItem> = {}): EditItem {
     timingDrift: 0.04,
     createdAt: NOW - 20 * HOUR,
     author: { ...OLA, userId: 11, keyId: "e5".repeat(32), displayName: "Yes", handle: null },
+    bookmark: null,
+    ...overrides,
+  }
+}
+
+export function metadataItem(overrides: Partial<MetadataItem> = {}): MetadataItem {
+  return {
+    id: 7001,
+    videoId: "oE56g61mW44",
+    lyricsId: 669,
+    song: "Isn't She Lovely",
+    artist: "Stevie Wonder",
+    before: { song: "Isn't She Lovely", artist: "Stevie Wonder", album: null },
+    proposed: { song: "Isn't She Lovely", artist: "Stevie Wonder", album: "Songs in the Key of Life" },
+    proposer: OLA,
+    approvers: [OLA],
+    createdAt: NOW - 3 * HOUR,
     bookmark: null,
     ...overrides,
   }
@@ -219,6 +238,7 @@ export function variantFull(item: QueueItem, overrides: Partial<VariantFull> = {
 export interface CouncilData {
   queue: QueueItem[]
   edits: EditsPayload
+  metadata: MetadataPayload
   overview: CouncilOverview
   members: RosterMember[]
   applicants: ApplicantView[]
@@ -232,6 +252,7 @@ export function councilData(overrides: Partial<CouncilData> = {}): CouncilData {
   return {
     queue: [],
     edits: { items: [], thresholds: { textDrift: 0.15, timingDrift: 0.3, jevFlag: 0.7 } },
+    metadata: { items: [], needed: 3 },
     overview: overview(),
     members: [rosterMember(ME), rosterMember(OLA)],
     applicants: [],
@@ -243,6 +264,7 @@ export function councilData(overrides: Partial<CouncilData> = {}): CouncilData {
 const ENDPOINTS: [string, Exclude<keyof CouncilData, "myOverview">][] = [
   ["/committee/queue", "queue"],
   ["/committee/edits", "edits"],
+  ["/committee/metadata", "metadata"],
   ["/committee/overview", "overview"],
   ["/committee/members", "members"],
   ["/committee/applicants", "applicants"],

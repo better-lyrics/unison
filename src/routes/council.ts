@@ -10,15 +10,20 @@ import {
 } from "@/db/council-bookmarks"
 import { listCouncilEdits } from "@/db/council-edits"
 import { type CouncilEventKind, listCouncilEvents, parseEventsCursor } from "@/db/council-events"
+import { listCouncilMetadata } from "@/db/council-metadata"
 import { loadPersonDecor } from "@/db/council-person"
 import { listCouncilQueue, listSealableForVideo } from "@/db/council-queue"
 import { getCouncilOverview, getCouncilRoster } from "@/db/council-stats"
 import { getSessionById, recordDecision } from "@/db/exam"
+import { evictFeedCaches } from "@/db/feed"
+import { invalidateCacheForLyric } from "@/db/lyrics"
+import { castVote, createProposal } from "@/db/metadata-proposals"
 import { getOrCreateUser, getUserByKeyId } from "@/db/users"
 import type { Env } from "@/types"
 import { allowCouncilWrite, parseCouncilNote } from "@/utils/council-input"
 import { eitherAuth } from "@/utils/either-auth"
 import { ErrorCode, buildError } from "@/utils/errors"
+import { parseMetadataProposal } from "@/utils/metadata-input"
 import { isVideoId } from "@/utils/video-id"
 import { Elysia, t } from "elysia"
 
@@ -39,7 +44,7 @@ function parseId(raw: string): number | null {
 const EVENT_GROUPS: Record<string, CouncilEventKind[]> = {
 	seals: ["seal", "unseal"],
 	rejections: ["reject", "unreject"],
-	edits: ["edit_approve", "edit_reject"],
+	edits: ["edit_approve", "edit_reject", "metadata_propose", "metadata_approve", "metadata_reject"],
 	membership: ["member_add", "member_remove", "applicant_approve", "applicant_reject"],
 }
 
@@ -52,6 +57,10 @@ function parseOpinionBody(
 	if (!note.ok) return null
 	return { stance, note: stance === null ? null : note.note }
 }
+
+const METADATA_UNCHANGED_HINT =
+	"These match the current title, artist and album. Change one of them first."
+const METADATA_DECIDED_HINT = "This proposal already passed or was rejected. Refresh the dashboard."
 
 const notAdmin = () => buildError(ErrorCode.NOT_COUNCIL_ADMIN)
 
@@ -75,6 +84,53 @@ export const councilRoutes = (env: Env) =>
 			{ params: t.Object({ videoId: t.String({ maxLength: 32 }) }) }
 		)
 		.get("/edits", async ({ env }) => ({ success: true, data: await listCouncilEdits(env) }))
+		.get("/metadata", async ({ env }) => ({ success: true, data: await listCouncilMetadata(env) }))
+		.post("/metadata", async ({ env, userId, keyId, body, status }) => {
+			const input = parseMetadataProposal(body)
+			if (!input) return status(400, buildError(ErrorCode.INVALID_PAYLOAD))
+			if (!(await allowCouncilWrite(env, keyId)))
+				return status(429, buildError(ErrorCode.RATE_LIMITED))
+			const result = await createProposal(env, userId, input)
+			if (result.ok) return { success: true, data: { id: result.id } }
+			switch (result.reason) {
+				case "not_committee":
+					return status(403, buildError(ErrorCode.NOT_COMMITTEE))
+				case "not_found":
+					return status(404, buildError(ErrorCode.NOT_FOUND))
+				case "no_changes":
+					return status(409, buildError(ErrorCode.NO_CHANGES, { hint: METADATA_UNCHANGED_HINT }))
+				case "open":
+					return status(409, buildError(ErrorCode.PROPOSAL_OPEN))
+			}
+		})
+		.post("/metadata/:id/vote", async ({ env, userId, keyId, params, body, status }) => {
+			const id = parseId(params.id)
+			if (id === null) return status(400, buildError(ErrorCode.INVALID_ID))
+			const { approve } = body
+			const note = parseCouncilNote(body)
+			if (typeof approve !== "boolean" || !note.ok)
+				return status(400, buildError(ErrorCode.INVALID_PAYLOAD))
+			if (!(await allowCouncilWrite(env, keyId)))
+				return status(429, buildError(ErrorCode.RATE_LIMITED))
+			const result = await castVote(env, id, userId, approve, note.note)
+			if (!result.ok) {
+				if (result.reason === "not_committee")
+					return status(403, buildError(ErrorCode.NOT_COMMITTEE))
+				if (result.reason === "not_found") return status(404, buildError(ErrorCode.NOT_FOUND))
+				return status(409, buildError(ErrorCode.ALREADY_DECIDED, { hint: METADATA_DECIDED_HINT }))
+			}
+			if (result.status === "passed") {
+				await Promise.all(result.lyricIds.map((lyricsId) => invalidateCacheForLyric(env, lyricsId)))
+				await evictFeedCaches(env)
+			}
+			return {
+				success: true,
+				data:
+					result.status === "open"
+						? { status: result.status, approvals: result.approvals }
+						: { status: result.status },
+			}
+		})
 		.post("/bookmarks", async ({ env, userId, keyId, body, status }) => {
 			const input = parseBookmarkBody(body)
 			if (!input) return status(400, buildError(ErrorCode.INVALID_PAYLOAD))

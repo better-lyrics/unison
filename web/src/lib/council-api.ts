@@ -8,9 +8,12 @@ import type {
   EditsPayload,
   EventGroup,
   EventsPage,
+  MetadataItem,
+  MetadataPayload,
   OpinionStance,
   QueueItem,
   RosterMember,
+  SongMetadata,
 } from "./council-types"
 
 const JSON_HEADERS = { "content-type": "application/json" }
@@ -32,6 +35,22 @@ export function fetchSealableVariants(videoId: string, signal?: AbortSignal): Pr
 
 export function fetchCouncilEdits(signal?: AbortSignal): Promise<EditsPayload> {
   return getJsonWithSignal("/committee/edits", signal)
+}
+
+export async function fetchCouncilMetadata(signal?: AbortSignal): Promise<MetadataPayload> {
+  const payload = await getJsonWithSignal<{ items: Omit<MetadataItem, "bookmark">[]; needed: number }>(
+    "/committee/metadata",
+    signal,
+  )
+  return { ...payload, items: payload.items.map((item) => ({ ...item, bookmark: null })) }
+}
+
+export function proposeMetadata(input: SongMetadata & { videoId: string; lyricsId: number }): Promise<{ id: number }> {
+  return send("/committee/metadata", "POST", input)
+}
+
+export function voteMetadata(id: number, approve: boolean, note: string | null): Promise<unknown> {
+  return send(`/committee/metadata/${id}/vote`, "POST", approve ? { approve } : { approve, note })
 }
 
 export interface EventsQuery {

@@ -15,10 +15,27 @@ export type CouncilEventKind =
 	| "member_remove"
 	| "applicant_approve"
 	| "applicant_reject"
+	| "metadata_propose"
+	| "metadata_approve"
+	| "metadata_reject"
 
 export type CouncilSource = "web" | "discord" | "admin"
 
-export const DECISION_KINDS: CouncilEventKind[] = ["seal", "reject", "edit_approve", "edit_reject"]
+export const DECISION_KINDS: CouncilEventKind[] = [
+	"seal",
+	"reject",
+	"edit_approve",
+	"edit_reject",
+	"metadata_approve",
+	"metadata_reject",
+]
+
+export const EDIT_DECISION_KINDS: CouncilEventKind[] = [
+	"edit_approve",
+	"edit_reject",
+	"metadata_approve",
+	"metadata_reject",
+]
 
 export const UNDONE_EXPR = `CASE
 	WHEN e.kind = 'seal' THEN EXISTS (
