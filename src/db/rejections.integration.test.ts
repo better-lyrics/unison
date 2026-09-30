@@ -360,7 +360,7 @@ describeIntegration("rejections store (integration)", () => {
 			const id = await insertLyric({ videoId: "vRej" })
 
 			expect(await rejectLyric(env, id, reviewer, { note: "bad sync", source: "discord" })).toEqual(
-				{ ok: true }
+				{ ok: true, rejectionId: expect.any(Number) }
 			)
 			expect(await activeRejection(id)).toMatchObject({ rejected_by: reviewer, note: "bad sync" })
 		})
@@ -396,7 +396,10 @@ describeIntegration("rejections store (integration)", () => {
 			await createBoost(env, reviewer, id, "web")
 			await revokeBoost(env, reviewer, id, "web")
 
-			expect(await rejectLyric(env, id, reviewer, { source: "discord" })).toEqual({ ok: true })
+			expect(await rejectLyric(env, id, reviewer, { source: "discord" })).toEqual({
+				ok: true,
+				rejectionId: expect.any(Number),
+			})
 		})
 
 		it("regression: a simultaneous seal and rejection leave exactly one decision", async () => {
@@ -422,7 +425,13 @@ describeIntegration("rejections store (integration)", () => {
 			await addToCommittee(member)
 			const submitter = await newUser()
 
-			for (const videoId of ["vSelfRace1", "vSelfRace2", "vSelfRace3", "vSelfRace4", "vSelfRace5"]) {
+			for (const videoId of [
+				"vSelfRace1",
+				"vSelfRace2",
+				"vSelfRace3",
+				"vSelfRace4",
+				"vSelfRace5",
+			]) {
 				const id = await insertLyric({ videoId, submitterId: submitter })
 				const [seal, reject] = await Promise.all([
 					createBoost(env, member, id, "web"),
@@ -438,7 +447,7 @@ describeIntegration("rejections store (integration)", () => {
 		it("not_committee when the actor is not on the roster", async () => {
 			const actor = await newUser()
 			const id = await insertLyric({ videoId: "vU" })
-			expect(await undoRejection(env, id, actor, "discord")).toEqual({
+			expect(await undoRejection(env, id, actor, "discord", null)).toEqual({
 				ok: false,
 				reason: "not_committee",
 			})
@@ -448,7 +457,7 @@ describeIntegration("rejections store (integration)", () => {
 			const actor = await newUser()
 			await addToCommittee(actor)
 			const id = await insertLyric({ videoId: "vNone" })
-			expect(await undoRejection(env, id, actor, "discord")).toEqual({
+			expect(await undoRejection(env, id, actor, "discord", null)).toEqual({
 				ok: false,
 				reason: "not_found",
 			})
@@ -462,7 +471,7 @@ describeIntegration("rejections store (integration)", () => {
 			const id = await insertLyric({ videoId: "vUndo" })
 			await rejectLyric(env, id, rejecter, { source: "discord" })
 
-			expect(await undoRejection(env, id, other, "discord")).toEqual({ ok: true })
+			expect(await undoRejection(env, id, other, "discord", null)).toEqual({ ok: true })
 			expect(await activeRejection(id)).toBeUndefined()
 		})
 
@@ -471,14 +480,162 @@ describeIntegration("rejections store (integration)", () => {
 			await addToCommittee(reviewer)
 			const id = await insertLyric({ videoId: "vReRej" })
 			await rejectLyric(env, id, reviewer, { source: "discord" })
-			await undoRejection(env, id, reviewer, "discord")
+			await undoRejection(env, id, reviewer, "discord", null)
 
-			expect(await rejectLyric(env, id, reviewer, { source: "discord" })).toEqual({ ok: true })
+			expect(await rejectLyric(env, id, reviewer, { source: "discord" })).toEqual({
+				ok: true,
+				rejectionId: expect.any(Number),
+			})
 			const count = await one<{ n: string }>(
 				"SELECT COUNT(*) AS n FROM rejections WHERE lyrics_id = $1",
 				[id]
 			)
 			expect(Number(count.n)).toBe(2)
+		})
+
+		it("records the revoke as an undo", async () => {
+			const reviewer = await newUser()
+			await addToCommittee(reviewer)
+			const id = await insertLyric({ videoId: "vReason" })
+			await rejectLyric(env, id, reviewer, { source: "web" })
+			await undoRejection(env, id, reviewer, "web", null)
+
+			const row = await one<{ revoke_reason: string | null }>(
+				"SELECT revoke_reason FROM rejections WHERE lyrics_id = $1",
+				[id]
+			)
+			expect(row.revoke_reason).toBe("undo")
+		})
+
+		describe("by rejection id", () => {
+			async function rejectionIdOf(id: number, reviewer: number): Promise<number> {
+				const result = await rejectLyric(env, id, reviewer, { source: "web" })
+				if (!result.ok) throw new Error(result.reason)
+				return result.rejectionId
+			}
+
+			it("revokes the named rejection while it is active and logs it", async () => {
+				const reviewer = await newUser()
+				await addToCommittee(reviewer)
+				const id = await insertLyric({ videoId: "vById" })
+				const rejectionId = await rejectionIdOf(id, reviewer)
+
+				expect(await undoRejection(env, id, reviewer, "web", rejectionId)).toEqual({ ok: true })
+
+				expect(await activeRejection(id)).toBeUndefined()
+				const event = await one<{ ref_id: string }>(
+					"SELECT ref_id FROM council_events WHERE kind = 'unreject' AND lyrics_id = $1",
+					[id]
+				)
+				expect(Number(event.ref_id)).toBe(rejectionId)
+			})
+
+			it("not_found when the named rejection was already undone", async () => {
+				const reviewer = await newUser()
+				await addToCommittee(reviewer)
+				const id = await insertLyric({ videoId: "vByIdTwice" })
+				const rejectionId = await rejectionIdOf(id, reviewer)
+				await undoRejection(env, id, reviewer, "web", rejectionId)
+
+				expect(await undoRejection(env, id, reviewer, "web", rejectionId)).toEqual({
+					ok: false,
+					reason: "not_found",
+				})
+			})
+
+			it("not_found when the named rejection belongs to another lyric", async () => {
+				const reviewer = await newUser()
+				await addToCommittee(reviewer)
+				const id = await insertLyric({ videoId: "vByIdMine" })
+				const other = await insertLyric({ videoId: "vByIdOther" })
+				const otherRejection = await rejectionIdOf(other, reviewer)
+				await rejectionIdOf(id, reviewer)
+
+				expect(await undoRejection(env, id, reviewer, "web", otherRejection)).toEqual({
+					ok: false,
+					reason: "not_found",
+				})
+				expect(await activeRejection(id)).toBeDefined()
+				expect(await activeRejection(other)).toBeDefined()
+			})
+
+			it("regression: naming a lapsed rejection leaves the newer rejection active", async () => {
+				const mira = await newUser()
+				const leo = await newUser()
+				await addToCommittee(mira)
+				await addToCommittee(leo)
+				const id = await insertLyric({ videoId: "vByIdLapsed" })
+				const first = await rejectionIdOf(id, mira)
+				await pool.query(
+					"UPDATE rejections SET revoked_at = $2, revoke_reason = 'edited' WHERE id = $1",
+					[first, NOW]
+				)
+				await rejectionIdOf(id, leo)
+
+				expect(await undoRejection(env, id, mira, "web", first)).toEqual({
+					ok: false,
+					reason: "not_found",
+				})
+				expect(await activeRejection(id)).toMatchObject({ rejected_by: leo })
+				const unrejects = await one<{ n: string }>(
+					"SELECT COUNT(*) AS n FROM council_events WHERE kind = 'unreject' AND lyrics_id = $1",
+					[id]
+				)
+				expect(Number(unrejects.n)).toBe(0)
+			})
+
+			it("regression: a stale undo that names no rejection cannot revoke a newer one after a lapse", async () => {
+				const mira = await newUser()
+				const leo = await newUser()
+				await addToCommittee(mira)
+				await addToCommittee(leo)
+				const id = await insertLyric({ videoId: "vStaleBotUndo" })
+				const first = await rejectionIdOf(id, mira)
+				await pool.query(
+					"UPDATE rejections SET revoked_at = $2, revoke_reason = 'edited' WHERE id = $1",
+					[first, NOW]
+				)
+				await rejectionIdOf(id, leo)
+
+				expect(await undoRejection(env, id, mira, "discord", null)).toEqual({
+					ok: false,
+					reason: "not_found",
+				})
+				expect(await activeRejection(id)).toMatchObject({ rejected_by: leo })
+			})
+
+			it("still undoes by name after a lapse", async () => {
+				const mira = await newUser()
+				const leo = await newUser()
+				await addToCommittee(mira)
+				await addToCommittee(leo)
+				const id = await insertLyric({ videoId: "vNamedAfterLapse" })
+				const first = await rejectionIdOf(id, mira)
+				await pool.query(
+					"UPDATE rejections SET revoked_at = $2, revoke_reason = 'edited' WHERE id = $1",
+					[first, NOW]
+				)
+				const second = await rejectionIdOf(id, leo)
+
+				expect(await undoRejection(env, id, leo, "discord", second)).toEqual({ ok: true })
+				expect(await activeRejection(id)).toBeUndefined()
+			})
+		})
+
+		describe("error paths", () => {
+			it("refuses an unknown revoke reason", async () => {
+				const reviewer = await newUser()
+				await addToCommittee(reviewer)
+				const id = await insertLyric({ videoId: "vBadReason" })
+				await rejectLyric(env, id, reviewer, { source: "web" })
+
+				await expect(
+					pool.query(
+						"UPDATE rejections SET revoked_at = 1, revoke_reason = 'expired' WHERE lyrics_id = $1",
+						[id]
+					)
+				).rejects.toThrow(/check constraint/)
+			})
 		})
 	})
 
@@ -511,12 +668,31 @@ describeIntegration("rejections store (integration)", () => {
 			await addToCommittee(undoer)
 			const id = await insertLyric({ videoId: "vLogUndo" })
 			await rejectLyric(env, id, rejecter, { source: "discord" })
-			await undoRejection(env, id, undoer, "web")
+			await undoRejection(env, id, undoer, "web", null)
 			const events = await log()
 			expect(events.map((e) => [e.kind, e.actor?.displayName, e.undone])).toEqual([
 				["unreject", "Ola", false],
 				["reject", "Mira", true],
 			])
+		})
+
+		it("carries the rejection id and stays active until the rejection is revoked", async () => {
+			const reviewer = await newUser()
+			await addToCommittee(reviewer)
+			const id = await insertLyric({ videoId: "vLogActive" })
+			const result = await rejectLyric(env, id, reviewer, { source: "web" })
+			if (!result.ok) throw new Error(result.reason)
+			expect((await log())[0]).toMatchObject({
+				kind: "reject",
+				refId: result.rejectionId,
+				active: true,
+			})
+
+			await undoRejection(env, id, reviewer, "web", result.rejectionId)
+
+			const reject = (await log()).find((e) => e.kind === "reject")
+			expect(reject).toMatchObject({ active: false, undone: true })
+			expect((await log()).find((e) => e.kind === "unreject")?.active).toBe(false)
 		})
 
 		it("logs a duplicate rejection once", async () => {

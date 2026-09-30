@@ -54,7 +54,20 @@ describe("canUndo", () => {
     expect(canUndo(councilEvent({ kind: "seal", actor: null, at: NOW - HOUR }), ME.keyId, NOW)).toBe(false)
   })
 
+  it("refuses a rejection that lapsed after the lyrics were edited", () => {
+    const lapsed = councilEvent({ kind: "reject", actor: mine, at: NOW - HOUR, undone: false, active: false })
+    expect(canUndo(lapsed, ME.keyId, NOW)).toBe(false)
+  })
+
+  it("refuses a seal that is no longer active", () => {
+    expect(canUndo(councilEvent({ kind: "seal", actor: mine, active: false }), ME.keyId, NOW)).toBe(false)
+  })
+
   describe("edge cases", () => {
+    it("refuses a decision that names no seal or rejection", () => {
+      expect(canUndo(councilEvent({ kind: "reject", actor: mine, refId: null }), ME.keyId, NOW)).toBe(false)
+    })
+
     it("still allows undo exactly at the window edge", () => {
       expect(canUndo(councilEvent({ kind: "seal", actor: mine, at: NOW - 3 * DAY }), ME.keyId, NOW)).toBe(true)
     })

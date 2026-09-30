@@ -1,4 +1,6 @@
+import { lapseRejectionForEdit } from "@/db/rejections"
 import { type D1Compat, advisoryXactLock } from "@/infra/database"
+import { Logger } from "@/infra/logger"
 import type {
 	LyricsFormat,
 	PendingReason,
@@ -9,10 +11,13 @@ import type {
 	SyncType,
 } from "@/types"
 import { compress, decompressIfNeeded, isCompressed } from "@/utils/compression"
-import { extractPlainText } from "@/utils/extract-text"
+import { type LyricLine, extractComparableLines, extractPlainText } from "@/utils/extract-text"
 import { sha256Hex } from "@/utils/hash"
+import { showsChanges } from "@/utils/lyric-diff"
 import { normalizeAlbum } from "@/utils/normalize"
 import { generatePetName } from "@/utils/petname"
+
+const log = new Logger("revisions")
 
 export interface RevisionRow {
 	id: number
@@ -274,8 +279,34 @@ export async function insertRevision(tx: D1Compat, input: NewRevision): Promise<
 	return row!
 }
 
+export async function revisionLines(stored: string, format: LyricsFormat): Promise<LyricLine[]> {
+	try {
+		return extractComparableLines(await decompressIfNeeded(stored), format)
+	} catch (err) {
+		log.warn("stored revision content could not be parsed", { error: (err as Error).message })
+		return []
+	}
+}
+
+async function changesLyrics(tx: D1Compat, revision: RevisionRow): Promise<boolean> {
+	const replaced = await tx
+		.prepare(
+			`SELECT r.lyrics, r.format, r.content_hash FROM lyrics l
+			JOIN lyric_revisions r ON r.id = l.current_revision_id
+			WHERE l.id = ?`
+		)
+		.bind(revision.lyrics_id)
+		.first<{ lyrics: string; format: LyricsFormat; content_hash: string }>()
+	if (!replaced || replaced.content_hash === revision.content_hash) return false
+	return showsChanges(
+		await revisionLines(replaced.lyrics, replaced.format),
+		await revisionLines(revision.lyrics, revision.format)
+	)
+}
+
 // The only writer of the lyrics content columns once a lyric has revisions.
 export async function setCurrentRevision(tx: D1Compat, revision: RevisionRow): Promise<void> {
+	if (await changesLyrics(tx, revision)) await lapseRejectionForEdit(tx, revision.lyrics_id)
 	const content = await decompressIfNeeded(revision.lyrics)
 	await tx
 		.prepare(

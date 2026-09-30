@@ -38,6 +38,11 @@ const UNDO_ERROR: Record<
 	not_found: { status: 404, code: ErrorCode.NOT_FOUND },
 }
 
+function parseRejectionId(raw: string | undefined): number | null {
+	const n = Number(raw)
+	return raw && Number.isInteger(n) && n > 0 ? n : null
+}
+
 function parseLimit(raw: string | undefined): number {
 	const n = Number(raw)
 	if (!Number.isInteger(n) || n < 1) return DEFAULT_LIMIT
@@ -63,14 +68,16 @@ export const reviewQueueRoutes = (env: Env) =>
 				const mapped = REJECT_ERROR[result.reason]
 				return status(mapped.status, buildError(mapped.code))
 			}
-			return { success: true }
+			return { success: true, data: { rejectionId: result.rejectionId } }
 		})
-		.delete("/:id/reject", async ({ params, env, userId, keyId, status }) => {
+		.delete("/:id/reject", async ({ params, query, env, userId, keyId, status }) => {
 			const id = Number(params.id)
-			if (!Number.isInteger(id) || id <= 0) return status(400, buildError(ErrorCode.INVALID_ID))
+			const rejectionId = parseRejectionId(query.rejection)
+			if (!Number.isInteger(id) || id <= 0 || rejectionId === null)
+				return status(400, buildError(ErrorCode.INVALID_ID))
 			if (!(await allowCouncilWrite(env, keyId)))
 				return status(429, buildError(ErrorCode.RATE_LIMITED))
-			const result = await undoRejection(env, id, userId, "web")
+			const result = await undoRejection(env, id, userId, "web", rejectionId)
 			if (!result.ok) {
 				const mapped = UNDO_ERROR[result.reason]
 				return status(mapped.status, buildError(mapped.code))
@@ -134,7 +141,7 @@ export const reviewQueueBotRoutes = (env: Env) =>
 					const mapped = REJECT_ERROR[result.reason]
 					return status(mapped.status, buildError(mapped.code))
 				}
-				return { success: true }
+				return { success: true, data: { rejectionId: result.rejectionId } }
 			},
 			{
 				params: t.Object({ id: t.String() }),
@@ -155,12 +162,18 @@ export const reviewQueueBotRoutes = (env: Env) =>
 				if (!user) {
 					return status(404, buildError(ErrorCode.NOT_FOUND))
 				}
-				const result = await undoRejection(env, id, user.id, "discord")
+				const result = await undoRejection(env, id, user.id, "discord", body.rejectionId ?? null)
 				if (!result.ok) {
 					const mapped = UNDO_ERROR[result.reason]
 					return status(mapped.status, buildError(mapped.code))
 				}
 				return { success: true }
 			},
-			{ params: t.Object({ id: t.String() }), body: t.Object({ keyId: t.String() }) }
+			{
+				params: t.Object({ id: t.String() }),
+				body: t.Object({
+					keyId: t.String(),
+					rejectionId: t.Optional(t.Integer({ minimum: 1 })),
+				}),
+			}
 		)

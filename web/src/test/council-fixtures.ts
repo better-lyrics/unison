@@ -195,6 +195,8 @@ export function councilEvent(overrides: Partial<CouncilEvent> = {}): CouncilEven
     at: NOW - 2 * HOUR,
     note: null,
     undone: false,
+    active: true,
+    refId: 91,
     actor: { ...OLA },
     subject: null,
     lyric: { id: 722, videoId: "SMQpJ9x7zEk", song: "Story of a Warrior", artist: "John Michael Howell" },

@@ -19,6 +19,7 @@ import {
 	recordReview,
 	retireLiveRevision,
 	revisionAuthor,
+	revisionLines,
 	setAnchorRevision,
 	setCurrentRevision,
 	setRevisionStatus,
@@ -128,15 +129,6 @@ class UncheckedLiveEdit extends Error {}
 const NOT_SAVABLE: GateOutcome = { goesLive: false, reason: null }
 const LANGUAGE_HINT = "Pick a language from the list."
 const ISRC_HINT = "An ISRC looks like USRC17607839."
-
-async function revisionLines(stored: string, format: LyricsFormat): Promise<LyricLine[]> {
-	try {
-		return extractComparableLines(await decompressIfNeeded(stored), format)
-	} catch (err) {
-		log.warn("stored revision content could not be parsed", { error: (err as Error).message })
-		return []
-	}
-}
 
 const joinText = (lines: LyricLine[]): string => lines.map((line) => line.text).join("\n")
 

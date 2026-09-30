@@ -37,11 +37,21 @@ export const EDIT_DECISION_KINDS: CouncilEventKind[] = [
 	"metadata_reject",
 ]
 
+const REJECTION_UNDONE = "r.revoked_at IS NOT NULL AND r.revoke_reason IS DISTINCT FROM 'edited'"
+
 export const UNDONE_EXPR = `CASE
 	WHEN e.kind = 'seal' THEN EXISTS (
 		SELECT 1 FROM boosts b WHERE b.id = e.ref_id AND b.revoked_at IS NOT NULL)
 	WHEN e.kind = 'reject' THEN EXISTS (
-		SELECT 1 FROM rejections r WHERE r.id = e.ref_id AND r.revoked_at IS NOT NULL)
+		SELECT 1 FROM rejections r WHERE r.id = e.ref_id AND ${REJECTION_UNDONE})
+	ELSE FALSE
+END`
+
+const ACTIVE_EXPR = `CASE
+	WHEN e.kind = 'seal' THEN EXISTS (
+		SELECT 1 FROM boosts b WHERE b.id = e.ref_id AND b.revoked_at IS NULL)
+	WHEN e.kind = 'reject' THEN EXISTS (
+		SELECT 1 FROM rejections r WHERE r.id = e.ref_id AND r.revoked_at IS NULL)
 	ELSE FALSE
 END`
 
@@ -70,6 +80,8 @@ export interface CouncilEvent {
 	at: number
 	note: string | null
 	undone: boolean
+	active: boolean
+	refId: number | null
 	actor: Person | null
 	subject: Person | null
 	lyric: CouncilEventLyric | null
@@ -120,6 +132,7 @@ interface EventRow {
 	source: CouncilSource
 	created_at: number | string
 	note: string | null
+	ref_id: number | string | null
 	actor_id: number | string | null
 	subject_user_id: number | string | null
 	lyric_id: number | string | null
@@ -127,6 +140,7 @@ interface EventRow {
 	song: string | null
 	artist: string | null
 	undone: boolean
+	active: boolean
 }
 
 export async function listCouncilEvents(
@@ -153,9 +167,9 @@ export async function listCouncilEvents(
 		params.push(opts.cursor.at, opts.cursor.id)
 	}
 	const rows = await env.DB.prepare(
-		`SELECT e.id, e.kind, e.source, e.created_at, e.note, e.actor_id, e.subject_user_id,
+		`SELECT e.id, e.kind, e.source, e.created_at, e.note, e.ref_id, e.actor_id, e.subject_user_id,
 			l.id AS lyric_id, l.video_id, l.song, l.artist,
-			${UNDONE_EXPR} AS undone
+			${UNDONE_EXPR} AS undone, ${ACTIVE_EXPR} AS active
 		 FROM council_events e
 		 LEFT JOIN lyrics l ON l.id = e.lyrics_id
 		 ${where.length > 0 ? `WHERE ${where.join(" AND ")}` : ""}
@@ -182,6 +196,8 @@ export async function listCouncilEvents(
 		at: Number(r.created_at),
 		note: r.note,
 		undone: r.undone,
+		active: r.active,
+		refId: r.ref_id === null ? null : Number(r.ref_id),
 		actor: person(r.actor_id),
 		subject: person(r.subject_user_id),
 		lyric:
@@ -220,7 +236,7 @@ const HISTORY_BACKFILLS = [
 	 ON CONFLICT DO NOTHING RETURNING id`,
 	`INSERT INTO council_events (actor_id, kind, source, lyrics_id, ref_id, created_at)
 	 SELECT NULL, 'unreject', 'discord', r.lyrics_id, r.id, r.revoked_at FROM rejections r
-	 WHERE r.revoked_at IS NOT NULL AND ${unrecorded("'unreject'", "r.id")}
+	 WHERE ${REJECTION_UNDONE} AND ${unrecorded("'unreject'", "r.id")}
 	 ON CONFLICT DO NOTHING RETURNING id`,
 	`INSERT INTO council_events (actor_id, kind, source, lyrics_id, ref_id, note, created_at)
 	 SELECT lr.reviewed_by,

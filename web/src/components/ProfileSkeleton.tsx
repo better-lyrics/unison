@@ -1,4 +1,3 @@
-import { editableCardClass } from "@/components/ui"
 import { cn } from "@/lib/cn"
 
 const shimmer = "animate-pulse bg-white/[0.04] motion-reduce:animate-none"
@@ -7,11 +6,15 @@ function Block({ className }: { className?: string }) {
   return <div className={cn(shimmer, "rounded-md", className)} />
 }
 
-function CollapsedSectionSkeleton() {
+function CollapsedSectionSkeleton({
+  titleWidth = "w-28",
+  summary = false,
+}: { titleWidth?: string; summary?: boolean }) {
   return (
     <div className="flex h-7 items-center gap-2">
       <Block className="size-4" />
-      <Block className="h-[18px] w-28" />
+      <Block className={cn("h-[18px]", titleWidth)} />
+      {summary ? <Block className="ml-auto h-3 w-16" /> : null}
     </div>
   )
 }
@@ -23,27 +26,7 @@ function OwnerBlockSkeleton() {
       <div className="flex justify-end">
         <Block className="h-9 w-40 rounded-lg" />
       </div>
-      <div>
-        <div className="flex items-center gap-3">
-          <div className="flex h-7 items-center gap-2">
-            <Block className="size-4" />
-            <Block className="h-[18px] w-32" />
-          </div>
-          <Block className="ml-auto h-3 w-16" />
-        </div>
-        <div className={cn(editableCardClass, "mt-5")}>
-          <Block className="h-3 w-64" />
-          <div className="flex flex-wrap gap-2">
-            {["a", "b", "c", "d", "e", "f"].map((k) => (
-              <Block key={k} className="size-[74px] rounded-lg" />
-            ))}
-          </div>
-          <div className="flex items-center justify-between">
-            <Block className="h-3 w-24" />
-            <Block className="h-8 w-16 rounded-md" />
-          </div>
-        </div>
-      </div>
+      <CollapsedSectionSkeleton titleWidth="w-32" summary />
       <CollapsedSectionSkeleton />
       <CollapsedSectionSkeleton />
       <CollapsedSectionSkeleton />

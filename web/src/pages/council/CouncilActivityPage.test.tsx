@@ -96,6 +96,45 @@ describe("CouncilActivityPage", () => {
     await screen.findByText("Seal lifted from “Story of a Warrior”")
   })
 
+  it("undoes my own rejection by the rejection it recorded, and hides undo once it lapsed", async () => {
+    const log: string[] = []
+    stubCouncilApi(
+      councilData({
+        events: {
+          events: [
+            councilEvent({ id: 7, kind: "reject", actor: me, at: NOW - HOUR, refId: 91 }),
+            councilEvent({
+              id: 6,
+              kind: "reject",
+              actor: me,
+              at: NOW - 2 * HOUR,
+              refId: 90,
+              active: false,
+              lyric: { id: 12, videoId: "p3r0yVv0lQs", song: "Sleep Well", artist: "CG5" },
+            }),
+          ],
+          nextCursor: null,
+        },
+      }),
+      { admin: false },
+      [
+        {
+          match: (url, init) => init?.method === "DELETE" && url.startsWith("/lyrics/722/reject"),
+          respond: (url) => {
+            log.push(url)
+            return jsonResponse({ success: true, data: null })
+          },
+        },
+      ],
+    )
+    renderCouncil("/council/activity")
+    await screen.findByRole("region", { name: "Today" })
+    const undo = screen.getAllByRole("button", { name: "Undo" })
+    expect(undo).toHaveLength(1)
+    fireEvent.click(undo[0])
+    await waitFor(() => expect(log).toEqual(["/lyrics/722/reject?rejection=91"]))
+  })
+
   it("filters by kind, member and bookmarks through the server", async () => {
     const router = stubCouncilApi(data())
     renderCouncil("/council/activity")

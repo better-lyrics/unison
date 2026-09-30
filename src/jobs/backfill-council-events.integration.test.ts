@@ -98,6 +98,33 @@ describeIntegration("backfillCouncilEvents (integration)", () => {
 		expect(events.find((e) => e.kind === "member_add")?.subject?.userId).toBe(member)
 	})
 
+	describe("rejection revoke reasons", () => {
+		async function revokedRejection(reason: string | null): Promise<number> {
+			const { rows } = await db.pool.query<{ id: number }>(
+				`INSERT INTO rejections (lyrics_id, rejected_by, rejected_at, revoked_at, revoke_reason)
+				 VALUES ($1, $2, 200, 250, $3) RETURNING id`,
+				[lyricId, member, reason]
+			)
+			return rows[0].id
+		}
+
+		it("backfills an unreject for a revoke recorded as an undo", async () => {
+			await revokedRejection("undo")
+			await backfillCouncilEvents(db.env)
+			expect(await kinds()).toEqual([
+				["unreject", 250],
+				["reject", 200],
+			])
+		})
+
+		it("writes no unreject for a rejection that lapsed after an edit", async () => {
+			await revokedRejection("edited")
+			await backfillCouncilEvents(db.env)
+			const { events } = await listCouncilEvents(db.env, { includeBookmarks: false, limit: 100 })
+			expect(events.map((e) => [e.kind, e.at, e.undone])).toEqual([["reject", 200, false]])
+		})
+	})
+
 	describe("invariants", () => {
 		it("is idempotent", async () => {
 			await seedHistory()

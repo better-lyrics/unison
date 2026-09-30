@@ -171,6 +171,38 @@ describeIntegration("council overview stats (integration)", () => {
 			expect(stats.decisionsByDay[29].sealed).toBe(0)
 			expect(stats.sealRate).toBe(0)
 		})
+
+		async function revokedReject(actorId: number, reason: "undo" | "edited") {
+			const { rows } = await db.pool.query<{ id: number }>(
+				`INSERT INTO rejections (lyrics_id, rejected_by, rejected_at, revoked_at, revoke_reason)
+				 VALUES ($1, $2, $3, $4, $5) RETURNING id`,
+				[lyricId, actorId, NOW - HOUR, NOW - 60, reason]
+			)
+			await recordCouncilEvent(db.env.DB, {
+				actorId,
+				kind: "reject",
+				source: "web",
+				lyricsId: lyricId,
+				refId: rows[0].id,
+				at: NOW - HOUR,
+			})
+		}
+
+		it("leaves a rejection a member undid out of every count", async () => {
+			await revokedReject(mira, "undo")
+			const stats = await overview()
+			expect(stats.me.rejectsThisMonth).toBe(0)
+			expect(stats.decisionsByDay[29].rejected).toBe(0)
+		})
+
+		it("still counts a rejection that lapsed after the lyrics were edited", async () => {
+			await revokedReject(mira, "edited")
+			const stats = await overview()
+			expect(stats.me.rejectsThisMonth).toBe(1)
+			expect(stats.decisionsByDay[29].rejected).toBe(1)
+			const members = await getCouncilRoster(db.env, { meId: mira, now: NOW })
+			expect(members.find((m) => m.isYou)?.rejectsThisMonth).toBe(1)
+		})
 	})
 
 	describe("metadata votes", () => {
