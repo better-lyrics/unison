@@ -7,7 +7,7 @@ import {
 	awardPenaltyXp,
 } from "@/db/contribution-events"
 import { invalidateCacheForLyric } from "@/db/lyrics"
-import { AUTO_HIDE_PREDICATE, CONSENSUS_LYRICS_CTE } from "@/db/predicates"
+import { CONSENSUS_LYRICS_CTE, VOTE_HIDE_PREDICATE } from "@/db/predicates"
 import { Logger } from "@/infra/logger"
 import type { Confidence, Env } from "@/types"
 
@@ -180,7 +180,7 @@ async function applyAutoHidePenalty(env: Env): Promise<void> {
 		const flipped = await tx
 			.prepare(
 				`UPDATE lyrics SET reputation_penalized = TRUE
-				WHERE ${AUTO_HIDE_PREDICATE}
+				WHERE ${VOTE_HIDE_PREDICATE}
 					AND deleted_at IS NULL
 					AND reputation_penalized = FALSE
 					AND submitter_id IS NOT NULL

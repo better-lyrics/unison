@@ -5,7 +5,7 @@ import {
 	buildOrderByClause,
 	hasAnyFilter,
 } from "@/db/feed-filters"
-import { AUTO_HIDE_PREDICATE, RANKING_EXPR } from "@/db/predicates"
+import { AUTO_HIDE_PREDICATE, BANNED_SUBMITTER_PREDICATE, RANKING_EXPR } from "@/db/predicates"
 import { Logger } from "@/infra/logger"
 import type { Env, FeedItem } from "@/types"
 
@@ -61,7 +61,11 @@ export async function getGlobalFeed(
 		}
 	}
 
-	const conditions = ["effective_score > 0", "deleted_at IS NULL"]
+	const conditions = [
+		"effective_score > 0",
+		"deleted_at IS NULL",
+		`NOT ${BANNED_SUBMITTER_PREDICATE}`,
+	]
 	const params: (number | string)[] = []
 
 	const fragments = buildFilterFragments(filters)
@@ -177,7 +181,12 @@ export async function getPersonalizedFeed(
 	const artistPlaceholders = artists.map(() => "?").join(", ")
 	const hasOffset = offset !== undefined && offset > 0
 	const fragments = buildFilterFragments(filters)
-	const innerWhere = ["effective_score > 0", "deleted_at IS NULL", ...fragments.conditions]
+	const innerWhere = [
+		"effective_score > 0",
+		"deleted_at IS NULL",
+		`NOT ${BANNED_SUBMITTER_PREDICATE}`,
+		...fragments.conditions,
+	]
 
 	const params: (number | string)[] = [...artists, userId, ...fragments.params, limit]
 	if (hasOffset) params.push(offset)

@@ -24,7 +24,7 @@ export const RANKING_EXPR_VARIANT = buildRankingExpr("l.", true)
 
 const { autoHide } = config.moderation
 
-const buildAutoHidePredicate = (prefix: string) => `(
+const buildVoteHidePredicate = (prefix: string) => `(
 	(
 		${prefix}vote_count >= ${autoHide.minVotes}
 		AND ${prefix}downvotes >= ${autoHide.downvoteRatio} * ${prefix}vote_count
@@ -37,6 +37,18 @@ const buildAutoHidePredicate = (prefix: string) => `(
 		AND EXTRACT(EPOCH FROM NOW())::INTEGER - ${prefix}created_at >= ${autoHide.decisiveMinAgeDays * 86400}
 	)
 )`
+
+// Uncorrelated IN so Postgres hashes the banned set once per query; COALESCE keeps a NULL submitter visible.
+const buildBannedSubmitterPredicate = (prefix: string) =>
+	`COALESCE(${prefix}submitter_id IN (SELECT id FROM users WHERE banned_at IS NOT NULL), FALSE)`
+
+export const BANNED_SUBMITTER_PREDICATE = buildBannedSubmitterPredicate("")
+export const BANNED_SUBMITTER_PREDICATE_JOINED = buildBannedSubmitterPredicate("l.")
+
+export const VOTE_HIDE_PREDICATE = buildVoteHidePredicate("")
+
+const buildAutoHidePredicate = (prefix: string) =>
+	`(${buildVoteHidePredicate(prefix)} OR ${buildBannedSubmitterPredicate(prefix)})`
 
 export const AUTO_HIDE_PREDICATE = buildAutoHidePredicate("")
 export const AUTO_HIDE_PREDICATE_JOINED = buildAutoHidePredicate("l.")

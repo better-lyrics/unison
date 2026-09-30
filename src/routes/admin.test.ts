@@ -694,3 +694,56 @@ describe("DELETE /admin/boost/:lyricsId", () => {
 		expect((await json(res)).code).toBe("NOT_FOUND")
 	})
 })
+
+describe("/admin/users/:keyId/ban", () => {
+	const KEY = "6d75511a7fd26a809f81bcde1da3cee9cb75d572966b5e45cc825ca3150ee1b3"
+	const put = (path: string, headers: Record<string, string> = ADMIN) =>
+		new Request(`http://localhost${path}`, { method: "PUT", headers })
+
+	it("rejects without a valid admin bearer", async () => {
+		const app = adminRoutes(makeEnv(makeMockDB(), makeMockCache()))
+		const res = await app.handle(put(`/admin/users/${KEY}/ban`, { authorization: "Bearer wrong" }))
+		expect(res.status).toBe(401)
+	})
+
+	it("does not accept the butler bot secret", async () => {
+		const app = adminRoutes(makeEnv(makeMockDB(), makeMockCache()))
+		const res = await app.handle(
+			put(`/admin/users/${KEY}/ban`, { authorization: "Bearer bot-secret" })
+		)
+		expect(res.status).toBe(401)
+	})
+
+	it("returns 404 when ADMIN_SECRET is unset (deploy dark)", async () => {
+		const app = adminRoutes(makeEnv(makeMockDB(), makeMockCache(), { ADMIN_SECRET: null }))
+		const res = await app.handle(put(`/admin/users/${KEY}/ban`))
+		expect(res.status).toBe(404)
+	})
+
+	it("PUT bans the key and returns banned:true", async () => {
+		const db = makeMockDB([{ id: 180 }, []])
+		const app = adminRoutes(makeEnv(db, makeMockCache()))
+		const res = await app.handle(put(`/admin/users/${KEY}/ban`))
+		expect(res.status).toBe(200)
+		expect((await json(res)).data).toEqual({ keyId: KEY, banned: true })
+		const update = db.calls.find((c) => c.sql.includes("UPDATE users SET banned_at"))
+		expect(update?.params).toEqual([true, KEY])
+	})
+
+	it("DELETE lifts the ban and returns banned:false", async () => {
+		const db = makeMockDB([{ id: 180 }, []])
+		const app = adminRoutes(makeEnv(db, makeMockCache()))
+		const res = await app.handle(del(`/admin/users/${KEY}/ban`))
+		expect(res.status).toBe(200)
+		expect((await json(res)).data).toEqual({ keyId: KEY, banned: false })
+		const update = db.calls.find((c) => c.sql.includes("UPDATE users SET banned_at"))
+		expect(update?.params).toEqual([false, KEY])
+	})
+
+	it("returns 404 NOT_FOUND for an unknown key", async () => {
+		const app = adminRoutes(makeEnv(makeMockDB([null]), makeMockCache()))
+		const res = await app.handle(put("/admin/users/unknown/ban"))
+		expect(res.status).toBe(404)
+		expect((await json(res)).code).toBe("NOT_FOUND")
+	})
+})

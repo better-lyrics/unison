@@ -4,6 +4,7 @@ import { recordFulfillment } from "@/db/fulfillments"
 import {
 	AUTO_HIDE_PREDICATE,
 	AUTO_HIDE_PREDICATE_JOINED,
+	BANNED_SUBMITTER_PREDICATE_JOINED,
 	PROVEN_EXPR_JOINED,
 	RANKING_EXPR,
 	RANKING_EXPR_JOINED,
@@ -197,7 +198,7 @@ export async function findVariantsByVideoId(
 	const results = await env.DB.prepare(
 		`
 		${LYRICS_WITH_SUBMITTER}
-		WHERE ${videoServesExpr("l.")} AND l.deleted_at IS NULL
+		WHERE ${videoServesExpr("l.")} AND l.deleted_at IS NULL AND NOT ${BANNED_SUBMITTER_PREDICATE_JOINED}
 		ORDER BY ${RANKING_EXPR_VARIANT} DESC
 		LIMIT ?
 		`
@@ -486,12 +487,18 @@ export async function invalidateCacheForLyric(env: Env, lyricsId: number): Promi
 
 export async function invalidateCacheForSubmitter(env: Env, keyId: string): Promise<void> {
 	const rows = await env.DB.prepare(
-		`SELECT DISTINCT l.video_id
+		`SELECT l.video_id
 		FROM lyrics l
+		JOIN users u ON l.submitter_id = u.id
+		WHERE u.key_id = ? AND l.deleted_at IS NULL
+		UNION
+		SELECT link.video_id
+		FROM lyrics_video_ids link
+		JOIN lyrics l ON l.id = link.lyrics_id
 		JOIN users u ON l.submitter_id = u.id
 		WHERE u.key_id = ? AND l.deleted_at IS NULL`
 	)
-		.bind(keyId)
+		.bind(keyId, keyId)
 		.all<{ video_id: string }>()
 	await Promise.all(rows.results.map((r) => env.CACHE.delete(`v:${r.video_id}`)))
 }

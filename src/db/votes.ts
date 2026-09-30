@@ -12,12 +12,19 @@ export async function castVote(
 	userId: number,
 	vote: 1 | -1
 ): Promise<{ success: boolean; message: string }> {
-	const lyrics = await env.DB.prepare("SELECT submitter_id, deleted_at FROM lyrics WHERE id = ?")
-		.bind(lyricsId)
-		.first<{ submitter_id: number | null; deleted_at: number | null }>()
+	const lyrics = await env.DB.prepare(
+		`SELECT submitter_id, deleted_at,
+			EXISTS (SELECT 1 FROM users WHERE id = ? AND banned_at IS NOT NULL) AS voter_banned
+		 FROM lyrics WHERE id = ?`
+	)
+		.bind(userId, lyricsId)
+		.first<{ submitter_id: number | null; deleted_at: number | null; voter_banned: boolean }>()
 
 	if (lyrics?.deleted_at != null) {
 		return { success: false, message: "Lyrics no longer available" }
+	}
+	if (lyrics?.voter_banned) {
+		return { success: true, message: "Vote recorded" }
 	}
 
 	const isSelfVote = lyrics?.submitter_id === userId ? 1 : 0

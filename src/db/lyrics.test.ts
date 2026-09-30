@@ -19,6 +19,8 @@ import {
 } from "./lyrics"
 import {
 	AUTO_HIDE_PREDICATE,
+	AUTO_HIDE_PREDICATE_JOINED,
+	BANNED_SUBMITTER_PREDICATE_JOINED,
 	RANKING_EXPR,
 	RANKING_EXPR_JOINED,
 	RANKING_EXPR_VARIANT,
@@ -957,17 +959,27 @@ describe("invalidateCacheForSubmitter", () => {
 		expect(sql).toMatch(/JOIN\s+users\s+u\s+ON\s+l\.submitter_id\s*=\s*u\.id/i)
 		expect(sql).toMatch(/WHERE\s+u\.key_id\s*=\s*\?/i)
 		expect(sql).toMatch(/AND\s+l\.deleted_at\s+IS\s+NULL/i)
-		expect(db.calls[0].params).toEqual(["k1"])
+		expect(db.calls[0].params).toEqual(["k1", "k1"])
 	})
 
-	it("uses SELECT DISTINCT so a user's multiple variants per video collapse to one delete", async () => {
+	it("uses UNION so a user's multiple variants per video collapse to one delete", async () => {
 		const db = createMockDB([[]])
 		const cache = createMockCache()
 		const env = createEnv(db, cache)
 
 		await invalidateCacheForSubmitter(env, "k1")
 
-		expect(db.calls[0].sql).toMatch(/SELECT\s+DISTINCT\s+l\.video_id/i)
+		expect(db.calls[0].sql).toMatch(/UNION\s+SELECT/i)
+		expect(db.calls[0].sql).not.toMatch(/UNION\s+ALL/i)
+	})
+
+	it("also evicts the videos the user's lyrics are linked to", async () => {
+		const db = createMockDB([[]])
+		const env = createEnv(db, createMockCache())
+
+		await invalidateCacheForSubmitter(env, "k1")
+
+		expect(db.calls[0].sql).toMatch(/FROM\s+lyrics_video_ids\s+link/i)
 	})
 
 	it("is a noop when the user has no submissions", async () => {
@@ -1577,11 +1589,18 @@ describe("hidden flag on browse surfaces", () => {
 		})
 	}
 
-	it("findVariantsByVideoId does NOT filter hidden variants out", async () => {
+	it("findVariantsByVideoId does NOT filter vote-hidden variants out", async () => {
 		const db = createMockDB([[]])
 		const env = createEnv(db, createMockCache())
 		await findVariantsByVideoId(env, "v1", 5)
-		expect(db.calls[0].sql).not.toContain("AND NOT")
+		expect(db.calls[0].sql).not.toContain(`NOT ${AUTO_HIDE_PREDICATE_JOINED}`)
+	})
+
+	it("findVariantsByVideoId drops variants by a banned submitter", async () => {
+		const db = createMockDB([[]])
+		const env = createEnv(db, createMockCache())
+		await findVariantsByVideoId(env, "v1", 5)
+		expect(db.calls[0].sql).toContain(`NOT ${BANNED_SUBMITTER_PREDICATE_JOINED}`)
 	})
 })
 
