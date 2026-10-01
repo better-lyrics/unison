@@ -14,6 +14,15 @@ export type DiffRow =
   | { kind: "del"; lineNo: number; startMs: number | null; text: string; head?: HeadTextRef }
   | { kind: "word"; lineNo: number; startMs: number | null; parts: DiffPart[]; head?: HeadTextRef }
   | { kind: "timing"; lineNo: number; startMs: number; deltaMs: number; text: string }
+  | {
+      kind: "syllable"
+      lineNo: number
+      startMs: number | null
+      text: string
+      before: string | null
+      after: string | null
+      moved: number
+    }
   | { kind: "gap"; count: number; section?: "head" }
 
 export interface RevisionDiff {

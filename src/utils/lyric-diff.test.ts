@@ -11,8 +11,10 @@ import {
 	renderLinesForDiff,
 	reviewDiff,
 	showsChanges,
+	showsLineChanges,
 	unifiedDiff,
 } from "./lyric-diff"
+import { shiftTtml } from "./ttml-timing"
 
 const LRC = readRevisionFixture("amazing-grace.lrc")
 const REEXPORT_BEFORE = ttmlLinesOf("90210-before.ttml")
@@ -126,6 +128,146 @@ describe("buildDiffRows", () => {
 				0
 			)
 			expect(shown).toBe(after.length)
+		})
+	})
+})
+
+const AMAZING = '<span begin="12.000" end="12.600">Amazing</span>'
+const SPLIT_AMAZING =
+	'<span begin="12.000" end="12.200">A</span><span begin="12.200" end="12.400">ma</span><span begin="12.400" end="12.600">zing</span>'
+const HOW = '<span begin="13.200" end="13.800">How</span>'
+const HOW_AT = (begin: string) => `<span begin="${begin}" end="13.800">How</span>`
+const FIRST_LINE = "Amazing grace! How sweet the sound"
+const ttmlWith = (from: string, to: string) => ttmlLines(TTML.replace(from, to))
+const original = () => ttmlLines(TTML)
+const split = () => ttmlWith(AMAZING, SPLIT_AMAZING)
+const changedRows = (rows: DiffRow[]) =>
+	rows.filter((row) => row.kind !== "same" && row.kind !== "gap")
+
+describe("buildDiffRows with syllables", () => {
+	it("shows merged syllables as a syllable row with the old and new split", () => {
+		expect(changedRows(buildDiffRows(split(), original()))).toEqual([
+			{
+				kind: "syllable",
+				lineNo: 1,
+				startMs: 12000,
+				text: FIRST_LINE,
+				before: "A·ma·zing grace! How sweet the sound",
+				after: FIRST_LINE,
+				moved: 0,
+			},
+		])
+	})
+
+	it("shows a newly split word as a syllable row", () => {
+		expect(changedRows(buildDiffRows(original(), split()))).toEqual([
+			expect.objectContaining({
+				kind: "syllable",
+				before: FIRST_LINE,
+				after: "A·ma·zing grace! How sweet the sound",
+			}),
+		])
+	})
+
+	it("counts a syllable that moved while the line start stayed", () => {
+		expect(changedRows(buildDiffRows(original(), ttmlWith(HOW, HOW_AT("13.500"))))).toEqual([
+			{
+				kind: "syllable",
+				lineNo: 1,
+				startMs: 12000,
+				text: FIRST_LINE,
+				before: FIRST_LINE,
+				after: FIRST_LINE,
+				moved: 1,
+			},
+		])
+	})
+
+	it("keeps the context lines and gaps around a syllable row", () => {
+		const rows = buildDiffRows(split(), original())
+		expect(rows.map((row) => row.kind)).toEqual(["syllable", "same", "same", "gap"])
+	})
+
+	describe("edge cases", () => {
+		it("ignores a syllable move under the minimum", () => {
+			expect(buildDiffRows(original(), ttmlWith(HOW, HOW_AT("13.299")))).toEqual([
+				{ kind: "gap", count: 16 },
+			])
+		})
+
+		it("counts a syllable move of exactly the minimum", () => {
+			expect(changedRows(buildDiffRows(original(), ttmlWith(HOW, HOW_AT("13.300"))))).toEqual([
+				expect.objectContaining({ kind: "syllable", moved: 1 }),
+			])
+		})
+
+		it("shows a whole line moved with its syllables as a timing row", () => {
+			const rows = changedRows(buildDiffRows(original(), ttmlLines(shiftTtml(TTML, 0.5))))
+			expect(rows).toHaveLength(16)
+			expect(rows.every((row) => row.kind === "timing")).toBe(true)
+		})
+
+		it("shows a line whose start moved without its syllables as a timing row", () => {
+			const rows = changedRows(
+				buildDiffRows(original(), ttmlWith('<p begin="12.000"', '<p begin="12.300"'))
+			)
+			expect(rows).toEqual([expect.objectContaining({ kind: "timing", lineNo: 1, deltaMs: 300 })])
+		})
+
+		it("shows a line that lost its syllable timing with a null split", () => {
+			const lineSynced = original().map(({ syllables, ...line }) => line)
+			const rows = changedRows(buildDiffRows(original(), lineSynced))
+			expect(rows).toHaveLength(16)
+			expect(rows[0]).toEqual({
+				kind: "syllable",
+				lineNo: 1,
+				startMs: 12000,
+				text: FIRST_LINE,
+				before: FIRST_LINE,
+				after: null,
+				moved: 0,
+			})
+		})
+
+		it("shows a line that gained syllable timing with a null old split", () => {
+			const lineSynced = original().map(({ syllables, ...line }) => line)
+			expect(changedRows(buildDiffRows(lineSynced, original()))[0]).toMatchObject({
+				kind: "syllable",
+				before: null,
+				after: FIRST_LINE,
+			})
+		})
+
+		it("shows a text change on a re-split line as a word row", () => {
+			const after = ttmlWith(AMAZING, '<span begin="12.000" end="12.600">Amaze</span>')
+			expect(changedRows(buildDiffRows(split(), after))).toEqual([
+				expect.objectContaining({ kind: "word", lineNo: 1 }),
+			])
+		})
+
+		it("marks no boundary between syllables that a space separates", () => {
+			const row = changedRows(buildDiffRows(original(), split()))[0]
+			expect(row.kind === "syllable" && row.before).toBe(FIRST_LINE)
+		})
+	})
+
+	describe("regressions", () => {
+		it("regression: a syllable-only edit no longer shows as an empty diff", () => {
+			expect(buildDiffRows(split(), original())).not.toEqual([{ kind: "gap", count: 16 }])
+		})
+	})
+
+	describe("invariants", () => {
+		it("never emits a syllable row whose split and timing are both unchanged", () => {
+			for (const after of [original(), shiftEvery(original(), 30)]) {
+				expect(buildDiffRows(original(), after).some((row) => row.kind === "syllable")).toBe(false)
+			}
+		})
+
+		it("keeps the new side's line text on a syllable row", () => {
+			for (const row of buildDiffRows(split(), original())) {
+				if (row.kind === "syllable") expect(row.text).toBe(original()[row.lineNo - 1].text)
+			}
 		})
 	})
 })
@@ -429,9 +571,37 @@ describe("minimum timing change", () => {
 			expect(showsChanges(base(), edit(base(), 3, { text: "Was dark, but now I see." }))).toBe(true)
 		})
 
+		it("is true when only the syllable split changed", () => {
+			expect(showsChanges(split(), original())).toBe(true)
+		})
+
+		it("is true when only a syllable moved", () => {
+			expect(showsChanges(original(), ttmlWith(HOW, HOW_AT("13.500")))).toBe(true)
+		})
+
 		it("is true when a line is added or removed", () => {
 			expect(showsChanges(base(), base().slice(1))).toBe(true)
 			expect(showsChanges(base().slice(1), base())).toBe(true)
+		})
+	})
+
+	describe("showsLineChanges", () => {
+		it("is false when only the syllable split changed", () => {
+			expect(showsLineChanges(split(), original())).toBe(false)
+		})
+
+		it("is false when only a syllable moved", () => {
+			expect(showsLineChanges(original(), ttmlWith(HOW, HOW_AT("13.500")))).toBe(false)
+		})
+
+		it("is true when text changes", () => {
+			expect(showsLineChanges(base(), edit(base(), 3, { text: "Was dark, but now I see." }))).toBe(
+				true
+			)
+		})
+
+		it("is true when a line moves by the minimum", () => {
+			expect(showsLineChanges(base(), edit(base(), 0, { startMs: 12100 }))).toBe(true)
 		})
 	})
 
@@ -569,9 +739,43 @@ describe("reviewDiff", () => {
 		)
 	})
 
+	it("shows a syllable merge as the old and new split", () => {
+		expect(reviewDiff(split(), original(), unchanged, labels).preview).toBe(
+			"-[00:12.00] A·ma·zing grace! How sweet the sound\n+[00:12.00] Amazing grace! How sweet the sound"
+		)
+	})
+
+	it("says syllable timing changed when a syllable moved without a split change", () => {
+		const review = reviewDiff(original(), ttmlWith(HOW, HOW_AT("13.500")), unchanged, labels)
+		expect(review.preview).toBe("Syllable timing changed on 1 line.")
+		expect(review.full.endsWith("Syllable timing changed on 1 line.\n")).toBe(true)
+	})
+
+	it("counts every line whose syllables moved", () => {
+		const after = ttmlLines(
+			TTML.replace(HOW, HOW_AT("13.500")).replace(
+				'<span begin="16.600" end="17.200">saved</span>',
+				'<span begin="16.900" end="17.200">saved</span>'
+			)
+		)
+		expect(reviewDiff(original(), after, unchanged, labels).preview).toBe(
+			"Syllable timing changed on 2 lines."
+		)
+	})
+
 	describe("edge cases", () => {
 		it("is empty when nothing changed", () => {
 			expect(reviewDiff(base(), base(), unchanged, labels).preview).toBe("")
+		})
+
+		it("is empty for an unchanged word-synced lyric", () => {
+			expect(reviewDiff(original(), original(), unchanged, labels).preview).toBe("")
+		})
+
+		it("adds no syllable line for a split change the diff already shows", () => {
+			expect(reviewDiff(split(), original(), unchanged, labels).preview).not.toContain(
+				"Syllable timing"
+			)
 		})
 
 		it("adds no timing line when a move reaches the minimum", () => {

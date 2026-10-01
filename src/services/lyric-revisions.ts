@@ -53,7 +53,7 @@ import {
 	buildDiffRows,
 	buildFieldRows,
 	reviewDiff,
-	showsChanges,
+	showsLineChanges,
 	unifiedDiff,
 } from "@/utils/lyric-diff"
 import { type DriftResult, measureDrift } from "@/utils/lyric-drift"
@@ -412,7 +412,7 @@ const needsJev = (a: Assessment): boolean =>
 	!a.noChanges &&
 	a.outcome.goesLive &&
 	hasRoom(a.rateLimit) &&
-	showsChanges(a.anchorLines, a.candidateLines)
+	showsLineChanges(a.anchorLines, a.candidateLines)
 
 // Runs before the row lock so a slow TypeSafe call never holds it.
 async function checkWithJev(

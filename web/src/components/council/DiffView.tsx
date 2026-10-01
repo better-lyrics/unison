@@ -37,6 +37,28 @@ function timingNote(deltaMs: number): string {
   return `${(Math.abs(deltaMs) / 1000).toFixed(2)} s ${deltaMs < 0 ? "earlier" : "later"}`
 }
 
+type SyllableRow = Extract<DiffRow, { kind: "syllable" }>
+
+function syllableNote(row: SyllableRow): string | undefined {
+  if (row.before === null) return "syllable timing added"
+  if (row.after === null) return "syllable timing removed"
+  if (row.moved > 0) return `${plural(row.moved, "syllable", "syllables")} retimed`
+  return undefined
+}
+
+function syllableLine(row: SyllableRow, which: "before" | "after"): Line {
+  const before = row.before ?? row.text
+  const after = row.after ?? row.text
+  const kind = before === after ? "timing" : which === "before" ? "del" : "add"
+  return {
+    kind,
+    lineNo: row.lineNo,
+    prefix: stamp(row.startMs),
+    body: which === "before" ? before : after,
+    note: which === "after" ? syllableNote(row) : undefined,
+  }
+}
+
 type Item = { gap: { count: number } } | { line: Line }
 
 function unified(rows: DiffRow[]): Item[] {
@@ -63,6 +85,11 @@ function unified(rows: DiffRow[]): Item[] {
             },
           },
         ]
+      case "syllable": {
+        const after = syllableLine(row, "after")
+        if (after.kind === "timing") return [{ line: after }]
+        return [{ line: syllableLine(row, "before") }, { line: after }]
+      }
       default:
         return [
           {
@@ -104,6 +131,8 @@ function side(rows: DiffRow[], which: "before" | "after"): Item[] {
             },
           },
         ]
+      case "syllable":
+        return [{ line: syllableLine(row, which) }]
       case "del":
       case "add":
         if ((row.kind === "del") !== (which === "before")) return []
