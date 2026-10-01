@@ -74,8 +74,8 @@ describe("badge definitions", () => {
 
 	it("resolves image URLs on the documented relative scheme", () => {
 		for (const b of BADGES) {
-			expect(b.image.color).toBe(`/badges/${b.key}/image.svg?variant=color`)
-			expect(b.image.mono).toBe(`/badges/${b.key}/image.svg?variant=mono`)
+			expect(b.image.color).toBe(`/badges/${b.key}/image.svg?variant=color&v=2`)
+			expect(b.image.mono).toBe(`/badges/${b.key}/image.svg?variant=mono&v=2`)
 			expect(b.image.color).toContain(b.key)
 			expect(b.image.color).toContain("variant=color")
 			expect(b.image.mono).toContain(b.key)
@@ -88,17 +88,17 @@ describe("badge definitions", () => {
 			if (!b.tiers) continue
 			for (const tier of b.tiers) {
 				expect(tier.image?.color).toBe(
-					`/badges/${b.key}/image.svg?variant=color&tier=${tier.level}`
+					`/badges/${b.key}/image.svg?variant=color&tier=${tier.level}&v=2`
 				)
-				expect(tier.image?.mono).toBe(`/badges/${b.key}/image.svg?variant=mono`)
+				expect(tier.image?.mono).toBe(`/badges/${b.key}/image.svg?variant=mono&v=2`)
 			}
 		}
 	})
 
 	it("pins the exact URL for a sample badge", () => {
 		const community = BADGES.find((b) => b.key === "community")
-		expect(community?.image.color).toBe("/badges/community/image.svg?variant=color")
-		expect(community?.image.mono).toBe("/badges/community/image.svg?variant=mono")
+		expect(community?.image.color).toBe("/badges/community/image.svg?variant=color&v=2")
+		expect(community?.image.mono).toBe("/badges/community/image.svg?variant=mono&v=2")
 	})
 
 	it("includes all nine launch keys", () => {
@@ -154,8 +154,8 @@ describe("tier title definitions", () => {
 
 	it("resolves color and mono image URLs on the documented scheme", () => {
 		for (const b of TIER_BADGES) {
-			expect(b.image.color).toBe(`/badges/${b.key}/image.svg?variant=color`)
-			expect(b.image.mono).toBe(`/badges/${b.key}/image.svg?variant=mono`)
+			expect(b.image.color).toBe(`/badges/${b.key}/image.svg?variant=color&v=2`)
+			expect(b.image.mono).toBe(`/badges/${b.key}/image.svg?variant=mono&v=2`)
 		}
 	})
 })

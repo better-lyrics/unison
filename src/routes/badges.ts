@@ -50,7 +50,8 @@ function resolveBackground(bg?: string): string | null {
 function bakeBackground(art: string, key: string, color: string): string {
 	const image = silhouetteMaskImage(key)
 	if (!image) return art
-	const layer = `<mask id="unison-badge-bg" mask-type="alpha" style="mask-type:alpha">${image}</mask><rect width="100%" height="100%" fill="${color}" mask="url(#unison-badge-bg)"/>`
+	const id = `unison-badge-bg-${key}`
+	const layer = `<mask id="${id}" mask-type="alpha" style="mask-type:alpha">${image}</mask><rect width="100%" height="100%" fill="${color}" mask="url(#${id})"/>`
 	return art.replace(/(<svg\b[^>]*>)/, `$1${layer}`)
 }
 
