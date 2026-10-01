@@ -102,6 +102,39 @@ describe("DiffView syllables", () => {
     ])
   })
 
+  it("adds the syllable count to a moved line", () => {
+    const moved: DiffRow = {
+      kind: "timing",
+      lineNo: 4,
+      startMs: 8300,
+      deltaMs: 300,
+      text: "So tell me",
+      syllables: { before: "So tell me", after: "So tell me", moved: 1 },
+    }
+    const { container } = render(<DiffView rows={[moved]} mode="unified" />)
+    expect(rows(container)).toEqual(["timing|4~[00:08.30] So tell me0.30 s later, 1 syllable retimed"])
+  })
+
+  it("shows the old and new split of a moved, re-split line with its timing", () => {
+    const moved: DiffRow = {
+      kind: "timing",
+      lineNo: 2,
+      startMs: 2300,
+      deltaMs: 300,
+      text: "from champagne",
+      syllables: { before: "from cham·p·a·gne", after: "from cham·pagne", moved: 0 },
+    }
+    const { container } = render(<DiffView rows={[moved]} mode="unified" />)
+    expect(rows(container)).toEqual([
+      "del|2-[00:02.30] from cham·p·a·gne",
+      "add|2+[00:02.30] from cham·pagne0.30 s later",
+    ])
+    const split = render(<DiffView rows={[moved]} mode="split" />).container
+    const [before, after] = [...split.querySelectorAll("[data-side]")] as HTMLElement[]
+    expect(rows(before)).toEqual(["del|2-[00:02.00] from cham·p·a·gne"])
+    expect(rows(after)).toEqual(["add|2+[00:02.30] from cham·pagne0.30 s later"])
+  })
+
   describe("edge cases", () => {
     it("says when a line lost its syllable timing", () => {
       const { container } = render(

@@ -1,5 +1,5 @@
 import { config } from "@/config"
-import type { DiffPart, DiffRow, HeadTextRef, MetadataField } from "@/types"
+import type { DiffPart, DiffRow, HeadTextRef, MetadataField, SyllableChange } from "@/types"
 import type { LyricLine } from "@/utils/extract-text"
 import { createTwoFilesPatch, diffArrays } from "diff"
 
@@ -59,24 +59,28 @@ function movedSyllables(before: LyricLine, after: LyricLine): number {
 	}).length
 }
 
-function keptRow(before: LyricLine, after: LyricLine, lineNo: number): DiffRow {
+function syllableChange(before: LyricLine, after: LyricLine): SyllableChange | null {
 	const resplit = !sameSplit(before, after)
 	const moved = resplit ? 0 : movedSyllables(before, after)
-	if (resplit || moved > 0) {
-		return {
-			kind: "syllable",
-			lineNo,
-			startMs: after.startMs,
-			text: after.text,
-			before: splitText(before),
-			after: splitText(after),
-			moved,
-		}
-	}
+	if (!resplit && moved === 0) return null
+	return { before: splitText(before), after: splitText(after), moved }
+}
+
+function keptRow(before: LyricLine, after: LyricLine, lineNo: number): DiffRow {
+	const syllables = syllableChange(before, after)
 	const deltaMs = timingShift(before, after)
 	if (deltaMs !== null && after.startMs !== null && isVisibleShift(deltaMs)) {
-		return { kind: "timing", lineNo, startMs: after.startMs, deltaMs, text: after.text }
+		const row = {
+			kind: "timing",
+			lineNo,
+			startMs: after.startMs,
+			deltaMs,
+			text: after.text,
+		} as const
+		return syllables ? { ...row, syllables } : row
 	}
+	if (syllables)
+		return { kind: "syllable", lineNo, startMs: after.startMs, text: after.text, ...syllables }
 	return { kind: "same", lineNo, startMs: after.startMs, text: after.text, ...headOf(after) }
 }
 
@@ -290,9 +294,11 @@ function renderFields(changes: FieldChange[], side: "before" | "after"): string 
 const SMALL_MOVES_NOTE = `Timing changed slightly, no line moved by ${config.revisions.minTimingChangeMs} ms or more.`
 
 function syllableTimingNote(before: LyricLine[], after: LyricLine[]): string | null {
-	const lines = buildDiffRows(before, after).filter(
-		(row) => row.kind === "syllable" && (row.before ?? row.text) === (row.after ?? row.text)
-	).length
+	const lines = buildDiffRows(before, after).filter((row) => {
+		if (row.kind !== "syllable" && row.kind !== "timing") return false
+		const change = row.kind === "syllable" ? row : row.syllables
+		return change !== undefined && (change.before ?? row.text) === (change.after ?? row.text)
+	}).length
 	if (lines === 0) return null
 	return `Syllable timing changed on ${lines} ${lines === 1 ? "line" : "lines"}.`
 }

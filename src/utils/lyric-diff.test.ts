@@ -214,6 +214,47 @@ describe("buildDiffRows with syllables", () => {
 			expect(rows).toEqual([expect.objectContaining({ kind: "timing", lineNo: 1, deltaMs: 300 })])
 		})
 
+		it("keeps a moved line with retimed syllables as a timing row carrying the syllable change", () => {
+			const after = ttmlLines(
+				TTML.replace('<p begin="12.000"', '<p begin="12.300"')
+					.replace(AMAZING, '<span begin="12.300" end="12.600">Amazing</span>')
+					.replace(HOW, HOW_AT("13.700"))
+			)
+			expect(changedRows(buildDiffRows(original(), after))).toEqual([
+				{
+					kind: "timing",
+					lineNo: 1,
+					startMs: 12300,
+					deltaMs: 300,
+					text: FIRST_LINE,
+					syllables: { before: FIRST_LINE, after: FIRST_LINE, moved: 1 },
+				},
+			])
+		})
+
+		it("keeps a moved and re-split line as a timing row carrying both splits", () => {
+			const after = ttmlLines(
+				TTML.replace('<p begin="12.000"', '<p begin="12.300"').replace(
+					AMAZING,
+					'<span begin="12.300" end="12.400">A</span><span begin="12.400" end="12.600">mazing</span>'
+				)
+			)
+			expect(changedRows(buildDiffRows(original(), after))).toEqual([
+				expect.objectContaining({
+					kind: "timing",
+					deltaMs: 300,
+					syllables: { before: FIRST_LINE, after: "A·mazing grace! How sweet the sound", moved: 0 },
+				}),
+			])
+		})
+
+		it("gives a moved line with unchanged syllables no syllable change", () => {
+			const rows = changedRows(
+				buildDiffRows(original(), ttmlWith('<p begin="12.000"', '<p begin="12.300"'))
+			)
+			expect(rows[0]).not.toHaveProperty("syllables")
+		})
+
 		it("shows a line that lost its syllable timing with a null split", () => {
 			const lineSynced = original().map(({ syllables, ...line }) => line)
 			const rows = changedRows(buildDiffRows(original(), lineSynced))
@@ -258,6 +299,15 @@ describe("buildDiffRows with syllables", () => {
 	})
 
 	describe("invariants", () => {
+		it("regression: a visible line shift is always a timing row with its delta", () => {
+			const after = ttmlLines(
+				TTML.replace('<p begin="12.000"', '<p begin="12.300"').replace(HOW, HOW_AT("13.700"))
+			)
+			for (const row of buildDiffRows(original(), after)) {
+				if (row.kind !== "same" && row.kind !== "gap") expect(row.kind).toBe("timing")
+			}
+		})
+
 		it("never emits a syllable row whose split and timing are both unchanged", () => {
 			for (const after of [original(), shiftEvery(original(), 30)]) {
 				expect(buildDiffRows(original(), after).some((row) => row.kind === "syllable")).toBe(false)
@@ -761,6 +811,17 @@ describe("reviewDiff", () => {
 		expect(reviewDiff(original(), after, unchanged, labels).preview).toBe(
 			"Syllable timing changed on 2 lines."
 		)
+	})
+
+	it("counts a moved line whose syllables also moved", () => {
+		const after = ttmlLines(
+			TTML.replace('<p begin="12.000"', '<p begin="12.300"')
+				.replace(AMAZING, '<span begin="12.300" end="12.600">Amazing</span>')
+				.replace(HOW, HOW_AT("13.700"))
+		)
+		const { preview } = reviewDiff(original(), after, unchanged, labels)
+		expect(preview).toContain("+[00:12.30] Amazing grace! How sweet the sound")
+		expect(preview.endsWith("Syllable timing changed on 1 line.")).toBe(true)
 	})
 
 	describe("edge cases", () => {
