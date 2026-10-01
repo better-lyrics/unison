@@ -62,6 +62,102 @@ describe("DiffView split", () => {
   })
 })
 
+const MERGED: DiffRow = {
+  kind: "syllable",
+  lineNo: 2,
+  startMs: 2000,
+  text: "from champagne",
+  before: "from cham·p·a·gne",
+  after: "from cham·pagne",
+  moved: 0,
+}
+const RETIMED: DiffRow = {
+  kind: "syllable",
+  lineNo: 3,
+  startMs: 5000,
+  text: "So tell me",
+  before: "So tell me",
+  after: "So tell me",
+  moved: 2,
+}
+
+describe("DiffView syllables", () => {
+  it("shows a re-split line as its old and new split", () => {
+    const { container } = render(<DiffView rows={[MERGED]} mode="unified" />)
+    expect(rows(container)).toEqual(["del|2-[00:02.00] from cham·p·a·gne", "add|2+[00:02.00] from cham·pagne"])
+  })
+
+  it("shows a syllable retime as one timing line with a count", () => {
+    const { container } = render(<DiffView rows={[RETIMED]} mode="unified" />)
+    expect(rows(container)).toEqual(["timing|3~[00:05.00] So tell me2 syllables retimed"])
+  })
+
+  it("puts the old split on the left and the new split on the right", () => {
+    const { container } = render(<DiffView rows={[MERGED, RETIMED]} mode="split" />)
+    const [before, after] = [...container.querySelectorAll("[data-side]")] as HTMLElement[]
+    expect(rows(before)).toEqual(["del|2-[00:02.00] from cham·p·a·gne", "timing|3~[00:05.00] So tell me"])
+    expect(rows(after)).toEqual([
+      "add|2+[00:02.00] from cham·pagne",
+      "timing|3~[00:05.00] So tell me2 syllables retimed",
+    ])
+  })
+
+  it("adds the syllable count to a moved line", () => {
+    const moved: DiffRow = {
+      kind: "timing",
+      lineNo: 4,
+      startMs: 8300,
+      deltaMs: 300,
+      text: "So tell me",
+      syllables: { before: "So tell me", after: "So tell me", moved: 1 },
+    }
+    const { container } = render(<DiffView rows={[moved]} mode="unified" />)
+    expect(rows(container)).toEqual(["timing|4~[00:08.30] So tell me0.30 s later, 1 syllable retimed"])
+  })
+
+  it("shows the old and new split of a moved, re-split line with its timing", () => {
+    const moved: DiffRow = {
+      kind: "timing",
+      lineNo: 2,
+      startMs: 2300,
+      deltaMs: 300,
+      text: "from champagne",
+      syllables: { before: "from cham·p·a·gne", after: "from cham·pagne", moved: 0 },
+    }
+    const { container } = render(<DiffView rows={[moved]} mode="unified" />)
+    expect(rows(container)).toEqual([
+      "del|2-[00:02.30] from cham·p·a·gne",
+      "add|2+[00:02.30] from cham·pagne0.30 s later",
+    ])
+    const split = render(<DiffView rows={[moved]} mode="split" />).container
+    const [before, after] = [...split.querySelectorAll("[data-side]")] as HTMLElement[]
+    expect(rows(before)).toEqual(["del|2-[00:02.00] from cham·p·a·gne"])
+    expect(rows(after)).toEqual(["add|2+[00:02.30] from cham·pagne0.30 s later"])
+  })
+
+  describe("edge cases", () => {
+    it("says when a line lost its syllable timing", () => {
+      const { container } = render(
+        <DiffView rows={[{ ...MERGED, before: "from champagne", after: null }]} mode="unified" />,
+      )
+      expect(rows(container)).toEqual(["timing|2~[00:02.00] from champagnesyllable timing removed"])
+    })
+
+    it("says when a line gained syllable timing", () => {
+      const { container } = render(<DiffView rows={[{ ...MERGED, before: null }]} mode="unified" />)
+      expect(rows(container)).toEqual([
+        "del|2-[00:02.00] from champagne",
+        "add|2+[00:02.00] from cham·pagnesyllable timing added",
+      ])
+    })
+
+    it("uses the singular for one retimed syllable", () => {
+      const { container } = render(<DiffView rows={[{ ...RETIMED, moved: 1 }]} mode="unified" />)
+      expect(rows(container)).toEqual(["timing|3~[00:05.00] So tell me1 syllable retimed"])
+    })
+  })
+})
+
 describe("DiffView edge cases", () => {
   it("says there are no line changes for an empty diff", () => {
     render(<DiffView rows={[]} mode="unified" />)

@@ -1,4 +1,4 @@
-import type { HeadTextRef, LyricsFormat } from "@/types"
+import type { HeadTextRef, LyricsFormat, Syllable } from "@/types"
 import { parseLrc } from "@/utils/lrc"
 import { parseTtmlTime } from "@/utils/ttml-timing"
 import {
@@ -12,6 +12,7 @@ export interface LyricLine {
 	text: string
 	startMs: number | null
 	head?: HeadTextRef
+	syllables?: Syllable[]
 }
 
 const parser = new XMLParser({
@@ -71,6 +72,33 @@ function beginMs(el: ParsedNode): number | null {
 	return seconds === null ? null : Math.round(seconds * 1000)
 }
 
+function childNodes(el: ParsedNode): unknown[] {
+	return Object.keys(el)
+		.filter((key) => key !== "#text" && key !== ":@" && Array.isArray(el[key]))
+		.flatMap((key) => el[key] as unknown[])
+}
+
+function collectSyllables(nodes: unknown[], out: Syllable[]): void {
+	for (const node of nodes) {
+		if (typeof node !== "object" || node === null) continue
+		const el = node as ParsedNode
+		const children = childNodes(el)
+		const startMs = beginMs(el)
+		if (startMs !== null && firstTimedDescendant(children) === null) {
+			const text = concatText(children).trim()
+			if (text) out.push({ text, startMs })
+		} else {
+			collectSyllables(children, out)
+		}
+	}
+}
+
+function syllablesOf(nodes: unknown[]): { syllables?: Syllable[] } {
+	const syllables: Syllable[] = []
+	collectSyllables(nodes, syllables)
+	return syllables.length > 0 ? { syllables } : {}
+}
+
 function firstTimedDescendant(nodes: unknown[]): number | null {
 	for (const node of nodes) {
 		if (typeof node !== "object" || node === null) continue
@@ -111,7 +139,11 @@ function collectParagraphs(nodes: unknown[], out: ParsedTtml): void {
 		if (Array.isArray(el.p)) {
 			const text = concatText(el.p).trim()
 			if (text) {
-				out.lines.push({ text, startMs: beginMs(el) ?? firstTimedDescendant(el.p) })
+				out.lines.push({
+					text,
+					startMs: beginMs(el) ?? firstTimedDescendant(el.p),
+					...syllablesOf(el.p),
+				})
 				out.texts.push(text)
 				const key = (el[":@"] as ParsedNode | undefined)?.["@_key"]
 				if (typeof key === "string") out.lineByKey.set(key, out.lines.length)

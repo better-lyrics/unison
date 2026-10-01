@@ -1,6 +1,6 @@
 import { cn } from "@/lib/cn"
 import { plural } from "@/lib/format"
-import type { DiffPart, DiffRow, HeadTextRef } from "@/lib/revision-types"
+import type { DiffPart, DiffRow, HeadTextRef, SyllableChange } from "@/lib/revision-types"
 import type { ReactNode } from "react"
 
 export type DiffMode = "unified" | "split"
@@ -37,6 +37,63 @@ function timingNote(deltaMs: number): string {
   return `${(Math.abs(deltaMs) / 1000).toFixed(2)} s ${deltaMs < 0 ? "earlier" : "later"}`
 }
 
+function syllableNote(change: SyllableChange): string | undefined {
+  if (change.before === null) return "syllable timing added"
+  if (change.after === null) return "syllable timing removed"
+  if (change.moved > 0) return `${plural(change.moved, "syllable", "syllables")} retimed`
+  return undefined
+}
+
+type SyllableRow = Extract<DiffRow, { kind: "syllable" }>
+type TimingRow = Extract<DiffRow, { kind: "timing" }>
+
+interface Resynced {
+  lineNo: number
+  startMs: number | null
+  beforeMs: number | null
+  text: string
+  change: SyllableChange
+  timing?: string
+}
+
+function resyncedSyllables(row: SyllableRow): Resynced {
+  return { lineNo: row.lineNo, startMs: row.startMs, beforeMs: row.startMs, text: row.text, change: row }
+}
+
+function resyncedTiming(row: TimingRow, change: SyllableChange): Resynced {
+  return {
+    lineNo: row.lineNo,
+    startMs: row.startMs,
+    beforeMs: row.startMs - row.deltaMs,
+    text: row.text,
+    change,
+    timing: timingNote(row.deltaMs),
+  }
+}
+
+function resyncedUnified(row: Resynced): Item[] {
+  const after = resyncedLine(row, "after", row.startMs)
+  if (after.kind === "timing") return [{ line: after }]
+  return [{ line: resyncedLine(row, "before", row.startMs) }, { line: after }]
+}
+
+function resyncedSide(row: Resynced, which: "before" | "after"): Item[] {
+  return [{ line: resyncedLine(row, which, which === "before" ? row.beforeMs : row.startMs) }]
+}
+
+function resyncedLine(row: Resynced, which: "before" | "after", startMs: number | null): Line {
+  const before = row.change.before ?? row.text
+  const after = row.change.after ?? row.text
+  const note = [row.timing, syllableNote(row.change)].filter(Boolean).join(", ")
+  return {
+    kind: before === after ? "timing" : which === "before" ? "del" : "add",
+    lineNo: row.lineNo,
+    prefix: stamp(startMs),
+    body: which === "before" ? before : after,
+    note: which === "after" && note ? note : undefined,
+  }
+}
+
 type Item = { gap: { count: number } } | { line: Line }
 
 function unified(rows: DiffRow[]): Item[] {
@@ -52,6 +109,7 @@ function unified(rows: DiffRow[]): Item[] {
         ]
       }
       case "timing":
+        if (row.syllables) return resyncedUnified(resyncedTiming(row, row.syllables))
         return [
           {
             line: {
@@ -63,6 +121,8 @@ function unified(rows: DiffRow[]): Item[] {
             },
           },
         ]
+      case "syllable":
+        return resyncedUnified(resyncedSyllables(row))
       default:
         return [
           {
@@ -94,6 +154,7 @@ function side(rows: DiffRow[], which: "before" | "after"): Item[] {
           },
         ]
       case "timing":
+        if (row.syllables) return resyncedSide(resyncedTiming(row, row.syllables), which)
         return [
           {
             line: {
@@ -104,6 +165,8 @@ function side(rows: DiffRow[], which: "before" | "after"): Item[] {
             },
           },
         ]
+      case "syllable":
+        return resyncedSide(resyncedSyllables(row), which)
       case "del":
       case "add":
         if ((row.kind === "del") !== (which === "before")) return []

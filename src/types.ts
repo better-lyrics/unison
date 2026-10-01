@@ -314,6 +314,17 @@ export interface PreviewResult {
 
 export type DiffPart = ["=" | "+" | "-", string]
 
+export interface Syllable {
+	text: string
+	startMs: number | null
+}
+
+export interface SyllableChange {
+	before: string | null
+	after: string | null
+	moved: number
+}
+
 export interface HeadTextRef {
 	kind: "translation" | "transliteration" | "credit"
 	lang: string | null
@@ -325,7 +336,15 @@ export type DiffRow =
 	| { kind: "add"; lineNo: number; startMs: number | null; text: string; head?: HeadTextRef }
 	| { kind: "del"; lineNo: number; startMs: number | null; text: string; head?: HeadTextRef }
 	| { kind: "word"; lineNo: number; startMs: number | null; parts: DiffPart[]; head?: HeadTextRef }
-	| { kind: "timing"; lineNo: number; startMs: number; deltaMs: number; text: string }
+	| {
+			kind: "timing"
+			lineNo: number
+			startMs: number
+			deltaMs: number
+			text: string
+			syllables?: SyllableChange
+	  }
+	| ({ kind: "syllable"; lineNo: number; startMs: number | null; text: string } & SyllableChange)
 	| { kind: "gap"; count: number; section?: "head" }
 	| { kind: "field"; field: MetadataField; before: string | null; after: string | null }
 

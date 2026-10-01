@@ -269,8 +269,19 @@ describe("extractLines", () => {
 	it("reads TTML lines with their begin times", () => {
 		const lines = extractLines(fixture("amazing-grace.ttml"), "ttml")
 		expect(lines).toHaveLength(16)
-		expect(lines[0]).toEqual({ text: "Amazing grace! How sweet the sound", startMs: 12000 })
-		expect(lines[15]).toEqual({ text: "As long as life endures.", startMs: 75000 })
+		expect(lines[0]).toEqual({
+			text: "Amazing grace! How sweet the sound",
+			startMs: 12000,
+			syllables: [
+				{ text: "Amazing", startMs: 12000 },
+				{ text: "grace!", startMs: 12600 },
+				{ text: "How", startMs: 13200 },
+				{ text: "sweet", startMs: 13800 },
+				{ text: "the", startMs: 14400 },
+				{ text: "sound", startMs: 15000 },
+			],
+		})
+		expect(lines[15]).toMatchObject({ text: "As long as life endures.", startMs: 75000 })
 	})
 
 	it("reads LRC lines with their times and skips metadata tags", () => {
@@ -294,7 +305,9 @@ describe("extractLines", () => {
 		it("falls back to the first timed span when a TTML line has no begin", () => {
 			const ttml =
 				'<tt xmlns="http://www.w3.org/ns/ttml"><body><div><p><span begin="1:02.500" end="1:03.000">Hi</span></p></div></body></tt>'
-			expect(extractLines(ttml, "ttml")).toEqual([{ text: "Hi", startMs: 62500 }])
+			expect(extractLines(ttml, "ttml")).toEqual([
+				{ text: "Hi", startMs: 62500, syllables: [{ text: "Hi", startMs: 62500 }] },
+			])
 		})
 
 		it("reads TTML offset times with a unit", () => {
@@ -325,7 +338,14 @@ describe("extractLines", () => {
 				'<span begin="1.000" end="2.000">my baby</span><span ttm:role="x-bg"><span begin="2.000" end="3.000">(Try to understand just what you)</span></span>'
 			)
 			expect(extractLines(ttml, "ttml")).toEqual([
-				{ text: "my baby (Try to understand just what you)", startMs: 1000 },
+				{
+					text: "my baby (Try to understand just what you)",
+					startMs: 1000,
+					syllables: [
+						{ text: "my baby", startMs: 1000 },
+						{ text: "(Try to understand just what you)", startMs: 2000 },
+					],
+				},
 			])
 		})
 
@@ -353,6 +373,83 @@ describe("extractLines", () => {
 		it("leaves a line that is only a background part unpadded", () => {
 			const ttml = line('<span ttm:role="x-bg"><span begin="1.000" end="2.000">(Oh)</span></span>')
 			expect(extractLines(ttml, "ttml")[0].text).toBe("(Oh)")
+		})
+	})
+
+	describe("syllables", () => {
+		const line = (inner: string): string =>
+			`<tt xmlns="http://www.w3.org/ns/ttml" xmlns:ttm="http://www.w3.org/ns/ttml#metadata"><body><div><p begin="1.000" end="4.000">${inner}</p></div></body></tt>`
+		const syllablesOf = (inner: string) => extractLines(line(inner), "ttml")[0].syllables
+
+		it("reads each timed span of a split word as its own syllable", () => {
+			expect(
+				syllablesOf(
+					'<span begin="1.000" end="1.500">from</span> <span begin="1.500" end="2.000">cham</span><span begin="2.000" end="2.100">p</span><span begin="2.100" end="3.000">agne</span>'
+				)
+			).toEqual([
+				{ text: "from", startMs: 1000 },
+				{ text: "cham", startMs: 1500 },
+				{ text: "p", startMs: 2000 },
+				{ text: "agne", startMs: 2100 },
+			])
+		})
+
+		it("reads the inner syllables of a background part in order", () => {
+			expect(
+				syllablesOf(
+					'<span begin="1.000" end="2.000">through</span><span ttm:role="x-bg"><span begin="2.000" end="2.500">(No-</span><span begin="2.500" end="3.000">no)</span></span>'
+				)
+			).toEqual([
+				{ text: "through", startMs: 1000 },
+				{ text: "(No-", startMs: 2000 },
+				{ text: "no)", startMs: 2500 },
+			])
+		})
+
+		describe("edge cases", () => {
+			it("gives a line-synced TTML line no syllables", () => {
+				expect(syllablesOf("Amazing grace")).toBeUndefined()
+			})
+
+			it("gives a line whose spans carry no times no syllables", () => {
+				expect(syllablesOf("<span>Amazing</span> <span>grace</span>")).toBeUndefined()
+			})
+
+			it("trims whitespace inside a span", () => {
+				expect(syllablesOf('<span begin="1.000" end="2.000"> grace </span>')).toEqual([
+					{ text: "grace", startMs: 1000 },
+				])
+			})
+
+			it("skips a timed span that holds no text", () => {
+				expect(
+					syllablesOf(
+						'<span begin="1.000" end="1.500"> </span><span begin="1.500" end="2.000">Hi</span>'
+					)
+				).toEqual([{ text: "Hi", startMs: 1500 }])
+			})
+
+			it("gives LRC and plain lines no syllables", () => {
+				for (const [name, format] of [
+					["amazing-grace.lrc", "lrc"],
+					["amazing-grace.txt", "plain"],
+				] as const) {
+					expect(extractLines(fixture(name), format).some((l) => "syllables" in l)).toBe(false)
+				}
+			})
+		})
+
+		describe("invariants", () => {
+			it("keeps every syllable in the line text, in order", () => {
+				for (const { text, syllables } of extractLines(fixture("90210-after.ttml"), "ttml")) {
+					let cursor = 0
+					for (const syllable of syllables ?? []) {
+						const at = text.indexOf(syllable.text, cursor)
+						expect(at).toBeGreaterThanOrEqual(cursor)
+						cursor = at + syllable.text.length
+					}
+				}
+			})
 		})
 	})
 

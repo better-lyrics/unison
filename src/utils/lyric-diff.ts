@@ -1,5 +1,5 @@
 import { config } from "@/config"
-import type { DiffPart, DiffRow, HeadTextRef, MetadataField } from "@/types"
+import type { DiffPart, DiffRow, HeadTextRef, MetadataField, SyllableChange } from "@/types"
 import type { LyricLine } from "@/utils/extract-text"
 import { createTwoFilesPatch, diffArrays } from "diff"
 
@@ -23,11 +23,64 @@ function timingShift(before: LyricLine, after: LyricLine): number | null {
 const isVisibleShift = (deltaMs: number): boolean =>
 	Math.abs(deltaMs) >= config.revisions.minTimingChangeMs
 
+const SYLLABLE_MARK = "·"
+
+function markedText(line: LyricLine): string {
+	if (!line.syllables) return line.text
+	let out = ""
+	let cursor = 0
+	for (const [index, { text }] of line.syllables.entries()) {
+		const at = line.text.indexOf(text, cursor)
+		if (at === -1) return line.text
+		const between = line.text.slice(cursor, at)
+		out += index > 0 && between === "" ? SYLLABLE_MARK : between
+		out += text
+		cursor = at + text.length
+	}
+	return out + line.text.slice(cursor)
+}
+
+const splitText = (line: LyricLine): string | null => (line.syllables ? markedText(line) : null)
+
+function sameSplit(before: LyricLine, after: LyricLine): boolean {
+	const a = before.syllables
+	const b = after.syllables
+	if (!a || !b) return a === b
+	return a.length === b.length && a.every((syllable, k) => syllable.text === b[k].text)
+}
+
+function movedSyllables(before: LyricLine, after: LyricLine): number {
+	const lineShift = timingShift(before, after) ?? 0
+	return (after.syllables ?? []).filter((syllable, k) => {
+		const was = before.syllables?.[k]?.startMs ?? null
+		if (was === null || syllable.startMs === null) return false
+		const deltaMs = syllable.startMs - was
+		return isVisibleShift(deltaMs) && isVisibleShift(deltaMs - lineShift)
+	}).length
+}
+
+function syllableChange(before: LyricLine, after: LyricLine): SyllableChange | null {
+	const resplit = !sameSplit(before, after)
+	const moved = resplit ? 0 : movedSyllables(before, after)
+	if (!resplit && moved === 0) return null
+	return { before: splitText(before), after: splitText(after), moved }
+}
+
 function keptRow(before: LyricLine, after: LyricLine, lineNo: number): DiffRow {
+	const syllables = syllableChange(before, after)
 	const deltaMs = timingShift(before, after)
 	if (deltaMs !== null && after.startMs !== null && isVisibleShift(deltaMs)) {
-		return { kind: "timing", lineNo, startMs: after.startMs, deltaMs, text: after.text }
+		const row = {
+			kind: "timing",
+			lineNo,
+			startMs: after.startMs,
+			deltaMs,
+			text: after.text,
+		} as const
+		return syllables ? { ...row, syllables } : row
 	}
+	if (syllables)
+		return { kind: "syllable", lineNo, startMs: after.startMs, text: after.text, ...syllables }
 	return { kind: "same", lineNo, startMs: after.startMs, text: after.text, ...headOf(after) }
 }
 
@@ -148,13 +201,16 @@ function stamp(ms: number | null): string {
 	return `[${pad(minutes)}:${pad(seconds)}.${pad(centis)}] `
 }
 
-export function renderLinesForDiff(lines: LyricLine[]): string {
+export function renderLinesForDiff(
+	lines: LyricLine[],
+	text: (line: LyricLine) => string = (line) => line.text
+): string {
 	const label = ({ head }: LyricLine) => {
 		if (!head) return ""
 		const where = head.line === null ? [] : [`L${head.line}`]
 		return `[${[head.kind, head.lang ?? [], where].flat().join(" ")}] `
 	}
-	return lines.map((line) => `${stamp(line.startMs)}${label(line)}${line.text}\n`).join("")
+	return lines.map((line) => `${stamp(line.startMs)}${label(line)}${text(line)}\n`).join("")
 }
 
 export function withoutSmallMoves(before: LyricLine[], after: LyricLine[]): LyricLine[] {
@@ -184,8 +240,15 @@ export function withoutSmallMoves(before: LyricLine[], after: LyricLine[]): Lyri
 	return settled
 }
 
-export function showsChanges(before: LyricLine[], after: LyricLine[]): boolean {
+export function showsLineChanges(before: LyricLine[], after: LyricLine[]): boolean {
 	return renderLinesForDiff(before) !== renderLinesForDiff(withoutSmallMoves(before, after))
+}
+
+export function showsChanges(before: LyricLine[], after: LyricLine[]): boolean {
+	return (
+		showsLineChanges(before, after) ||
+		buildDiffRows(before, after).some((row) => row.kind === "syllable")
+	)
 }
 
 type DiffLabels = { before: string; after: string }
@@ -230,6 +293,16 @@ function renderFields(changes: FieldChange[], side: "before" | "after"): string 
 
 const SMALL_MOVES_NOTE = `Timing changed slightly, no line moved by ${config.revisions.minTimingChangeMs} ms or more.`
 
+function syllableTimingNote(before: LyricLine[], after: LyricLine[]): string | null {
+	const lines = buildDiffRows(before, after).filter((row) => {
+		if (row.kind !== "syllable" && row.kind !== "timing") return false
+		const change = row.kind === "syllable" ? row : row.syllables
+		return change !== undefined && (change.before ?? row.text) === (change.after ?? row.text)
+	}).length
+	if (lines === 0) return null
+	return `Syllable timing changed on ${lines} ${lines === 1 ? "line" : "lines"}.`
+}
+
 export function reviewDiff(
 	before: LyricLine[],
 	after: LyricLine[],
@@ -238,15 +311,18 @@ export function reviewDiff(
 ): { full: string; preview: string } {
 	const full = patch(
 		labels,
-		renderFields(fields, "before") + renderLinesForDiff(before),
-		renderFields(fields, "after") + renderLinesForDiff(withoutSmallMoves(before, after))
+		renderFields(fields, "before") + renderLinesForDiff(before, markedText),
+		renderFields(fields, "after") + renderLinesForDiff(withoutSmallMoves(before, after), markedText)
 	)
 	const onlySmallMoves =
 		renderLinesForDiff(before) !== renderLinesForDiff(after) && !showsChanges(before, after)
-	if (!onlySmallMoves) return { full, preview: diffPreview(full) }
+	const notes = [
+		onlySmallMoves ? SMALL_MOVES_NOTE : null,
+		syllableTimingNote(before, after),
+	].filter((note) => note !== null)
 	return {
-		full: `${full}${SMALL_MOVES_NOTE}\n`,
-		preview: [diffPreview(full), SMALL_MOVES_NOTE].filter(Boolean).join("\n"),
+		full: notes.reduce((text, note) => `${text}${note}\n`, full),
+		preview: [diffPreview(full), ...notes].filter(Boolean).join("\n"),
 	}
 }
 

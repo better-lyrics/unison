@@ -2156,4 +2156,134 @@ describeIntegration("lyric revisions pipeline (integration)", () => {
 			})
 		})
 	})
+
+	describe("ttml syllables", () => {
+		const SYLLABLE_VIDEO = "syllablesAB"
+		const AMAZING = '<span begin="12.000" end="12.600">Amazing</span>'
+		const SPLIT_TTML = TTML.replace(
+			AMAZING,
+			'<span begin="12.000" end="12.200">A</span><span begin="12.200" end="12.400">ma</span><span begin="12.400" end="12.600">zing</span>'
+		)
+		const RETIMED_TTML = TTML.replace(
+			'<span begin="13.200" end="13.800">How</span>',
+			'<span begin="13.500" end="13.800">How</span>'
+		)
+		let ttmlLyric: number
+		let council: number
+
+		beforeEach(async () => {
+			ttmlLyric = await seedLyric(db, owner, {
+				lyrics: SPLIT_TTML,
+				format: "ttml",
+				videoId: SYLLABLE_VIDEO,
+			})
+			council = await seedCouncilMember(db, "c".repeat(64))
+			await db.pool.query("UPDATE lyrics SET effective_score = 1 WHERE id = $1", [ttmlLyric])
+		})
+
+		function countingGate() {
+			const calls: JevCheckInput[] = []
+			const gate: JevGate = {
+				check: async (input) => {
+					calls.push(input)
+					return { flagged: false, probability: 0.1 }
+				},
+			}
+			return { calls, env: { ...db.env, JEV: gate } }
+		}
+
+		const saveTtml = async (lyrics: string, env: Env = db.env) => {
+			const result = await saveRevision(env, ttmlLyric, owner, { lyrics, format: "ttml" })
+			if (!result.ok) throw new Error(`save failed: ${result.reason}`)
+			return result.revision
+		}
+
+		const sealable = async () =>
+			(await getSealableVariants(db.env, SYLLABLE_VIDEO)).map((row) => row.id)
+
+		async function reject(): Promise<void> {
+			const result = await rejectLyric(db.env, ttmlLyric, council, {
+				note: "Oversplit syllables.",
+				source: "web",
+			})
+			if (!result.ok) throw new Error(`reject failed: ${result.reason}`)
+		}
+
+		it("diffs a syllable merge as a syllable row", async () => {
+			const revision = await saveTtml(TTML)
+			const diff = await diffRevisions(db.env, ttmlLyric, revision.id, null)
+			expect(diff?.rows.filter((row) => row.kind === "syllable")).toEqual([
+				{
+					kind: "syllable",
+					lineNo: 1,
+					startMs: 12000,
+					text: "Amazing grace! How sweet the sound",
+					before: "A·ma·zing grace! How sweet the sound",
+					after: "Amazing grace! How sweet the sound",
+					moved: 0,
+				},
+			])
+		})
+
+		it("previews a syllable merge as a syllable row", async () => {
+			const result = await previewRevision(db.env, ttmlLyric, owner, {
+				lyrics: TTML,
+				format: "ttml",
+			})
+			if (!result.ok) throw new Error(`preview failed: ${result.reason}`)
+			expect(result.preview.diff.rows.map((row) => row.kind)).toEqual([
+				"syllable",
+				"same",
+				"same",
+				"gap",
+			])
+		})
+
+		it("lapses a council rejection for a syllable-only edit", async () => {
+			await reject()
+			expect(await sealable()).toEqual([])
+
+			const revision = await saveTtml(TTML)
+
+			expect(revision.status).toBe("live")
+			expect(await sealable()).toEqual([ttmlLyric])
+		})
+
+		it("lapses a council rejection for a syllable retime", async () => {
+			await saveTtml(TTML)
+			await reject()
+
+			await saveTtml(RETIMED_TTML)
+
+			expect(await sealable()).toEqual([ttmlLyric])
+		})
+
+		it("does not ask Jev about a syllable-only edit", async () => {
+			const { calls, env } = countingGate()
+			expect((await saveTtml(TTML, env)).status).toBe("live")
+			expect(calls).toEqual([])
+		})
+
+		it("still asks Jev about a text edit on a word-synced lyric", async () => {
+			const { calls, env } = countingGate()
+			await saveTtml(SPLIT_TTML.replace(">sweet<", ">soft<"), env)
+			expect(calls).toHaveLength(1)
+		})
+
+		it("shows a syllable retime in the council card", async () => {
+			await db.pool.query(
+				"UPDATE lyrics SET committee_approved_at = 1700000000, committee_approved_by = $2 WHERE id = $1",
+				[ttmlLyric, council]
+			)
+			const pending = await saveTtml(
+				SPLIT_TTML.replace(
+					'<span begin="13.200" end="13.800">How</span>',
+					'<span begin="13.500" end="13.800">How</span>'
+				)
+			)
+			expect(pending.status).toBe("pending")
+			const card = (await listPendingCards(db.env)).find((c) => c.revisionId === pending.id)
+			expect(card?.diffPreview).toBe("Syllable timing changed on 1 line.")
+		})
+	})
 })
