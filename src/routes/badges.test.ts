@@ -84,9 +84,9 @@ describe("GET /badges", () => {
 		const res = await app.handle(new Request("http://localhost/badges"))
 		const json = (await res.json()) as CatalogueBody
 		for (const b of json.data.badges) {
-			expect(b.image.color).toBe(`/badges/${b.key}/image.svg?variant=color`)
-			expect(b.image.mono).toBe(`/badges/${b.key}/image.svg?variant=mono`)
-			expect(b.image.silhouette).toBe(`/badges/${b.key}/image.svg?variant=silhouette`)
+			expect(b.image.color).toBe(`/badges/${b.key}/image.svg?variant=color&v=2`)
+			expect(b.image.mono).toBe(`/badges/${b.key}/image.svg?variant=mono&v=2`)
+			expect(b.image.silhouette).toBe(`/badges/${b.key}/image.svg?variant=silhouette&v=2`)
 		}
 	})
 
@@ -296,6 +296,20 @@ describe("GET /badges/:key/image.svg", () => {
 			)
 			expect(body).toContain('fill="#000000"')
 			expect(body).not.toContain("onload")
+		})
+
+		it("regression: gives each badge its own mask id so inlined badges never share a shape", async () => {
+			const app = badgeRoutes(makeEnv())
+			const ids = await Promise.all(
+				["most-loved", "first-submission"].map(async (key) => {
+					const body = await bodyOf(app, `http://localhost/badges/${key}/image.svg?variant=color`)
+					const id = body.match(/<mask id="(unison-badge-bg[^"]*)"/)?.[1]
+					expect(body).toContain(`mask="url(#${id})"`)
+					return id
+				})
+			)
+			expect(ids[0]).toBeDefined()
+			expect(ids[0]).not.toBe(ids[1])
 		})
 
 		it("does not declare an undefined xlink namespace in the baked output", async () => {

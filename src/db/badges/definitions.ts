@@ -35,11 +35,13 @@ export interface BadgeDef {
 	image: BadgeImage
 }
 
+const ART_VERSION = 2
+
 function image(key: string): BadgeImage {
 	return {
-		color: `/badges/${key}/image.svg?variant=color`,
-		mono: `/badges/${key}/image.svg?variant=mono`,
-		silhouette: `/badges/${key}/image.svg?variant=silhouette`,
+		color: `/badges/${key}/image.svg?variant=color&v=${ART_VERSION}`,
+		mono: `/badges/${key}/image.svg?variant=mono&v=${ART_VERSION}`,
+		silhouette: `/badges/${key}/image.svg?variant=silhouette&v=${ART_VERSION}`,
 	}
 }
 
@@ -48,9 +50,9 @@ function tiers(key: string, thresholds: number[]): BadgeTier[] {
 		level: i + 1,
 		threshold,
 		image: {
-			color: `/badges/${key}/image.svg?variant=color&tier=${i + 1}`,
-			mono: `/badges/${key}/image.svg?variant=mono`,
-			silhouette: `/badges/${key}/image.svg?variant=silhouette`,
+			color: `/badges/${key}/image.svg?variant=color&tier=${i + 1}&v=${ART_VERSION}`,
+			mono: `/badges/${key}/image.svg?variant=mono&v=${ART_VERSION}`,
+			silhouette: `/badges/${key}/image.svg?variant=silhouette&v=${ART_VERSION}`,
 		},
 	}))
 }
