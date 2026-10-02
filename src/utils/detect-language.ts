@@ -1,3 +1,5 @@
+import { normalizeLanguage } from "@/utils/language-code"
+
 export const DETECTOR_VERSION = 4
 
 export interface DetectResult {
@@ -18,7 +20,7 @@ function classify(eld: Eld, text: string): DetectResult {
 	if (!text.trim()) return { language: null, ready: true }
 	const result = eld.detect(text)
 	if (result.language && result.isReliable()) {
-		return { language: result.language, ready: true }
+		return { language: normalizeLanguage(result.language) ?? result.language, ready: true }
 	}
 	return { language: null, ready: true }
 }
