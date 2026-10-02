@@ -22,6 +22,7 @@ import type { Env, LyricsSubmission } from "@/types"
 import { ALBUM_HINT, isValidAlbum } from "@/utils/album"
 import { signedRequest } from "@/utils/auth"
 import { ErrorCode, buildError } from "@/utils/errors"
+import { normalizeLanguage } from "@/utils/language-code"
 import { readRateLimit } from "@/utils/read-rate-limit"
 import { getSession } from "@/utils/session"
 import { validateLyricContent } from "@/utils/validate-lyrics"
@@ -427,7 +428,8 @@ export const lyricsRoutes = (env: Env) =>
 				duration: p.duration as number,
 				lyrics: p.lyrics as string,
 				format: validated.format,
-				language: typeof p.language === "string" ? p.language : undefined,
+				language:
+					typeof p.language === "string" ? (normalizeLanguage(p.language) ?? undefined) : undefined,
 				syncType: validated.syncType,
 			}
 

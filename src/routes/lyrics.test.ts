@@ -1430,3 +1430,79 @@ describe("POST /lyrics/submit album validation", () => {
 		})
 	})
 })
+
+describe("POST /lyrics/submit language normalization", () => {
+	const LANGUAGE_PARAM_INDEX = 11
+	const LANGUAGE_SOURCE_PARAM_INDEX = 15
+	const submitWithLanguage = async (language: unknown) => {
+		const { res, db } = await submit({
+			videoId: "abc123",
+			song: "Song",
+			artist: "Artist",
+			duration: 200,
+			lyrics: "[00:01.00]Hello darkness my old friend\n[00:03.00]I've come to talk with you again",
+			format: "lrc",
+			language,
+		})
+		const params = findInsert(db)?.params
+		return {
+			status: res.status,
+			language: params?.[LANGUAGE_PARAM_INDEX],
+			source: params?.[LANGUAGE_SOURCE_PARAM_INDEX],
+		}
+	}
+
+	it("stores a curated language as the submitter's", async () => {
+		expect(await submitWithLanguage("hi")).toEqual({
+			status: 201,
+			language: "hi",
+			source: "submitter",
+		})
+	})
+
+	it("stores a self-serve language outside the curated list", async () => {
+		expect(await submitWithLanguage("bgc")).toEqual({
+			status: 201,
+			language: "bgc",
+			source: "submitter",
+		})
+	})
+
+	describe("edge cases", () => {
+		it("trims surrounding whitespace", async () => {
+			expect((await submitWithLanguage("  bgc ")).language).toBe("bgc")
+		})
+
+		for (const [tag, stored] of [
+			["en-US", "en"],
+			["ja-JP", "ja"],
+			["EN", "en"],
+			["zh-TW", "zh-Hant"],
+			["zh-Hant-HK", "zh-Hant"],
+			["zh-CN", "zh"],
+			["iw", "he"],
+			["cmn", "zh"],
+			["nb", "no"],
+			["bgc-IN", "bgc"],
+		]) {
+			it(`normalizes ${tag} to ${stored}`, async () => {
+				expect(await submitWithLanguage(tag)).toEqual({
+					status: 201,
+					language: stored,
+					source: "submitter",
+				})
+			})
+		}
+	})
+
+	describe("error paths", () => {
+		for (const tag of ["   ", "xx", "und", "ja-Latn", "not a language", "x".repeat(300)]) {
+			it(`falls back to detection for ${JSON.stringify(tag.slice(0, 20))}`, async () => {
+				const result = await submitWithLanguage(tag)
+				expect(result.status).toBe(201)
+				expect(result.source).toBe("detector")
+				expect(result.language).toBe("en")
+			})
+		}
+	})
+})
