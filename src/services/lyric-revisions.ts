@@ -48,6 +48,7 @@ import { ErrorCode, buildError } from "@/utils/errors"
 import { type LyricLine, extractComparableLines } from "@/utils/extract-text"
 import { sha256Hex } from "@/utils/hash"
 import { normalizeIsrc } from "@/utils/isrc"
+import { LANGUAGE_HINT, isCuratedLanguage, isLanguageCode } from "@/utils/language-code"
 import {
 	type FieldChange,
 	buildDiffRows,
@@ -127,7 +128,6 @@ const JEV_SKIPPED: JevStep = { state: "skipped" }
 
 class UncheckedLiveEdit extends Error {}
 const NOT_SAVABLE: GateOutcome = { goesLive: false, reason: null }
-const LANGUAGE_HINT = "Pick a language from the list."
 const ISRC_HINT = "An ISRC looks like USRC17607839."
 
 const joinText = (lines: LyricLine[]): string => lines.map((line) => line.text).join("\n")
@@ -151,7 +151,7 @@ function resolveField(
 
 const acceptLanguage = (value: string): ResolvedField => ({
 	value,
-	valid: config.revisions.languages.has(value),
+	valid: isLanguageCode(value),
 })
 
 function acceptIsrc(value: string): ResolvedField {
@@ -174,7 +174,11 @@ async function languageCheck(
 	if (plainText) {
 		const detected = await detectLanguage(plainText)
 		const base = (code: string) => code.split("-")[0].toLowerCase()
-		if (detected.language && base(detected.language) !== base(language.value)) {
+		if (
+			detected.language &&
+			isCuratedLanguage(language.value) &&
+			base(detected.language) !== base(language.value)
+		) {
 			return {
 				field: "language",
 				status: "warn",
