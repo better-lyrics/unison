@@ -631,3 +631,7 @@ CREATE TABLE IF NOT EXISTS metadata_votes (
     created_at INTEGER NOT NULL DEFAULT (EXTRACT(EPOCH FROM NOW())::INTEGER),
     PRIMARY KEY (proposal_id, voter_id)
 );
+
+-- Tagalog's canonical code is fil; the language detector stored tl before it normalized its output.
+UPDATE lyrics SET language = 'fil' WHERE language = 'tl';
+UPDATE lyric_revisions SET language = 'fil' WHERE language = 'tl';

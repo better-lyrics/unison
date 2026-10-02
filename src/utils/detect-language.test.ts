@@ -105,3 +105,13 @@ describe("DETECTOR_VERSION", () => {
 		expect(DETECTOR_VERSION).toBe(4)
 	})
 })
+
+describe("regressions", () => {
+	const TAGALOG =
+		"Mahal kita at hindi kita iiwan kahit kailan sa buhay ko ikaw lamang ang mamahalin"
+
+	it("stores Tagalog under its canonical code fil, not tl", async () => {
+		expect(await detectLanguage(TAGALOG)).toEqual({ language: "fil", ready: true })
+		expect(await detectLanguageBatch([TAGALOG])).toEqual([{ language: "fil", ready: true }])
+	})
+})
