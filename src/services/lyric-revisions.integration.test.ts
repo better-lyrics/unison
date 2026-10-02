@@ -985,15 +985,21 @@ describeIntegration("lyric revisions pipeline (integration)", () => {
 		})
 
 		it("accepts a legacy language outside the list only while it stays unchanged", async () => {
-			await db.pool.query("UPDATE lyric_revisions SET language = 'ca' WHERE lyrics_id = $1", [
+			await db.pool.query("UPDATE lyric_revisions SET language = 'en-US' WHERE lyrics_id = $1", [
 				lyricId,
 			])
 			expect(
-				await saveRevision(db.env, lyricId, owner, lrc(swapWords(LRC, 1), { language: "ca" }))
+				await saveRevision(db.env, lyricId, owner, lrc(swapWords(LRC, 1), { language: "en-US" }))
 			).toMatchObject({ ok: true })
 			expect(
-				await saveRevision(db.env, lyricId, owner, lrc(swapWords(LRC, 2), { language: "gd" }))
+				await saveRevision(db.env, lyricId, owner, lrc(swapWords(LRC, 2), { language: "xx" }))
 			).toMatchObject({ ok: false, reason: "invalid", code: "INVALID_PAYLOAD" })
+		})
+
+		it("accepts a self-serve language outside the curated list", async () => {
+			expect(
+				await saveRevision(db.env, lyricId, owner, lrc(swapWords(LRC, 1), { language: "bgc" }))
+			).toMatchObject({ ok: true })
 		})
 	})
 
