@@ -23,7 +23,14 @@ interface ActionBarProps {
     unavailableHint?: string
   }
   onPrimary: () => void
-  reject: { label?: string; submitLabel: string; hint: string; unavailable?: boolean }
+  reject: {
+    label?: string
+    submitLabel: string
+    hint: string
+    unavailable?: boolean
+    noteLabel?: string
+    placeholder?: string
+  }
   onReject: (note: string | null) => void
   busy: boolean
 }
@@ -84,7 +91,7 @@ export function ActionBar(props: ActionBarProps) {
           htmlFor={noteId}
           className="flex justify-between text-[10px] uppercase tracking-[0.08em] text-unison-text-muted"
         >
-          Reason for the council
+          {reject.noteLabel ?? "Reason for the council"}
           <span className="font-mono">
             {note.length}/{NOTE_MAX}
           </span>
@@ -98,7 +105,7 @@ export function ActionBar(props: ActionBarProps) {
           onKeyDown={(e) => {
             if (e.key === "Escape") setMode("idle")
           }}
-          placeholder="For example: chorus timing lands early on every repeat"
+          placeholder={reject.placeholder ?? "For example: chorus timing lands early on every repeat"}
           className="min-h-16 w-full resize-y rounded-md border border-unison-border bg-unison-bg px-2.5 py-2 text-[13px] leading-normal outline-none transition-colors focus:border-unison-border-strong"
         />
         <div className="flex items-center gap-2">

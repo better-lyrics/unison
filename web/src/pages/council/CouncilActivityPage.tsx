@@ -228,7 +228,7 @@ function WeekAside({
   const split = useCouncilOverview().data?.sourceSplit
   if (!members) return null
   const rows = members
-    .map((m) => ({ member: m, total: m.lastWeek.sealed + m.lastWeek.rejected + m.lastWeek.edits }))
+    .map((m) => ({ member: m, total: m.lastWeek.sealed + m.lastWeek.rejected + m.lastWeek.edits + m.lastWeek.flags }))
     .sort((a, b) => b.total - a.total)
   const max = Math.max(1, ...rows.map((r) => r.total))
   const decided = split ? split.web + split.discord : 0

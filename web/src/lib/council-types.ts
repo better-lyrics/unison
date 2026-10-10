@@ -210,6 +210,7 @@ export interface DayDecisions {
   sealed: number
   rejected: number
   editsReviewed: number
+  flags: number
 }
 
 export interface CouncilOverview {
@@ -237,7 +238,7 @@ export interface RosterMember extends CouncilPerson {
   editsThisMonth: number
   lastActiveAt: number | null
   weekly: number[]
-  lastWeek: { sealed: number; rejected: number; edits: number }
+  lastWeek: { sealed: number; rejected: number; edits: number; flags: number }
 }
 
 export type OpinionStance = "support" | "object"

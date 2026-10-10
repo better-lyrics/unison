@@ -181,7 +181,7 @@ export function rosterMember(person: CouncilPerson, overrides: Partial<RosterMem
     editsThisMonth: 9,
     lastActiveAt: NOW - HOUR,
     weekly: [3, 5, 2, 6, 4, 7, 5, 8],
-    lastWeek: { sealed: 1, rejected: 4, edits: 3 },
+    lastWeek: { sealed: 1, rejected: 4, edits: 3, flags: 0 },
     ...overrides,
   }
 }
@@ -226,9 +226,15 @@ export function councilEvent(overrides: Partial<CouncilEvent> = {}): CouncilEven
   }
 }
 
-export function dayDecisions(days: [sealed: number, rejected: number, editsReviewed: number][]) {
+export function dayDecisions(days: [sealed: number, rejected: number, editsReviewed: number, flags?: number][]) {
   const start = Math.floor(NOW / DAY) * DAY - (days.length - 1) * DAY
-  return days.map(([sealed, rejected, editsReviewed], i) => ({ day: start + i * DAY, sealed, rejected, editsReviewed }))
+  return days.map(([sealed, rejected, editsReviewed, flags = 0], i) => ({
+    day: start + i * DAY,
+    sealed,
+    rejected,
+    editsReviewed,
+    flags,
+  }))
 }
 
 export const PREVIEW_TTML = `<?xml version="1.0" encoding="UTF-8"?>

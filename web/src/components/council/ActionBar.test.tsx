@@ -56,6 +56,25 @@ describe("ActionBar", () => {
       expect(screen.queryByRole("button", { name: /^Reject/ })).toBeNull()
     })
 
+    it("labels the note with the reject wording by default", () => {
+      render(<ActionBar {...base} />)
+      act(() => void fireEvent.keyDown(window, { key: "r" }))
+      const note = screen.getByRole("textbox", { name: /^Reason for the council/ })
+      expect(note.getAttribute("placeholder")).toBe("For example: chorus timing lands early on every repeat")
+    })
+
+    it("takes the note label and placeholder from the reject slot", () => {
+      render(
+        <ActionBar
+          {...base}
+          reject={{ ...base.reject, noteLabel: "Why keep it? (optional)", placeholder: "For example: real lyrics" }}
+        />,
+      )
+      act(() => void fireEvent.keyDown(window, { key: "r" }))
+      const note = screen.getByRole("textbox", { name: /^Why keep it\? \(optional\)/ })
+      expect(note.getAttribute("placeholder")).toBe("For example: real lyrics")
+    })
+
     it("disables the reject slot and its shortcut when it is unavailable", () => {
       render(<ActionBar {...base} reject={{ ...base.reject, unavailable: true }} />)
       expect((screen.getByRole("button", { name: /^Reject/ }) as HTMLButtonElement).disabled).toBe(true)

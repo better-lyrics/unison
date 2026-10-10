@@ -47,6 +47,8 @@ export function FlagDetail({ item, needed, now, meKeyId, onRemove, onKeep, busy 
             submitLabel: "Keep",
             hint: "Keeping makes the lyric visible again and closes the flag.",
             unavailable: conflict !== null,
+            noteLabel: "Why keep it? (optional)",
+            placeholder: "For example: these are real lyrics, the reports are wrong",
           }}
           onReject={onKeep}
           busy={busy}
