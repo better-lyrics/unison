@@ -114,10 +114,9 @@ export interface MetadataPayload {
   needed: number
 }
 
-export type FlagReason = Extract<ReportReason, "spam" | "wrong_song" | "offensive">
-
 export interface FlagReport {
-  reason: FlagReason
+  id: number
+  reason: ReportReason
   details: string | null
   reporter: CouncilPerson | null
   createdAt: number
@@ -134,6 +133,7 @@ export interface CouncilFlag {
   reports: FlagReport[]
   removers: CouncilPerson[]
   keepers: CouncilPerson[]
+  conflict: "submitter" | "reporter" | null
   bookmark: null
 }
 
@@ -189,7 +189,7 @@ export interface CouncilEvent {
   lyric: { id: number; videoId: string; song: string; artist: string } | null
 }
 
-export type EventGroup = "seals" | "rejections" | "edits" | "membership"
+export type EventGroup = "seals" | "rejections" | "edits" | "membership" | "flags"
 
 export interface EventsPage {
   events: CouncilEvent[]

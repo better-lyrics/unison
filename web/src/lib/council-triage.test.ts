@@ -172,7 +172,7 @@ describe("filterFlags", () => {
       song: "Alone",
       artist: "Heart",
       submitter: { ...OLA, displayName: "Kai" },
-      reports: [{ reason: "offensive", details: "Slur in verse two", reporter: null, createdAt: NOW - 9 * HOUR }],
+      reports: [{ id: 5, reason: "offensive", details: "Slur in verse two", reporter: null, createdAt: NOW - 9 * HOUR }],
     })
     expect(filterFlags([newer, older], "").map((f) => f.id)).toEqual([2, 1])
     expect(filterFlags([newer, older], "heart").map((f) => f.id)).toEqual([2])

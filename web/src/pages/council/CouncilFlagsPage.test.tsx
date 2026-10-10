@@ -1,5 +1,6 @@
 import { __resetToastStore } from "@/lib/toast"
 import { ME, NOW, OLA, councilData, flagItem, queueItem, stubCouncilApi, variantFull } from "@/test/council-fixtures"
+import type { FetchRoute } from "@/test/fetch-router"
 import { jsonResponse } from "@/test/fetch-router"
 import { renderCouncil } from "@/test/render-council"
 import { act, cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react"
@@ -28,14 +29,24 @@ const lyricFlag = flagItem({
   song: "One More Hour",
   artist: "Tame Impala",
   openedAt: NOW - 3600,
-  reports: [{ reason: "offensive", details: null, reporter: OLA, createdAt: NOW - 3600 }],
+  reports: [{ id: 31, reason: "offensive", details: null, reporter: OLA, createdAt: NOW - 3600 }],
   removers: [OLA],
 })
 
 const detail = () => screen.getByRole("region", { name: "Details" })
+const selected = () => document.querySelector("[aria-current='true'][data-key]")?.getAttribute("data-key")
+const press = (key: string) => act(() => void fireEvent.keyDown(window, { key }))
+const ALREADY_DECIDED_HINT = "Another council member already decided this flag. Refresh the dashboard."
+
+function failingVote(log: string[], status: number, body: object) {
+  return voteRoute(log, () => jsonResponse({ success: false, ...body }, status))
+}
 const OPEN_TALLY = { status: "open", removals: 1, keeps: 0, needed: 3 }
 
-function voteRoute(log: string[], response = () => jsonResponse({ success: true, data: OPEN_TALLY })) {
+function voteRoute(
+  log: string[],
+  response: () => Response | Promise<Response> = () => jsonResponse({ success: true, data: OPEN_TALLY }),
+) {
   return [
     {
       match: (url: string, init?: RequestInit) => init?.method === "POST" && /\/committee\/flags\/\d+\/vote$/.test(url),
@@ -121,6 +132,20 @@ describe("CouncilFlagsPage", () => {
     await screen.findByText("Vote counted on “Story of a Warrior”")
   })
 
+  it("says the lyric was removed once the quorum is reached", async () => {
+    stubCouncilApi(
+      data(),
+      { admin: false },
+      voteRoute([], () =>
+        jsonResponse({ success: true, data: { status: "removed", removals: 3, keeps: 0, needed: 3 } }),
+      ),
+    )
+    await openDetail()
+    press("a")
+    press("Enter")
+    expect(await screen.findByText("Removed “Story of a Warrior”")).toBeTruthy()
+  })
+
   it("keeps with a note", async () => {
     const log: string[] = []
     stubCouncilApi(
@@ -152,7 +177,7 @@ describe("CouncilFlagsPage", () => {
 
   describe("edge cases", () => {
     it("blocks both votes for the submitter", async () => {
-      stubCouncilApi(data([flagItem({ submitter: ME })]), { admin: false })
+      stubCouncilApi(data([flagItem({ submitter: ME, conflict: "submitter" })]), { admin: false })
       renderCouncil("/council/flags?item=8001")
       const blocked = await within(await screen.findByRole("region", { name: "Details" })).findByRole("button", {
         name: "You submitted this lyric",
@@ -161,15 +186,69 @@ describe("CouncilFlagsPage", () => {
       expect((within(detail()).getByRole("button", { name: /^Keep/ }) as HTMLButtonElement).disabled).toBe(true)
     })
 
-    it("blocks both votes for a reporter", async () => {
-      const reported = flagItem({ reports: [{ reason: "spam", details: null, reporter: ME, createdAt: NOW }] })
-      stubCouncilApi(data([reported]), { admin: false })
+    it("blocks both votes for a member whose report is not listed", async () => {
+      stubCouncilApi(data([flagItem({ conflict: "reporter" })]), { admin: false })
       renderCouncil("/council/flags?item=8001")
       const blocked = await within(await screen.findByRole("region", { name: "Details" })).findByRole("button", {
         name: "You reported this lyric",
       })
       expect((blocked as HTMLButtonElement).disabled).toBe(true)
-      expect((within(detail()).getByRole("button", { name: /^Keep/ }) as HTMLButtonElement).disabled).toBe(true)
+      const keep = within(detail()).getByRole("button", { name: /^Keep/ })
+      expect((keep as HTMLButtonElement).disabled).toBe(true)
+      fireEvent.mouseEnter(keep.closest("[data-unavailable-hint]") as Element)
+      expect((await screen.findByRole("tooltip")).textContent).toBe("You reported this lyric")
+    })
+
+    it("ignores R and A under a conflict", async () => {
+      const log: string[] = []
+      stubCouncilApi(data([flagItem({ conflict: "reporter" })]), { admin: false }, voteRoute(log))
+      renderCouncil("/council/flags?item=8001")
+      await within(await screen.findByRole("region", { name: "Details" })).findByRole("button", {
+        name: "You reported this lyric",
+      })
+      press("r")
+      expect(within(detail()).queryByRole("textbox")).toBeNull()
+      press("a")
+      expect(detail().textContent).not.toContain("Remove this lyric?")
+      expect(log).toEqual([])
+    })
+
+    it("moves to the next flag after a vote", async () => {
+      stubCouncilApi(data(), { admin: false }, voteRoute([]))
+      await openDetail()
+      await waitFor(() => expect(selected()).toBe("8001"))
+      press("a")
+      press("Enter")
+      await waitFor(() => expect(selected()).toBe("8002"))
+    })
+
+    it("sends one vote while the first is still in flight", async () => {
+      const log: string[] = []
+      stubCouncilApi(
+        data(),
+        { admin: false },
+        voteRoute(log, () => new Promise<Response>(() => {})),
+      )
+      await openDetail()
+      press("a")
+      press("Enter")
+      await waitFor(() => expect(log).toHaveLength(1))
+      await waitFor(() => expect(selected()).toBe("8002"))
+      press("a")
+      press("Enter")
+      press("r")
+      expect(within(detail()).queryByRole("textbox")).toBeNull()
+      expect(log).toEqual(['/committee/flags/8001/vote {"remove":true}'])
+    })
+
+    it("shows nothing selected when the selected flag closes elsewhere", async () => {
+      const server = data([spamFlag])
+      stubCouncilApi(server, { admin: false })
+      const { client } = renderCouncil("/council/flags?item=8001")
+      await waitFor(() => expect(within(detail()).getByRole("button", { name: /^Remove/ })).toBeTruthy())
+      server.flags.items = []
+      await act(() => client.invalidateQueries())
+      expect(await screen.findByText("Nothing selected")).toBeTruthy()
     })
 
     it("tells a member who already voted to remove", async () => {
@@ -199,27 +278,37 @@ describe("CouncilFlagsPage", () => {
   })
 
   describe("error paths", () => {
-    it("shows the server hint when the flag was already decided", async () => {
-      const log: string[] = []
-      stubCouncilApi(
-        data(),
-        { admin: false },
-        voteRoute(log, () =>
-          jsonResponse(
-            {
-              success: false,
-              error: "Already decided",
-              code: "ALREADY_DECIDED",
-              hint: "This flag was already closed. Refresh the dashboard.",
-            },
-            409,
-          ),
-        ),
-      )
+    const removeWith = async (routes: FetchRoute[]) => {
+      stubCouncilApi(data(), { admin: false }, routes)
       await openDetail()
-      act(() => void fireEvent.keyDown(window, { key: "a" }))
-      act(() => void fireEvent.keyDown(window, { key: "Enter" }))
-      expect(await screen.findByText("This flag was already closed. Refresh the dashboard.")).toBeTruthy()
+      press("a")
+      press("Enter")
+    }
+
+    it("shows the server hint when the flag was already decided", async () => {
+      await removeWith(
+        failingVote([], 409, { error: "Already decided", code: "ALREADY_DECIDED", hint: ALREADY_DECIDED_HINT }),
+      )
+      expect(await screen.findByText(ALREADY_DECIDED_HINT)).toBeTruthy()
+    })
+
+    it("explains a conflict the page did not know about", async () => {
+      await removeWith(
+        failingVote([], 409, {
+          error: "You cannot vote on this flag",
+          code: "FLAG_CONFLICT",
+          hint: "You submitted or reported this lyric, so another council member has to decide it.",
+        }),
+      )
+      expect(await screen.findByText("You cannot vote on this flag")).toBeTruthy()
+      expect(
+        screen.getByText("You submitted or reported this lyric, so another council member has to decide it."),
+      ).toBeTruthy()
+    })
+
+    it("asks the member to slow down when rate limited", async () => {
+      await removeWith(failingVote([], 429, { error: "Rate limited. Try again later.", code: "RATE_LIMITED" }))
+      expect(await screen.findByText("Too many council actions. Try again in a minute.")).toBeTruthy()
     })
   })
 })

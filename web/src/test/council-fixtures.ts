@@ -130,11 +130,12 @@ export function flagItem(overrides: Partial<CouncilFlag> = {}): CouncilFlag {
     submitter: { ...OLA, userId: 10, keyId: "5a".repeat(32), displayName: "SigmaViolinRemix", handle: null },
     openedAt: NOW - 4 * HOUR,
     reports: [
-      { reason: "spam", details: "Ad link in every line", reporter: OLA, createdAt: NOW - 5 * HOUR },
-      { reason: "wrong_song", details: null, reporter: null, createdAt: NOW - 4 * HOUR },
+      { id: 21, reason: "spam", details: "Ad link in every line", reporter: OLA, createdAt: NOW - 5 * HOUR },
+      { id: 22, reason: "wrong_song", details: null, reporter: null, createdAt: NOW - 4 * HOUR },
     ],
     removers: [],
     keepers: [],
+    conflict: null,
     bookmark: null,
     ...overrides,
   }

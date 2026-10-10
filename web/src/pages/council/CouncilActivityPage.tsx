@@ -28,6 +28,7 @@ const KINDS: { value: KindFilter; label: string }[] = [
   { value: "rejections", label: "Rejections" },
   { value: "edits", label: "Edits" },
   { value: "membership", label: "Membership" },
+  { value: "flags", label: "Flags" },
 ]
 
 const SOURCE: Record<CouncilSource, { label: string; className: string }> = {
@@ -228,7 +229,7 @@ function WeekAside({
   const split = useCouncilOverview().data?.sourceSplit
   if (!members) return null
   const rows = members
-    .map((m) => ({ member: m, total: m.lastWeek.sealed + m.lastWeek.rejected + m.lastWeek.edits + m.lastWeek.flags }))
+    .map((m) => ({ member: m, total: m.lastWeek.sealed + m.lastWeek.rejected + m.lastWeek.edits }))
     .sort((a, b) => b.total - a.total)
   const max = Math.max(1, ...rows.map((r) => r.total))
   const decided = split ? split.web + split.discord : 0

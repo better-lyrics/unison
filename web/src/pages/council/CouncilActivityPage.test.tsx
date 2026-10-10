@@ -194,7 +194,7 @@ describe("CouncilActivityPage", () => {
     expect(screen.getByText("38%")).toBeTruthy()
   })
 
-  it("counts flag votes in each member's week and ranking", async () => {
+  it("leaves flag votes out of the week bars until flags have their own colour", async () => {
     const week = data()
     week.members = [
       rosterMember(OLA, { lastWeek: { sealed: 2, rejected: 3, edits: 4, flags: 0 } }),
@@ -207,7 +207,15 @@ describe("CouncilActivityPage", () => {
       within(list)
         .getAllByRole("button")
         .map((r) => r.textContent),
-    ).toEqual(["boidu11", "olafix529"])
+    ).toEqual(["olafix529", "boidu3"])
+  })
+
+  it("filters to flag votes", async () => {
+    const router = stubCouncilApi(data())
+    renderCouncil("/council/activity")
+    await screen.findByRole("region", { name: "Today" })
+    fireEvent.click(screen.getByRole("button", { name: "Flags" }))
+    await waitFor(() => expect(calls(router)).toContain("/committee/events?kind=flags"))
   })
 
   it("says so when nothing matches", async () => {

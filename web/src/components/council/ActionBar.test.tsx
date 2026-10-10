@@ -1,4 +1,5 @@
 import { IconCheck } from "@tabler/icons-react"
+import { buttonClass } from "@/components/ui"
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { ActionBar } from "./ActionBar"
@@ -76,10 +77,27 @@ describe("ActionBar", () => {
     })
 
     it("disables the reject slot and its shortcut when it is unavailable", () => {
-      render(<ActionBar {...base} reject={{ ...base.reject, unavailable: true }} />)
+      render(<ActionBar {...base} reject={{ ...base.reject, unavailable: "You reported this lyric" }} />)
       expect((screen.getByRole("button", { name: /^Reject/ }) as HTMLButtonElement).disabled).toBe(true)
       act(() => void fireEvent.keyDown(window, { key: "r" }))
       expect(screen.queryByRole("textbox")).toBeNull()
+    })
+
+    it("explains why the reject slot is unavailable on hover", async () => {
+      render(<ActionBar {...base} reject={{ ...base.reject, unavailable: "You reported this lyric" }} />)
+      const button = screen.getByRole("button", { name: /^Reject/ })
+      fireEvent.mouseEnter(button.closest("[data-unavailable-hint]") as Element)
+      expect((await screen.findByRole("tooltip")).textContent).toBe("You reported this lyric")
+    })
+
+    it("sends with a danger button by default and with the given variant otherwise", () => {
+      render(<ActionBar {...base} />)
+      act(() => void fireEvent.keyDown(window, { key: "r" }))
+      expect(screen.getByRole("button", { name: /^Reject/ }).className).toBe(buttonClass("danger", "sm"))
+      cleanup()
+      render(<ActionBar {...base} reject={{ ...base.reject, submitLabel: "Keep", submitVariant: "fill" }} />)
+      act(() => void fireEvent.keyDown(window, { key: "r" }))
+      expect(screen.getByRole("button", { name: /^Keep/ }).className).toBe(buttonClass("fill", "sm"))
     })
   })
 })

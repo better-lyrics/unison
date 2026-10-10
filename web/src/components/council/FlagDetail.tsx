@@ -1,8 +1,7 @@
-import { useCouncilShortcuts } from "@/hooks/useCouncilShortcuts"
+import { useOpenInYouTubeMusic } from "@/hooks/useOpenInYouTubeMusic"
 import { flagConflict, reportGroups } from "@/lib/council-flags"
 import type { CouncilFlag, CouncilPerson, FlagReport } from "@/lib/council-types"
 import { formatElapsed, plural } from "@/lib/format"
-import { youTubeMusicUrl } from "@/lib/youtube-music"
 import { IconTrash } from "@tabler/icons-react"
 import { ActionBar } from "./ActionBar"
 import { LyricPreview } from "./LyricPreview"
@@ -19,12 +18,8 @@ interface FlagDetailProps {
 }
 
 export function FlagDetail({ item, needed, now, meKeyId, onRemove, onKeep, busy }: FlagDetailProps) {
-  useCouncilShortcuts({
-    o: () => {
-      window.open(youTubeMusicUrl(item.videoId), "_blank", "noreferrer")
-    },
-  })
-  const conflict = flagConflict(item, meKeyId)
+  useOpenInYouTubeMusic(item.videoId)
+  const conflict = flagConflict(item)
   const removed = item.removers.some((p) => p.keyId === meKeyId)
 
   return (
@@ -46,7 +41,8 @@ export function FlagDetail({ item, needed, now, meKeyId, onRemove, onKeep, busy 
             label: "Keep",
             submitLabel: "Keep",
             hint: "Keeping makes the lyric visible again and closes the flag.",
-            unavailable: conflict !== null,
+            unavailable: conflict,
+            submitVariant: "fill",
             noteLabel: "Why keep it? (optional)",
             placeholder: "For example: these are real lyrics, the reports are wrong",
           }}
@@ -85,7 +81,7 @@ export function FlagDetail({ item, needed, now, meKeyId, onRemove, onKeep, busy 
                 </Chip>
               </div>
               {group.reports.map((report) => (
-                <ReportEntry key={`${report.createdAt}-${report.reporter?.keyId}`} report={report} now={now} />
+                <ReportEntry key={report.id} report={report} now={now} />
               ))}
             </div>
           ))}
