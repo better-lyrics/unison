@@ -4,6 +4,7 @@ import {
 	type CouncilEventKind,
 	DECISION_KINDS,
 	EDIT_DECISION_KINDS,
+	FLAG_DECISION_KINDS,
 	UNDONE_EXPR,
 } from "@/db/council-events"
 import { type CouncilPerson, loadPersonDecor, toCouncilPerson } from "@/db/council-person"
@@ -20,6 +21,7 @@ export interface DayDecisions {
 	sealed: number
 	rejected: number
 	editsReviewed: number
+	flags: number
 }
 
 export interface CouncilOverview {
@@ -109,7 +111,7 @@ export async function getCouncilOverview(
 	const byDay = new Map<number, DayDecisions>()
 	for (let i = 0; i < CHART_DAYS; i++) {
 		const day = chartStart + i * DAY
-		byDay.set(day, { day, sealed: 0, rejected: 0, editsReviewed: 0 })
+		byDay.set(day, { day, sealed: 0, rejected: 0, editsReviewed: 0, flags: 0 })
 	}
 	for (const r of daily.results) {
 		const bucket = byDay.get(Number(r.day))
@@ -117,6 +119,7 @@ export async function getCouncilOverview(
 		if (r.kind === "seal") bucket.sealed += Number(r.n)
 		else if (r.kind === "reject") bucket.rejected += Number(r.n)
 		else if (EDIT_DECISION_KINDS.includes(r.kind)) bucket.editsReviewed += Number(r.n)
+		else if (FLAG_DECISION_KINDS.includes(r.kind)) bucket.flags += Number(r.n)
 	}
 
 	const count = (kinds: string[], mineOnly: boolean) =>
@@ -156,7 +159,7 @@ export interface RosterMember extends CouncilPerson {
 	editsThisMonth: number
 	lastActiveAt: number | null
 	weekly: number[]
-	lastWeek: { sealed: number; rejected: number; edits: number }
+	lastWeek: { sealed: number; rejected: number; edits: number; flags: number }
 }
 
 export async function getCouncilRoster(
@@ -214,7 +217,7 @@ export async function getCouncilRoster(
 				.filter((r) => Number(r.actor_id) === userId && list.includes(r.kind))
 				.reduce((n, r) => n + Number(r.n), 0)
 		const buckets = Array.from({ length: ROSTER_WEEKS }, () => 0)
-		const lastWeek = { sealed: 0, rejected: 0, edits: 0 }
+		const lastWeek = { sealed: 0, rejected: 0, edits: 0, flags: 0 }
 		for (const r of weekly.results) {
 			if (Number(r.actor_id) !== userId) continue
 			const week = Number(r.week)
@@ -223,6 +226,7 @@ export async function getCouncilRoster(
 			if (r.kind === "seal") lastWeek.sealed += Number(r.n)
 			else if (r.kind === "reject") lastWeek.rejected += Number(r.n)
 			else if (EDIT_DECISION_KINDS.includes(r.kind)) lastWeek.edits += Number(r.n)
+			else if (FLAG_DECISION_KINDS.includes(r.kind)) lastWeek.flags += Number(r.n)
 		}
 		const last = lastActive.results.find((r) => Number(r.actor_id) === userId)
 		return [

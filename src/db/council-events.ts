@@ -41,6 +41,8 @@ export const EDIT_DECISION_KINDS: CouncilEventKind[] = [
 	"metadata_reject",
 ]
 
+export const FLAG_DECISION_KINDS: CouncilEventKind[] = ["flag_remove", "flag_keep"]
+
 const REJECTION_UNDONE = "r.revoked_at IS NOT NULL AND r.revoke_reason IS DISTINCT FROM 'edited'"
 
 export const UNDONE_EXPR = `CASE

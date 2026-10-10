@@ -68,12 +68,19 @@ describeIntegration("council overview stats (integration)", () => {
 			await decide(ola, "edit_reject", TODAY - DAY + 2 * HOUR)
 			const { decisionsByDay } = await overview()
 			expect(decisionsByDay).toHaveLength(30)
-			expect(decisionsByDay[29]).toEqual({ day: TODAY, sealed: 1, rejected: 1, editsReviewed: 0 })
+			expect(decisionsByDay[29]).toEqual({
+				day: TODAY,
+				sealed: 1,
+				rejected: 1,
+				editsReviewed: 0,
+				flags: 0,
+			})
 			expect(decisionsByDay[28]).toEqual({
 				day: TODAY - DAY,
 				sealed: 0,
 				rejected: 0,
 				editsReviewed: 2,
+				flags: 0,
 			})
 			expect(decisionsByDay[0].day).toBe(TODAY - 29 * DAY)
 		})
@@ -278,8 +285,8 @@ describeIntegration("council overview stats (integration)", () => {
 			expect(members[0].quota.quota).toBeGreaterThan(0)
 			expect(members[0].weekly).toHaveLength(8)
 			expect(members[0].weekly[7]).toBe(3)
-			expect(members[0].lastWeek).toEqual({ sealed: 1, rejected: 1, edits: 1 })
-			expect(members[1].lastWeek).toEqual({ sealed: 0, rejected: 0, edits: 0 })
+			expect(members[0].lastWeek).toEqual({ sealed: 1, rejected: 1, edits: 1, flags: 0 })
+			expect(members[1].lastWeek).toEqual({ sealed: 0, rejected: 0, edits: 0, flags: 0 })
 			expect(members[1]).toMatchObject({ isYou: false, isAdmin: true, lastActiveAt: NOW - 5 * DAY })
 			expect(members[1].weekly.every((n) => n === 0)).toBe(true)
 		})
@@ -304,7 +311,7 @@ describeIntegration("council overview stats (integration)", () => {
 			await decide(mira, "reject", NOW - 8 * DAY)
 			await decide(mira, "edit_reject", NOW - DAY)
 			const [me] = await roster()
-			expect(me.lastWeek).toEqual({ sealed: 0, rejected: 0, edits: 1 })
+			expect(me.lastWeek).toEqual({ sealed: 0, rejected: 0, edits: 1, flags: 0 })
 			expect(me.weekly[6]).toBe(1)
 		})
 

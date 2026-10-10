@@ -553,6 +553,26 @@ describeIntegration("council flags (integration)", () => {
 				expect(overview.medianDecisionHours.current).toBeCloseTo(2, 1)
 			})
 
+			it("counts flag decisions in the daily chart and the roster week", async () => {
+				const id = await openCase()
+				await vote(id, members[0], true)
+				await vote(id, members[1], false)
+				const overview = await getCouncilOverview(db.env, { meId: members[0], scope: "council" })
+				expect(overview.decisionsByDay.reduce((n, d) => n + d.flags, 0)).toBe(2)
+				expect(overview.decisionsByDay.reduce((n, d) => n + d.sealed + d.rejected, 0)).toBe(0)
+				const roster = await getCouncilRoster(db.env, {
+					meId: members[0],
+					now: Math.floor(Date.now() / 1000) + 60,
+				})
+				expect(roster.find((m) => m.userId === members[0])?.lastWeek).toEqual({
+					sealed: 0,
+					rejected: 0,
+					edits: 0,
+					flags: 1,
+				})
+				expect(roster.find((m) => m.userId === members[1])?.lastWeek.flags).toBe(1)
+			})
+
 			it("does not count flag decisions as edit reviews", async () => {
 				const id = await openCase()
 				await vote(id, members[0], false)
