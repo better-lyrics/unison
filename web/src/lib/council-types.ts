@@ -113,6 +113,41 @@ export interface MetadataPayload {
   needed: number
 }
 
+export type FlagReason = "spam" | "wrong_song" | "offensive"
+
+export interface FlagReport {
+  reason: FlagReason
+  details: string | null
+  reporter: CouncilPerson | null
+  createdAt: number
+}
+
+export interface CouncilFlag {
+  id: number
+  lyricsId: number
+  videoId: string
+  song: string
+  artist: string
+  submitter: CouncilPerson | null
+  openedAt: number
+  reports: FlagReport[]
+  removers: CouncilPerson[]
+  keepers: CouncilPerson[]
+  bookmark: null
+}
+
+export interface FlagsPayload {
+  items: CouncilFlag[]
+  needed: number
+}
+
+export interface FlagVoteResult {
+  status: "open" | "removed" | "kept"
+  removals: number
+  keeps: number
+  needed: number
+}
+
 export interface EditsPayload {
   items: EditItem[]
   thresholds: EditThresholds
@@ -134,6 +169,8 @@ export type CouncilEventKind =
   | "metadata_propose"
   | "metadata_approve"
   | "metadata_reject"
+  | "flag_remove"
+  | "flag_keep"
 
 export type CouncilSource = "web" | "discord" | "admin"
 

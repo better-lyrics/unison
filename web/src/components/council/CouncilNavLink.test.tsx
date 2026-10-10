@@ -1,5 +1,14 @@
 import { AuthProvider } from "@/auth/AuthProvider"
-import { NOW, OLA, bookmarkBy, councilData, editItem, queueItem, stubCouncilApi } from "@/test/council-fixtures"
+import {
+  NOW,
+  OLA,
+  bookmarkBy,
+  councilData,
+  editItem,
+  flagItem,
+  queueItem,
+  stubCouncilApi,
+} from "@/test/council-fixtures"
 import { fetchRouter } from "@/test/fetch-router"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { cleanup, render, screen, waitFor } from "@testing-library/react"
@@ -48,6 +57,12 @@ describe("CouncilNavLink", () => {
     const link = await screen.findByRole("link", { name: "Council, 3 open items" })
     expect(link.getAttribute("href")).toBe("/council")
     expect(link.textContent).toBe("Council3")
+  })
+
+  it("counts open flags as open work", async () => {
+    stubCouncilApi(councilData({ flags: { items: [flagItem({ id: 1 }), flagItem({ id: 2 })], needed: 3 } }))
+    renderLink()
+    expect(await screen.findByRole("link", { name: "Council, 2 open items" })).toBeTruthy()
   })
 
   it("hides the count when nothing is open", async () => {

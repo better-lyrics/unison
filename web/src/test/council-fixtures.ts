@@ -7,6 +7,8 @@ import type {
   EditItem,
   EditsPayload,
   EventsPage,
+  FlagsPayload,
+  CouncilFlag,
   MetadataItem,
   MetadataPayload,
   QueueItem,
@@ -113,6 +115,26 @@ export function metadataItem(overrides: Partial<MetadataItem> = {}): MetadataIte
     proposer: OLA,
     approvers: [OLA],
     createdAt: NOW - 3 * HOUR,
+    bookmark: null,
+    ...overrides,
+  }
+}
+
+export function flagItem(overrides: Partial<CouncilFlag> = {}): CouncilFlag {
+  return {
+    id: 8001,
+    lyricsId: 722,
+    videoId: "SMQpJ9x7zEk",
+    song: "Story of a Warrior",
+    artist: "John Michael Howell",
+    submitter: { ...OLA, userId: 10, keyId: "5a".repeat(32), displayName: "SigmaViolinRemix", handle: null },
+    openedAt: NOW - 4 * HOUR,
+    reports: [
+      { reason: "spam", details: "Ad link in every line", reporter: OLA, createdAt: NOW - 5 * HOUR },
+      { reason: "wrong_song", details: null, reporter: null, createdAt: NOW - 4 * HOUR },
+    ],
+    removers: [],
+    keepers: [],
     bookmark: null,
     ...overrides,
   }
@@ -241,6 +263,7 @@ export interface CouncilData {
   queue: QueueItem[]
   edits: EditsPayload
   metadata: MetadataPayload
+  flags: FlagsPayload
   overview: CouncilOverview
   members: RosterMember[]
   applicants: ApplicantView[]
@@ -255,6 +278,7 @@ export function councilData(overrides: Partial<CouncilData> = {}): CouncilData {
     queue: [],
     edits: { items: [], thresholds: { textDrift: 0.15, timingDrift: 0.3, jevFlag: 0.7 } },
     metadata: { items: [], needed: 3 },
+    flags: { items: [], needed: 3 },
     overview: overview(),
     members: [rosterMember(ME), rosterMember(OLA)],
     applicants: [],
@@ -267,6 +291,7 @@ const ENDPOINTS: [string, Exclude<keyof CouncilData, "myOverview">][] = [
   ["/committee/queue", "queue"],
   ["/committee/edits", "edits"],
   ["/committee/metadata", "metadata"],
+  ["/committee/flags", "flags"],
   ["/committee/overview", "overview"],
   ["/committee/members", "members"],
   ["/committee/applicants", "applicants"],
