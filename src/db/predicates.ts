@@ -49,7 +49,6 @@ const buildReportHidePredicate = (prefix: string) =>
 	`${prefix}id IN (SELECT lyrics_id FROM report_cases WHERE status = 'open')`
 
 export const REPORT_HIDE_PREDICATE = buildReportHidePredicate("")
-export const REPORT_HIDE_PREDICATE_JOINED = buildReportHidePredicate("l.")
 
 export const VOTE_HIDE_PREDICATE = buildVoteHidePredicate("")
 
