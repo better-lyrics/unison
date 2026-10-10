@@ -26,7 +26,7 @@ async function main() {
 			return
 		}
 
-		console.log(`deleted lyrics ${lyricsId}, submitter penalised, caches evicted`)
+		console.log(`deleted lyrics ${lyricsId}, caches evicted`)
 	} finally {
 		await closePool()
 		await closeRedis()
