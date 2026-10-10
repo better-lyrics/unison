@@ -1,6 +1,9 @@
+import { getMySubmissions } from "@/db/feed"
 import { openCaseIfQualified } from "@/db/flags"
+import { findByVideoId, findVariantsByVideoId } from "@/db/lyrics"
 import { submitReport } from "@/db/reports"
 import { isUniqueViolation } from "@/infra/database"
+import { updateScores } from "@/jobs/score-updater"
 import {
 	type IntegrationDb,
 	describeIntegration,
@@ -214,6 +217,87 @@ describeIntegration("council flags (integration)", () => {
 				const id = await reporter(10)
 				await report(id)
 				expect(await report(id)).toEqual({ success: false, message: "Already reported" })
+			})
+		})
+	})
+
+	const flag = async (target = lyricsId) => {
+		await db.pool.query("INSERT INTO report_cases (lyrics_id) VALUES ($1)", [target])
+	}
+
+	const voteHide = async (target: number) => {
+		await db.pool.query(
+			"UPDATE lyrics SET vote_count = 3, downvotes = 3, effective_score = -1 WHERE id = $1",
+			[target]
+		)
+	}
+
+	describe("hiding a flagged lyric", () => {
+		describe("happy paths", () => {
+			it("serves nothing for a video whose only variant is flagged", async () => {
+				await flag()
+				expect(await findByVideoId(db.env, VIDEO)).toBeNull()
+			})
+
+			it("serves the lyric again once the case is kept", async () => {
+				await flag()
+				expect(await findByVideoId(db.env, VIDEO)).toBeNull()
+				await keepCase(Math.floor(Date.now() / 1000))
+				db.cache.store.clear()
+				expect((await findByVideoId(db.env, VIDEO))?.id).toBe(lyricsId)
+			})
+
+			it("skips the flagged variant and serves the other one", async () => {
+				const other = await seedLyric(db, await seedUser(db, kid(2)), {
+					lyrics: LRC,
+					format: "lrc",
+					videoId: VIDEO,
+				})
+				await flag()
+				expect((await findByVideoId(db.env, VIDEO))?.id).toBe(other)
+			})
+		})
+
+		describe("edge cases", () => {
+			it("does not hide a lyric whose case was removed or kept", async () => {
+				await db.pool.query(
+					"INSERT INTO report_cases (lyrics_id, status, decided_at) VALUES ($1, 'kept', 1), ($1, 'removed', 2)",
+					[lyricsId]
+				)
+				expect((await findByVideoId(db.env, VIDEO))?.id).toBe(lyricsId)
+			})
+
+			it("marks a flagged lyric hidden in the submitter's own list like a vote-hidden one", async () => {
+				const voteHidden = await seedLyric(db, submitter, {
+					lyrics: LRC,
+					format: "lrc",
+					videoId: "dQw4w9WgXcQ",
+				})
+				await voteHide(voteHidden)
+				await flag()
+				const rows = await getMySubmissions(db.env, submitter, 10)
+				const hidden = Object.fromEntries(rows.map((r) => [r.id, r.hidden]))
+				expect(hidden).toEqual({ [lyricsId]: true, [voteHidden]: true })
+			})
+		})
+
+		describe("invariants", () => {
+			it("does not cost the submitter reputation or XP", async () => {
+				await flag()
+				await updateScores(db.env)
+				const { rows } = await db.pool.query(
+					`SELECT l.reputation_penalized, u.reputation,
+						(SELECT COUNT(*)::INTEGER FROM contribution_events WHERE user_id = u.id) AS events
+					 FROM lyrics l JOIN users u ON u.id = l.submitter_id WHERE l.id = $1`,
+					[lyricsId]
+				)
+				expect(rows[0]).toEqual({ reputation_penalized: false, reputation: 1, events: 0 })
+			})
+
+			it("keeps the flagged lyric in the variants list", async () => {
+				await flag()
+				const variants = await findVariantsByVideoId(db.env, VIDEO, 10)
+				expect(variants.map((v) => v.id)).toEqual([lyricsId])
 			})
 		})
 	})
