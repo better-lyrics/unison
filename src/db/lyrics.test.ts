@@ -1062,6 +1062,8 @@ describe("softDeleteLyrics", () => {
 				effective_score: 0,
 				reputation_penalized: false,
 			},
+			null,
+			null,
 		])
 		const cache = createMockCache()
 		const env = createEnv(db, cache)
@@ -1086,6 +1088,8 @@ describe("softDeleteLyrics", () => {
 				effective_score: 0,
 				reputation_penalized: false,
 			},
+			null,
+			null,
 			null,
 			[{ video_id: "v1" }], // invalidateCacheForLyric fan-out
 		])
@@ -1121,6 +1125,8 @@ describe("softDeleteLyrics", () => {
 				reputation_penalized: true,
 			},
 			null,
+			null,
+			null,
 		])
 		const cache = createMockCache()
 		const env = createEnv(db, cache)
@@ -1145,6 +1151,8 @@ describe("softDeleteLyrics", () => {
 				effective_score: -0.6,
 				reputation_penalized: false,
 			},
+			null,
+			null,
 			{ id: 1 },
 			null,
 			null,
@@ -1203,6 +1211,8 @@ describe("softDeleteLyrics", () => {
 				effective_score: 0.07,
 				reputation_penalized: false,
 			},
+			null,
+			null,
 			{ id: 4521 },
 		])
 		const cache = createMockCache()
@@ -1242,6 +1252,8 @@ describe("softDeleteLyrics", () => {
 			},
 			null,
 			null,
+			null,
+			null,
 		])
 		const cache = createMockCache()
 		const env = createEnv(db, cache)
@@ -1274,6 +1286,8 @@ describe("softDeleteLyrics", () => {
 				reputation_penalized: false,
 			},
 			null,
+			null,
+			null,
 		])
 		const cache = createMockCache()
 		const env = createEnv(db, cache)
@@ -1299,6 +1313,8 @@ describe("softDeleteLyrics", () => {
 				reputation_penalized: false,
 			},
 			null,
+			null,
+			null,
 		])
 		const cache = createMockCache()
 		const env = createEnv(db, cache)
@@ -1323,6 +1339,8 @@ describe("softDeleteLyrics", () => {
 				effective_score: 0,
 				reputation_penalized: false,
 			},
+			null,
+			null,
 			{ id: 1 },
 			null,
 			null,
@@ -1364,6 +1382,8 @@ describe("softDeleteLyrics", () => {
 				reputation_penalized: true,
 			},
 			null,
+			null,
+			null,
 		])
 		const cache = createMockCache()
 		const env = createEnv(db, cache)
@@ -1395,6 +1415,8 @@ describe("softDeleteLyrics", () => {
 				effective_score: -0.6,
 				reputation_penalized: false,
 			},
+			null,
+			null,
 			{ id: 1 },
 			null,
 			null,
@@ -1418,6 +1440,8 @@ describe("softDeleteLyrics", () => {
 				effective_score: -0.6,
 				reputation_penalized: false,
 			},
+			null,
+			null,
 			null,
 		])
 		const cache = createMockCache()
@@ -1473,6 +1497,8 @@ describe("softDeleteLyrics", () => {
 				effective_score: 0,
 				reputation_penalized: false,
 			},
+			null,
+			null,
 		])
 		const cache = createMockCache()
 		const env = createEnv(db, cache)
@@ -1495,6 +1521,7 @@ describe("softDeleteLyrics", () => {
 				effective_score: -0.6,
 				reputation_penalized: false,
 			},
+			null,
 			{ id: 1 },
 		]
 		const db = {

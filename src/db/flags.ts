@@ -3,6 +3,7 @@ import { isCommittee } from "@/db/committee"
 import { type CouncilSource, recordCouncilEvent } from "@/db/council-events"
 import { softDeleteLyrics } from "@/db/lyrics"
 import { NOW_EPOCH } from "@/db/predicates"
+import { closeCase, insertOpenCase } from "@/db/report-cases"
 import type { Env } from "@/types"
 
 const { reportHide } = config.moderation
@@ -70,14 +71,7 @@ export async function openCaseIfQualified(env: Env, lyricsId: number): Promise<n
 		.first<{ n: number }>()
 	if ((count?.n ?? 0) < reportHide.threshold) return null
 
-	const opened = await env.DB.prepare(
-		`INSERT INTO report_cases (lyrics_id) VALUES (?)
-			ON CONFLICT (lyrics_id) WHERE status = 'open' DO NOTHING
-			RETURNING id`
-	)
-		.bind(lyricsId)
-		.first<{ id: number }>()
-	return opened ? Number(opened.id) : null
+	return insertOpenCase(env.DB, lyricsId)
 }
 
 export async function castFlagVote(
@@ -139,20 +133,14 @@ export async function castFlagVote(
 		const tally = { removals: counts?.removals ?? 0, keeps: counts?.keeps ?? 0 }
 
 		if (!remove) {
-			await tx
-				.prepare(`UPDATE report_cases SET status = 'kept', decided_at = ${NOW_EPOCH} WHERE id = ?`)
-				.bind(caseId)
-				.run()
+			await closeCase(tx, caseId, "kept")
 			return { ok: true, status: "kept", lyricsId, ...tally }
 		}
 
 		if (tally.removals < config.council.reportFlags.removals)
 			return { ok: true, status: "open", ...tally }
 
-		await tx
-			.prepare(`UPDATE report_cases SET status = 'removed', decided_at = ${NOW_EPOCH} WHERE id = ?`)
-			.bind(caseId)
-			.run()
+		await closeCase(tx, caseId, "removed")
 		await softDeleteLyrics({ ...env, DB: tx }, lyricsId, voterId, "admin", "council flag: removed")
 		return { ok: true, status: "removed", lyricsId, ...tally }
 	})
@@ -197,7 +185,7 @@ async function listFlags(env: Env, where: string, params: unknown[]): Promise<Re
 			FROM report_cases c
 			JOIN lyrics l ON l.id = c.lyrics_id
 			LEFT JOIN report_case_votes v ON v.case_id = c.id
-			WHERE ${where}
+			WHERE (${where}) AND NOT (c.status = 'open' AND l.deleted_at IS NOT NULL)
 			GROUP BY c.id, l.id
 			ORDER BY c.opened_at ASC, c.id ASC`
 	)

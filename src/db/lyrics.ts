@@ -14,6 +14,7 @@ import {
 	fuzzyMatch,
 	videoServesExpr,
 } from "@/db/predicates"
+import { closeOpenCaseForLyric, lockLyricCases } from "@/db/report-cases"
 import { Logger } from "@/infra/logger"
 import type { Env, LyricsRow, LyricsSearchResult, LyricsSubmission } from "@/types"
 import { compress, decompress, isCompressed } from "@/utils/compression"
@@ -548,11 +549,14 @@ export async function softDeleteLyrics(
 		return { deleted: false, reason: "forbidden" }
 	}
 
-	const shouldPenalise =
-		!row.reputation_penalized &&
-		(role === "admin" || (role === "submitter" && row.vote_count >= 2 && row.effective_score < 0))
-
 	await env.DB.transaction(async (tx) => {
+		await lockLyricCases(tx, lyricsId)
+		const flagged = await closeOpenCaseForLyric(tx, lyricsId)
+		const shouldPenalise =
+			!row.reputation_penalized &&
+			(role === "admin" ||
+				(role === "submitter" && (flagged || (row.vote_count >= 2 && row.effective_score < 0))))
+
 		if (shouldPenalise && row.submitter_id) {
 			const flipped = await tx
 				.prepare(

@@ -2,7 +2,7 @@ import { config } from "@/config"
 import { getCouncilOverview, getCouncilRoster } from "@/db/council-stats"
 import { getMySubmissions } from "@/db/feed"
 import { castFlagVote, listOpenFlags, listRecentFlags, openCaseIfQualified } from "@/db/flags"
-import { findByVideoId, findVariantsByVideoId } from "@/db/lyrics"
+import { findByVideoId, findVariantsByVideoId, softDeleteLyrics } from "@/db/lyrics"
 import { submitReport } from "@/db/reports"
 import { isUniqueViolation } from "@/infra/database"
 import { updateScores } from "@/jobs/score-updater"
@@ -668,6 +668,118 @@ describeIntegration("council flags (integration)", () => {
 			})
 
 			it("lists nothing when no case is open", async () => {
+				expect(await listOpenFlags(db.env)).toEqual([])
+				expect(await listRecentFlags(db.env, 0)).toEqual([])
+			})
+		})
+	})
+
+	describe("deleting a flagged lyric", () => {
+		const PENALTY = config.moderation.autoHide.reputationPenalty
+
+		beforeEach(async () => {
+			await db.pool.query(
+				"UPDATE lyrics SET effective_score = 2, vote_count = 3, upvotes = 3 WHERE id = $1",
+				[lyricsId]
+			)
+		})
+
+		const openCase = async (): Promise<number> => {
+			const { rows } = await db.pool.query<{ id: number }>(
+				"INSERT INTO report_cases (lyrics_id) VALUES ($1) RETURNING id",
+				[lyricsId]
+			)
+			return Number(rows[0].id)
+		}
+
+		const caseRow = async (id: number) => {
+			const { rows } = await db.pool.query<{ status: string; decided_at: number | null }>(
+				"SELECT status, decided_at FROM report_cases WHERE id = $1",
+				[id]
+			)
+			return rows[0]
+		}
+
+		const submitterState = async () => {
+			const { rows } = await db.pool.query<{ reputation: number; penalties: number }>(
+				`SELECT u.reputation,
+					(SELECT COUNT(*)::INTEGER FROM contribution_events
+						WHERE user_id = u.id AND kind = 'penalized') AS penalties
+				 FROM users u WHERE u.id = $1`,
+				[submitter]
+			)
+			return rows[0]
+		}
+
+		describe("happy paths", () => {
+			it("penalises a submitter who deletes their flagged lyric once and closes the case", async () => {
+				const id = await openCase()
+				const before = await submitterState()
+				expect(await softDeleteLyrics(db.env, lyricsId, submitter, "submitter")).toEqual({
+					deleted: true,
+				})
+				expect(await caseRow(id)).toEqual({ status: "removed", decided_at: expect.any(Number) })
+				const after = await submitterState()
+				expect(after.penalties).toBe(1)
+				expect(after.reputation).toBeCloseTo(before.reputation - PENALTY, 10)
+			})
+
+			it("closes the case as removed on an admin delete", async () => {
+				const id = await openCase()
+				const admin = await seedUser(db, kid(300))
+				await softDeleteLyrics(db.env, lyricsId, admin, "admin", "spam")
+				expect(await caseRow(id)).toEqual({ status: "removed", decided_at: expect.any(Number) })
+				expect((await submitterState()).penalties).toBe(1)
+			})
+		})
+
+		describe("edge cases", () => {
+			it("does not penalise a submitter deleting an unflagged well scored lyric", async () => {
+				const before = await submitterState()
+				await softDeleteLyrics(db.env, lyricsId, submitter, "submitter")
+				expect(await submitterState()).toEqual(before)
+			})
+
+			it("leaves a kept case untouched on delete", async () => {
+				const id = await openCase()
+				await db.pool.query(
+					"UPDATE report_cases SET status = 'kept', decided_at = 1700000000 WHERE id = $1",
+					[id]
+				)
+				await softDeleteLyrics(db.env, lyricsId, submitter, "submitter")
+				expect(await caseRow(id)).toEqual({ status: "kept", decided_at: 1700000000 })
+				expect((await submitterState()).penalties).toBe(0)
+			})
+		})
+
+		describe("regressions", () => {
+			it("regression: a quorum after a concurrent delete closes the case without a second penalty", async () => {
+				const members: number[] = []
+				for (let i = 0; i < config.council.reportFlags.removals; i++)
+					members.push(await seedCouncilMember(db, kid(400 + i)))
+				const id = await openCase()
+				for (let i = 0; i < members.length - 1; i++)
+					await castFlagVote(db.env, id, members[i], true, null, "web")
+				await softDeleteLyrics(db.env, lyricsId, submitter, "submitter")
+				await db.pool.query(
+					"UPDATE report_cases SET status = 'open', decided_at = NULL WHERE id = $1",
+					[id]
+				)
+				const before = await submitterState()
+				const last = await castFlagVote(db.env, id, members[members.length - 1], true, null, "web")
+				expect(last).toMatchObject({ ok: true, status: "removed" })
+				expect((await caseRow(id)).status).toBe("removed")
+				expect(await submitterState()).toEqual(before)
+			})
+		})
+
+		describe("invariants", () => {
+			it("never lists an open case whose lyric is already deleted", async () => {
+				await openCase()
+				await db.pool.query(
+					"UPDATE lyrics SET deleted_at = 1700000000, deleted_by_user_id = submitter_id, deleted_by_role = 'submitter' WHERE id = $1",
+					[lyricsId]
+				)
 				expect(await listOpenFlags(db.env)).toEqual([])
 				expect(await listRecentFlags(db.env, 0)).toEqual([])
 			})
