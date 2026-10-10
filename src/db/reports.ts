@@ -36,11 +36,15 @@ export async function submitReport(
 		.bind(lyricsId, userId, report.reason, report.details || null)
 		.run()
 
-	const caseId = await openCaseIfQualified(env, lyricsId)
-	if (caseId !== null) {
-		await invalidateCacheForLyric(env, lyricsId)
-		await evictFeedCaches(env)
-		log.warn("report case opened", { lyricsId, caseId })
+	try {
+		const caseId = await openCaseIfQualified(env, lyricsId)
+		if (caseId !== null) {
+			await invalidateCacheForLyric(env, lyricsId)
+			await evictFeedCaches(env)
+			log.warn("report case opened", { lyricsId, caseId })
+		}
+	} catch (err) {
+		log.error("failed to open report case", { lyricsId, error: String(err) })
 	}
 
 	log.info("report submitted", { lyricsId, userId, reason: report.reason })

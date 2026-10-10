@@ -379,6 +379,25 @@ describe("POST /lyrics/:id/report bearer path", () => {
 		expect(insert?.params[2]).toBe("spam")
 	})
 
+	it("regression: still reports success when opening a case fails after the insert", async () => {
+		const keyId = "a".repeat(64)
+		const cache = makeMockCache()
+		seedSession(cache, "tok", keyId)
+		const db = makeMockDB([{ id: 13, key_id: keyId }, LYRICS_ROW, { deleted_at: null }, null, null])
+		db.transaction = async () => {
+			throw new Error("connection reset")
+		}
+		const res = await voteRoutes(makeEnv(db, cache)).handle(
+			new Request("http://localhost/lyrics/7/report", {
+				method: "POST",
+				headers: { authorization: "Bearer tok", "content-type": "application/json" },
+				body: JSON.stringify({ reason: "spam" }),
+			})
+		)
+		expect(res.status).toBe(201)
+		expect(db.calls.some((c) => /INSERT INTO reports/.test(c.sql))).toBe(true)
+	})
+
 	it("rejects an unknown reason with 400 INVALID_REPORT_REASON", async () => {
 		const keyId = "a".repeat(64)
 		const cache = makeMockCache()
