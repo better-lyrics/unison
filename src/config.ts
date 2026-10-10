@@ -398,7 +398,7 @@ export const config = {
 		write: { maxRequests: 60, windowSeconds: 60 },
 		flagsCacheTtlSec: 7 * 24 * 60 * 60,
 		metadataApprovals: 3,
-		flagRemovals: 3,
+		reportFlags: { removals: 3, historySec: 24 * 60 * 60 },
 	},
 
 	exam: {

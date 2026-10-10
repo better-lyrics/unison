@@ -107,7 +107,10 @@ export const committeeBotRoutes = (env: Env) =>
 				return status(401, buildError(ErrorCode.AUTH_REQUIRED))
 			}
 			const nowSec = Math.floor(Date.now() / 1000)
-			return { success: true, data: await listBotFlags(env, nowSec - 24 * 60 * 60) }
+			return {
+				success: true,
+				data: await listBotFlags(env, nowSec - config.council.reportFlags.historySec),
+			}
 		})
 		.post(
 			"/flags/:id/vote/bot",

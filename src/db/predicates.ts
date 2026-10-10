@@ -24,6 +24,8 @@ export const RANKING_EXPR_VARIANT = buildRankingExpr("l.", true)
 
 const { autoHide } = config.moderation
 
+export const NOW_EPOCH = "EXTRACT(EPOCH FROM NOW())::INTEGER"
+
 const buildVoteHidePredicate = (prefix: string) => `(
 	(
 		${prefix}vote_count >= ${autoHide.minVotes}

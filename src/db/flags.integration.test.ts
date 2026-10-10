@@ -354,13 +354,14 @@ describeIntegration("council flags (integration)", () => {
 
 			it("removes the lyric at the removal quorum", async () => {
 				const id = await openCase()
-				for (let i = 0; i < config.council.flagRemovals - 1; i++) await vote(id, members[i], true)
-				const last = await vote(id, members[config.council.flagRemovals - 1], true)
+				for (let i = 0; i < config.council.reportFlags.removals - 1; i++)
+					await vote(id, members[i], true)
+				const last = await vote(id, members[config.council.reportFlags.removals - 1], true)
 				expect(last).toEqual({
 					ok: true,
 					status: "removed",
 					lyricsId,
-					removals: config.council.flagRemovals,
+					removals: config.council.reportFlags.removals,
 					keeps: 0,
 				})
 				expect((await caseRow(id)).status).toBe("removed")
@@ -371,7 +372,7 @@ describeIntegration("council flags (integration)", () => {
 				expect(rows[0]).toEqual({
 					deleted_at: expect.any(Number),
 					deleted_by_role: "admin",
-					deleted_by_user_id: members[config.council.flagRemovals - 1],
+					deleted_by_user_id: members[config.council.reportFlags.removals - 1],
 					deletion_reason: "council flag: removed",
 				})
 			})
@@ -477,13 +478,14 @@ describeIntegration("council flags (integration)", () => {
 		describe("regressions", () => {
 			it("regression: two last removes at once remove and penalise once", async () => {
 				const id = await openCase()
-				for (let i = 0; i < config.council.flagRemovals - 1; i++) await vote(id, members[i], true)
+				for (let i = 0; i < config.council.reportFlags.removals - 1; i++)
+					await vote(id, members[i], true)
 				const before = await db.pool.query("SELECT reputation FROM users WHERE id = $1", [
 					submitter,
 				])
 				const extra = await seedCouncilMember(db, kid(200))
 				const results = await Promise.all([
-					vote(id, members[config.council.flagRemovals - 1], true),
+					vote(id, members[config.council.reportFlags.removals - 1], true),
 					vote(id, extra, true),
 				])
 				expect(results.filter((r) => r.ok && r.status === "removed")).toHaveLength(1)

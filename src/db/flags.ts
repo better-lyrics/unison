@@ -2,11 +2,10 @@ import { config } from "@/config"
 import { isCommittee } from "@/db/committee"
 import { type CouncilSource, recordCouncilEvent } from "@/db/council-events"
 import { softDeleteLyrics } from "@/db/lyrics"
+import { NOW_EPOCH } from "@/db/predicates"
 import type { Env } from "@/types"
 
 const { reportHide } = config.moderation
-
-const NOW_EPOCH = "EXTRACT(EPOCH FROM NOW())::INTEGER"
 
 const qualifyingReports = (asOf: string) => `JOIN users u ON u.id = r.user_id
 	WHERE r.reason IN (${reportHide.reasons.map(() => "?").join(", ")})
@@ -147,7 +146,8 @@ export async function castFlagVote(
 			return { ok: true, status: "kept", lyricsId, ...tally }
 		}
 
-		if (tally.removals < config.council.flagRemovals) return { ok: true, status: "open", ...tally }
+		if (tally.removals < config.council.reportFlags.removals)
+			return { ok: true, status: "open", ...tally }
 
 		await tx
 			.prepare(`UPDATE report_cases SET status = 'removed', decided_at = ${NOW_EPOCH} WHERE id = ?`)

@@ -46,7 +46,7 @@ export async function listCouncilFlags(
 		removers: removerIds.flatMap((id) => person(id) ?? []),
 		keepers: keeperIds.flatMap((id) => person(id) ?? []),
 	}))
-	return { items, needed: config.council.flagRemovals }
+	return { items, needed: config.council.reportFlags.removals }
 }
 
 export interface BotFlagCase {
@@ -87,5 +87,5 @@ export async function listBotFlags(
 		removals: f.removerIds.length,
 		keeps: f.keeperIds.length,
 	}))
-	return { needed: config.council.flagRemovals, cases }
+	return { needed: config.council.reportFlags.removals, cases }
 }

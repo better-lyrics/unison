@@ -40,7 +40,7 @@ export async function settleFlagVote(
 		status: result.status,
 		removals: result.removals,
 		keeps: result.keeps,
-		needed: config.council.flagRemovals,
+		needed: config.council.reportFlags.removals,
 	}
 	if (result.status === "open") return data
 	// Evicting inside the vote transaction runs before commit, so a concurrent read could refill it.
