@@ -1,5 +1,6 @@
 import { config } from "@/config"
 import { approvedMetadata } from "@/db/approved-metadata"
+import { awardPenaltyXp } from "@/db/contribution-events"
 import { evictFeedCaches } from "@/db/feed"
 import { recordFulfillment } from "@/db/fulfillments"
 import {
@@ -568,6 +569,7 @@ export async function softDeleteLyrics(
 					.prepare("UPDATE users SET reputation = GREATEST(?, reputation - ?) WHERE id = ?")
 					.bind(config.reputation.min, penalty, row.submitter_id)
 					.run()
+				await awardPenaltyXp({ ...env, DB: tx }, row.submitter_id, lyricsId)
 			}
 		}
 

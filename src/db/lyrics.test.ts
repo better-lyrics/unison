@@ -1181,6 +1181,52 @@ describe("softDeleteLyrics", () => {
 			(c) => c.sql.includes("UPDATE lyrics") && c.sql.includes("deleted_at =")
 		)
 		expect(softDelete?.params).toEqual([42, "submitter", "regret", 1])
+
+		const xpPenalty = db.calls.find((c) => c.sql.includes("INSERT INTO contribution_events"))
+		expect(xpPenalty?.params).toEqual([
+			42,
+			config.gamification.xp.weights.penalized,
+			"penalized",
+			"lyric",
+			1,
+		])
+	})
+
+	it("admin delete applies the reputation and XP penalty to the submitter", async () => {
+		const db = createMockDB([
+			{
+				id: 4521,
+				video_id: "LZTOfQiudx0",
+				submitter_id: 99,
+				deleted_at: null,
+				vote_count: 13,
+				effective_score: 0.07,
+				reputation_penalized: false,
+			},
+			{ id: 4521 },
+		])
+		const cache = createMockCache()
+		const env = createEnv(db, cache)
+
+		const result = await softDeleteLyrics(env, 4521, 1, "admin", "not lyrics")
+
+		expect(result.deleted).toBe(true)
+		const penaltyUpdate = db.calls.find(
+			(c) => c.sql.includes("UPDATE users") && c.sql.includes("reputation - ?")
+		)
+		expect(penaltyUpdate?.params).toEqual([
+			config.reputation.min,
+			config.moderation.autoHide.reputationPenalty,
+			99,
+		])
+		const xpPenalty = db.calls.find((c) => c.sql.includes("INSERT INTO contribution_events"))
+		expect(xpPenalty?.params).toEqual([
+			99,
+			config.gamification.xp.weights.penalized,
+			"penalized",
+			"lyric",
+			4521,
+		])
 	})
 
 	it("skips user decrement when a concurrent caller flipped the flag first", async () => {
@@ -1208,6 +1254,7 @@ describe("softDeleteLyrics", () => {
 			(c) => c.sql.includes("UPDATE users") && c.sql.includes("reputation - ?")
 		)
 		expect(penaltyUpdate).toBeUndefined()
+		expect(db.calls.find((c) => c.sql.includes("INSERT INTO contribution_events"))).toBeUndefined()
 
 		const softDelete = db.calls.find(
 			(c) => c.sql.includes("UPDATE lyrics") && c.sql.includes("deleted_at =")
