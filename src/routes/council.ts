@@ -46,6 +46,7 @@ const EVENT_GROUPS: Record<string, CouncilEventKind[]> = {
 	rejections: ["reject", "unreject"],
 	edits: ["edit_approve", "edit_reject", "metadata_propose", "metadata_approve", "metadata_reject"],
 	membership: ["member_add", "member_remove", "applicant_approve", "applicant_reject"],
+	flags: ["flag_remove", "flag_keep"],
 }
 
 function parseOpinionBody(

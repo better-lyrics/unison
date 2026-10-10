@@ -18,6 +18,8 @@ export type CouncilEventKind =
 	| "metadata_propose"
 	| "metadata_approve"
 	| "metadata_reject"
+	| "flag_remove"
+	| "flag_keep"
 
 export type CouncilSource = "web" | "discord" | "admin"
 
@@ -28,6 +30,8 @@ export const DECISION_KINDS: CouncilEventKind[] = [
 	"edit_reject",
 	"metadata_approve",
 	"metadata_reject",
+	"flag_remove",
+	"flag_keep",
 ]
 
 export const EDIT_DECISION_KINDS: CouncilEventKind[] = [

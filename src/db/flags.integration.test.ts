@@ -1,5 +1,7 @@
+import { config } from "@/config"
+import { getCouncilOverview, getCouncilRoster } from "@/db/council-stats"
 import { getMySubmissions } from "@/db/feed"
-import { openCaseIfQualified } from "@/db/flags"
+import { castFlagVote, listOpenFlags, listRecentFlags, openCaseIfQualified } from "@/db/flags"
 import { findByVideoId, findVariantsByVideoId } from "@/db/lyrics"
 import { submitReport } from "@/db/reports"
 import { isUniqueViolation } from "@/infra/database"
@@ -8,6 +10,7 @@ import {
 	type IntegrationDb,
 	describeIntegration,
 	openIntegrationDb,
+	seedCouncilMember,
 	seedLyric,
 	seedUser,
 	wipeRevisionData,
@@ -298,6 +301,349 @@ describeIntegration("council flags (integration)", () => {
 				await flag()
 				const variants = await findVariantsByVideoId(db.env, VIDEO, 10)
 				expect(variants.map((v) => v.id)).toEqual([lyricsId])
+			})
+		})
+	})
+
+	describe("council votes", () => {
+		let members: number[]
+
+		beforeEach(async () => {
+			members = []
+			for (let i = 0; i < 4; i++) members.push(await seedCouncilMember(db, kid(100 + i)))
+		})
+
+		const openCase = async (target = lyricsId): Promise<number> => {
+			const { rows } = await db.pool.query<{ id: number }>(
+				"INSERT INTO report_cases (lyrics_id) VALUES ($1) RETURNING id",
+				[target]
+			)
+			return rows[0].id
+		}
+
+		const caseRow = async (id: number) => {
+			const { rows } = await db.pool.query(
+				"SELECT status, decided_at FROM report_cases WHERE id = $1",
+				[id]
+			)
+			return rows[0]
+		}
+
+		const events = async (id: number) => {
+			const { rows } = await db.pool.query(
+				"SELECT actor_id, kind, source, lyrics_id, note FROM council_events WHERE ref_id = $1 AND kind LIKE 'flag_%' ORDER BY id",
+				[id]
+			)
+			return rows
+		}
+
+		const vote = (id: number, voter: number, remove: boolean, note: string | null = null) =>
+			castFlagVote(db.env, id, voter, remove, note, "web")
+
+		describe("happy paths", () => {
+			it("keeps the case open below the removal quorum", async () => {
+				const id = await openCase()
+				expect(await vote(id, members[0], true)).toEqual({
+					ok: true,
+					status: "open",
+					removals: 1,
+				})
+				expect((await caseRow(id)).status).toBe("open")
+			})
+
+			it("removes the lyric at the removal quorum", async () => {
+				const id = await openCase()
+				for (let i = 0; i < config.council.flagRemovals - 1; i++) await vote(id, members[i], true)
+				const last = await vote(id, members[config.council.flagRemovals - 1], true)
+				expect(last).toEqual({ ok: true, status: "removed", lyricsId })
+				expect((await caseRow(id)).status).toBe("removed")
+				const { rows } = await db.pool.query(
+					"SELECT deleted_at, deleted_by_role, deleted_by_user_id, deletion_reason FROM lyrics WHERE id = $1",
+					[lyricsId]
+				)
+				expect(rows[0]).toEqual({
+					deleted_at: expect.any(Number),
+					deleted_by_role: "admin",
+					deleted_by_user_id: members[config.council.flagRemovals - 1],
+					deletion_reason: "council flag: removed",
+				})
+			})
+
+			it("closes the case as kept on one keep and serves the lyric again", async () => {
+				const id = await openCase()
+				expect(await findByVideoId(db.env, VIDEO)).toBeNull()
+				expect(await vote(id, members[0], false)).toEqual({ ok: true, status: "kept", lyricsId })
+				const row = await caseRow(id)
+				expect(row.status).toBe("kept")
+				expect(row.decided_at).toEqual(expect.any(Number))
+				db.cache.store.clear()
+				expect((await findByVideoId(db.env, VIDEO))?.id).toBe(lyricsId)
+			})
+
+			it("records a council event per vote with the lyric and the case", async () => {
+				const id = await openCase()
+				await castFlagVote(db.env, id, members[0], true, "spam link", "discord")
+				await vote(id, members[1], false, "looks fine")
+				expect(await events(id)).toEqual([
+					{
+						actor_id: members[0],
+						kind: "flag_remove",
+						source: "discord",
+						lyrics_id: lyricsId,
+						note: "spam link",
+					},
+					{
+						actor_id: members[1],
+						kind: "flag_keep",
+						source: "web",
+						lyrics_id: lyricsId,
+						note: "looks fine",
+					},
+				])
+			})
+
+			it("closes as kept when a member changes a remove to a keep", async () => {
+				const id = await openCase()
+				await vote(id, members[0], true)
+				expect(await vote(id, members[0], false)).toEqual({ ok: true, status: "kept", lyricsId })
+				expect((await events(id)).map((e) => e.kind)).toEqual(["flag_remove", "flag_keep"])
+			})
+		})
+
+		describe("edge cases", () => {
+			it("does not count a repeated remove from the same member twice", async () => {
+				const id = await openCase()
+				await vote(id, members[0], true)
+				expect(await vote(id, members[0], true)).toEqual({ ok: true, status: "open", removals: 1 })
+			})
+
+			it("counts the council stats wait from when the case opened", async () => {
+				const now = Math.floor(Date.now() / 1000)
+				const id = await openCase()
+				await db.pool.query("UPDATE report_cases SET opened_at = $2 WHERE id = $1", [
+					id,
+					now - 7200,
+				])
+				await db.pool.query("UPDATE lyrics SET created_at = $2 WHERE id = $1", [
+					lyricsId,
+					now - 72000,
+				])
+				await vote(id, members[0], false)
+				const overview = await getCouncilOverview(db.env, {
+					meId: members[0],
+					scope: "me",
+					now: now + 60,
+				})
+				expect(overview.medianDecisionHours.current).toBeCloseTo(2, 1)
+			})
+
+			it("does not count flag decisions as edit reviews", async () => {
+				const id = await openCase()
+				await vote(id, members[0], false)
+				const overview = await getCouncilOverview(db.env, { meId: members[0], scope: "me" })
+				expect(overview.decisionsByDay.reduce((n, d) => n + d.editsReviewed, 0)).toBe(0)
+				expect(overview.me.editsThisMonth).toBe(0)
+				const roster = await getCouncilRoster(db.env, { meId: members[0] })
+				const me = roster.find((m) => m.isYou)
+				expect(me?.lastWeek.edits).toBe(0)
+				expect(me?.editsThisMonth).toBe(0)
+			})
+		})
+
+		describe("regressions", () => {
+			it("regression: two last removes at once remove and penalise once", async () => {
+				const id = await openCase()
+				for (let i = 0; i < config.council.flagRemovals - 1; i++) await vote(id, members[i], true)
+				const before = await db.pool.query("SELECT reputation FROM users WHERE id = $1", [
+					submitter,
+				])
+				const extra = await seedCouncilMember(db, kid(200))
+				const results = await Promise.all([
+					vote(id, members[config.council.flagRemovals - 1], true),
+					vote(id, extra, true),
+				])
+				expect(results.filter((r) => r.ok && r.status === "removed")).toHaveLength(1)
+				expect(results.filter((r) => !r.ok && r.reason === "already_decided")).toHaveLength(1)
+				const { rows } = await db.pool.query(
+					`SELECT u.reputation, l.deleted_by_role, l.deleted_at,
+						(SELECT COUNT(*)::INTEGER FROM contribution_events
+							WHERE user_id = u.id AND kind = 'penalized') AS penalties
+					 FROM lyrics l JOIN users u ON u.id = l.submitter_id WHERE l.id = $1`,
+					[lyricsId]
+				)
+				expect(rows[0].deleted_by_role).toBe("admin")
+				expect(rows[0].deleted_at).toEqual(expect.any(Number))
+				expect(rows[0].penalties).toBe(1)
+				expect(rows[0].reputation).toBeCloseTo(
+					before.rows[0].reputation - config.moderation.autoHide.reputationPenalty,
+					10
+				)
+			})
+		})
+
+		describe("invariants", () => {
+			it("writes no second council event for an unchanged repeat vote", async () => {
+				const id = await openCase()
+				await vote(id, members[0], true)
+				await vote(id, members[0], true)
+				expect(await events(id)).toHaveLength(1)
+			})
+
+			it("leaves the reports in place when the case closes", async () => {
+				await reportBy(10, 3)
+				const [{ id }] = await cases()
+				await vote(id, members[0], false)
+				const { rows } = await db.pool.query(
+					"SELECT COUNT(*)::INTEGER AS n FROM reports WHERE lyrics_id = $1",
+					[lyricsId]
+				)
+				expect(rows[0].n).toBe(3)
+			})
+		})
+
+		describe("error paths", () => {
+			it("rejects a vote from someone outside the council", async () => {
+				const id = await openCase()
+				expect(await vote(id, await seedUser(db, kid(300)), true)).toEqual({
+					ok: false,
+					reason: "not_committee",
+				})
+				expect(await events(id)).toEqual([])
+			})
+
+			it("rejects a vote on a case that does not exist", async () => {
+				expect(await vote(2_000_000_000, members[0], true)).toEqual({
+					ok: false,
+					reason: "not_found",
+				})
+			})
+
+			it("rejects a vote on a closed case", async () => {
+				const id = await openCase()
+				await vote(id, members[0], false)
+				expect(await vote(id, members[1], true)).toEqual({ ok: false, reason: "already_decided" })
+			})
+
+			it("rejects a vote from the lyric's submitter", async () => {
+				await db.pool.query(
+					"INSERT INTO committee_members (user_id, added_by) VALUES ($1, 'test')",
+					[submitter]
+				)
+				const id = await openCase()
+				expect(await vote(id, submitter, false)).toEqual({ ok: false, reason: "conflict" })
+				expect((await caseRow(id)).status).toBe("open")
+			})
+
+			it("rejects a vote from a member who reported the lyric", async () => {
+				const id = await openCase()
+				await report(members[0], "bad_sync")
+				expect(await vote(id, members[0], true)).toEqual({ ok: false, reason: "conflict" })
+				expect(await events(id)).toEqual([])
+			})
+		})
+
+		describe("listing", () => {
+			it("lists open cases with qualifying reports and votes", async () => {
+				await report(await reporter(10), "spam")
+				await report(await reporter(11, { votes: 0 }), "spam")
+				await report(await reporter(12), "bad_sync")
+				const third = await reporter(13)
+				await submitReport(db.env, lyricsId, third, { reason: "offensive", details: "slur" })
+				await report(await reporter(14), "wrong_song")
+				const [{ id }] = await cases()
+				await vote(id, members[0], true)
+				await vote(id, members[1], true)
+				const flags = await listOpenFlags(db.env)
+				expect(flags).toEqual([
+					{
+						id,
+						lyricsId,
+						videoId: VIDEO,
+						song: "Amazing Grace",
+						artist: "Traditional",
+						submitterId: submitter,
+						openedAt: expect.any(Number),
+						reports: [
+							{
+								reason: "spam",
+								details: null,
+								reporterId: expect.any(Number),
+								createdAt: expect.any(Number),
+							},
+							{
+								reason: "offensive",
+								details: "slur",
+								reporterId: third,
+								createdAt: expect.any(Number),
+							},
+							{
+								reason: "wrong_song",
+								details: null,
+								reporterId: expect.any(Number),
+								createdAt: expect.any(Number),
+							},
+						],
+						removerIds: [members[0], members[1]],
+						keeperIds: [],
+					},
+				])
+			})
+
+			it("lists the oldest open case first and leaves closed cases out", async () => {
+				const later = await seedLyric(db, submitter, {
+					lyrics: LRC,
+					format: "lrc",
+					videoId: "dQw4w9WgXcQ",
+				})
+				const closed = await seedLyric(db, submitter, {
+					lyrics: LRC,
+					format: "lrc",
+					videoId: "9bZkp7q19f0",
+				})
+				const second = await openCase(later)
+				const first = await openCase()
+				await db.pool.query("UPDATE report_cases SET opened_at = 1000 WHERE id = $1", [first])
+				await db.pool.query(
+					"INSERT INTO report_cases (lyrics_id, status, decided_at) VALUES ($1, 'kept', 5)",
+					[closed]
+				)
+				expect((await listOpenFlags(db.env)).map((f) => f.id)).toEqual([first, second])
+			})
+
+			it("lists recent cases decided at or after the cutoff plus open ones", async () => {
+				const kept = await seedLyric(db, submitter, {
+					lyrics: LRC,
+					format: "lrc",
+					videoId: "dQw4w9WgXcQ",
+				})
+				const old = await seedLyric(db, submitter, {
+					lyrics: LRC,
+					format: "lrc",
+					videoId: "9bZkp7q19f0",
+				})
+				const open = await openCase()
+				const keptCase = await openCase(kept)
+				const oldCase = await openCase(old)
+				await db.pool.query(
+					"UPDATE report_cases SET status = 'kept', decided_at = 5000 WHERE id = $1",
+					[keptCase]
+				)
+				await db.pool.query(
+					"UPDATE report_cases SET status = 'removed', decided_at = 4999 WHERE id = $1",
+					[oldCase]
+				)
+				const recent = await listRecentFlags(db.env, 5000)
+				expect(recent.map((f) => [f.id, f.status, f.decidedAt])).toEqual(
+					[
+						[open, "open", null],
+						[keptCase, "kept", 5000],
+					].sort((a, b) => Number(a[0]) - Number(b[0]))
+				)
+			})
+
+			it("lists nothing when no case is open", async () => {
+				expect(await listOpenFlags(db.env)).toEqual([])
+				expect(await listRecentFlags(db.env, 0)).toEqual([])
 			})
 		})
 	})

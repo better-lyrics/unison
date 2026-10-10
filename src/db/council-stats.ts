@@ -1,6 +1,11 @@
 import { config } from "@/config"
 import { type BoostQuota, getQuota, monthWindow } from "@/db/boost"
-import { DECISION_KINDS, EDIT_DECISION_KINDS, UNDONE_EXPR } from "@/db/council-events"
+import {
+	type CouncilEventKind,
+	DECISION_KINDS,
+	EDIT_DECISION_KINDS,
+	UNDONE_EXPR,
+} from "@/db/council-events"
 import { type CouncilPerson, loadPersonDecor, toCouncilPerson } from "@/db/council-person"
 import { resolvePeople } from "@/db/users"
 import type { Env } from "@/types"
@@ -37,6 +42,7 @@ const DECIDED = `e.kind = ANY(?) AND NOT (${UNDONE_EXPR})`
 const WAIT_SECONDS = `e.created_at - CASE
 	WHEN e.kind IN ('edit_approve', 'edit_reject') THEN (SELECT r.created_at FROM lyric_revisions r WHERE r.id = e.ref_id)
 	WHEN e.kind IN ('metadata_approve', 'metadata_reject') THEN (SELECT p.created_at FROM metadata_proposals p WHERE p.id = e.ref_id)
+	WHEN e.kind IN ('flag_remove', 'flag_keep') THEN (SELECT c.opened_at FROM report_cases c WHERE c.id = e.ref_id)
 	ELSE (SELECT l.created_at FROM lyrics l WHERE l.id = e.lyrics_id)
 END`
 
@@ -79,7 +85,7 @@ export async function getCouncilOverview(
 			 GROUP BY 1, 2`
 		)
 			.bind(DECISION_KINDS, chartStart, actor, actor)
-			.all<{ day: number | string; kind: string; n: number | string }>(),
+			.all<{ day: number | string; kind: CouncilEventKind; n: number | string }>(),
 		env.DB.prepare(
 			`SELECT e.kind, e.actor_id = ? AS mine, COUNT(*) AS n
 			 FROM council_events e
@@ -110,7 +116,7 @@ export async function getCouncilOverview(
 		if (!bucket) continue
 		if (r.kind === "seal") bucket.sealed += Number(r.n)
 		else if (r.kind === "reject") bucket.rejected += Number(r.n)
-		else bucket.editsReviewed += Number(r.n)
+		else if (EDIT_DECISION_KINDS.includes(r.kind)) bucket.editsReviewed += Number(r.n)
 	}
 
 	const count = (kinds: string[], mineOnly: boolean) =>
@@ -187,7 +193,7 @@ export async function getCouncilRoster(
 			.all<{
 				actor_id: number | string
 				week: number | string
-				kind: string
+				kind: CouncilEventKind
 				n: number | string
 			}>(),
 		env.DB.prepare(
@@ -216,7 +222,7 @@ export async function getCouncilRoster(
 			if (week !== ROSTER_WEEKS - 1) continue
 			if (r.kind === "seal") lastWeek.sealed += Number(r.n)
 			else if (r.kind === "reject") lastWeek.rejected += Number(r.n)
-			else lastWeek.edits += Number(r.n)
+			else if (EDIT_DECISION_KINDS.includes(r.kind)) lastWeek.edits += Number(r.n)
 		}
 		const last = lastActive.results.find((r) => Number(r.actor_id) === userId)
 		return [
