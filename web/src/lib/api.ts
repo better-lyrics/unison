@@ -1,5 +1,6 @@
 import { loadStoredSession } from "./auth"
 import { AUTHED_FETCH_ERRORS, authedFetch } from "./authedFetch"
+import type { ReportReason } from "./report-reasons"
 import type { RevisionDiff, RevisionSummary } from "./revision-types"
 import { IS_SPA_EXPANSION_SEED } from "./seed-flag"
 import type {
@@ -223,7 +224,7 @@ export async function unvoteVariant(id: number): Promise<void> {
 
 export async function reportVariant(
   id: number,
-  reason: "wrong_song" | "bad_sync" | "offensive" | "spam" | "other",
+  reason: ReportReason,
   details?: string,
 ): Promise<void> {
   if (IS_SPA_EXPANSION_SEED) return (await import("./dev-seed-spa-expansion")).seedReport(id, reason, details)
