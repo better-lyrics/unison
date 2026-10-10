@@ -690,7 +690,7 @@ describeIntegration("council flags (integration)", () => {
 				const [{ id }] = await cases()
 				await vote(id, members[0], true)
 				await vote(id, members[1], true)
-				const flags = await listOpenFlags(db.env)
+				const flags = await listOpenFlags(db.env, members[2])
 				expect(flags).toEqual([
 					{
 						id,
@@ -702,18 +702,21 @@ describeIntegration("council flags (integration)", () => {
 						openedAt: expect.any(Number),
 						reports: [
 							{
+								id: expect.any(Number),
 								reason: "spam",
 								details: null,
 								reporterId: expect.any(Number),
 								createdAt: expect.any(Number),
 							},
 							{
+								id: expect.any(Number),
 								reason: "offensive",
 								details: "slur",
 								reporterId: third,
 								createdAt: expect.any(Number),
 							},
 							{
+								id: expect.any(Number),
 								reason: "wrong_song",
 								details: null,
 								reporterId: expect.any(Number),
@@ -722,8 +725,30 @@ describeIntegration("council flags (integration)", () => {
 						],
 						removerIds: [members[0], members[1]],
 						keeperIds: [],
+						conflict: null,
 					},
 				])
+			})
+
+			it("tells the viewer they submitted the flagged lyric", async () => {
+				await openCase()
+				const [flag] = await listOpenFlags(db.env, submitter)
+				expect(flag.conflict).toBe("submitter")
+			})
+
+			it("tells a viewer who reported for any reason that they reported it", async () => {
+				const id = await openCase()
+				await report(members[0], "bad_sync")
+				const [flag] = await listOpenFlags(db.env, members[0])
+				expect(flag.conflict).toBe("reporter")
+				expect(flag.reports.map((r) => r.reporterId)).not.toContain(members[0])
+				expect(await vote(id, members[0], true)).toEqual({ ok: false, reason: "conflict" })
+			})
+
+			it("finds no conflict without a viewer", async () => {
+				await openCase()
+				const [flag] = await listOpenFlags(db.env, null)
+				expect(flag.conflict).toBeNull()
 			})
 
 			it("lists the oldest open case first and leaves closed cases out", async () => {
@@ -744,7 +769,7 @@ describeIntegration("council flags (integration)", () => {
 					"INSERT INTO report_cases (lyrics_id, status, decided_at) VALUES ($1, 'kept', 5)",
 					[closed]
 				)
-				expect((await listOpenFlags(db.env)).map((f) => f.id)).toEqual([first, second])
+				expect((await listOpenFlags(db.env, null)).map((f) => f.id)).toEqual([first, second])
 			})
 
 			it("lists recent cases decided at or after the cutoff plus open ones", async () => {
@@ -779,7 +804,7 @@ describeIntegration("council flags (integration)", () => {
 			})
 
 			it("lists nothing when no case is open", async () => {
-				expect(await listOpenFlags(db.env)).toEqual([])
+				expect(await listOpenFlags(db.env, null)).toEqual([])
 				expect(await listRecentFlags(db.env, 0)).toEqual([])
 			})
 		})
@@ -891,7 +916,7 @@ describeIntegration("council flags (integration)", () => {
 					"UPDATE lyrics SET deleted_at = 1700000000, deleted_by_user_id = submitter_id, deleted_by_role = 'submitter' WHERE id = $1",
 					[lyricsId]
 				)
-				expect(await listOpenFlags(db.env)).toEqual([])
+				expect(await listOpenFlags(db.env, null)).toEqual([])
 				expect(await listRecentFlags(db.env, 0)).toEqual([])
 			})
 		})

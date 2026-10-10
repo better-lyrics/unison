@@ -135,7 +135,10 @@ export const councilRoutes = (env: Env) =>
 						: { status: result.status },
 			}
 		})
-		.get("/flags", async ({ env }) => ({ success: true, data: await listCouncilFlags(env) }))
+		.get("/flags", async ({ env, userId }) => ({
+			success: true,
+			data: await listCouncilFlags(env, userId),
+		}))
 		.post("/flags/:id/vote", async ({ env, userId, keyId, params, body, status }) => {
 			const id = parseId(params.id)
 			if (id === null) return status(400, buildError(ErrorCode.INVALID_ID))

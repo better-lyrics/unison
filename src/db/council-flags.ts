@@ -8,6 +8,7 @@ export interface CouncilFlagItem
 	extends Omit<OpenFlag, "submitterId" | "reports" | "removerIds" | "keeperIds"> {
 	submitter: CouncilPerson | null
 	reports: {
+		id: number
 		reason: FlagReason
 		details: string | null
 		reporter: CouncilPerson | null
@@ -18,9 +19,10 @@ export interface CouncilFlagItem
 }
 
 export async function listCouncilFlags(
-	env: Env
+	env: Env,
+	viewerId: number
 ): Promise<{ items: CouncilFlagItem[]; needed: number }> {
-	const flags = await listOpenFlags(env)
+	const flags = await listOpenFlags(env, viewerId)
 	const people = await resolvePeople(env, [
 		...new Set(
 			flags.flatMap((f) => [

@@ -23,9 +23,19 @@ const QUALIFYING_PARAMS = [
 	reportHide.minReporterVotes,
 ]
 
+const CONFLICT_EXPR = `CASE
+	WHEN l.submitter_id = ? THEN 'submitter'
+	WHEN EXISTS (SELECT 1 FROM reports cr WHERE cr.lyrics_id = l.id AND cr.user_id = ?) THEN 'reporter'
+END`
+
+const conflictParams = (userId: number | null) => [userId, userId]
+
 export type FlagReason = (typeof reportHide.reasons)[number]
 
+export type FlagConflict = "submitter" | "reporter" | null
+
 export interface FlagReport {
+	id: number
 	reason: FlagReason
 	details: string | null
 	reporterId: number
@@ -43,6 +53,7 @@ export interface OpenFlag {
 	reports: FlagReport[]
 	removerIds: number[]
 	keeperIds: number[]
+	conflict: FlagConflict
 }
 
 export interface RecentFlag extends OpenFlag {
@@ -96,21 +107,17 @@ export async function castFlagVote(
 
 		const flag = await tx
 			.prepare(
-				`SELECT c.id, c.lyrics_id, c.status, l.submitter_id
+				`SELECT c.id, c.lyrics_id, c.status, ${CONFLICT_EXPR} AS conflict
 					FROM report_cases c JOIN lyrics l ON l.id = c.lyrics_id
 					WHERE c.id = ? FOR UPDATE OF c`
 			)
-			.bind(caseId)
-			.first<{ id: number; lyrics_id: number; status: string; submitter_id: number | null }>()
+			.bind(...conflictParams(voterId), caseId)
+			.first<{ id: number; lyrics_id: number; status: string; conflict: FlagConflict }>()
 		if (!flag) return { ok: false, reason: "not_found" }
 		if (flag.status !== "open") return { ok: false, reason: "already_decided" }
 		const lyricsId = Number(flag.lyrics_id)
 
-		const reported = await tx
-			.prepare("SELECT 1 AS one FROM reports WHERE lyrics_id = ? AND user_id = ?")
-			.bind(lyricsId, voterId)
-			.first<{ one: number }>()
-		if (flag.submitter_id === voterId || reported) return { ok: false, reason: "conflict" }
+		if (flag.conflict) return { ok: false, reason: "conflict" }
 
 		const changed = await tx
 			.prepare(
@@ -166,18 +173,30 @@ interface FlagRow {
 	opened_at: number
 	status: "open" | "removed" | "kept"
 	decided_at: number | null
-	reports: { reason: FlagReason; details: string | null; reporterId: number; createdAt: number }[]
+	reports: {
+		id: number
+		reason: FlagReason
+		details: string | null
+		reporterId: number
+		createdAt: number
+	}[]
 	remover_ids: number[]
 	keeper_ids: number[]
+	conflict: FlagConflict
 }
 
-async function listFlags(env: Env, where: string, params: unknown[]): Promise<RecentFlag[]> {
+async function listFlags(
+	env: Env,
+	viewerId: number | null,
+	where: string,
+	params: unknown[]
+): Promise<RecentFlag[]> {
 	const rows = await env.DB.prepare(
 		`SELECT c.id, c.lyrics_id, l.video_id, l.song, l.artist, l.submitter_id,
 				c.opened_at, c.status, c.decided_at,
 				COALESCE((
 					SELECT json_agg(json_build_object(
-						'reason', r.reason, 'details', r.details,
+						'id', r.id, 'reason', r.reason, 'details', r.details,
 						'reporterId', r.user_id, 'createdAt', r.created_at
 					) ORDER BY r.created_at, r.id)
 					FROM reports r ${qualifyingReports("c.opened_at")}
@@ -191,7 +210,8 @@ async function listFlags(env: Env, where: string, params: unknown[]): Promise<Re
 				COALESCE(
 					ARRAY_AGG(v.voter_id ORDER BY v.created_at, v.voter_id) FILTER (WHERE NOT v.remove),
 					'{}'
-				) AS keeper_ids
+				) AS keeper_ids,
+				${CONFLICT_EXPR} AS conflict
 			FROM report_cases c
 			JOIN lyrics l ON l.id = c.lyrics_id
 			LEFT JOIN report_case_votes v ON v.case_id = c.id
@@ -199,7 +219,7 @@ async function listFlags(env: Env, where: string, params: unknown[]): Promise<Re
 			GROUP BY c.id, l.id
 			ORDER BY c.opened_at ASC, c.id ASC`
 	)
-		.bind(...QUALIFYING_PARAMS, ...params)
+		.bind(...QUALIFYING_PARAMS, ...conflictParams(viewerId), ...params)
 		.all<FlagRow>()
 	return rows.results.map((r) => ({
 		id: Number(r.id),
@@ -212,6 +232,7 @@ async function listFlags(env: Env, where: string, params: unknown[]): Promise<Re
 		status: r.status,
 		decidedAt: r.decided_at === null ? null : Number(r.decided_at),
 		reports: r.reports.map((report) => ({
+			id: Number(report.id),
 			reason: report.reason,
 			details: report.details,
 			reporterId: Number(report.reporterId),
@@ -219,14 +240,15 @@ async function listFlags(env: Env, where: string, params: unknown[]): Promise<Re
 		})),
 		removerIds: r.remover_ids.map(Number),
 		keeperIds: r.keeper_ids.map(Number),
+		conflict: r.conflict,
 	}))
 }
 
-export async function listOpenFlags(env: Env): Promise<OpenFlag[]> {
-	const flags = await listFlags(env, "c.status = 'open'", [])
+export async function listOpenFlags(env: Env, viewerId: number | null): Promise<OpenFlag[]> {
+	const flags = await listFlags(env, viewerId, "c.status = 'open'", [])
 	return flags.map(({ status: _status, decidedAt: _decidedAt, ...flag }) => flag)
 }
 
 export function listRecentFlags(env: Env, sinceSec: number): Promise<RecentFlag[]> {
-	return listFlags(env, "c.status = 'open' OR c.decided_at >= ?", [sinceSec])
+	return listFlags(env, null, "c.status = 'open' OR c.decided_at >= ?", [sinceSec])
 }

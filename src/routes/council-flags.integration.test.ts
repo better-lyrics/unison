@@ -143,7 +143,9 @@ describeIntegration("council flag routes (integration)", () => {
 				expect(item.submitter?.keyId).toBe(SUBMITTER)
 				expect(item.submitter).toHaveProperty("tier")
 				expect(item.reports).toHaveLength(3)
+				expect(item.conflict).toBeNull()
 				expect(item.reports[0]).toEqual({
+					id: expect.any(Number),
 					reason: "spam",
 					details: "copied from a bot",
 					reporter: expect.objectContaining({ keyId: kid(10), tier: null }),
@@ -157,6 +159,32 @@ describeIntegration("council flag routes (integration)", () => {
 		})
 
 		describe("edge cases", () => {
+			it("tells a member who reported for a non qualifying reason that they reported it", async () => {
+				const mira = await db.pool.query<{ id: number }>("SELECT id FROM users WHERE key_id = $1", [
+					MIRA,
+				])
+				await submitReport(db.env, lyricsId, Number(mira.rows[0].id), { reason: "bad_sync" })
+				const res = await call<{ items: CouncilFlagItem[] }>("GET", "/committee/flags", {
+					token: "mira",
+				})
+				const [item] = res.json.data.items
+				expect(item.conflict).toBe("reporter")
+				expect(item.reports).toHaveLength(3)
+				expect((await vote(caseId, "mira", { remove: true })).json.code).toBe("FLAG_CONFLICT")
+			})
+
+			it("tells the submitter they submitted the lyric", async () => {
+				await db.pool.query(
+					"INSERT INTO committee_members (user_id, added_by) VALUES ($1, 'test')",
+					[submitter]
+				)
+				seedSession(db, "submitter", SUBMITTER)
+				const res = await call<{ items: CouncilFlagItem[] }>("GET", "/committee/flags", {
+					token: "submitter",
+				})
+				expect(res.json.data.items[0].conflict).toBe("submitter")
+			})
+
 			it("returns an empty list when nothing is flagged", async () => {
 				await db.pool.query("DELETE FROM report_cases")
 				const res = await call<{ items: CouncilFlagItem[] }>("GET", "/committee/flags", {
