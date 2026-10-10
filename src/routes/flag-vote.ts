@@ -1,11 +1,12 @@
 import { config } from "@/config"
 import { evictFeedCaches } from "@/db/feed"
-import type { FlagVoteResult } from "@/db/flags"
+import type { FlagTally, FlagVoteResult } from "@/db/flags"
 import { invalidateCacheForLyric } from "@/db/lyrics"
 import type { Env } from "@/types"
 import { ErrorCode, type SubmissionErrorBody, buildError } from "@/utils/errors"
 
 type FlagVoteFailure = Extract<FlagVoteResult, { ok: false }>["reason"]
+type FlagVoteSuccess = Extract<FlagVoteResult, { ok: true }>
 
 const FLAG_VOTE_ERROR: Record<FlagVoteFailure, { status: number; code: ErrorCode; hint?: string }> =
 	{
@@ -29,13 +30,8 @@ export function flagVoteError(reason: FlagVoteFailure): {
 
 export async function settleFlagVote(
 	env: Env,
-	result: Extract<FlagVoteResult, { ok: true }>
-): Promise<{
-	status: "open" | "removed" | "kept"
-	removals: number
-	keeps: number
-	needed: number
-}> {
+	result: FlagVoteSuccess
+): Promise<FlagTally & Pick<FlagVoteSuccess, "status"> & { needed: number }> {
 	const data = {
 		status: result.status,
 		removals: result.removals,

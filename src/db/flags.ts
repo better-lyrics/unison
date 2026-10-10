@@ -32,9 +32,9 @@ const conflictParams = (userId: number | null) => [userId, userId]
 
 export type FlagReason = (typeof reportHide.reasons)[number]
 
-export type FlagConflict = "submitter" | "reporter" | null
+type FlagConflict = "submitter" | "reporter" | null
 
-export interface FlagReport {
+interface FlagReport {
 	id: number
 	reason: FlagReason
 	details: string | null
@@ -56,7 +56,7 @@ export interface OpenFlag {
 	conflict: FlagConflict
 }
 
-export interface RecentFlag extends OpenFlag {
+interface RecentFlag extends OpenFlag {
 	status: "open" | "removed" | "kept"
 	decidedAt: number | null
 }
@@ -173,13 +173,7 @@ interface FlagRow {
 	opened_at: number
 	status: "open" | "removed" | "kept"
 	decided_at: number | null
-	reports: {
-		id: number
-		reason: FlagReason
-		details: string | null
-		reporterId: number
-		createdAt: number
-	}[]
+	reports: FlagReport[]
 	remover_ids: number[]
 	keeper_ids: number[]
 	conflict: FlagConflict

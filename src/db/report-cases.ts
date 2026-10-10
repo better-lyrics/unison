@@ -1,7 +1,7 @@
 import { NOW_EPOCH } from "@/db/predicates"
 import { type D1Compat, advisoryXactLock } from "@/infra/database"
 
-export type ClosedCaseStatus = "removed" | "kept"
+type ClosedCaseStatus = "removed" | "kept"
 
 export function lockLyricCases(tx: D1Compat, lyricsId: number): Promise<void> {
 	return advisoryXactLock(tx, `flag:${lyricsId}`)

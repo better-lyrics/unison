@@ -51,7 +51,7 @@ export async function listCouncilFlags(
 	return { items, needed: config.council.reportFlags.removals }
 }
 
-export interface BotFlagCase {
+interface BotFlagCase {
 	id: number
 	lyricsId: number
 	videoId: string
