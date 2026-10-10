@@ -3,6 +3,7 @@ import { CouncilActivityPage } from "./CouncilActivityPage"
 import { CouncilApplicantsPage } from "./CouncilApplicantsPage"
 import { CouncilBookmarksPage } from "./CouncilBookmarksPage"
 import { CouncilEditsPage } from "./CouncilEditsPage"
+import { CouncilFlagsPage } from "./CouncilFlagsPage"
 import { CouncilLayout } from "./CouncilLayout"
 import { CouncilMembersPage } from "./CouncilMembersPage"
 import { CouncilMetadataPage } from "./CouncilMetadataPage"
@@ -18,6 +19,7 @@ export const councilRoute = {
     { path: "queue", element: <CouncilQueuePage /> },
     { path: "edits", element: <CouncilEditsPage /> },
     { path: "metadata", element: <CouncilMetadataPage /> },
+    { path: "flags", element: <CouncilFlagsPage /> },
     { path: "bookmarks", element: <CouncilBookmarksPage /> },
     { path: "applicants", element: <CouncilApplicantsPage /> },
     { path: "activity", element: <CouncilActivityPage /> },

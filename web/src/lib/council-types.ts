@@ -1,3 +1,4 @@
+import type { ReportReason } from "./report-reasons"
 import type { Confidence, LeaderboardBadge, LyricsFormat, SyncType, TierName } from "./types"
 
 export interface Person {
@@ -113,7 +114,7 @@ export interface MetadataPayload {
   needed: number
 }
 
-export type FlagReason = "spam" | "wrong_song" | "offensive"
+export type FlagReason = Extract<ReportReason, "spam" | "wrong_song" | "offensive">
 
 export interface FlagReport {
   reason: FlagReason

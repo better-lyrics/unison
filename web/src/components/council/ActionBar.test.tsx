@@ -1,5 +1,5 @@
 import { IconCheck } from "@tabler/icons-react"
-import { cleanup, render, screen } from "@testing-library/react"
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { ActionBar } from "./ActionBar"
 
@@ -48,6 +48,19 @@ describe("ActionBar", () => {
       render(<ActionBar {...base} primary={{ ...PRIMARY, unavailable: "You approved" }} />)
       const button = screen.getByRole("button", { name: "You approved" }) as HTMLButtonElement
       expect(button.disabled).toBe(true)
+    })
+
+    it("names the reject slot after the decision it makes", () => {
+      render(<ActionBar {...base} reject={{ label: "Keep", submitLabel: "Keep", hint: "Closes the flag." }} />)
+      expect(screen.getByRole("button", { name: /^Keep/ })).toBeTruthy()
+      expect(screen.queryByRole("button", { name: /^Reject/ })).toBeNull()
+    })
+
+    it("disables the reject slot and its shortcut when it is unavailable", () => {
+      render(<ActionBar {...base} reject={{ ...base.reject, unavailable: true }} />)
+      expect((screen.getByRole("button", { name: /^Reject/ }) as HTMLButtonElement).disabled).toBe(true)
+      act(() => void fireEvent.keyDown(window, { key: "r" }))
+      expect(screen.queryByRole("textbox")).toBeNull()
     })
   })
 })

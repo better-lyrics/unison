@@ -23,7 +23,7 @@ interface ActionBarProps {
     unavailableHint?: string
   }
   onPrimary: () => void
-  reject: { submitLabel: string; hint: string }
+  reject: { label?: string; submitLabel: string; hint: string; unavailable?: boolean }
   onReject: (note: string | null) => void
   busy: boolean
 }
@@ -62,7 +62,7 @@ export function ActionBar(props: ActionBarProps) {
         }
       : {}),
     r: () => {
-      if (busy) return
+      if (busy || reject.unavailable) return
       setMode("reject")
       requestAnimationFrame(() => noteRef.current?.focus())
     },
@@ -167,7 +167,7 @@ export function ActionBar(props: ActionBarProps) {
         ) : null}
         <button
           type="button"
-          disabled={busy}
+          disabled={busy || reject.unavailable}
           className={buttonClass("fill", "sm")}
           onClick={() => {
             setMode("reject")
@@ -175,7 +175,7 @@ export function ActionBar(props: ActionBarProps) {
           }}
         >
           <IconX aria-hidden className="size-3.5" stroke={1.75} />
-          Reject
+          {reject.label ?? "Reject"}
           <Kbd keys={["R"]} />
         </button>
         {primary.unavailable && primary.unavailableHint ? (
