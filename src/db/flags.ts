@@ -23,8 +23,10 @@ const QUALIFYING_PARAMS = [
 	reportHide.minReporterVotes,
 ]
 
+export type FlagReason = (typeof reportHide.reasons)[number]
+
 export interface FlagReport {
-	reason: string
+	reason: FlagReason
 	details: string | null
 	reporterId: number
 	createdAt: number
@@ -166,7 +168,7 @@ interface FlagRow {
 	opened_at: number
 	status: "open" | "removed" | "kept"
 	decided_at: number | null
-	reports: { reason: string; details: string | null; reporterId: number; createdAt: number }[]
+	reports: { reason: FlagReason; details: string | null; reporterId: number; createdAt: number }[]
 	remover_ids: number[]
 	keeper_ids: number[]
 }
