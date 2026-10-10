@@ -3,7 +3,7 @@ import { isCommittee } from "@/db/committee"
 import { type CouncilSource, recordCouncilEvent } from "@/db/council-events"
 import { softDeleteLyrics } from "@/db/lyrics"
 import { NOW_EPOCH } from "@/db/predicates"
-import { closeCase, insertOpenCase } from "@/db/report-cases"
+import { closeCase, insertOpenCase, lockLyricCases } from "@/db/report-cases"
 import type { Env } from "@/types"
 
 const { reportHide } = config.moderation
@@ -61,17 +61,20 @@ export type FlagVoteResult =
 	| ({ ok: true; status: "kept"; lyricsId: number } & FlagTally)
 	| { ok: false; reason: "not_committee" | "not_found" | "already_decided" | "conflict" }
 
-export async function openCaseIfQualified(env: Env, lyricsId: number): Promise<number | null> {
-	const count = await env.DB.prepare(
-		`SELECT COUNT(*)::INTEGER AS n FROM reports r ${qualifyingReports(NOW_EPOCH)}
-			AND r.lyrics_id = ?
-			AND EXISTS (SELECT 1 FROM lyrics l WHERE l.id = r.lyrics_id AND l.deleted_at IS NULL)`
-	)
-		.bind(...QUALIFYING_PARAMS, lyricsId)
-		.first<{ n: number }>()
-	if ((count?.n ?? 0) < reportHide.threshold) return null
-
-	return insertOpenCase(env.DB, lyricsId)
+export function openCaseIfQualified(env: Env, lyricsId: number): Promise<number | null> {
+	return env.DB.transaction(async (tx) => {
+		await lockLyricCases(tx, lyricsId)
+		const count = await tx
+			.prepare(
+				`SELECT COUNT(*)::INTEGER AS n FROM reports r ${qualifyingReports(NOW_EPOCH)}
+					AND r.lyrics_id = ?
+					AND EXISTS (SELECT 1 FROM lyrics l WHERE l.id = r.lyrics_id AND l.deleted_at IS NULL)`
+			)
+			.bind(...QUALIFYING_PARAMS, lyricsId)
+			.first<{ n: number }>()
+		if ((count?.n ?? 0) < reportHide.threshold) return null
+		return insertOpenCase(tx, lyricsId)
+	})
 }
 
 export async function castFlagVote(
@@ -84,6 +87,13 @@ export async function castFlagVote(
 ): Promise<FlagVoteResult> {
 	if (!(await isCommittee(env, voterId))) return { ok: false, reason: "not_committee" }
 	return env.DB.transaction(async (tx): Promise<FlagVoteResult> => {
+		const target = await tx
+			.prepare("SELECT lyrics_id FROM report_cases WHERE id = ?")
+			.bind(caseId)
+			.first<{ lyrics_id: number }>()
+		if (!target) return { ok: false, reason: "not_found" }
+		await lockLyricCases(tx, Number(target.lyrics_id))
+
 		const flag = await tx
 			.prepare(
 				`SELECT c.id, c.lyrics_id, c.status, l.submitter_id

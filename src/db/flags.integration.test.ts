@@ -3,8 +3,9 @@ import { getCouncilOverview, getCouncilRoster } from "@/db/council-stats"
 import { getMySubmissions } from "@/db/feed"
 import { castFlagVote, listOpenFlags, listRecentFlags, openCaseIfQualified } from "@/db/flags"
 import { findByVideoId, findVariantsByVideoId, softDeleteLyrics } from "@/db/lyrics"
+import { lockLyricCases } from "@/db/report-cases"
 import { submitReport } from "@/db/reports"
-import { isUniqueViolation } from "@/infra/database"
+import { type D1Compat, isUniqueViolation } from "@/infra/database"
 import { updateScores } from "@/jobs/score-updater"
 import {
 	type IntegrationDb,
@@ -179,6 +180,96 @@ describeIntegration("council flags (integration)", () => {
 				await report(await reporter(16), "offensive")
 				await report(await reporter(17), "spam")
 				expect(await cases()).toHaveLength(1)
+			})
+
+			const holdCaseLock = (work: (tx: D1Compat) => Promise<unknown>) => {
+				let release = () => {}
+				const gate = new Promise<void>((resolve) => {
+					release = resolve
+				})
+				let locked = () => {}
+				const ready = new Promise<void>((resolve) => {
+					locked = resolve
+				})
+				const done = db.env.DB.transaction(async (tx) => {
+					await lockLyricCases(tx, lyricsId)
+					await work(tx)
+					locked()
+					await gate
+				})
+				return {
+					ready,
+					release: () => {
+						release()
+						return done
+					},
+				}
+			}
+
+			const pause = () => new Promise((resolve) => setTimeout(resolve, 150))
+
+			const settled = <T>(promise: Promise<T>) => {
+				let state = false
+				promise.then(() => {
+					state = true
+				})
+				return () => state
+			}
+
+			it("regression: a report racing a keep does not reopen the case without fresh reports", async () => {
+				await reportBy(10, 3)
+				const hold = holdCaseLock((tx) =>
+					tx
+						.prepare(
+							"UPDATE report_cases SET status = 'kept', decided_at = EXTRACT(EPOCH FROM NOW())::INTEGER WHERE lyrics_id = ?"
+						)
+						.bind(lyricsId)
+						.run()
+				)
+				await hold.ready
+				const opening = openCaseIfQualified(db.env, lyricsId)
+				await pause()
+				await hold.release()
+				expect(await opening).toBeNull()
+				expect((await cases()).map((c) => c.status)).toEqual(["kept"])
+			})
+
+			it("regression: a report racing a delete does not open a case for the deleted lyric", async () => {
+				for (let i = 0; i < 3; i++) {
+					await db.pool.query(
+						"INSERT INTO reports (lyrics_id, user_id, reason) VALUES ($1, $2, 'spam')",
+						[lyricsId, await reporter(10 + i)]
+					)
+				}
+				const hold = holdCaseLock((tx) =>
+					tx
+						.prepare(
+							"UPDATE lyrics SET deleted_at = 1700000000, deleted_by_user_id = submitter_id, deleted_by_role = 'submitter' WHERE id = ?"
+						)
+						.bind(lyricsId)
+						.run()
+				)
+				await hold.ready
+				const opening = openCaseIfQualified(db.env, lyricsId)
+				await pause()
+				await hold.release()
+				expect(await opening).toBeNull()
+				expect(await cases()).toEqual([])
+			})
+
+			it("regression: a vote waits for the case lock", async () => {
+				await reportBy(10, 3)
+				const [{ id }] = await cases()
+				const member = await seedCouncilMember(db, kid(500))
+				const hold = holdCaseLock(async () => {})
+				await hold.ready
+				const voting = castFlagVote(db.env, id, member, false, null, "web")
+				const isSettled = settled(voting)
+				await pause()
+				const settledWhileLocked = isSettled()
+				await hold.release()
+				expect(settledWhileLocked).toBe(false)
+				expect(await voting).toMatchObject({ ok: true, status: "kept" })
 			})
 		})
 

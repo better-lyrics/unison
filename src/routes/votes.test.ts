@@ -71,6 +71,7 @@ interface MockDB {
 	queue: unknown[]
 	prepare(sql: string): MockStatement
 	batch(stmts: MockStatement[]): Promise<void>
+	transaction<T>(fn: (tx: MockDB) => Promise<T>): Promise<T>
 }
 
 function makeMockDB(queue: unknown[] = []): MockDB {
@@ -85,6 +86,9 @@ function makeMockDB(queue: unknown[] = []): MockDB {
 			for (const stmt of stmts) {
 				calls.push({ sql: stmt.getSql(), params: stmt.getParams() })
 			}
+		},
+		transaction(fn) {
+			return fn(db)
 		},
 	}
 	return db
@@ -356,7 +360,8 @@ describe("POST /lyrics/:id/report bearer path", () => {
 			{ deleted_at: null },
 			null,
 			null,
-			{ count: 1 },
+			null,
+			{ n: 1 },
 		])
 		const env = makeEnv(db, cache)
 		const app = voteRoutes(env)
@@ -495,7 +500,8 @@ describe("signed-envelope path regression", () => {
 			{ deleted_at: null },
 			null,
 			null,
-			{ count: 1 },
+			null,
+			{ n: 1 },
 		])
 		const env = makeEnv(db, makeMockCache())
 		const app = voteRoutes(env)
