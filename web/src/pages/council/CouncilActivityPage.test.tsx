@@ -52,8 +52,8 @@ function data() {
       nextCursor: "1790000000:2",
     },
     members: [
-      rosterMember(ME, { lastWeek: { sealed: 1, rejected: 2, edits: 0 } }),
-      rosterMember(OLA, { lastWeek: { sealed: 2, rejected: 3, edits: 4 } }),
+      rosterMember(ME, { lastWeek: { sealed: 1, rejected: 2, edits: 0, flags: 0 } }),
+      rosterMember(OLA, { lastWeek: { sealed: 2, rejected: 3, edits: 4, flags: 0 } }),
     ],
     overview: overview({ sourceSplit: { web: 31, discord: 19 } }),
   })
@@ -192,6 +192,30 @@ describe("CouncilActivityPage", () => {
     expect(rows[0].getAttribute("aria-pressed")).toBe("true")
     expect(screen.getByText("62%")).toBeTruthy()
     expect(screen.getByText("38%")).toBeTruthy()
+  })
+
+  it("leaves flag votes out of the week bars until flags have their own colour", async () => {
+    const week = data()
+    week.members = [
+      rosterMember(OLA, { lastWeek: { sealed: 2, rejected: 3, edits: 4, flags: 0 } }),
+      rosterMember(ME, { lastWeek: { sealed: 1, rejected: 2, edits: 0, flags: 8 } }),
+    ]
+    stubCouncilApi(week)
+    renderCouncil("/council/activity")
+    const list = await screen.findByRole("list", { name: "Decisions per member" })
+    expect(
+      within(list)
+        .getAllByRole("button")
+        .map((r) => r.textContent),
+    ).toEqual(["olafix529", "boidu3"])
+  })
+
+  it("filters to flag votes", async () => {
+    const router = stubCouncilApi(data())
+    renderCouncil("/council/activity")
+    await screen.findByRole("region", { name: "Today" })
+    fireEvent.click(screen.getByRole("button", { name: "Flags" }))
+    await waitFor(() => expect(calls(router)).toContain("/committee/events?kind=flags"))
   })
 
   it("says so when nothing matches", async () => {

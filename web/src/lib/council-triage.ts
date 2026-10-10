@@ -1,4 +1,4 @@
-import type { BookmarkView, EditItem, MetadataItem, QueueItem } from "./council-types"
+import type { BookmarkView, CouncilFlag, EditItem, MetadataItem, QueueItem } from "./council-types"
 import { videoIdFromInput } from "./youtube-music"
 
 export type BookmarkState =
@@ -97,6 +97,20 @@ export function filterMetadata(items: MetadataItem[], text: string): MetadataIte
       matches(text, m.song, m.artist, m.proposed.song, m.proposed.artist, m.proposed.album, m.proposer?.displayName),
     )
     .sort((a, b) => a.createdAt - b.createdAt)
+}
+
+export function filterFlags(items: CouncilFlag[], text: string): CouncilFlag[] {
+  return items
+    .filter((f) =>
+      matches(
+        text,
+        f.song,
+        f.artist,
+        f.submitter?.displayName,
+        ...f.reports.flatMap((r) => [r.details, r.reporter?.displayName]),
+      ),
+    )
+    .sort((a, b) => a.openedAt - b.openedAt)
 }
 
 export function splitNew(known: ReadonlySet<string>, keys: string[]): string[] {

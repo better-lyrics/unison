@@ -5,7 +5,12 @@ import {
 	buildOrderByClause,
 	hasAnyFilter,
 } from "@/db/feed-filters"
-import { AUTO_HIDE_PREDICATE, BANNED_SUBMITTER_PREDICATE, RANKING_EXPR } from "@/db/predicates"
+import {
+	AUTO_HIDE_PREDICATE,
+	BANNED_SUBMITTER_PREDICATE,
+	RANKING_EXPR,
+	REPORT_HIDE_PREDICATE,
+} from "@/db/predicates"
 import { Logger } from "@/infra/logger"
 import type { Env, FeedItem } from "@/types"
 
@@ -65,6 +70,7 @@ export async function getGlobalFeed(
 		"effective_score > 0",
 		"deleted_at IS NULL",
 		`NOT ${BANNED_SUBMITTER_PREDICATE}`,
+		`NOT ${REPORT_HIDE_PREDICATE}`,
 	]
 	const params: (number | string)[] = []
 
@@ -185,6 +191,7 @@ export async function getPersonalizedFeed(
 		"effective_score > 0",
 		"deleted_at IS NULL",
 		`NOT ${BANNED_SUBMITTER_PREDICATE}`,
+		`NOT ${REPORT_HIDE_PREDICATE}`,
 		...fragments.conditions,
 	]
 

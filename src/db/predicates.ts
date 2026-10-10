@@ -24,6 +24,8 @@ export const RANKING_EXPR_VARIANT = buildRankingExpr("l.", true)
 
 const { autoHide } = config.moderation
 
+export const NOW_EPOCH = "EXTRACT(EPOCH FROM NOW())::INTEGER"
+
 const buildVoteHidePredicate = (prefix: string) => `(
 	(
 		${prefix}vote_count >= ${autoHide.minVotes}
@@ -45,10 +47,15 @@ const buildBannedSubmitterPredicate = (prefix: string) =>
 export const BANNED_SUBMITTER_PREDICATE = buildBannedSubmitterPredicate("")
 export const BANNED_SUBMITTER_PREDICATE_JOINED = buildBannedSubmitterPredicate("l.")
 
+const buildReportHidePredicate = (prefix: string) =>
+	`${prefix}id IN (SELECT lyrics_id FROM report_cases WHERE status = 'open')`
+
+export const REPORT_HIDE_PREDICATE = buildReportHidePredicate("")
+
 export const VOTE_HIDE_PREDICATE = buildVoteHidePredicate("")
 
 const buildAutoHidePredicate = (prefix: string) =>
-	`(${buildVoteHidePredicate(prefix)} OR ${buildBannedSubmitterPredicate(prefix)})`
+	`(${buildVoteHidePredicate(prefix)} OR ${buildBannedSubmitterPredicate(prefix)} OR ${buildReportHidePredicate(prefix)})`
 
 export const AUTO_HIDE_PREDICATE = buildAutoHidePredicate("")
 export const AUTO_HIDE_PREDICATE_JOINED = buildAutoHidePredicate("l.")

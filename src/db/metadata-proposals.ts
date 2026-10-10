@@ -2,7 +2,7 @@ import { config } from "@/config"
 import type { SongMetadata } from "@/db/approved-metadata"
 import { isCommittee } from "@/db/committee"
 import { recordCouncilEvent } from "@/db/council-events"
-import { videoServesExpr } from "@/db/predicates"
+import { NOW_EPOCH, videoServesExpr } from "@/db/predicates"
 import { type D1Compat, isUniqueViolation } from "@/infra/database"
 import type { Env } from "@/types"
 import type { MetadataInput } from "@/utils/metadata-input"
@@ -31,8 +31,6 @@ export type VoteResult =
 
 const sameMetadata = (a: SongMetadata, b: SongMetadata) =>
 	a.song === b.song && a.artist === b.artist && a.album === b.album
-
-const NOW_EPOCH = "EXTRACT(EPOCH FROM NOW())::INTEGER"
 
 export async function createProposal(
 	env: Env,

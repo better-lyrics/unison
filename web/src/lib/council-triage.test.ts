@@ -1,7 +1,8 @@
-import { ME, NOW, OLA, bookmarkBy, editItem, metadataItem, queueItem } from "@/test/council-fixtures"
+import { ME, NOW, OLA, bookmarkBy, editItem, flagItem, metadataItem, queueItem } from "@/test/council-fixtures"
 import { describe, expect, it } from "vitest"
 import {
   filterEdits,
+  filterFlags,
   filterMetadata,
   filterQueue,
   NO_FILTERS,
@@ -159,6 +160,38 @@ describe("filterEdits", () => {
     expect(filterEdits([newer, older], "").map((e) => e.revisionId)).toEqual([2, 1])
     expect(filterEdits([newer, older], "alone").map((e) => e.revisionId)).toEqual([2])
     expect(filterEdits([newer, older], "yes").map((e) => e.revisionId)).toEqual([2, 1])
+  })
+})
+
+describe("filterFlags", () => {
+  it("matches song, artist, submitter and report details and lists the oldest first", () => {
+    const newer = flagItem({ id: 1, openedAt: NOW - HOUR })
+    const older = flagItem({
+      id: 2,
+      openedAt: NOW - 9 * HOUR,
+      song: "Alone",
+      artist: "Heart",
+      submitter: { ...OLA, displayName: "Kai" },
+      reports: [{ id: 5, reason: "offensive", details: "Slur in verse two", reporter: null, createdAt: NOW - 9 * HOUR }],
+    })
+    expect(filterFlags([newer, older], "").map((f) => f.id)).toEqual([2, 1])
+    expect(filterFlags([newer, older], "heart").map((f) => f.id)).toEqual([2])
+    expect(filterFlags([newer, older], "kai").map((f) => f.id)).toEqual([2])
+    expect(filterFlags([newer, older], "  SLUR ").map((f) => f.id)).toEqual([2])
+  })
+
+  describe("edge cases", () => {
+    it("returns an empty list for no items", () => {
+      expect(filterFlags([], "x")).toEqual([])
+    })
+  })
+
+  describe("invariants", () => {
+    it("leaves the input order untouched", () => {
+      const items = [flagItem({ id: 1, openedAt: NOW - HOUR }), flagItem({ id: 2, openedAt: NOW - 2 * HOUR })]
+      filterFlags(items, "")
+      expect(items.map((f) => f.id)).toEqual([1, 2])
+    })
   })
 })
 

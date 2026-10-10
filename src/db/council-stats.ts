@@ -1,6 +1,12 @@
 import { config } from "@/config"
 import { type BoostQuota, getQuota, monthWindow } from "@/db/boost"
-import { DECISION_KINDS, EDIT_DECISION_KINDS, UNDONE_EXPR } from "@/db/council-events"
+import {
+	type CouncilEventKind,
+	DECISION_KINDS,
+	EDIT_DECISION_KINDS,
+	FLAG_DECISION_KINDS,
+	UNDONE_EXPR,
+} from "@/db/council-events"
 import { type CouncilPerson, loadPersonDecor, toCouncilPerson } from "@/db/council-person"
 import { resolvePeople } from "@/db/users"
 import type { Env } from "@/types"
@@ -15,6 +21,7 @@ export interface DayDecisions {
 	sealed: number
 	rejected: number
 	editsReviewed: number
+	flags: number
 }
 
 export interface CouncilOverview {
@@ -37,6 +44,7 @@ const DECIDED = `e.kind = ANY(?) AND NOT (${UNDONE_EXPR})`
 const WAIT_SECONDS = `e.created_at - CASE
 	WHEN e.kind IN ('edit_approve', 'edit_reject') THEN (SELECT r.created_at FROM lyric_revisions r WHERE r.id = e.ref_id)
 	WHEN e.kind IN ('metadata_approve', 'metadata_reject') THEN (SELECT p.created_at FROM metadata_proposals p WHERE p.id = e.ref_id)
+	WHEN e.kind IN ('flag_remove', 'flag_keep') THEN (SELECT c.opened_at FROM report_cases c WHERE c.id = e.ref_id)
 	ELSE (SELECT l.created_at FROM lyrics l WHERE l.id = e.lyrics_id)
 END`
 
@@ -79,7 +87,7 @@ export async function getCouncilOverview(
 			 GROUP BY 1, 2`
 		)
 			.bind(DECISION_KINDS, chartStart, actor, actor)
-			.all<{ day: number | string; kind: string; n: number | string }>(),
+			.all<{ day: number | string; kind: CouncilEventKind; n: number | string }>(),
 		env.DB.prepare(
 			`SELECT e.kind, e.actor_id = ? AS mine, COUNT(*) AS n
 			 FROM council_events e
@@ -103,14 +111,15 @@ export async function getCouncilOverview(
 	const byDay = new Map<number, DayDecisions>()
 	for (let i = 0; i < CHART_DAYS; i++) {
 		const day = chartStart + i * DAY
-		byDay.set(day, { day, sealed: 0, rejected: 0, editsReviewed: 0 })
+		byDay.set(day, { day, sealed: 0, rejected: 0, editsReviewed: 0, flags: 0 })
 	}
 	for (const r of daily.results) {
 		const bucket = byDay.get(Number(r.day))
 		if (!bucket) continue
 		if (r.kind === "seal") bucket.sealed += Number(r.n)
 		else if (r.kind === "reject") bucket.rejected += Number(r.n)
-		else bucket.editsReviewed += Number(r.n)
+		else if (EDIT_DECISION_KINDS.includes(r.kind)) bucket.editsReviewed += Number(r.n)
+		else if (FLAG_DECISION_KINDS.includes(r.kind)) bucket.flags += Number(r.n)
 	}
 
 	const count = (kinds: string[], mineOnly: boolean) =>
@@ -150,7 +159,7 @@ export interface RosterMember extends CouncilPerson {
 	editsThisMonth: number
 	lastActiveAt: number | null
 	weekly: number[]
-	lastWeek: { sealed: number; rejected: number; edits: number }
+	lastWeek: { sealed: number; rejected: number; edits: number; flags: number }
 }
 
 export async function getCouncilRoster(
@@ -187,7 +196,7 @@ export async function getCouncilRoster(
 			.all<{
 				actor_id: number | string
 				week: number | string
-				kind: string
+				kind: CouncilEventKind
 				n: number | string
 			}>(),
 		env.DB.prepare(
@@ -208,7 +217,7 @@ export async function getCouncilRoster(
 				.filter((r) => Number(r.actor_id) === userId && list.includes(r.kind))
 				.reduce((n, r) => n + Number(r.n), 0)
 		const buckets = Array.from({ length: ROSTER_WEEKS }, () => 0)
-		const lastWeek = { sealed: 0, rejected: 0, edits: 0 }
+		const lastWeek = { sealed: 0, rejected: 0, edits: 0, flags: 0 }
 		for (const r of weekly.results) {
 			if (Number(r.actor_id) !== userId) continue
 			const week = Number(r.week)
@@ -216,7 +225,8 @@ export async function getCouncilRoster(
 			if (week !== ROSTER_WEEKS - 1) continue
 			if (r.kind === "seal") lastWeek.sealed += Number(r.n)
 			else if (r.kind === "reject") lastWeek.rejected += Number(r.n)
-			else lastWeek.edits += Number(r.n)
+			else if (EDIT_DECISION_KINDS.includes(r.kind)) lastWeek.edits += Number(r.n)
+			else if (FLAG_DECISION_KINDS.includes(r.kind)) lastWeek.flags += Number(r.n)
 		}
 		const last = lastActive.results.find((r) => Number(r.actor_id) === userId)
 		return [

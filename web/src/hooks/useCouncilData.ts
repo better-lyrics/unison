@@ -4,6 +4,7 @@ import {
   fetchCouncilApplicants,
   fetchCouncilEdits,
   fetchCouncilEvents,
+  fetchCouncilFlags,
   fetchCouncilMembers,
   fetchCouncilMetadata,
   fetchCouncilOverview,
@@ -20,6 +21,7 @@ export const councilKeys = {
   sealable: (videoId: string) => ["council", "queue", "video", videoId] as const,
   edits: ["council", "edits"] as const,
   metadata: ["council", "metadata"] as const,
+  flags: ["council", "flags"] as const,
   overview: (scope: "council" | "me") => ["council", "overview", scope] as const,
   events: (filters: object) => ["council", "events", filters] as const,
   log: (filters: EventsQuery) => ["council", "log", filters] as const,
@@ -71,6 +73,17 @@ export function useCouncilMetadata() {
   return useQuery({
     queryKey: councilKeys.metadata,
     queryFn: ({ signal }) => fetchCouncilMetadata(signal),
+    enabled: role !== null,
+    refetchInterval: REFRESH_MS,
+    staleTime: 15_000,
+  })
+}
+
+export function useCouncilFlags() {
+  const role = useCouncilRole()
+  return useQuery({
+    queryKey: councilKeys.flags,
+    queryFn: ({ signal }) => fetchCouncilFlags(signal),
     enabled: role !== null,
     refetchInterval: REFRESH_MS,
     staleTime: 15_000,
@@ -147,7 +160,8 @@ export function useOpenWorkCount(): number {
   const queue = useCouncilQueue()
   const edits = useCouncilEdits()
   const metadata = useCouncilMetadata()
+  const flags = useCouncilFlags()
   const now = Math.floor(Date.now() / 1000)
   const open = (items: { bookmark: BookmarkView | null }[] | undefined) => openItems(items ?? [], now).length
-  return open(queue.data) + open(edits.data?.items) + open(metadata.data?.items)
+  return open(queue.data) + open(edits.data?.items) + open(metadata.data?.items) + open(flags.data?.items)
 }

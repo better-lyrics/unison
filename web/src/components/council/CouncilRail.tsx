@@ -3,6 +3,7 @@ import { Tooltip } from "@/components/Tooltip"
 import {
   useCouncilApplicants,
   useCouncilEdits,
+  useCouncilFlags,
   useCouncilMembers,
   useCouncilMetadata,
   useCouncilOverview,
@@ -17,6 +18,7 @@ import {
   type Icon,
   IconBookmark,
   IconCommand,
+  IconFlag,
   IconHistory,
   IconKeyboard,
   IconLayoutDashboard,
@@ -28,7 +30,16 @@ import {
 } from "@tabler/icons-react"
 import { NavLink } from "react-router-dom"
 
-type SectionId = "overview" | "queue" | "edits" | "metadata" | "bookmarks" | "applicants" | "activity" | "members"
+type SectionId =
+  | "overview"
+  | "queue"
+  | "edits"
+  | "metadata"
+  | "flags"
+  | "bookmarks"
+  | "applicants"
+  | "activity"
+  | "members"
 
 interface Section {
   id: SectionId
@@ -42,6 +53,7 @@ export const COUNCIL_SECTIONS: Section[] = [
   { id: "queue", to: "/council/queue", label: "Seal queue", icon: IconRosetteDiscountCheck },
   { id: "edits", to: "/council/edits", label: "Edits", icon: IconPencil },
   { id: "metadata", to: "/council/metadata", label: "Details", icon: IconTags },
+  { id: "flags", to: "/council/flags", label: "Flags", icon: IconFlag },
   { id: "bookmarks", to: "/council/bookmarks", label: "Bookmarks", icon: IconBookmark },
   { id: "applicants", to: "/council/applicants", label: "Applicants", icon: IconSchool },
   { id: "activity", to: "/council/activity", label: "Activity", icon: IconHistory },
@@ -58,6 +70,7 @@ function useSectionCounts(meKeyId: string): Partial<Record<SectionId, SectionCou
   const queue = useCouncilQueue().data
   const edits = useCouncilEdits().data
   const metadata = useCouncilMetadata().data
+  const flags = useCouncilFlags().data
   const overview = useCouncilOverview().data
   const applicants = useCouncilApplicants().data
   const members = useCouncilMembers().data
@@ -70,6 +83,7 @@ function useSectionCounts(meKeyId: string): Partial<Record<SectionId, SectionCou
     }
   }
   if (metadata) counts.metadata = { value: String(metadata.items.length) }
+  if (flags) counts.flags = { value: String(flags.items.length), hot: flags.items.length > 0 }
   if (queue && edits && overview) {
     const mine = groupByBookmark<QueueItem | EditItem>([...queue, ...edits.items], meKeyId, now).mine.length
     counts.bookmarks = { value: `${mine}/${overview.me.bookmarkCap}` }

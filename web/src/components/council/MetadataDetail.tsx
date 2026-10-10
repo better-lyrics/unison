@@ -1,8 +1,7 @@
-import { useCouncilShortcuts } from "@/hooks/useCouncilShortcuts"
+import { useOpenInYouTubeMusic } from "@/hooks/useOpenInYouTubeMusic"
 import { changedFields, metadataValue } from "@/lib/council-metadata"
 import type { MetadataItem } from "@/lib/council-types"
 import { formatElapsed } from "@/lib/format"
-import { youTubeMusicUrl } from "@/lib/youtube-music"
 import { IconCheck } from "@tabler/icons-react"
 import { ActionBar } from "./ActionBar"
 import { BlockHead, Chip, DetailCard, DetailHeader, PersonCard } from "./detail-parts"
@@ -18,11 +17,7 @@ interface MetadataDetailProps {
 }
 
 export function MetadataDetail({ item, needed, now, meKeyId, onApprove, onReject, busy }: MetadataDetailProps) {
-  useCouncilShortcuts({
-    o: () => {
-      window.open(youTubeMusicUrl(item.videoId), "_blank", "noreferrer")
-    },
-  })
+  useOpenInYouTubeMusic(item.videoId)
   const approved = item.approvers.some((p) => p.keyId === meKeyId)
 
   return (
