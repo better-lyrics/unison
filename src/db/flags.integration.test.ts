@@ -347,6 +347,7 @@ describeIntegration("council flags (integration)", () => {
 					ok: true,
 					status: "open",
 					removals: 1,
+					keeps: 0,
 				})
 				expect((await caseRow(id)).status).toBe("open")
 			})
@@ -355,7 +356,13 @@ describeIntegration("council flags (integration)", () => {
 				const id = await openCase()
 				for (let i = 0; i < config.council.flagRemovals - 1; i++) await vote(id, members[i], true)
 				const last = await vote(id, members[config.council.flagRemovals - 1], true)
-				expect(last).toEqual({ ok: true, status: "removed", lyricsId })
+				expect(last).toEqual({
+					ok: true,
+					status: "removed",
+					lyricsId,
+					removals: config.council.flagRemovals,
+					keeps: 0,
+				})
 				expect((await caseRow(id)).status).toBe("removed")
 				const { rows } = await db.pool.query(
 					"SELECT deleted_at, deleted_by_role, deleted_by_user_id, deletion_reason FROM lyrics WHERE id = $1",
@@ -372,7 +379,13 @@ describeIntegration("council flags (integration)", () => {
 			it("closes the case as kept on one keep and serves the lyric again", async () => {
 				const id = await openCase()
 				expect(await findByVideoId(db.env, VIDEO)).toBeNull()
-				expect(await vote(id, members[0], false)).toEqual({ ok: true, status: "kept", lyricsId })
+				expect(await vote(id, members[0], false)).toEqual({
+					ok: true,
+					status: "kept",
+					lyricsId,
+					removals: 0,
+					keeps: 1,
+				})
 				const row = await caseRow(id)
 				expect(row.status).toBe("kept")
 				expect(row.decided_at).toEqual(expect.any(Number))
@@ -405,7 +418,13 @@ describeIntegration("council flags (integration)", () => {
 			it("closes as kept when a member changes a remove to a keep", async () => {
 				const id = await openCase()
 				await vote(id, members[0], true)
-				expect(await vote(id, members[0], false)).toEqual({ ok: true, status: "kept", lyricsId })
+				expect(await vote(id, members[0], false)).toEqual({
+					ok: true,
+					status: "kept",
+					lyricsId,
+					removals: 0,
+					keeps: 1,
+				})
 				expect((await events(id)).map((e) => e.kind)).toEqual(["flag_remove", "flag_keep"])
 			})
 		})
@@ -414,7 +433,12 @@ describeIntegration("council flags (integration)", () => {
 			it("does not count a repeated remove from the same member twice", async () => {
 				const id = await openCase()
 				await vote(id, members[0], true)
-				expect(await vote(id, members[0], true)).toEqual({ ok: true, status: "open", removals: 1 })
+				expect(await vote(id, members[0], true)).toEqual({
+					ok: true,
+					status: "open",
+					removals: 1,
+					keeps: 0,
+				})
 			})
 
 			it("counts the council stats wait from when the case opened", async () => {

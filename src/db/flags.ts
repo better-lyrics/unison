@@ -48,10 +48,15 @@ export interface RecentFlag extends OpenFlag {
 	decidedAt: number | null
 }
 
+export interface FlagTally {
+	removals: number
+	keeps: number
+}
+
 export type FlagVoteResult =
-	| { ok: true; status: "open"; removals: number }
-	| { ok: true; status: "removed"; lyricsId: number }
-	| { ok: true; status: "kept"; lyricsId: number }
+	| ({ ok: true; status: "open" } & FlagTally)
+	| ({ ok: true; status: "removed"; lyricsId: number } & FlagTally)
+	| ({ ok: true; status: "kept"; lyricsId: number } & FlagTally)
 	| { ok: false; reason: "not_committee" | "not_found" | "already_decided" | "conflict" }
 
 export async function openCaseIfQualified(env: Env, lyricsId: number): Promise<number | null> {
@@ -122,27 +127,32 @@ export async function castFlagVote(
 			})
 		}
 
+		const counts = await tx
+			.prepare(
+				`SELECT COUNT(*) FILTER (WHERE remove)::INTEGER AS removals,
+						COUNT(*) FILTER (WHERE NOT remove)::INTEGER AS keeps
+					FROM report_case_votes WHERE case_id = ?`
+			)
+			.bind(caseId)
+			.first<FlagTally>()
+		const tally = { removals: counts?.removals ?? 0, keeps: counts?.keeps ?? 0 }
+
 		if (!remove) {
 			await tx
 				.prepare(`UPDATE report_cases SET status = 'kept', decided_at = ${NOW_EPOCH} WHERE id = ?`)
 				.bind(caseId)
 				.run()
-			return { ok: true, status: "kept", lyricsId }
+			return { ok: true, status: "kept", lyricsId, ...tally }
 		}
 
-		const count = await tx
-			.prepare("SELECT COUNT(*)::INTEGER AS n FROM report_case_votes WHERE case_id = ? AND remove")
-			.bind(caseId)
-			.first<{ n: number }>()
-		const removals = count?.n ?? 0
-		if (removals < config.council.flagRemovals) return { ok: true, status: "open", removals }
+		if (tally.removals < config.council.flagRemovals) return { ok: true, status: "open", ...tally }
 
 		await tx
 			.prepare(`UPDATE report_cases SET status = 'removed', decided_at = ${NOW_EPOCH} WHERE id = ?`)
 			.bind(caseId)
 			.run()
 		await softDeleteLyrics({ ...env, DB: tx }, lyricsId, voterId, "admin", "council flag: removed")
-		return { ok: true, status: "removed", lyricsId }
+		return { ok: true, status: "removed", lyricsId, ...tally }
 	})
 }
 

@@ -10,12 +10,14 @@ import {
 } from "@/db/council-bookmarks"
 import { listCouncilEdits } from "@/db/council-edits"
 import { type CouncilEventKind, listCouncilEvents, parseEventsCursor } from "@/db/council-events"
+import { listCouncilFlags } from "@/db/council-flags"
 import { listCouncilMetadata } from "@/db/council-metadata"
 import { loadPersonDecor } from "@/db/council-person"
 import { listCouncilQueue, listSealableForVideo } from "@/db/council-queue"
 import { getCouncilOverview, getCouncilRoster } from "@/db/council-stats"
 import { getSessionById, recordDecision } from "@/db/exam"
 import { evictFeedCaches } from "@/db/feed"
+import { castFlagVote } from "@/db/flags"
 import { invalidateCacheForLyric } from "@/db/lyrics"
 import { castVote, createProposal } from "@/db/metadata-proposals"
 import { getOrCreateUser, getUserByKeyId } from "@/db/users"
@@ -26,6 +28,7 @@ import { ErrorCode, buildError } from "@/utils/errors"
 import { parseMetadataProposal } from "@/utils/metadata-input"
 import { isVideoId } from "@/utils/video-id"
 import { Elysia, t } from "elysia"
+import { flagVoteError, settleFlagVote } from "./flag-vote"
 
 function parseBookmarkBody(
 	body: Record<string, unknown>
@@ -131,6 +134,23 @@ export const councilRoutes = (env: Env) =>
 						? { status: result.status, approvals: result.approvals }
 						: { status: result.status },
 			}
+		})
+		.get("/flags", async ({ env }) => ({ success: true, data: await listCouncilFlags(env) }))
+		.post("/flags/:id/vote", async ({ env, userId, keyId, params, body, status }) => {
+			const id = parseId(params.id)
+			if (id === null) return status(400, buildError(ErrorCode.INVALID_ID))
+			const { remove } = body
+			const note = parseCouncilNote(body)
+			if (typeof remove !== "boolean" || !note.ok)
+				return status(400, buildError(ErrorCode.INVALID_PAYLOAD))
+			if (!(await allowCouncilWrite(env, keyId)))
+				return status(429, buildError(ErrorCode.RATE_LIMITED))
+			const result = await castFlagVote(env, id, userId, remove, note.note, "web")
+			if (!result.ok) {
+				const failure = flagVoteError(result.reason)
+				return status(failure.status, failure.body)
+			}
+			return { success: true, data: await settleFlagVote(env, result) }
 		})
 		.post("/bookmarks", async ({ env, userId, keyId, body, status }) => {
 			const input = parseBookmarkBody(body)
