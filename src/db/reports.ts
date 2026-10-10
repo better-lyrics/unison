@@ -1,6 +1,7 @@
-import { config } from "@/config"
+import { evictFeedCaches } from "@/db/feed"
+import { openCaseIfQualified } from "@/db/flags"
+import { invalidateCacheForLyric } from "@/db/lyrics"
 import { Logger } from "@/infra/logger"
-import { recalculateScore } from "@/jobs/score-updater"
 import type { Env, ReportRequest } from "@/types"
 
 const log = new Logger("db")
@@ -35,23 +36,11 @@ export async function submitReport(
 		.bind(lyricsId, userId, report.reason, report.details || null)
 		.run()
 
-	const reportCount = await env.DB.prepare(
-		"SELECT COUNT(*) as count FROM reports WHERE lyrics_id = ?"
-	)
-		.bind(lyricsId)
-		.first<{ count: number }>()
-
-	if (reportCount && reportCount.count >= config.moderation.reportsThreshold) {
-		recalculateScore(env, lyricsId).catch((err) =>
-			log.error("background recalculation failed after reports", {
-				lyricsId,
-				error: String(err),
-			})
-		)
-		log.warn("report threshold reached, recalculating score", {
-			lyricsId,
-			reports: reportCount.count,
-		})
+	const caseId = await openCaseIfQualified(env, lyricsId)
+	if (caseId !== null) {
+		await invalidateCacheForLyric(env, lyricsId)
+		await evictFeedCaches(env)
+		log.warn("report case opened", { lyricsId, caseId })
 	}
 
 	log.info("report submitted", { lyricsId, userId, reason: report.reason })
