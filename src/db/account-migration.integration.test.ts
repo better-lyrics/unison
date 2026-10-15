@@ -979,6 +979,74 @@ describeIntegration("account migration (integration)", () => {
 			)
 		})
 
+		async function seedFlagCase(lyricOwnerId: number) {
+			const lyric = await insertLyric(lyricOwnerId, "vidFlagCase")
+			const row = await one<{ id: number }>(
+				"INSERT INTO report_cases (lyrics_id) VALUES ($1) RETURNING id",
+				[lyric]
+			)
+			return row.id
+		}
+
+		const flagVotesOn = async (caseId: number) =>
+			(
+				await pool.query(
+					"SELECT voter_id, remove FROM report_case_votes WHERE case_id = $1 ORDER BY voter_id",
+					[caseId]
+				)
+			).rows
+
+		it("regression: merging carries a flag vote to the survivor", async () => {
+			const { oldId, newId } = await seedIdentities()
+			const flagCase = await seedFlagCase(oldId)
+			await pool.query(
+				"INSERT INTO report_case_votes (case_id, voter_id, remove) VALUES ($1, $2, TRUE)",
+				[flagCase, newId]
+			)
+
+			await migrate("sess-flag-vote")
+
+			expect(await flagVotesOn(flagCase)).toEqual([{ voter_id: oldId, remove: true }])
+		})
+
+		it("keeps the survivor's flag vote when both identities voted on one case", async () => {
+			const { oldId, newId } = await seedIdentities()
+			const flagCase = await seedFlagCase(oldId)
+			await pool.query(
+				"INSERT INTO report_case_votes (case_id, voter_id, remove) VALUES ($1, $2, FALSE), ($1, $3, TRUE)",
+				[flagCase, oldId, newId]
+			)
+
+			await migrate("sess-flag-votes")
+
+			expect(await flagVotesOn(flagCase)).toEqual([{ voter_id: oldId, remove: false }])
+		})
+
+		it("restores flag votes on undo", async () => {
+			const { oldId, newId } = await seedIdentities()
+			const flagCase = await seedFlagCase(oldId)
+			await pool.query(
+				"INSERT INTO report_case_votes (case_id, voter_id, remove, note) VALUES ($1, $2, FALSE, 'fine'), ($1, $3, TRUE, NULL)",
+				[flagCase, oldId, newId]
+			)
+
+			const auditId = await migrate("sess-flag-undo")
+			expect(await restoreFromSnapshot(env, auditId)).toEqual({ restored: true })
+
+			expect(await flagVotesOn(flagCase)).toEqual(
+				[
+					{ voter_id: oldId, remove: false },
+					{ voter_id: newId, remove: true },
+				].sort((a, b) => a.voter_id - b.voter_id)
+			)
+			expect(
+				await one("SELECT note FROM report_case_votes WHERE case_id = $1 AND voter_id = $2", [
+					flagCase,
+					oldId,
+				])
+			).toEqual({ note: "fine" })
+		})
+
 		it("refuses to restore over a council action taken after commit", async () => {
 			const { oldId } = await seedIdentities()
 			const auditId = await migrate("sess-council-interim")

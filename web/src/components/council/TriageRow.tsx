@@ -4,10 +4,11 @@ import { VariantBadge } from "@/components/VariantBadge"
 import { tagClass } from "@/components/ui"
 import type { Bookmarkable, Triage } from "@/hooks/useTriage"
 import { cn } from "@/lib/cn"
+import { reportGroups } from "@/lib/council-flags"
 import { changedFields } from "@/lib/council-metadata"
 import { reasonLabel, reasonMetric } from "@/lib/council-reasons"
-import type { BookmarkView, EditItem, MetadataItem, QueueItem } from "@/lib/council-types"
-import { formatElapsed, formatRemaining } from "@/lib/format"
+import type { BookmarkView, CouncilFlag, EditItem, MetadataItem, QueueItem } from "@/lib/council-types"
+import { formatElapsed, formatRemaining, plural } from "@/lib/format"
 import { IconAlertTriangle, IconBookmark, IconBookmarkFilled } from "@tabler/icons-react"
 import type { ReactNode } from "react"
 import { Link } from "react-router-dom"
@@ -186,6 +187,30 @@ export function metadataRowParts(item: MetadataItem, needed: number, now: number
     end: (
       <span className="font-mono text-[11px] text-unison-text-muted">
         {item.approvers.length} of {needed}
+      </span>
+    ),
+  }
+}
+
+export function flagRowParts(item: CouncilFlag, needed: number, now: number) {
+  return {
+    title: item.song,
+    sub: [item.artist, item.submitter?.displayName].filter(Boolean).join(" · "),
+    meta: (
+      <>
+        <span className={tagClass}>
+          {reportGroups(item.reports)
+            .map((group) => group.label)
+            .join(", ")}
+        </span>
+        <span>{plural(item.reports.length, "report", "reports")}</span>
+        <Sep />
+        <span>{formatElapsed(now - item.openedAt)}</span>
+      </>
+    ),
+    end: (
+      <span className="font-mono text-[11px] text-unison-text-muted">
+        {item.removers.length} of {needed}
       </span>
     ),
   }

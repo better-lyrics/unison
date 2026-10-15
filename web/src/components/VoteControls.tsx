@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 import { useSession } from "@/auth/useSession"
-import { type ReportReason, useVoteMutations } from "@/hooks/useVoteMutations"
+import { useVoteMutations } from "@/hooks/useVoteMutations"
 import { cn } from "@/lib/cn"
+import { REPORT_REASONS, REPORT_REASON_LABEL, type ReportReason } from "@/lib/report-reasons"
 import { BlDownvoteIcon, BlReportIcon, BlUpvoteIcon } from "./icons/BlVoteIcons"
 
 interface VoteControlsProps {
@@ -15,13 +16,7 @@ interface ReasonOption {
   label: string
 }
 
-const REASONS: ReasonOption[] = [
-  { reason: "wrong_song", label: "Wrong song" },
-  { reason: "bad_sync", label: "Bad sync" },
-  { reason: "offensive", label: "Offensive" },
-  { reason: "spam", label: "Spam" },
-  { reason: "other", label: "Other" },
-]
+const REASONS: ReasonOption[] = REPORT_REASONS.map((reason) => ({ reason, label: REPORT_REASON_LABEL[reason] }))
 
 export function VoteControls({ variantId, videoId, variant }: VoteControlsProps) {
   const session = useSession()

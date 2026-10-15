@@ -22,6 +22,7 @@ const SECTION_KEYS: Record<string, string[]> = {
   overview: ["G", "O"],
   queue: ["G", "Q"],
   edits: ["G", "E"],
+  flags: ["G", "F"],
   activity: ["G", "A"],
 }
 

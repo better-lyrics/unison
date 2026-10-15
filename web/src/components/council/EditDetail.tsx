@@ -1,5 +1,5 @@
 import { Bone } from "@/components/skeleton"
-import { useCouncilShortcuts } from "@/hooks/useCouncilShortcuts"
+import { useOpenInYouTubeMusic } from "@/hooks/useOpenInYouTubeMusic"
 import { useRevisionDiff, useRevisions } from "@/hooks/useLyricsData"
 import { cn } from "@/lib/cn"
 import { reasonLabel, reasonWhy } from "@/lib/council-reasons"
@@ -7,7 +7,6 @@ import type { BookmarkState } from "@/lib/council-triage"
 import type { EditItem, EditThresholds } from "@/lib/council-types"
 import { formatElapsed } from "@/lib/format"
 import type { RevisionSummary } from "@/lib/revision-types"
-import { youTubeMusicUrl } from "@/lib/youtube-music"
 import { IconAlertTriangle, IconCheck, IconRosetteDiscountCheck } from "@tabler/icons-react"
 import { useState } from "react"
 import { ActionBar } from "./ActionBar"
@@ -32,11 +31,7 @@ const pct = (value: number) => `${Math.round(value * 100)}%`
 export function EditDetail(props: EditDetailProps) {
   const { item, thresholds, now } = props
   const [mode, setMode] = useState<DiffMode>("unified")
-  useCouncilShortcuts({
-    o: () => {
-      window.open(youTubeMusicUrl(item.videoId), "_blank", "noreferrer")
-    },
-  })
+  useOpenInYouTubeMusic(item.videoId)
   const sealed = item.pendingReason === "sealed"
   const ReasonIcon = sealed ? IconRosetteDiscountCheck : IconAlertTriangle
 

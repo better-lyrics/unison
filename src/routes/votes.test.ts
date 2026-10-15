@@ -71,6 +71,7 @@ interface MockDB {
 	queue: unknown[]
 	prepare(sql: string): MockStatement
 	batch(stmts: MockStatement[]): Promise<void>
+	transaction<T>(fn: (tx: MockDB) => Promise<T>): Promise<T>
 }
 
 function makeMockDB(queue: unknown[] = []): MockDB {
@@ -85,6 +86,9 @@ function makeMockDB(queue: unknown[] = []): MockDB {
 			for (const stmt of stmts) {
 				calls.push({ sql: stmt.getSql(), params: stmt.getParams() })
 			}
+		},
+		transaction(fn) {
+			return fn(db)
 		},
 	}
 	return db
@@ -356,7 +360,8 @@ describe("POST /lyrics/:id/report bearer path", () => {
 			{ deleted_at: null },
 			null,
 			null,
-			{ count: 1 },
+			null,
+			{ n: 1 },
 		])
 		const env = makeEnv(db, cache)
 		const app = voteRoutes(env)
@@ -372,6 +377,25 @@ describe("POST /lyrics/:id/report bearer path", () => {
 		expect(json.success).toBe(true)
 		const insert = db.calls.find((c) => /INSERT INTO reports/.test(c.sql))
 		expect(insert?.params[2]).toBe("spam")
+	})
+
+	it("regression: still reports success when opening a case fails after the insert", async () => {
+		const keyId = "a".repeat(64)
+		const cache = makeMockCache()
+		seedSession(cache, "tok", keyId)
+		const db = makeMockDB([{ id: 13, key_id: keyId }, LYRICS_ROW, { deleted_at: null }, null, null])
+		db.transaction = async () => {
+			throw new Error("connection reset")
+		}
+		const res = await voteRoutes(makeEnv(db, cache)).handle(
+			new Request("http://localhost/lyrics/7/report", {
+				method: "POST",
+				headers: { authorization: "Bearer tok", "content-type": "application/json" },
+				body: JSON.stringify({ reason: "spam" }),
+			})
+		)
+		expect(res.status).toBe(201)
+		expect(db.calls.some((c) => /INSERT INTO reports/.test(c.sql))).toBe(true)
 	})
 
 	it("rejects an unknown reason with 400 INVALID_REPORT_REASON", async () => {
@@ -495,7 +519,8 @@ describe("signed-envelope path regression", () => {
 			{ deleted_at: null },
 			null,
 			null,
-			{ count: 1 },
+			null,
+			{ n: 1 },
 		])
 		const env = makeEnv(db, makeMockCache())
 		const app = voteRoutes(env)

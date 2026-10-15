@@ -55,6 +55,9 @@ function CouncilShell({ meKeyId }: { meKeyId: string }) {
     "g a": () => {
       navigate("/council/activity")
     },
+    "g f": () => {
+      navigate("/council/flags")
+    },
   })
   return (
     <div className={SHELL}>

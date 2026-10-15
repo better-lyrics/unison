@@ -1,13 +1,12 @@
 import { reportVariant, unvoteVariant, voteVariant } from "@/lib/api"
 import { clearStoredSession } from "@/lib/auth"
 import { AUTHED_FETCH_ERRORS } from "@/lib/authedFetch"
+import type { ReportReason } from "@/lib/report-reasons"
 import { pushToast } from "@/lib/toast"
 import type { VariantFull, VariantSummary } from "@/lib/types"
 import { useMutation, useQueryClient } from "@tanstack/react-query"
 import { useCallback } from "react"
 import { lyricsKeys } from "./useLyricsData"
-
-export type ReportReason = "wrong_song" | "bad_sync" | "offensive" | "spam" | "other"
 
 export interface UseVoteMutationsArgs {
   variantId: number

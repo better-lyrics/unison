@@ -1,6 +1,6 @@
 import { ME, OLA, applicant } from "@/test/council-fixtures"
 import { describe, expect, it } from "vitest"
-import { withOpinion } from "./useCouncilMutations"
+import { flagVoteMessage, withOpinion } from "./useCouncilMutations"
 
 const base = applicant({ opinions: { support: [{ ...OLA }], object: [], notes: [], mine: null } })
 const keys = (people: { keyId: string }[]) => people.map((p) => p.keyId)
@@ -30,5 +30,16 @@ describe("withOpinion", () => {
       expect(keys(base.opinions.support)).toEqual([OLA.keyId])
       expect(base.opinions.mine).toBeNull()
     })
+  })
+})
+
+describe("flagVoteMessage", () => {
+  it("names the outcome once the quorum decides", () => {
+    expect(flagVoteMessage("removed", "Run Rabbit")).toBe("Removed “Run Rabbit”")
+    expect(flagVoteMessage("kept", "Run Rabbit")).toBe("Kept “Run Rabbit”")
+  })
+
+  it("only counts the vote while the flag stays open", () => {
+    expect(flagVoteMessage("open", "Run Rabbit")).toBe("Vote counted on “Run Rabbit”")
   })
 })

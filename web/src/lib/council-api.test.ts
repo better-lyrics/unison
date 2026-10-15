@@ -14,6 +14,7 @@ import {
   decideEdit,
   fetchCouncilApplicants,
   fetchCouncilEvents,
+  fetchCouncilFlags,
   fetchCouncilOverview,
   fetchCouncilQueue,
   rejectLyric,
@@ -23,6 +24,7 @@ import {
   setApplicantOpinion,
   undoRejectLyric,
   unsealLyric,
+  voteFlag,
 } from "./council-api"
 
 const SESSION: StoredSession = { sessionToken: "tok", keyId: "k", displayName: "Mira", expiresAt: 9e9 }
@@ -87,6 +89,53 @@ describe("council reads", () => {
     expect(lastCall().url).toBe("/committee/applicants?includeBelowCutoff=1")
     await fetchCouncilApplicants(false)
     expect(lastCall().url).toBe("/committee/applicants")
+  })
+})
+
+describe("council flags", () => {
+  it("reads open flags and marks none of them bookmarked", async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(
+      new Response(JSON.stringify({ success: true, data: { items: [{ id: 4, lyricsId: 9 }], needed: 3 } }), {
+        status: 200,
+      }),
+    )
+    const payload = await fetchCouncilFlags()
+    expect(lastCall()).toMatchObject({ url: "/committee/flags", method: "GET", auth: "Bearer tok" })
+    expect(payload).toEqual({ items: [{ id: 4, lyricsId: 9, bookmark: null }], needed: 3 })
+  })
+
+  it("votes to remove without a note and to keep with one", async () => {
+    await voteFlag(4, true, null)
+    expect(lastCall()).toMatchObject({ url: "/committee/flags/4/vote", method: "POST", body: { remove: true } })
+    await voteFlag(4, false, "Lyrics are fine")
+    expect(lastCall().body).toEqual({ remove: false, note: "Lyrics are fine" })
+  })
+
+  it("returns the tally the server reports", async () => {
+    const tally = { status: "removed", removals: 3, keeps: 0, needed: 3 }
+    vi.mocked(fetch).mockResolvedValueOnce(
+      new Response(JSON.stringify({ success: true, data: tally }), { status: 200 }),
+    )
+    expect(await voteFlag(4, true, null)).toEqual(tally)
+  })
+
+  describe("edge cases", () => {
+    it("leaves an empty keep note out of the body", async () => {
+      await voteFlag(4, false, null)
+      expect(lastCall().body).toEqual({ remove: false })
+    })
+  })
+
+  describe("error paths", () => {
+    it("surfaces the conflict a submitter or reporter gets", async () => {
+      vi.mocked(fetch).mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({ success: false, error: "You cannot vote on this flag", code: "FLAG_CONFLICT", hint: "h" }),
+          { status: 409 },
+        ),
+      )
+      await expect(voteFlag(4, true, null)).rejects.toThrow("You cannot vote on this flag")
+    })
   })
 })
 

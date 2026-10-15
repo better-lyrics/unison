@@ -35,6 +35,7 @@ export interface MigrationSnapshot {
 	applicant_opinions?: unknown[]
 	metadata_proposals?: unknown[]
 	metadata_votes?: unknown[]
+	report_case_votes?: unknown[]
 	exam_decisions?: unknown[]
 	committee_approvals?: unknown[]
 }
@@ -412,6 +413,11 @@ export async function runMigration(
 				"SELECT * FROM metadata_votes WHERE voter_id = ANY(?)",
 				[ids]
 			)
+			snapshot.report_case_votes = await all(
+				tx,
+				"SELECT * FROM report_case_votes WHERE voter_id = ANY(?)",
+				[ids]
+			)
 			snapshot.exam_decisions = await all(
 				tx,
 				"SELECT id, decided_by_user_id FROM exam_session WHERE decided_by_user_id = ANY(?)",
@@ -485,6 +491,16 @@ export async function runMigration(
 				.run()
 			await tx
 				.prepare("UPDATE metadata_votes SET voter_id = ? WHERE voter_id = ?")
+				.bind(oldId, newId)
+				.run()
+			await tx
+				.prepare(
+					"DELETE FROM report_case_votes WHERE voter_id = ? AND case_id IN (SELECT case_id FROM report_case_votes WHERE voter_id = ?)"
+				)
+				.bind(newId, oldId)
+				.run()
+			await tx
+				.prepare("UPDATE report_case_votes SET voter_id = ? WHERE voter_id = ?")
 				.bind(oldId, newId)
 				.run()
 
@@ -784,6 +800,13 @@ interface SnapMetadataVote {
 	approve: boolean
 	created_at: number
 }
+interface SnapReportCaseVote {
+	case_id: number
+	voter_id: number
+	remove: boolean
+	note: string | null
+	created_at: number
+}
 interface SnapExamDecision {
 	id: number | string
 	decided_by_user_id: number | null
@@ -851,6 +874,7 @@ export async function restoreFromSnapshot(
 		const snapDecisions = snap.exam_decisions as SnapExamDecision[] | undefined
 		const snapProposals = snap.metadata_proposals as SnapMetadataProposal[] | undefined
 		const snapMetadataVotes = snap.metadata_votes as SnapMetadataVote[] | undefined
+		const snapReportCaseVotes = snap.report_case_votes as SnapReportCaseVote[] | undefined
 		const currentVotes = await all<{ id: number }>(
 			tx,
 			"SELECT id FROM votes WHERE user_id = ANY(?)",
@@ -1129,6 +1153,18 @@ export async function restoreFromSnapshot(
 						"INSERT INTO metadata_votes (proposal_id, voter_id, approve, created_at) VALUES (?, ?, ?, ?) ON CONFLICT DO NOTHING"
 					)
 					.bind(v.proposal_id, v.voter_id, v.approve, v.created_at)
+					.run()
+			}
+		}
+
+		if (snapReportCaseVotes) {
+			await tx.prepare("DELETE FROM report_case_votes WHERE voter_id = ANY(?)").bind(ids).run()
+			for (const v of snapReportCaseVotes) {
+				await tx
+					.prepare(
+						"INSERT INTO report_case_votes (case_id, voter_id, remove, note, created_at) VALUES (?, ?, ?, ?, ?) ON CONFLICT DO NOTHING"
+					)
+					.bind(v.case_id, v.voter_id, v.remove, v.note, v.created_at)
 					.run()
 			}
 		}

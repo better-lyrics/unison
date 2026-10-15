@@ -19,6 +19,8 @@ export const EVENT_WORDS: Record<CouncilEventKind, EventWords> = {
   metadata_propose: { verb: "proposed new details for" },
   metadata_approve: { verb: "approved new details for" },
   metadata_reject: { verb: "rejected new details for" },
+  flag_remove: { verb: "voted to remove" },
+  flag_keep: { verb: "kept" },
   bookmark: { verb: "bookmarked" },
   release: { verb: "released" },
   member_add: { verb: "added", after: "to the council" },

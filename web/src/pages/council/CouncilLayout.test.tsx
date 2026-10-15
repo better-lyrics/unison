@@ -8,6 +8,7 @@ import {
   bookmarkBy,
   councilData,
   editItem,
+  flagItem,
   queueItem,
   rosterMember,
   stubCouncilApi,
@@ -22,7 +23,7 @@ function Where() {
   return <p data-testid="where">{useLocation().pathname}</p>
 }
 
-const probes = ["", "queue", "edits", "bookmarks", "applicants", "activity", "members"].map((p) =>
+const probes = ["", "queue", "edits", "flags", "bookmarks", "applicants", "activity", "members"].map((p) =>
   p === "" ? { index: true, element: <Where /> } : { path: p, element: <Where /> },
 )
 
@@ -84,6 +85,7 @@ describe("CouncilLayout rail", () => {
       "/council/queue",
       "/council/edits",
       "/council/metadata",
+      "/council/flags",
       "/council/bookmarks",
       "/council/applicants",
       "/council/activity",
@@ -124,6 +126,22 @@ describe("CouncilLayout rail", () => {
         .getByRole("link", { name: /Overview/ })
         .querySelector("[data-count]"),
     ).toBeNull()
+  })
+
+  it("counts open flags and highlights them while any are open", async () => {
+    stubCouncilApi(councilData({ flags: { items: [flagItem({ id: 1 }), flagItem({ id: 2 })], needed: 3 } }))
+    renderCouncil()
+    const flags = () => within(rail()).getByRole("link", { name: /Flags/ }).querySelector("[data-count]")
+    await waitFor(() => expect(flags()?.textContent).toBe("2"))
+    expect(flags()?.getAttribute("data-hot")).toBe("true")
+  })
+
+  it("does not highlight flags when none are open", async () => {
+    stubCouncilApi()
+    renderCouncil()
+    const flags = () => within(rail()).getByRole("link", { name: /Flags/ }).querySelector("[data-count]")
+    await waitFor(() => expect(flags()?.textContent).toBe("0"))
+    expect(flags()?.getAttribute("data-hot")).not.toBe("true")
   })
 
   it("highlights the edits count when a sealed lyric waits for approval", async () => {
@@ -229,5 +247,8 @@ describe("CouncilLayout shortcuts", () => {
     press("g")
     press("a")
     await waitFor(() => expect(screen.getByTestId("where").textContent).toBe("/council/activity"))
+    press("g")
+    press("f")
+    await waitFor(() => expect(screen.getByTestId("where").textContent).toBe("/council/flags"))
   })
 })

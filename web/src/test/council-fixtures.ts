@@ -7,6 +7,8 @@ import type {
   EditItem,
   EditsPayload,
   EventsPage,
+  FlagsPayload,
+  CouncilFlag,
   MetadataItem,
   MetadataPayload,
   QueueItem,
@@ -118,6 +120,27 @@ export function metadataItem(overrides: Partial<MetadataItem> = {}): MetadataIte
   }
 }
 
+export function flagItem(overrides: Partial<CouncilFlag> = {}): CouncilFlag {
+  return {
+    id: 8001,
+    lyricsId: 722,
+    videoId: "SMQpJ9x7zEk",
+    song: "Story of a Warrior",
+    artist: "John Michael Howell",
+    submitter: { ...OLA, userId: 10, keyId: "5a".repeat(32), displayName: "SigmaViolinRemix", handle: null },
+    openedAt: NOW - 4 * HOUR,
+    reports: [
+      { id: 21, reason: "spam", details: "Ad link in every line", reporter: OLA, createdAt: NOW - 5 * HOUR },
+      { id: 22, reason: "wrong_song", details: null, reporter: null, createdAt: NOW - 4 * HOUR },
+    ],
+    removers: [],
+    keepers: [],
+    conflict: null,
+    bookmark: null,
+    ...overrides,
+  }
+}
+
 export function bookmarkBy(holder: CouncilPerson, id = 1) {
   return { id, holder, createdAt: NOW - 5 * HOUR, expiresAt: NOW + 67 * HOUR }
 }
@@ -159,7 +182,7 @@ export function rosterMember(person: CouncilPerson, overrides: Partial<RosterMem
     editsThisMonth: 9,
     lastActiveAt: NOW - HOUR,
     weekly: [3, 5, 2, 6, 4, 7, 5, 8],
-    lastWeek: { sealed: 1, rejected: 4, edits: 3 },
+    lastWeek: { sealed: 1, rejected: 4, edits: 3, flags: 0 },
     ...overrides,
   }
 }
@@ -204,9 +227,15 @@ export function councilEvent(overrides: Partial<CouncilEvent> = {}): CouncilEven
   }
 }
 
-export function dayDecisions(days: [sealed: number, rejected: number, editsReviewed: number][]) {
+export function dayDecisions(days: [sealed: number, rejected: number, editsReviewed: number, flags?: number][]) {
   const start = Math.floor(NOW / DAY) * DAY - (days.length - 1) * DAY
-  return days.map(([sealed, rejected, editsReviewed], i) => ({ day: start + i * DAY, sealed, rejected, editsReviewed }))
+  return days.map(([sealed, rejected, editsReviewed, flags = 0], i) => ({
+    day: start + i * DAY,
+    sealed,
+    rejected,
+    editsReviewed,
+    flags,
+  }))
 }
 
 export const PREVIEW_TTML = `<?xml version="1.0" encoding="UTF-8"?>
@@ -241,6 +270,7 @@ export interface CouncilData {
   queue: QueueItem[]
   edits: EditsPayload
   metadata: MetadataPayload
+  flags: FlagsPayload
   overview: CouncilOverview
   members: RosterMember[]
   applicants: ApplicantView[]
@@ -255,6 +285,7 @@ export function councilData(overrides: Partial<CouncilData> = {}): CouncilData {
     queue: [],
     edits: { items: [], thresholds: { textDrift: 0.15, timingDrift: 0.3, jevFlag: 0.7 } },
     metadata: { items: [], needed: 3 },
+    flags: { items: [], needed: 3 },
     overview: overview(),
     members: [rosterMember(ME), rosterMember(OLA)],
     applicants: [],
@@ -267,6 +298,7 @@ const ENDPOINTS: [string, Exclude<keyof CouncilData, "myOverview">][] = [
   ["/committee/queue", "queue"],
   ["/committee/edits", "edits"],
   ["/committee/metadata", "metadata"],
+  ["/committee/flags", "flags"],
   ["/committee/overview", "overview"],
   ["/committee/members", "members"],
   ["/committee/applicants", "applicants"],

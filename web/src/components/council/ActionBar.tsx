@@ -1,6 +1,6 @@
 import { Kbd } from "@/components/Kbd"
 import { Tooltip } from "@/components/Tooltip"
-import { buttonClass } from "@/components/ui"
+import { type ButtonVariant, buttonClass } from "@/components/ui"
 import { useCouncilShortcuts } from "@/hooks/useCouncilShortcuts"
 import type { BookmarkState } from "@/lib/council-triage"
 import { type Icon, IconBookmark, IconBookmarkFilled, IconX } from "@tabler/icons-react"
@@ -23,7 +23,15 @@ interface ActionBarProps {
     unavailableHint?: string
   }
   onPrimary: () => void
-  reject: { submitLabel: string; hint: string }
+  reject: {
+    label?: string
+    submitLabel: string
+    hint: string
+    unavailable?: string | null
+    noteLabel?: string
+    placeholder?: string
+    submitVariant?: ButtonVariant
+  }
   onReject: (note: string | null) => void
   busy: boolean
 }
@@ -62,7 +70,7 @@ export function ActionBar(props: ActionBarProps) {
         }
       : {}),
     r: () => {
-      if (busy) return
+      if (busy || reject.unavailable) return
       setMode("reject")
       requestAnimationFrame(() => noteRef.current?.focus())
     },
@@ -84,7 +92,7 @@ export function ActionBar(props: ActionBarProps) {
           htmlFor={noteId}
           className="flex justify-between text-[10px] uppercase tracking-[0.08em] text-unison-text-muted"
         >
-          Reason for the council
+          {reject.noteLabel ?? "Reason for the council"}
           <span className="font-mono">
             {note.length}/{NOTE_MAX}
           </span>
@@ -98,7 +106,7 @@ export function ActionBar(props: ActionBarProps) {
           onKeyDown={(e) => {
             if (e.key === "Escape") setMode("idle")
           }}
-          placeholder="For example: chorus timing lands early on every repeat"
+          placeholder={reject.placeholder ?? "For example: chorus timing lands early on every repeat"}
           className="min-h-16 w-full resize-y rounded-md border border-unison-border bg-unison-bg px-2.5 py-2 text-[13px] leading-normal outline-none transition-colors focus:border-unison-border-strong"
         />
         <div className="flex items-center gap-2">
@@ -107,7 +115,7 @@ export function ActionBar(props: ActionBarProps) {
           <button type="button" className={buttonClass("ghost", "sm")} onClick={() => setMode("idle")}>
             Cancel
           </button>
-          <button type="submit" disabled={busy} className={buttonClass("danger", "sm")}>
+          <button type="submit" disabled={busy} className={buttonClass(reject.submitVariant ?? "danger", "sm")}>
             {reject.submitLabel}
             <Kbd keys={["Mod", "Enter"]} />
           </button>
@@ -154,6 +162,21 @@ export function ActionBar(props: ActionBarProps) {
         {primary.unavailable ? null : <Kbd keys={[primary.shortcut]} className="text-unison-bg/60" />}
       </button>
     )
+    const rejectButton = (
+      <button
+      type="button"
+      disabled={busy || Boolean(reject.unavailable)}
+      className={buttonClass("fill", "sm")}
+      onClick={() => {
+        setMode("reject")
+        requestAnimationFrame(() => noteRef.current?.focus())
+      }}
+    >
+      <IconX aria-hidden className="size-3.5" stroke={1.75} />
+      {reject.label ?? "Reject"}
+      <Kbd keys={["R"]} />
+    </button>
+    )
     body = (
       <div className="flex items-center gap-2">
         {bookmark && props.onBookmark ? (
@@ -165,19 +188,15 @@ export function ActionBar(props: ActionBarProps) {
             You can still decide. {bookmark.holder} will see your decision.
           </span>
         ) : null}
-        <button
-          type="button"
-          disabled={busy}
-          className={buttonClass("fill", "sm")}
-          onClick={() => {
-            setMode("reject")
-            requestAnimationFrame(() => noteRef.current?.focus())
-          }}
-        >
-          <IconX aria-hidden className="size-3.5" stroke={1.75} />
-          Reject
-          <Kbd keys={["R"]} />
-        </button>
+        {reject.unavailable ? (
+          <Tooltip label={reject.unavailable}>
+            <span data-unavailable-hint className="inline-flex [&>button]:pointer-events-none">
+              {rejectButton}
+            </span>
+          </Tooltip>
+        ) : (
+          rejectButton
+        )}
         {primary.unavailable && primary.unavailableHint ? (
           <Tooltip label={primary.unavailableHint}>
             <span data-unavailable-hint className="inline-flex [&>button]:pointer-events-none">

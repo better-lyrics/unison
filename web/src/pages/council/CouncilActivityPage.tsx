@@ -28,6 +28,7 @@ const KINDS: { value: KindFilter; label: string }[] = [
   { value: "rejections", label: "Rejections" },
   { value: "edits", label: "Edits" },
   { value: "membership", label: "Membership" },
+  { value: "flags", label: "Flags" },
 ]
 
 const SOURCE: Record<CouncilSource, { label: string; className: string }> = {

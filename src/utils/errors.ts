@@ -82,6 +82,7 @@ export const ErrorCode = {
 	NOT_COUNCIL_ADMIN: "NOT_COUNCIL_ADMIN",
 	INVALID_OPINION: "INVALID_OPINION",
 	PROTECTED_MEMBER: "PROTECTED_MEMBER",
+	FLAG_CONFLICT: "FLAG_CONFLICT",
 } as const
 
 export type ErrorCode = (typeof ErrorCode)[keyof typeof ErrorCode]
@@ -400,6 +401,10 @@ const TEMPLATES: Record<ErrorCode, Template> = {
 	PROTECTED_MEMBER: {
 		error: "This member cannot be removed here",
 		hint: "Council admins, including you, are removed by a server admin.",
+	},
+	FLAG_CONFLICT: {
+		error: "You cannot vote on this flag",
+		hint: "You submitted or reported this lyric, so another council member has to decide it.",
 	},
 	INVALID_OPINION: {
 		error: "Invalid opinion",

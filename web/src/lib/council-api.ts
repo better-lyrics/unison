@@ -4,10 +4,13 @@ import type {
   ApplicantView,
   BookmarkItemType,
   CouncilBookmark,
+  CouncilFlag,
   CouncilOverview,
   EditsPayload,
   EventGroup,
   EventsPage,
+  FlagVoteResult,
+  FlagsPayload,
   MetadataItem,
   MetadataPayload,
   OpinionStance,
@@ -51,6 +54,18 @@ export function proposeMetadata(input: SongMetadata & { videoId: string; lyricsI
 
 export function voteMetadata(id: number, approve: boolean, note: string | null): Promise<unknown> {
   return send(`/committee/metadata/${id}/vote`, "POST", approve ? { approve } : { approve, note })
+}
+
+export async function fetchCouncilFlags(signal?: AbortSignal): Promise<FlagsPayload> {
+  const payload = await getJsonWithSignal<{ items: Omit<CouncilFlag, "bookmark">[]; needed: number }>(
+    "/committee/flags",
+    signal,
+  )
+  return { ...payload, items: payload.items.map((item) => ({ ...item, bookmark: null })) }
+}
+
+export function voteFlag(id: number, remove: boolean, note: string | null): Promise<FlagVoteResult> {
+  return send(`/committee/flags/${id}/vote`, "POST", note === null ? { remove } : { remove, note })
 }
 
 export interface EventsQuery {

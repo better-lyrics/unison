@@ -26,6 +26,8 @@ const BUTTON_SIZES = {
   sm: "px-2.5 py-1.5 text-[13px]",
 }
 
-export function buttonClass(variant: keyof typeof BUTTON_VARIANTS, size: keyof typeof BUTTON_SIZES = "md"): string {
+export type ButtonVariant = keyof typeof BUTTON_VARIANTS
+
+export function buttonClass(variant: ButtonVariant, size: keyof typeof BUTTON_SIZES = "md"): string {
   return `${BUTTON_BASE} ${BUTTON_VARIANTS[variant]} ${BUTTON_SIZES[size]}`
 }

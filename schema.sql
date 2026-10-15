@@ -560,7 +560,8 @@ CREATE TABLE IF NOT EXISTS council_events (
         'seal', 'unseal', 'reject', 'unreject', 'edit_approve', 'edit_reject',
         'bookmark', 'release', 'member_add', 'member_remove',
         'applicant_approve', 'applicant_reject',
-        'metadata_propose', 'metadata_approve', 'metadata_reject')),
+        'metadata_propose', 'metadata_approve', 'metadata_reject',
+        'flag_remove', 'flag_keep')),
     source TEXT NOT NULL CHECK (source IN ('web', 'discord', 'admin')),
     lyrics_id INTEGER REFERENCES lyrics(id) ON DELETE CASCADE,
     ref_id BIGINT,
@@ -635,3 +636,43 @@ CREATE TABLE IF NOT EXISTS metadata_votes (
 -- Tagalog's canonical code is fil; the language detector stored tl before it normalized its output.
 UPDATE lyrics SET language = 'fil' WHERE language = 'tl';
 UPDATE lyric_revisions SET language = 'fil' WHERE language = 'tl';
+
+-- ---- council flags ----
+
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint
+        WHERE conname = 'council_events_kind_check'
+            AND pg_get_constraintdef(oid) LIKE '%flag_remove%'
+    ) THEN
+        ALTER TABLE council_events DROP CONSTRAINT IF EXISTS council_events_kind_check;
+        ALTER TABLE council_events ADD CONSTRAINT council_events_kind_check CHECK (kind IN (
+            'seal', 'unseal', 'reject', 'unreject', 'edit_approve', 'edit_reject',
+            'bookmark', 'release', 'member_add', 'member_remove',
+            'applicant_approve', 'applicant_reject',
+            'metadata_propose', 'metadata_approve', 'metadata_reject',
+            'flag_remove', 'flag_keep'));
+    END IF;
+END $$;
+
+CREATE TABLE IF NOT EXISTS report_cases (
+    id SERIAL PRIMARY KEY,
+    lyrics_id INTEGER NOT NULL REFERENCES lyrics(id) ON DELETE CASCADE,
+    status TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open', 'removed', 'kept')),
+    opened_at INTEGER NOT NULL DEFAULT (EXTRACT(EPOCH FROM NOW())::INTEGER),
+    decided_at INTEGER
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_report_cases_one_open
+    ON report_cases(lyrics_id) WHERE status = 'open';
+CREATE INDEX IF NOT EXISTS idx_report_cases_kept
+    ON report_cases(lyrics_id, decided_at DESC) WHERE status = 'kept';
+
+CREATE TABLE IF NOT EXISTS report_case_votes (
+    case_id INTEGER NOT NULL REFERENCES report_cases(id) ON DELETE CASCADE,
+    voter_id INTEGER NOT NULL REFERENCES users(id),
+    remove BOOLEAN NOT NULL,
+    note TEXT,
+    created_at INTEGER NOT NULL DEFAULT (EXTRACT(EPOCH FROM NOW())::INTEGER),
+    PRIMARY KEY (case_id, voter_id)
+);

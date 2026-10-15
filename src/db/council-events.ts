@@ -18,6 +18,8 @@ export type CouncilEventKind =
 	| "metadata_propose"
 	| "metadata_approve"
 	| "metadata_reject"
+	| "flag_remove"
+	| "flag_keep"
 
 export type CouncilSource = "web" | "discord" | "admin"
 
@@ -28,6 +30,8 @@ export const DECISION_KINDS: CouncilEventKind[] = [
 	"edit_reject",
 	"metadata_approve",
 	"metadata_reject",
+	"flag_remove",
+	"flag_keep",
 ]
 
 export const EDIT_DECISION_KINDS: CouncilEventKind[] = [
@@ -36,6 +40,8 @@ export const EDIT_DECISION_KINDS: CouncilEventKind[] = [
 	"metadata_approve",
 	"metadata_reject",
 ]
+
+export const FLAG_DECISION_KINDS: CouncilEventKind[] = ["flag_remove", "flag_keep"]
 
 const REJECTION_UNDONE = "r.revoked_at IS NOT NULL AND r.revoke_reason IS DISTINCT FROM 'edited'"
 

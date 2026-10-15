@@ -103,6 +103,12 @@ export const config = {
 			decisiveMinAgeDays: 3,
 			reputationPenalty: 0.2,
 		},
+		reportHide: {
+			threshold: 3,
+			reasons: ["spam", "wrong_song", "offensive"] as const,
+			minReporterReputation: 1.0,
+			minReporterVotes: 5,
+		},
 	},
 
 	requests: {
@@ -392,6 +398,7 @@ export const config = {
 		write: { maxRequests: 60, windowSeconds: 60 },
 		flagsCacheTtlSec: 7 * 24 * 60 * 60,
 		metadataApprovals: 3,
+		reportFlags: { removals: 3, historySec: 24 * 60 * 60 },
 	},
 
 	exam: {

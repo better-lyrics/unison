@@ -87,6 +87,11 @@ describe("EVENT_WORDS", () => {
     )
   })
 
+  it("reads flag votes as a sentence", () => {
+    expect(`boidu ${EVENT_WORDS.flag_remove.verb} Run Rabbit`).toBe("boidu voted to remove Run Rabbit")
+    expect(`boidu ${EVENT_WORDS.flag_keep.verb} Run Rabbit`).toBe("boidu kept Run Rabbit")
+  })
+
   describe("invariants", () => {
     it("gives a tone only to decisions that show on a lyric's history", () => {
       for (const words of Object.values(EVENT_WORDS)) {

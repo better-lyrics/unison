@@ -1,13 +1,12 @@
 import { UserAvatar } from "@/components/UserAvatar"
 import { VariantBadge } from "@/components/VariantBadge"
-import { useCouncilShortcuts } from "@/hooks/useCouncilShortcuts"
+import { useOpenInYouTubeMusic } from "@/hooks/useOpenInYouTubeMusic"
 import { useLyricsVariants } from "@/hooks/useLyricsData"
 import { cn } from "@/lib/cn"
 import { quotaExplanation } from "@/lib/council-quota"
 import type { BookmarkState } from "@/lib/council-triage"
 import type { BoostQuota, QueueItem } from "@/lib/council-types"
 import { formatElapsed, formatRemaining, formatShortDate, titleCase } from "@/lib/format"
-import { youTubeMusicUrl } from "@/lib/youtube-music"
 import { IconAlertTriangle, IconBookmark, IconCheck, IconRosetteDiscountCheck } from "@tabler/icons-react"
 import type { ReactNode } from "react"
 import { ActionBar } from "./ActionBar"
@@ -30,11 +29,7 @@ interface SealDetailProps {
 
 export function SealDetail(props: SealDetailProps) {
   const { item, now, quota } = props
-  useCouncilShortcuts({
-    o: () => {
-      window.open(youTubeMusicUrl(item.videoId), "_blank", "noreferrer")
-    },
-  })
+  useOpenInYouTubeMusic(item.videoId)
   const remaining = quota?.remaining ?? 0
 
   return (
