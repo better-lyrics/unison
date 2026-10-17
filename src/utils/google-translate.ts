@@ -179,6 +179,9 @@ export function parseLyricsTranslateResponse(
 		}
 
 		const original = source.trim()
+		if (target === "" && joined.length === 0) {
+			return { original, translation: original, romanization: null, needsTranslation: false }
+		}
 		const translation = joined
 			.map((p) => p.translation)
 			.join("")
