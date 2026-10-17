@@ -370,6 +370,29 @@ describe("parseLyricsTranslateResponse", () => {
 			expect(result.lines.map((l) => l.translation)).toEqual(["To King Solomon", "Woo"])
 		})
 
+		it("regression: keeps a spacer line made only of zero-width characters", () => {
+			const raw = body(
+				segment(
+					"夜に駆ける\n\u200B\u200B\n君の名は",
+					"run into the night\n\u200B\u200B\nyour name is"
+				)
+			)
+			expect(
+				parseBody(raw, ["夜に駆ける", "\u200B\u200B", "君の名は"]).lines.map((l) => l.translation)
+			).toEqual(["run into the night", "\u200B\u200B", "your name is"])
+		})
+
+		it("regression: keeps consecutive zero-width spacer lines on their own lines", () => {
+			const raw = body(
+				segment("\u200E", "\u200E"),
+				segment("\u200C", "\u200C"),
+				segment("君の名は", "your name is")
+			)
+			expect(
+				parseBody(raw, ["\u200E", "\u200C", "君の名は"]).lines.map((l) => l.translation)
+			).toEqual(["\u200E", "\u200C", "your name is"])
+		})
+
 		it("regression: aligns a source line carrying a zero-width character Google drops", () => {
 			const raw = body(segment("まだら模様", "Mottled"))
 			expect(parseBody(raw, ["\u200Bまだら模様\uFEFF"]).lines[0].translation).toBe("Mottled")

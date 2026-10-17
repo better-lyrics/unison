@@ -161,6 +161,9 @@ export function parseLyricsTranslateResponse(
 		const target = alignmentKey(source)
 		const joined: Segment[] = []
 		let matched = ""
+		if (target === "" && next < pieces.length && alignmentKey(pieces[next].original) === "") {
+			joined.push(pieces[next++])
+		}
 		while (matched.length < target.length && next < pieces.length) {
 			const piece = pieces[next++]
 			joined.push(piece)
