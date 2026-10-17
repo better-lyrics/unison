@@ -379,7 +379,7 @@ export const config = {
 
 	translation: {
 		provider: "google-lyrics-translate",
-		parserVersion: 1,
+		parserVersion: 2,
 		positiveTtlSeconds: 5 * 365 * 24 * 60 * 60, // ~5 years; translations are effectively permanent
 		negativeTtlSeconds: 30 * 24 * 60 * 60, // confirmed deterministic failure: suppress ~a month
 		negativeThreshold: 3, // deterministic parse failures before a song is suppressed

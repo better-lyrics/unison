@@ -451,8 +451,8 @@ describe("POST /translate", () => {
 		expect(res.status).toBe(502)
 		const insert = db.calls.find((c) => INSERT_RE.test(c.sql))
 		expect(insert).toBeDefined()
-		expect(insert?.sql).toMatch(/failure_count = translation_cache\.failure_count \+ 1/)
-		expect(insert?.sql).toMatch(/is_negative = \(translation_cache\.failure_count \+ 1\) >=/)
+		expect(insert?.sql).toMatch(/failure_count = CASE WHEN translation_cache\.parser_version/)
+		expect(insert?.sql).toMatch(/is_negative = CASE WHEN translation_cache\.parser_version/)
 	})
 
 	it("serves a suppressed negative row as 502 without hitting the network", async () => {
@@ -730,7 +730,7 @@ describe("regressions", () => {
 		const routes = await loadFreshRoutes()
 		const fetchSpy = vi.fn(
 			async () =>
-				new Response(fixture("zh-en-single-line"), {
+				new Response(fixture("zh-en-single-line").replace("你好世界", "12345 67890 000 111"), {
 					status: 200,
 					headers: { version: "v-1" },
 				})
@@ -745,6 +745,45 @@ describe("regressions", () => {
 		const json = (await res.json()) as TranslateOk
 		expect(json.detectedLang).toBe("zh")
 		expect(fetchSpy).toHaveBeenCalledTimes(1)
+	})
+
+	it("regression: translates a response that packs ten lines into one span instead of 502ing", async () => {
+		const routes = await loadFreshRoutes()
+		const fetchSpy = vi.fn(
+			async () =>
+				new Response(fixture("en-zh-Hant-packed-blocks"), {
+					status: 200,
+					headers: { version: "v-1" },
+				})
+		)
+		vi.stubGlobal("fetch", fetchSpy)
+		const db = makeMockDB([null])
+		const app = routes(makeEnv(db))
+		const lines = [
+			"Twinkle, twinkle, little star",
+			"How I wonder what you are",
+			"Up above the world so high",
+			"Like a diamond in the sky",
+			"When the blazing sun is gone",
+			"When he nothing shines upon",
+			"Then you show your little light",
+			"Twinkle, twinkle, all the night",
+			"Then the traveller in the dark",
+			"Thanks you for your tiny spark",
+			"Twinkle, twinkle, little star",
+			"How I wonder what you are",
+		]
+
+		const res = await post(app, { lines, to: "zh-Hant", from: "en" })
+
+		expect(res.status).toBe(200)
+		const json = (await res.json()) as TranslateOk
+		expect(json.lines).toHaveLength(12)
+		expect(json.lines[0].translation).toBe("一閃一閃小星星")
+		expect(json.lines[11].translation).toBe("我多想知道你是什麼")
+		const insert = db.calls.find((c) => INSERT_RE.test(c.sql))
+		expect(insert?.params[8]).toBe(false)
+		expect(insert?.sql).toMatch(/failure_count = 0/)
 	})
 })
 

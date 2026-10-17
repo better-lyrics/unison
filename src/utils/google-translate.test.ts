@@ -15,17 +15,77 @@ function fixture(name: string): string {
 	)
 }
 
-function parse(name: string, expectedLineCount: number) {
+const TWINKLE = [
+	"Twinkle, twinkle, little star",
+	"How I wonder what you are",
+	"Up above the world so high",
+	"Like a diamond in the sky",
+	"When the blazing sun is gone",
+	"When he nothing shines upon",
+	"Then you show your little light",
+	"Twinkle, twinkle, all the night",
+	"Then the traveller in the dark",
+	"Thanks you for your tiny spark",
+	"Twinkle, twinkle, little star",
+	"How I wonder what you are",
+]
+
+const SOURCE_LINES: Record<string, string[]> = {
+	"zh-en-romanized": ["你问我爱你有多深", "月亮代表我的心"],
+	"ja-en-no-romanization": ["夜に駆ける", "君の名は"],
+	"zh-en-already-target": ["Hello world", "你好世界"],
+	"zh-en-blank-line-split": ["你好", "世界"],
+	"ko-en-romanized": ["사랑해", "안녕하세요"],
+	"zh-en-apostrophe": ["我不知道你在哪里"],
+	"zh-en-single-line": ["你好世界"],
+	"en-zh-Hant-packed-blocks": TWINKLE,
+	"en-id-sentence-split": [
+		"[Music]",
+		"[Music]",
+		"Heat.",
+		"[Music]",
+		"Heat.",
+		"[Music]",
+		"Heat. Heat.",
+		"[Music]",
+		"Hey.",
+		"[Music]",
+	],
+	"ja-ko-cjk-sentence-split": [
+		"何を買う？誰と買う？",
+		"最近はどう？ かなりストレイト",
+		"溜まるストレスと 闘うクラスメイト",
+	],
+}
+
+function parse(name: string, sourceLines = SOURCE_LINES[name]) {
 	return parseLyricsTranslateResponse(fixture(name), {
 		httpStatus: 200,
 		version: "test-version",
-		expectedLineCount,
+		sourceLines,
 	})
+}
+
+function segment(original: string, translation: string, romanization?: string): string {
+	const roman =
+		romanization === undefined
+			? ""
+			: `<span jsname="tSjPGf"><br aria-hidden="true"><span>${romanization}</span></span>`
+	return `<span jsname="UVGAte"><span>${translation}</span><br aria-hidden="true"></span><span jsname="YS01Ge" class="gOGZsb">${original}</span>${roman}<br aria-hidden="true"><br aria-hidden="true">`
+}
+
+function body(...segments: string[]): string {
+	return `)]}'
+22;["id","tok"]c;[2,null,"0"]1;<div jsname="Vinbg"></div><div jsname="WbKHeb"><div jsname="U8S5sf" class="ujudUb WRZytc">${segments.join("")}</div></div>c;[9,null,"0"]0;`
+}
+
+function parseBody(raw: string, sourceLines: string[]) {
+	return parseLyricsTranslateResponse(raw, { httpStatus: 200, version: null, sourceLines })
 }
 
 describe("parseLyricsTranslateResponse", () => {
 	it("parses a Chinese song with pinyin romanization", () => {
-		const result = parse("zh-en-romanized", 2)
+		const result = parse("zh-en-romanized")
 		expect(result.googleId).toBe("15GUarMdo93j4Q_4ip2xCw")
 		expect(result.googleToken).toBe("2527")
 		expect(result.httpStatus).toBe(200)
@@ -47,7 +107,7 @@ describe("parseLyricsTranslateResponse", () => {
 	})
 
 	it("parses a Japanese song with no romanization span as null", () => {
-		const result = parse("ja-en-no-romanization", 2)
+		const result = parse("ja-en-no-romanization")
 		expect(result.googleId).toBe("15GUaqfVBovc4-EPo9u_gQM")
 		expect(result.lines).toEqual<ParsedTranslationLine[]>([
 			{
@@ -66,7 +126,7 @@ describe("parseLyricsTranslateResponse", () => {
 	})
 
 	it("marks an already-translated line as needsTranslation false", () => {
-		const result = parse("zh-en-already-target", 2)
+		const result = parse("zh-en-already-target")
 		expect(result.lines).toEqual<ParsedTranslationLine[]>([
 			{
 				original: "Hello world",
@@ -84,7 +144,7 @@ describe("parseLyricsTranslateResponse", () => {
 	})
 
 	it("walks multiple U8S5sf groups produced by a blank input line", () => {
-		const result = parse("zh-en-blank-line-split", 2)
+		const result = parse("zh-en-blank-line-split")
 		expect(result.googleId).toBe("15GUaq-RE4nm4-EPzb7YqQ8")
 		expect(result.lines).toEqual<ParsedTranslationLine[]>([
 			{ original: "你好", translation: "Hello", romanization: "Nǐ hǎo", needsTranslation: true },
@@ -93,7 +153,7 @@ describe("parseLyricsTranslateResponse", () => {
 	})
 
 	it("parses a Korean song with romanization", () => {
-		const result = parse("ko-en-romanized", 2)
+		const result = parse("ko-en-romanized")
 		expect(result.lines).toEqual<ParsedTranslationLine[]>([
 			{
 				original: "사랑해",
@@ -111,7 +171,7 @@ describe("parseLyricsTranslateResponse", () => {
 	})
 
 	it("preserves a literal apostrophe in the translation", () => {
-		const result = parse("zh-en-apostrophe", 1)
+		const result = parse("zh-en-apostrophe")
 		expect(result.lines).toEqual<ParsedTranslationLine[]>([
 			{
 				original: "我不知道你在哪里",
@@ -129,14 +189,14 @@ describe("parseLyricsTranslateResponse", () => {
 		const result = parseLyricsTranslateResponse(body, {
 			httpStatus: 200,
 			version: null,
-			expectedLineCount: 1,
+			sourceLines: ["你和我"],
 		})
 		expect(result.lines[0].translation).toBe("You & Me <3 &lt;tag>")
 		expect(result.lines[0].original).toBe("你和我")
 	})
 
 	it("parses a single-line response", () => {
-		const result = parse("zh-en-single-line", 1)
+		const result = parse("zh-en-single-line")
 		expect(result.googleId).toBe("UpKUauTWJde74-EP4Mv0mA4")
 		expect(result.lines).toEqual<ParsedTranslationLine[]>([
 			{
@@ -149,7 +209,7 @@ describe("parseLyricsTranslateResponse", () => {
 	})
 
 	it("exposes rawPayload from WbKHeb up to but excluding the trailer chunk", () => {
-		const result = parse("zh-en-romanized", 2)
+		const result = parse("zh-en-romanized")
 		expect(result.rawPayload.startsWith('<div jsname="WbKHeb">')).toBe(true)
 		expect(result.rawPayload).not.toContain("c;[9,")
 		expect(result.rawPayload).toContain('jsname="U8S5sf"')
@@ -157,7 +217,7 @@ describe("parseLyricsTranslateResponse", () => {
 
 	describe("edge cases", () => {
 		it("strips the trailing newline so no field carries a newline or edge whitespace", () => {
-			const result = parse("zh-en-romanized", 2)
+			const result = parse("zh-en-romanized")
 			for (const line of result.lines) {
 				for (const value of [line.original, line.translation, line.romanization]) {
 					if (value === null) continue
@@ -168,11 +228,13 @@ describe("parseLyricsTranslateResponse", () => {
 		})
 
 		it("succeeds when the blank-line split yields exactly the expected count", () => {
-			expect(() => parse("zh-en-blank-line-split", 2)).not.toThrow()
+			expect(() => parse("zh-en-blank-line-split")).not.toThrow()
 		})
 
-		it("throws when the expected count includes the dropped blank line", () => {
-			expect(() => parse("zh-en-blank-line-split", 3)).toThrow(/line count mismatch/i)
+		it("throws when the source has more lines than the response carries", () => {
+			expect(() => parse("zh-en-blank-line-split", ["你好", "世界", "再见"])).toThrow(
+				/line count mismatch/i
+			)
 		})
 
 		it("throws on an empty body", () => {
@@ -180,7 +242,7 @@ describe("parseLyricsTranslateResponse", () => {
 				parseLyricsTranslateResponse("", {
 					httpStatus: 200,
 					version: null,
-					expectedLineCount: 1,
+					sourceLines: ["你好"],
 				})
 			).toThrow()
 		})
@@ -190,7 +252,7 @@ describe("parseLyricsTranslateResponse", () => {
 				parseLyricsTranslateResponse("   \n  ", {
 					httpStatus: 200,
 					version: null,
-					expectedLineCount: 1,
+					sourceLines: ["你好"],
 				})
 			).toThrow()
 		})
@@ -200,7 +262,7 @@ describe("parseLyricsTranslateResponse", () => {
 				parseLyricsTranslateResponse(')]}\'\n21;["x","y"]c;[2,null,"0"]0;', {
 					httpStatus: 200,
 					version: null,
-					expectedLineCount: 1,
+					sourceLines: ["你好"],
 				})
 			).toThrow()
 		})
@@ -213,7 +275,7 @@ describe("parseLyricsTranslateResponse", () => {
 				parseLyricsTranslateResponse(truncated, {
 					httpStatus: 200,
 					version: null,
-					expectedLineCount: 2,
+					sourceLines: SOURCE_LINES["zh-en-romanized"],
 				})
 			).toThrow(/line count mismatch/i)
 		})
@@ -225,7 +287,7 @@ describe("parseLyricsTranslateResponse", () => {
 				parseLyricsTranslateResponse(body, {
 					httpStatus: 200,
 					version: null,
-					expectedLineCount: 1,
+					sourceLines: ["你好"],
 				})
 			).toThrow(/empty original or translation/i)
 		})
@@ -233,11 +295,11 @@ describe("parseLyricsTranslateResponse", () => {
 
 	describe("invariants", () => {
 		it("is deterministic across repeated calls on the same input", () => {
-			expect(parse("zh-en-romanized", 2).lines).toEqual(parse("zh-en-romanized", 2).lines)
+			expect(parse("zh-en-romanized").lines).toEqual(parse("zh-en-romanized").lines)
 		})
 
 		it("preserves source line order", () => {
-			const result = parse("zh-en-romanized", 2)
+			const result = parse("zh-en-romanized")
 			expect(result.lines.map((l) => l.translation)).toEqual([
 				"You ask me how deeply I love you",
 				"The moon represents my heart",
@@ -245,10 +307,186 @@ describe("parseLyricsTranslateResponse", () => {
 		})
 
 		it("yields a null-or-string romanization and a boolean needsTranslation per line", () => {
-			const result = parse("ja-en-no-romanization", 2)
+			const result = parse("ja-en-no-romanization")
 			for (const line of result.lines) {
 				expect(line.romanization === null || typeof line.romanization === "string").toBe(true)
 				expect(typeof line.needsTranslation).toBe("boolean")
+			}
+		})
+	})
+
+	describe("regressions", () => {
+		it("regression: splits a block that packs ten lines into one span", () => {
+			const result = parse("en-zh-Hant-packed-blocks")
+			expect(result.lines).toHaveLength(12)
+			expect(result.lines[0]).toEqual<ParsedTranslationLine>({
+				original: "Twinkle, twinkle, little star",
+				translation: "一閃一閃小星星",
+				romanization: null,
+				needsTranslation: true,
+			})
+			expect(result.lines[9].translation).toBe("感謝你微小的火花")
+			expect(result.lines[10].translation).toBe("一閃一閃小星星")
+			expect(result.lines[11]).toEqual<ParsedTranslationLine>({
+				original: "How I wonder what you are",
+				translation: "我多想知道你是什麼",
+				romanization: null,
+				needsTranslation: true,
+			})
+		})
+
+		it("regression: joins a line Google splits into two sentences", () => {
+			const result = parse("en-id-sentence-split")
+			expect(result.lines).toHaveLength(10)
+			expect(result.lines[6]).toEqual<ParsedTranslationLine>({
+				original: "Heat. Heat.",
+				translation: "Panas. Panas.",
+				romanization: null,
+				needsTranslation: true,
+			})
+			expect(result.lines[7].translation).toBe("[Musik]")
+			expect(result.lines[9].translation).toBe("[Musik]")
+		})
+
+		it("regression: joins a CJK sentence split that leaves no space in the original", () => {
+			const result = parse("ja-ko-cjk-sentence-split")
+			expect(result.lines.map((l) => [l.original, l.translation])).toEqual([
+				["何を買う？誰と買う？", "무엇을 사? 더 누구와 사?"],
+				["最近はどう？ かなりストレイト", "요즘은 어때? 꽤 스트레이트"],
+				["溜まるストレスと 闘うクラスメイト", "모이는 스트레스와 싸우는 클래스 메이트"],
+			])
+		})
+
+		it("regression: aligns a source line whose control character Google echoes as a space", () => {
+			const raw = body(segment("We were born  born to be wild", "Kami terlahir untuk liar"))
+			const result = parseBody(raw, ["We were born\x7F born to be wild"])
+			expect(result.lines[0].original).toBe("We were born\x7F born to be wild")
+			expect(result.lines[0].translation).toBe("Kami terlahir untuk liar")
+		})
+
+		it("regression: aligns source lines whose U+FFFD Google drops or blanks in its echo", () => {
+			const raw = body(segment("Al Rey Salom n\n呜", "To King Solomon\nWoo"))
+			const result = parseBody(raw, ["Al Rey Salom\uFFFDn", "呜\uFFFD\uFFFD"])
+			expect(result.lines.map((l) => l.translation)).toEqual(["To King Solomon", "Woo"])
+		})
+
+		it("regression: keeps a spacer line made only of zero-width characters", () => {
+			const raw = body(
+				segment(
+					"夜に駆ける\n\u200B\u200B\n君の名は",
+					"run into the night\n\u200B\u200B\nyour name is"
+				)
+			)
+			expect(
+				parseBody(raw, ["夜に駆ける", "\u200B\u200B", "君の名は"]).lines.map((l) => l.translation)
+			).toEqual(["run into the night", "\u200B\u200B", "your name is"])
+		})
+
+		it("regression: keeps consecutive zero-width spacer lines on their own lines", () => {
+			const raw = body(
+				segment("\u200E", "\u200E"),
+				segment("\u200C", "\u200C"),
+				segment("君の名は", "your name is")
+			)
+			expect(
+				parseBody(raw, ["\u200E", "\u200C", "君の名は"]).lines.map((l) => l.translation)
+			).toEqual(["\u200E", "\u200C", "your name is"])
+		})
+
+		it("regression: aligns a source line carrying a zero-width character Google drops", () => {
+			const raw = body(segment("まだら模様", "Mottled"))
+			expect(parseBody(raw, ["\u200Bまだら模様\uFEFF"]).lines[0].translation).toBe("Mottled")
+		})
+	})
+
+	describe("segment alignment", () => {
+		it("splits romanization inside a packed block line by line", () => {
+			const raw = body(segment("你好\n世界", "Hello\nworld", "Nǐ hǎo\nShìjiè"))
+			expect(parseBody(raw, ["你好", "世界"]).lines).toEqual<ParsedTranslationLine[]>([
+				{ original: "你好", translation: "Hello", romanization: "Nǐ hǎo", needsTranslation: true },
+				{ original: "世界", translation: "world", romanization: "Shìjiè", needsTranslation: true },
+			])
+		})
+
+		it("drops romanization for a block whose romanization lines do not line up", () => {
+			const raw = body(segment("你好\n世界", "Hello\nworld", "Nǐ hǎo shìjiè"))
+			const result = parseBody(raw, ["你好", "世界"])
+			expect(result.lines.map((l) => l.romanization)).toEqual([null, null])
+			expect(result.lines.map((l) => l.translation)).toEqual(["Hello", "world"])
+		})
+
+		it("nulls the romanization of a joined line when one of its pieces has none", () => {
+			const raw = body(segment("你好。", "Hello. ", "Nǐ hǎo."), segment("世界", "World"))
+			expect(parseBody(raw, ["你好。世界"]).lines[0].romanization).toBeNull()
+		})
+
+		it("joins romanization across a sentence split with a space, since Google drops its trailing whitespace", () => {
+			const raw = body(segment("你好。", "Hello. ", "Nǐ hǎo."), segment("世界", "World", "Shìjiè"))
+			expect(parseBody(raw, ["你好。世界"]).lines[0]).toEqual<ParsedTranslationLine>({
+				original: "你好。世界",
+				translation: "Hello. World",
+				romanization: "Nǐ hǎo. Shìjiè",
+				needsTranslation: true,
+			})
+		})
+
+		it("handles a packed block and a sentence split in the same response", () => {
+			const raw = body(segment("一\n二。", "One\nTwo. "), segment("三\n四", "Three\nFour"))
+			expect(parseBody(raw, ["一", "二。三", "四"]).lines.map((l) => l.translation)).toEqual([
+				"One",
+				"Two. Three",
+				"Four",
+			])
+		})
+
+		it("aligns duplicate lines by position, not by text", () => {
+			const raw = body(segment("啦\n啦\n啦", "La\nLa la\nLa la la"))
+			expect(parseBody(raw, ["啦", "啦", "啦"]).lines.map((l) => l.translation)).toEqual([
+				"La",
+				"La la",
+				"La la la",
+			])
+		})
+
+		it("throws when Google echoes an original that differs from the source line", () => {
+			const raw = body(segment("你好", "Hello"))
+			expect(() => parseBody(raw, ["再见"])).toThrow(/original text mismatch/i)
+		})
+
+		it("throws when the response carries more lines than the source", () => {
+			const raw = body(segment("你好\n世界", "Hello\nworld"))
+			expect(() => parseBody(raw, ["你好"])).toThrow(/line count mismatch/i)
+		})
+
+		it("throws when a block's translation and original line counts differ", () => {
+			const raw = body(segment("你好\n世界", "Hello world"))
+			expect(() => parseBody(raw, ["你好", "世界"])).toThrow(UnparseableResponseError)
+		})
+
+		it("throws when a block line has an original but no translation", () => {
+			const raw = body(segment("你好\n世界", "Hello\n "))
+			expect(() => parseBody(raw, ["你好", "世界"])).toThrow(/empty original or translation/i)
+		})
+	})
+
+	describe("alignment invariants", () => {
+		const shapes = Object.keys(SOURCE_LINES)
+
+		it.each(shapes)("returns one line per source line for %s", (name) => {
+			expect(parse(name).lines).toHaveLength(SOURCE_LINES[name].length)
+		})
+
+		it.each(shapes)("echoes each source line as the original for %s", (name) => {
+			expect(parse(name).lines.map((l) => l.original)).toEqual(SOURCE_LINES[name])
+		})
+
+		it.each(shapes)("never leaves a newline or edge whitespace in %s", (name) => {
+			for (const line of parse(name).lines) {
+				for (const value of [line.translation, line.romanization]) {
+					if (value === null) continue
+					expect(value).not.toContain("\n")
+					expect(value).toBe(value.trim())
+				}
 			}
 		})
 	})
@@ -263,13 +501,15 @@ describe("UnparseableResponseError", () => {
 			parseLyricsTranslateResponse("body without a marker", {
 				httpStatus: 200,
 				version: null,
-				expectedLineCount: 1,
+				sourceLines: ["你好"],
 			})
 		).toThrow(UnparseableResponseError)
 	})
 
 	it("throws UnparseableResponseError on a line-count mismatch", () => {
-		expect(() => parse("zh-en-blank-line-split", 3)).toThrow(UnparseableResponseError)
+		expect(() => parse("zh-en-blank-line-split", ["你好", "世界", "再见"])).toThrow(
+			UnparseableResponseError
+		)
 	})
 
 	it("throws UnparseableResponseError on an empty content line", () => {
@@ -277,7 +517,7 @@ describe("UnparseableResponseError", () => {
 			parseLyricsTranslateResponse(emptyLineBody, {
 				httpStatus: 200,
 				version: null,
-				expectedLineCount: 1,
+				sourceLines: ["你好"],
 			})
 		).toThrow(UnparseableResponseError)
 	})
@@ -287,7 +527,7 @@ describe("UnparseableResponseError", () => {
 			parseLyricsTranslateResponse("body without a marker", {
 				httpStatus: 200,
 				version: null,
-				expectedLineCount: 1,
+				sourceLines: ["你好"],
 			})
 			throw new Error("expected a throw")
 		} catch (err) {
@@ -393,7 +633,17 @@ describe("toLyricsTranslateLang", () => {
 	})
 
 	describe("invariants", () => {
-		const tags = ["zh-TW", "zh-CN", "zh-Hant-TW", "pt-BR", "en-US", "sr-Latn", "mni-Mtei", "en", "x-foo"]
+		const tags = [
+			"zh-TW",
+			"zh-CN",
+			"zh-Hant-TW",
+			"pt-BR",
+			"en-US",
+			"sr-Latn",
+			"mni-Mtei",
+			"en",
+			"x-foo",
+		]
 
 		it("is idempotent", () => {
 			for (const tag of tags) {
