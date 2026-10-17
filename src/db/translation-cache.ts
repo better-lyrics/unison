@@ -99,7 +99,8 @@ export async function getTranslationCache(
 			failure_count
 		 FROM translation_cache
 		 WHERE lyrics_hash = ? AND from_lang = ? AND to_lang = ? AND provider = ?
-		   AND parser_version = ? AND expires_at > now()`
+		   AND (parser_version = ? OR (failure_count = 0 AND NOT is_negative))
+		   AND expires_at > now()`
 	)
 		.bind(key.lyricsHash, key.from, key.to, provider, config.translation.parserVersion)
 		.first<TranslationCacheDbRow>()
@@ -173,6 +174,10 @@ export async function upsertTranslationCache(env: Env, row: TranslationCacheRow)
 	})
 }
 
+// A failure only counts toward suppression under the parser version that produced it.
+const NEXT_FAILURE_COUNT = `CASE WHEN translation_cache.parser_version = EXCLUDED.parser_version
+	THEN translation_cache.failure_count + 1 ELSE 1 END`
+
 export async function recordTranslationFailure(
 	env: Env,
 	failure: {
@@ -195,8 +200,9 @@ export async function recordTranslationFailure(
 		) VALUES (?, ?, ?, ?, ?, ?, ?, FALSE, FALSE, '[]'::jsonb, '[]'::jsonb,
 			?, ?, ?, 1, now() + (? || ' seconds')::interval)
 		ON CONFLICT (lyrics_hash, from_lang, to_lang, provider) DO UPDATE SET
-			failure_count = translation_cache.failure_count + 1,
-			is_negative = (translation_cache.failure_count + 1) >= ?,
+			failure_count = ${NEXT_FAILURE_COUNT},
+			is_negative = ${NEXT_FAILURE_COUNT} >= ?,
+			parser_version = EXCLUDED.parser_version,
 			video_id = EXCLUDED.video_id,
 			line_count = EXCLUDED.line_count,
 			detected_source_lang = EXCLUDED.detected_source_lang,

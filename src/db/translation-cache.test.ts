@@ -218,7 +218,7 @@ describe("getTranslationCache", () => {
 		])
 	})
 
-	it("scopes the lookup to the current parser version so a bump invalidates old rows", async () => {
+	it("scopes failures to the current parser version so a bump retries them", async () => {
 		const db = makeMockDB([])
 		const env = makeEnv(db)
 		await getTranslationCache(env, { lyricsHash: "hash-1", from: "fr", to: "en" })
@@ -361,15 +361,18 @@ describe("recordTranslationFailure", () => {
 		rawPayload: "<div>unparseable</div>",
 	}
 
-	it("increments the counter and flips is_negative at the threshold on conflict", async () => {
+	it("increments the counter under the same parser and flips is_negative at the threshold", async () => {
 		const db = makeMockDB([undefined])
 		const env = makeEnv(db)
 		await recordTranslationFailure(env, failure)
 		const sql = db.calls[0].sql
 		expect(sql).toMatch(/INSERT INTO translation_cache/i)
 		const doUpdate = sql.slice(sql.indexOf("DO UPDATE SET"))
-		expect(doUpdate).toMatch(/failure_count = translation_cache\.failure_count \+ 1/)
-		expect(doUpdate).toMatch(/is_negative = \(translation_cache\.failure_count \+ 1\) >= \?/)
+		const nextCount =
+			/CASE WHEN translation_cache\.parser_version = EXCLUDED\.parser_version\s+THEN translation_cache\.failure_count \+ 1 ELSE 1 END/
+		expect(doUpdate).toMatch(new RegExp(`failure_count = ${nextCount.source}`))
+		expect(doUpdate).toMatch(new RegExp(`is_negative = ${nextCount.source} >= \\?`))
+		expect(doUpdate).toMatch(/parser_version = EXCLUDED\.parser_version/)
 	})
 
 	it("inserts the first failure with count 1, is_negative false, and empty jsonb", async () => {
