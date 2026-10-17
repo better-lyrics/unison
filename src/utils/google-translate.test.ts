@@ -393,6 +393,42 @@ describe("parseLyricsTranslateResponse", () => {
 			).toEqual(["\u200E", "\u200C", "your name is"])
 		})
 
+		it("regression: passes a zero-width spacer line through when Google echoes it as blank", () => {
+			const raw = body(segment("夜に駆ける\n\n君の名は", "run into the night\n\nyour name is"))
+			expect(parseBody(raw, ["夜に駆ける", "\u200B", "君の名は"]).lines).toEqual<
+				ParsedTranslationLine[]
+			>([
+				{
+					original: "夜に駆ける",
+					translation: "run into the night",
+					romanization: null,
+					needsTranslation: true,
+				},
+				{ original: "\u200B", translation: "\u200B", romanization: null, needsTranslation: false },
+				{
+					original: "君の名は",
+					translation: "your name is",
+					romanization: null,
+					needsTranslation: true,
+				},
+			])
+		})
+
+		it("regression: passes a trailing zero-width spacer line through when Google drops it", () => {
+			const raw = body(segment("君の名は", "your name is"))
+			expect(parseBody(raw, ["君の名は", "\u200B\u200B"]).lines.map((l) => l.translation)).toEqual([
+				"your name is",
+				"\u200B\u200B",
+			])
+		})
+
+		it("still throws when a visible line has no piece behind a dropped spacer", () => {
+			const raw = body(segment("君の名は", "your name is"))
+			expect(() => parseBody(raw, ["\u200B", "君の名は", "夜に駆ける"])).toThrow(
+				/line count mismatch/i
+			)
+		})
+
 		it("regression: aligns a source line carrying a zero-width character Google drops", () => {
 			const raw = body(segment("まだら模様", "Mottled"))
 			expect(parseBody(raw, ["\u200Bまだら模様\uFEFF"]).lines[0].translation).toBe("Mottled")
