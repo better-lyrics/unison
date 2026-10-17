@@ -363,6 +363,17 @@ describe("parseLyricsTranslateResponse", () => {
 			expect(result.lines[0].original).toBe("We were born\x7F born to be wild")
 			expect(result.lines[0].translation).toBe("Kami terlahir untuk liar")
 		})
+
+		it("regression: aligns source lines whose U+FFFD Google drops or blanks in its echo", () => {
+			const raw = body(segment("Al Rey Salom n\n呜", "To King Solomon\nWoo"))
+			const result = parseBody(raw, ["Al Rey Salom\uFFFDn", "呜\uFFFD\uFFFD"])
+			expect(result.lines.map((l) => l.translation)).toEqual(["To King Solomon", "Woo"])
+		})
+
+		it("regression: aligns a source line carrying a zero-width character Google drops", () => {
+			const raw = body(segment("まだら模様", "Mottled"))
+			expect(parseBody(raw, ["\u200Bまだら模様\uFEFF"]).lines[0].translation).toBe("Mottled")
+		})
 	})
 
 	describe("segment alignment", () => {
@@ -386,8 +397,8 @@ describe("parseLyricsTranslateResponse", () => {
 			expect(parseBody(raw, ["你好。世界"]).lines[0].romanization).toBeNull()
 		})
 
-		it("joins romanization across a sentence split", () => {
-			const raw = body(segment("你好。", "Hello. ", "Nǐ hǎo. "), segment("世界", "World", "Shìjiè"))
+		it("joins romanization across a sentence split with a space, since Google drops its trailing whitespace", () => {
+			const raw = body(segment("你好。", "Hello. ", "Nǐ hǎo."), segment("世界", "World", "Shìjiè"))
 			expect(parseBody(raw, ["你好。世界"]).lines[0]).toEqual<ParsedTranslationLine>({
 				original: "你好。世界",
 				translation: "Hello. World",

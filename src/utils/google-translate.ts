@@ -75,9 +75,9 @@ function spanText(input: string): string {
 	return unescapeHtml(input.replace(/<[^>]*>/g, ""))
 }
 
-// Google echoes each source line but turns control characters into spaces.
+// Google echoes each source line but drops or blanks control, format and U+FFFD characters.
 function alignmentKey(text: string): string {
-	return text.replace(/[\s\p{Cc}]/gu, "")
+	return text.replace(/[\s\p{Cc}\p{Cf}\uFFFD]/gu, "")
 }
 
 function readSegments(rawPayload: string): Segment[] {
@@ -184,10 +184,7 @@ export function parseLyricsTranslateResponse(
 			throw fail("lyrics_translate response has an empty original or translation line")
 		}
 		const romanization = joined.every((p) => p.romanization !== null)
-			? joined
-					.map((p) => p.romanization)
-					.join("")
-					.trim()
+			? joined.map((p) => p.romanization?.trim()).join(" ")
 			: null
 		return { original, translation, romanization, needsTranslation: translation !== original }
 	})
