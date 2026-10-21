@@ -274,23 +274,23 @@ describe("measureDrift over TTML head text", () => {
 	const retranslate = (count: number) =>
 		AMAZING_GRACE_SPANISH.map((line, index) => (index < count ? `${line} otra vez` : line))
 
-	it("counts a head-only translation change as text drift", () => {
-		const drift = measureDrift(translated(AMAZING_GRACE_SPANISH), translated(retranslate(1)))
-		expect(drift.text).toBeGreaterThan(0)
-		expect(drift.timing).toBe(0)
+	it("ignores a head-only translation change", () => {
+		const drift = measureDrift(translated(AMAZING_GRACE_SPANISH), translated(retranslate(8)))
+		expect(drift).toEqual({ text: 0, timing: 0, timingOffsetMs: 0 })
 	})
 
-	it("scales with how much head text changed", () => {
-		const anchor = translated(AMAZING_GRACE_SPANISH)
-		const small = measureDrift(anchor, translated(retranslate(1))).text
-		const large = measureDrift(anchor, translated(retranslate(8))).text
-		expect(large).toBeGreaterThan(small * 4)
-	})
-
-	it("puts a full head replacement over the text limit", () => {
+	it("ignores a full head replacement", () => {
 		const replaced = AMAZING_GRACE_SPANISH.map((_, index) => `Línea traducida número ${index}`)
-		const drift = measureDrift(translated(AMAZING_GRACE_SPANISH), translated(replaced))
-		expect(drift.text).toBeGreaterThan(0.15)
+		expect(measureDrift(translated(AMAZING_GRACE_SPANISH), translated(replaced)).text).toBe(0)
+	})
+
+	it("still measures body changes when the head is unchanged", () => {
+		const anchor = translated(AMAZING_GRACE_SPANISH)
+		const edited = extractComparableLines(
+			withTranslation(TTML.replace(">Amazing<", ">Wondrous<"), "es", AMAZING_GRACE_SPANISH),
+			"ttml"
+		)
+		expect(measureDrift(anchor, edited).text).toBeGreaterThan(0)
 	})
 
 	describe("edge cases", () => {
@@ -316,7 +316,39 @@ describe("measureDrift over TTML head text", () => {
 		})
 	})
 
+	describe("regressions", () => {
+		it("regression: adding a translation to an untranslated lyric is not text drift", () => {
+			const anchor = extractComparableLines(TTML, "ttml")
+			expect(measureDrift(anchor, translated(AMAZING_GRACE_SPANISH)).text).toBe(0)
+		})
+
+		it("regression: adding a transliteration to an untransliterated lyric is not text drift", () => {
+			const body = `<body><div><p begin="1.000" end="2.600" itunes:key="L1">君の声</p><p begin="3.000" end="4.600" itunes:key="L2">夜が明ける</p></div></body>`
+			const tt = (head: string) =>
+				`<tt xmlns="http://www.w3.org/ns/ttml" xmlns:itunes="http://music.apple.com/lyric-ttml-internal" xml:lang="ja"><head><metadata><iTunesMetadata xmlns="http://music.apple.com/lyric-ttml-internal">${head}</iTunesMetadata></metadata></head>${body}</tt>`
+			const romaji = `<transliterations><transliteration xml:lang="ja-Latn"><text for="L1">kimi no koe</text><text for="L2">yoru ga akeru</text></transliteration></transliterations>`
+			const anchor = extractComparableLines(tt(""), "ttml")
+			const candidate = extractComparableLines(tt(romaji), "ttml")
+			expect(candidate.some((line) => line.head?.kind === "transliteration")).toBe(true)
+			expect(measureDrift(anchor, candidate)).toEqual({ text: 0, timing: 0, timingOffsetMs: 0 })
+		})
+	})
+
 	describe("invariants", () => {
+		it("measures the same body drift with or without head lines", () => {
+			const edited = TTML.replace(">Amazing<", ">Wondrous<")
+			const bare = textDrift(
+				extractComparableLines(TTML, "ttml"),
+				extractComparableLines(edited, "ttml")
+			)
+			const withHead = textDrift(
+				translated(AMAZING_GRACE_SPANISH),
+				extractComparableLines(withTranslation(edited, "es", retranslate(8)), "ttml")
+			)
+			expect(bare).toBeGreaterThan(0)
+			expect(withHead).toBe(bare)
+		})
+
 		it("leaves timing drift to the body lines", () => {
 			const anchor = translated(AMAZING_GRACE_SPANISH)
 			const shifted = extractComparableLines(

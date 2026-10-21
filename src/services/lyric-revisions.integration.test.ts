@@ -408,14 +408,14 @@ describeIntegration("lyric revisions pipeline (integration)", () => {
 			return result.revision
 		}
 
-		it("measures a head-only translation change as text drift and asks Jev about it", async () => {
+		it("leaves a head-only translation change out of text drift and asks Jev about it", async () => {
 			const { calls, env } = recordingGate(false)
 			const revision = await saveTtml(
 				retranslated((line, index) => (index === 1 ? "Que salvó a un alma como yo" : line)),
 				env
 			)
 			expect(revision.status).toBe("live")
-			expect(revision.textDrift).toBeGreaterThan(0)
+			expect(revision.textDrift).toBe(0)
 			expect(revision.timingDrift).toBe(0)
 			expect(calls).toHaveLength(1)
 			expect(calls[0].diff).toContain("-[translation es L2] Que salvó a un desdichado como yo")
@@ -434,14 +434,22 @@ describeIntegration("lyric revisions pipeline (integration)", () => {
 			expect(revision).toMatchObject({ status: "pending", pendingReason: "flagged" })
 		})
 
-		it("holds a large head replacement for its text drift", async () => {
-			const revision = await saveTtml(retranslated((_, index) => `Línea traducida ${index}`))
-			expect(revision).toMatchObject({ status: "pending", pendingReason: "large_text_drift" })
-			expect(revision.textDrift).toBeGreaterThan(0.15)
+		it("lets a large head replacement go live without text drift once Jev passes it", async () => {
+			const { calls, env } = recordingGate(false)
+			const revision = await saveTtml(
+				retranslated((_, index) => `Línea traducida ${index}`),
+				env
+			)
+			expect(revision).toMatchObject({ status: "live", textDrift: 0 })
+			expect(calls).toHaveLength(1)
 		})
 
 		it("shows head changes in the council card diff", async () => {
-			const pending = await saveTtml(retranslated((_, index) => `Línea traducida ${index}`))
+			const { env } = recordingGate(true)
+			const pending = await saveTtml(
+				retranslated((_, index) => `Línea traducida ${index}`),
+				env
+			)
 			const card = (await listPendingCards(db.env)).find((c) => c.revisionId === pending.id)
 			expect(card?.diffFull).toContain("-[translation es L1] ¡Sublime gracia! Qué dulce el sonido")
 			expect(card?.diffFull).toContain("+[translation es L1] Línea traducida 0")

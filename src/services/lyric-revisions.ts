@@ -45,7 +45,7 @@ import { ALBUM_HINT, isValidAlbum } from "@/utils/album"
 import { decompressIfNeeded } from "@/utils/compression"
 import { detectLanguage } from "@/utils/detect-language"
 import { ErrorCode, buildError } from "@/utils/errors"
-import { type LyricLine, extractComparableLines } from "@/utils/extract-text"
+import { type LyricLine, extractComparableLines, isBodyLine } from "@/utils/extract-text"
 import { sha256Hex } from "@/utils/hash"
 import { normalizeIsrc } from "@/utils/isrc"
 import { LANGUAGE_HINT, isCuratedLanguage, isLanguageCode } from "@/utils/language-code"
@@ -272,7 +272,7 @@ async function assess(
 	const album = resolveField(input.album, current.album, revert?.album, acceptAlbum)
 
 	const comparable = validated.ok ? extractComparableLines(input.lyrics, validated.format) : null
-	const lines = comparable?.filter((line) => line.head === undefined) ?? null
+	const lines = comparable?.filter(isBodyLine) ?? null
 	const checks: FieldCheck[] = [
 		validated.ok
 			? {
