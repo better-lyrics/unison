@@ -1,5 +1,5 @@
 import { config } from "@/config"
-import type { LyricLine } from "@/utils/extract-text"
+import { type LyricLine, isBodyLine } from "@/utils/extract-text"
 import { diffArrays } from "diff"
 
 export interface DriftResult {
@@ -47,8 +47,8 @@ function keptPairs(before: string[], after: string[]): Array<[number, number]> |
 }
 
 export function textDrift(anchor: LyricLine[], candidate: LyricLine[]): number {
-	const before = wordTokens(anchor)
-	const after = wordTokens(candidate)
+	const before = wordTokens(anchor.filter(isBodyLine))
+	const after = wordTokens(candidate.filter(isBodyLine))
 	const longest = Math.max(before.length, after.length)
 	if (longest === 0) return 0
 	const kept = keptPairs(before, after)

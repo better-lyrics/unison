@@ -15,6 +15,8 @@ export interface LyricLine {
 	syllables?: Syllable[]
 }
 
+export const isBodyLine = (line: LyricLine): boolean => line.head === undefined
+
 const parser = new XMLParser({
 	ignoreAttributes: false,
 	attributeNamePrefix: "@_",

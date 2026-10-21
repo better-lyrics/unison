@@ -1,6 +1,6 @@
 import { config } from "@/config"
 import type { DiffPart, DiffRow, HeadTextRef, MetadataField, SyllableChange } from "@/types"
-import type { LyricLine } from "@/utils/extract-text"
+import { type LyricLine, isBodyLine } from "@/utils/extract-text"
 import { createTwoFilesPatch, diffArrays } from "diff"
 
 const SEGMENTS = new Intl.Segmenter(undefined, { granularity: "word" })
@@ -183,10 +183,12 @@ function sectionRows(before: LyricLine[], after: LyricLine[]): DiffRow[] {
 }
 
 export function buildDiffRows(before: LyricLine[], after: LyricLine[]): DiffRow[] {
-	const isHead = (line: LyricLine) => line.head !== undefined
-	const isBody = (line: LyricLine) => line.head === undefined
+	const isHead = (line: LyricLine) => !isBodyLine(line)
 	const context = config.revisions.diffContextLines
-	const body = collapseUnchanged(sectionRows(before.filter(isBody), after.filter(isBody)), context)
+	const body = collapseUnchanged(
+		sectionRows(before.filter(isBodyLine), after.filter(isBodyLine)),
+		context
+	)
 	const head = sectionRows(before.filter(isHead), after.filter(isHead))
 	if (head.every((row) => row.kind === "same")) return body
 	return [...body, ...collapseUnchanged(head, context, "head")]
