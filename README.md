@@ -318,6 +318,18 @@ CREATE SCHEMA IF NOT EXISTS public_dump AUTHORIZATION unison_dump;
 Set `DUMP_DATABASE_URL` to a connection string that authenticates as that
 role. If it's unset, the pipeline uses `DATABASE_URL` as before.
 
+## Funding
+
+> [!IMPORTANT]
+>
+> Unison is self-funded. The API is free for Better Lyrics and every other app that reads from it, and the database, cache, and servers behind it are paid for out of pocket.
+>
+> Your support helps cover hosting costs and keeps the API free for everyone.
+
+<a href="https://www.buymeacoffee.com/boidu" target="_blank"><img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me A Coffee" height="42" /></a>
+
+[![Github Sponsors](https://img.shields.io/static/v1?label=Sponsor&message=%E2%9D%A4&logo=GitHub&color=%23F20C33)](https://github.com/sponsors/boidushya)
+
 ## License
 
 Source code: [AGPL-3.0](LICENSE).
