@@ -280,6 +280,7 @@ export const config = {
 
 	http: {
 		maxBodyBytes: 8 * 1024 * 1024,
+		compressMinBytes: 1024,
 	},
 
 	rateLimit: {
