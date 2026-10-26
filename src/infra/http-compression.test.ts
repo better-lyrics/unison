@@ -267,6 +267,39 @@ describe("httpCompression", () => {
 			expect(JSON.parse(await gunzipText(res))).toEqual(errorBody)
 		})
 
+		it("keeps a status set through set.status on a large body", async () => {
+			const errorBody = { success: false, error: "Not found", detail: "x".repeat(2000) }
+			const app = appWith((a) =>
+				a.get("/lyrics", ({ set }) => {
+					set.status = 404
+					return errorBody
+				})
+			)
+			const res = await get(app, "/lyrics", "gzip")
+
+			expect(res.status).toBe(404)
+			expect(res.headers.get("content-encoding")).toBe("gzip")
+			expect(JSON.parse(await gunzipText(res))).toEqual(errorBody)
+		})
+
+		it("keeps the status an onError hook sets on a large body", async () => {
+			const errorBody = { success: false, error: "Internal Server Error", detail: "x".repeat(2000) }
+			const app = appWith((a) =>
+				a
+					.onError(({ set }) => {
+						set.status = 500
+						return errorBody
+					})
+					.get("/lyrics", () => {
+						throw new Error("database unavailable")
+					})
+			)
+			const res = await get(app, "/lyrics", "gzip")
+
+			expect(res.status).toBe(500)
+			expect(JSON.parse(await gunzipText(res))).toEqual(errorBody)
+		})
+
 		it("keeps the status code of a small error body", async () => {
 			const app = appWith((a) =>
 				a.get("/lyrics", ({ status }) => status(400, { success: false, error: "bad" }))
