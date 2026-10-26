@@ -5,6 +5,7 @@ import { refreshCatalogue } from "@/db/avatar-presets"
 import { closeRedis } from "@/infra/cache"
 import { closePool } from "@/infra/database"
 import { createEnv } from "@/infra/env"
+import { httpCompression } from "@/infra/http-compression"
 import { Logger, flushLogs } from "@/infra/logger"
 import { startWatchdog } from "@/infra/watchdog"
 import { backfillArtwork } from "@/jobs/backfill-artwork"
@@ -68,6 +69,7 @@ const app = new Elysia({ adapter: node() })
 			maxAge: 86400,
 		})
 	)
+	.use(httpCompression)
 	.onParse(({ request, set }) => {
 		const len = request.headers.get("content-length")
 		if (len && Number(len) > config.http.maxBodyBytes) {
