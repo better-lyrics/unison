@@ -4,6 +4,7 @@ import { gunzipSync } from "node:zlib"
 import { config } from "@/config"
 import { badgeRoutes } from "@/routes/badges"
 import type { Env } from "@/types"
+import { cors } from "@elysiajs/cors"
 import { node } from "@elysiajs/node"
 import { Elysia } from "elysia"
 import { describe, expect, it } from "vitest"
@@ -82,6 +83,33 @@ function freePort(): Promise<number> {
 			probe.close(() => resolve(port))
 		})
 	})
+}
+
+interface RawResponse {
+	headers: Record<string, unknown>
+	body: Buffer
+}
+
+function rawGet(port: number, path: string): Promise<RawResponse> {
+	return new Promise((resolve, reject) => {
+		httpGet({ port, path, headers: { "accept-encoding": "gzip" } }, (r) => {
+			const chunks: Buffer[] = []
+			r.on("data", (c) => chunks.push(c))
+			r.on("end", () => resolve({ headers: r.headers, body: Buffer.concat(chunks) }))
+		}).on("error", reject)
+	})
+}
+
+async function getWhenListening(port: number, path: string): Promise<RawResponse> {
+	for (let attempt = 0; ; attempt++) {
+		try {
+			return await rawGet(port, path)
+		} catch (err) {
+			const refused = (err as NodeJS.ErrnoException).code === "ECONNREFUSED"
+			if (!refused || attempt >= 40) throw err
+			await new Promise((r) => setTimeout(r, 25))
+		}
+	}
 }
 
 async function gunzipText(res: Response): Promise<string> {
@@ -260,17 +288,8 @@ describe("httpCompression", () => {
 				.listen(port, (server) => {
 					stop = () => server.stop()
 				})
-			await new Promise((r) => setTimeout(r, 50))
 			try {
-				const res = await new Promise<{ headers: Record<string, unknown>; body: Buffer }>(
-					(resolve, reject) => {
-						httpGet({ port, path: "/lyrics", headers: { "accept-encoding": "gzip" } }, (r) => {
-							const chunks: Buffer[] = []
-							r.on("data", (c) => chunks.push(c))
-							r.on("end", () => resolve({ headers: r.headers, body: Buffer.concat(chunks) }))
-						}).on("error", reject)
-					}
-				)
+				const res = await getWhenListening(port, "/lyrics")
 
 				expect(res.headers["content-encoding"]).toBe("gzip")
 				expect(JSON.parse(gunzipSync(res.body).toString("utf8"))).toEqual(lyricBody)
@@ -280,7 +299,81 @@ describe("httpCompression", () => {
 		})
 	})
 
+	describe("regressions", () => {
+		const corsApp = (withCompression: boolean) => {
+			const app = new Elysia().use(cors({ origin: true }))
+			return (withCompression ? app.use(httpCompression) : app)
+				.get("/lyrics", () => lyricBody)
+				.get("/health", () => ({ status: "ok" }))
+		}
+
+		function corsGet(app: ReturnType<typeof corsApp>, path: string, encoding?: string) {
+			const headers: Record<string, string> = { origin: "https://music.youtube.com" }
+			if (encoding) headers["accept-encoding"] = encoding
+			return app.handle(new Request(`http://localhost${path}`, { headers }))
+		}
+
+		it.each([
+			["gzipped body", "/lyrics", "gzip"],
+			["body without gzip", "/lyrics", undefined],
+			["small body", "/health", "gzip"],
+		])("regression: keeps the CORS vary header on a %s", async (_label, path, encoding) => {
+			const res = await corsGet(corsApp(true), path, encoding)
+
+			expect(res.headers.get("vary")).toBe("*")
+			expect(res.headers.get("access-control-allow-origin")).toBe("https://music.youtube.com")
+		})
+
+		it.each([
+			["gzipped body", "/lyrics", "gzip"],
+			["body without gzip", "/lyrics", undefined],
+			["small body", "/health", "gzip"],
+		])(
+			"regression: changes no header except content-encoding on a %s",
+			async (_label, path, encoding) => {
+				const before = await corsGet(corsApp(false), path, encoding)
+				const after = await corsGet(corsApp(true), path, encoding)
+				const headers = (r: Response) =>
+					Object.fromEntries([...r.headers].filter(([k]) => k !== "content-encoding"))
+
+				expect(headers(after)).toEqual(headers(before))
+			}
+		)
+
+		it("adds accept-encoding to a vary value the handler set", async () => {
+			const app = appWith((a) =>
+				a.get("/lyrics", ({ set }) => {
+					set.headers.vary = "Origin"
+					return lyricBody
+				})
+			)
+			const res = await get(app, "/lyrics", "gzip")
+
+			expect(res.headers.get("vary")).toBe("Origin, Accept-Encoding")
+		})
+
+		it("does not repeat accept-encoding already in vary", async () => {
+			const app = appWith((a) =>
+				a.get("/lyrics", ({ set }) => {
+					set.headers.vary = "accept-encoding"
+					return lyricBody
+				})
+			)
+			const res = await get(app, "/lyrics", "gzip")
+
+			expect(res.headers.get("vary")).toBe("accept-encoding")
+		})
+	})
+
 	describe("invariants", () => {
+		it("sends the same content-type with and without gzip", async () => {
+			const app = appWith((a) => a.get("/lyrics", () => lyricBody))
+			const plain = await get(app, "/lyrics")
+			const gzipped = await get(app, "/lyrics", "gzip")
+
+			expect(gzipped.headers.get("content-type")).toBe(plain.headers.get("content-type"))
+		})
+
 		it("does not mutate the handler's return value", async () => {
 			const body = structuredClone(lyricBody)
 			const app = appWith((a) => a.get("/lyrics", () => body))

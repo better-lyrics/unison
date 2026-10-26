@@ -15,6 +15,14 @@ function acceptsGzip(header: string | null): boolean {
 	})
 }
 
+function withAcceptEncoding(vary: string | number | undefined): string {
+	if (vary === undefined || vary === "") return "Accept-Encoding"
+	const value = String(vary)
+	const tokens = value.split(",").map((t) => t.trim().toLowerCase())
+	if (tokens.includes("*") || tokens.includes("accept-encoding")) return value
+	return `${value}, Accept-Encoding`
+}
+
 function isJsonBody(value: unknown): value is object {
 	if (value === null || typeof value !== "object") return false
 	if (value instanceof Response) return false
@@ -27,14 +35,14 @@ export const httpCompression = new Elysia({ name: "http-compression" }).mapRespo
 		const isStatus = responseValue instanceof ElysiaCustomStatusResponse
 		const body: unknown = isStatus ? responseValue.response : responseValue
 		if (!isJsonBody(body)) return
-		set.headers.vary = "Accept-Encoding"
+		set.headers.vary = withAcceptEncoding(set.headers.vary)
+		if (!acceptsGzip(request.headers.get("accept-encoding"))) return
 		const json = JSON.stringify(body)
 		if (json.length < config.http.compressMinBytes) return
-		if (!acceptsGzip(request.headers.get("accept-encoding"))) return
 		set.headers["content-encoding"] = "gzip"
 		return new Response(await gzip(json), {
 			status: isStatus ? responseValue.code : undefined,
-			headers: { "content-type": "application/json; charset=utf-8" },
+			headers: { "content-type": "application/json" },
 		})
 	}
 )
