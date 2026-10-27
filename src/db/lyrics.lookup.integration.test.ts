@@ -318,6 +318,20 @@ describeIntegration("findBySongArtist / searchBySongArtist album + duration matc
 				expect(rows[0].isrc).toBe("US2S70465012")
 			})
 
+			it("regression: migrates when a stored ISRC is longer than a btree row allows", async () => {
+				const u = await seedUser("key-a")
+				const { id } = await submitLyrics(env, buildSubmission(), u)
+				await pool.query("DROP INDEX IF EXISTS idx_lyrics_isrc")
+				await pool.query(
+					`UPDATE lyrics SET isrc = (SELECT string_agg(md5(i::TEXT), '') FROM generate_series(1, 400) i)
+					 WHERE id = $1`,
+					[id]
+				)
+				const schema = readFileSync(new URL("../../schema.sql", import.meta.url), "utf-8")
+
+				await expect(pool.query(schema)).resolves.toBeDefined()
+			})
+
 			it("indexes ISRC lookups", async () => {
 				const { rows } = await pool.query(
 					"SELECT indexdef FROM pg_indexes WHERE tablename = 'lyrics' AND indexdef LIKE '%(isrc)%'"
