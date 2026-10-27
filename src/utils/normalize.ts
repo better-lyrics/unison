@@ -42,12 +42,15 @@ export function normalizeArtist(artist: string): string {
 
 const CREDIT_SEPARATOR = /\s*[,&;/×]\s*|\s+(?:and|x|feat\.?|ft\.?|featuring|with)\s+/i
 
-function creditSegments(credit: string): string {
-	const segments = credit
+function creditNames(credit: string): string[] {
+	return credit
 		.split(CREDIT_SEPARATOR)
 		.map(normalize)
 		.filter((s) => s.length > 0)
-	return `|${segments.join("|")}|`
+}
+
+function creditSegments(credit: string): string {
+	return `|${creditNames(credit).join("|")}|`
 }
 
 /** Matches whole separator-bounded segments, so "Ga" is not an artist in "Lady Gaga". */
@@ -57,6 +60,19 @@ export function creditIncludesArtist(credit: string, name: string): boolean {
 	if (whole === normalizeArtist(credit)) return true
 	const nameSegments = creditSegments(name)
 	return nameSegments !== "||" && creditSegments(credit).includes(nameSegments)
+}
+
+/** Shares a whole credited name, or a run of consecutive names sent without separators ("Madvillain Madlib"). */
+export function creditSharesArtist(credit: string, artist: string): boolean {
+	if (creditIncludesArtist(credit, artist)) return true
+	const names = creditNames(artist)
+	if (names.length === 0) return false
+	const credited = creditNames(credit)
+	if (names.some((name) => credited.includes(name))) return true
+	const joined = names.join(" ")
+	return credited.some((_, start) =>
+		credited.some((_, end) => end >= start && credited.slice(start, end + 1).join(" ") === joined)
+	)
 }
 
 export function normalizeAlbum(album: string | null): string | null {

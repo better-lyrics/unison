@@ -117,16 +117,18 @@ Chrome and Chromium-based browsers only. Firefox does not implement `externally_
 
 ```
 GET /lyrics?v=<videoId>
+GET /lyrics?isrc=<isrc>
 GET /lyrics?song=<song>&artist=<artist>
 GET /lyrics?song=<song>&artist=<artist>&album=<album>&duration=<seconds>
 ```
 
-Returns the highest-scored match. Optional `album` and `duration` narrow results.
-Duration matching uses ±2s tolerance (configurable in `src/config.ts`).
+Returns the highest-scored match. Lookups run in order `v`, then `isrc`, then `song` + `artist`, so an unknown ISRC falls back to song and artist when both are given. ISRCs match in any case, with or without hyphens.
+`artist` matches when it shares a whole credited name with the stored credit, so `Madvillain`, `Madvillain Madlib` and `Madlib & Madvillain` all find a song credited to `Madvillain, Madlib, MF Doom`. An exact credit wins when several variants match.
+Optional `album` and `duration` narrow results. Duration matching uses ±2s tolerance (configurable in `src/config.ts`).
 
 ### Search lyrics
 
-Returns all matching entries sorted by score (highest first).
+Returns all matching entries, best match first.
 
 ```
 GET /lyrics/search?q=<query>
@@ -135,7 +137,7 @@ GET /lyrics/search?song=<song>&artist=<artist>&album=<album>
 GET /lyrics/search?song=<song>&artist=<artist>&duration=<seconds>
 ```
 
-The `q` parameter searches across video ID, ISRC, metadata (song/artist/album via trigram similarity), and lyrics content (full-text search). Results are ranked in three tiers: exact identifier match > metadata similarity > lyrics content match.
+The `q` parameter searches across video ID, ISRC, metadata (song/artist/album via trigram similarity), and lyrics content (full-text search). Results are ranked as: exact identifier match > strong metadata match > lyrics content match > weak metadata match. Relevance decides the order within each group; the community score only breaks ties, so a new or unvoted lyric that matches the query exactly still comes first. `song` + `artist` uses the same artist credit matching as `GET /lyrics`.
 
 ### Get by ID
 

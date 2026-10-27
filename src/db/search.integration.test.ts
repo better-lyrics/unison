@@ -26,6 +26,8 @@ interface Fixture {
 	album?: string
 	isrc?: string
 	text: string
+	effectiveScore?: number
+	voteCount?: number
 }
 
 const FIXTURES: Fixture[] = [
@@ -121,7 +123,7 @@ describeIntegration("searchByQuery (integration)", () => {
 				(video_id, song, artist, album, isrc, duration, song_norm, artist_norm, album_norm,
 				 lyrics, format, sync_type, submitter_id, effective_score, upvotes, downvotes,
 				 vote_count, lyrics_text_search)
-			 VALUES ($1,$2,$3,$4,$5,200,$6,$7,$8,$9,'lrc','linesync',$10,1,0,0,1,
+			 VALUES ($1,$2,$3,$4,$5,200,$6,$7,$8,$9,'lrc','linesync',$10,$12,0,0,$13,
 				to_tsvector('simple', $11))
 			 RETURNING id`,
 			[
@@ -136,6 +138,8 @@ describeIntegration("searchByQuery (integration)", () => {
 				await compress(f.text),
 				submitter,
 				f.text,
+				f.effectiveScore ?? 1,
+				f.voteCount ?? 1,
 			]
 		)
 		return rows[0].id
@@ -214,6 +218,169 @@ describeIntegration("searchByQuery (integration)", () => {
 		it("ranks an exact ISRC match first", async () => {
 			const results = await searchByQuery(db.env, "GBUM71029604", 20)
 			expect(results[0].id).toBe(ids.get("Bohemian Rhapsody"))
+		})
+	})
+
+	describe("ranking", () => {
+		const popular: Fixture[] = [
+			{
+				videoId: "pop00000001",
+				song: "Speakerphone",
+				artist: "Rebecca Black",
+				text: "call me on the speakerphone",
+				effectiveScore: 2,
+				voteCount: 80,
+			},
+			{
+				videoId: "pop00000002",
+				song: "Too Little, Too Late",
+				artist: "Laufey",
+				text: "too little too late for me",
+				effectiveScore: 2,
+				voteCount: 80,
+			},
+		]
+
+		async function insertAll(extra: Fixture[]): Promise<void> {
+			for (const f of [...popular, ...extra]) ids.set(f.song, await insertFixture(f))
+		}
+
+		it("regression: an exact title and artist match outranks popular partial matches", async () => {
+			await insertAll([
+				{
+					videoId: "raye0000001",
+					song: "Black Mascara.",
+					artist: "RAYE",
+					text: "black mascara running down",
+					effectiveScore: 0,
+					voteCount: 0,
+				},
+			])
+
+			for (const q of ["black mascara raye", "raye black mascara", "black mascara"]) {
+				const results = await searchByQuery(db.env, q, 20)
+				expect(results[0].id, q).toBe(ids.get("Black Mascara."))
+			}
+		})
+
+		it("regression: a downvoted exact match still outranks unrelated titles", async () => {
+			await insertAll([
+				{
+					videoId: "raye0000001",
+					song: "Black Mascara.",
+					artist: "RAYE",
+					text: "black mascara running down",
+					effectiveScore: -1,
+					voteCount: 4,
+				},
+			])
+
+			const results = await searchByQuery(db.env, "black mascara raye", 20)
+			expect(results[0].id).toBe(ids.get("Black Mascara."))
+		})
+
+		it("ranks a title prefix match first", async () => {
+			await insertAll([
+				{
+					videoId: "raye0000001",
+					song: "Black Mascara.",
+					artist: "RAYE",
+					text: "black mascara running down",
+					effectiveScore: 0,
+					voteCount: 0,
+				},
+			])
+
+			const results = await searchByQuery(db.env, "black masc", 20)
+			expect(results[0].id).toBe(ids.get("Black Mascara."))
+		})
+
+		it("matches a title against one artist of a long multi-artist credit", async () => {
+			await insertAll([
+				{
+					videoId: "drake000001",
+					song: "Forever",
+					artist: "Drake, Kanye West, Lil Wayne, Eminem",
+					text: "it may not mean nothing to y'all",
+					effectiveScore: 0,
+					voteCount: 0,
+				},
+				{
+					videoId: "alpha000001",
+					song: "Forever Young",
+					artist: "Alphaville",
+					text: "let us die young or let us live forever",
+					effectiveScore: 2,
+					voteCount: 80,
+				},
+			])
+
+			const results = await searchByQuery(db.env, "forever drake", 20)
+			expect(results[0].id).toBe(ids.get("Forever"))
+		})
+
+		it("regression: a lyric line finds its song above weak title matches", async () => {
+			await insertAll([
+				{
+					videoId: "mock0000001",
+					song: "Mockingbird",
+					artist: "Eminem",
+					text: "now hush little baby don't you cry everything's gonna be alright",
+					effectiveScore: 0,
+					voteCount: 0,
+				},
+			])
+
+			const results = await searchByQuery(db.env, "hush little baby", 20)
+			expect(results[0].id).toBe(ids.get("Mockingbird"))
+		})
+
+		it("keeps a strong title match above a lyric line match", async () => {
+			await insertAll([
+				{
+					videoId: "cover000001",
+					song: "Cover Song",
+					artist: "Someone",
+					text: "i keep singing hello adele all night",
+					effectiveScore: 2,
+					voteCount: 80,
+				},
+			])
+
+			const results = await searchByQuery(db.env, "hello adele", 20)
+			expect(results[0].id).toBe(ids.get("Hello"))
+		})
+
+		it("breaks a relevance tie by quality", async () => {
+			await insertAll([
+				{
+					videoId: "numb0000002",
+					song: "Numb",
+					artist: "Linkin Park",
+					album: "Meteora",
+					text: "i'm tired of being what you want me to be",
+					effectiveScore: 3,
+					voteCount: 40,
+				},
+			])
+
+			const results = await searchByQuery(db.env, "linkin park numb", 20)
+			expect(results[0].video_id).toBe("numb0000002")
+			expect(results[1].video_id).toBe("kXYiU_JCYtU")
+		})
+
+		it("regression: a junk stored ISRC never claims the identifier bucket", async () => {
+			await db.pool.query("UPDATE lyrics SET isrc = 'LOVE' WHERE id = $1", [ids.get("Numb")])
+
+			const results = await searchByQuery(db.env, "love", 20)
+			expect(results.map((r) => r.id)).not.toContain(ids.get("Numb"))
+		})
+
+		it("finds an ISRC typed in lowercase or with separators", async () => {
+			for (const q of ["gbum71029604", "GB-UM7-10-29604"]) {
+				const results = await searchByQuery(db.env, q, 20)
+				expect(results[0]?.id, q).toBe(ids.get("Bohemian Rhapsody"))
+			}
 		})
 	})
 

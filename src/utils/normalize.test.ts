@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest"
 import {
 	collapseWhitespace,
 	creditIncludesArtist,
+	creditSharesArtist,
 	normalize,
 	normalizeAlbum,
 	normalizeArtist,
@@ -321,6 +322,86 @@ describe("collapseWhitespace", () => {
 		it("is idempotent", () => {
 			const once = collapseWhitespace("  a   b  ")
 			expect(collapseWhitespace(once)).toBe(once)
+		})
+	})
+})
+
+describe("creditSharesArtist", () => {
+	const madvillain = "Madvillain, Madlib, MF Doom"
+
+	it("matches any one credited name", () => {
+		for (const artist of ["Madvillain", "MF DOOM", "madlib"]) {
+			expect(creditSharesArtist(madvillain, artist), artist).toBe(true)
+		}
+	})
+
+	it("matches consecutive names joined without separators", () => {
+		expect(creditSharesArtist(madvillain, "Madvillain Madlib")).toBe(true)
+		expect(creditSharesArtist(madvillain, "Madvillain Madlib MF Doom")).toBe(true)
+	})
+
+	it("matches names in any order once separated", () => {
+		expect(creditSharesArtist(madvillain, "Madlib & Madvillain")).toBe(true)
+	})
+
+	it("matches a query that credits more names than the stored credit", () => {
+		expect(creditSharesArtist("Madvillain", "Madvillain, Madlib")).toBe(true)
+	})
+
+	it("treats & and the word and alike", () => {
+		for (const artist of ["Simon and Garfunkel", "Simon, Garfunkel", "Simon Garfunkel"]) {
+			expect(creditSharesArtist("Simon & Garfunkel", artist), artist).toBe(true)
+		}
+	})
+
+	describe("negatives", () => {
+		it("regression: one word of a credited name is not that artist", () => {
+			expect(creditSharesArtist("Future Islands", "Future")).toBe(false)
+			expect(creditSharesArtist("Nick Drake", "Drake")).toBe(false)
+			expect(creditSharesArtist("Queen Latifah", "Queen")).toBe(false)
+		})
+
+		it("regression: a longer name is not a shorter credited artist", () => {
+			expect(creditSharesArtist("Future", "Future Islands")).toBe(false)
+			expect(creditSharesArtist("Drake", "Nick Drake")).toBe(false)
+		})
+
+		it("does not match part of a word", () => {
+			expect(creditSharesArtist("Lady Gaga", "Ga")).toBe(false)
+		})
+
+		it("does not match names that are not consecutive", () => {
+			expect(creditSharesArtist(madvillain, "Madvillain MF Doom")).toBe(false)
+		})
+	})
+
+	describe("edge cases", () => {
+		it("never matches a blank artist", () => {
+			expect(creditSharesArtist(madvillain, "")).toBe(false)
+			expect(creditSharesArtist(madvillain, " & ")).toBe(false)
+		})
+
+		it("ignores empty credit segments", () => {
+			expect(creditSharesArtist("ARJN, , , KDS", "KDS")).toBe(true)
+			expect(creditSharesArtist("ARJN, , , KDS", "ARJN KDS")).toBe(true)
+		})
+
+		it("keeps a name that contains a separator matching itself", () => {
+			expect(creditSharesArtist("Tyler, The Creator", "Tyler, The Creator")).toBe(true)
+		})
+	})
+
+	describe("invariants", () => {
+		it("agrees with creditIncludesArtist whenever that matches", () => {
+			const pairs: [string, string][] = [
+				["Drake, Future", "Drake"],
+				["Lil Nas X", "Lil Nas X"],
+				["Beyoncé", "beyonce"],
+			]
+			for (const [credit, name] of pairs) {
+				expect(creditIncludesArtist(credit, name)).toBe(true)
+				expect(creditSharesArtist(credit, name)).toBe(true)
+			}
 		})
 	})
 })

@@ -127,6 +127,11 @@ CREATE INDEX IF NOT EXISTS idx_lyrics_effective_score ON lyrics(effective_score 
 
 -- Migrations
 ALTER TABLE lyrics ADD COLUMN IF NOT EXISTS isrc TEXT;
+-- Canonical ISRC, same rule as src/utils/isrc.ts; values that are not ISRCs stay as submitted.
+UPDATE lyrics SET isrc = UPPER(REGEXP_REPLACE(NORMALIZE(isrc, NFKC), '[[:space:]-]', '', 'g'))
+    WHERE isrc !~ '^[A-Z]{2}[A-Z0-9]{3}[0-9]{7}$'
+      AND UPPER(REGEXP_REPLACE(NORMALIZE(isrc, NFKC), '[[:space:]-]', '', 'g')) ~ '^[A-Z]{2}[A-Z0-9]{3}[0-9]{7}$';
+CREATE INDEX IF NOT EXISTS idx_lyrics_isrc ON lyrics(isrc) WHERE isrc IS NOT NULL;
 
 -- Trigram search support
 CREATE EXTENSION IF NOT EXISTS pg_trgm;
@@ -493,6 +498,9 @@ CREATE TABLE IF NOT EXISTS lyric_revisions (
     created_at INTEGER NOT NULL DEFAULT (EXTRACT(EPOCH FROM NOW())::INTEGER),
     UNIQUE (lyrics_id, rev_no)
 );
+UPDATE lyric_revisions SET isrc = UPPER(REGEXP_REPLACE(NORMALIZE(isrc, NFKC), '[[:space:]-]', '', 'g'))
+    WHERE isrc !~ '^[A-Z]{2}[A-Z0-9]{3}[0-9]{7}$'
+      AND UPPER(REGEXP_REPLACE(NORMALIZE(isrc, NFKC), '[[:space:]-]', '', 'g')) ~ '^[A-Z]{2}[A-Z0-9]{3}[0-9]{7}$';
 
 CREATE UNIQUE INDEX IF NOT EXISTS idx_lyric_revisions_one_live
     ON lyric_revisions(lyrics_id) WHERE status = 'live';

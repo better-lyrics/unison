@@ -652,6 +652,7 @@ describe("findBySongArtist", () => {
 
 	it("returns submitter fields from joined row", async () => {
 		const db = createMockDB([
+			[{ id: baseRow.id, artist: "artist" }],
 			{
 				...baseRow,
 				submitter_key_id: "alice",
@@ -674,7 +675,7 @@ describe("findBySongArtist", () => {
 			vote_count: 5,
 			effective_score: 0.6,
 		}
-		const db = createMockDB([row])
+		const db = createMockDB([[{ id: row.id, artist: "Artist" }], row])
 		const cache = createMockCache()
 		const env = createEnv(db, cache)
 
@@ -883,8 +884,8 @@ describe("searchByQuery", () => {
 		expect(sql).toMatch(
 			/SELECT link\.lyrics_id FROM lyrics_video_ids link WHERE link\.video_id = \?/
 		)
-		// tier 1 binds the trimmed query for the home video_id, the junction lookup, and isrc
-		expect(searchCall(db).params.slice(0, 3)).toEqual(["dQw4w9WgXcQ", "dQw4w9WgXcQ", "dQw4w9WgXcQ"])
+		// tier 1 binds the trimmed query for the home video_id and the junction lookup; a video id is not an ISRC
+		expect(searchCall(db).params.slice(0, 3)).toEqual(["dQw4w9WgXcQ", "dQw4w9WgXcQ", null])
 	})
 })
 
