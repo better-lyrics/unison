@@ -265,6 +265,7 @@ export const config = {
 		maxLimit: 50,
 		minQueryLength: 2,
 		similarityThreshold: 0.15,
+		strongMatch: 0.5,
 	},
 
 	feed: {

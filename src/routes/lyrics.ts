@@ -4,6 +4,7 @@ import { parseFeedFilters } from "@/db/feed-filters"
 import { getFulfillmentByLyricsId } from "@/db/fulfillments"
 import { getRevisionBar } from "@/db/lyric-revisions"
 import {
+	findByIsrc,
 	findBySongArtist,
 	findByVideoId,
 	findVariantsByVideoId,
@@ -107,15 +108,18 @@ export const lyricsRoutes = (env: Env) =>
 					}
 				}
 
-				if (query.song && query.artist) {
-					const duration = parseDuration(query.duration)
-					const result = await findBySongArtist(
-						env,
-						query.song,
-						query.artist,
-						duration,
-						query.album
-					)
+				if (query.isrc !== undefined || (query.song && query.artist)) {
+					const result =
+						(query.isrc !== undefined ? await findByIsrc(env, query.isrc) : null) ??
+						(query.song && query.artist
+							? await findBySongArtist(
+									env,
+									query.song,
+									query.artist,
+									parseDuration(query.duration),
+									query.album
+								)
+							: null)
 					if (!result) {
 						return status(404, buildError(ErrorCode.NOT_FOUND))
 					}
@@ -147,6 +151,7 @@ export const lyricsRoutes = (env: Env) =>
 			{
 				query: t.Object({
 					v: t.Optional(t.String()),
+					isrc: t.Optional(t.String()),
 					song: t.Optional(t.String()),
 					artist: t.Optional(t.String()),
 					album: t.Optional(t.String()),

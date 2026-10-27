@@ -101,6 +101,11 @@ function makeEnv(db: ReturnType<typeof makeMockDB>): Env {
 	}
 }
 
+function durationParamOf(call: { params: unknown[] } | undefined): unknown {
+	const params = call?.params ?? []
+	return params[params.indexOf(config.matching.durationTolerance) - 1]
+}
+
 describe("GET /lyrics duration query parsing", () => {
 	it("rounds fractional duration before binding to integer SQL column", async () => {
 		const db = makeMockDB([null])
@@ -114,7 +119,7 @@ describe("GET /lyrics duration query parsing", () => {
 		expect(res.status).toBe(404)
 		const findCall = db.calls.find((c) => /ABS\(l\.duration - \?\)/.test(c.sql))
 		expect(findCall).toBeDefined()
-		const durationParam = findCall?.params[2]
+		const durationParam = durationParamOf(findCall)
 		expect(durationParam).toBe(30)
 		expect(Number.isInteger(durationParam)).toBe(true)
 	})
@@ -141,7 +146,7 @@ describe("GET /lyrics duration query parsing", () => {
 		await app.handle(new Request("http://localhost/lyrics?song=Foo&artist=Bar&duration=200"))
 
 		const findCall = db.calls.find((c) => /ABS\(l\.duration - \?\)/.test(c.sql))
-		expect(findCall?.params[2]).toBe(200)
+		expect(durationParamOf(findCall)).toBe(200)
 	})
 })
 
@@ -158,7 +163,7 @@ describe("GET /lyrics/search duration query parsing", () => {
 		expect(res.status).toBe(200)
 		const findCall = db.calls.find((c) => /ABS\(l\.duration - \?\)/.test(c.sql))
 		expect(findCall).toBeDefined()
-		expect(findCall?.params[2]).toBe(30)
+		expect(durationParamOf(findCall)).toBe(30)
 	})
 })
 

@@ -6,6 +6,7 @@ const BASE_URL = "https://unison.boidu.dev"
 
 const VIDEO_URL = "https://unison.boidu.dev/lyrics?v=dQw4w9WgXcQ"
 const SONG_ARTIST_URL = "https://unison.boidu.dev/lyrics?song=Never+Gonna+Give+You+Up&artist=Rick+Astley"
+const ISRC_URL = "https://unison.boidu.dev/lyrics?isrc=US2S70465012"
 const SEARCH_URL = "https://unison.boidu.dev/lyrics/search?q=never+gonna+give"
 const VARIANTS_URL = "https://unison.boidu.dev/lyrics/variants/dQw4w9WgXcQ?limit=5"
 const TRANSLATE_URL = "https://unison.boidu.dev/translate"
@@ -247,10 +248,20 @@ export function DocsPage() {
           <h2 className="text-lg font-semibold text-unison-text">Fetch by song and artist</h2>
           <p className="text-sm leading-relaxed text-unison-text-secondary">
             No video id? Look up by <Code>song</Code> and <Code>artist</Code> instead. Both are matched
-            case-insensitively. Add <Code>album</Code> or <Code>duration</Code> (seconds, matched within a small
-            tolerance) when a title has more than one recording.
+            case-insensitively, and <Code>artist</Code> only has to share one credited name, so sending just the main
+            artist works for a song with several. Add <Code>album</Code> or <Code>duration</Code> (seconds, matched
+            within a small tolerance) when a title has more than one recording.
           </p>
           <CodeTabs tabs={fetchTabs(SONG_ARTIST_URL)} />
+        </section>
+
+        <section className="space-y-3">
+          <h2 className="text-lg font-semibold text-unison-text">Fetch by ISRC</h2>
+          <p className="text-sm leading-relaxed text-unison-text-secondary">
+            <Code>GET /lyrics?isrc=&lt;isrc&gt;</Code> returns the best version for a recording. Case and hyphens do not
+            matter. Pass <Code>song</Code> and <Code>artist</Code> too and an unknown ISRC falls back to them.
+          </p>
+          <CodeTabs tabs={fetchTabs(ISRC_URL)} />
         </section>
 
         <section className="space-y-3">

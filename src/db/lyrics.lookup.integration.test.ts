@@ -4,7 +4,7 @@ import { wipeCouncilTables } from "@/test/integration-harness"
 import type { Env, LyricsSubmission } from "@/types"
 import pg from "pg"
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest"
-import { findBySongArtist, searchBySongArtist, submitLyrics } from "./lyrics"
+import { findByIsrc, findBySongArtist, searchBySongArtist, submitLyrics } from "./lyrics"
 
 const { Pool } = pg
 
@@ -132,6 +132,220 @@ describeIntegration("findBySongArtist / searchBySongArtist album + duration matc
 
 			expect(rows.length).toBe(2)
 			expect(rows[0].album).toBe("Album Y")
+		})
+	})
+
+	describe("artist credit matching", () => {
+		const madvillain = {
+			song: "Shadows of Tomorrow (feat. Quasimoto)",
+			artist: "Madvillain, Madlib, MF Doom",
+		}
+
+		it("regression: resolves when the consumer sends part of a multi-artist credit", async () => {
+			const u = await seedUser("key-a")
+			await submitLyrics(env, buildSubmission({ videoId: "MV", ...madvillain }), u)
+
+			for (const artist of [
+				"Madvillain Madlib",
+				"Madvillain",
+				"MF DOOM",
+				"Madlib & Madvillain",
+			]) {
+				const found = await findBySongArtist(env, madvillain.song, artist)
+				expect(found?.video_id, artist).toBe("MV")
+			}
+		})
+
+		it("resolves when the consumer credits more artists than the submitter", async () => {
+			const u = await seedUser("key-a")
+			await submitLyrics(env, buildSubmission({ videoId: "V1", artist: "Madvillain" }), u)
+
+			const found = await findBySongArtist(env, "Angin Malam", "Madvillain, Madlib")
+
+			expect(found?.video_id).toBe("V1")
+		})
+
+		it("treats & and the word and alike", async () => {
+			const u = await seedUser("key-a")
+			await submitLyrics(env, buildSubmission({ videoId: "V1", artist: "Simon & Garfunkel" }), u)
+
+			for (const artist of ["Simon and Garfunkel", "Simon, Garfunkel", "Simon Garfunkel"]) {
+				expect((await findBySongArtist(env, "Angin Malam", artist))?.video_id, artist).toBe("V1")
+			}
+		})
+
+		it("prefers the variant whose credit matches exactly", async () => {
+			const u = await seedUser("key-a")
+			const partial = await submitLyrics(
+				env,
+				buildSubmission({ videoId: "VP", artist: "Drake, Future" }),
+				u
+			)
+			await submitLyrics(env, buildSubmission({ videoId: "VE", artist: "Drake" }), u)
+			await pool.query("UPDATE lyrics SET effective_score = 5, vote_count = 50 WHERE id = $1", [
+				partial.id,
+			])
+
+			expect((await findBySongArtist(env, "Angin Malam", "Drake"))?.video_id).toBe("VE")
+		})
+
+		it("searchBySongArtist lists every variant that shares a credited artist", async () => {
+			const u = await seedUser("key-a")
+			await submitLyrics(env, buildSubmission({ videoId: "VA", artist: "Drake" }), u)
+			await submitLyrics(env, buildSubmission({ videoId: "VB", artist: "Drake, Future" }), u)
+			await submitLyrics(env, buildSubmission({ videoId: "VC", artist: "Future" }), u)
+
+			const rows = await searchBySongArtist(env, "Angin Malam", "Drake")
+
+			expect(rows.map((r) => r.video_id).sort()).toEqual(["VA", "VB"])
+		})
+
+		describe("negatives", () => {
+			it("does not match a different artist with the same title", async () => {
+				const u = await seedUser("key-a")
+				await submitLyrics(
+					env,
+					buildSubmission({ videoId: "V1", song: "Intro", artist: "The xx" }),
+					u
+				)
+
+				expect(await findBySongArtist(env, "Intro", "alt-J")).toBeNull()
+			})
+
+			it("regression: one word of a credited name is not that artist", async () => {
+				const u = await seedUser("key-a")
+				for (const [videoId, artist] of [
+					["V1", "Future Islands"],
+					["V2", "Nick Drake"],
+				]) {
+					await submitLyrics(env, buildSubmission({ videoId, song: "Intro", artist }), u)
+				}
+
+				expect(await findBySongArtist(env, "Intro", "Future")).toBeNull()
+				expect(await findBySongArtist(env, "Intro", "Drake")).toBeNull()
+				expect(await searchBySongArtist(env, "Intro", "Future")).toEqual([])
+			})
+
+			it("does not match part of a word", async () => {
+				const u = await seedUser("key-a")
+				await submitLyrics(env, buildSubmission({ videoId: "V1", artist: "Lady Gaga" }), u)
+
+				expect(await findBySongArtist(env, "Angin Malam", "Ga")).toBeNull()
+				expect(await findBySongArtist(env, "Angin Malam", "Lady Gagaa")).toBeNull()
+			})
+
+			it("does not match a blank artist", async () => {
+				const u = await seedUser("key-a")
+				await submitLyrics(env, buildSubmission({ videoId: "V1" }), u)
+
+				expect(await findBySongArtist(env, "Angin Malam", " & ")).toBeNull()
+			})
+		})
+	})
+
+	describe("isrc", () => {
+		it("stores a submitted ISRC in canonical form", async () => {
+			const u = await seedUser("key-a")
+			const { id } = await submitLyrics(env, buildSubmission({ isrc: "us-2s7-04-65012" }), u)
+
+			const { rows } = await pool.query("SELECT isrc FROM lyrics WHERE id = $1", [id])
+
+			expect(rows[0].isrc).toBe("US2S70465012")
+		})
+
+		it("regression: keeps a junk ISRC as submitted and never matches it", async () => {
+			const u = await seedUser("key-a")
+			const { id } = await submitLyrics(env, buildSubmission({ isrc: "love" }), u)
+
+			const { rows } = await pool.query("SELECT isrc FROM lyrics WHERE id = $1", [id])
+
+			expect(rows[0].isrc).toBe("love")
+			expect(await findByIsrc(env, "love")).toBeNull()
+			expect(await findByIsrc(env, "LOVE")).toBeNull()
+		})
+
+		it("finds a lyric by ISRC in any case or format", async () => {
+			const u = await seedUser("key-a")
+			await submitLyrics(env, buildSubmission({ videoId: "V1", isrc: "US2S70465012" }), u)
+
+			for (const isrc of ["US2S70465012", "us2s70465012", "US-2S7-04-65012"]) {
+				expect((await findByIsrc(env, isrc))?.video_id, isrc).toBe("V1")
+			}
+		})
+
+		it("returns the top-ranked variant for a shared ISRC", async () => {
+			const u = await seedUser("key-a")
+			await submitLyrics(env, buildSubmission({ videoId: "VL", isrc: "US2S70465012" }), u)
+			const top = await submitLyrics(
+				env,
+				buildSubmission({ videoId: "VT", isrc: "US2S70465012" }),
+				u
+			)
+			await pool.query("UPDATE lyrics SET effective_score = 3, vote_count = 10 WHERE id = $1", [
+				top.id,
+			])
+
+			expect((await findByIsrc(env, "US2S70465012"))?.video_id).toBe("VT")
+		})
+
+		describe("schema", () => {
+			it("rewrites legacy ISRCs into canonical form and stays idempotent", async () => {
+				const u = await seedUser("key-a")
+				const legacy = await submitLyrics(env, buildSubmission({ videoId: "V1" }), u)
+				const junk = await submitLyrics(env, buildSubmission({ videoId: "V2" }), u)
+				await pool.query("UPDATE lyrics SET isrc = 'us-2s7-04-65012' WHERE id = $1", [legacy.id])
+				await pool.query("UPDATE lyrics SET isrc = 'n/a' WHERE id = $1", [junk.id])
+				const schema = readFileSync(new URL("../../schema.sql", import.meta.url), "utf-8")
+
+				await pool.query(schema)
+				await pool.query(schema)
+
+				const { rows } = await pool.query("SELECT id, isrc FROM lyrics ORDER BY id")
+				expect(rows.map((r) => r.isrc)).toEqual(["US2S70465012", "n/a"])
+			})
+
+			it("rewrites legacy revision ISRCs so they match the live lyric", async () => {
+				const u = await seedUser("key-a")
+				const { id } = await submitLyrics(env, buildSubmission({ isrc: "US2S70465012" }), u)
+				await pool.query("UPDATE lyric_revisions SET isrc = 'us-2s7-04-65012' WHERE lyrics_id = $1", [
+					id,
+				])
+				const schema = readFileSync(new URL("../../schema.sql", import.meta.url), "utf-8")
+
+				await pool.query(schema)
+
+				const { rows } = await pool.query("SELECT isrc FROM lyric_revisions WHERE lyrics_id = $1", [id])
+				expect(rows[0].isrc).toBe("US2S70465012")
+			})
+
+			it("indexes ISRC lookups", async () => {
+				const { rows } = await pool.query(
+					"SELECT indexdef FROM pg_indexes WHERE tablename = 'lyrics' AND indexdef LIKE '%(isrc)%'"
+				)
+				expect(rows).toHaveLength(1)
+			})
+		})
+
+		describe("edge cases", () => {
+			it("returns null for an unknown or blank ISRC", async () => {
+				const u = await seedUser("key-a")
+				await submitLyrics(env, buildSubmission({ isrc: "US2S70465012" }), u)
+
+				expect(await findByIsrc(env, "GBAYE0800346")).toBeNull()
+				expect(await findByIsrc(env, " - ")).toBeNull()
+			})
+
+			it("skips deleted lyrics", async () => {
+				const u = await seedUser("key-a")
+				const { id } = await submitLyrics(env, buildSubmission({ isrc: "US2S70465012" }), u)
+				await pool.query(
+					`UPDATE lyrics SET deleted_at = 1700000000, deleted_by_user_id = $2,
+					deleted_by_role = 'submitter' WHERE id = $1`,
+					[id, u]
+				)
+
+				expect(await findByIsrc(env, "US2S70465012")).toBeNull()
+			})
 		})
 	})
 

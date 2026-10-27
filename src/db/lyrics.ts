@@ -28,7 +28,14 @@ import {
 } from "@/utils/exploration"
 import { extractPlainText } from "@/utils/extract-text"
 import { sha256Hex } from "@/utils/hash"
-import { normalize, normalizeAlbum, normalizeArtist, normalizeSong } from "@/utils/normalize"
+import { normalizeIsrc } from "@/utils/isrc"
+import {
+	creditSharesArtist,
+	normalize,
+	normalizeAlbum,
+	normalizeArtist,
+	normalizeSong,
+} from "@/utils/normalize"
 
 const log = new Logger("db")
 const cacheLog = new Logger("cache")
@@ -218,6 +225,46 @@ export async function findVariantsByVideoId(
 	return results.results
 }
 
+// SQL cannot split credit names the way normalize.ts does, so the artist check runs on the candidates.
+async function songArtistMatches(
+	env: Env,
+	song: string,
+	artist: string,
+	duration: number | undefined,
+	album: string | undefined,
+	order: string
+): Promise<number[]> {
+	const conditions = [
+		"l.song_norm = ?",
+		"l.deleted_at IS NULL",
+		`NOT ${AUTO_HIDE_PREDICATE_JOINED}`,
+	]
+	const params: (string | number)[] = [normalizeSong(song)]
+
+	if (duration !== undefined) {
+		conditions.push("ABS(l.duration - ?) <= ?")
+		params.push(duration, config.matching.durationTolerance)
+	}
+
+	params.push(normalizeArtist(artist))
+	let preference = "(l.artist_norm = ?) DESC, "
+	if (album) {
+		preference += "(CASE WHEN l.album_norm = ? THEN 1 ELSE 0 END) DESC, "
+		params.push(normalize(album))
+	}
+
+	const { results } = await env.DB.prepare(
+		`SELECT l.id, l.artist FROM lyrics l
+		LEFT JOIN users u ON l.submitter_id = u.id
+		WHERE ${conditions.join(" AND ")}
+		ORDER BY ${preference}${order}`
+	)
+		.bind(...params)
+		.all<{ id: number; artist: string }>()
+
+	return results.filter((row) => creditSharesArtist(row.artist, artist)).map((row) => row.id)
+}
+
 export async function findBySongArtist(
 	env: Env,
 	song: string,
@@ -225,42 +272,42 @@ export async function findBySongArtist(
 	duration?: number,
 	album?: string
 ): Promise<LyricsRow | null> {
-	const songNorm = normalizeSong(song)
-	const artistNorm = normalizeArtist(artist)
+	const [id] = await songArtistMatches(
+		env,
+		song,
+		artist,
+		duration,
+		album,
+		`(CASE WHEN ${PROVEN_EXPR_JOINED} THEN 1 ELSE 0 END) DESC, ${RANKING_EXPR_JOINED} DESC`
+	)
+	if (id === undefined) return null
 
-	const conditions = [
-		"l.song_norm = ?",
-		"l.artist_norm = ?",
-		"l.deleted_at IS NULL",
-		`NOT ${AUTO_HIDE_PREDICATE_JOINED}`,
-	]
-	const params: (string | number)[] = [songNorm, artistNorm]
-
-	if (duration !== undefined) {
-		conditions.push("ABS(l.duration - ?) <= ?")
-		params.push(duration, config.matching.durationTolerance)
-	}
-
-	const albumPref = album ? "(CASE WHEN l.album_norm = ? THEN 1 ELSE 0 END) DESC, " : ""
-	if (album) {
-		params.push(normalize(album))
-	}
-
-	const query = `
-		${LYRICS_WITH_SUBMITTER}
-		WHERE ${conditions.join(" AND ")}
-		ORDER BY ${albumPref}(CASE WHEN ${PROVEN_EXPR_JOINED} THEN 1 ELSE 0 END) DESC, ${RANKING_EXPR_JOINED} DESC
-		LIMIT 1
-	`
-
-	const result = await env.DB.prepare(query)
-		.bind(...params)
+	const result = await env.DB.prepare(`${LYRICS_WITH_SUBMITTER} WHERE l.id = ?`)
+		.bind(id)
 		.first<LyricsRow>()
 
-	if (result) {
-		if (isCompressed(result.lyrics)) {
-			result.lyrics = await decompress(result.lyrics)
-		}
+	if (result && isCompressed(result.lyrics)) {
+		result.lyrics = await decompress(result.lyrics)
+	}
+
+	return result
+}
+
+export async function findByIsrc(env: Env, isrc: string): Promise<LyricsRow | null> {
+	const normalized = normalizeIsrc(isrc)
+	if (!normalized) return null
+
+	const result = await env.DB.prepare(
+		`${LYRICS_WITH_SUBMITTER}
+		WHERE l.isrc = ? AND l.deleted_at IS NULL AND NOT ${AUTO_HIDE_PREDICATE_JOINED}
+		ORDER BY (CASE WHEN ${PROVEN_EXPR_JOINED} THEN 1 ELSE 0 END) DESC, ${RANKING_EXPR_JOINED} DESC
+		LIMIT 1`
+	)
+		.bind(normalized)
+		.first<LyricsRow>()
+
+	if (result && isCompressed(result.lyrics)) {
+		result.lyrics = await decompress(result.lyrics)
 	}
 
 	return result
@@ -355,7 +402,7 @@ export async function submitLyrics(
 			song,
 			artist,
 			album,
-			submission.isrc || null,
+			submission.isrc ? (normalizeIsrc(submission.isrc) ?? submission.isrc) : null,
 			submission.duration,
 			songNorm,
 			artistNorm,
@@ -413,38 +460,15 @@ export async function searchBySongArtist(
 	album?: string,
 	limit = 20
 ): Promise<LyricsRow[]> {
-	const songNorm = normalizeSong(song)
-	const artistNorm = normalizeArtist(artist)
-
-	const conditions = [
-		"l.song_norm = ?",
-		"l.artist_norm = ?",
-		"l.deleted_at IS NULL",
-		`NOT ${AUTO_HIDE_PREDICATE_JOINED}`,
-	]
-	const params: (string | number)[] = [songNorm, artistNorm]
-
-	if (duration !== undefined) {
-		conditions.push("ABS(l.duration - ?) <= ?")
-		params.push(duration, config.matching.durationTolerance)
-	}
-
-	const albumPref = album ? "(CASE WHEN l.album_norm = ? THEN 1 ELSE 0 END) DESC, " : ""
-	if (album) {
-		params.push(normalize(album))
-	}
-
-	params.push(limit)
+	const ids = (
+		await songArtistMatches(env, song, artist, duration, album, `${RANKING_EXPR_JOINED} DESC`)
+	).slice(0, limit)
+	if (ids.length === 0) return []
 
 	const results = await env.DB.prepare(
-		`
-		${LYRICS_WITH_SUBMITTER}
-		WHERE ${conditions.join(" AND ")}
-		ORDER BY ${albumPref}${RANKING_EXPR_JOINED} DESC
-		LIMIT ?
-		`
+		`${LYRICS_WITH_SUBMITTER} WHERE l.id = ANY(?) ORDER BY array_position(?::INTEGER[], l.id)`
 	)
-		.bind(...params)
+		.bind(ids, ids)
 		.all<LyricsRow>()
 
 	for (const row of results.results) {
@@ -613,49 +637,53 @@ export async function searchByQuery(
 		return []
 	}
 
-	const threshold = config.search.similarityThreshold
+	const { similarityThreshold: threshold, strongMatch } = config.search
 	const fuzzy = fuzzyMatch(normalized, threshold)
+	const identifier = query.trim()
 
-	// Tier 1: exact identifier match (video_id or isrc)
-	// Tier 2: trigram similarity on song_norm, artist_norm, album_norm, and combined fields
-	// Tier 3: full-text search on lyrics content
+	// Buckets: 0 identifier, 1 strong metadata, 2 lyrics text, 3 weak metadata. RANKING_EXPR only breaks relevance ties.
 	const sql = `
 		SELECT DISTINCT ON (id) * FROM (
 			SELECT ${SEARCH_COLUMNS},
 				1.0::DOUBLE PRECISION AS match_score,
-				1 AS tier
+				1 AS tier,
+				0 AS bucket
 			FROM lyrics
 			WHERE (${videoServesExpr()} OR isrc = ?) AND deleted_at IS NULL AND NOT ${AUTO_HIDE_PREDICATE}
 
 			UNION ALL
 
-			SELECT ${SEARCH_COLUMNS},
-				GREATEST(
-					similarity(song_norm, ?),
-					similarity(artist_norm, ?),
-					COALESCE(similarity(album_norm, ?), 0),
-					similarity(song_norm || ' ' || artist_norm, ?)
-				)::DOUBLE PRECISION AS match_score,
-				2 AS tier
-			FROM lyrics
-			WHERE deleted_at IS NULL
-				AND NOT ${AUTO_HIDE_PREDICATE}
-				AND ${fuzzy.sql}
+			SELECT *, CASE WHEN match_score >= ${strongMatch} THEN 1 ELSE 3 END AS bucket FROM (
+				SELECT ${SEARCH_COLUMNS},
+					GREATEST(
+						similarity(song_norm, ?),
+						similarity(artist_norm, ?),
+						COALESCE(similarity(album_norm, ?), 0),
+						similarity(song_norm || ' ' || artist_norm, ?),
+						word_similarity(?, song_norm || ' ' || artist_norm)
+					)::DOUBLE PRECISION AS match_score,
+					2 AS tier
+				FROM lyrics
+				WHERE deleted_at IS NULL
+					AND NOT ${AUTO_HIDE_PREDICATE}
+					AND ${fuzzy.sql}
+			) AS metadata
 
 			UNION ALL
 
 			SELECT ${SEARCH_COLUMNS},
 				ts_rank(lyrics_text_search, plainto_tsquery('simple', ?))::DOUBLE PRECISION AS match_score,
-				3 AS tier
+				3 AS tier,
+				2 AS bucket
 			FROM lyrics
 			WHERE lyrics_text_search @@ plainto_tsquery('simple', ?) AND deleted_at IS NULL AND NOT ${AUTO_HIDE_PREDICATE}
 		) AS combined
-		ORDER BY id, tier ASC, match_score DESC
+		ORDER BY id, bucket ASC, match_score DESC
 	`
 
 	const ranked = `
 		SELECT * FROM (${sql}) AS deduped
-		ORDER BY tier ASC, (match_score * ${RANKING_EXPR}) DESC
+		ORDER BY bucket ASC, ROUND(match_score::NUMERIC, 1) DESC, ${RANKING_EXPR} DESC, id ASC
 		LIMIT ?
 	`
 
@@ -667,16 +695,17 @@ export async function searchByQuery(
 		return tx
 			.prepare(ranked)
 			.bind(
-				query.trim(),
-				query.trim(),
-				query.trim(),
+				identifier,
+				identifier,
+				normalizeIsrc(identifier),
+				normalized,
 				normalized,
 				normalized,
 				normalized,
 				normalized,
 				...fuzzy.params,
-				query.trim(),
-				query.trim(),
+				identifier,
+				identifier,
 				limit
 			)
 			.all<LyricsSearchResult>()
