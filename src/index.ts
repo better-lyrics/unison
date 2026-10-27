@@ -19,6 +19,7 @@ import { backfillNorms } from "@/jobs/backfill-norms"
 import { backfillRevisions } from "@/jobs/backfill-revisions"
 import { backfillSyncType } from "@/jobs/backfill-synctype"
 import { backfillTextSearch } from "@/jobs/backfill-text-search"
+import { backfillVideoIds } from "@/jobs/backfill-video-ids"
 import { backfillVideoLinks } from "@/jobs/backfill-video-links"
 import { backfillVoteCounts } from "@/jobs/backfill-vote-counts"
 import { backfillXp } from "@/jobs/backfill-xp"
@@ -238,6 +239,11 @@ backfillVideoLinks(env)
 		if (linked > 0) log.info("video links backfill complete", { linked })
 	})
 	.catch((err) => log.error("video links backfill failed", { error: (err as Error).message }))
+	.then(() => backfillVideoIds(env))
+	.then(({ repaired, deleted }) => {
+		if (repaired + deleted > 0) log.info("video id backfill complete", { repaired, deleted })
+	})
+	.catch((err) => log.error("video id backfill failed", { error: (err as Error).message }))
 
 backfillArtwork(env)
 	.then(({ seeded }) => {

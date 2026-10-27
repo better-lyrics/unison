@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { isVideoId } from "../../../src/utils/video-id"
+import { isVideoId, videoIdFromInput as serverVideoIdFromInput } from "../../../src/utils/video-id"
 import { videoIdFromInput, youTubeMusicUrl } from "./youtube-music"
 
 describe("youTubeMusicUrl", () => {
@@ -60,6 +60,28 @@ describe("videoIdFromInput", () => {
 })
 
 describe("invariants", () => {
+  it("reads every input exactly as the server does", () => {
+    const samples = [
+      "dQw4w9WgXcQ",
+      "https://music.youtube.com/watch?v=9yfrVqCcrS0&si=cQ3SU5WVYjJvKbhq",
+      "https://youtu.be/9yfrVqCcrS0?si=k-QGhtw2NsdmnzVI",
+      "music.youtube.com/watch?v=9yfrVqCcrS0",
+      "8ylRSepPra4&si",
+      "v=5iGHe72I5Ho",
+      "=rHfkyeQ-S44",
+      "watch?v=5iGHe72I5Ho",
+      "https://www.youtube.com/shorts/9yfrVqCcrS0",
+      "https://www.youtube-nocookie.com/embed/9yfrVqCcrS0",
+      "https://youtu.be/9yfrVqCcrS0/",
+      "local-file",
+      "t7AcyLcqkIWx6a23",
+      "https://example.com/watch?v=dQw4w9WgXcQ",
+      "never gonna",
+      "",
+    ]
+    for (const sample of samples) expect(videoIdFromInput(sample), sample).toBe(serverVideoIdFromInput(sample))
+  })
+
   it("accepts a bare id exactly when the server does", () => {
     const samples = ["dQw4w9WgXcQ", "a-b_c123456", "short", "dQw4w9WgXcQx", "dQw4w9WgXc!", "", "never gonna"]
     for (const sample of samples) expect(videoIdFromInput(sample) === sample).toBe(isVideoId(sample))

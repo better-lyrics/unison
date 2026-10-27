@@ -8,6 +8,7 @@ import {
 import type { Env } from "@/types"
 import { eitherAuth } from "@/utils/either-auth"
 import { ErrorCode, buildError } from "@/utils/errors"
+import { VIDEO_ID_HINT, isVideoId, videoIdFromInput } from "@/utils/video-id"
 import { Elysia } from "elysia"
 
 const LINK_ERROR = {
@@ -24,8 +25,6 @@ const UNLINK_ERROR = {
 	not_owner: { status: 403, code: ErrorCode.NOT_OWNER },
 	cannot_unlink_primary: { status: 409, code: ErrorCode.CANNOT_UNLINK_PRIMARY },
 } as const
-
-const VIDEO_ID_LENGTH = 11
 
 function isNamed(value: unknown, maxLength: number): value is string {
 	return typeof value === "string" && value.trim().length > 0 && value.length <= maxLength
@@ -44,12 +43,7 @@ function parseSongForSuggestions(body: Record<string, unknown>): SongForSuggesti
 	) {
 		return null
 	}
-	if (
-		videoId !== undefined &&
-		(typeof videoId !== "string" || videoId.length !== VIDEO_ID_LENGTH)
-	) {
-		return null
-	}
+	if (videoId !== undefined && !isVideoId(videoId)) return null
 	return { song, artist, album: album ?? null, duration, videoId }
 }
 
@@ -73,8 +67,10 @@ export const videoLinkRoutes = (env: Env) =>
 		.post("/:id/videos", async ({ params, env, userId, keyId, body, status }) => {
 			const id = Number(params.id)
 			if (Number.isNaN(id)) return status(400, buildError(ErrorCode.INVALID_ID))
-			const videoId = (body as { videoId?: unknown }).videoId
-			if (typeof videoId !== "string") return status(400, buildError(ErrorCode.INVALID_ID))
+			const input = (body as { videoId?: unknown }).videoId
+			if (typeof input !== "string") return status(400, buildError(ErrorCode.INVALID_ID))
+			const videoId = videoIdFromInput(input)
+			if (!videoId) return status(400, buildError(ErrorCode.INVALID_ID, { hint: VIDEO_ID_HINT }))
 			const { success } = await env.RATE_LIMITER.limit({ key: keyId })
 			if (!success) return status(429, buildError(ErrorCode.RATE_LIMITED))
 			const res = await linkVideoForOwner(env, id, userId, videoId)

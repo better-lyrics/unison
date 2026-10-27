@@ -47,7 +47,7 @@ import { detectLanguage } from "@/utils/detect-language"
 import { ErrorCode, buildError } from "@/utils/errors"
 import { type LyricLine, extractComparableLines, isBodyLine } from "@/utils/extract-text"
 import { sha256Hex } from "@/utils/hash"
-import { normalizeIsrc } from "@/utils/isrc"
+import { ISRC_HINT, normalizeIsrc } from "@/utils/isrc"
 import { LANGUAGE_HINT, isCuratedLanguage, isLanguageCode } from "@/utils/language-code"
 import {
 	type FieldChange,
@@ -128,7 +128,6 @@ const JEV_SKIPPED: JevStep = { state: "skipped" }
 
 class UncheckedLiveEdit extends Error {}
 const NOT_SAVABLE: GateOutcome = { goesLive: false, reason: null }
-const ISRC_HINT = "An ISRC looks like USRC17607839."
 
 const joinText = (lines: LyricLine[]): string => lines.map((line) => line.text).join("\n")
 

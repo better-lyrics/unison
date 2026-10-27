@@ -15,6 +15,7 @@ import { config } from "@/config"
 import { linkVideoForOwner, listVideoLinks, unlinkVideoForOwner } from "@/db/video-links"
 import { suggestVideosForSong, suggestVideosForVariant } from "@/services/video-suggestions"
 import { canonicalJson, hashPublicKey } from "@/utils/crypto"
+import { VIDEO_ID_HINT } from "@/utils/video-id"
 import { videoLinkRoutes } from "./video-links"
 
 const KEY = "a".repeat(64)
@@ -162,6 +163,25 @@ describe("POST /lyrics/:id/videos", () => {
 	it("rejects a missing videoId with 400", async () => {
 		const res = await authedApp().handle(post(7, undefined))
 		expect(res.status).toBe(400)
+	})
+
+	it("links the video id read from a pasted YouTube Music link", async () => {
+		vi.mocked(linkVideoForOwner).mockClear().mockResolvedValue({ ok: true, videos: [] })
+		const res = await authedApp().handle(
+			post(7, "https://music.youtube.com/watch?v=9bZkp7q19f0&si=abc")
+		)
+		expect(res.status).toBe(200)
+		expect(vi.mocked(linkVideoForOwner).mock.calls[0][3]).toBe("9bZkp7q19f0")
+	})
+
+	it("regression: rejects a value that is not a video id with a hint, without running the mutation", async () => {
+		vi.mocked(linkVideoForOwner).mockClear()
+		const res = await authedApp().handle(post(7, "local-file"))
+		expect(res.status).toBe(400)
+		const body = (await res.json()) as { code: string; hint?: string }
+		expect(body.code).toBe("INVALID_ID")
+		expect(body.hint).toBe(VIDEO_ID_HINT)
+		expect(vi.mocked(linkVideoForOwner)).not.toHaveBeenCalled()
 	})
 
 	it("returns 429 when the rate limiter rejects, without running the mutation", async () => {
@@ -403,6 +423,10 @@ describe("POST /lyrics/suggested-videos", () => {
 			["a short videoId", { ...VALID, videoId: "fHI8X4OXlu" }],
 			["a long videoId", { ...VALID, videoId: "fHI8X4OXluQQ" }],
 			["a non-string videoId", { ...VALID, videoId: 12345678901 }],
+			[
+				"a videoId with characters outside the YouTube alphabet",
+				{ ...VALID, videoId: "fHI8X4OXlu!" },
+			],
 		]
 		for (const [label, body] of invalid) {
 			it(`rejects ${label} with 400 INVALID_PAYLOAD`, async () => {

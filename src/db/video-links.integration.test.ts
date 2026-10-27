@@ -141,6 +141,11 @@ describeIntegration("video link service (integration)", () => {
 			expect(res).toEqual({ ok: false, reason: "invalid_id" })
 		})
 
+		it("rejects an 11-character id with characters outside the YouTube alphabet", async () => {
+			const res = await linkVideoForOwner(env, lyricId, owner, "e.d  rt!!!!", match)
+			expect(res).toEqual({ ok: false, reason: "invalid_id" })
+		})
+
 		it("rejects an unverifiable video (duration unavailable)", async () => {
 			const res = await linkVideoForOwner(env, lyricId, owner, TARGET, {
 				search: noResults,

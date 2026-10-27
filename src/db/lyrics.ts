@@ -402,7 +402,7 @@ export async function submitLyrics(
 			song,
 			artist,
 			album,
-			submission.isrc ? (normalizeIsrc(submission.isrc) ?? submission.isrc) : null,
+			submission.isrc ? normalizeIsrc(submission.isrc) : null,
 			submission.duration,
 			songNorm,
 			artistNorm,
@@ -548,7 +548,7 @@ export async function softDeleteLyrics(
 	env: Env,
 	lyricsId: number,
 	actingUserId: number,
-	role: "submitter" | "admin",
+	role: "submitter" | "admin" | "system",
 	reason: string | null = null
 ): Promise<SoftDeleteResult> {
 	const row = await env.DB.prepare(
