@@ -131,7 +131,9 @@ ALTER TABLE lyrics ADD COLUMN IF NOT EXISTS isrc TEXT;
 UPDATE lyrics SET isrc = UPPER(REGEXP_REPLACE(NORMALIZE(isrc, NFKC), '[[:space:]-]', '', 'g'))
     WHERE isrc !~ '^[A-Z]{2}[A-Z0-9]{3}[0-9]{7}$'
       AND UPPER(REGEXP_REPLACE(NORMALIZE(isrc, NFKC), '[[:space:]-]', '', 'g')) ~ '^[A-Z]{2}[A-Z0-9]{3}[0-9]{7}$';
-CREATE INDEX IF NOT EXISTS idx_lyrics_isrc ON lyrics(isrc) WHERE isrc IS NOT NULL;
+-- Hash, not btree: some stored values are whole lyric documents, past the btree row size limit.
+DROP INDEX IF EXISTS idx_lyrics_isrc;
+CREATE INDEX IF NOT EXISTS idx_lyrics_isrc_hash ON lyrics USING HASH (isrc) WHERE isrc IS NOT NULL;
 
 -- Trigram search support
 CREATE EXTENSION IF NOT EXISTS pg_trgm;
