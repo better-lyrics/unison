@@ -253,13 +253,13 @@ describeIntegration("findBySongArtist / searchBySongArtist album + duration matc
 			expect(rows[0].isrc).toBe("US2S70465012")
 		})
 
-		it("regression: keeps a junk ISRC as submitted and never matches it", async () => {
+		it("regression: stores no ISRC for a value that is not one, and never matches it", async () => {
 			const u = await seedUser("key-a")
 			const { id } = await submitLyrics(env, buildSubmission({ isrc: "love" }), u)
 
 			const { rows } = await pool.query("SELECT isrc FROM lyrics WHERE id = $1", [id])
 
-			expect(rows[0].isrc).toBe("love")
+			expect(rows[0].isrc).toBeNull()
 			expect(await findByIsrc(env, "love")).toBeNull()
 			expect(await findByIsrc(env, "LOVE")).toBeNull()
 		})
@@ -289,7 +289,7 @@ describeIntegration("findBySongArtist / searchBySongArtist album + duration matc
 		})
 
 		describe("schema", () => {
-			it("rewrites legacy ISRCs into canonical form and stays idempotent", async () => {
+			it("rewrites legacy ISRCs into canonical form, clears junk, and stays idempotent", async () => {
 				const u = await seedUser("key-a")
 				const legacy = await submitLyrics(env, buildSubmission({ videoId: "V1" }), u)
 				const junk = await submitLyrics(env, buildSubmission({ videoId: "V2" }), u)
@@ -301,7 +301,7 @@ describeIntegration("findBySongArtist / searchBySongArtist album + duration matc
 				await pool.query(schema)
 
 				const { rows } = await pool.query("SELECT id, isrc FROM lyrics ORDER BY id")
-				expect(rows.map((r) => r.isrc)).toEqual(["US2S70465012", "n/a"])
+				expect(rows.map((r) => r.isrc)).toEqual(["US2S70465012", null])
 			})
 
 			it("rewrites legacy revision ISRCs so they match the live lyric", async () => {
@@ -316,6 +316,21 @@ describeIntegration("findBySongArtist / searchBySongArtist album + duration matc
 
 				const { rows } = await pool.query("SELECT isrc FROM lyric_revisions WHERE lyrics_id = $1", [id])
 				expect(rows[0].isrc).toBe("US2S70465012")
+			})
+
+			it("clears a revision ISRC that is not one", async () => {
+				const u = await seedUser("key-a")
+				const { id } = await submitLyrics(env, buildSubmission({ isrc: "US2S70465012" }), u)
+				await pool.query(
+					"UPDATE lyric_revisions SET isrc = 'Cause I can''t go back' WHERE lyrics_id = $1",
+					[id]
+				)
+				const schema = readFileSync(new URL("../../schema.sql", import.meta.url), "utf-8")
+
+				await pool.query(schema)
+
+				const { rows } = await pool.query("SELECT isrc FROM lyric_revisions WHERE lyrics_id = $1", [id])
+				expect(rows[0].isrc).toBeNull()
 			})
 
 			it("regression: migrates when a stored ISRC is longer than a btree row allows", async () => {

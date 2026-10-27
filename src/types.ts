@@ -97,7 +97,7 @@ export interface LyricsRow {
 	submitter_nickname?: string | null
 	deleted_at: number | null
 	deleted_by_user_id: number | null
-	deleted_by_role: "submitter" | "admin" | null
+	deleted_by_role: "submitter" | "admin" | "system" | null
 	deletion_reason: string | null
 	hidden?: boolean
 }

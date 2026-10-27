@@ -127,11 +127,11 @@ CREATE INDEX IF NOT EXISTS idx_lyrics_effective_score ON lyrics(effective_score 
 
 -- Migrations
 ALTER TABLE lyrics ADD COLUMN IF NOT EXISTS isrc TEXT;
--- Canonical ISRC, same rule as src/utils/isrc.ts; values that are not ISRCs stay as submitted.
+-- Canonical ISRC, same rule as src/utils/isrc.ts; values that are not ISRCs are cleared.
 UPDATE lyrics SET isrc = UPPER(REGEXP_REPLACE(NORMALIZE(isrc, NFKC), '[[:space:]-]', '', 'g'))
     WHERE isrc !~ '^[A-Z]{2}[A-Z0-9]{3}[0-9]{7}$'
       AND UPPER(REGEXP_REPLACE(NORMALIZE(isrc, NFKC), '[[:space:]-]', '', 'g')) ~ '^[A-Z]{2}[A-Z0-9]{3}[0-9]{7}$';
--- Hash, not btree: some stored values are whole lyric documents, past the btree row size limit.
+UPDATE lyrics SET isrc = NULL WHERE isrc !~ '^[A-Z]{2}[A-Z0-9]{3}[0-9]{7}$';
 DROP INDEX IF EXISTS idx_lyrics_isrc;
 CREATE INDEX IF NOT EXISTS idx_lyrics_isrc_hash ON lyrics USING HASH (isrc) WHERE isrc IS NOT NULL;
 
@@ -179,6 +179,18 @@ ALTER TABLE lyrics ADD COLUMN IF NOT EXISTS deleted_by_user_id INTEGER REFERENCE
 ALTER TABLE lyrics ADD COLUMN IF NOT EXISTS deleted_by_role TEXT
     CHECK (deleted_by_role IN ('submitter', 'admin'));
 ALTER TABLE lyrics ADD COLUMN IF NOT EXISTS deletion_reason TEXT;
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint
+        WHERE conname = 'lyrics_deleted_by_role_check'
+          AND pg_get_constraintdef(oid) LIKE '%system%'
+    ) THEN
+        ALTER TABLE lyrics DROP CONSTRAINT IF EXISTS lyrics_deleted_by_role_check;
+        ALTER TABLE lyrics ADD CONSTRAINT lyrics_deleted_by_role_check
+            CHECK (deleted_by_role IN ('submitter', 'admin', 'system'));
+    END IF;
+END $$;
 
 DO $$
 BEGIN
@@ -503,6 +515,7 @@ CREATE TABLE IF NOT EXISTS lyric_revisions (
 UPDATE lyric_revisions SET isrc = UPPER(REGEXP_REPLACE(NORMALIZE(isrc, NFKC), '[[:space:]-]', '', 'g'))
     WHERE isrc !~ '^[A-Z]{2}[A-Z0-9]{3}[0-9]{7}$'
       AND UPPER(REGEXP_REPLACE(NORMALIZE(isrc, NFKC), '[[:space:]-]', '', 'g')) ~ '^[A-Z]{2}[A-Z0-9]{3}[0-9]{7}$';
+UPDATE lyric_revisions SET isrc = NULL WHERE isrc !~ '^[A-Z]{2}[A-Z0-9]{3}[0-9]{7}$';
 
 CREATE UNIQUE INDEX IF NOT EXISTS idx_lyric_revisions_one_live
     ON lyric_revisions(lyrics_id) WHERE status = 'live';

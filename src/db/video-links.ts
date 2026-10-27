@@ -5,6 +5,7 @@ import { cachedRecordingMatch } from "@/services/recording-match"
 import { type SongSearch, findSongCandidate } from "@/services/song-search"
 import type { Env } from "@/types"
 import { type SongCandidate, getVideoDurationSeconds } from "@/utils/innertube"
+import { isVideoId } from "@/utils/video-id"
 
 const log = new Logger("db")
 
@@ -32,8 +33,6 @@ export type UnlinkFailure = "not_found" | "not_owner" | "cannot_unlink_primary"
 
 export type LinkResult = { ok: true; videos: VideoLink[] } | { ok: false; reason: LinkFailure }
 export type UnlinkResult = { ok: true; videos: VideoLink[] } | { ok: false; reason: UnlinkFailure }
-
-const VIDEO_ID_LENGTH = 11
 
 export function isWithinDurationDelta(a: number, b: number): boolean {
 	return Math.abs(a - b) <= config.videoLinking.durationDeltaSeconds
@@ -101,7 +100,7 @@ export async function linkVideoForOwner(
 	videoId: string,
 	deps: LinkDeps = {}
 ): Promise<LinkResult> {
-	if (videoId.length !== VIDEO_ID_LENGTH) return { ok: false, reason: "invalid_id" }
+	if (!isVideoId(videoId)) return { ok: false, reason: "invalid_id" }
 
 	const row = await getLinkTarget(env, lyricsId)
 	if (!row || row.deleted_at !== null) return { ok: false, reason: "not_found" }

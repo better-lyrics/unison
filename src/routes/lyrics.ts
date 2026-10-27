@@ -23,10 +23,12 @@ import type { Env, LyricsSubmission } from "@/types"
 import { ALBUM_HINT, isValidAlbum } from "@/utils/album"
 import { signedRequest } from "@/utils/auth"
 import { ErrorCode, buildError } from "@/utils/errors"
+import { ISRC_HINT, normalizeIsrc } from "@/utils/isrc"
 import { normalizeLanguage } from "@/utils/language-code"
 import { readRateLimit } from "@/utils/read-rate-limit"
 import { getSession } from "@/utils/session"
 import { validateLyricContent } from "@/utils/validate-lyrics"
+import { VIDEO_ID_HINT, videoIdFromInput } from "@/utils/video-id"
 import { Elysia, t } from "elysia"
 
 const log = new Logger("app")
@@ -413,6 +415,28 @@ export const lyricsRoutes = (env: Env) =>
 				return status(400, buildError(ErrorCode.INVALID_DURATION))
 			}
 
+			const videoId = videoIdFromInput(p.videoId as string)
+			if (!videoId) {
+				return status(
+					400,
+					buildError(ErrorCode.INVALID_PAYLOAD, { error: "Invalid video ID", hint: VIDEO_ID_HINT })
+				)
+			}
+			if (p.isrc !== undefined && p.isrc !== null && typeof p.isrc !== "string") {
+				return status(
+					400,
+					buildError(ErrorCode.INVALID_PAYLOAD, { error: "Invalid ISRC", hint: ISRC_HINT })
+				)
+			}
+			const rawIsrc = typeof p.isrc === "string" ? p.isrc.trim() : ""
+			const isrc = rawIsrc ? normalizeIsrc(rawIsrc) : undefined
+			if (isrc === null) {
+				return status(
+					400,
+					buildError(ErrorCode.INVALID_PAYLOAD, { error: "Invalid ISRC", hint: ISRC_HINT })
+				)
+			}
+
 			const validated = validateLyricContent(
 				p.lyrics as string,
 				p.format as "ttml" | "lrc" | "plain"
@@ -425,11 +449,11 @@ export const lyricsRoutes = (env: Env) =>
 			}
 
 			const submission: LyricsSubmission = {
-				videoId: p.videoId as string,
+				videoId,
 				song: p.song as string,
 				artist: p.artist as string,
 				album: typeof p.album === "string" ? p.album : undefined,
-				isrc: typeof p.isrc === "string" ? p.isrc : undefined,
+				isrc,
 				duration: p.duration as number,
 				lyrics: p.lyrics as string,
 				format: validated.format,

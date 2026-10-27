@@ -876,6 +876,29 @@ describeIntegration("council flags (integration)", () => {
 				expect(await submitterState()).toEqual(before)
 			})
 
+			it("never penalises a system delete, even of a flagged downvoted lyric, and still closes the case", async () => {
+				const id = await openCase()
+				await db.pool.query(
+					"UPDATE lyrics SET vote_count = 5, effective_score = -2 WHERE id = $1",
+					[lyricsId]
+				)
+				const before = await submitterState()
+				expect(
+					await softDeleteLyrics(db.env, lyricsId, submitter, "system", "invalid video id")
+				).toEqual({ deleted: true })
+				expect(await caseRow(id)).toEqual({ status: "removed", decided_at: expect.any(Number) })
+				expect(await submitterState()).toEqual(before)
+				const { rows } = await db.pool.query(
+					"SELECT deleted_by_role, deletion_reason, reputation_penalized FROM lyrics WHERE id = $1",
+					[lyricsId]
+				)
+				expect(rows[0]).toEqual({
+					deleted_by_role: "system",
+					deletion_reason: "invalid video id",
+					reputation_penalized: false,
+				})
+			})
+
 			it("leaves a kept case untouched on delete", async () => {
 				const id = await openCase()
 				await db.pool.query(

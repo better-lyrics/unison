@@ -1,6 +1,8 @@
 import { config } from "@/config"
 import type { Env, FeedItem } from "@/types"
 import { canonicalJson, hashPublicKey } from "@/utils/crypto"
+import { ISRC_HINT } from "@/utils/isrc"
+import { VIDEO_ID_HINT } from "@/utils/video-id"
 import { describe, expect, it } from "vitest"
 import { lyricsRoutes } from "./lyrics"
 
@@ -249,7 +251,7 @@ describe("POST /lyrics/submit syncType override", () => {
 		const app = lyricsRoutes(env)
 
 		const req = await buildSubmitRequest(keyPair, keyId, {
-			videoId: "abc123",
+			videoId: "dQw4w9WgXcQ",
 			song: "Song",
 			artist: "Artist",
 			duration: 200,
@@ -280,7 +282,7 @@ describe("POST /lyrics/submit syncType override", () => {
 		const app = lyricsRoutes(env)
 
 		const req = await buildSubmitRequest(keyPair, keyId, {
-			videoId: "abc123",
+			videoId: "dQw4w9WgXcQ",
 			song: "Song",
 			artist: "Artist",
 			duration: 200,
@@ -316,7 +318,7 @@ describe("POST /lyrics/submit syncType override", () => {
 		const app = lyricsRoutes(env)
 
 		const req = await buildSubmitRequest(keyPair, keyId, {
-			videoId: "abc123",
+			videoId: "dQw4w9WgXcQ",
 			song: "Song",
 			artist: "Artist",
 			duration: 200,
@@ -347,7 +349,7 @@ describe("POST /lyrics/submit syncType override", () => {
 		const app = lyricsRoutes(env)
 
 		const req = await buildSubmitRequest(keyPair, keyId, {
-			videoId: "abc123",
+			videoId: "dQw4w9WgXcQ",
 			song: "Song",
 			artist: "Artist",
 			duration: 200,
@@ -847,7 +849,7 @@ function findInsert(db: ReturnType<typeof makeMockDB>): DBCall | undefined {
 describe("POST /lyrics/submit format override", () => {
 	it("overrides plain claim with ttml when content is well-formed TTML", async () => {
 		const { res, db } = await submit({
-			videoId: "abc123",
+			videoId: "dQw4w9WgXcQ",
 			song: "Song",
 			artist: "Artist",
 			duration: 200,
@@ -864,7 +866,7 @@ describe("POST /lyrics/submit format override", () => {
 
 	it("overrides plain claim with lrc when content has line tags", async () => {
 		const { res, db } = await submit({
-			videoId: "abc123",
+			videoId: "dQw4w9WgXcQ",
 			song: "Song",
 			artist: "Artist",
 			duration: 200,
@@ -880,7 +882,7 @@ describe("POST /lyrics/submit format override", () => {
 
 	it("overrides lrc claim with plain when content has no timestamps", async () => {
 		const { res, db } = await submit({
-			videoId: "abc123",
+			videoId: "dQw4w9WgXcQ",
 			song: "Song",
 			artist: "Artist",
 			duration: 200,
@@ -896,7 +898,7 @@ describe("POST /lyrics/submit format override", () => {
 
 	it("re-derives syncType from the detected format, ignoring the claimed syncType", async () => {
 		const { res, db } = await submit({
-			videoId: "abc123",
+			videoId: "dQw4w9WgXcQ",
 			song: "Song",
 			artist: "Artist",
 			duration: 200,
@@ -913,7 +915,7 @@ describe("POST /lyrics/submit format override", () => {
 
 	it("leaves matching ttml/richsync claim untouched", async () => {
 		const { res, db } = await submit({
-			videoId: "abc123",
+			videoId: "dQw4w9WgXcQ",
 			song: "Song",
 			artist: "Artist",
 			duration: 200,
@@ -930,7 +932,7 @@ describe("POST /lyrics/submit format override", () => {
 
 	it("rejects ttml claim with malformed content (no closing root) with 400", async () => {
 		const { res, db } = await submit({
-			videoId: "abc123",
+			videoId: "dQw4w9WgXcQ",
 			song: "Song",
 			artist: "Artist",
 			duration: 200,
@@ -947,7 +949,7 @@ describe("POST /lyrics/submit format override", () => {
 
 	it("rejects ttml claim with prose content with 400", async () => {
 		const { res, db } = await submit({
-			videoId: "abc123",
+			videoId: "dQw4w9WgXcQ",
 			song: "Song",
 			artist: "Artist",
 			duration: 200,
@@ -961,7 +963,7 @@ describe("POST /lyrics/submit format override", () => {
 
 	it("rejects ttml claim with LRC content with 400 (lying TTML claim)", async () => {
 		const { res, db } = await submit({
-			videoId: "abc123",
+			videoId: "dQw4w9WgXcQ",
 			song: "Song",
 			artist: "Artist",
 			duration: 200,
@@ -976,7 +978,7 @@ describe("POST /lyrics/submit format override", () => {
 	it("still enforces size cap before sniffing", async () => {
 		const huge = "x".repeat(6 * 1024 * 1024)
 		const { res, db } = await submit({
-			videoId: "abc123",
+			videoId: "dQw4w9WgXcQ",
 			song: "Song",
 			artist: "Artist",
 			duration: 200,
@@ -992,7 +994,7 @@ describe("POST /lyrics/submit format override", () => {
 
 	it("overrides lrc claim with ttml when content is well-formed TTML", async () => {
 		const { res, db } = await submit({
-			videoId: "abc123",
+			videoId: "dQw4w9WgXcQ",
 			song: "Song",
 			artist: "Artist",
 			duration: 200,
@@ -1009,7 +1011,7 @@ describe("POST /lyrics/submit format override", () => {
 	it("stores valid TTML with no timing as ttml/plain", async () => {
 		const untimedTtml = "<tt><body><div><p>Hello world</p><p>Second line</p></div></body></tt>"
 		const { res, db } = await submit({
-			videoId: "abc123",
+			videoId: "dQw4w9WgXcQ",
 			song: "Song",
 			artist: "Artist",
 			duration: 200,
@@ -1025,7 +1027,7 @@ describe("POST /lyrics/submit format override", () => {
 
 	it("treats empty-string syncType claim the same as omitted", async () => {
 		const { res, db } = await submit({
-			videoId: "abc123",
+			videoId: "dQw4w9WgXcQ",
 			song: "Song",
 			artist: "Artist",
 			duration: 200,
@@ -1063,7 +1065,7 @@ describe("POST /lyrics/submit format override", () => {
 
 	it("4xx submission responses carry code, error, and hint fields", async () => {
 		const { res } = await submit({
-			videoId: "abc",
+			videoId: "HMeQT3FLJ3k",
 			song: "S",
 			artist: "A",
 			duration: 100,
@@ -1090,7 +1092,7 @@ describe("POST /lyrics/submit formatted-TTML rejection", () => {
 		const formatted =
 			'<tt><body><div><p begin="0:00.0" end="0:02.0">\n  <span begin="0:00.0" end="0:01.0">Hello</span>\n  <span begin="0:01.0" end="0:02.0">world</span>\n</p></div></body></tt>'
 		const { res, db } = await submit({
-			videoId: "abc",
+			videoId: "HMeQT3FLJ3k",
 			song: "S",
 			artist: "A",
 			duration: 100,
@@ -1118,7 +1120,7 @@ describe("POST /lyrics/submit formatted-TTML rejection", () => {
 			'<span begin="0:01.0" end="0:02.0">Aim</span>' +
 			"</p></div></body></tt>"
 		const { res } = await submit({
-			videoId: "abc",
+			videoId: "HMeQT3FLJ3k",
 			song: "S",
 			artist: "A",
 			duration: 100,
@@ -1138,7 +1140,7 @@ describe("POST /lyrics/submit formatted-TTML rejection", () => {
 			'<span begin="0:01.0" end="0:02.0"> world</span>' +
 			"</p></div></body></tt>"
 		const { res } = await submit({
-			videoId: "abc",
+			videoId: "HMeQT3FLJ3k",
 			song: "S",
 			artist: "A",
 			duration: 100,
@@ -1159,7 +1161,7 @@ describe("POST /lyrics/submit formatted-TTML rejection", () => {
 			'<span begin="0:01.0" end="0:02.0">world</span>' +
 			"</p></div></body></tt>"
 		const { res, db } = await submit({
-			videoId: "abc",
+			videoId: "HMeQT3FLJ3k",
 			song: "S",
 			artist: "A",
 			duration: 100,
@@ -1177,7 +1179,7 @@ describe("POST /lyrics/submit formatted-TTML rejection", () => {
 			'<p begin="0:02.0" end="0:04.0"><span begin="0:02.0" end="0:03.0">More</span> <span begin="0:03.0" end="0:04.0">words</span></p>\n' +
 			"</div></body></tt>"
 		const { res } = await submit({
-			videoId: "abc",
+			videoId: "HMeQT3FLJ3k",
 			song: "S",
 			artist: "A",
 			duration: 100,
@@ -1190,7 +1192,7 @@ describe("POST /lyrics/submit formatted-TTML rejection", () => {
 	it("does not gate non-ttml submissions", async () => {
 		const lrc = "[00:01.00]Hello\n[00:03.00]World"
 		const { res } = await submit({
-			videoId: "abc",
+			videoId: "HMeQT3FLJ3k",
 			song: "S",
 			artist: "A",
 			duration: 100,
@@ -1204,7 +1206,7 @@ describe("POST /lyrics/submit formatted-TTML rejection", () => {
 		const formatted =
 			'<tt><body><div><p begin="0:00.0" end="0:02.0">\n  <span begin="0:00.0" end="0:01.0">Hello</span>\n  <span begin="0:01.0" end="0:02.0">world</span>\n</p></div></body></tt>'
 		const { res, db } = await submit({
-			videoId: "abc",
+			videoId: "HMeQT3FLJ3k",
 			song: "S",
 			artist: "A",
 			duration: 100,
@@ -1224,7 +1226,7 @@ describe("POST /lyrics/submit formatted-TTML rejection", () => {
 			'<span begin="0:01.0" end="0:02.0">Aim </span>\n' +
 			"</p></div></body></tt>"
 		const { res } = await submit({
-			videoId: "abc",
+			videoId: "HMeQT3FLJ3k",
 			song: "S",
 			artist: "A",
 			duration: 100,
@@ -1241,7 +1243,7 @@ describe("POST /lyrics/submit formatted-TTML rejection", () => {
 		const formatted =
 			'<tt><body><div><p>\n<span begin="0:00.0" end="0:01.0">Hi</span>\n<span begin="0:01.0" end="0:02.0">there</span>\n</p></div></body></tt>'
 		const { res, db } = await submit({
-			videoId: "abc",
+			videoId: "HMeQT3FLJ3k",
 			song: "S",
 			artist: "A",
 			duration: 100,
@@ -1257,7 +1259,7 @@ describe("POST /lyrics/submit formatted-TTML rejection", () => {
 		const both =
 			'<tt><body><div><p>\n<span begin="0:00.0" end="0:01.0">Hi</span>\n<span begin="0:01.0" end="0:02.0">there</span>\n</p></div></body>'
 		const { res } = await submit({
-			videoId: "abc",
+			videoId: "HMeQT3FLJ3k",
 			song: "S",
 			artist: "A",
 			duration: 100,
@@ -1273,7 +1275,7 @@ describe("POST /lyrics/submit formatted-TTML rejection", () => {
 		const formatted =
 			'<tt><body><div><p>\n<span begin="0:00.0" end="0:01.0">Hi</span>\n<span begin="0:01.0" end="0:02.0">there</span>\n</p></div></body></tt>'
 		const { res } = await submit({
-			videoId: "abc",
+			videoId: "HMeQT3FLJ3k",
 			song: "S",
 			artist: "A",
 			duration: 100,
@@ -1297,7 +1299,7 @@ describe("POST /lyrics/submit formatted-TTML rejection", () => {
 		const results = await Promise.all(
 			[interSpan, trailing, leading].map((lyrics) =>
 				submit({
-					videoId: "abc",
+					videoId: "HMeQT3FLJ3k",
 					song: "S",
 					artist: "A",
 					duration: 100,
@@ -1319,7 +1321,7 @@ describe("POST /lyrics/submit formatted-TTML rejection", () => {
 			'<span begin="0:00.5" end="0:01.0">lo</span>' +
 			"</p></div></body></tt>"
 		const { res } = await submit({
-			videoId: "abc",
+			videoId: "HMeQT3FLJ3k",
 			song: "S",
 			artist: "A",
 			duration: 100,
@@ -1338,7 +1340,7 @@ describe("POST /lyrics/submit formatted-TTML rejection", () => {
 			"</span>" +
 			"</p></div></body></tt>"
 		const { res } = await submit({
-			videoId: "abc",
+			videoId: "HMeQT3FLJ3k",
 			song: "S",
 			artist: "A",
 			duration: 100,
@@ -1363,7 +1365,7 @@ describe("POST /lyrics/submit album validation", () => {
 		])
 		const app = lyricsRoutes(makeEnv(db))
 		const req = await buildSubmitRequest(keyPair, keyId, {
-			videoId: "abc123",
+			videoId: "dQw4w9WgXcQ",
 			song: "Song",
 			artist: "Artist",
 			album,
@@ -1436,12 +1438,86 @@ describe("POST /lyrics/submit album validation", () => {
 	})
 })
 
+describe("POST /lyrics/submit identifier validation", () => {
+	const VIDEO_ID_PARAM_INDEX = 0
+	const ISRC_PARAM_INDEX = 4
+	const submitWith = (fields: Record<string, unknown>) =>
+		submit({
+			videoId: "dQw4w9WgXcQ",
+			song: "Song",
+			artist: "Artist",
+			duration: 200,
+			lyrics: RICHSYNC_TTML,
+			format: "ttml",
+			...fields,
+		})
+	const errorOf = async (res: Response) =>
+		(await res.json()) as { code: string; error: string; hint?: string }
+
+	it("stores the video id read from a pasted YouTube Music link", async () => {
+		const { res, db } = await submitWith({
+			videoId: "https://music.youtube.com/watch?v=9yfrVqCcrS0&si=cQ3SU5WVYjJvKbhq",
+		})
+		expect(res.status).toBe(201)
+		expect(findInsert(db)?.params[VIDEO_ID_PARAM_INDEX]).toBe("9yfrVqCcrS0")
+	})
+
+	it("stores an ISRC in canonical form", async () => {
+		const { res, db } = await submitWith({ isrc: "us-2s7-04-65012" })
+		expect(res.status).toBe(201)
+		expect(findInsert(db)?.params[ISRC_PARAM_INDEX]).toBe("US2S70465012")
+	})
+
+	describe("edge cases", () => {
+		it("stores a blank ISRC as no ISRC", async () => {
+			const { res, db } = await submitWith({ isrc: "   " })
+			expect(res.status).toBe(201)
+			expect(findInsert(db)?.params[ISRC_PARAM_INDEX]).toBeNull()
+		})
+	})
+
+	describe("error paths", () => {
+		it("regression: rejects a video id that is not a YouTube id and stores nothing", async () => {
+			for (const videoId of ["local-file", "e.d  rt", "t7AcyLcqkIWx6a23"]) {
+				const { res, db } = await submitWith({ videoId })
+				expect(res.status, videoId).toBe(400)
+				const body = await errorOf(res)
+				expect(body.code).toBe("INVALID_PAYLOAD")
+				expect(body.error).toBe("Invalid video ID")
+				expect(body.hint).toBe(VIDEO_ID_HINT)
+				expect(findInsert(db)).toBeUndefined()
+			}
+		})
+
+		it("regression: rejects an ISRC field holding lyrics or a link and stores nothing", async () => {
+			for (const isrc of [
+				RICHSYNC_TTML,
+				"https://open.spotify.com/track/2kD5bGkc4Inh6Uel6wfRK8",
+				"love",
+			]) {
+				const { res, db } = await submitWith({ isrc })
+				expect(res.status).toBe(400)
+				const body = await errorOf(res)
+				expect(body.code).toBe("INVALID_PAYLOAD")
+				expect(body.error).toBe("Invalid ISRC")
+				expect(body.hint).toBe(ISRC_HINT)
+				expect(findInsert(db)).toBeUndefined()
+			}
+		})
+
+		it("rejects a non-string ISRC", async () => {
+			const { res } = await submitWith({ isrc: 12345 })
+			expect(res.status).toBe(400)
+		})
+	})
+})
+
 describe("POST /lyrics/submit language normalization", () => {
 	const LANGUAGE_PARAM_INDEX = 11
 	const LANGUAGE_SOURCE_PARAM_INDEX = 15
 	const submitWithLanguage = async (language: unknown) => {
 		const { res, db } = await submit({
-			videoId: "abc123",
+			videoId: "dQw4w9WgXcQ",
 			song: "Song",
 			artist: "Artist",
 			duration: 200,

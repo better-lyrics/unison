@@ -202,6 +202,7 @@ POST /lyrics/submit
   "lyrics": "[00:15.00]First line...",
   "format": "lrc",
   "album": "Album Name",
+  "isrc": "USRC17607839",
   "language": "en",
   "syncType": "linesync"
 }
@@ -209,6 +210,8 @@ POST /lyrics/submit
 
 Formats: `ttml`, `lrc`, `plain`
 Sync Types: `richsync`, `linesync`, `plain`
+
+`videoId` takes a bare video id or a pasted YouTube / YouTube Music link, and the id is read out of the link. Anything else is rejected with `400 INVALID_PAYLOAD` ("Invalid video ID"). `isrc` is optional; when present it must be a real ISRC (case and hyphens do not matter) or the request is rejected with "Invalid ISRC". Both errors carry a `hint` to show the user.
 
 ### Vote
 
