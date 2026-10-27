@@ -11,7 +11,7 @@ const LINK_FRAGMENT = /^(?:\/?watch)?\??(?:v=|=)?([A-Za-z0-9_-]{11})(?:[&?#].*)?
 const ID_PATH = /^\/(?:shorts|embed|live)\/([^/]+)\/?$/
 
 export const VIDEO_ID_HINT =
-	"Use a YouTube video id like dQw4w9WgXcQ, or paste the YouTube or YouTube Music link."
+	"That doesn't look like a YouTube video. Paste its YouTube or YouTube Music link, or the 11-character video ID."
 
 export function isVideoId(value: unknown): value is string {
 	return typeof value === "string" && VIDEO_ID.test(value)
