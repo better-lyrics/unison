@@ -1,4 +1,3 @@
-import { readFileSync } from "node:fs"
 import { config } from "@/config"
 import { createBookmark, listActiveBookmarks } from "@/db/council-bookmarks"
 import { listCouncilEvents } from "@/db/council-events"
@@ -16,6 +15,7 @@ import {
 } from "@/test/integration-harness"
 import {
 	AMAZING_GRACE_SPANISH,
+	readMalformedTtml,
 	readRevisionFixture,
 	shiftLrc,
 	swapWords,
@@ -1048,15 +1048,9 @@ describeIntegration("lyric revisions pipeline (integration)", () => {
 	})
 
 	describe("regressions: TTML that is not well-formed XML", () => {
-		const malformed = (name: string) =>
-			readFileSync(
-				new URL(`../utils/__fixtures__/malformed-ttml/${name}.ttml`, import.meta.url),
-				"utf-8"
-			)
-
 		it("regression: rejects an edit wrapped in a code fence", async () => {
 			const result = await saveRevision(db.env, lyricId, owner, {
-				lyrics: malformed("code-fence"),
+				lyrics: readMalformedTtml("code-fence"),
 				format: "ttml",
 			})
 			expect(result).toMatchObject({ ok: false, reason: "invalid", code: "TTML_MALFORMED" })
@@ -1067,7 +1061,7 @@ describeIntegration("lyric revisions pipeline (integration)", () => {
 			await save(lrc(swapWords(LRC, 1)))
 			await db.pool.query(
 				"UPDATE lyric_revisions SET lyrics = $2, format = 'ttml' WHERE lyrics_id = $1 AND rev_no = 1",
-				[lyricId, await compress(malformed("trailing-junk"))]
+				[lyricId, await compress(readMalformedTtml("trailing-junk"))]
 			)
 			const reverted = await revertToRevision(db.env, lyricId, owner, await revisionId(1))
 			expect(reverted).toMatchObject({ ok: false, reason: "invalid", code: "TTML_MALFORMED" })

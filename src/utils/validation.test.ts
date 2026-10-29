@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs"
+import { readMalformedTtml, readRevisionFixture } from "@/test/lyric-fixtures"
 import { describe, expect, it } from "vitest"
 import {
 	detectFormat,
@@ -10,16 +10,13 @@ import {
 	validateTtmlStructure,
 } from "./validation"
 
-const malformed = (name: string) =>
-	readFileSync(new URL(`./__fixtures__/malformed-ttml/${name}.ttml`, import.meta.url), "utf-8")
-const revisionFixture = (name: string) =>
-	readFileSync(new URL(`./__fixtures__/revisions/${name}`, import.meta.url), "utf-8")
+
 
 describe("findXmlProblem", () => {
 	describe("well-formed TTML", () => {
 		it("accepts a real Apple-style TTML file", () => {
-			expect(findXmlProblem(revisionFixture("amazing-grace.ttml"))).toBeNull()
-			expect(findXmlProblem(revisionFixture("90210-before.ttml"))).toBeNull()
+			expect(findXmlProblem(readRevisionFixture("amazing-grace.ttml"))).toBeNull()
+			expect(findXmlProblem(readRevisionFixture("90210-before.ttml"))).toBeNull()
 		})
 
 		it("accepts the xml prefix without a declaration", () => {
@@ -37,7 +34,7 @@ describe("findXmlProblem", () => {
 		})
 
 		it("accepts a namespace name that is not a URI, as browsers do", () => {
-			expect(findXmlProblem(malformed("non-uri-namespace"))).toBeNull()
+			expect(findXmlProblem(readMalformedTtml("non-uri-namespace"))).toBeNull()
 		})
 	})
 
@@ -71,58 +68,58 @@ describe("findXmlProblem", () => {
 
 	describe("regressions: failure classes found in stored lyrics", () => {
 		it("regression: rejects text before the root element", () => {
-			const problem = findXmlProblem(malformed("text-before-root"))
+			const problem = findXmlProblem(readMalformedTtml("text-before-root"))
 			expect(problem?.message).toContain("before the opening <tt>")
 			expect(problem?.line).toBe(1)
 		})
 
 		it("regression: rejects a markdown code fence around the file", () => {
-			expect(findXmlProblem(malformed("code-fence"))?.message).toContain("code fence")
+			expect(findXmlProblem(readMalformedTtml("code-fence"))?.message).toContain("code fence")
 		})
 
 		it("regression: rejects text after the closing root tag", () => {
-			expect(findXmlProblem(malformed("trailing-junk"))?.message).toContain(
+			expect(findXmlProblem(readMalformedTtml("trailing-junk"))?.message).toContain(
 				"after the closing </tt>"
 			)
 		})
 
 		it("regression: rejects two documents pasted one after the other", () => {
-			expect(findXmlProblem(malformed("two-documents"))?.message).toContain(
+			expect(findXmlProblem(readMalformedTtml("two-documents"))?.message).toContain(
 				"after the closing </tt>"
 			)
 		})
 
 		it("regression: rejects an undeclared namespace prefix", () => {
-			const problem = findXmlProblem(malformed("unbound-prefix"))
+			const problem = findXmlProblem(readMalformedTtml("unbound-prefix"))
 			expect(problem?.message).toContain("itunes:timing")
 			expect(problem?.message).toContain("xmlns:itunes")
 			expect(problem?.line).toBe(2)
 		})
 
 		it("regression: rejects a control character in an attribute", () => {
-			const problem = findXmlProblem(malformed("control-char"))
+			const problem = findXmlProblem(readMalformedTtml("control-char"))
 			expect(problem?.message).toContain("control character")
 			expect(problem?.line).toBe(6)
 		})
 
 		it("regression: rejects a stray closing tag", () => {
-			expect(findXmlProblem(malformed("mismatched-tag"))).not.toBeNull()
+			expect(findXmlProblem(readMalformedTtml("mismatched-tag"))).not.toBeNull()
 		})
 
 		it("regression: rejects a half-written tag", () => {
-			expect(findXmlProblem(malformed("half-written-tag"))).not.toBeNull()
+			expect(findXmlProblem(readMalformedTtml("half-written-tag"))).not.toBeNull()
 		})
 
 		it("regression: rejects backslash-escaped quotes", () => {
-			expect(findXmlProblem(malformed("escaped-quotes"))).not.toBeNull()
+			expect(findXmlProblem(readMalformedTtml("escaped-quotes"))).not.toBeNull()
 		})
 
 		it("regression: rejects a bare ampersand", () => {
-			expect(findXmlProblem(malformed("bare-ampersand"))).not.toBeNull()
+			expect(findXmlProblem(readMalformedTtml("bare-ampersand"))).not.toBeNull()
 		})
 
 		it("regression: rejects a tag with garbage between its name and attributes", () => {
-			expect(findXmlProblem(malformed("corrupted-tag"))).not.toBeNull()
+			expect(findXmlProblem(readMalformedTtml("corrupted-tag"))).not.toBeNull()
 		})
 	})
 
@@ -141,7 +138,7 @@ describe("findXmlProblem", () => {
 				"bare-ampersand",
 				"corrupted-tag",
 			]) {
-				const problem = findXmlProblem(malformed(name))
+				const problem = findXmlProblem(readMalformedTtml(name))
 				expect(problem, name).not.toBeNull()
 				expect(problem!.line, name).toBeGreaterThan(0)
 				expect(problem!.column, name).toBeGreaterThan(0)
@@ -149,7 +146,7 @@ describe("findXmlProblem", () => {
 		})
 
 		it("gives the same answer when called twice on the same input", () => {
-			const input = malformed("unbound-prefix")
+			const input = readMalformedTtml("unbound-prefix")
 			expect(findXmlProblem(input)).toEqual(findXmlProblem(input))
 		})
 	})
@@ -157,11 +154,11 @@ describe("findXmlProblem", () => {
 
 describe("missingRootPrefixes", () => {
 	it("lists a prefix the root never declares", () => {
-		expect(missingRootPrefixes(malformed("unbound-prefix"))).toEqual(["itunes"])
+		expect(missingRootPrefixes(readMalformedTtml("unbound-prefix"))).toEqual(["itunes"])
 	})
 
 	it("returns nothing when every prefix is declared", () => {
-		expect(missingRootPrefixes(revisionFixture("amazing-grace.ttml"))).toEqual([])
+		expect(missingRootPrefixes(readRevisionFixture("amazing-grace.ttml"))).toEqual([])
 	})
 
 	describe("edge cases", () => {
