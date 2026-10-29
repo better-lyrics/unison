@@ -4,6 +4,13 @@ export function readRevisionFixture(name: string): string {
 	return readFileSync(new URL(`../utils/__fixtures__/revisions/${name}`, import.meta.url), "utf-8")
 }
 
+export function readMalformedTtml(name: string): string {
+	return readFileSync(
+		new URL(`../utils/__fixtures__/malformed-ttml/${name}.ttml`, import.meta.url),
+		"utf-8"
+	)
+}
+
 // Each word appears once in amazing-grace.lrc, and each swap moves text drift by 1/98.
 export const AMAZING_GRACE_SWAPS: Array<[string, string]> = [
 	["sweet", "soft"],

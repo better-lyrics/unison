@@ -1,0 +1,27 @@
+<tt xmlns="http://www.w3.org/ns/ttml" xmlns:ttm="http://www.w3.org/ns/ttml#metadata" xmlns:ttp="http://www.w3.org/ns/ttml#parameter" xmlns:itunes="http://music.apple.com/lyric-ttml-internal" xmlns:composer="https://composer.betterlyrics.org/ttml" ttp:timeBase="media" xml:lang="hi" itunes:timing="Word" composer:timing="Word">
+  <head>
+    <metadata>
+      <ttm:title>Paaro</ttm:title>
+      <ttm:agent xml:id="v1" type="person">
+        <ttm:name>Lead</ttm:name>
+      </ttm:agent>
+      <iTunesMetadata xmlns="http://music.apple.com/lyric-ttml-internal">
+        <translations>
+          <translation xml:lang="en" type="subtitle">
+          </translation>
+        </translations>
+        <transliterations>
+          <transliteration xml:lang="hi-Latn">
+            <text for="L9"><span begin="1:01.000" end="1:01.591">Jise</span>  <span begin="1:01.591" end="1:02.182">paana</span>  <span begin="1:02.182" end="1:02.773">tha</span>  <span begin="1:02.773" end="1:03.364">use</span>  <span begin="1:03.364" end="1:03.955">kho</span>  <span begin="1:03.955" end="1:04.545">baithe,</span>  <span begin="1:04.545" end="1:05.136">yeh</span>  <span begin="1:05.136" end="1:05.727">kaafi</span>  <span録begin="1:05.727" end="1:06.318">nahi</span>  <span begin="1:06.318" end="1:06.788">hai</span>  <span begin="1:06.788" end="1:07.080">kya?</span></text>
+          </transliteration>
+        </transliterations>
+      </iTunesMetadata>
+    </metadata>
+  </head>
+  <body dur="2:33.227">
+    <div>
+      <p begin="0:13.600" end="0:15.132" itunes:key="L1" ttm:agent="v1"><span begin="0:13.600" end="0:15.132">पारो</span></p>
+      <p begin="0:16.599" end="0:18.652" itunes:key="L2" ttm:agent="v1"><span begin="0:16.599" end="0:17.169">मेरी</span> <span begin="0:17.169" end="0:18.652">पारो</span></p>
+    </div>
+  </body>
+</tt>

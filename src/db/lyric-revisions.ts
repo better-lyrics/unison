@@ -304,7 +304,7 @@ async function changesLyrics(tx: D1Compat, revision: RevisionRow): Promise<boole
 	)
 }
 
-// The only writer of the lyrics content columns once a lyric has revisions.
+// With restoreLyricContent, the only writer of the lyrics content columns once a lyric has revisions.
 export async function setCurrentRevision(tx: D1Compat, revision: RevisionRow): Promise<void> {
 	if (await changesLyrics(tx, revision)) await lapseRejectionForEdit(tx, revision.lyrics_id)
 	const content = await decompressIfNeeded(revision.lyrics)
@@ -340,6 +340,52 @@ export async function setCurrentRevision(tx: D1Compat, revision: RevisionRow): P
 			extractPlainText(content, revision.format),
 			revision.id,
 			revision.lyrics_id
+		)
+		.run()
+}
+
+export interface LyricContentSnapshot {
+	lyrics: string
+	format: LyricsFormat
+	sync_type: SyncType
+	lyrics_text_search: string | null
+}
+
+export async function snapshotLyricContent(
+	db: D1Compat,
+	lyricsId: number
+): Promise<LyricContentSnapshot | null> {
+	return db
+		.prepare(
+			`SELECT lyrics, format, sync_type, lyrics_text_search::text AS lyrics_text_search
+			FROM lyrics WHERE id = ?`
+		)
+		.bind(lyricsId)
+		.first<LyricContentSnapshot>()
+}
+
+export async function restoreLyricContent(
+	tx: D1Compat,
+	lyricsId: number,
+	snapshot: LyricContentSnapshot,
+	pointers: { currentRevisionId: number; anchorRevisionId: number }
+): Promise<void> {
+	await tx
+		.prepare(
+			`UPDATE lyrics SET
+				lyrics = ?, format = ?, sync_type = ?, lyrics_text_search = ?::tsvector,
+				current_revision_id = ?, anchor_revision_id = ?,
+				updated_at = EXTRACT(EPOCH FROM NOW())::INTEGER
+			WHERE id = ?`
+		)
+		.bind(
+			snapshot.lyrics,
+			snapshot.format,
+			snapshot.sync_type,
+			snapshot.lyrics_text_search,
+			pointers.currentRevisionId,
+			pointers.anchorRevisionId,
+			lyricsId
 		)
 		.run()
 }

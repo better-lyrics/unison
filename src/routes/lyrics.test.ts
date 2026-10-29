@@ -1,7 +1,10 @@
 import { config } from "@/config"
+import { readMalformedTtml, readRevisionFixture } from "@/test/lyric-fixtures"
 import type { Env, FeedItem } from "@/types"
+import { decompress } from "@/utils/compression"
 import { canonicalJson, hashPublicKey } from "@/utils/crypto"
 import { ISRC_HINT } from "@/utils/isrc"
+import { findXmlProblem } from "@/utils/validation"
 import { VIDEO_ID_HINT } from "@/utils/video-id"
 import { describe, expect, it } from "vitest"
 import { lyricsRoutes } from "./lyrics"
@@ -817,6 +820,7 @@ describe("GET /lyrics/variants/:videoId", () => {
 
 const FORMAT_PARAM_INDEX = 10
 const SYNC_TYPE_PARAM_INDEX = 12
+const LYRICS_PARAM_INDEX = 9
 
 function seedSubmitDB(keyId: string, publicJwk: JsonWebKey) {
 	return makeMockDB([
@@ -1084,6 +1088,92 @@ describe("POST /lyrics/submit format override", () => {
 		expect(body.code).toBe("TTML_MALFORMED")
 		expect(typeof body.hint).toBe("string")
 		expect(body.hint.length).toBeGreaterThan(40)
+	})
+})
+
+describe("POST /lyrics/submit XML well-formedness", () => {
+	const FAILURE_CLASSES = [
+		"text-before-root",
+		"code-fence",
+		"trailing-junk",
+		"two-documents",
+		"control-char",
+		"mismatched-tag",
+		"half-written-tag",
+		"escaped-quotes",
+		"bare-ampersand",
+		"corrupted-tag",
+	]
+	const submitTtml = (lyrics: string, format = "ttml") =>
+		submit({ videoId: "HMeQT3FLJ3k", song: "S", artist: "A", duration: 240, lyrics, format })
+
+	describe("regressions: failure classes found in stored lyrics", () => {
+		for (const name of FAILURE_CLASSES) {
+			it(`regression: rejects ${name} with TTML_MALFORMED and stores nothing`, async () => {
+				const { res, db } = await submitTtml(readMalformedTtml(name))
+				expect(res.status).toBe(400)
+				const body = (await res.json()) as { code: string; error: string; hint: string }
+				expect(body.code).toBe("TTML_MALFORMED")
+				expect(body.error).toBe("Malformed TTML content")
+				expect(body.hint).toMatch(/\(line \d+, column \d+\)/)
+				expect(findInsert(db)).toBeUndefined()
+			})
+		}
+
+		it("regression: names the fix in the hint for a code fence", async () => {
+			const { res } = await submitTtml(readMalformedTtml("code-fence"))
+			const body = (await res.json()) as { hint: string }
+			expect(body.hint).toContain("code fence")
+		})
+	})
+
+	describe("cross-field interactions", () => {
+		it("rejects malformed TTML even when the submitter claims plain or lrc", async () => {
+			for (const format of ["plain", "lrc"]) {
+				const { res, db } = await submitTtml(readMalformedTtml("trailing-junk"), format)
+				expect(res.status, format).toBe(400)
+				expect(((await res.json()) as { code: string }).code).toBe("TTML_MALFORMED")
+				expect(findInsert(db)).toBeUndefined()
+			}
+		})
+	})
+
+	describe("undeclared standard prefixes", () => {
+		it("declares a missing standard prefix and stores the declared file", async () => {
+			const { res, db } = await submitTtml(readMalformedTtml("unbound-prefix"))
+			expect(res.status).toBe(201)
+			const stored = await decompress(findInsert(db)?.params[LYRICS_PARAM_INDEX] as string)
+			expect(stored).toContain('<tt xmlns:itunes="http://music.apple.com/lyric-ttml-internal"')
+			expect(findXmlProblem(stored)).toBeNull()
+		})
+
+		it("still rejects a prefix with no standard namespace", async () => {
+			const input = readMalformedTtml("unbound-prefix").replace("itunes:timing", "quick:timing")
+			const { res, db } = await submitTtml(input)
+			expect(res.status).toBe(400)
+			expect(((await res.json()) as { hint: string }).hint).toContain('"quick:timing"')
+			expect(findInsert(db)).toBeUndefined()
+		})
+
+		it("leaves a file that declares its prefixes byte for byte", async () => {
+			const input = readRevisionFixture("amazing-grace.ttml")
+			const { res, db } = await submitTtml(input)
+			expect(res.status).toBe(201)
+			expect(await decompress(findInsert(db)?.params[LYRICS_PARAM_INDEX] as string)).toBe(input)
+		})
+	})
+
+	describe("well-formed input", () => {
+		it("accepts a namespace name that is not a URI, as browsers do", async () => {
+			const { res, db } = await submitTtml(readMalformedTtml("non-uri-namespace"))
+			expect(res.status).toBe(201)
+			expect(findInsert(db)?.params[FORMAT_PARAM_INDEX]).toBe("ttml")
+		})
+
+		it("still accepts plain text that merely mentions angle brackets", async () => {
+			const { res } = await submitTtml("I said <hey> & walked away\nThen I came back", "plain")
+			expect(res.status).toBe(201)
+		})
 	})
 })
 

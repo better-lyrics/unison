@@ -1,0 +1,24 @@
+<tt xmlns="http://www.w3.org/ns/ttml" xmlns:ttm="http://www.w3.org/ns/ttml#metadata" xmlns:ttp="http://www.w3.org/ns/ttml#parameter" xmlns:itunes="http://music.apple.com/lyric-ttml-internal" xmlns:composer="https://composer.betterlyrics.org/ttml" ttp:timeBase="media" xml:lang="en" itunes:timing="Word" composer:timing="Word">
+  <head>
+    <metadata>
+      <ttm:title>Ode to the Nameless Martyr</ttm:title>
+      <composer:meta key="artists" value="Wuthering Waves"/>
+      <composer:meta key="album" value="An Untitled Long Poemo&lt;Original Game Soundtracko&lt;	"/>
+      <ttm:agent xml:id="v1" type="person">
+        <ttm:name>Lupa</ttm:name>
+      </ttm:agent>
+      <ttm:agent xml:id="v2" type="person">
+        <ttm:name>Mya</ttm:name>
+      </ttm:agent>
+      <ttm:agent xml:id="v3" type="group">
+        <ttm:name>Mya &amp; Lupa</ttm:name>
+      </ttm:agent>
+    </metadata>
+  </head>
+  <body dur="4:01.643">
+    <div>
+      <p begin="0:11.813" end="0:11.813" ttm:agent="v3"><span>(Lupa &amp; Mya)</span></p>
+      <p begin="0:11.813" end="0:17.759" ttm:agent="v3"><span begin="0:11.813" end="0:12.134">Was</span> <span begin="0:12.134" end="0:12.415">it</span> <span begin="0:12.415" end="0:13.544">real?</span> <span begin="0:13.544" end="0:13.829">Was</span> <span begin="0:13.829" end="0:14.400">it</span> <span begin="0:14.400" end="0:14.966">mine?</span> <span begin="0:14.966" end="0:15.249">Was</span> <span begin="0:15.249" end="0:15.535">it</span> <span begin="0:15.535" end="0:15.824">worth</span> <span begin="0:15.824" end="0:17.759">it?</span></p>
+    </div>
+  </body>
+</tt>

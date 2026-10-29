@@ -455,7 +455,7 @@ export const lyricsRoutes = (env: Env) =>
 				album: typeof p.album === "string" ? p.album : undefined,
 				isrc,
 				duration: p.duration as number,
-				lyrics: p.lyrics as string,
+				lyrics: validated.lyrics,
 				format: validated.format,
 				language:
 					typeof p.language === "string" ? (normalizeLanguage(p.language) ?? undefined) : undefined,
