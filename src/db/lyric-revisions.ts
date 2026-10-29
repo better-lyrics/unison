@@ -348,14 +348,7 @@ export interface LyricContentSnapshot {
 	lyrics: string
 	format: LyricsFormat
 	sync_type: SyncType
-	isrc: string | null
-	album: string | null
-	album_norm: string | null
-	language: string | null
-	language_source: string | null
-	language_detector_version: number | null
 	lyrics_text_search: string | null
-	updated_at: number
 }
 
 export async function snapshotLyricContent(
@@ -364,8 +357,7 @@ export async function snapshotLyricContent(
 ): Promise<LyricContentSnapshot | null> {
 	return db
 		.prepare(
-			`SELECT lyrics, format, sync_type, isrc, album, album_norm, language, language_source,
-				language_detector_version, lyrics_text_search::text AS lyrics_text_search, updated_at
+			`SELECT lyrics, format, sync_type, lyrics_text_search::text AS lyrics_text_search
 			FROM lyrics WHERE id = ?`
 		)
 		.bind(lyricsId)
@@ -381,23 +373,16 @@ export async function restoreLyricContent(
 	await tx
 		.prepare(
 			`UPDATE lyrics SET
-				lyrics = ?, format = ?, sync_type = ?, isrc = ?, album = ?, album_norm = ?, language = ?,
-				language_source = ?, language_detector_version = ?, lyrics_text_search = ?::tsvector,
-				updated_at = ?, current_revision_id = ?, anchor_revision_id = ?
+				lyrics = ?, format = ?, sync_type = ?, lyrics_text_search = ?::tsvector,
+				current_revision_id = ?, anchor_revision_id = ?,
+				updated_at = EXTRACT(EPOCH FROM NOW())::INTEGER
 			WHERE id = ?`
 		)
 		.bind(
 			snapshot.lyrics,
 			snapshot.format,
 			snapshot.sync_type,
-			snapshot.isrc,
-			snapshot.album,
-			snapshot.album_norm,
-			snapshot.language,
-			snapshot.language_source,
-			snapshot.language_detector_version,
 			snapshot.lyrics_text_search,
-			snapshot.updated_at,
 			pointers.currentRevisionId,
 			pointers.anchorRevisionId,
 			lyricsId

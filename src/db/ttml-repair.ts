@@ -7,7 +7,6 @@ import {
 	loadLyricState,
 	restoreLyricContent,
 	retireLiveRevision,
-	setAnchorRevision,
 	setCurrentRevision,
 	setRevisionStatus,
 	snapshotLyricContent,
@@ -25,7 +24,11 @@ export const TTML_REPAIR_DELETION_REASON = "TTML is not well-formed XML"
 export type RepairAction =
 	| { kind: "repair"; lyricsId: number; contentHash: string; before: string; after: string }
 	| { kind: "delete"; lyricsId: number; contentHash: string; problem: string }
-	| { kind: "skip"; lyricsId: number; reason: "no_submitter" | "open_report_case" }
+	| {
+			kind: "skip"
+			lyricsId: number
+			reason: "no_submitter" | "open_report_case" | "pending_revision"
+	  }
 
 export type ManifestEntry =
 	| {
@@ -49,6 +52,14 @@ async function hasOpenReportCase(db: D1Compat, lyricsId: number): Promise<boolea
 		.prepare("SELECT 1 AS open FROM report_cases WHERE lyrics_id = ? AND status = 'open'")
 		.bind(lyricsId)
 		.first<{ open: number }>()
+	return row !== null
+}
+
+async function hasPendingRevision(db: D1Compat, lyricsId: number): Promise<boolean> {
+	const row = await db
+		.prepare("SELECT 1 AS pending FROM lyric_revisions WHERE lyrics_id = ? AND status = 'pending'")
+		.bind(lyricsId)
+		.first<{ pending: number }>()
 	return row !== null
 }
 
@@ -92,7 +103,9 @@ export async function planTtmlRepairs(
 			}
 			const contentHash = sha256Hex(content)
 			const repaired = repairTtml(content)
-			if (repaired !== null) {
+			if (repaired !== null && (await hasPendingRevision(env.DB, row.id))) {
+				actions.push({ kind: "skip", lyricsId: row.id, reason: "pending_revision" })
+			} else if (repaired !== null) {
 				actions.push({
 					kind: "repair",
 					lyricsId: row.id,
@@ -113,20 +126,30 @@ async function applyRepair(
 	env: Env,
 	action: Extract<RepairAction, { kind: "repair" }>
 ): Promise<ManifestEntry | null> {
-	if ((await contentHashOf(await liveContent(env.DB, action.lyricsId))) !== action.contentHash) {
-		return null
+	const unchanged = async (db: D1Compat) => {
+		const stored = await liveContent(db, action.lyricsId)
+		if (!stored) return false
+		const content = await decompressIfNeeded(stored.lyrics)
+		if (sha256Hex(content) !== action.contentHash || repairTtml(content) !== action.after) {
+			return false
+		}
+		return !(await hasPendingRevision(db, action.lyricsId))
 	}
+	if (!(await unchanged(env.DB))) return null
 	await ensureBaseRevision(env.DB, action.lyricsId)
 	const entry = await env.DB.transaction(async (tx): Promise<ManifestEntry | null> => {
 		const lyric = await loadLyricState(tx, action.lyricsId, true)
-		const stored = await liveContent(tx, action.lyricsId)
 		if (!lyric?.current_revision_id || !lyric.anchor_revision_id || lyric.submitter_id === null) {
 			return null
 		}
-		if ((await contentHashOf(stored)) !== action.contentHash) return null
+		if (!(await unchanged(tx))) return null
 		const live = await getRevisionRow(tx, action.lyricsId, lyric.current_revision_id)
 		const previous = await snapshotLyricContent(tx, action.lyricsId)
-		if (!live || !previous) return null
+		const metadata = await tx
+			.prepare("SELECT language, isrc, album FROM lyrics WHERE id = ?")
+			.bind(action.lyricsId)
+			.first<{ language: string | null; isrc: string | null; album: string | null }>()
+		if (!live || !previous || !metadata) return null
 
 		await retireLiveRevision(tx, action.lyricsId)
 		const repair = await insertRevision(tx, {
@@ -134,9 +157,7 @@ async function applyRepair(
 			content: action.after,
 			format: "ttml",
 			syncType: previous.sync_type,
-			language: previous.language,
-			isrc: previous.isrc,
-			album: previous.album,
+			...metadata,
 			authorId: lyric.submitter_id,
 			status: "live",
 			pendingReason: null,
@@ -146,7 +167,6 @@ async function applyRepair(
 			revertsRevisionId: null,
 		})
 		await setCurrentRevision(tx, repair)
-		await setAnchorRevision(tx, action.lyricsId, repair.id)
 		return {
 			kind: "repair",
 			lyricsId: action.lyricsId,

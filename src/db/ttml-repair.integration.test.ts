@@ -103,6 +103,20 @@ describeIntegration("stored TTML repair (integration)", () => {
 				])
 			})
 
+			it("regression: skips a lyric with a pending edit so approval cannot overwrite the repair", async () => {
+				const id = await seedTtml(readMalformedTtml("code-fence"))
+				await ensureBaseRevision(db.env.DB, id)
+				await db.pool.query(
+					`INSERT INTO lyric_revisions (lyrics_id, rev_no, lyrics, format, sync_type, content_hash,
+						author_id, status, pending_reason)
+					VALUES ($1, 2, $2, 'ttml', 'richsync', 'x', $3, 'pending', 'large_text_drift')`,
+					[id, await compress(readRevisionFixture("amazing-grace.ttml")), owner]
+				)
+				expect(await planTtmlRepairs(db.env)).toMatchObject([
+					{ kind: "skip", lyricsId: id, reason: "pending_revision" },
+				])
+			})
+
 			it("pages through more rows than one batch", async () => {
 				const ids: number[] = []
 				for (let i = 0; i < 5; i++) ids.push(await seedTtml(readMalformedTtml("code-fence")))
@@ -127,7 +141,7 @@ describeIntegration("stored TTML repair (integration)", () => {
 			const row = await lyricRow(id)
 			expect(await decompress(row.lyrics)).toBe(repairTtml(readMalformedTtml("code-fence")))
 			expect(row.current_revision_id).toBe(revs[1].id)
-			expect(row.anchor_revision_id).toBe(revs[1].id)
+			expect(row.anchor_revision_id).toBe(revs[0].id)
 			expect(manifest).toEqual([
 				{
 					kind: "repair",
@@ -188,6 +202,15 @@ describeIntegration("stored TTML repair (integration)", () => {
 				)
 				expect(await applyTtmlRepairs(db.env, plan)).toEqual([])
 				expect((await lyricRow(id)).deleted_by_role).toBe("submitter")
+			})
+
+			it("regression: refuses a plan whose repaired text was edited by hand", async () => {
+				const id = await seedTtml(readMalformedTtml("code-fence"))
+				const plan = (await planTtmlRepairs(db.env)).map((action) =>
+					action.kind === "repair" ? { ...action, after: "<tt><body/></tt>" } : action
+				)
+				expect(await applyTtmlRepairs(db.env, plan)).toEqual([])
+				expect(await revisions(id)).toEqual([])
 			})
 		})
 	})
@@ -280,12 +303,27 @@ describeIntegration("stored TTML repair (integration)", () => {
 			})
 		})
 
-		it("regression: revert restores every content column exactly", async () => {
+		it("regression: revert restores the lyric content exactly", async () => {
 			const id = await seedEditedMetadata()
-			const before = await contentColumns(id)
+			const { updated_at: _, ...before } = await contentColumns(id)
 			const manifest = await applyTtmlRepairs(db.env, await planTtmlRepairs(db.env))
 			await revertTtmlRepairs(db.env, manifest)
-			expect(await contentColumns(id)).toEqual(before)
+			const { updated_at: __, ...after } = await contentColumns(id)
+			expect(after).toEqual(before)
+		})
+
+		it("regression: revert keeps metadata approved after the repair", async () => {
+			const id = await seedEditedMetadata()
+			const manifest = await applyTtmlRepairs(db.env, await planTtmlRepairs(db.env))
+			await db.pool.query(
+				"UPDATE lyrics SET album = 'Later Album', album_norm = 'later album' WHERE id = $1",
+				[id]
+			)
+			await revertTtmlRepairs(db.env, manifest)
+			expect(await contentColumns(id)).toMatchObject({
+				album: "Later Album",
+				album_norm: "later album",
+			})
 		})
 	})
 
@@ -314,7 +352,7 @@ describeIntegration("stored TTML repair (integration)", () => {
 			expect(manifest).toMatchObject([
 				{ kind: "repair", previousRevisionId: rows[0].id, previousAnchorId: base.id },
 			])
-			expect((await lyricRow(id)).anchor_revision_id).not.toBe(base.id)
+			expect((await lyricRow(id)).anchor_revision_id).toBe(base.id)
 			await revertTtmlRepairs(db.env, manifest)
 
 			const after = await lyricRow(id)

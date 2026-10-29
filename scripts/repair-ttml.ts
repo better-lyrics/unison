@@ -99,7 +99,8 @@ async function main() {
 			const result = await revertTtmlRepairs(env, readManifest(path))
 			console.log(`reverted ${result.reverted}; skipped ${result.skipped.join(", ") || "none"}`)
 		} else {
-			const out = mode === "--out" && path ? path : join(tmpdir(), "ttml-repair-plan.json")
+			const out =
+				mode === "--out" && path ? path : join(tmpdir(), `ttml-repair-plan-${Date.now()}.json`)
 			const actions = await planTtmlRepairs(env)
 			printPlan(actions)
 			writeFileSync(out, JSON.stringify(actions, null, 1))
