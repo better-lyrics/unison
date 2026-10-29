@@ -1,8 +1,10 @@
 import { config } from "@/config"
-import { readMalformedTtml } from "@/test/lyric-fixtures"
+import { readMalformedTtml, readRevisionFixture } from "@/test/lyric-fixtures"
 import type { Env, FeedItem } from "@/types"
+import { decompress } from "@/utils/compression"
 import { canonicalJson, hashPublicKey } from "@/utils/crypto"
 import { ISRC_HINT } from "@/utils/isrc"
+import { findXmlProblem } from "@/utils/validation"
 import { VIDEO_ID_HINT } from "@/utils/video-id"
 import { describe, expect, it } from "vitest"
 import { lyricsRoutes } from "./lyrics"
@@ -818,6 +820,7 @@ describe("GET /lyrics/variants/:videoId", () => {
 
 const FORMAT_PARAM_INDEX = 10
 const SYNC_TYPE_PARAM_INDEX = 12
+const LYRICS_PARAM_INDEX = 9
 
 function seedSubmitDB(keyId: string, publicJwk: JsonWebKey) {
 	return makeMockDB([
@@ -1094,7 +1097,6 @@ describe("POST /lyrics/submit XML well-formedness", () => {
 		"code-fence",
 		"trailing-junk",
 		"two-documents",
-		"unbound-prefix",
 		"control-char",
 		"mismatched-tag",
 		"half-written-tag",
@@ -1133,6 +1135,31 @@ describe("POST /lyrics/submit XML well-formedness", () => {
 				expect(((await res.json()) as { code: string }).code).toBe("TTML_MALFORMED")
 				expect(findInsert(db)).toBeUndefined()
 			}
+		})
+	})
+
+	describe("undeclared standard prefixes", () => {
+		it("declares a missing standard prefix and stores the declared file", async () => {
+			const { res, db } = await submitTtml(readMalformedTtml("unbound-prefix"))
+			expect(res.status).toBe(201)
+			const stored = await decompress(findInsert(db)?.params[LYRICS_PARAM_INDEX] as string)
+			expect(stored).toContain('<tt xmlns:itunes="http://music.apple.com/lyric-ttml-internal"')
+			expect(findXmlProblem(stored)).toBeNull()
+		})
+
+		it("still rejects a prefix with no standard namespace", async () => {
+			const input = readMalformedTtml("unbound-prefix").replace("itunes:timing", "quick:timing")
+			const { res, db } = await submitTtml(input)
+			expect(res.status).toBe(400)
+			expect(((await res.json()) as { hint: string }).hint).toContain('"quick:timing"')
+			expect(findInsert(db)).toBeUndefined()
+		})
+
+		it("leaves a file that declares its prefixes byte for byte", async () => {
+			const input = readRevisionFixture("amazing-grace.ttml")
+			const { res, db } = await submitTtml(input)
+			expect(res.status).toBe(201)
+			expect(await decompress(findInsert(db)?.params[LYRICS_PARAM_INDEX] as string)).toBe(input)
 		})
 	})
 
@@ -1396,7 +1423,7 @@ describe("POST /lyrics/submit formatted-TTML rejection", () => {
 
 	it("accepts background-span container with clean inner spans", async () => {
 		const ttml =
-			'<tt xmlns:ttm="http://www.w3.org/ns/ttml#metadata"><body><div><p>' +
+			"<tt><body><div><p>" +
 			'<span begin="0:00.0" end="0:01.0">Main</span> ' +
 			'<span ttm:role="x-bg">' +
 			'<span begin="0:00.5" end="0:01.0">bg</span>' +

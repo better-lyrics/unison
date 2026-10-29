@@ -18,7 +18,7 @@ function stripOutsideRoot(ttml: string): string | null {
 	return ttml.slice(declaration >= 0 ? declaration : root, end + "</tt>".length)
 }
 
-function declareStandardPrefixes(ttml: string): string | null {
+export function declareStandardPrefixes(ttml: string): string | null {
 	const missing = missingRootPrefixes(ttml)
 	if (missing.some((prefix) => !Object.hasOwn(STANDARD_NAMESPACES, prefix))) return null
 	const declarations = missing.map((prefix) => ` xmlns:${prefix}="${STANDARD_NAMESPACES[prefix]}"`)

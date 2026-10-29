@@ -270,7 +270,9 @@ async function assess(
 	const isrc = resolveField(input.isrc, current.isrc, revert?.isrc, acceptIsrc)
 	const album = resolveField(input.album, current.album, revert?.album, acceptAlbum)
 
-	const comparable = validated.ok ? extractComparableLines(input.lyrics, validated.format) : null
+	const comparable = validated.ok
+		? extractComparableLines(validated.lyrics, validated.format)
+		: null
 	const lines = comparable?.filter(isBodyLine) ?? null
 	const checks: FieldCheck[] = [
 		validated.ok
@@ -330,7 +332,7 @@ async function assess(
 	}
 
 	const candidate: Candidate = {
-		content: input.lyrics,
+		content: validated.lyrics,
 		format: validated.format,
 		syncType: validated.syncType,
 		language: language.value,

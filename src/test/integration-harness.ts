@@ -177,7 +177,7 @@ export async function seedLyric(
 			artist: "Traditional",
 			album: opts.album,
 			duration: 90,
-			lyrics: opts.lyrics,
+			lyrics: validated.lyrics,
 			format: validated.format,
 			syncType: validated.syncType,
 			language: opts.language ?? "en",

@@ -1048,6 +1048,14 @@ describeIntegration("lyric revisions pipeline (integration)", () => {
 	})
 
 	describe("regressions: TTML that is not well-formed XML", () => {
+		it("stores an edit with its missing standard prefix declared", async () => {
+			const revision = await save({ lyrics: readMalformedTtml("unbound-prefix"), format: "ttml" })
+			const detail = await getRevisionDetail(db.env, lyricId, revision.id)
+			expect(detail?.lyrics).toContain(
+				'<tt xmlns:itunes="http://music.apple.com/lyric-ttml-internal"'
+			)
+		})
+
 		it("regression: rejects an edit wrapped in a code fence", async () => {
 			const result = await saveRevision(db.env, lyricId, owner, {
 				lyrics: readMalformedTtml("code-fence"),
