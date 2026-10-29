@@ -1,4 +1,3 @@
-import { validateLyricContent } from "@/utils/validate-lyrics"
 import { findXmlProblem, missingRootPrefixes } from "@/utils/validation"
 
 const STANDARD_NAMESPACES: Record<string, string> = {
@@ -27,9 +26,8 @@ function declareStandardPrefixes(ttml: string): string | null {
 }
 
 export function repairTtml(ttml: string): string | null {
-	if (findXmlProblem(ttml) === null) return validateLyricContent(ttml, "ttml").ok ? ttml : null
+	if (findXmlProblem(ttml) === null) return ttml
 	const stripped = stripOutsideRoot(ttml)
 	const repaired = stripped === null ? null : declareStandardPrefixes(stripped)
-	if (repaired === null || !validateLyricContent(repaired, "ttml").ok) return null
-	return repaired
+	return repaired !== null && findXmlProblem(repaired) === null ? repaired : null
 }

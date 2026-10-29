@@ -69,6 +69,16 @@ describe("repairTtml", () => {
 		})
 	})
 
+	describe("regressions: found in review", () => {
+		it("regression: repairs a legacy file that a newer content rule would reject", () => {
+			const legacy =
+				'<tt xmlns="http://www.w3.org/ns/ttml"><body><div><p begin="0:01.0" end="0:02.0">\n<span begin="0:01.0" end="0:01.5">Hi</span>\n<span begin="0:01.5" end="0:02.0">there</span>\n</p></div></body></tt>\nCredits: someone'
+			const repaired = repairTtml(legacy)
+			expect(repaired).toBe(legacy.slice(0, legacy.indexOf("</tt>") + "</tt>".length))
+			expect(findXmlProblem(repaired!)).toBeNull()
+		})
+	})
+
 	describe("edge cases", () => {
 		it("keeps an XML declaration in front of the root", () => {
 			const repaired = repairTtml(readMalformedTtml("unbound-prefix"))!
