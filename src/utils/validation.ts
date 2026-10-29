@@ -172,25 +172,25 @@ const DECLARED_PREFIX_REGEX = /xmlns:([A-Za-z][\w.-]*)\s*=/g
 const ELEMENT_PREFIX_REGEX = /<\/?([A-Za-z][\w.-]*):/g
 const ATTRIBUTE_PREFIX_REGEX = /\s([A-Za-z][\w.-]*):[\w.-]+\s*=/g
 
-function declareMissingNamespaces(ttml: string): string {
-	const rootMatch = ttml.match(ROOT_TT_TAG_REGEX)
-	if (!rootMatch) return ttml
-
-	const rootTag = rootMatch[0]
+export function missingRootPrefixes(ttml: string): string[] {
+	const rootTag = ttml.match(ROOT_TT_TAG_REGEX)?.[0] ?? ""
 	const declared = new Set<string>(["xml", "xmlns"])
 	for (const match of rootTag.matchAll(DECLARED_PREFIX_REGEX)) {
 		declared.add(match[1])
 	}
 
-	const used = new Set<string>()
-	for (const match of ttml.matchAll(ELEMENT_PREFIX_REGEX)) {
-		used.add(match[1])
-	}
-	for (const match of ttml.matchAll(ATTRIBUTE_PREFIX_REGEX)) {
-		used.add(match[1])
-	}
+	const used = [...ttml.matchAll(ELEMENT_PREFIX_REGEX), ...ttml.matchAll(ATTRIBUTE_PREFIX_REGEX)]
+		.sort((a, b) => a.index - b.index)
+		.map((match) => match[1])
+	return [...new Set(used)].filter((p) => !declared.has(p))
+}
 
-	const missing = [...used].filter((p) => !declared.has(p))
+function declareMissingNamespaces(ttml: string): string {
+	const rootMatch = ttml.match(ROOT_TT_TAG_REGEX)
+	if (!rootMatch) return ttml
+
+	const rootTag = rootMatch[0]
+	const missing = missingRootPrefixes(ttml)
 	if (missing.length === 0) return ttml
 
 	const additions = missing.map((p) => ` xmlns:${p}="urn:unison:unbound:${p}"`).join("")

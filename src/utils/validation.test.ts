@@ -6,6 +6,7 @@ import {
 	detectSyncType,
 	findXmlProblem,
 	hasDegenerateWordTiming,
+	missingRootPrefixes,
 	validateTtmlStructure,
 } from "./validation"
 
@@ -154,6 +155,29 @@ describe("findXmlProblem", () => {
 	})
 })
 
+describe("missingRootPrefixes", () => {
+	it("lists a prefix the root never declares", () => {
+		expect(missingRootPrefixes(malformed("unbound-prefix"))).toEqual(["itunes"])
+	})
+
+	it("returns nothing when every prefix is declared", () => {
+		expect(missingRootPrefixes(revisionFixture("amazing-grace.ttml"))).toEqual([])
+	})
+
+	describe("edge cases", () => {
+		it("never reports the reserved xml and xmlns prefixes", () => {
+			expect(missingRootPrefixes('<tt xml:lang="en" xmlns:ttm="urn:m"><body/></tt>')).toEqual([])
+		})
+
+		it("lists element and attribute prefixes once, in order of first use", () => {
+			expect(
+				missingRootPrefixes(
+					'<tt amll:a="1"><head><ttm:agent/><amll:meta/></head><body ttm:x="1"/></tt>'
+				)
+			).toEqual(["amll", "ttm"])
+		})
+	})
+})
 
 describe("validateTtmlStructure", () => {
 	it("validates basic TTML structure", () => {
