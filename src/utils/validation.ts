@@ -5,9 +5,12 @@ export type XmlProblem = { message: string; line: number; column: number }
 
 const NON_XML_CHAR = /[^\t\n\r\x20-\uD7FF\uE000-\uFFFD\u{10000}-\u{10FFFF}]/u
 const NON_TAG_MARKUP = /<!--[\s\S]*?-->|<!\[CDATA\[[\s\S]*?\]\]>|<\?[\s\S]*?\?>|<!DOCTYPE[^>]*>/g
-const TAG = /<([A-Za-z_][\w.:-]*)((?:\s+[^\s=/>]+\s*=\s*(?:"[^"]*"|'[^']*'))*)\s*(\/?)>|<\/[^>]+>/g
+const TAG = /<([^\s/>!?][^\s/>]*)((?:\s+[^\s=/>]+\s*=\s*(?:"[^"]*"|'[^']*'))*)\s*(\/?)>|<\/[^>]+>/g
 const ATTRIBUTE_NAME = /([^\s=]+)\s*=\s*(?:"[^"]*"|'[^']*')/g
+const UNDEFINED_ENTITY = /&(?!(?:amp|lt|gt|quot|apos|#\d+|#x[0-9a-fA-F]+);)[^;\s<&]+;/
 const TEXT_AFTER_ROOT_CODES = ["Extra text at the end", "Multiple possible root nodes found."]
+const TEXT_AFTER_ROOT =
+	"The file has text after the closing </tt> tag. Remove everything after </tt>"
 
 function positionOf(text: string, index: number): { line: number; column: number } {
 	const before = text.slice(0, index)
@@ -19,15 +22,18 @@ function problemAt(text: string, index: number, message: string): XmlProblem {
 	return { message, ...positionOf(text, index) }
 }
 
-function findUnboundPrefix(xml: string): XmlProblem | null {
+function findElementProblem(xml: string): XmlProblem | null {
 	const scopes = [new Set(["xml", "xmlns"])]
-	const tags = xml.replace(NON_TAG_MARKUP, (markup) => " ".repeat(markup.length))
-	for (const tag of tags.matchAll(TAG)) {
+	const markup = xml.replace(NON_TAG_MARKUP, (skipped) => " ".repeat(skipped.length))
+	let rootSeen = false
+	for (const tag of markup.matchAll(TAG)) {
 		const [, name, attributeText, selfClosing] = tag
 		if (name === undefined) {
 			scopes.pop()
 			continue
 		}
+		if (scopes.length === 1 && rootSeen) return problemAt(xml, tag.index, TEXT_AFTER_ROOT)
+		rootSeen = true
 		const attributes = [...attributeText.matchAll(ATTRIBUTE_NAME)].map((match) => match[1])
 		const declared = attributes.filter((attr) => attr.startsWith("xmlns:"))
 		const parent = scopes[scopes.length - 1]
@@ -47,7 +53,15 @@ function findUnboundPrefix(xml: string): XmlProblem | null {
 		}
 		if (!selfClosing) scopes.push(scope)
 	}
-	return null
+	if (/<!DOCTYPE/i.test(xml)) return null
+	const entity = UNDEFINED_ENTITY.exec(markup)
+	return entity
+		? problemAt(
+				xml,
+				entity.index,
+				`The file uses the entity "${entity[0]}", which XML does not define. Write the character itself or a numeric reference such as &#160;`
+			)
+		: null
 }
 
 export function findXmlProblem(xml: string): XmlProblem | null {
@@ -62,10 +76,12 @@ export function findXmlProblem(xml: string): XmlProblem | null {
 	}
 
 	const result = XMLValidator.validate(xml)
-	if (result === true) return findUnboundPrefix(xml)
+	if (result === true) return findElementProblem(xml)
 
 	const fence = xml.indexOf("```")
-	if (fence >= 0) {
+	const rootStart = xml.search(/<tt[\s>]/)
+	const fenceOutsideRoot = fence >= 0 && (fence < rootStart || fence > xml.lastIndexOf("</tt>"))
+	if (fenceOutsideRoot) {
 		return problemAt(
 			xml,
 			fence,
@@ -81,13 +97,7 @@ export function findXmlProblem(xml: string): XmlProblem | null {
 		)
 	}
 	const { msg, line, col } = result.err
-	if (TEXT_AFTER_ROOT_CODES.includes(msg)) {
-		return {
-			message: "The file has text after the closing </tt> tag. Remove everything after </tt>",
-			line,
-			column: col,
-		}
-	}
+	if (TEXT_AFTER_ROOT_CODES.includes(msg)) return { message: TEXT_AFTER_ROOT, line, column: col }
 	return { message: msg.replace(/\.$/, ""), line, column: col }
 }
 

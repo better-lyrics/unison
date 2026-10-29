@@ -64,6 +64,51 @@ describe("findXmlProblem", () => {
 		it("rejects a control character in text as well as in attributes", () => {
 			expect(findXmlProblem("<tt><body><p>a\u0001b</p></body></tt>")).not.toBeNull()
 		})
+
+		it("accepts the predefined entities and character references", () => {
+			expect(
+				findXmlProblem("<tt><body><p>&amp; &lt; &gt; &quot; &apos; &#233; &#xE9;</p></body></tt>")
+			).toBeNull()
+		})
+
+		it("accepts non-ASCII element names", () => {
+			expect(findXmlProblem('<tt><body><p><é a="1">x</é></p></body></tt>')).toBeNull()
+		})
+	})
+
+	describe("regressions: gaps found in review", () => {
+		it("regression: does not throw on a non-ASCII element name followed by an undeclared prefix", () => {
+			const problem = findXmlProblem(
+				'<tt><body><div><p><é a="1">x</é><y:z/></p></div></body></tt>'
+			)
+			expect(problem?.message).toContain('"y:z"')
+		})
+
+		it("regression: checks a prefix against the scope of the element it sits in", () => {
+			expect(
+				findXmlProblem('<tt><é xmlns:x="urn:x"><x:a/></é><x:b/></tt>')?.message
+			).toContain('"x:b"')
+		})
+
+		it("regression: rejects an entity XML does not predefine", () => {
+			const problem = findXmlProblem("<tt><body><p>a&nbsp;b</p></body></tt>")
+			expect(problem?.message).toContain("&nbsp;")
+			expect(problem?.column).toBe(15)
+		})
+
+		it("regression: rejects a self-closing element after the root", () => {
+			expect(findXmlProblem("<tt><body/></tt><br/>")?.message).toContain(
+				"after the closing </tt>"
+			)
+			expect(findXmlProblem("<tt><body/></tt>\n<tt/>")?.line).toBe(2)
+		})
+
+		it("regression: only blames a code fence that sits outside the root", () => {
+			const problem = findXmlProblem(
+				'<tt><head><metadata><ttm:title xmlns:ttm="urn:m">```</ttm:title></metadata></head><body><p>a & b</p></body></tt>'
+			)
+			expect(problem?.message).not.toContain("code fence")
+		})
 	})
 
 	describe("regressions: failure classes found in stored lyrics", () => {
