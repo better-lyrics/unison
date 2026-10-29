@@ -115,6 +115,7 @@ describeIntegration("stored TTML repair (integration)", () => {
 	describe("apply", () => {
 		it("makes the repaired file a new live revision authored by the submitter", async () => {
 			const id = await seedTtml(readMalformedTtml("code-fence"))
+			const original = (await lyricRow(id)).lyrics
 			const manifest = await applyTtmlRepairs(db.env, await planTtmlRepairs(db.env))
 
 			const revs = await revisions(id)
@@ -134,6 +135,7 @@ describeIntegration("stored TTML repair (integration)", () => {
 					previousRevisionId: revs[0].id,
 					previousAnchorId: revs[0].id,
 					repairRevisionId: revs[1].id,
+					previous: expect.objectContaining({ lyrics: original, format: "ttml" }),
 				},
 			])
 		})
@@ -239,6 +241,51 @@ describeIntegration("stored TTML repair (integration)", () => {
 			)
 			expect(await revertTtmlRepairs(db.env, manifest)).toEqual({ reverted: 0, skipped: [id] })
 			expect((await lyricRow(id)).deleted_by_role).toBe("admin")
+		})
+	})
+
+	describe("regressions: rehearsal on production rows", () => {
+		const CONTENT_COLUMNS = `lyrics, format, sync_type, isrc, album, album_norm, language,
+			language_source, language_detector_version, lyrics_text_search::text AS search, updated_at`
+
+		async function contentColumns(id: number) {
+			const { rows } = await db.pool.query(`SELECT ${CONTENT_COLUMNS} FROM lyrics WHERE id = $1`, [
+				id,
+			])
+			return rows[0]
+		}
+
+		async function seedEditedMetadata(): Promise<number> {
+			const id = await seedTtml(readMalformedTtml("code-fence"))
+			await ensureBaseRevision(db.env.DB, id)
+			await db.pool.query(
+				`UPDATE lyrics SET album = 'Approved Album', album_norm = 'approved album',
+					language = 'es', language_source = 'detector', language_detector_version = 4,
+					lyrics_text_search = to_tsvector('simple', 'indexed by an older extractor'),
+					updated_at = 1700000500
+				WHERE id = $1`,
+				[id]
+			)
+			return id
+		}
+
+		it("regression: apply keeps the lyric's album and detected language", async () => {
+			const id = await seedEditedMetadata()
+			await applyTtmlRepairs(db.env, await planTtmlRepairs(db.env))
+			expect(await contentColumns(id)).toMatchObject({
+				album: "Approved Album",
+				language: "es",
+				language_source: "detector",
+				language_detector_version: 4,
+			})
+		})
+
+		it("regression: revert restores every content column exactly", async () => {
+			const id = await seedEditedMetadata()
+			const before = await contentColumns(id)
+			const manifest = await applyTtmlRepairs(db.env, await planTtmlRepairs(db.env))
+			await revertTtmlRepairs(db.env, manifest)
+			expect(await contentColumns(id)).toEqual(before)
 		})
 	})
 

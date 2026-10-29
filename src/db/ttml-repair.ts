@@ -1,13 +1,16 @@
 import { evictFeedCaches } from "@/db/feed"
 import {
+	type LyricContentSnapshot,
 	ensureBaseRevision,
 	getRevisionRow,
 	insertRevision,
 	loadLyricState,
+	restoreLyricContent,
 	retireLiveRevision,
 	setAnchorRevision,
 	setCurrentRevision,
 	setRevisionStatus,
+	snapshotLyricContent,
 } from "@/db/lyric-revisions"
 import { invalidateCacheForLyric, softDeleteLyrics } from "@/db/lyrics"
 import type { D1Compat } from "@/infra/database"
@@ -31,6 +34,7 @@ export type ManifestEntry =
 			previousRevisionId: number
 			previousAnchorId: number
 			repairRevisionId: number
+			previous: LyricContentSnapshot
 	  }
 	| { kind: "delete"; lyricsId: number }
 
@@ -121,17 +125,18 @@ async function applyRepair(
 		}
 		if ((await contentHashOf(stored)) !== action.contentHash) return null
 		const live = await getRevisionRow(tx, action.lyricsId, lyric.current_revision_id)
-		if (!live) return null
+		const previous = await snapshotLyricContent(tx, action.lyricsId)
+		if (!live || !previous) return null
 
 		await retireLiveRevision(tx, action.lyricsId)
 		const repair = await insertRevision(tx, {
 			lyricsId: action.lyricsId,
 			content: action.after,
 			format: "ttml",
-			syncType: live.sync_type,
-			language: live.language,
-			isrc: live.isrc,
-			album: lyric.album,
+			syncType: previous.sync_type,
+			language: previous.language,
+			isrc: previous.isrc,
+			album: previous.album,
 			authorId: lyric.submitter_id,
 			status: "live",
 			pendingReason: null,
@@ -148,6 +153,7 @@ async function applyRepair(
 			previousRevisionId: live.id,
 			previousAnchorId: lyric.anchor_revision_id,
 			repairRevisionId: repair.id,
+			previous,
 		}
 	})
 	if (entry) await invalidateCacheForLyric(env, action.lyricsId)
@@ -199,12 +205,13 @@ async function revertRepair(
 	const reverted = await env.DB.transaction(async (tx): Promise<boolean> => {
 		const lyric = await loadLyricState(tx, entry.lyricsId, true)
 		if (lyric?.current_revision_id !== entry.repairRevisionId) return false
-		const previous = await getRevisionRow(tx, entry.lyricsId, entry.previousRevisionId)
-		if (!previous) return false
+		if (!(await getRevisionRow(tx, entry.lyricsId, entry.previousRevisionId))) return false
 		await retireLiveRevision(tx, entry.lyricsId)
-		await setRevisionStatus(tx, previous.id, "live")
-		await setCurrentRevision(tx, previous)
-		await setAnchorRevision(tx, entry.lyricsId, entry.previousAnchorId)
+		await setRevisionStatus(tx, entry.previousRevisionId, "live")
+		await restoreLyricContent(tx, entry.lyricsId, entry.previous, {
+			currentRevisionId: entry.previousRevisionId,
+			anchorRevisionId: entry.previousAnchorId,
+		})
 		await tx
 			.prepare("DELETE FROM lyric_revisions WHERE id = ? AND lyrics_id = ?")
 			.bind(entry.repairRevisionId, entry.lyricsId)
