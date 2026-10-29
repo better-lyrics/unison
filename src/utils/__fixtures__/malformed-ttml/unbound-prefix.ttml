@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<tt xmlns="http://www.w3.org/ns/ttml" itunes:timing="Word">
+  <body>
+    <div>
+      <p begin="00:00:07.260" end="00:00:10.220"><span begin="00:00:07.260" end="00:00:07.578">&quot;What</span> <span begin="00:00:07.578" end="00:00:07.896">would</span> <span begin="00:00:07.896" end="00:00:08.145">you</span> <span begin="00:00:08.145" end="00:00:08.358">do</span> <span begin="00:00:08.358" end="00:00:08.642">with</span> <span begin="00:00:08.642" end="00:00:08.925">just</span> <span begin="00:00:08.925" end="00:00:09.174">one</span> <span begin="00:00:09.174" end="00:00:09.422">day</span> <span begin="00:00:09.422" end="00:00:09.636">to</span> <span begin="00:00:09.636" end="00:00:10.220">live?&quot;</span></p>
+      <p begin="00:00:10.220" end="00:00:11.940"><span begin="00:00:10.220" end="00:00:10.492">Said</span> <span begin="00:00:10.492" end="00:00:10.730">the</span> <span begin="00:00:10.730" end="00:00:11.002">rich</span> <span begin="00:00:11.002" end="00:00:11.208">to</span> <span begin="00:00:11.208" end="00:00:11.446">the</span> <span begin="00:00:11.446" end="00:00:11.940">poor</span></p>
+    </div>
+  </body>
+</tt>

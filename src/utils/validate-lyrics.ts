@@ -4,6 +4,7 @@ import {
 	detectFormat,
 	detectPrettyPrintedTtml,
 	detectSyncType,
+	findXmlProblem,
 	hasDegenerateWordTiming,
 	validateTtmlStructure,
 } from "@/utils/validation"
@@ -43,6 +44,14 @@ export function validateLyricContent(
 	const format = detectFormat(lyrics)
 
 	if (format === "ttml") {
+		const xmlProblem = findXmlProblem(lyrics)
+		if (xmlProblem) {
+			return {
+				ok: false,
+				code: ErrorCode.TTML_MALFORMED,
+				hint: `The TTML file is not valid XML. ${xmlProblem.message} (line ${xmlProblem.line}, column ${xmlProblem.column}).`,
+			}
+		}
 		const prettyCheck = detectPrettyPrintedTtml(lyrics)
 		if (!prettyCheck.ok) {
 			return {

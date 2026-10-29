@@ -1,0 +1,23 @@
+<tt xmlns="http://www.w3.org/ns/ttml" xmlns:ttm="http://www.w3.org/ns/ttml#metadata" xmlns:ttp="http://www.w3.org/ns/ttml#parameter" xmlns:composer="https://composer.boidu.dev/ttml" ttp:timeBase="media" xml:lang="en" composer:timing="Word">
+<head>
+  <metadata>
+    <ttm:title>So Long To Ya, 2010! - JibJab</ttm:title>
+    <ttm:agent xml:id="v1" type="person"><ttm:name>Lead</ttm:name></ttm:agent>
+    <ttm:agent xml:id="v1000" type="group"><ttm:name>Harmony</ttm:name></ttm:agent>
+    <composer:groups>
+      <composer:group id="g1" label="Group 1" color="#f472b6" templateVersion="1"/>
+      <composer:group id="g2" label="Group 2" color="#60a5fa" templateVersion="1"/>
+      <composer:group id="g3" label="Group 3" color="#4ade80" templateVersion="1"/>
+      <composer:group id="g4" label="Group 4" color="#fb923c" templateVersion="1"/>
+      <composer:group id="g5" label="Group 5" color="#a78bfa" templateVersion="1"/>
+    </composer:groups>
+  </metadata>
+</head>
+<body dur="2:22.000">
+  <div>
+    <p begin="0:06.850" end="0:10.950" ttm:agent="v1000" composer:groupId="g1" composer:instanceIdx="0" composer:templateLineIdx="0"><span begin="0:06.850" end="0:07.250">We</span> <span begin="0:07.250" end="0:07.550">ar</span><span begin="0:07.550" end="0:08.050">rived</span> <span begin="0:08.050" end="0:08.350">in</span> <span begin="0:08.350" end="0:09.100">'09</span> <span begin="0:09.100" end="0:09.350">on</span> <span begin="0:09.350" end="0:09.600">a</span> <span begin="0:09.600" end="0:09.950">rain</span><span begin="0:09.950" end="0:10.300">bow</span> <span begin="0:10.300" end="0:10.500">of</span> <span begin="0:10.500" end="0:10.950">hope,</span></p>
+    <p begin="0:11.200" end="0:14.800" ttm:agent="v1000" composer:groupId="g1" composer:instanceIdx="0" composer:templateLineIdx="1"><span begin="0:11.200" end="0:11.500">But</span> <span begin="0:11.500" end="0:11.900">two</span> <span begin="0:11.900" end="0:12.250">thou</span><span begin="0:12.250" end="0:12.600">sand</span> <span begin="0:12.600" end="0:13.000">ten</span> <span begin="0:13.000" end="0:13.450">blew</span> <span begin="0:13.450" end="0:13.650">it</span> <span begin="0:13.650" end="0:13.950">all</span> <span begin="0:13.950" end="0:14.200">up</span> <span begin="0:14.200" end="0:14.400">in</span> <span begin="0:14.400" end="0:14.800">smoke.</span></p>
+    <p begin="1:01.550" end="1:05.350" ttm:agent="v1" composer:groupId="g2" composer:instanceIdx="0" composer:templateLineIdx="3"><span begin="1:01.550" end="1:01.850">And</span> <span begin="1:01.850" end="1:02.200">no</span> <span begin="1:02.200" end="1:02.500">cred</span><span begin="1:02.500" end="1:02.850">it</span> <span begin="1:02.850" end="1:03.150">for</span> <span begin="1:03.150" end="1:03.500">end</span><span begin="1:03.500" end="1:03.800">ing</span> <span begin="1:03.800" end="1:04.050">a</span> <span begin="1:04.050" end="1:05.000">war!</span><span ttm:</span></span></p>
+  </div>
+</body>
+</tt>

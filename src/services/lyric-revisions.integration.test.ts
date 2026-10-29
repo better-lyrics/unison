@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs"
 import { config } from "@/config"
 import { createBookmark, listActiveBookmarks } from "@/db/council-bookmarks"
 import { listCouncilEvents } from "@/db/council-events"
@@ -21,7 +22,7 @@ import {
 	withTranslation,
 } from "@/test/lyric-fixtures"
 import type { DiffRow, Env } from "@/types"
-import { decompress } from "@/utils/compression"
+import { compress, decompress } from "@/utils/compression"
 import { extractComparableLines } from "@/utils/extract-text"
 import { sha256Hex } from "@/utils/hash"
 import { buildDiffRows } from "@/utils/lyric-diff"
@@ -1044,6 +1045,37 @@ describeIntegration("lyric revisions pipeline (integration)", () => {
 			await saveRevision(db.env, lyricId, owner, lrc(swapWords(LRC, 1), { isrc: "not-an-isrc" }))
 		).toMatchObject({ ok: false, reason: "invalid", code: "INVALID_PAYLOAD" })
 		expect(await statuses()).toEqual([{ rev_no: 1, status: "live" }])
+	})
+
+	describe("regressions: TTML that is not well-formed XML", () => {
+		const malformed = (name: string) =>
+			readFileSync(
+				new URL(`../utils/__fixtures__/malformed-ttml/${name}.ttml`, import.meta.url),
+				"utf-8"
+			)
+
+		it("regression: rejects an edit wrapped in a code fence", async () => {
+			const result = await saveRevision(db.env, lyricId, owner, {
+				lyrics: malformed("code-fence"),
+				format: "ttml",
+			})
+			expect(result).toMatchObject({ ok: false, reason: "invalid", code: "TTML_MALFORMED" })
+			expect(await statuses()).toEqual([{ rev_no: 1, status: "live" }])
+		})
+
+		it("regression: refuses to revert to a stored revision that is not well-formed", async () => {
+			await save(lrc(swapWords(LRC, 1)))
+			await db.pool.query(
+				"UPDATE lyric_revisions SET lyrics = $2, format = 'ttml' WHERE lyrics_id = $1 AND rev_no = 1",
+				[lyricId, await compress(malformed("trailing-junk"))]
+			)
+			const reverted = await revertToRevision(db.env, lyricId, owner, await revisionId(1))
+			expect(reverted).toMatchObject({ ok: false, reason: "invalid", code: "TTML_MALFORMED" })
+			expect(await statuses()).toEqual([
+				{ rev_no: 1, status: "past" },
+				{ rev_no: 2, status: "live" },
+			])
+		})
 	})
 
 	describe("rate limits", () => {

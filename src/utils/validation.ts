@@ -1,5 +1,95 @@
-import { XMLParser } from "fast-xml-parser"
 import type { LyricsFormat } from "@/types"
+import { XMLParser, XMLValidator } from "fast-xml-parser"
+
+export type XmlProblem = { message: string; line: number; column: number }
+
+const NON_XML_CHAR = /[^\t\n\r\x20-\uD7FF\uE000-\uFFFD\u{10000}-\u{10FFFF}]/u
+const NON_TAG_MARKUP = /<!--[\s\S]*?-->|<!\[CDATA\[[\s\S]*?\]\]>|<\?[\s\S]*?\?>|<!DOCTYPE[^>]*>/g
+const TAG = /<([A-Za-z_][\w.:-]*)((?:\s+[^\s=/>]+\s*=\s*(?:"[^"]*"|'[^']*'))*)\s*(\/?)>|<\/[^>]+>/g
+const ATTRIBUTE_NAME = /([^\s=]+)\s*=\s*(?:"[^"]*"|'[^']*')/g
+const TEXT_AFTER_ROOT_CODES = ["Extra text at the end", "Multiple possible root nodes found."]
+
+function positionOf(text: string, index: number): { line: number; column: number } {
+	const before = text.slice(0, index)
+	const line = before.split("\n").length
+	return { line, column: index - before.lastIndexOf("\n") }
+}
+
+function problemAt(text: string, index: number, message: string): XmlProblem {
+	return { message, ...positionOf(text, index) }
+}
+
+function findUnboundPrefix(xml: string): XmlProblem | null {
+	const scopes = [new Set(["xml", "xmlns"])]
+	const tags = xml.replace(NON_TAG_MARKUP, (markup) => " ".repeat(markup.length))
+	for (const tag of tags.matchAll(TAG)) {
+		const [, name, attributeText, selfClosing] = tag
+		if (name === undefined) {
+			scopes.pop()
+			continue
+		}
+		const attributes = [...attributeText.matchAll(ATTRIBUTE_NAME)].map((match) => match[1])
+		const declared = attributes.filter((attr) => attr.startsWith("xmlns:"))
+		const parent = scopes[scopes.length - 1]
+		const scope = declared.length
+			? new Set([...parent, ...declared.map((attr) => attr.slice(6))])
+			: parent
+		for (const qualified of [name, ...attributes]) {
+			const colon = qualified.indexOf(":")
+			const prefix = colon > 0 ? qualified.slice(0, colon) : null
+			if (prefix && !scope.has(prefix)) {
+				return problemAt(
+					xml,
+					tag.index,
+					`"${qualified}" uses the prefix "${prefix}", but the file never declares it. Add xmlns:${prefix}="..." to the <tt> tag`
+				)
+			}
+		}
+		if (!selfClosing) scopes.push(scope)
+	}
+	return null
+}
+
+export function findXmlProblem(xml: string): XmlProblem | null {
+	const badChar = NON_XML_CHAR.exec(xml)
+	if (badChar) {
+		const code = badChar[0].codePointAt(0)!.toString(16).toUpperCase().padStart(4, "0")
+		return problemAt(
+			xml,
+			badChar.index,
+			`The file contains an invalid control character (U+${code})`
+		)
+	}
+
+	const result = XMLValidator.validate(xml)
+	if (result === true) return findUnboundPrefix(xml)
+
+	const fence = xml.indexOf("```")
+	if (fence >= 0) {
+		return problemAt(
+			xml,
+			fence,
+			"The file is wrapped in a ``` code fence. Remove the fence so the file starts with <tt> and ends with </tt>"
+		)
+	}
+	const start = xml.search(/[^\s\uFEFF]/)
+	if (start >= 0 && xml[start] !== "<") {
+		return problemAt(
+			xml,
+			start,
+			"The file has text before the opening <tt> tag. Remove it so the file starts with <tt>"
+		)
+	}
+	const { msg, line, col } = result.err
+	if (TEXT_AFTER_ROOT_CODES.includes(msg)) {
+		return {
+			message: "The file has text after the closing </tt> tag. Remove everything after </tt>",
+			line,
+			column: col,
+		}
+	}
+	return { message: msg.replace(/\.$/, ""), line, column: col }
+}
 
 export function validateTtmlStructure(ttml: string): boolean {
 	const hasRoot = /<tt[\s>]/i.test(ttml)

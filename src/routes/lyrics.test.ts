@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs"
 import { config } from "@/config"
 import type { Env, FeedItem } from "@/types"
 import { canonicalJson, hashPublicKey } from "@/utils/crypto"
@@ -1087,6 +1088,73 @@ describe("POST /lyrics/submit format override", () => {
 	})
 })
 
+describe("POST /lyrics/submit XML well-formedness", () => {
+	const malformed = (name: string) =>
+		readFileSync(
+			new URL(`../utils/__fixtures__/malformed-ttml/${name}.ttml`, import.meta.url),
+			"utf-8"
+		)
+	const FAILURE_CLASSES = [
+		"text-before-root",
+		"code-fence",
+		"trailing-junk",
+		"two-documents",
+		"unbound-prefix",
+		"control-char",
+		"mismatched-tag",
+		"half-written-tag",
+		"escaped-quotes",
+		"bare-ampersand",
+		"corrupted-tag",
+	]
+	const submitTtml = (lyrics: string, format = "ttml") =>
+		submit({ videoId: "HMeQT3FLJ3k", song: "S", artist: "A", duration: 240, lyrics, format })
+
+	describe("regressions: failure classes found in stored lyrics", () => {
+		for (const name of FAILURE_CLASSES) {
+			it(`regression: rejects ${name} with TTML_MALFORMED and stores nothing`, async () => {
+				const { res, db } = await submitTtml(malformed(name))
+				expect(res.status).toBe(400)
+				const body = (await res.json()) as { code: string; error: string; hint: string }
+				expect(body.code).toBe("TTML_MALFORMED")
+				expect(body.error).toBe("Malformed TTML content")
+				expect(body.hint).toMatch(/\(line \d+, column \d+\)/)
+				expect(findInsert(db)).toBeUndefined()
+			})
+		}
+
+		it("regression: names the fix in the hint for a code fence", async () => {
+			const { res } = await submitTtml(malformed("code-fence"))
+			const body = (await res.json()) as { hint: string }
+			expect(body.hint).toContain("code fence")
+		})
+	})
+
+	describe("cross-field interactions", () => {
+		it("rejects malformed TTML even when the submitter claims plain or lrc", async () => {
+			for (const format of ["plain", "lrc"]) {
+				const { res, db } = await submitTtml(malformed("trailing-junk"), format)
+				expect(res.status, format).toBe(400)
+				expect(((await res.json()) as { code: string }).code).toBe("TTML_MALFORMED")
+				expect(findInsert(db)).toBeUndefined()
+			}
+		})
+	})
+
+	describe("well-formed input", () => {
+		it("accepts a namespace name that is not a URI, as browsers do", async () => {
+			const { res, db } = await submitTtml(malformed("non-uri-namespace"))
+			expect(res.status).toBe(201)
+			expect(findInsert(db)?.params[FORMAT_PARAM_INDEX]).toBe("ttml")
+		})
+
+		it("still accepts plain text that merely mentions angle brackets", async () => {
+			const { res } = await submitTtml("I said <hey> & walked away\nThen I came back", "plain")
+			expect(res.status).toBe(201)
+		})
+	})
+})
+
 describe("POST /lyrics/submit formatted-TTML rejection", () => {
 	it("rejects pretty-printed TTML with newlines between span siblings", async () => {
 		const formatted =
@@ -1333,7 +1401,7 @@ describe("POST /lyrics/submit formatted-TTML rejection", () => {
 
 	it("accepts background-span container with clean inner spans", async () => {
 		const ttml =
-			"<tt><body><div><p>" +
+			'<tt xmlns:ttm="http://www.w3.org/ns/ttml#metadata"><body><div><p>' +
 			'<span begin="0:00.0" end="0:01.0">Main</span> ' +
 			'<span ttm:role="x-bg">' +
 			'<span begin="0:00.5" end="0:01.0">bg</span>' +

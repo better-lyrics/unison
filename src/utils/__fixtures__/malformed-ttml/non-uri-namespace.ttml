@@ -1,0 +1,19 @@
+<tt xmlns="http://www.w3.org/ns/ttml" xmlns:ttm="http://www.w3.org/ns/ttml#metadata" xmlns:ttp="http://www.w3.org/ns/ttml#parameter" xmlns:composer="Sades Kithma" ttp:timeBase="media" xml:lang="en" composer:timing="Word">
+  <head>
+    <metadata>
+      <ttm:title>00 - Dilo - Alinde</ttm:title>
+      <ttm:agent xml:id="v1" type="person">
+        <ttm:name>Dilu Beats</ttm:name>
+      </ttm:agent>
+      <ttm:agent xml:id="v2" type="person">
+        <ttm:name>Dilo</ttm:name>
+      </ttm:agent>
+    </metadata>
+  </head>
+  <body dur="2:42.525">
+    <div>
+      <p begin="0:09.953" end="0:14.035" ttm:agent="v1"><span begin="0:09.953" end="0:11.291">හීන</span> <span begin="0:11.291" end="0:12.624">ගේන</span> <span begin="0:12.624" end="0:14.035">යාමේ</span></p>
+      <p begin="0:14.748" end="0:18.747" ttm:agent="v1"><span begin="0:14.748" end="0:15.011">මා</span> <span begin="0:15.011" end="0:16.015">ගාවින්</span> <span begin="0:16.333" end="0:16.596">ඈ</span> <span begin="0:16.596" end="0:18.747">පෑයුවා</span></p>
+    </div>
+  </body>
+</tt>
