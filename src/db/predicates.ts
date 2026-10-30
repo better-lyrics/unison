@@ -1,5 +1,20 @@
 import { config } from "@/config"
 
+export const NOW_EPOCH = "EXTRACT(EPOCH FROM NOW())::INTEGER"
+
+const { multiplier } = config.voteIntegrity
+const repeatStrikesInWindow = `SELECT submitter_id FROM vote_strikes
+	WHERE repeat AND undone_at IS NULL AND detected_at > ${NOW_EPOCH} - ${multiplier.windowSec}`
+const strikeMultiplierExpr = (prefix: string) => `CASE
+	WHEN ${prefix}submitter_id IN (${repeatStrikesInWindow} GROUP BY submitter_id HAVING COUNT(*) >= 2)
+		THEN ${multiplier.many}
+	WHEN ${prefix}submitter_id IN (${repeatStrikesInWindow}) THEN ${multiplier.one}
+	ELSE 1
+END`
+
+export const deboost = (expr: string, prefix: string) =>
+	`(${expr} - ABS(${expr}) * (1 - ${strikeMultiplierExpr(prefix)}))`
+
 const { syncTypeBoost } = config.ranking
 const buildRankingExpr = (prefix: string, committeeBonus = false) => {
 	const syncTypeBoostExpr = `CASE ${prefix}sync_type
@@ -10,11 +25,14 @@ const buildRankingExpr = (prefix: string, committeeBonus = false) => {
 	const committeeBonusExpr = committeeBonus
 		? ` + CASE WHEN ${prefix}committee_approved_at IS NOT NULL THEN ${config.gamification.boost.rankingBonus} ELSE 0 END`
 		: ""
-	return `(
+	return deboost(
+		`(
 		(${prefix}effective_score * LN(${prefix}vote_count + ${config.ranking.confidenceBase})
 		+ ${config.ranking.recencyWeight} / (1.0 + (EXTRACT(EPOCH FROM NOW())::INTEGER - ${prefix}created_at) / 86400.0)${committeeBonusExpr})
 		* ${syncTypeBoostExpr}
-	)`
+	)`,
+		prefix
+	)
 }
 
 export const RANKING_EXPR = buildRankingExpr("")
@@ -23,8 +41,6 @@ export const RANKING_EXPR_JOINED = buildRankingExpr("l.")
 export const RANKING_EXPR_VARIANT = buildRankingExpr("l.", true)
 
 const { autoHide } = config.moderation
-
-export const NOW_EPOCH = "EXTRACT(EPOCH FROM NOW())::INTEGER"
 
 const buildVoteHidePredicate = (prefix: string) => `(
 	(

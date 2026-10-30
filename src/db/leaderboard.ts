@@ -6,6 +6,7 @@ import {
 	AUTO_HIDE_PREDICATE,
 	AUTO_HIDE_PREDICATE_JOINED,
 	RANKING_EXPR,
+	deboost,
 	noServableSyncedVariantServes,
 } from "@/db/predicates"
 import { windowCutoff } from "@/db/requests"
@@ -271,7 +272,7 @@ export async function getCuratorLeaderboard(
 		        COUNT(*) OVER () AS total_count
 		 FROM (
 		   SELECT submitter_id,
-		          SUM(effective_score) AS score,
+		          SUM(${deboost("effective_score", "")}) AS score,
 		          COUNT(*) AS submission_count,
 		          SUM(upvotes) AS total_upvotes
 		   FROM lyrics

@@ -638,7 +638,7 @@ describe("findBySongArtist", () => {
 
 		await findBySongArtist(env, "song", "artist")
 
-		expect(db.calls[0].sql).not.toContain("ABS")
+		expect(db.calls[0].sql).not.toContain("ABS(l.duration")
 	})
 
 	it("includes duration tolerance filter when provided", async () => {
