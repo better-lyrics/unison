@@ -1,5 +1,5 @@
 import { config } from "@/config"
-import { CONSENSUS_LYRICS_CTE } from "@/db/predicates"
+import { CONSENSUS_LYRICS_CTE, COUNTED_VOTER_PREDICATE } from "@/db/predicates"
 import type { Confidence, Env } from "@/types"
 
 export interface ContributionEvent {
@@ -105,7 +105,8 @@ export async function awardConsensusVotes(env: Env): Promise<void> {
 		SELECT v.user_id, ?, 'consensus-vote', 'lyric', v.lyrics_id
 		FROM votes v
 		JOIN consensus_lyrics cl ON v.lyrics_id = cl.id
-		WHERE v.vote = cl.consensus AND v.is_self_vote = 0
+		JOIN users u ON u.id = v.user_id
+		WHERE v.vote = cl.consensus AND v.is_self_vote = 0 AND ${COUNTED_VOTER_PREDICATE}
 		ON CONFLICT (user_id, kind, ref_type, ref_id) DO NOTHING`)
 		.bind(config.reputation.minVotesForConfidence, config.gamification.xp.weights.consensusVote)
 		.run()

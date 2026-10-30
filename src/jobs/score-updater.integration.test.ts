@@ -142,6 +142,68 @@ describeIntegration("score-updater xp emission (integration)", () => {
 		expect(await countEvents(submitter, "reached-high")).toBe(1)
 	})
 
+	describe("discounted keys", () => {
+		const discount = (userId: number) =>
+			pool.query("UPDATE users SET votes_discounted_at = 1 WHERE id = $1", [userId])
+
+		async function voteFrom(lyricId: number, vote: 1 | -1): Promise<number> {
+			const voterId = await insertUser()
+			await pool.query(
+				"INSERT INTO votes (lyrics_id, user_id, vote, is_self_vote) VALUES ($1,$2,$3,0)",
+				[lyricId, voterId, vote]
+			)
+			return voterId
+		}
+
+		it("recalculateScore drops a discounted key's vote from score and counts", async () => {
+			const submitter = await insertUser()
+			const lyricId = await insertLyric(submitter, "vidDiscounted")
+			await discount(await voteFrom(lyricId, 1))
+
+			await recalculateScore(env, lyricId)
+
+			const row = await one<{
+				effective_score: number
+				vote_count: number
+				upvotes: number
+				confidence: string
+			}>("SELECT effective_score, vote_count, upvotes, confidence FROM lyrics WHERE id = $1", [
+				lyricId,
+			])
+			expect(row).toEqual({ effective_score: 0, vote_count: 0, upvotes: 0, confidence: "low" })
+		})
+
+		it("keeps honest votes when a discounted key votes on the same lyric", async () => {
+			const submitter = await insertUser()
+			const lyricId = await insertLyric(submitter, "vidMixed")
+			await voteFrom(lyricId, 1)
+			await voteFrom(lyricId, 1)
+			await voteFrom(lyricId, 1)
+			await discount(await voteFrom(lyricId, -1))
+
+			await recalculateScore(env, lyricId)
+
+			expect(await confidenceOf(lyricId)).toBe("medium")
+			expect(await num("SELECT vote_count n FROM lyrics WHERE id = $1", [lyricId])).toBe(3)
+		})
+
+		it("awardConsensusVotes skips a discounted key", async () => {
+			const submitter = await insertUser()
+			const lyricId = await insertLyric(submitter, "vidConsensusDiscounted")
+			const honest = await voteFrom(lyricId, 1)
+			const sock = await voteFrom(lyricId, 1)
+			await discount(sock)
+			await pool.query("UPDATE lyrics SET effective_score = 0.9, vote_count = 3 WHERE id = $1", [
+				lyricId,
+			])
+
+			await awardConsensusVotes(env)
+
+			expect(await countEvents(honest, "consensus-vote")).toBe(1)
+			expect(await countEvents(sock, "consensus-vote")).toBe(0)
+		})
+	})
+
 	describe("first-for-song", () => {
 		const FIRST = config.gamification.xp.weights.firstForSong
 
