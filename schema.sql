@@ -398,6 +398,7 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS featured_badges TEXT;
 -- Shadowban: every lyric by a banned user is hidden, nothing is deleted
 ALTER TABLE users ADD COLUMN IF NOT EXISTS banned_at INTEGER;
 CREATE INDEX IF NOT EXISTS idx_users_banned ON users(id) WHERE banned_at IS NOT NULL;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS votes_discounted_at INTEGER;
 
 -- ---- council entry exam ----
 -- Table structure only; question content and answer keys live only in seeded rows.

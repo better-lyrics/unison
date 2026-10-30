@@ -44,6 +44,8 @@ const buildVoteHidePredicate = (prefix: string) => `(
 const buildBannedSubmitterPredicate = (prefix: string) =>
 	`COALESCE(${prefix}submitter_id IN (SELECT id FROM users WHERE banned_at IS NOT NULL), FALSE)`
 
+export const COUNTED_VOTER_PREDICATE = "(u.banned_at IS NULL AND u.votes_discounted_at IS NULL)"
+
 export const BANNED_SUBMITTER_PREDICATE = buildBannedSubmitterPredicate("")
 export const BANNED_SUBMITTER_PREDICATE_JOINED = buildBannedSubmitterPredicate("l.")
 
