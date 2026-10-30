@@ -241,6 +241,7 @@ describe("runMigration (merge case)", () => {
 				"reports",
 				"request_fulfillments",
 				"users",
+				"vote_strikes",
 				"votes",
 			].sort()
 		)

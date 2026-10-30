@@ -39,6 +39,7 @@ export interface MigrationSnapshot {
 	report_case_votes?: unknown[]
 	exam_decisions?: unknown[]
 	committee_approvals?: unknown[]
+	vote_strikes?: unknown[]
 }
 
 export interface MigrationResult {
@@ -505,6 +506,32 @@ export async function runMigration(
 				.bind(oldId, newId)
 				.run()
 
+			snapshot.vote_strikes = await all(
+				tx,
+				"SELECT id, submitter_id, undone_by FROM vote_strikes WHERE submitter_id = ANY(?) OR undone_by = ANY(?)",
+				[ids, ids]
+			)
+			await tx
+				.prepare("UPDATE vote_strikes SET submitter_id = ? WHERE submitter_id = ?")
+				.bind(oldId, newId)
+				.run()
+			await tx
+				.prepare("UPDATE vote_strikes SET undone_by = ? WHERE undone_by = ?")
+				.bind(oldId, newId)
+				.run()
+			const strikeUsers = snapshot.users as SnapUser[]
+			const survivorMark = strikeMarkOf(strikeUsers.find((u) => u.key_id === oldKey))
+			const mergedMark = survivingStrikeMark(
+				survivorMark,
+				strikeMarkOf(strikeUsers.find((u) => u.key_id === newKey))
+			)
+			if (!sameStrikeMark(mergedMark, survivorMark)) {
+				await tx
+					.prepare("UPDATE users SET votes_discounted_at = ?, vote_strike_id = ? WHERE id = ?")
+					.bind(mergedMark.votes_discounted_at, mergedMark.vote_strike_id, oldId)
+					.run()
+			}
+
 			await tx.prepare("DELETE FROM users WHERE id = ?").bind(newId).run()
 		}
 		await tx.prepare("UPDATE users SET key_id = ? WHERE id = ?").bind(newKey, oldId).run()
@@ -543,8 +570,6 @@ export async function runMigration(
 				.run()
 		}
 
-		if (newId !== null) await updateReputations({ ...env, DB: tx }, [oldId])
-
 		if (oldLink) {
 			await tx
 				.prepare("UPDATE discord_links SET key_id = ? WHERE key_id = ?")
@@ -559,6 +584,8 @@ export async function runMigration(
 			)
 			.bind(oldId, oldId)
 			.run()
+
+		if (newId !== null) await updateReputations({ ...env, DB: tx }, [oldId])
 
 		await tx
 			.prepare(
@@ -703,6 +730,38 @@ interface SnapUser {
 	avatar_type?: string | null
 	avatar_ref?: string | null
 	avatar_updated_at?: number | null
+	votes_discounted_at?: number | null
+	vote_strike_id?: number | null
+}
+
+interface StrikeMark {
+	votes_discounted_at: number | null
+	vote_strike_id: number | null
+}
+
+const strikeMarkOf = (user: SnapUser | undefined): StrikeMark => ({
+	votes_discounted_at: user?.votes_discounted_at ?? null,
+	vote_strike_id: user?.vote_strike_id ?? null,
+})
+
+const sameStrikeMark = (a: StrikeMark, b: StrikeMark): boolean =>
+	a.votes_discounted_at === b.votes_discounted_at && a.vote_strike_id === b.vote_strike_id
+
+// Discounted beats cleared beats clean; the earliest discount wins, ties keep the survivor's.
+function survivingStrikeMark(survivor: StrikeMark, merged: StrikeMark): StrikeMark {
+	const discounted = [survivor, merged].filter((m) => m.votes_discounted_at !== null)
+	if (discounted.length > 0) {
+		return discounted.reduce((earliest, m) =>
+			(m.votes_discounted_at ?? 0) < (earliest.votes_discounted_at ?? 0) ? m : earliest
+		)
+	}
+	return survivor.vote_strike_id !== null ? survivor : merged
+}
+
+interface SnapVoteStrike {
+	id: number
+	submitter_id: number
+	undone_by: number | null
 }
 interface SnapDiscord {
 	discord_id: string
@@ -922,7 +981,30 @@ export async function restoreFromSnapshot(
 					ids,
 				])
 			: []
+		const snapStrikes = snap.vote_strikes as SnapVoteStrike[] | undefined
+		const snapStrikeIds = new Set(snapStrikes?.map((s) => s.id))
+		const currentStrikes = snapStrikes
+			? await all<{ id: number }>(
+					tx,
+					"SELECT id FROM vote_strikes WHERE submitter_id = ANY(?) OR undone_by = ANY(?)",
+					[ids, ids]
+				)
+			: []
+		const survivorMark = snapStrikes
+			? await tx
+					.prepare("SELECT votes_discounted_at, vote_strike_id FROM users WHERE id = ?")
+					.bind(oldSnap.id)
+					.first<StrikeMark>()
+			: null
+		const markChanged =
+			survivorMark !== null &&
+			!sameStrikeMark(
+				survivorMark,
+				survivingStrikeMark(strikeMarkOf(oldSnap), strikeMarkOf(newSnap))
+			)
 		if (
+			markChanged ||
+			currentStrikes.some((s) => !snapStrikeIds.has(s.id)) ||
 			currentEvents.some((e) => !snapEventIds.has(e.id)) ||
 			currentBookmarks.some((b) => !snapBookmarkIds.has(b.id)) ||
 			currentVotes.some((v) => !snapVoteIds.has(v.id)) ||
@@ -975,6 +1057,22 @@ export async function restoreFromSnapshot(
 					newSnap.avatar_updated_at ?? null
 				)
 				.run()
+		}
+
+		if (snapStrikes) {
+			for (const u of newSnap ? [oldSnap, newSnap] : [oldSnap]) {
+				const mark = strikeMarkOf(u)
+				await tx
+					.prepare("UPDATE users SET votes_discounted_at = ?, vote_strike_id = ? WHERE id = ?")
+					.bind(mark.votes_discounted_at, mark.vote_strike_id, u.id)
+					.run()
+			}
+			for (const s of snapStrikes) {
+				await tx
+					.prepare("UPDATE vote_strikes SET submitter_id = ?, undone_by = ? WHERE id = ?")
+					.bind(s.submitter_id, s.undone_by, s.id)
+					.run()
+			}
 		}
 
 		await tx.prepare("DELETE FROM discord_links WHERE key_id = ANY(?)").bind([oldKey, newKey]).run()

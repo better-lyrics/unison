@@ -13,6 +13,7 @@ import {
 	runMigration,
 } from "./account-migration"
 import { ensureBaseRevision } from "./lyric-revisions"
+import { updateReputations } from "./reputation"
 
 const { Pool } = pg
 
@@ -60,6 +61,8 @@ describeIntegration("account migration (integration)", () => {
 		await pool.query("DELETE FROM discord_links")
 		await wipeCouncilTables(pool)
 		await pool.query("DELETE FROM exam_session WHERE key_id = $1", ["c".repeat(64)])
+		await pool.query("UPDATE users SET vote_strike_id = NULL WHERE vote_strike_id IS NOT NULL")
+		await pool.query("DELETE FROM vote_strikes")
 		await pool.query("DELETE FROM users")
 		await pool.query("DELETE FROM public_keys")
 	}
@@ -1150,6 +1153,265 @@ describeIntegration("account migration (integration)", () => {
 				[oldId]
 			)
 			expect(await restoreFromSnapshot(env, auditId)).toEqual({ error: "HAS_INTERIM_ACTIVITY" })
+		})
+	})
+
+	describe("vote integrity", () => {
+		const OTHER_KEY = `${"c".repeat(58)}strike`
+
+		async function seedOther(): Promise<number> {
+			await pool.query("INSERT INTO public_keys (key_id, public_key) VALUES ($1, 'z')", [OTHER_KEY])
+			return (
+				await one<{ id: number }>("INSERT INTO users (key_id) VALUES ($1) RETURNING id", [
+					OTHER_KEY,
+				])
+			).id
+		}
+
+		async function seedStrike(
+			submitterId: number,
+			undo?: { at: number; by: number }
+		): Promise<number> {
+			const row = await one<{ id: number }>(
+				`INSERT INTO vote_strikes
+					(submitter_id, kind, detected_at, key_count, vote_count, repeat, backfill, undone_at, undone_by)
+					VALUES ($1, 'ring', 1000, 3, 9, FALSE, FALSE, $2, $3) RETURNING id`,
+				[submitterId, undo?.at ?? null, undo?.by ?? null]
+			)
+			return row.id
+		}
+
+		async function markKey(
+			userId: number,
+			mark: { votes_discounted_at: number | null; vote_strike_id: number | null }
+		) {
+			await pool.query(
+				"UPDATE users SET votes_discounted_at = $1, vote_strike_id = $2 WHERE id = $3",
+				[mark.votes_discounted_at, mark.vote_strike_id, userId]
+			)
+		}
+
+		const markOf = (userId: number) =>
+			one<{ votes_discounted_at: number | null; vote_strike_id: number | null }>(
+				"SELECT votes_discounted_at, vote_strike_id FROM users WHERE id = $1",
+				[userId]
+			)
+
+		const strikeOwners = (strikeId: number) =>
+			one<{ submitter_id: number; undone_by: number | null }>(
+				"SELECT submitter_id, undone_by FROM vote_strikes WHERE id = $1",
+				[strikeId]
+			)
+
+		describe("regressions", () => {
+			it("regression: merging an identity that has a vote strike succeeds and the strike points at the survivor", async () => {
+				const { oldId, newId } = await seedIdentities()
+				const strike = await seedStrike(newId)
+
+				await migrate("sess-strike-submitter")
+
+				expect(await strikeOwners(strike)).toEqual({ submitter_id: oldId, undone_by: null })
+				expect(await num("SELECT count(*)::int n FROM users WHERE id = $1", [newId])).toBe(0)
+			})
+
+			it("regression: merging an identity that undid a strike carries undone_by to the survivor", async () => {
+				const { oldId, newId } = await seedIdentities()
+				const other = await seedOther()
+				const strike = await seedStrike(other, { at: 2000, by: newId })
+
+				await migrate("sess-strike-undone-by")
+
+				expect(await strikeOwners(strike)).toEqual({ submitter_id: other, undone_by: oldId })
+			})
+
+			it("regression: a discounted merged-away key keeps its votes discounted on the survivor", async () => {
+				const { oldId, newId } = await seedIdentities()
+				const other = await seedOther()
+				const strike = await seedStrike(other)
+				await markKey(newId, { votes_discounted_at: 1500, vote_strike_id: strike })
+				const lyric = await insertLyric(other, "vidDiscounted")
+				await pool.query("UPDATE lyrics SET effective_score = 0.9, vote_count = 3 WHERE id = $1", [
+					lyric,
+				])
+				await pool.query(
+					"INSERT INTO votes (lyrics_id, user_id, vote, is_self_vote) VALUES ($1, $2, 1, 0)",
+					[lyric, newId]
+				)
+
+				await migrate("sess-discounted")
+
+				expect(await markOf(oldId)).toEqual({ votes_discounted_at: 1500, vote_strike_id: strike })
+				const rep = await one<{ reputation: number }>(
+					"SELECT reputation FROM users WHERE id = $1",
+					[oldId]
+				)
+				expect(Number(rep.reputation)).toBeCloseTo(1.0)
+			})
+		})
+
+		describe("edge cases", () => {
+			it("keeps the earliest discount when both identities are discounted", async () => {
+				const { oldId, newId } = await seedIdentities()
+				const other = await seedOther()
+				const late = await seedStrike(other)
+				const early = await seedStrike(other)
+				await markKey(oldId, { votes_discounted_at: 1900, vote_strike_id: late })
+				await markKey(newId, { votes_discounted_at: 1200, vote_strike_id: early })
+
+				await migrate("sess-both-discounted")
+
+				expect(await markOf(oldId)).toEqual({ votes_discounted_at: 1200, vote_strike_id: early })
+			})
+
+			it("carries strikes against both identities to the survivor", async () => {
+				const { oldId, newId } = await seedIdentities()
+				const own = await seedStrike(oldId)
+				const merged = await seedStrike(newId)
+
+				await migrate("sess-both-struck")
+
+				expect(await strikeOwners(own)).toEqual({ submitter_id: oldId, undone_by: null })
+				expect(await strikeOwners(merged)).toEqual({ submitter_id: oldId, undone_by: null })
+			})
+
+			it("leaves the survivor unmarked when neither identity was struck or discounted", async () => {
+				const { oldId } = await seedIdentities()
+
+				await migrate("sess-neither-struck")
+
+				expect(await markOf(oldId)).toEqual({ votes_discounted_at: null, vote_strike_id: null })
+			})
+
+			it("keeps the survivor's own discount when only the survivor is discounted", async () => {
+				const { oldId } = await seedIdentities()
+				const other = await seedOther()
+				const strike = await seedStrike(other)
+				await markKey(oldId, { votes_discounted_at: 1700, vote_strike_id: strike })
+
+				await migrate("sess-survivor-discounted")
+
+				expect(await markOf(oldId)).toEqual({ votes_discounted_at: 1700, vote_strike_id: strike })
+			})
+
+			it("carries the council-cleared marker so detection never flags the survivor again", async () => {
+				const { oldId, newId } = await seedIdentities()
+				const other = await seedOther()
+				const cleared = await seedStrike(other, { at: 2000, by: other })
+				await markKey(newId, { votes_discounted_at: null, vote_strike_id: cleared })
+
+				await migrate("sess-cleared")
+
+				expect(await markOf(oldId)).toEqual({ votes_discounted_at: null, vote_strike_id: cleared })
+			})
+
+			it("keeps the survivor's own cleared marker when both identities were cleared", async () => {
+				const { oldId, newId } = await seedIdentities()
+				const other = await seedOther()
+				const own = await seedStrike(other, { at: 2000, by: other })
+				const merged = await seedStrike(other, { at: 2100, by: other })
+				await markKey(oldId, { votes_discounted_at: null, vote_strike_id: own })
+				await markKey(newId, { votes_discounted_at: null, vote_strike_id: merged })
+
+				await migrate("sess-both-cleared")
+
+				expect(await markOf(oldId)).toEqual({ votes_discounted_at: null, vote_strike_id: own })
+			})
+
+			it("a live discount wins over a cleared marker", async () => {
+				const { oldId, newId } = await seedIdentities()
+				const other = await seedOther()
+				const cleared = await seedStrike(other, { at: 2000, by: other })
+				const live = await seedStrike(other)
+				await markKey(oldId, { votes_discounted_at: null, vote_strike_id: cleared })
+				await markKey(newId, { votes_discounted_at: 2500, vote_strike_id: live })
+
+				await migrate("sess-live-wins")
+
+				expect(await markOf(oldId)).toEqual({ votes_discounted_at: 2500, vote_strike_id: live })
+			})
+		})
+
+		describe("restore", () => {
+			it("restores strike ownership and both identities' discount columns exactly", async () => {
+				const { oldId, newId } = await seedIdentities()
+				const other = await seedOther()
+				const cleared = await seedStrike(other, { at: 2000, by: other })
+				const live = await seedStrike(other)
+				const againstNew = await seedStrike(newId)
+				const undoneByNew = await seedStrike(other, { at: 2200, by: newId })
+				await markKey(oldId, { votes_discounted_at: null, vote_strike_id: cleared })
+				await markKey(newId, { votes_discounted_at: 2500, vote_strike_id: live })
+
+				const auditId = await migrate("sess-strike-restore")
+				expect(await restoreFromSnapshot(env, auditId)).toEqual({ restored: true })
+
+				expect(await markOf(oldId)).toEqual({ votes_discounted_at: null, vote_strike_id: cleared })
+				expect(await markOf(newId)).toEqual({ votes_discounted_at: 2500, vote_strike_id: live })
+				expect(await strikeOwners(againstNew)).toEqual({ submitter_id: newId, undone_by: null })
+				expect(await strikeOwners(undoneByNew)).toEqual({ submitter_id: other, undone_by: newId })
+				expect(await strikeOwners(cleared)).toEqual({ submitter_id: other, undone_by: other })
+			})
+
+			it("refuses to restore over a strike recorded against the survivor after commit", async () => {
+				const { oldId } = await seedIdentities()
+				const auditId = await migrate("sess-strike-interim")
+				await seedStrike(oldId)
+
+				expect(await restoreFromSnapshot(env, auditId)).toEqual({ error: "HAS_INTERIM_ACTIVITY" })
+			})
+
+			it("refuses to restore when the survivor's discount changed after commit", async () => {
+				const { oldId, newId } = await seedIdentities()
+				const other = await seedOther()
+				const live = await seedStrike(other)
+				await markKey(newId, { votes_discounted_at: 2500, vote_strike_id: live })
+				const auditId = await migrate("sess-discount-interim")
+				await pool.query("UPDATE vote_strikes SET undone_at = 3000, undone_by = $1 WHERE id = $2", [
+					other,
+					live,
+				])
+				await markKey(oldId, { votes_discounted_at: null, vote_strike_id: live })
+
+				expect(await restoreFromSnapshot(env, auditId)).toEqual({ error: "HAS_INTERIM_ACTIVITY" })
+				expect(await markOf(oldId)).toEqual({ votes_discounted_at: null, vote_strike_id: live })
+			})
+		})
+
+		describe("invariants", () => {
+			it("survivor reputation after a merge equals a fresh full recompute when the merge creates self votes", async () => {
+				const { oldId, newId } = await seedIdentities()
+				const other = await seedOther()
+				const ownedByNew = await insertLyric(newId, "vidSelfVote")
+				const elsewhere = await insertLyric(other, "vidElsewhere")
+				await pool.query(
+					"UPDATE lyrics SET effective_score = 0.9, vote_count = 3 WHERE id IN ($1, $2)",
+					[ownedByNew, elsewhere]
+				)
+				await pool.query(
+					"INSERT INTO votes (lyrics_id, user_id, vote, is_self_vote) VALUES ($1, $2, 1, 0), ($3, $2, 1, 0)",
+					[ownedByNew, oldId, elsewhere]
+				)
+
+				await migrate("sess-self-vote-rep")
+
+				const after = await one<{ reputation: number }>(
+					"SELECT reputation FROM users WHERE id = $1",
+					[oldId]
+				)
+				await updateReputations(env)
+				const fresh = await one<{ reputation: number }>(
+					"SELECT reputation FROM users WHERE id = $1",
+					[oldId]
+				)
+				expect(
+					await one("SELECT is_self_vote FROM votes WHERE lyrics_id = $1 AND user_id = $2", [
+						ownedByNew,
+						oldId,
+					])
+				).toEqual({ is_self_vote: 1 })
+				expect(Number(after.reputation)).toBeCloseTo(Number(fresh.reputation))
+				expect(Number(after.reputation)).toBeCloseTo(1.1)
+			})
 		})
 	})
 })
