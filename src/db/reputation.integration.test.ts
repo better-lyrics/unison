@@ -1,5 +1,7 @@
 import { config } from "@/config"
+import { softDeleteLyrics } from "@/db/lyrics"
 import { updateReputations } from "@/db/reputation"
+import { updateScores } from "@/jobs/score-updater"
 import {
 	type IntegrationDb,
 	describeIntegration,
@@ -119,6 +121,36 @@ describeIntegration("derived reputation (integration)", () => {
 
 		expect(await reputationOf(inScope)).toBeCloseTo(1.1)
 		expect(await reputationOf(outOfScope)).toBeCloseTo(config.reputation.default)
+	})
+
+	describe("penalty paths", () => {
+		it("an admin removal lowers the derived value, not a stale stored one", async () => {
+			const submitter = await user()
+			const admin = await user()
+			const lyric = await consensusLyric(submitter, -0.9)
+			await db.pool.query("UPDATE users SET reputation = 2.0 WHERE id = $1", [submitter])
+
+			await softDeleteLyrics(db.env, lyric, admin, "admin", "copied")
+
+			const expected = config.reputation.default - config.moderation.autoHide.reputationPenalty
+			expect(await reputationOf(submitter)).toBeCloseTo(expected)
+			await updateReputations(db.env)
+			expect(await reputationOf(submitter)).toBeCloseTo(expected)
+		})
+
+		it("the auto-hide penalty survives the next score run", async () => {
+			const submitter = await user()
+			const lyric = await consensusLyric(submitter, -0.9)
+			for (let i = 0; i < 3; i++) await vote(lyric, await user(), -1)
+			await db.pool.query("UPDATE lyrics SET downvotes = 3 WHERE id = $1", [lyric])
+
+			await updateScores(db.env)
+			await updateScores(db.env)
+
+			expect(await reputationOf(submitter)).toBeCloseTo(
+				config.reputation.default - config.moderation.autoHide.reputationPenalty
+			)
+		})
 	})
 
 	describe("edge cases", () => {

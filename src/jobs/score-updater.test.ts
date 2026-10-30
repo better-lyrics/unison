@@ -1,11 +1,12 @@
 import { config } from "@/config"
+import { updateReputations } from "@/db/reputation"
 import {
 	calculateScore,
 	recalculateScore,
 	recomputeAllScores,
 	updateScores,
 } from "@/jobs/score-updater"
-import { updateReputations } from "@/db/reputation"
+import { isReputationRefresh, refreshParams } from "@/test/reputation-refresh"
 import type { Env } from "@/types"
 import { describe, expect, it, vi } from "vitest"
 
@@ -358,18 +359,9 @@ describe("auto-hide reputation penalty", () => {
 
 		await updateScores(env)
 
-		const userUpdate = calls.find(
-			(c) =>
-				c.sql.includes("UPDATE users") &&
-				c.sql.includes("reputation - ?") &&
-				c.sql.includes("WHERE id = ?")
-		)
+		const userUpdate = calls.find((c) => isReputationRefresh(c.sql))
 		expect(userUpdate).toBeDefined()
-		expect(userUpdate?.params).toEqual([
-			config.reputation.min,
-			config.moderation.autoHide.reputationPenalty,
-			42,
-		])
+		expect(userUpdate?.params).toEqual(refreshParams([42]))
 
 		const markUpdate = calls.find(
 			(c) => c.sql.includes("UPDATE lyrics") && c.sql.includes("reputation_penalized = TRUE")
@@ -406,15 +398,9 @@ describe("auto-hide reputation penalty", () => {
 
 		await updateScores(env)
 
-		const userUpdates = calls.filter(
-			(c) =>
-				c.sql.includes("UPDATE users") &&
-				c.sql.includes("reputation - ?") &&
-				c.sql.includes("WHERE id = ?")
-		)
+		const userUpdates = calls.filter((c) => isReputationRefresh(c.sql))
 		expect(userUpdates).toHaveLength(1)
-		const totalPenalty = config.moderation.autoHide.reputationPenalty * 2
-		expect(userUpdates[0].params).toEqual([config.reputation.min, totalPenalty, 42])
+		expect(userUpdates[0].params).toEqual(refreshParams([42]))
 	})
 
 	it("wraps the mark UPDATE and user-penalty updates in a single transaction", async () => {
@@ -432,12 +418,7 @@ describe("auto-hide reputation penalty", () => {
 
 		await updateScores(env)
 
-		const userPenalty = calls.find(
-			(c) =>
-				c.sql.includes("UPDATE users") &&
-				c.sql.includes("reputation - ?") &&
-				c.sql.includes("WHERE id = ?")
-		)
+		const userPenalty = calls.find((c) => isReputationRefresh(c.sql))
 		expect(userPenalty).toBeUndefined()
 	})
 
@@ -463,7 +444,7 @@ describe("auto-hide reputation penalty", () => {
 					},
 					async run(): Promise<void> {
 						calls.push({ sql, params })
-						if (sql.includes("UPDATE users") && sql.includes("reputation - ?")) {
+						if (isReputationRefresh(sql)) {
 							throw new Error("simulated failure")
 						}
 					},

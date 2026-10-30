@@ -171,10 +171,7 @@ export async function recomputeAllScores(env: Env): Promise<{ updated: number }>
 }
 
 async function applyAutoHidePenalty(env: Env): Promise<void> {
-	const penalty = config.moderation.autoHide.reputationPenalty
-	const minRep = config.reputation.min
-
-	const submitterPenalty = new Map<number, number>()
+	const penalized = new Set<number>()
 	const flippedIds: number[] = []
 
 	await env.DB.transaction(async (tx) => {
@@ -193,23 +190,18 @@ async function applyAutoHidePenalty(env: Env): Promise<void> {
 		if (rows.length === 0) return
 
 		for (const r of rows) {
-			submitterPenalty.set(r.submitter_id, (submitterPenalty.get(r.submitter_id) ?? 0) + penalty)
+			penalized.add(r.submitter_id)
 			flippedIds.push(r.id)
 			await awardPenaltyXp({ ...env, DB: tx }, r.submitter_id, r.id)
 		}
 
-		for (const [sid, totalPenalty] of submitterPenalty) {
-			await tx
-				.prepare("UPDATE users SET reputation = GREATEST(?, reputation - ?) WHERE id = ?")
-				.bind(minRep, totalPenalty, sid)
-				.run()
-		}
+		await updateReputations({ ...env, DB: tx }, [...penalized])
 	})
 
 	if (flippedIds.length === 0) return
 
 	log.info("applied auto-hide reputation penalty", {
-		affected_submitters: submitterPenalty.size,
+		affected_submitters: penalized.size,
 		affected_rows: flippedIds.length,
 		lyrics_ids: flippedIds.slice(0, 10),
 	})

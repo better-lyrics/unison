@@ -15,6 +15,7 @@ import {
 	videoServesExpr,
 } from "@/db/predicates"
 import { closeOpenCaseForLyric, lockLyricCases } from "@/db/report-cases"
+import { updateReputations } from "@/db/reputation"
 import { Logger } from "@/infra/logger"
 import type { Env, LyricsRow, LyricsSearchResult, LyricsSubmission } from "@/types"
 import { compress, decompress, isCompressed } from "@/utils/compression"
@@ -592,12 +593,8 @@ export async function softDeleteLyrics(
 				.first<{ id: number }>()
 
 			if (flipped) {
-				const penalty = config.moderation.autoHide.reputationPenalty
-				await tx
-					.prepare("UPDATE users SET reputation = GREATEST(?, reputation - ?) WHERE id = ?")
-					.bind(config.reputation.min, penalty, row.submitter_id)
-					.run()
 				await awardPenaltyXp({ ...env, DB: tx }, row.submitter_id, lyricsId)
+				await updateReputations({ ...env, DB: tx }, [row.submitter_id])
 			}
 		}
 

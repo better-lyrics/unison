@@ -1,4 +1,5 @@
 import { config } from "@/config"
+import { isReputationRefresh, refreshParams } from "@/test/reputation-refresh"
 import type { Env, LyricsRow, LyricsSearchResult, LyricsSubmission } from "@/types"
 import { compress } from "@/utils/compression"
 import { DETECTOR_VERSION } from "@/utils/detect-language"
@@ -1072,9 +1073,7 @@ describe("softDeleteLyrics", () => {
 		const result = await softDeleteLyrics(env, 1, 1, "submitter")
 
 		expect(result).toEqual({ deleted: false, reason: "forbidden" })
-		const penalty = db.calls.find(
-			(c) => c.sql.includes("UPDATE users") && c.sql.includes("reputation - ?")
-		)
+		const penalty = db.calls.find((c) => isReputationRefresh(c.sql))
 		expect(penalty).toBeUndefined()
 	})
 
@@ -1176,15 +1175,9 @@ describe("softDeleteLyrics", () => {
 		expect(markUpdate?.sql).toMatch(/RETURNING\s+id/i)
 		expect(markUpdate?.params).toEqual([1])
 
-		const penaltyUpdate = db.calls.find(
-			(c) => c.sql.includes("UPDATE users") && c.sql.includes("reputation - ?")
-		)
+		const penaltyUpdate = db.calls.find((c) => isReputationRefresh(c.sql))
 		expect(penaltyUpdate).toBeDefined()
-		expect(penaltyUpdate?.params).toEqual([
-			config.reputation.min,
-			config.moderation.autoHide.reputationPenalty,
-			42,
-		])
+		expect(penaltyUpdate?.params).toEqual(refreshParams([42]))
 
 		const softDelete = db.calls.find(
 			(c) => c.sql.includes("UPDATE lyrics") && c.sql.includes("deleted_at =")
@@ -1222,14 +1215,8 @@ describe("softDeleteLyrics", () => {
 		const result = await softDeleteLyrics(env, 4521, 1, "admin", "not lyrics")
 
 		expect(result.deleted).toBe(true)
-		const penaltyUpdate = db.calls.find(
-			(c) => c.sql.includes("UPDATE users") && c.sql.includes("reputation - ?")
-		)
-		expect(penaltyUpdate?.params).toEqual([
-			config.reputation.min,
-			config.moderation.autoHide.reputationPenalty,
-			99,
-		])
+		const penaltyUpdate = db.calls.find((c) => isReputationRefresh(c.sql))
+		expect(penaltyUpdate?.params).toEqual(refreshParams([99]))
 		const xpPenalty = db.calls.find((c) => c.sql.includes("INSERT INTO contribution_events"))
 		expect(xpPenalty?.params).toEqual([
 			99,
@@ -1263,9 +1250,7 @@ describe("softDeleteLyrics", () => {
 
 		expect(result.deleted).toBe(true)
 
-		const penaltyUpdate = db.calls.find(
-			(c) => c.sql.includes("UPDATE users") && c.sql.includes("reputation - ?")
-		)
+		const penaltyUpdate = db.calls.find((c) => isReputationRefresh(c.sql))
 		expect(penaltyUpdate).toBeUndefined()
 		expect(db.calls.find((c) => c.sql.includes("INSERT INTO contribution_events"))).toBeUndefined()
 
@@ -1296,9 +1281,7 @@ describe("softDeleteLyrics", () => {
 		const result = await softDeleteLyrics(env, 1, 42, "submitter", null)
 
 		expect(result.deleted).toBe(true)
-		const penalty = db.calls.find(
-			(c) => c.sql.includes("UPDATE users") && c.sql.includes("reputation - ?")
-		)
+		const penalty = db.calls.find((c) => isReputationRefresh(c.sql))
 		expect(penalty).toBeUndefined()
 	})
 
@@ -1323,9 +1306,7 @@ describe("softDeleteLyrics", () => {
 		const result = await softDeleteLyrics(env, 1, 42, "submitter", null)
 
 		expect(result.deleted).toBe(true)
-		const penalty = db.calls.find(
-			(c) => c.sql.includes("UPDATE users") && c.sql.includes("reputation - ?")
-		)
+		const penalty = db.calls.find((c) => isReputationRefresh(c.sql))
 		expect(penalty).toBeUndefined()
 	})
 
@@ -1352,15 +1333,9 @@ describe("softDeleteLyrics", () => {
 		const result = await softDeleteLyrics(env, 1, 1, "admin", "DMCA")
 
 		expect(result.deleted).toBe(true)
-		const penalty = db.calls.find(
-			(c) => c.sql.includes("UPDATE users") && c.sql.includes("reputation - ?")
-		)
+		const penalty = db.calls.find((c) => isReputationRefresh(c.sql))
 		expect(penalty).toBeDefined()
-		expect(penalty?.params).toEqual([
-			config.reputation.min,
-			config.moderation.autoHide.reputationPenalty,
-			42,
-		])
+		expect(penalty?.params).toEqual(refreshParams([42]))
 
 		const markUpdate = db.calls.find(
 			(c) =>
@@ -1392,9 +1367,7 @@ describe("softDeleteLyrics", () => {
 		const result = await softDeleteLyrics(env, 1, 42, "submitter", null)
 
 		expect(result.deleted).toBe(true)
-		const penalty = db.calls.find(
-			(c) => c.sql.includes("UPDATE users") && c.sql.includes("reputation - ?")
-		)
+		const penalty = db.calls.find((c) => isReputationRefresh(c.sql))
 		expect(penalty).toBeUndefined()
 		const mark = db.calls.find(
 			(c) =>
@@ -1451,9 +1424,7 @@ describe("softDeleteLyrics", () => {
 		await softDeleteLyrics(env, 1, 42, "submitter", null)
 
 		expect(db.transactionCount).toBe(1)
-		const penalty = db.calls.find(
-			(c) => c.sql.includes("UPDATE users") && c.sql.includes("reputation - ?")
-		)
+		const penalty = db.calls.find((c) => isReputationRefresh(c.sql))
 		expect(penalty).toBeUndefined()
 	})
 
@@ -1541,7 +1512,7 @@ describe("softDeleteLyrics", () => {
 							},
 							async run(): Promise<void> {
 								calls.push({ sql, params: args })
-								if (sql.includes("UPDATE users") && sql.includes("reputation - ?")) {
+								if (isReputationRefresh(sql)) {
 									throw new Error("simulated failure")
 								}
 							},
