@@ -1,5 +1,7 @@
 import { COMMUNITY_KEY_ID, config } from "@/config"
-import { type SuspectKey, findSuspectKeys, recordStrikes } from "@/db/vote-strikes"
+import { addEvent, awardPenaltyXp, awardStrikePenaltyXp, getXp } from "@/db/contribution-events"
+import { type SuspectKey, findSuspectKeys, recordStrikes, revokeStrikeXp } from "@/db/vote-strikes"
+import { recalculateScore } from "@/jobs/score-updater"
 import {
 	type IntegrationDb,
 	describeIntegration,
@@ -906,5 +908,327 @@ describeIntegration("recordStrikes", () => {
 			expect(await keyState(orphanKey)).toEqual({ votes_discounted_at: null, vote_strike_id: null })
 			expect(await strikeCount()).toBe(1)
 		})
+	})
+})
+
+describeIntegration("revokeStrikeXp", () => {
+	const NOW = launchedAt + 10 * DAY
+	const { weights } = config.gamification.xp
+
+	interface Scenario {
+		submitter: number
+		dropped: number
+		stays: number
+		untouched: number
+		socks: number[]
+		strikeId: number
+	}
+
+	async function honestVote(lyricsId: number): Promise<number> {
+		const key = await seedKey(NOW - 90 * DAY)
+		await vote(key, lyricsId, NOW - 2 * HOUR)
+		return key
+	}
+
+	async function sock(targets: number[], avgVote: number): Promise<number> {
+		const key = await seedKey(NOW - 30 * DAY)
+		await db.pool.query("UPDATE users SET avg_vote = $1 WHERE id = $2", [avgVote, key])
+		for (const [i, target] of targets.entries()) await vote(key, target, NOW - HOUR + i * MINUTE)
+		return key
+	}
+
+	const recalculate = async (ids: number[]) => {
+		for (const id of ids) await recalculateScore(db.env, id)
+	}
+
+	async function votedLyrics(keyIds: number[]): Promise<number[]> {
+		const { rows } = await db.pool.query<{ id: number }>(
+			"SELECT DISTINCT lyrics_id AS id FROM votes WHERE user_id = ANY($1::int[]) ORDER BY 1",
+			[keyIds]
+		)
+		return rows.map((r) => r.id)
+	}
+
+	async function detect(): Promise<number> {
+		const strikes = await recordStrikes(db.env, await findSuspectKeys(db.env), NOW)
+		expect(strikes).toHaveLength(1)
+		await recalculate(await votedLyrics(strikes[0].keyIds))
+		return strikes[0].strikeId
+	}
+
+	async function scenario(): Promise<Scenario> {
+		const submitter = await seedKey(NOW - 60 * DAY)
+		const targets = await lyrics(submitter, serialMinVotes)
+		const [dropped, stays] = targets
+		await honestVote(dropped)
+		for (let i = 0; i < 3; i++) await honestVote(stays)
+		const socks = [await sock(targets, -0.5), await sock(targets, 0)]
+		const untouched = await lyric(submitter)
+		const untouchedVoters = [
+			await honestVote(untouched),
+			await honestVote(untouched),
+			await honestVote(untouched),
+		]
+		await recalculate([...targets, untouched])
+		await db.pool.query("DELETE FROM votes WHERE lyrics_id = $1 AND user_id = ANY($2::int[])", [
+			untouched,
+			untouchedVoters.slice(0, 2),
+		])
+		await recalculate([untouched])
+		return { submitter, dropped, stays, untouched, socks, strikeId: await detect() }
+	}
+
+	async function kinds(userId: number, lyricsId: number): Promise<string[]> {
+		const { rows } = await db.pool.query<{ kind: string }>(
+			"SELECT kind FROM contribution_events WHERE user_id = $1 AND ref_type = 'lyric' AND ref_id = $2 ORDER BY kind",
+			[userId, lyricsId]
+		)
+		return rows.map((r) => r.kind)
+	}
+
+	async function confidence(lyricsId: number): Promise<string> {
+		const { rows } = await db.pool.query<{ confidence: string }>(
+			"SELECT confidence FROM lyrics WHERE id = $1",
+			[lyricsId]
+		)
+		return rows[0].confidence
+	}
+
+	async function xpRevoked(strikeId: number): Promise<number> {
+		const { rows } = await db.pool.query<{ xp_revoked: number }>(
+			"SELECT xp_revoked FROM vote_strikes WHERE id = $1",
+			[strikeId]
+		)
+		return rows[0].xp_revoked
+	}
+
+	async function allEvents(): Promise<{ user_id: number; kind: string; ref_id: number }[]> {
+		const { rows } = await db.pool.query<{ user_id: number; kind: string; ref_id: number }>(
+			"SELECT user_id, kind, ref_id FROM contribution_events ORDER BY user_id, kind, ref_type, ref_id"
+		)
+		return rows
+	}
+
+	const mediumHighFirst = ["first-for-song", "reached-high", "reached-medium"]
+
+	beforeAll(async () => {
+		db = await openIntegrationDb()
+	})
+
+	afterAll(async () => {
+		await db.pool.end()
+	})
+
+	beforeEach(async () => {
+		await wipeRevisionData(db)
+	})
+
+	it("takes back the xp of a lyric that drops to low once the socks are discounted", async () => {
+		const s = await scenario()
+		expect(await confidence(s.dropped)).toBe("low")
+		expect(await kinds(s.submitter, s.dropped)).toEqual(mediumHighFirst)
+		const before = await getXp(db.env, s.submitter)
+
+		const revoked = await revokeStrikeXp(db.env, s.strikeId)
+
+		const expected = weights.reachedMedium + weights.reachedHigh + weights.firstForSong
+		expect(revoked).toBe(expected)
+		expect(await xpRevoked(s.strikeId)).toBe(expected)
+		expect(await kinds(s.submitter, s.dropped)).toEqual([])
+		expect(await getXp(db.env, s.submitter)).toBe(before - expected)
+	})
+
+	it("keeps the xp of a lyric that stays medium on honest votes", async () => {
+		const s = await scenario()
+		expect(await confidence(s.stays)).toBe("medium")
+
+		await revokeStrikeXp(db.env, s.strikeId)
+
+		expect(await kinds(s.submitter, s.stays)).toEqual(mediumHighFirst)
+	})
+
+	it("keeps the xp of a low lyric the strike keys did not vote on", async () => {
+		const s = await scenario()
+		expect(await confidence(s.untouched)).toBe("low")
+		expect(await kinds(s.submitter, s.untouched)).toEqual(["first-for-song", "reached-medium"])
+
+		await revokeStrikeXp(db.env, s.strikeId)
+
+		expect(await kinds(s.submitter, s.untouched)).toEqual(["first-for-song", "reached-medium"])
+	})
+
+	it("leaves other users, other kinds and badge awards alone", async () => {
+		const s = await scenario()
+		const other = await seedKey(NOW - 60 * DAY)
+		await addEvent(db.env, {
+			userId: other,
+			delta: weights.reachedMedium,
+			kind: "reached-medium",
+			refType: "lyric",
+			refId: s.dropped,
+		})
+		await addEvent(db.env, {
+			userId: s.submitter,
+			delta: weights.consensusVote,
+			kind: "consensus-vote",
+			refType: "lyric",
+			refId: s.dropped,
+		})
+		await addEvent(db.env, {
+			userId: s.submitter,
+			delta: weights.requestFilled,
+			kind: "request-filled",
+			refType: "fulfillment",
+			refId: s.dropped,
+		})
+		await awardPenaltyXp(db.env, s.submitter, s.dropped)
+		await db.pool.query("INSERT INTO badge_awards (user_id, badge_key) VALUES ($1, 'first-sync')", [
+			s.submitter,
+		])
+		const before = await allEvents()
+
+		await revokeStrikeXp(db.env, s.strikeId)
+
+		const removed = new Set(
+			mediumHighFirst.map((kind) => JSON.stringify([s.submitter, kind, s.dropped]))
+		)
+		expect(await allEvents()).toEqual(
+			before.filter((e) => !removed.has(JSON.stringify([e.user_id, e.kind, e.ref_id])))
+		)
+		expect(await kinds(s.submitter, s.dropped)).toEqual(["consensus-vote", "penalized"])
+		const { rows } = await db.pool.query("SELECT user_id, badge_key FROM badge_awards")
+		expect(rows).toEqual([{ user_id: s.submitter, badge_key: "first-sync" }])
+	})
+
+	describe("regressions", () => {
+		it("regression: a lyric that later climbs to medium on honest votes earns it again", async () => {
+			const s = await scenario()
+			await revokeStrikeXp(db.env, s.strikeId)
+
+			await honestVote(s.dropped)
+			await honestVote(s.dropped)
+			await recalculateScore(db.env, s.dropped)
+
+			expect(await confidence(s.dropped)).toBe("medium")
+			expect(await kinds(s.submitter, s.dropped)).toEqual(["first-for-song", "reached-medium"])
+		})
+	})
+
+	describe("invariants", () => {
+		it("a second call revokes nothing and leaves xp_revoked unchanged", async () => {
+			const s = await scenario()
+			const first = await revokeStrikeXp(db.env, s.strikeId)
+			const xpAfterFirst = await getXp(db.env, s.submitter)
+
+			expect(await revokeStrikeXp(db.env, s.strikeId)).toBe(0)
+			expect(await xpRevoked(s.strikeId)).toBe(first)
+			expect(await getXp(db.env, s.submitter)).toBe(xpAfterFirst)
+		})
+
+		it("xp_revoked equals the drop in the submitter's xp", async () => {
+			const s = await scenario()
+			const before = await getXp(db.env, s.submitter)
+
+			await revokeStrikeXp(db.env, s.strikeId)
+
+			expect(await xpRevoked(s.strikeId)).toBe(before - (await getXp(db.env, s.submitter)))
+			expect(await xpRevoked(s.strikeId)).toBeGreaterThan(0)
+		})
+	})
+
+	describe("edge cases", () => {
+		it("returns 0 for an unknown strike id", async () => {
+			const { rows } = await db.pool.query<{ id: number }>(
+				"SELECT COALESCE(MAX(id), 0) + 1000 AS id FROM vote_strikes"
+			)
+			expect(await revokeStrikeXp(db.env, rows[0].id)).toBe(0)
+		})
+
+		it("revokes nothing when the keys only voted on deleted lyrics", async () => {
+			const s = await scenario()
+			await db.pool.query(
+				`UPDATE lyrics SET deleted_at = $1, deleted_by_user_id = $2, deleted_by_role = 'submitter'
+				 WHERE submitter_id = $2 AND id <> $3`,
+				[NOW, s.submitter, s.untouched]
+			)
+			const before = await allEvents()
+
+			expect(await revokeStrikeXp(db.env, s.strikeId)).toBe(0)
+			expect(await allEvents()).toEqual(before)
+			expect(await xpRevoked(s.strikeId)).toBe(0)
+		})
+
+		it("revokes nothing when the keys only voted on other submitters' lyrics", async () => {
+			const s = await scenario()
+			const other = await seedKey(NOW - 60 * DAY)
+			await db.pool.query("UPDATE lyrics SET submitter_id = $1 WHERE id = $2", [other, s.dropped])
+			await addEvent(db.env, {
+				userId: other,
+				delta: weights.reachedMedium,
+				kind: "reached-medium",
+				refType: "lyric",
+				refId: s.dropped,
+			})
+			const before = await allEvents()
+
+			expect(await revokeStrikeXp(db.env, s.strikeId)).toBe(0)
+			expect(await allEvents()).toEqual(before)
+		})
+	})
+
+	describe("error paths", () => {
+		it("revokes nothing for an undone strike", async () => {
+			const s = await scenario()
+			await db.pool.query("UPDATE vote_strikes SET undone_at = $1 WHERE id = $2", [
+				NOW + HOUR,
+				s.strikeId,
+			])
+			const before = await allEvents()
+
+			expect(await revokeStrikeXp(db.env, s.strikeId)).toBe(0)
+			expect(await allEvents()).toEqual(before)
+			expect(await xpRevoked(s.strikeId)).toBe(0)
+		})
+	})
+})
+
+describeIntegration("awardStrikePenaltyXp", () => {
+	beforeAll(async () => {
+		db = await openIntegrationDb()
+	})
+
+	afterAll(async () => {
+		await db.pool.end()
+	})
+
+	beforeEach(async () => {
+		await wipeRevisionData(db)
+	})
+
+	it("writes one vote-manipulation event per strike", async () => {
+		const submitter = await seedKey(T0)
+		const { rows: strikes } = await db.pool.query<{ id: number }>(
+			`INSERT INTO vote_strikes (submitter_id, kind, key_count, vote_count, repeat, backfill)
+			 VALUES ($1, 'serial', 1, 5, true, false) RETURNING id`,
+			[submitter]
+		)
+		const strikeId = strikes[0].id
+
+		expect(await awardStrikePenaltyXp(db.env, submitter, strikeId)).toBe(true)
+		expect(await awardStrikePenaltyXp(db.env, submitter, strikeId)).toBe(false)
+
+		const { rows } = await db.pool.query(
+			"SELECT user_id, kind, ref_type, ref_id, delta FROM contribution_events"
+		)
+		expect(rows).toEqual([
+			{
+				user_id: submitter,
+				kind: "vote-manipulation",
+				ref_type: "strike",
+				ref_id: strikeId,
+				delta: config.voteIntegrity.repeatPenalty.xp,
+			},
+		])
+		expect(await getXp(db.env, submitter)).toBe(config.voteIntegrity.repeatPenalty.xp)
 	})
 })

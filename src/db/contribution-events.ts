@@ -99,6 +99,20 @@ export async function awardPenaltyXp(
 	})
 }
 
+export async function awardStrikePenaltyXp(
+	env: Env,
+	submitterId: number,
+	strikeId: number
+): Promise<boolean> {
+	return addEvent(env, {
+		userId: submitterId,
+		delta: config.voteIntegrity.repeatPenalty.xp,
+		kind: "vote-manipulation",
+		refType: "strike",
+		refId: strikeId,
+	})
+}
+
 export async function awardConsensusVotes(env: Env): Promise<void> {
 	await env.DB.prepare(`${CONSENSUS_LYRICS_CTE}
 		INSERT INTO contribution_events (user_id, delta, kind, ref_type, ref_id)

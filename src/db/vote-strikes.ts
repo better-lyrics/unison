@@ -186,3 +186,35 @@ async function recordSubmitterStrike(
 		.run()
 	return { ...strike, submitterId, keyIds }
 }
+
+export async function revokeStrikeXp(env: Env, strikeId: number): Promise<number> {
+	const row = await env.DB.prepare(`
+		WITH strike AS (
+			SELECT id, submitter_id FROM vote_strikes WHERE id = ? AND undone_at IS NULL
+		),
+		targets AS (
+			SELECT DISTINCT l.id
+			FROM strike s
+			JOIN users u ON u.vote_strike_id = s.id
+			JOIN votes v ON v.user_id = u.id
+			JOIN lyrics l ON l.id = v.lyrics_id AND l.submitter_id = s.submitter_id
+			WHERE l.deleted_at IS NULL AND l.confidence = 'low'
+		),
+		removed AS (
+			DELETE FROM contribution_events e
+			USING strike s
+			WHERE e.user_id = s.submitter_id
+				AND e.ref_type = 'lyric'
+				AND e.ref_id IN (SELECT id FROM targets)
+				AND e.kind IN ('reached-medium', 'reached-high', 'first-for-song')
+			RETURNING e.delta
+		),
+		total AS (SELECT COALESCE(SUM(delta), 0)::int AS xp FROM removed)
+		UPDATE vote_strikes SET xp_revoked = xp_revoked + (SELECT xp FROM total)
+		WHERE id IN (SELECT id FROM strike)
+		RETURNING (SELECT xp FROM total) AS xp
+	`)
+		.bind(strikeId)
+		.first<{ xp: number }>()
+	return row?.xp ?? 0
+}
