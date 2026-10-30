@@ -1,7 +1,10 @@
 import { COMMUNITY_KEY_ID, config } from "@/config"
-import { revokeStrikePenaltyXp } from "@/db/contribution-events"
+import {
+	awardStrikePenaltyXp,
+	revokeConfidenceXp,
+	revokeStrikePenaltyXp,
+} from "@/db/contribution-events"
 import { recordCouncilEvent } from "@/db/council-events"
-import type { D1Compat } from "@/infra/database"
 import { Logger } from "@/infra/logger"
 import type { Env } from "@/types"
 
@@ -130,7 +133,7 @@ export async function recordStrikes(
 	for (const [submitterId, group] of bySubmitter) {
 		try {
 			const strike = await env.DB.transaction((tx) =>
-				recordSubmitterStrike(tx, submitterId, group, now)
+				recordSubmitterStrike({ ...env, DB: tx }, submitterId, group, now)
 			)
 			if (strike) recorded.push(strike)
 		} catch (err) {
@@ -141,12 +144,13 @@ export async function recordStrikes(
 }
 
 async function recordSubmitterStrike(
-	tx: D1Compat,
+	txEnv: Env,
 	submitterId: number,
 	suspects: SuspectKey[],
 	now: number
 ): Promise<RecordedStrike | null> {
 	const { mergeWindowSec, launchedAt } = config.voteIntegrity
+	const tx = txEnv.DB
 	await tx.prepare("SELECT id FROM users WHERE id = ? FOR UPDATE").bind(submitterId).run()
 	const undiscounted = await tx
 		.prepare(
@@ -164,7 +168,7 @@ async function recordSubmitterStrike(
 	const latest = await tx
 		.prepare(
 			`SELECT id, kind, detected_at, repeat FROM vote_strikes
-			WHERE submitter_id = ? AND undone_at IS NULL
+			WHERE submitter_id = ? AND undone_at IS NULL AND NOT backfill
 			ORDER BY detected_at DESC, id DESC LIMIT 1`
 		)
 		.bind(submitterId)
@@ -174,7 +178,9 @@ async function recordSubmitterStrike(
 	if (latest && now - latest.detected_at <= mergeWindowSec) {
 		await tx
 			.prepare(
-				"UPDATE vote_strikes SET key_count = key_count + ?, vote_count = vote_count + ?, kind = ? WHERE id = ?"
+				`UPDATE vote_strikes SET key_count = key_count + ?, vote_count = vote_count + ?, kind = ?,
+					settled_at = NULL
+				WHERE id = ?`
 			)
 			.bind(keys.length, votes, mergeKinds(latest.kind, kind), latest.id)
 			.run()
@@ -192,6 +198,16 @@ async function recordSubmitterStrike(
 			.first<{ id: number }>()
 		if (!inserted) throw new Error(`vote strike insert returned no row for ${submitterId}`)
 		strike = { strikeId: inserted.id, created: true, repeat }
+		if (repeat) await awardStrikePenaltyXp(txEnv, submitterId, inserted.id)
+		await recordCouncilEvent(tx, {
+			actorId: null,
+			kind: "vote_strike",
+			source: "system",
+			subjectUserId: submitterId,
+			refId: inserted.id,
+			note: strikeNote({ kind, keyCount: keys.length, voteCount: votes, repeat, backfill }),
+			at: now,
+		})
 	}
 
 	await tx
@@ -205,52 +221,124 @@ async function recordSubmitterStrike(
 }
 
 export async function revokeStrikeXp(env: Env, strikeId: number): Promise<number> {
-	const row = await env.DB.prepare(`
-		WITH strike AS (
-			SELECT id, submitter_id FROM vote_strikes WHERE id = ? AND undone_at IS NULL
-		),
-		targets AS (
-			SELECT DISTINCT l.id
-			FROM strike s
-			JOIN users u ON u.vote_strike_id = s.id
-			JOIN votes v ON v.user_id = u.id
-			JOIN lyrics l ON l.id = v.lyrics_id AND l.submitter_id = s.submitter_id
-			WHERE l.deleted_at IS NULL AND l.confidence = 'low'
-		),
-		removed AS (
-			DELETE FROM contribution_events e
-			USING strike s
-			WHERE e.user_id = s.submitter_id
-				AND e.ref_type = 'lyric'
-				AND e.ref_id IN (SELECT id FROM targets)
-				AND e.kind IN ('reached-medium', 'reached-high', 'first-for-song')
-			RETURNING e.delta
-		),
-		total AS (SELECT COALESCE(SUM(delta), 0)::int AS xp FROM removed)
-		UPDATE vote_strikes SET xp_revoked = xp_revoked + (SELECT xp FROM total)
-		WHERE id IN (SELECT id FROM strike)
-		RETURNING (SELECT xp FROM total) AS xp
-	`)
-		.bind(strikeId)
-		.first<{ xp: number }>()
-	return row?.xp ?? 0
+	return env.DB.transaction(async (tx) => {
+		const strike = await tx
+			.prepare(
+				"SELECT submitter_id FROM vote_strikes WHERE id = ? AND undone_at IS NULL FOR UPDATE"
+			)
+			.bind(strikeId)
+			.first<{ submitter_id: number }>()
+		if (!strike) return 0
+		const targets = await tx
+			.prepare(
+				`SELECT DISTINCT l.id
+				FROM users u
+				JOIN votes v ON v.user_id = u.id
+				JOIN lyrics l ON l.id = v.lyrics_id
+				WHERE u.vote_strike_id = ? AND l.submitter_id = ? AND l.deleted_at IS NULL`
+			)
+			.bind(strikeId, strike.submitter_id)
+			.all<{ id: number }>()
+		const xp = await revokeConfidenceXp(
+			{ ...env, DB: tx },
+			strike.submitter_id,
+			targets.results.map((r) => r.id)
+		)
+		if (xp !== 0) {
+			await tx
+				.prepare("UPDATE vote_strikes SET xp_revoked = xp_revoked + ? WHERE id = ?")
+				.bind(xp, strikeId)
+				.run()
+		}
+		return xp
+	})
+}
+
+export interface UnsettledStrike {
+	id: number
+	submitterId: number
+	submitterKeyId: string
+	repeat: boolean
+	keyCount: number
+	keyIds: number[]
+}
+
+export async function unsettledStrikes(env: Env): Promise<UnsettledStrike[]> {
+	const res = await env.DB.prepare(
+		`SELECT s.id, s.submitter_id, sub.key_id, s.repeat, s.key_count,
+			ARRAY(SELECT u.id FROM users u WHERE u.vote_strike_id = s.id ORDER BY u.id) AS key_ids
+		FROM vote_strikes s
+		JOIN users sub ON sub.id = s.submitter_id
+		WHERE s.settled_at IS NULL AND s.undone_at IS NULL
+		ORDER BY s.id`
+	).all<{
+		id: number
+		submitter_id: number
+		key_id: string
+		repeat: boolean
+		key_count: number
+		key_ids: number[]
+	}>()
+	return res.results.map((r) => ({
+		id: r.id,
+		submitterId: r.submitter_id,
+		submitterKeyId: r.key_id,
+		repeat: r.repeat,
+		keyCount: r.key_count,
+		keyIds: r.key_ids,
+	}))
+}
+
+export async function markStrikeSettled(
+	env: Env,
+	strike: Pick<UnsettledStrike, "id" | "keyCount">,
+	now: number
+): Promise<void> {
+	await env.DB.prepare(
+		"UPDATE vote_strikes SET settled_at = ? WHERE id = ? AND key_count = ? AND undone_at IS NULL"
+	)
+		.bind(now, strike.id, strike.keyCount)
+		.run()
 }
 
 export type UndoStrikeResult = "undone" | "not_found" | "already_undone"
+
+export interface UndoneStrike {
+	result: UndoStrikeResult
+	keyIds: number[]
+	submitterId: number | null
+	submitterKeyId: string | null
+	repeatChanged: boolean
+}
 
 export async function undoStrike(
 	env: Env,
 	strikeId: number,
 	actorId: number,
 	now = Math.floor(Date.now() / 1000)
-): Promise<{ result: UndoStrikeResult; keyIds: number[] }> {
+): Promise<UndoneStrike> {
+	const unchanged = (result: UndoStrikeResult): UndoneStrike => ({
+		result,
+		keyIds: [],
+		submitterId: null,
+		submitterKeyId: null,
+		repeatChanged: false,
+	})
 	return env.DB.transaction(async (tx) => {
-		const strike = await tx
-			.prepare("SELECT submitter_id, undone_at FROM vote_strikes WHERE id = ? FOR UPDATE")
+		const submitter = await tx
+			.prepare(
+				`SELECT u.id, u.key_id FROM vote_strikes s JOIN users u ON u.id = s.submitter_id
+				WHERE s.id = ? FOR UPDATE OF u`
+			)
 			.bind(strikeId)
-			.first<{ submitter_id: number; undone_at: number | null }>()
-		if (!strike) return { result: "not_found", keyIds: [] }
-		if (strike.undone_at !== null) return { result: "already_undone", keyIds: [] }
+			.first<{ id: number; key_id: string }>()
+		if (!submitter) return unchanged("not_found")
+		const strike = await tx
+			.prepare("SELECT detected_at, repeat, undone_at FROM vote_strikes WHERE id = ? FOR UPDATE")
+			.bind(strikeId)
+			.first<{ detected_at: number; repeat: boolean; undone_at: number | null }>()
+		if (!strike) return unchanged("not_found")
+		if (strike.undone_at !== null) return unchanged("already_undone")
 
 		await tx
 			.prepare("UPDATE vote_strikes SET undone_at = ?, undone_by = ? WHERE id = ?")
@@ -260,18 +348,63 @@ export async function undoStrike(
 			.prepare("UPDATE users SET votes_discounted_at = NULL WHERE vote_strike_id = ? RETURNING id")
 			.bind(strikeId)
 			.all<{ id: number }>()
-		await revokeStrikePenaltyXp({ ...env, DB: tx }, strikeId)
+		const txEnv = { ...env, DB: tx }
+		await revokeStrikePenaltyXp(txEnv, strikeId)
+		const lifted = await liftLaterRepeats(txEnv, submitter.id, strikeId, strike.detected_at)
 		await recordCouncilEvent(tx, {
 			actorId,
 			kind: "vote_strike_undo",
 			source: "web",
-			subjectUserId: strike.submitter_id,
+			subjectUserId: submitter.id,
 			refId: strikeId,
 			note: null,
 			at: now,
 		})
-		return { result: "undone", keyIds: keys.results.map((k) => k.id).sort((a, b) => a - b) }
+		return {
+			result: "undone",
+			keyIds: keys.results.map((k) => k.id).sort((a, b) => a - b),
+			submitterId: submitter.id,
+			submitterKeyId: submitter.key_id,
+			repeatChanged: strike.repeat || lifted > 0,
+		}
 	})
+}
+
+async function liftLaterRepeats(
+	txEnv: Env,
+	submitterId: number,
+	undoneId: number,
+	undoneAt: number
+): Promise<number> {
+	const live = await txEnv.DB.prepare(
+		`SELECT id, detected_at, repeat, backfill FROM vote_strikes
+		WHERE submitter_id = ? AND undone_at IS NULL
+		ORDER BY detected_at, id FOR UPDATE`
+	)
+		.bind(submitterId)
+		.all<{ id: number; detected_at: number; repeat: boolean; backfill: boolean }>()
+	let earlierLive = false
+	let lifted = 0
+	for (const s of live.results) {
+		const later = s.detected_at > undoneAt || (s.detected_at === undoneAt && s.id > undoneId)
+		if (later && s.repeat && !earlierLive) {
+			await txEnv.DB.prepare("UPDATE vote_strikes SET repeat = FALSE WHERE id = ?").bind(s.id).run()
+			await revokeStrikePenaltyXp(txEnv, s.id)
+			lifted++
+		}
+		if (!s.backfill) earlierLive = true
+	}
+	return lifted
+}
+
+export async function votersOn(env: Env, lyricsIds: number[]): Promise<number[]> {
+	if (lyricsIds.length === 0) return []
+	const res = await env.DB.prepare(
+		"SELECT DISTINCT user_id FROM votes WHERE lyrics_id = ANY(?::int[]) ORDER BY user_id"
+	)
+		.bind(lyricsIds)
+		.all<{ user_id: number }>()
+	return res.results.map((r) => r.user_id)
 }
 
 export async function lyricsVotedByKeys(env: Env, keyIds: number[]): Promise<number[]> {
@@ -301,26 +434,4 @@ export function strikeNote(s: StrikeSummary): string {
 	const base = `${s.kind}: ${count(s.keyCount, "key")}, ${count(s.voteCount, "vote")}`
 	if (s.repeat) return `${base} (repeat)`
 	return s.backfill ? `${base} (history before launch)` : base
-}
-
-export async function getStrikeSummary(env: Env, strikeId: number): Promise<StrikeSummary | null> {
-	const row = await env.DB.prepare(
-		"SELECT kind, key_count, vote_count, repeat, backfill FROM vote_strikes WHERE id = ?"
-	)
-		.bind(strikeId)
-		.first<{
-			kind: string
-			key_count: number
-			vote_count: number
-			repeat: boolean
-			backfill: boolean
-		}>()
-	if (!row) return null
-	return {
-		kind: row.kind,
-		keyCount: row.key_count,
-		voteCount: row.vote_count,
-		repeat: row.repeat,
-		backfill: row.backfill,
-	}
 }

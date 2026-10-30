@@ -2,6 +2,7 @@ import { config } from "@/config"
 import { getXp } from "@/db/contribution-events"
 import { listCouncilEvents } from "@/db/council-events"
 import { CURATOR_LEADERBOARD_CACHE_KEY } from "@/db/leaderboard"
+import { deboost } from "@/db/predicates"
 import { updateReputations } from "@/db/reputation"
 import { lyricsVotedByKeys } from "@/db/vote-strikes"
 import { recalculateScore } from "@/jobs/score-updater"
@@ -192,6 +193,45 @@ const softDelete = (lyricsId: number) =>
 	)
 
 const sorted = (ids: number[]) => [...ids].sort((a, b) => a - b)
+
+async function settledAt(strikeId: number): Promise<number | null> {
+	const { rows } = await db.pool.query<{ settled_at: number | null }>(
+		"SELECT settled_at FROM vote_strikes WHERE id = $1",
+		[strikeId]
+	)
+	return rows[0].settled_at
+}
+
+async function rankingMultiplier(lyricsId: number): Promise<number> {
+	const { rows } = await db.pool.query(
+		`SELECT ${deboost("1.0", "")} AS m FROM lyrics WHERE id = $1`,
+		[lyricsId]
+	)
+	return Number(rows[0].m)
+}
+
+async function expectReputationsMatchFullRefresh(): Promise<void> {
+	const scoped = await reputations()
+	await updateReputations(db.env)
+	expect(await reputations()).toEqual(scoped)
+}
+
+async function failLyricUpdates(lyricsId: number): Promise<() => Promise<void>> {
+	await db.pool.query(
+		`CREATE OR REPLACE FUNCTION vi_settle_fail() RETURNS trigger AS $$
+		BEGIN
+			IF NEW.id = ${lyricsId} THEN RAISE EXCEPTION 'blocked'; END IF;
+			RETURN NEW;
+		END $$ LANGUAGE plpgsql`
+	)
+	await db.pool.query(
+		"CREATE TRIGGER vi_settle_fail BEFORE UPDATE ON lyrics FOR EACH ROW EXECUTE FUNCTION vi_settle_fail()"
+	)
+	return async () => {
+		await db.pool.query("DROP TRIGGER IF EXISTS vi_settle_fail ON lyrics")
+		await db.pool.query("DROP FUNCTION IF EXISTS vi_settle_fail()")
+	}
+}
 
 describeIntegration("runVoteIntegrity", () => {
 	beforeAll(async () => {
@@ -579,6 +619,238 @@ describeIntegration("runVoteIntegrity", () => {
 
 				expect(await snapshot()).toEqual(before)
 			})
+		})
+	})
+
+	describe("settling", () => {
+		it("regression: a strike whose settling fails is retried on the next run", async () => {
+			const f = await voravit()
+			const g = await voravit()
+			const release = await failLyricUpdates(f.targets[0])
+			try {
+				expect(await runVoteIntegrity(db.env, NOW)).toEqual({ strikes: 2, keys: 14 })
+			} finally {
+				await release()
+			}
+			const bySubmitter = async (submitter: number) => {
+				const strike = (await strikes()).find((s) => s.submitter_id === submitter)
+				if (!strike) throw new Error(`no strike for ${submitter}`)
+				return strike
+			}
+			const fStrike = await bySubmitter(f.submitter)
+			const gStrike = await bySubmitter(g.submitter)
+			expect(await settledAt(fStrike.id)).toBeNull()
+			expect(fStrike.xp_revoked).toBe(0)
+			for (const row of await scores(f.targets)) expect(row.confidence).toBe("medium")
+			expect(await settledAt(gStrike.id)).toBe(NOW)
+			for (const row of await scores(g.targets)) expect(row.confidence).toBe("low")
+			expect(await councilEvents()).toHaveLength(2)
+
+			expect(await runVoteIntegrity(db.env, NOW + HOUR)).toEqual({ strikes: 0, keys: 0 })
+
+			expect(await settledAt(fStrike.id)).toBe(NOW + HOUR)
+			expect(await settledAt(gStrike.id)).toBe(NOW)
+			for (const row of await scores(f.targets)) expect(row.confidence).toBe("low")
+			expect((await bySubmitter(f.submitter)).xp_revoked).toBeGreaterThan(0)
+			const events = await councilEvents()
+			expect(events.map((e) => e.kind)).toEqual(["vote_strike", "vote_strike"])
+			expect(events.map((e) => e.ref_id).sort()).toEqual(
+				[String(fStrike.id), String(gStrike.id)].sort()
+			)
+			await expectReputationsMatchFullRefresh()
+		})
+
+		it("a repeat strike that fails to settle keeps one penalty and one council event across runs", async () => {
+			const f = await voravit()
+			await runVoteIntegrity(db.env, NOW)
+			await ringBurst(f.targets, NOW + 22 * HOUR)
+			const release = await failLyricUpdates(f.targets[0])
+			try {
+				expect(await runVoteIntegrity(db.env, NOW + 25 * HOUR)).toEqual({ strikes: 1, keys: 6 })
+			} finally {
+				await release()
+			}
+			const [, second] = await strikes()
+			expect(second.repeat).toBe(true)
+			expect(await settledAt(second.id)).toBeNull()
+			const penalty = [{ delta: repeatPenalty.xp, ref_type: "strike", ref_id: second.id }]
+			expect(await penaltyEvents(f.submitter)).toEqual(penalty)
+			expect(await councilEvents()).toHaveLength(2)
+
+			await runVoteIntegrity(db.env, NOW + 26 * HOUR)
+			const settled = await snapshot()
+			await runVoteIntegrity(db.env, NOW + 27 * HOUR)
+
+			expect(await settledAt(second.id)).toBe(NOW + 26 * HOUR)
+			expect(await penaltyEvents(f.submitter)).toEqual(penalty)
+			expect((await councilEvents()).map((e) => e.note)).toEqual([
+				"both: 7 keys, 15 votes",
+				"ring: 6 keys, 9 votes (repeat)",
+			])
+			expect(await snapshot()).toEqual(settled)
+		})
+
+		it("settles every strike of a run and stamps settled_at", async () => {
+			await voravit()
+			await runVoteIntegrity(db.env, NOW)
+
+			const [strike] = await strikes()
+			expect(await settledAt(strike.id)).toBe(NOW)
+		})
+
+		it("a merge is settled again so the new keys stop counting", async () => {
+			const f = await voravit()
+			await runVoteIntegrity(db.env, NOW)
+			const other = await seedKey(NOW - 120 * DAY)
+			const otherLyric = await lyric(other)
+			const late = await serialKey([...f.targets, otherLyric], NOW + HOUR)
+			await recalculateScore(db.env, otherLyric)
+			expect((await scores([otherLyric]))[0].vote_count).toBe(1)
+
+			await runVoteIntegrity(db.env, NOW + 2 * HOUR)
+
+			const [strike] = await strikes()
+			expect(await discounted()).toContain(late)
+			expect(await settledAt(strike.id)).toBe(NOW + 2 * HOUR)
+			expect((await scores([otherLyric]))[0].vote_count).toBe(0)
+		})
+
+		it("a repeat strike evicts the submitter's lyrics the keys never voted on", async () => {
+			const f = await voravit()
+			const quiet = await lyric(f.submitter)
+			const quietKey = `v:${await videoIdOf(quiet)}`
+			db.cache.store.set(quietKey, "{}")
+			await runVoteIntegrity(db.env, NOW)
+			expect(db.cache.store.has(quietKey)).toBe(true)
+
+			await ringBurst(f.targets, NOW + 22 * HOUR)
+			await runVoteIntegrity(db.env, NOW + 25 * HOUR)
+
+			expect(db.cache.store.has(quietKey)).toBe(false)
+		})
+
+		it("a repeat strike deboosts the submitter's ranking", async () => {
+			const f = await voravit()
+			await runVoteIntegrity(db.env, NOW)
+			expect(await rankingMultiplier(f.targets[0])).toBe(1)
+
+			await ringBurst(f.targets, NOW + 22 * HOUR)
+			await runVoteIntegrity(db.env, NOW + 25 * HOUR)
+
+			expect(await rankingMultiplier(f.targets[0])).toBeCloseTo(
+				config.voteIntegrity.multiplier.one,
+				10
+			)
+		})
+	})
+
+	describe("backfill strikes", () => {
+		it("regression: a live strike 2 days after a backfill strike is a first strike", async () => {
+			const f = await voravit(launchedAt - 20 * DAY)
+			await runVoteIntegrity(db.env, launchedAt + HOUR)
+			const repBefore = await reputation(f.submitter)
+			await ringBurst(f.targets, launchedAt + 2 * DAY - 3 * HOUR)
+
+			expect(await runVoteIntegrity(db.env, launchedAt + 2 * DAY)).toEqual({
+				strikes: 1,
+				keys: 6,
+			})
+
+			expect((await strikes()).map((s) => [s.repeat, s.backfill])).toEqual([
+				[false, true],
+				[false, false],
+			])
+			expect(await penaltyEvents(f.submitter)).toEqual([])
+			expect(await reputation(f.submitter)).toBe(repBefore)
+			expect(await rankingMultiplier(f.targets[0])).toBe(1)
+		})
+
+		it("regression: a live detection within 24h of a backfill strike is a new first strike", async () => {
+			const f = await voravit(launchedAt - 20 * DAY)
+			await runVoteIntegrity(db.env, launchedAt + HOUR)
+			await ringBurst(f.targets, launchedAt + HOUR)
+
+			expect(await runVoteIntegrity(db.env, launchedAt + 4 * HOUR)).toEqual({
+				strikes: 1,
+				keys: 6,
+			})
+
+			const rows = await strikes()
+			expect(rows.map((s) => [s.key_count, s.repeat, s.backfill])).toEqual([
+				[7, false, true],
+				[6, false, false],
+			])
+			expect(await penaltyEvents(f.submitter)).toEqual([])
+			expect(await rankingMultiplier(f.targets[0])).toBe(1)
+		})
+	})
+
+	describe("undo of an earlier strike", () => {
+		async function firstAndRepeat() {
+			const f = await voravit()
+			const admin = await seedKey(NOW - 300 * DAY)
+			await runVoteIntegrity(db.env, NOW)
+			await ringBurst(f.targets, NOW + 22 * HOUR)
+			await runVoteIntegrity(db.env, NOW + 25 * HOUR)
+			const [first, second] = await strikes()
+			expect(second.repeat).toBe(true)
+			return { f, admin, first, second }
+		}
+
+		it("regression: undoing the first strike lifts the later strike's penalty and deboost", async () => {
+			const { f, admin, first, second } = await firstAndRepeat()
+			const repBefore = await reputation(f.submitter)
+			expect(await rankingMultiplier(f.targets[0])).toBeCloseTo(
+				config.voteIntegrity.multiplier.one,
+				10
+			)
+
+			expect(await undoVoteStrike(db.env, first.id, admin, NOW + 26 * HOUR)).toBe("undone")
+
+			const [, after] = await strikes()
+			expect(after).toMatchObject({ id: second.id, repeat: false })
+			expect(await penaltyEvents(f.submitter)).toEqual([])
+			expect(await reputation(f.submitter)).toBeCloseTo(repBefore + repeatPenalty.reputation, 10)
+			expect(await rankingMultiplier(f.targets[0])).toBe(1)
+			await expectReputationsMatchFullRefresh()
+		})
+
+		it("undoing a strike that lifts a repeat evicts the submitter's untouched lyrics", async () => {
+			const { f, admin, first } = await firstAndRepeat()
+			const quiet = await lyric(f.submitter)
+			const quietKey = `v:${await videoIdOf(quiet)}`
+			db.cache.store.set(quietKey, "{}")
+
+			await undoVoteStrike(db.env, first.id, admin, NOW + 26 * HOUR)
+
+			expect(db.cache.store.has(quietKey)).toBe(false)
+		})
+
+		it("undoing a repeat strike evicts the submitter's untouched lyrics", async () => {
+			const { f, admin, second } = await firstAndRepeat()
+			const quiet = await lyric(f.submitter)
+			const quietKey = `v:${await videoIdOf(quiet)}`
+			db.cache.store.set(quietKey, "{}")
+
+			await undoVoteStrike(db.env, second.id, admin, NOW + 26 * HOUR)
+
+			expect(db.cache.store.has(quietKey)).toBe(false)
+			await expectReputationsMatchFullRefresh()
+		})
+
+		it("undoing a lone first strike leaves the submitter's untouched lyrics cached", async () => {
+			const f = await voravit()
+			const admin = await seedKey(NOW - 300 * DAY)
+			await runVoteIntegrity(db.env, NOW)
+			const [strike] = await strikes()
+			const quiet = await lyric(f.submitter)
+			const quietKey = `v:${await videoIdOf(quiet)}`
+			db.cache.store.set(quietKey, "{}")
+
+			await undoVoteStrike(db.env, strike.id, admin, NOW + HOUR)
+
+			expect(db.cache.store.has(quietKey)).toBe(true)
+			await expectReputationsMatchFullRefresh()
 		})
 	})
 

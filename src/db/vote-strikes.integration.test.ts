@@ -1,6 +1,18 @@
 import { COMMUNITY_KEY_ID, config } from "@/config"
-import { addEvent, awardPenaltyXp, awardStrikePenaltyXp, getXp } from "@/db/contribution-events"
-import { type SuspectKey, findSuspectKeys, recordStrikes, revokeStrikeXp } from "@/db/vote-strikes"
+import {
+	addEvent,
+	awardPenaltyXp,
+	awardStrikePenaltyXp,
+	getXp,
+	revokeConfidenceXp,
+} from "@/db/contribution-events"
+import {
+	type SuspectKey,
+	findSuspectKeys,
+	recordStrikes,
+	revokeStrikeXp,
+	undoStrike,
+} from "@/db/vote-strikes"
 import { recalculateScore } from "@/jobs/score-updater"
 import {
 	type IntegrationDb,
@@ -848,6 +860,157 @@ describeIntegration("recordStrikes", () => {
 		expect(await snapshot()).toEqual(before)
 	})
 
+	describe("council and penalty events", () => {
+		async function councilEvents() {
+			const { rows } = await db.pool.query(
+				"SELECT actor_id, kind, source, subject_user_id, ref_id, note, created_at FROM council_events ORDER BY id"
+			)
+			return rows
+		}
+
+		async function penaltyEvents() {
+			const { rows } = await db.pool.query(
+				"SELECT user_id, delta, ref_id FROM contribution_events WHERE kind = 'vote-manipulation' ORDER BY id"
+			)
+			return rows
+		}
+
+		async function settledAt(strikeId: number): Promise<number | null> {
+			const { rows } = await db.pool.query<{ settled_at: number | null }>(
+				"SELECT settled_at FROM vote_strikes WHERE id = $1",
+				[strikeId]
+			)
+			return rows[0].settled_at
+		}
+
+		it("a new strike writes its vote_strike council event and is not settled yet", async () => {
+			const { id: submitter, targets } = await submitterWithLyrics()
+			await serialKey(targets, NOW - HOUR)
+
+			const [result] = await detectAndRecord(NOW)
+
+			expect(await councilEvents()).toEqual([
+				{
+					actor_id: null,
+					kind: "vote_strike",
+					source: "system",
+					subject_user_id: submitter,
+					ref_id: String(result.strikeId),
+					note: `serial: 1 key, ${serialMinVotes} votes`,
+					created_at: NOW,
+				},
+			])
+			expect(await settledAt(result.strikeId)).toBeNull()
+			expect(await penaltyEvents()).toEqual([])
+		})
+
+		it("a repeat strike writes its penalty event with the strike", async () => {
+			const { id: submitter, targets } = await submitterWithLyrics()
+			await serialKey(targets, NOW - HOUR)
+			await detectAndRecord(NOW)
+			await serialKey(targets, NOW + 2 * DAY - HOUR)
+
+			const [repeat] = await detectAndRecord(NOW + 2 * DAY)
+
+			expect(repeat).toMatchObject({ created: true, repeat: true })
+			expect(await penaltyEvents()).toEqual([
+				{
+					user_id: submitter,
+					delta: config.voteIntegrity.repeatPenalty.xp,
+					ref_id: repeat.strikeId,
+				},
+			])
+			expect((await councilEvents()).map((e) => e.note)).toEqual([
+				`serial: 1 key, ${serialMinVotes} votes`,
+				`serial: 1 key, ${serialMinVotes} votes (repeat)`,
+			])
+		})
+
+		it("a merge writes no second council event and marks the strike unsettled", async () => {
+			const { targets } = await submitterWithLyrics()
+			await serialKey(targets, NOW - HOUR)
+			const [first] = await detectAndRecord(NOW)
+			await db.pool.query("UPDATE vote_strikes SET settled_at = $1 WHERE id = $2", [
+				NOW,
+				first.strikeId,
+			])
+			await serialKey(targets, NOW + HOUR)
+
+			const [merged] = await detectAndRecord(NOW + 2 * HOUR)
+
+			expect(merged).toMatchObject({ strikeId: first.strikeId, created: false })
+			expect(await settledAt(first.strikeId)).toBeNull()
+			expect(await councilEvents()).toHaveLength(1)
+			expect(await penaltyEvents()).toEqual([])
+		})
+
+		it("regression: a council event that cannot be written rolls the whole strike back", async () => {
+			const { targets } = await submitterWithLyrics()
+			const key = await serialKey(targets, NOW - HOUR)
+			await db.pool.query(
+				`CREATE OR REPLACE FUNCTION vs_fail() RETURNS trigger AS $$
+				BEGIN RAISE EXCEPTION 'blocked'; END $$ LANGUAGE plpgsql`
+			)
+			await db.pool.query(
+				"CREATE TRIGGER vs_fail BEFORE INSERT ON council_events FOR EACH ROW EXECUTE FUNCTION vs_fail()"
+			)
+			try {
+				expect(await detectAndRecord(NOW)).toEqual([])
+			} finally {
+				await db.pool.query("DROP TRIGGER vs_fail ON council_events")
+				await db.pool.query("DROP FUNCTION vs_fail()")
+			}
+
+			expect(await strikeCount()).toBe(0)
+			expect(await keyState(key)).toEqual({ votes_discounted_at: null, vote_strike_id: null })
+			expect(await councilEvents()).toEqual([])
+		})
+	})
+
+	describe("regressions", () => {
+		it("regression: a backfill strike never makes a later live strike a repeat", async () => {
+			const { targets } = await submitterWithLyrics()
+			await serialKey(targets, launchedAt - DAY)
+			const [backfill] = await detectAndRecord(NOW)
+			const live = await serialKey(targets, NOW + 2 * DAY - HOUR)
+
+			const [result] = await detectAndRecord(NOW + 2 * DAY)
+
+			expect(result).toMatchObject({ created: true, repeat: false, keyIds: [live] })
+			expect(await strike(backfill.strikeId)).toMatchObject({ backfill: true, repeat: false })
+			expect(await strike(result.strikeId)).toMatchObject({ backfill: false, repeat: false })
+		})
+
+		it("regression: a live detection within 24h of a backfill strike is a new first strike", async () => {
+			const { targets } = await submitterWithLyrics()
+			const old = await serialKey(targets, launchedAt - DAY)
+			const [backfill] = await detectAndRecord(NOW)
+			const live = await serialKey(targets, NOW + HOUR)
+
+			const [result] = await detectAndRecord(NOW + 2 * HOUR)
+
+			expect(result).toMatchObject({ created: true, repeat: false, keyIds: [live] })
+			expect(result.strikeId).not.toBe(backfill.strikeId)
+			expect(await strike(backfill.strikeId)).toMatchObject({ key_count: 1, backfill: true })
+			expect(await markedKeys(backfill.strikeId)).toEqual([old])
+			expect(await markedKeys(result.strikeId)).toEqual([live])
+			expect(await strikeCount()).toBe(2)
+		})
+
+		it("a live strike after a backfill and a first live strike is still a repeat", async () => {
+			const { targets } = await submitterWithLyrics()
+			await serialKey(targets, launchedAt - DAY)
+			await detectAndRecord(NOW)
+			await serialKey(targets, NOW + 2 * DAY - HOUR)
+			await detectAndRecord(NOW + 2 * DAY)
+			await serialKey(targets, NOW + 4 * DAY - HOUR)
+
+			const [result] = await detectAndRecord(NOW + 4 * DAY)
+
+			expect(result).toMatchObject({ created: true, repeat: true })
+		})
+	})
+
 	describe("edge cases", () => {
 		it("exactly mergeWindowSec apart merges, one second more inserts", async () => {
 			const a = await submitterWithLyrics()
@@ -1152,20 +1315,22 @@ describeIntegration("revokeStrikeXp", () => {
 
 		const revoked = await revokeStrikeXp(db.env, s.strikeId)
 
-		const expected = weights.reachedMedium + weights.reachedHigh + weights.firstForSong
+		const expected =
+			weights.reachedMedium + weights.reachedHigh + weights.firstForSong + weights.reachedHigh
 		expect(revoked).toBe(expected)
 		expect(await xpRevoked(s.strikeId)).toBe(expected)
 		expect(await kinds(s.submitter, s.dropped)).toEqual([])
 		expect(await getXp(db.env, s.submitter)).toBe(before - expected)
 	})
 
-	it("keeps the xp of a lyric that stays medium on honest votes", async () => {
+	it("takes back only reached-high of a lyric that drops to medium on honest votes", async () => {
 		const s = await scenario()
 		expect(await confidence(s.stays)).toBe("medium")
+		expect(await kinds(s.submitter, s.stays)).toEqual(mediumHighFirst)
 
 		await revokeStrikeXp(db.env, s.strikeId)
 
-		expect(await kinds(s.submitter, s.stays)).toEqual(mediumHighFirst)
+		expect(await kinds(s.submitter, s.stays)).toEqual(["first-for-song", "reached-medium"])
 	})
 
 	it("keeps the xp of a low lyric the strike keys did not vote on", async () => {
@@ -1210,9 +1375,10 @@ describeIntegration("revokeStrikeXp", () => {
 
 		await revokeStrikeXp(db.env, s.strikeId)
 
-		const removed = new Set(
-			mediumHighFirst.map((kind) => JSON.stringify([s.submitter, kind, s.dropped]))
-		)
+		const removed = new Set([
+			...mediumHighFirst.map((kind) => JSON.stringify([s.submitter, kind, s.dropped])),
+			JSON.stringify([s.submitter, "reached-high", s.stays]),
+		])
 		expect(await allEvents()).toEqual(
 			before.filter((e) => !removed.has(JSON.stringify([e.user_id, e.kind, e.ref_id])))
 		)
@@ -1282,7 +1448,10 @@ describeIntegration("revokeStrikeXp", () => {
 		it("revokes nothing when the keys only voted on other submitters' lyrics", async () => {
 			const s = await scenario()
 			const other = await seedKey(NOW - 60 * DAY)
-			await db.pool.query("UPDATE lyrics SET submitter_id = $1 WHERE id = $2", [other, s.dropped])
+			await db.pool.query(
+				"UPDATE lyrics SET submitter_id = $1 WHERE submitter_id = $2 AND id <> $3",
+				[other, s.submitter, s.untouched]
+			)
 			await addEvent(db.env, {
 				userId: other,
 				delta: weights.reachedMedium,
@@ -1351,5 +1520,274 @@ describeIntegration("awardStrikePenaltyXp", () => {
 			},
 		])
 		expect(await getXp(db.env, submitter)).toBe(config.voteIntegrity.repeatPenalty.xp)
+	})
+})
+
+describeIntegration("revokeConfidenceXp", () => {
+	const { weights } = config.gamification.xp
+	const confidenceKinds = [
+		["reached-medium", weights.reachedMedium],
+		["reached-high", weights.reachedHigh],
+		["first-for-song", weights.firstForSong],
+	] as const
+
+	async function earnedLyric(submitterId: number, now: "low" | "medium" | "high") {
+		const id = await lyric(submitterId)
+		for (const [kind, delta] of confidenceKinds) {
+			await addEvent(db.env, { userId: submitterId, delta, kind, refType: "lyric", refId: id })
+		}
+		await db.pool.query("UPDATE lyrics SET confidence = $1 WHERE id = $2", [now, id])
+		return id
+	}
+
+	async function kinds(lyricsId: number): Promise<string[]> {
+		const { rows } = await db.pool.query<{ kind: string }>(
+			"SELECT kind FROM contribution_events WHERE ref_type = 'lyric' AND ref_id = $1 ORDER BY kind",
+			[lyricsId]
+		)
+		return rows.map((r) => r.kind)
+	}
+
+	beforeAll(async () => {
+		db = await openIntegrationDb()
+	})
+
+	afterAll(async () => {
+		await db.pool.end()
+	})
+
+	beforeEach(async () => {
+		await wipeRevisionData(db)
+	})
+
+	it("high to medium takes back only reached-high", async () => {
+		const submitter = await seedKey(T0)
+		const id = await earnedLyric(submitter, "medium")
+
+		expect(await revokeConfidenceXp(db.env, submitter, [id])).toBe(weights.reachedHigh)
+
+		expect(await kinds(id)).toEqual(["first-for-song", "reached-medium"])
+	})
+
+	it("medium to low takes back reached-medium, first-for-song and reached-high", async () => {
+		const submitter = await seedKey(T0)
+		const id = await earnedLyric(submitter, "low")
+
+		expect(await revokeConfidenceXp(db.env, submitter, [id])).toBe(
+			weights.reachedMedium + weights.reachedHigh + weights.firstForSong
+		)
+
+		expect(await kinds(id)).toEqual([])
+	})
+
+	it("a lyric still high keeps everything", async () => {
+		const submitter = await seedKey(T0)
+		const id = await earnedLyric(submitter, "high")
+
+		expect(await revokeConfidenceXp(db.env, submitter, [id])).toBe(0)
+
+		expect(await kinds(id)).toEqual(["first-for-song", "reached-high", "reached-medium"])
+	})
+
+	describe("edge cases", () => {
+		it("no lyrics revokes nothing", async () => {
+			const submitter = await seedKey(T0)
+			const id = await earnedLyric(submitter, "low")
+
+			expect(await revokeConfidenceXp(db.env, submitter, [])).toBe(0)
+
+			expect(await kinds(id)).toHaveLength(3)
+		})
+
+		it("lyrics not in the list are left alone", async () => {
+			const submitter = await seedKey(T0)
+			const listed = await earnedLyric(submitter, "low")
+			const other = await earnedLyric(submitter, "low")
+
+			await revokeConfidenceXp(db.env, submitter, [listed])
+
+			expect(await kinds(listed)).toEqual([])
+			expect(await kinds(other)).toHaveLength(3)
+		})
+	})
+
+	describe("invariants", () => {
+		it("only the given user's confidence events go, and a second call revokes nothing", async () => {
+			const submitter = await seedKey(T0)
+			const other = await seedKey(T0)
+			const id = await earnedLyric(submitter, "low")
+			await addEvent(db.env, {
+				userId: other,
+				delta: weights.reachedMedium,
+				kind: "reached-medium",
+				refType: "lyric",
+				refId: id,
+			})
+			await awardPenaltyXp(db.env, submitter, id)
+
+			await revokeConfidenceXp(db.env, submitter, [id])
+
+			expect(await kinds(id)).toEqual(["penalized", "reached-medium"])
+			expect(await revokeConfidenceXp(db.env, submitter, [id])).toBe(0)
+		})
+	})
+})
+
+describeIntegration("undoStrike", () => {
+	const NOW = launchedAt + 10 * DAY
+
+	async function submitterWithLyrics(): Promise<{ id: number; targets: number[] }> {
+		const id = await seedKey(T0 - 60 * DAY)
+		return { id, targets: await lyrics(id, serialMinVotes) }
+	}
+
+	async function strikeAt(targets: number[], at: number) {
+		const key = await seedKey(at - HOUR - targets.length * MINUTE)
+		for (const [i, target] of targets.entries()) await vote(key, target, at - HOUR + i * MINUTE)
+		const [recorded] = await recordStrikes(db.env, await findSuspectKeys(db.env), at)
+		return recorded.strikeId
+	}
+
+	async function repeats(submitterId: number): Promise<Record<number, boolean>> {
+		const { rows } = await db.pool.query<{ id: number; repeat: boolean }>(
+			"SELECT id, repeat FROM vote_strikes WHERE submitter_id = $1 ORDER BY id",
+			[submitterId]
+		)
+		return Object.fromEntries(rows.map((r) => [r.id, r.repeat]))
+	}
+
+	async function penalized(): Promise<number[]> {
+		const { rows } = await db.pool.query<{ ref_id: number }>(
+			"SELECT ref_id FROM contribution_events WHERE kind = 'vote-manipulation' ORDER BY ref_id"
+		)
+		return rows.map((r) => r.ref_id)
+	}
+
+	beforeAll(async () => {
+		db = await openIntegrationDb()
+	})
+
+	afterAll(async () => {
+		await db.pool.end()
+	})
+
+	beforeEach(async () => {
+		await wipeRevisionData(db)
+	})
+
+	it("undoing the first of three strikes makes the second first and keeps the third repeat", async () => {
+		const { id: submitter, targets } = await submitterWithLyrics()
+		const admin = await seedKey(T0)
+		const a = await strikeAt(targets, NOW)
+		const b = await strikeAt(targets, NOW + 2 * DAY)
+		const c = await strikeAt(targets, NOW + 4 * DAY)
+		expect(await repeats(submitter)).toEqual({ [a]: false, [b]: true, [c]: true })
+		expect(await penalized()).toEqual([b, c])
+
+		const undone = await undoStrike(db.env, a, admin, NOW + 5 * DAY)
+
+		expect(undone).toMatchObject({ result: "undone", submitterId: submitter, repeatChanged: true })
+		expect(await repeats(submitter)).toEqual({ [a]: false, [b]: false, [c]: true })
+		expect(await penalized()).toEqual([c])
+	})
+
+	it("regression: undoing the only earlier strike clears the later strike's repeat", async () => {
+		const { id: submitter, targets } = await submitterWithLyrics()
+		const admin = await seedKey(T0)
+		const a = await strikeAt(targets, NOW)
+		const b = await strikeAt(targets, NOW + 2 * DAY)
+
+		await undoStrike(db.env, a, admin, NOW + 3 * DAY)
+
+		expect(await repeats(submitter)).toEqual({ [a]: false, [b]: false })
+		expect(await penalized()).toEqual([])
+	})
+
+	it("undoing the last repeat strike changes no other strike", async () => {
+		const { id: submitter, targets } = await submitterWithLyrics()
+		const admin = await seedKey(T0)
+		const a = await strikeAt(targets, NOW)
+		const b = await strikeAt(targets, NOW + 2 * DAY)
+		const c = await strikeAt(targets, NOW + 4 * DAY)
+
+		const undone = await undoStrike(db.env, c, admin, NOW + 5 * DAY)
+
+		expect(undone).toMatchObject({ result: "undone", repeatChanged: true })
+		expect(await repeats(submitter)).toEqual({ [a]: false, [b]: true, [c]: true })
+		expect(await penalized()).toEqual([b])
+	})
+
+	describe("edge cases", () => {
+		it("undoing a lone first strike reports no repeat change", async () => {
+			const { targets } = await submitterWithLyrics()
+			const admin = await seedKey(T0)
+			const a = await strikeAt(targets, NOW)
+
+			expect(await undoStrike(db.env, a, admin, NOW + DAY)).toMatchObject({
+				result: "undone",
+				repeatChanged: false,
+			})
+		})
+
+		it("a backfill strike does not keep a later strike repeat once the first live one is undone", async () => {
+			const { id: submitter, targets } = await submitterWithLyrics()
+			const admin = await seedKey(T0)
+			const backfill = await strikeAt(targets, launchedAt - HOUR)
+			const a = await strikeAt(targets, NOW)
+			const b = await strikeAt(targets, NOW + 2 * DAY)
+			expect(await repeats(submitter)).toEqual({ [backfill]: false, [a]: false, [b]: true })
+
+			await undoStrike(db.env, a, admin, NOW + 3 * DAY)
+
+			expect(await repeats(submitter)).toEqual({ [backfill]: false, [a]: false, [b]: false })
+			expect(await penalized()).toEqual([])
+		})
+
+		it("another submitter's strikes are untouched", async () => {
+			const one = await submitterWithLyrics()
+			const two = await submitterWithLyrics()
+			const admin = await seedKey(T0)
+			const a = await strikeAt(one.targets, NOW)
+			await strikeAt(one.targets, NOW + 2 * DAY)
+			await strikeAt(two.targets, NOW + 2 * DAY + HOUR)
+			await strikeAt(two.targets, NOW + 4 * DAY)
+			const twoStrikes = await repeats(two.id)
+			expect(Object.values(twoStrikes)).toEqual([false, true])
+
+			await undoStrike(db.env, a, admin, NOW + 5 * DAY)
+
+			expect(await repeats(two.id)).toEqual(twoStrikes)
+		})
+	})
+
+	describe("invariants", () => {
+		it("undo never turns a strike into a repeat", async () => {
+			const { id: submitter, targets } = await submitterWithLyrics()
+			const admin = await seedKey(T0)
+			const a = await strikeAt(targets, NOW)
+			const b = await strikeAt(targets, NOW + 2 * DAY)
+			const c = await strikeAt(targets, NOW + 4 * DAY)
+			let before = await repeats(submitter)
+
+			for (const id of [b, a, c]) {
+				await undoStrike(db.env, id, admin, NOW + 5 * DAY)
+				const after = await repeats(submitter)
+				for (const [strikeId, repeat] of Object.entries(after)) {
+					if (repeat) expect(before[Number(strikeId)]).toBe(true)
+				}
+				before = after
+			}
+			expect(await penalized()).toEqual([])
+		})
+	})
+
+	describe("error paths", () => {
+		it("an unknown strike is not_found and changes nothing", async () => {
+			const admin = await seedKey(T0)
+			expect(await undoStrike(db.env, 999999, admin, NOW)).toMatchObject({
+				result: "not_found",
+				repeatChanged: false,
+			})
+		})
 	})
 })

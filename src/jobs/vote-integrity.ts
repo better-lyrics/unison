@@ -1,17 +1,18 @@
-import { awardStrikePenaltyXp } from "@/db/contribution-events"
-import { recordCouncilEvent } from "@/db/council-events"
 import { evictFeedCaches } from "@/db/feed"
 import { invalidateCuratorLeaderboardCache } from "@/db/leaderboard"
+import { invalidateCacheForSubmitter } from "@/db/lyrics"
 import { updateReputations } from "@/db/reputation"
 import {
 	type UndoStrikeResult,
+	type UnsettledStrike,
 	findSuspectKeys,
-	getStrikeSummary,
 	lyricsVotedByKeys,
+	markStrikeSettled,
 	recordStrikes,
 	revokeStrikeXp,
-	strikeNote,
 	undoStrike,
+	unsettledStrikes,
+	votersOn,
 } from "@/db/vote-strikes"
 import { Logger } from "@/infra/logger"
 import { recalculateScore } from "@/jobs/score-updater"
@@ -24,39 +25,41 @@ export async function runVoteIntegrity(
 	now = Math.floor(Date.now() / 1000)
 ): Promise<{ strikes: number; keys: number }> {
 	const suspects = await findSuspectKeys(env)
-	if (suspects.length === 0) return { strikes: 0, keys: 0 }
-
-	const recorded = await recordStrikes(env, suspects, now)
-	for (const strike of recorded) {
-		for (const id of await lyricsVotedByKeys(env, strike.keyIds)) {
-			await recalculateScore(env, id)
-		}
-		await revokeStrikeXp(env, strike.strikeId)
-		if (!strike.created) continue
-		if (strike.repeat) await awardStrikePenaltyXp(env, strike.submitterId, strike.strikeId)
-		const summary = await getStrikeSummary(env, strike.strikeId)
-		await recordCouncilEvent(env.DB, {
-			actorId: null,
-			kind: "vote_strike",
-			source: "system",
-			subjectUserId: strike.submitterId,
-			refId: strike.strikeId,
-			note: summary ? strikeNote(summary) : null,
-			at: now,
-		})
-	}
-
+	const recorded = suspects.length > 0 ? await recordStrikes(env, suspects, now) : []
 	const result = {
 		strikes: recorded.length,
 		keys: recorded.reduce((sum, s) => sum + s.keyIds.length, 0),
 	}
-	if (result.strikes === 0) return result
 
-	await updateReputations(env)
+	let settled = 0
+	for (const strike of await unsettledStrikes(env)) {
+		try {
+			await settleStrike(env, strike, now)
+			settled++
+		} catch (err) {
+			log.error("vote strike settle failed", { strikeId: strike.id, error: String(err) })
+		}
+	}
+	if (settled === 0) return result
+
 	await evictFeedCaches(env)
 	await invalidateCuratorLeaderboardCache(env)
-	log.info("vote integrity", result)
+	log.info("vote integrity", { ...result, settled })
 	return result
+}
+
+async function settleStrike(env: Env, strike: UnsettledStrike, now: number): Promise<void> {
+	await refreshVotedLyrics(env, strike.submitterId, strike.keyIds)
+	await revokeStrikeXp(env, strike.id)
+	if (strike.repeat) await invalidateCacheForSubmitter(env, strike.submitterKeyId)
+	await markStrikeSettled(env, strike, now)
+}
+
+async function refreshVotedLyrics(env: Env, submitterId: number, keyIds: number[]): Promise<void> {
+	const lyricsIds = await lyricsVotedByKeys(env, keyIds)
+	for (const id of lyricsIds) await recalculateScore(env, id)
+	const scope = new Set([submitterId, ...keyIds, ...(await votersOn(env, lyricsIds))])
+	await updateReputations(env, [...scope])
 }
 
 export async function undoVoteStrike(
@@ -65,15 +68,15 @@ export async function undoVoteStrike(
 	actorId: number,
 	now = Math.floor(Date.now() / 1000)
 ): Promise<UndoStrikeResult> {
-	const { result, keyIds } = await undoStrike(env, strikeId, actorId, now)
-	if (result !== "undone") return result
+	const undone = await undoStrike(env, strikeId, actorId, now)
+	if (undone.result !== "undone" || undone.submitterId === null) return undone.result
 
-	for (const id of await lyricsVotedByKeys(env, keyIds)) {
-		await recalculateScore(env, id)
+	await refreshVotedLyrics(env, undone.submitterId, undone.keyIds)
+	if (undone.repeatChanged && undone.submitterKeyId !== null) {
+		await invalidateCacheForSubmitter(env, undone.submitterKeyId)
 	}
-	await updateReputations(env)
 	await evictFeedCaches(env)
 	await invalidateCuratorLeaderboardCache(env)
-	log.info("vote strike undone", { strikeId, actorId, keys: keyIds.length })
-	return result
+	log.info("vote strike undone", { strikeId, actorId, keys: undone.keyIds.length })
+	return undone.result
 }

@@ -48,6 +48,33 @@ export async function awardConfidenceXp(
 	}
 }
 
+export async function revokeConfidenceXp(
+	env: Env,
+	submitterId: number,
+	lyricsIds: number[]
+): Promise<number> {
+	if (lyricsIds.length === 0) return 0
+	const row = await env.DB.prepare(`
+		WITH removed AS (
+			DELETE FROM contribution_events e
+			USING lyrics l
+			WHERE l.id = e.ref_id
+				AND e.user_id = ?
+				AND e.ref_type = 'lyric'
+				AND e.ref_id = ANY(?::int[])
+				AND (
+					(e.kind IN ('reached-medium', 'first-for-song') AND l.confidence = 'low')
+					OR (e.kind = 'reached-high' AND l.confidence <> 'high')
+				)
+			RETURNING e.delta
+		)
+		SELECT COALESCE(SUM(delta), 0)::int AS xp FROM removed
+	`)
+		.bind(submitterId, lyricsIds)
+		.first<{ xp: number }>()
+	return row?.xp ?? 0
+}
+
 export async function awardRequestFilledXp(
 	env: Env,
 	fillerId: number,
