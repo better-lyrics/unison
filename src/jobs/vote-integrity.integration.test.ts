@@ -19,7 +19,7 @@ const MINUTE = 60
 const HOUR = 3600
 const DAY = 86400
 
-const { launchedAt, repeatPenalty } = config.voteIntegrity
+const { launchedAt, repeatPenalty, lookbackSec } = config.voteIntegrity
 const NOW = launchedAt + 10 * DAY
 
 let db: IntegrationDb
@@ -406,6 +406,18 @@ describeIntegration("runVoteIntegrity", () => {
 
 			expect((await scores([otherLyric]))[0].vote_count).toBe(0)
 		})
+
+		it("a default run skips a burst older than the lookback, a full run strikes it", async () => {
+			const f = await voravit(NOW - lookbackSec - DAY)
+			const before = await snapshot()
+
+			expect(await runVoteIntegrity(db.env, NOW)).toEqual({ strikes: 0, keys: 0 })
+			expect(await snapshot()).toEqual(before)
+
+			expect(await runVoteIntegrity(db.env, NOW, { all: true })).toEqual({ strikes: 1, keys: 7 })
+			expect(await discounted()).toEqual(sorted([...f.ring, f.serial]))
+			for (const row of await scores(f.targets)) expect(row.vote_count).toBe(1)
+		})
 	})
 
 	describe("lyricsVotedByKeys", () => {
@@ -747,7 +759,7 @@ describeIntegration("runVoteIntegrity", () => {
 	describe("backfill strikes", () => {
 		it("regression: a live strike 2 days after a backfill strike is a first strike", async () => {
 			const f = await voravit(launchedAt - 20 * DAY)
-			await runVoteIntegrity(db.env, launchedAt + HOUR)
+			await runVoteIntegrity(db.env, launchedAt + HOUR, { all: true })
 			const repBefore = await reputation(f.submitter)
 			await ringBurst(f.targets, launchedAt + 2 * DAY - 3 * HOUR)
 
@@ -767,7 +779,7 @@ describeIntegration("runVoteIntegrity", () => {
 
 		it("regression: a live detection within 24h of a backfill strike is a new first strike", async () => {
 			const f = await voravit(launchedAt - 20 * DAY)
-			await runVoteIntegrity(db.env, launchedAt + HOUR)
+			await runVoteIntegrity(db.env, launchedAt + HOUR, { all: true })
 			await ringBurst(f.targets, launchedAt + HOUR)
 
 			expect(await runVoteIntegrity(db.env, launchedAt + 4 * HOUR)).toEqual({

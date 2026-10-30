@@ -63,6 +63,16 @@ describe("voteIntegrity", () => {
 		expect(v.multiplier.many).toBeGreaterThan(0)
 	})
 
+	it("looks back far enough to see a whole ring window and a whole serial window", () => {
+		expect(v.lookbackSec).toBeGreaterThanOrEqual(v.ring.windowSec + v.serialWindowSec)
+	})
+
+	it("needs a ring to beat a submitter's normal traffic, measured over many windows", () => {
+		expect(v.ring.trafficFactor).toBeGreaterThan(1)
+		expect(v.ring.baselineSec).toBeGreaterThanOrEqual(100 * v.ring.windowSec)
+		expect(v.ring.baselineSec).toBeGreaterThan(v.lookbackSec + v.ring.windowSec)
+	})
+
 	it("penalises a repeat strike", () => {
 		expect(v.repeatPenalty.reputation).toBeGreaterThan(0)
 		expect(v.repeatPenalty.xp).toBeLessThan(0)

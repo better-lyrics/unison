@@ -36,6 +36,7 @@ const {
 	serialWindowSec,
 	launchedAt,
 	mergeWindowSec,
+	lookbackSec,
 } = config.voteIntegrity
 
 let db: IntegrationDb
@@ -86,6 +87,36 @@ async function freshVoters(lyricsId: number, firstVotes: number[]): Promise<numb
 
 const sorted = (ids: number[]) => [...ids].sort((a, b) => a - b)
 
+const detectAll = () => findSuspectKeys(db.env, { now: T0, all: true })
+
+async function fans(
+	lyricsId: number,
+	firstVotes: number[],
+	signupLead = MINUTE
+): Promise<number[]> {
+	const { rows } = await db.pool.query<{ id: number }>(
+		`WITH fans AS (
+			INSERT INTO users (key_id, created_at)
+			SELECT 'fan-' || $2::int || '-' || ord, at - $4::int
+			FROM unnest($1::int[]) WITH ORDINALITY AS f(at, ord)
+			RETURNING id, created_at
+		)
+		INSERT INTO votes (lyrics_id, user_id, vote, is_self_vote, created_at)
+		SELECT $3, id, 1, 0, created_at + $4::int FROM fans RETURNING user_id AS id`,
+		[firstVotes, ++seq, lyricsId, signupLead]
+	)
+	return rows.map((r) => r.id)
+}
+
+const every = (from: number, to: number, step: number) =>
+	Array.from({ length: Math.ceil((to - from) / step) }, (_, i) => from + i * step)
+
+const ringThreshold = (freshKeysInBaseline: number) =>
+	Math.max(
+		ring.minKeys,
+		Math.ceil((ring.trafficFactor * freshKeysInBaseline * ring.windowSec) / ring.baselineSec)
+	)
+
 describeIntegration("findSuspectKeys", () => {
 	const sortByUser = (rows: SuspectKey[]) => [...rows].sort((a, b) => a.userId - b.userId)
 	const userIds = (rows: SuspectKey[]) => rows.map((r) => r.userId).sort((a, b) => a - b)
@@ -119,7 +150,7 @@ describeIntegration("findSuspectKeys", () => {
 				}
 			}
 
-			expect(await findSuspectKeys(db.env)).toEqual([])
+			expect(await detectAll()).toEqual([])
 		})
 
 		it("regression: a long-time fan who upvotes one submitter for months is not serial", async () => {
@@ -130,7 +161,7 @@ describeIntegration("findSuspectKeys", () => {
 				await vote(fan, lyricsId, T0 - 200 * DAY + 9 * MINUTE + i * DAY)
 			}
 
-			expect(await findSuspectKeys(db.env)).toEqual([])
+			expect(await detectAll()).toEqual([])
 		})
 
 		it("a fresh key whose upvotes are spread over more than the window is not serial", async () => {
@@ -141,7 +172,7 @@ describeIntegration("findSuspectKeys", () => {
 				await vote(key, lyricsId, T0 + MINUTE + i * gap)
 			}
 
-			expect(await findSuspectKeys(db.env)).toEqual([])
+			expect(await detectAll()).toEqual([])
 		})
 
 		it("a key that is not fresh is not serial, however fast it votes", async () => {
@@ -151,7 +182,7 @@ describeIntegration("findSuspectKeys", () => {
 				await vote(key, lyricsId, T0 + i * 10)
 			}
 
-			expect(await findSuspectKeys(db.env)).toEqual([])
+			expect(await detectAll()).toEqual([])
 		})
 
 		it("the window is inclusive: the last vote exactly serialWindowSec after the first counts", async () => {
@@ -167,7 +198,7 @@ describeIntegration("findSuspectKeys", () => {
 				await vote(outside, lyricsId, at)
 			}
 
-			const result = await findSuspectKeys(db.env)
+			const result = await detectAll()
 			expect(result.map((r) => r.userId)).toEqual([inside])
 			expect(result[0]).toMatchObject({ serial: true, ring: false })
 		})
@@ -181,7 +212,7 @@ describeIntegration("findSuspectKeys", () => {
 			}
 			await downvote(key, targets[serialMinVotes - 1], T0 + 2 * MINUTE)
 
-			expect(await findSuspectKeys(db.env)).toEqual([])
+			expect(await detectAll()).toEqual([])
 		})
 	})
 
@@ -197,7 +228,7 @@ describeIntegration("findSuspectKeys", () => {
 			keys.push(key)
 		}
 
-		const result = sortByUser(await findSuspectKeys(db.env))
+		const result = sortByUser(await detectAll())
 
 		expect(result).toEqual(
 			keys.map((key, i) => ({
@@ -217,7 +248,7 @@ describeIntegration("findSuspectKeys", () => {
 		const key = await seedKey(T0)
 		for (const [i, target] of targets.entries()) await vote(key, target, T0 + 30 + i * 20)
 
-		const result = await findSuspectKeys(db.env)
+		const result = await detectAll()
 
 		expect(result).toEqual([
 			{
@@ -242,7 +273,7 @@ describeIntegration("findSuspectKeys", () => {
 			keys.push(key)
 		}
 
-		const result = sortByUser(await findSuspectKeys(db.env))
+		const result = sortByUser(await detectAll())
 
 		expect(result.map((r) => r.userId)).toEqual(keys)
 		for (const row of result) {
@@ -259,7 +290,7 @@ describeIntegration("findSuspectKeys", () => {
 			await vote(key, target, signup + 2 * MINUTE)
 		}
 
-		expect(await findSuspectKeys(db.env)).toEqual([])
+		expect(await detectAll()).toEqual([])
 	})
 
 	it("does not flag an old key that votes on many submitters", async () => {
@@ -271,7 +302,7 @@ describeIntegration("findSuspectKeys", () => {
 			}
 		}
 
-		expect(await findSuspectKeys(db.env)).toEqual([])
+		expect(await detectAll()).toEqual([])
 	})
 
 	it("does not flag the community account's voters", async () => {
@@ -284,7 +315,7 @@ describeIntegration("findSuspectKeys", () => {
 		const serialKey = await seedKey(T0)
 		for (const [i, target] of targets.entries()) await vote(serialKey, target, T0 + 60 + i * 10)
 
-		expect(await findSuspectKeys(db.env)).toEqual([])
+		expect(await detectAll()).toEqual([])
 	})
 
 	it("skips keys already discounted and banned keys", async () => {
@@ -301,7 +332,7 @@ describeIntegration("findSuspectKeys", () => {
 		for (const [i, target] of targets.entries()) await vote(bannedSerial, target, T0 + i * 60)
 		await db.pool.query("UPDATE users SET banned_at = $1 WHERE id = $2", [T0, bannedSerial])
 
-		const result = await findSuspectKeys(db.env)
+		const result = await detectAll()
 
 		expect(userIds(result)).toEqual(sorted(rest))
 		expect(result.every((r) => r.ring && r.submitterId === submitter)).toBe(true)
@@ -322,7 +353,7 @@ describeIntegration("findSuspectKeys", () => {
 		}
 		const newcomer = await freshVoter(target, T0 + 2 * HOUR + 30 * MINUTE)
 
-		expect(await findSuspectKeys(db.env)).toEqual([
+		expect(await detectAll()).toEqual([
 			{
 				userId: newcomer,
 				submitterId: submitter,
@@ -353,7 +384,7 @@ describeIntegration("findSuspectKeys", () => {
 		])
 		const newcomer = await freshVoter(target, T0 + 2 * HOUR + 30 * MINUTE)
 
-		expect(await findSuspectKeys(db.env)).toEqual([
+		expect(await detectAll()).toEqual([
 			{
 				userId: newcomer,
 				submitterId: submitter,
@@ -365,6 +396,252 @@ describeIntegration("findSuspectKeys", () => {
 		])
 	})
 
+	describe("incremental scan", () => {
+		const NOW = T0 + 200 * DAY
+		const start = NOW - lookbackSec
+		const detect = () => findSuspectKeys(db.env, { now: NOW })
+
+		async function serialAt(submitter: number, lastVoteAt: number): Promise<number> {
+			const targets = await lyrics(submitter, serialMinVotes)
+			const key = await seedKey(lastVoteAt - serialMinVotes * MINUTE)
+			for (const [i, target] of targets.entries()) {
+				await vote(key, target, lastVoteAt - (serialMinVotes - 1 - i) * MINUTE)
+			}
+			return key
+		}
+
+		it("skips a ring and a serial key whose votes are all older than the lookback", async () => {
+			const submitter = await seedKey(NOW - 120 * DAY)
+			const target = await lyric(submitter)
+			const ringKeys = await freshVoters(
+				target,
+				Array.from({ length: ring.minKeys }, (_, i) => start - DAY + i * 10 * MINUTE)
+			)
+			const serial = await serialAt(submitter, start - 2 * DAY)
+
+			expect(await detect()).toEqual([])
+
+			const full = await findSuspectKeys(db.env, { now: NOW, all: true })
+			expect(userIds(full)).toEqual(sorted([...ringKeys, serial]))
+			expect(full.find((r) => r.userId === serial)).toMatchObject({ serial: true, ring: false })
+			expect(full.filter((r) => r.ring).map((r) => r.userId)).toEqual(sorted(ringKeys))
+		})
+
+		it("finds ring mates that started up to ringWindowSec before the lookback start", async () => {
+			const submitter = await seedKey(NOW - 120 * DAY)
+			const target = await lyric(submitter)
+			const mates = await freshVoters(target, [
+				start - ring.windowSec,
+				start - ring.windowSec + 10 * MINUTE,
+			])
+			const candidates = await freshVoters(
+				target,
+				Array.from({ length: ring.minKeys - mates.length }, () => start)
+			)
+
+			const result = await detect()
+
+			expect(userIds(result)).toEqual(sorted(candidates))
+			expect(result.every((r) => r.ring && r.submitterId === submitter)).toBe(true)
+			expect(result.some((r) => mates.includes(r.userId))).toBe(false)
+		})
+
+		it("reads a candidate's whole history, so older votes still decide devotion", async () => {
+			const submitter = await seedKey(NOW - 120 * DAY)
+			const other = await seedKey(NOW - 120 * DAY)
+			const targets = await lyrics(submitter, serialMinVotes)
+			const elsewhere = await lyrics(other, serialMinVotes)
+			const key = await seedKey(start - 30 * DAY)
+			for (const [i, lyricsId] of elsewhere.entries()) {
+				await vote(key, lyricsId, start - 30 * DAY + MINUTE + i * MINUTE)
+			}
+			for (const [i, lyricsId] of targets.entries()) await vote(key, lyricsId, NOW - HOUR + i)
+
+			expect(await detect()).toEqual([])
+		})
+
+		describe("edge cases", () => {
+			it("a last vote exactly at the lookback start is scanned, one second earlier is not", async () => {
+				const submitter = await seedKey(NOW - 120 * DAY)
+				const inside = await serialAt(submitter, start)
+				const outside = await serialAt(await seedKey(NOW - 120 * DAY), start - 1)
+
+				expect(userIds(await detect())).toEqual([inside])
+				expect(userIds(await findSuspectKeys(db.env, { now: NOW, all: true }))).toEqual(
+					sorted([inside, outside])
+				)
+			})
+
+			it("returns nothing when no votes were cast at all", async () => {
+				expect(await detect()).toEqual([])
+			})
+		})
+
+		describe("invariants", () => {
+			it("when every vote is inside the lookback, the incremental and full scans agree", async () => {
+				const submitter = await seedKey(NOW - 120 * DAY)
+				const target = await lyric(submitter)
+				await freshVoters(
+					target,
+					Array.from({ length: ring.minKeys }, (_, i) => NOW - 2 * DAY + i * 20 * MINUTE)
+				)
+				await serialAt(await seedKey(NOW - 120 * DAY), NOW - DAY)
+				await freshVoter(await lyric(await seedKey(NOW - 120 * DAY)), NOW - 3 * DAY)
+
+				const incremental = sortByUser(await detect())
+				expect(incremental).toHaveLength(ring.minKeys + 1)
+				expect(incremental).toEqual(
+					sortByUser(await findSuspectKeys(db.env, { now: NOW, all: true }))
+				)
+			})
+		})
+	})
+
+	describe("ring threshold scales with the submitter's traffic", () => {
+		const NOW = T0 + 200 * DAY
+		const detect = () => findSuspectKeys(db.env, { now: NOW })
+
+		async function popularSubmitter(): Promise<{ id: number; flow: number; target: number }> {
+			const id = await seedKey(NOW - 120 * DAY)
+			const flowTarget = await lyric(id)
+			const flow = await fans(flowTarget, every(NOW - 60 * DAY, NOW - DAY, 90 * MINUTE))
+			return { id, flow: flow.length, target: await lyric(id) }
+		}
+
+		const burst = (target: number, size: number) =>
+			freshVoters(
+				target,
+				Array.from({ length: size }, (_, i) => NOW - 2 * HOUR + i * MINUTE)
+			)
+
+		function smallestRing(flow: number): number {
+			let size = ring.minKeys
+			while (size < ringThreshold(flow + size)) size++
+			return size
+		}
+
+		it("a 5-key burst on a submitter with a steady flow of fresh fans is not a ring", async () => {
+			const popular = await popularSubmitter()
+			await burst(popular.target, ring.minKeys)
+
+			expect(ringThreshold(popular.flow + ring.minKeys)).toBeGreaterThan(ring.minKeys)
+			expect(await detect()).toEqual([])
+		})
+
+		it("a burst at the scaled threshold is a ring", async () => {
+			const popular = await popularSubmitter()
+			const size = smallestRing(popular.flow)
+			const keys = await burst(popular.target, size)
+
+			const result = await detect()
+
+			expect(size).toBeGreaterThan(ring.minKeys)
+			expect(userIds(result)).toEqual(sorted(keys))
+			expect(result.every((r) => r.ring && r.submitterId === popular.id)).toBe(true)
+		})
+
+		it("an unknown submitter gets a ring at ring.minKeys", async () => {
+			const submitter = await seedKey(NOW - 120 * DAY)
+			const keys = await burst(await lyric(submitter), ring.minKeys)
+
+			expect(userIds(await detect())).toEqual(sorted(keys))
+		})
+
+		it("the steady flow itself is never a ring", async () => {
+			const popular = await popularSubmitter()
+
+			expect(popular.flow).toBeGreaterThan(ring.minKeys * 100)
+			expect(await findSuspectKeys(db.env, { now: NOW, all: true })).toEqual([])
+		})
+
+		it("only fresh devoted keys raise the baseline", async () => {
+			const submitter = await seedKey(NOW - 120 * DAY)
+			const oldFans = await fans(
+				await lyric(submitter),
+				every(NOW - 60 * DAY, NOW - DAY, 90 * MINUTE),
+				DAY
+			)
+			const keys = await burst(await lyric(submitter), ring.minKeys)
+
+			expect(ringThreshold(oldFans.length + ring.minKeys)).toBeGreaterThan(ring.minKeys)
+			expect(userIds(await detect())).toEqual(sorted(keys))
+		})
+
+		describe("edge cases", () => {
+			it("one key below the scaled threshold is not a ring, the threshold is", async () => {
+				const popular = await popularSubmitter()
+				const size = smallestRing(popular.flow)
+				const target = popular.target
+				const keys = await burst(target, size - 1)
+
+				expect(await detect()).toEqual([])
+
+				keys.push(await freshVoter(target, NOW - 2 * HOUR + size * MINUTE))
+				expect(userIds(await detect())).toEqual(sorted(keys))
+			})
+
+			it("a baseline landing exactly on an integer threshold needs that many keys, not one more", async () => {
+				const windows = ring.baselineSec / ring.windowSec
+				const threshold = ring.minKeys + 1
+				const freshKeys = (threshold * windows) / ring.trafficFactor
+				expect(Number.isInteger(freshKeys)).toBe(true)
+				const submitter = await seedKey(NOW - 120 * DAY)
+				await fans(
+					await lyric(submitter),
+					Array.from({ length: freshKeys - threshold }, () => NOW - 30 * DAY)
+				)
+				const keys = await burst(await lyric(submitter), threshold)
+
+				expect(ringThreshold(freshKeys)).toBe(threshold)
+				expect(userIds(await detect())).toEqual(sorted(keys))
+			})
+
+			it("fans exactly baselineSec ago count toward the baseline, one second earlier do not", async () => {
+				const windows = ring.baselineSec / ring.windowSec
+				const crowd = Math.ceil((ring.minKeys * windows) / ring.trafficFactor)
+				const counted = await seedKey(NOW - 120 * DAY)
+				const notCounted = await seedKey(NOW - 120 * DAY)
+				await fans(
+					await lyric(counted),
+					Array.from({ length: crowd }, () => NOW - ring.baselineSec)
+				)
+				await fans(
+					await lyric(notCounted),
+					Array.from({ length: crowd }, () => NOW - ring.baselineSec - 1)
+				)
+				await burst(await lyric(counted), ring.minKeys)
+				const keys = await burst(await lyric(notCounted), ring.minKeys)
+
+				expect(ringThreshold(crowd + ring.minKeys)).toBeGreaterThan(ring.minKeys)
+				expect(userIds(await detect())).toEqual(sorted(keys))
+			})
+		})
+
+		describe("regressions", () => {
+			it("regression: a voravit-shaped burst of 59 fresh keys in 2 hours is still a ring", async () => {
+				const submitter = await seedKey(NOW - 120 * DAY)
+				const targets = await lyrics(submitter, 6)
+				for (const [i, target] of targets.entries()) {
+					const honest = await seedKey(NOW - 200 * DAY)
+					await vote(honest, target, NOW - 40 * DAY + i * DAY)
+				}
+				await fans(targets[0], every(NOW - 60 * DAY, NOW - 2 * DAY, 3 * DAY))
+				const keys: number[] = []
+				for (let i = 0; i < 59; i++) {
+					const at = NOW - 3 * HOUR + i * 2 * MINUTE
+					const key = await freshVoter(targets[i % targets.length], at)
+					if (i % 3 === 0) await vote(key, targets[(i + 1) % targets.length], at + MINUTE)
+					keys.push(key)
+				}
+
+				const result = await detect()
+
+				expect(userIds(result)).toEqual(sorted(keys))
+				expect(result.every((r) => r.ring && r.submitterId === submitter)).toBe(true)
+			})
+		})
+	})
+
 	describe("edge cases", () => {
 		it("4 fresh keys is not a ring, 5 is", async () => {
 			const submitter = await seedKey(T0 - 60 * DAY)
@@ -372,10 +649,10 @@ describeIntegration("findSuspectKeys", () => {
 			const firstVotes = Array.from({ length: ring.minKeys }, (_, i) => T0 + i * 20 * MINUTE)
 			const keys = await freshVoters(target, firstVotes.slice(0, -1))
 
-			expect(await findSuspectKeys(db.env)).toEqual([])
+			expect(await detectAll()).toEqual([])
 
 			keys.push(await freshVoter(target, firstVotes[firstVotes.length - 1]))
-			const result = await findSuspectKeys(db.env)
+			const result = await detectAll()
 
 			expect(userIds(result)).toEqual(sorted(keys))
 			expect(result.every((r) => r.ring && !r.serial)).toBe(true)
@@ -390,7 +667,7 @@ describeIntegration("findSuspectKeys", () => {
 			const insideKeys = await freshVoters(insideLyric, [...together, T0 + ring.windowSec])
 			await freshVoters(outsideLyric, [...together, T0 + ring.windowSec + 1])
 
-			const result = await findSuspectKeys(db.env)
+			const result = await detectAll()
 
 			expect(userIds(result)).toEqual(sorted(insideKeys))
 			expect(result.every((r) => r.ring && r.submitterId === inside)).toBe(true)
@@ -409,7 +686,7 @@ describeIntegration("findSuspectKeys", () => {
 			const edgeStale = await seedKey(T0)
 			await vote(edgeStale, staleLyric, T0 + freshSec)
 
-			const result = await findSuspectKeys(db.env)
+			const result = await detectAll()
 
 			expect(userIds(result)).toEqual(sorted([...freshKeys, edgeFresh]))
 			expect(result.every((r) => r.ring && r.submitterId === freshSubmitter)).toBe(true)
@@ -427,7 +704,7 @@ describeIntegration("findSuspectKeys", () => {
 				await vote(atKey, target, T0 + i * MINUTE)
 			}
 
-			expect(await findSuspectKeys(db.env)).toEqual([
+			expect(await detectAll()).toEqual([
 				{
 					userId: atKey,
 					submitterId: at,
@@ -451,7 +728,7 @@ describeIntegration("findSuspectKeys", () => {
 			await vote(sock, await lyric(other), T0 + HOUR)
 			expect(serialMinVotes / (serialMinVotes + 1)).toBeGreaterThanOrEqual(devotedShare)
 
-			expect(await findSuspectKeys(db.env)).toEqual([
+			expect(await detectAll()).toEqual([
 				{
 					userId: sock,
 					submitterId: submitter,
@@ -481,7 +758,7 @@ describeIntegration("findSuspectKeys", () => {
 				await vote(selfOnly, own, T0 + i * 60, 1)
 			}
 
-			expect(await findSuspectKeys(db.env)).toEqual([
+			expect(await detectAll()).toEqual([
 				{
 					userId: voter,
 					submitterId: submitter,
@@ -513,7 +790,7 @@ describeIntegration("findSuspectKeys", () => {
 				await vote(ringKeys[0], target, T0 + MINUTE + i * 60)
 			}
 
-			const result = await findSuspectKeys(db.env)
+			const result = await detectAll()
 
 			expect(new Set(result.map((r) => r.userId)).size).toBe(result.length)
 			expect(userIds(result)).toEqual(sorted([...ringKeys, serialKey]))
@@ -532,7 +809,7 @@ describeIntegration("findSuspectKeys", () => {
 			await lyrics(submitter, 3)
 			await seedKey(T0)
 
-			expect(await findSuspectKeys(db.env)).toEqual([])
+			expect(await detectAll()).toEqual([])
 		})
 
 		it("ignores votes on lyrics with no submitter", async () => {
@@ -546,7 +823,7 @@ describeIntegration("findSuspectKeys", () => {
 				await vote(mixed, target, T0 + HOUR + i * 60)
 			}
 
-			expect(await findSuspectKeys(db.env)).toEqual([
+			expect(await detectAll()).toEqual([
 				{
 					userId: mixed,
 					submitterId: submitter,
@@ -566,7 +843,7 @@ describeIntegration("findSuspectKeys", () => {
 			}
 			await db.pool.query("UPDATE users SET banned_at = $1 WHERE id = $2", [T0 + HOUR, banned])
 
-			expect(await findSuspectKeys(db.env)).toEqual([])
+			expect(await detectAll()).toEqual([])
 		})
 	})
 })
@@ -598,8 +875,7 @@ describeIntegration("recordStrikes", () => {
 		return key
 	}
 
-	const detectAndRecord = async (now: number) =>
-		recordStrikes(db.env, await findSuspectKeys(db.env), now)
+	const detectAndRecord = async (now: number) => recordStrikes(db.env, await detectAll(), now)
 
 	async function strike(id: number): Promise<StrikeRow> {
 		const { rows } = await db.pool.query<StrikeRow>(
@@ -1020,7 +1296,7 @@ describeIntegration("recordStrikes", () => {
 			const first = await detectAndRecord(NOW)
 			const a2 = await serialKey(a.targets, NOW + HOUR)
 			const b2 = await serialKey(b.targets, NOW + HOUR)
-			const suspects = await findSuspectKeys(db.env)
+			const suspects = await detectAll()
 
 			const atEdge = await recordStrikes(
 				db.env,
@@ -1170,7 +1446,7 @@ describeIntegration("recordStrikes", () => {
 					serial: true,
 					lastVoteAt: NOW - HOUR,
 				},
-				...(await findSuspectKeys(db.env)),
+				...(await detectAll()),
 			]
 
 			const result = await recordStrikes(db.env, suspects, NOW)
@@ -1234,7 +1510,7 @@ describeIntegration("revokeStrikeXp", () => {
 	}
 
 	async function detect(): Promise<number> {
-		const strikes = await recordStrikes(db.env, await findSuspectKeys(db.env), NOW)
+		const strikes = await recordStrikes(db.env, await detectAll(), NOW)
 		expect(strikes).toHaveLength(1)
 		await recalculate(await votedLyrics(strikes[0].keyIds))
 		return strikes[0].strikeId
@@ -1644,7 +1920,7 @@ describeIntegration("undoStrike", () => {
 	async function strikeAt(targets: number[], at: number) {
 		const key = await seedKey(at - HOUR - targets.length * MINUTE)
 		for (const [i, target] of targets.entries()) await vote(key, target, at - HOUR + i * MINUTE)
-		const [recorded] = await recordStrikes(db.env, await findSuspectKeys(db.env), at)
+		const [recorded] = await recordStrikes(db.env, await detectAll(), at)
 		return recorded.strikeId
 	}
 

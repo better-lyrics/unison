@@ -19,65 +19,96 @@ export interface SuspectKey {
 	lastVoteAt: number
 }
 
-export async function findSuspectKeys(env: Env): Promise<SuspectKey[]> {
-	const { freshSec, devotedShare, ring, serialMinVotes, serialWindowSec } = config.voteIntegrity
-	// Full scan of votes; restrict to voters active since the last run once votes passes ~1M rows.
+export async function findSuspectKeys(
+	env: Env,
+	opts: { now?: number; all?: boolean } = {}
+): Promise<SuspectKey[]> {
+	const { freshSec, devotedShare, ring, serialMinVotes, serialWindowSec, lookbackSec } =
+		config.voteIntegrity
+	const now = opts.now ?? Math.floor(Date.now() / 1000)
+	const baselineStart = now - ring.baselineSec
+	const loadSince = opts.all ? 0 : Math.min(baselineStart, now - lookbackSec - ring.windowSec)
+	const candidateSince = opts.all ? 0 : now - lookbackSec
 	const res = await env.DB.prepare(`
-		WITH counted AS (
+		WITH active AS (
+			SELECT DISTINCT user_id FROM votes WHERE vote = 1 AND created_at >= ?::int
+		),
+		counted AS (
 			SELECT v.user_id, l.submitter_id AS sid, v.created_at
-			FROM votes v
+			FROM active a
+			JOIN votes v ON v.user_id = a.user_id
 			JOIN lyrics l ON l.id = v.lyrics_id
 			JOIN users u ON u.id = v.user_id
 			JOIN users s ON s.id = l.submitter_id
 			WHERE v.is_self_vote = 0 AND v.vote = 1 AND u.banned_at IS NULL AND s.key_id <> ?
 		),
-		bursts AS (
-			SELECT user_id, sid, MAX(in_window) AS peak
-			FROM (
-				SELECT user_id, sid, COUNT(*) OVER (
-					PARTITION BY user_id, sid ORDER BY created_at
-					RANGE BETWEEN CURRENT ROW AND ?::int FOLLOWING
-				) AS in_window
-				FROM counted
-			) w
-			GROUP BY user_id, sid
-		),
 		per_key AS (
-			SELECT user_id, COUNT(*) AS total, MIN(created_at) AS first_vote FROM counted GROUP BY user_id
+			SELECT user_id, COUNT(*) AS total, MIN(created_at) AS first_vote,
+				MAX(created_at) >= ?::int AS candidate
+			FROM counted GROUP BY user_id
 		),
 		devoted AS (
-			SELECT c.user_id, c.sid, COUNT(*) AS n, MAX(c.created_at) AS last_vote, k.first_vote,
+			SELECT c.user_id, c.sid, COUNT(*) AS n, MIN(c.created_at) AS first_on_sid,
+				MAX(c.created_at) AS last_vote, k.first_vote, k.candidate,
 				(k.first_vote - u.created_at) < ? AS fresh
 			FROM counted c
 			JOIN per_key k ON k.user_id = c.user_id
 			JOIN users u ON u.id = c.user_id
-			GROUP BY c.user_id, c.sid, k.total, k.first_vote, u.created_at
+			GROUP BY c.user_id, c.sid, k.total, k.first_vote, k.candidate, u.created_at
 			HAVING COUNT(*) >= ?::float8 * k.total
+		),
+		baseline AS (
+			SELECT sid, COUNT(*) AS fresh_keys
+			FROM devoted
+			WHERE fresh AND first_on_sid >= ?::int AND first_on_sid < ?::int
+			GROUP BY sid
 		),
 		rings AS (
 			SELECT a.user_id, a.sid
 			FROM devoted a
 			JOIN devoted b ON b.sid = a.sid AND b.fresh AND ABS(b.first_vote - a.first_vote) <= ?
-			WHERE a.fresh
-			GROUP BY a.user_id, a.sid
-			HAVING COUNT(*) >= ?
+			LEFT JOIN baseline bl ON bl.sid = a.sid
+			WHERE a.fresh AND a.candidate
+			GROUP BY a.user_id, a.sid, bl.fresh_keys
+			HAVING COUNT(*) >= GREATEST(?::int,
+				CEIL(?::float8 * COALESCE(bl.fresh_keys, 0) * ?::int / ?::int))
+		),
+		bursts AS (
+			SELECT user_id, sid, MAX(in_window) AS peak
+			FROM (
+				SELECT c.user_id, c.sid, COUNT(*) OVER (
+					PARTITION BY c.user_id, c.sid ORDER BY c.created_at
+					RANGE BETWEEN CURRENT ROW AND ?::int FOLLOWING
+				) AS in_window
+				FROM counted c
+				JOIN devoted d ON d.user_id = c.user_id AND d.sid = c.sid
+				WHERE d.fresh AND d.candidate
+			) w
+			GROUP BY user_id, sid
 		)
 		SELECT d.user_id, d.sid, d.n, d.last_vote, (r.user_id IS NOT NULL) AS ring,
-			(d.fresh AND b.peak >= ?) AS serial
+			COALESCE(b.peak >= ?, FALSE) AS serial
 		FROM devoted d
 		JOIN users u ON u.id = d.user_id
 		LEFT JOIN rings r ON r.user_id = d.user_id AND r.sid = d.sid
-		JOIN bursts b ON b.user_id = d.user_id AND b.sid = d.sid
-		WHERE u.votes_discounted_at IS NULL AND u.vote_strike_id IS NULL
-			AND (r.user_id IS NOT NULL OR (d.fresh AND b.peak >= ?))
+		LEFT JOIN bursts b ON b.user_id = d.user_id AND b.sid = d.sid
+		WHERE d.candidate AND u.votes_discounted_at IS NULL AND u.vote_strike_id IS NULL
+			AND (r.user_id IS NOT NULL OR b.peak >= ?)
 	`)
 		.bind(
+			loadSince,
 			COMMUNITY_KEY_ID,
-			serialWindowSec,
+			candidateSince,
 			freshSec,
 			devotedShare,
+			baselineStart,
+			now,
 			ring.windowSec,
 			ring.minKeys,
+			ring.trafficFactor,
+			ring.windowSec,
+			ring.baselineSec,
+			serialWindowSec,
 			serialMinVotes,
 			serialMinVotes
 		)

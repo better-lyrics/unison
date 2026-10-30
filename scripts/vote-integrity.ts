@@ -7,8 +7,10 @@ import { runVoteIntegrity } from "@/jobs/vote-integrity"
 import type { Env } from "@/types"
 
 const USAGE = `usage:
-  pnpm vote-integrity            dry run, prints the keys that would be discounted
-  pnpm vote-integrity --apply    discounts them and records strikes`
+  pnpm vote-integrity                  dry run over recent voters, prints the keys that would be discounted
+  pnpm vote-integrity --apply          discounts them and records strikes
+  pnpm vote-integrity --all            dry run over every voter
+  pnpm vote-integrity --apply --all    full scan for the launch backfill`
 
 const day = (epoch: number) => new Date(epoch * 1000).toISOString().slice(0, 10)
 
@@ -39,19 +41,20 @@ async function printPlan(env: Env, suspects: SuspectKey[]): Promise<void> {
 }
 
 async function main() {
-	const [, , mode] = process.argv
-	if (mode !== undefined && mode !== "--apply") {
+	const flags = process.argv.slice(2)
+	if (flags.some((f) => f !== "--apply" && f !== "--all") || new Set(flags).size !== flags.length) {
 		console.error(USAGE)
 		process.exitCode = 1
 		return
 	}
+	const all = flags.includes("--all")
 	const env = createEnv()
 	try {
-		if (mode === "--apply") {
-			const result = await runVoteIntegrity(env)
+		if (flags.includes("--apply")) {
+			const result = await runVoteIntegrity(env, undefined, { all })
 			console.log(`recorded ${result.strikes} strikes over ${result.keys} keys`)
 		} else {
-			await printPlan(env, await findSuspectKeys(env))
+			await printPlan(env, await findSuspectKeys(env, { all }))
 		}
 	} finally {
 		await closePool()

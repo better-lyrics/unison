@@ -22,9 +22,10 @@ const log = new Logger("cron")
 
 export async function runVoteIntegrity(
 	env: Env,
-	now = Math.floor(Date.now() / 1000)
+	now = Math.floor(Date.now() / 1000),
+	opts: { all?: boolean } = {}
 ): Promise<{ strikes: number; keys: number }> {
-	const suspects = await findSuspectKeys(env)
+	const suspects = await findSuspectKeys(env, { now, all: opts.all })
 	const recorded = suspects.length > 0 ? await recordStrikes(env, suspects, now) : []
 	const result = {
 		strikes: recorded.length,
