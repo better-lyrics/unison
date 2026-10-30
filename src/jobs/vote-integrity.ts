@@ -1,3 +1,4 @@
+import { revokeConfidenceXp } from "@/db/contribution-events"
 import { evictFeedCaches } from "@/db/feed"
 import { invalidateCuratorLeaderboardCache } from "@/db/leaderboard"
 import { invalidateCacheForSubmitter } from "@/db/lyrics"
@@ -11,6 +12,7 @@ import {
 	markStrikeSettled,
 	recordStrikes,
 	revokeStrikeXp,
+	staleLoyalLyrics,
 	undoStrike,
 	unsettledStrikes,
 	votersOn,
@@ -50,12 +52,36 @@ export async function runVoteIntegrity(
 			log.error("vote strike settle failed", { strikeId: strike.id, error: String(err) })
 		}
 	}
-	if (settled === 0) return result
+	const swept = await sweepLoyalLyrics(env)
+	if (settled === 0 && swept === 0) return result
 
 	await evictFeedCaches(env)
 	await invalidateCuratorLeaderboardCache(env)
-	log.info("vote integrity", { ...result, settled })
+	log.info("vote integrity", { ...result, settled, swept })
 	return result
+}
+
+async function sweepLoyalLyrics(env: Env): Promise<number> {
+	const bySubmitter = new Map<number, number[]>()
+	let swept = 0
+	for (const lyric of await staleLoyalLyrics(env)) {
+		try {
+			await recalculateScore(env, lyric.id)
+			swept++
+			if (lyric.submitterId === null) continue
+			bySubmitter.set(lyric.submitterId, [...(bySubmitter.get(lyric.submitterId) ?? []), lyric.id])
+		} catch (err) {
+			log.error("loyal sweep recalculation failed", { lyricsId: lyric.id, error: String(err) })
+		}
+	}
+	for (const [submitterId, ids] of bySubmitter) {
+		try {
+			await revokeConfidenceXp(env, submitterId, ids)
+		} catch (err) {
+			log.error("loyal sweep xp revoke failed", { submitterId, error: String(err) })
+		}
+	}
+	return swept
 }
 
 async function settleStrike(env: Env, strike: UnsettledStrike, now: number): Promise<void> {

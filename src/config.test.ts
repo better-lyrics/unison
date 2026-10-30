@@ -77,4 +77,9 @@ describe("voteIntegrity", () => {
 		expect(v.repeatPenalty.reputation).toBeGreaterThan(0)
 		expect(v.repeatPenalty.xp).toBeLessThan(0)
 	})
+
+	it("needs more than one upvote to call a key loyal to a submitter", () => {
+		expect(v.loyalMinVotes).toBeGreaterThan(1)
+		expect(Number.isInteger(v.loyalMinVotes)).toBe(true)
+	})
 })

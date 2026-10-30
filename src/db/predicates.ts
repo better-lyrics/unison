@@ -62,6 +62,22 @@ const buildBannedSubmitterPredicate = (prefix: string) =>
 
 export const COUNTED_VOTER_PREDICATE = "(u.banned_at IS NULL AND u.votes_discounted_at IS NULL)"
 
+const { loyalMinVotes, devotedShare } = config.voteIntegrity
+const loyalVoterExpr = `(
+	SELECT COUNT(*) FILTER (WHERE ol.submitter_id = l.submitter_id) >= ${loyalMinVotes}
+		AND COUNT(*) FILTER (WHERE ol.submitter_id = l.submitter_id) >= ${devotedShare} * COUNT(*)
+	FROM votes ov
+	JOIN lyrics ol ON ol.id = ov.lyrics_id
+	WHERE ov.user_id = v.user_id AND ov.vote = 1 AND ov.is_self_vote = 0
+)`
+
+export const LOYAL_ONLY_EXPR_JOINED = `COALESCE((
+	SELECT bool_and(${loyalVoterExpr})
+	FROM votes v
+	JOIN users u ON u.id = v.user_id
+	WHERE v.lyrics_id = l.id AND v.vote = 1 AND v.is_self_vote = 0 AND ${COUNTED_VOTER_PREDICATE}
+), FALSE)`
+
 export const BANNED_SUBMITTER_PREDICATE = buildBannedSubmitterPredicate("")
 export const BANNED_SUBMITTER_PREDICATE_JOINED = buildBannedSubmitterPredicate("l.")
 

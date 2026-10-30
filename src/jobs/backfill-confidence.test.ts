@@ -130,4 +130,12 @@ describe("backfillConfidence", () => {
 		const selectSql = db.calls[0].sql
 		expect(selectSql).toContain(`effective_score >= ${config.reputation.minScoreForConfidence}`)
 	})
+
+	it("keeps loyal-only lyrics low in both tiers", async () => {
+		const db = makeMockDB([[]])
+		const env = makeEnv(db, makeMockCache())
+		await backfillConfidence(env)
+		const selectSql = db.calls[0].sql
+		expect(selectSql.match(/AND NOT loyal_only/g)).toHaveLength(2)
+	})
 })

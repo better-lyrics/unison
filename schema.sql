@@ -215,6 +215,8 @@ CREATE INDEX IF NOT EXISTS idx_lyrics_submitter_created
 -- penalty has already been applied for this row.
 ALTER TABLE lyrics ADD COLUMN IF NOT EXISTS reputation_penalized BOOLEAN DEFAULT FALSE;
 
+ALTER TABLE lyrics ADD COLUMN IF NOT EXISTS loyal_only BOOLEAN NOT NULL DEFAULT FALSE;
+
 -- Language detection metadata.
 -- `language` keeps its semantic meaning (NULL = unknown).
 -- `language_source` records whether the language came from the submitter or

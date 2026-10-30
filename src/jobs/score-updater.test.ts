@@ -308,6 +308,69 @@ describe("confidence score floor", () => {
 	})
 })
 
+describe("loyal-only lyrics", () => {
+	const diverse = [
+		{ vote: 1, reputation: 1.0, avg_vote: -0.5, is_self_vote: 0 },
+		{ vote: 1, reputation: 1.0, avg_vote: 0.5, is_self_vote: 0 },
+		{ vote: 1, reputation: 1.0, avg_vote: 0.3, is_self_vote: 0 },
+	]
+
+	it("forces low confidence when every independent upvote is missing", () => {
+		const result = calculateScore(1, diverse, true)
+
+		expect(result.confidence).toBe("low")
+	})
+
+	it("keeps effective_score, vote_count and diversity unchanged", () => {
+		const loyal = calculateScore(1, diverse, true)
+		const open = calculateScore(1, diverse)
+
+		expect(loyal.effective_score).toBe(open.effective_score)
+		expect(loyal.vote_count).toBe(open.vote_count)
+		expect(loyal.diversity_bonus).toBe(open.diversity_bonus)
+		expect(open.confidence).toBe("high")
+	})
+
+	it("defaults to not loyal-only", () => {
+		expect(calculateScore(1, diverse).confidence).toBe(
+			calculateScore(1, diverse, false).confidence
+		)
+	})
+})
+
+describe("recalculateScore loyal_only", () => {
+	const votes = [
+		{ vote: 1, reputation: 1.0, avg_vote: 0.5, is_self_vote: 0 },
+		{ vote: 1, reputation: 1.0, avg_vote: 0.3, is_self_vote: 0 },
+		{ vote: 1, reputation: 1.0, avg_vote: 0.2, is_self_vote: 0 },
+	]
+
+	it("writes loyal_only and low confidence for a loyal-only lyric", async () => {
+		const { db, calls } = createMockDB([
+			{ video_id: "v1", deleted_at: null, submitter_id: null, loyal_only: true },
+			votes,
+		])
+		await recalculateScore({ DB: db } as unknown as Env, 1)
+
+		const update = calls.find((c) => c.sql.includes("UPDATE lyrics"))
+		expect(update?.sql).toMatch(/loyal_only\s*=\s*\?/)
+		expect(update?.params).toContain(true)
+		expect(update?.params).toContain("low")
+	})
+
+	it("writes loyal_only false for an open lyric", async () => {
+		const { db, calls } = createMockDB([
+			{ video_id: "v1", deleted_at: null, submitter_id: null, loyal_only: false },
+			votes,
+		])
+		await recalculateScore({ DB: db } as unknown as Env, 1)
+
+		const update = calls.find((c) => c.sql.includes("UPDATE lyrics"))
+		expect(update?.params).toContain(false)
+		expect(update?.params).toContain("medium")
+	})
+})
+
 describe("soft-delete handling", () => {
 	it("recalculateScore early-returns when the row is deleted (no UPDATE)", async () => {
 		const { db, calls } = createMockDB([{ video_id: "v1", deleted_at: 1700000000 }])

@@ -8,7 +8,11 @@ import {
 } from "@/db/contribution-events"
 import { invalidateCacheForLyric } from "@/db/lyrics"
 import { updateReputations } from "@/db/reputation"
-import { COUNTED_VOTER_PREDICATE, VOTE_HIDE_PREDICATE } from "@/db/predicates"
+import {
+	COUNTED_VOTER_PREDICATE,
+	LOYAL_ONLY_EXPR_JOINED,
+	VOTE_HIDE_PREDICATE,
+} from "@/db/predicates"
 import { Logger } from "@/infra/logger"
 import type { Confidence, Env } from "@/types"
 
@@ -31,10 +35,16 @@ interface LyricsScoreUpdate {
 
 export async function recalculateScore(env: Env, lyricsId: number): Promise<void> {
 	const row = await env.DB.prepare(
-		"SELECT video_id, deleted_at, submitter_id FROM lyrics WHERE id = ?"
+		`SELECT video_id, deleted_at, submitter_id, ${LOYAL_ONLY_EXPR_JOINED} AS loyal_only
+		FROM lyrics l WHERE l.id = ?`
 	)
 		.bind(lyricsId)
-		.first<{ video_id: string; deleted_at: number | null; submitter_id: number | null }>()
+		.first<{
+			video_id: string
+			deleted_at: number | null
+			submitter_id: number | null
+			loyal_only: boolean
+		}>()
 
 	if (!row || row.deleted_at !== null) return
 
@@ -48,7 +58,8 @@ export async function recalculateScore(env: Env, lyricsId: number): Promise<void
 		.all<VoteWithUser>()
 
 	const voteRows = votes.results || []
-	const update = calculateScore(lyricsId, voteRows)
+	const loyalOnly = row.loyal_only === true
+	const update = calculateScore(lyricsId, voteRows, loyalOnly)
 	const upvotes = voteRows.filter((v) => v.vote === 1).length
 	const downvotes = voteRows.filter((v) => v.vote === -1).length
 
@@ -60,6 +71,7 @@ export async function recalculateScore(env: Env, lyricsId: number): Promise<void
 			downvotes = ?,
 			diversity_bonus = ?,
 			confidence = ?,
+			loyal_only = ?,
 			score_updated_at = EXTRACT(EPOCH FROM NOW())::INTEGER
 		WHERE id = ?
 	`)
@@ -70,6 +82,7 @@ export async function recalculateScore(env: Env, lyricsId: number): Promise<void
 			downvotes,
 			update.diversity_bonus,
 			update.confidence,
+			loyalOnly,
 			update.id
 		)
 		.run()
@@ -207,7 +220,11 @@ async function applyAutoHidePenalty(env: Env): Promise<void> {
 	})
 }
 
-export function calculateScore(lyricsId: number, votes: VoteWithUser[]): LyricsScoreUpdate {
+export function calculateScore(
+	lyricsId: number,
+	votes: VoteWithUser[],
+	loyalOnly = false
+): LyricsScoreUpdate {
 	let weightedSum = 0
 	let totalWeight = 0
 	let harshUpvotes = 0
@@ -237,6 +254,7 @@ export function calculateScore(lyricsId: number, votes: VoteWithUser[]): LyricsS
 	// This rule is also reproduced in SQL by backfill-confidence.ts; keep them in sync.
 	let confidence: Confidence = "low"
 	if (
+		!loyalOnly &&
 		votes.length >= config.reputation.minVotesForConfidence &&
 		effectiveScore >= config.reputation.minScoreForConfidence
 	) {

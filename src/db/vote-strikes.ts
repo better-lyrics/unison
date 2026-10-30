@@ -5,6 +5,7 @@ import {
 	revokeStrikePenaltyXp,
 } from "@/db/contribution-events"
 import { recordCouncilEvent } from "@/db/council-events"
+import { LOYAL_ONLY_EXPR_JOINED } from "@/db/predicates"
 import { Logger } from "@/infra/logger"
 import type { Env } from "@/types"
 
@@ -449,6 +450,29 @@ export async function lyricsVotedByKeys(env: Env, keyIds: number[]): Promise<num
 		.bind(keyIds)
 		.all<{ id: number }>()
 	return res.results.map((r) => r.id)
+}
+
+export interface StaleLoyalLyric {
+	id: number
+	submitterId: number | null
+}
+
+export async function staleLoyalLyrics(env: Env): Promise<StaleLoyalLyric[]> {
+	const res = await env.DB.prepare(
+		`SELECT l.id, l.submitter_id FROM lyrics l
+		WHERE l.deleted_at IS NULL
+			AND (l.upvotes > 0 OR l.loyal_only)
+			AND (
+				l.loyal_only IS DISTINCT FROM ${LOYAL_ONLY_EXPR_JOINED}
+				OR (l.loyal_only AND EXISTS (
+					SELECT 1 FROM contribution_events e
+					WHERE e.ref_type = 'lyric' AND e.ref_id = l.id AND e.user_id = l.submitter_id
+						AND e.kind IN ('reached-medium', 'reached-high', 'first-for-song')
+				))
+			)
+		ORDER BY l.id`
+	).all<{ id: number; submitter_id: number | null }>()
+	return res.results.map((r) => ({ id: r.id, submitterId: r.submitter_id }))
 }
 
 export interface StrikeSummary {

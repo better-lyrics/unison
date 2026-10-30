@@ -11,8 +11,10 @@ export async function backfillConfidence(env: Env): Promise<{ updated: number }>
 	// Reproduces the confidence rule in calculateScore (score-updater.ts) in SQL.
 	// If that rule changes, update this expression to match.
 	const tierExpr = `CASE
-			WHEN vote_count >= ${threshold} AND effective_score >= ${scoreFloor} AND diversity_bonus = 1 THEN 'high'
-			WHEN vote_count >= ${threshold} AND effective_score >= ${scoreFloor} THEN 'medium'
+			WHEN vote_count >= ${threshold} AND effective_score >= ${scoreFloor} AND diversity_bonus = 1
+				AND NOT loyal_only THEN 'high'
+			WHEN vote_count >= ${threshold} AND effective_score >= ${scoreFloor} AND NOT loyal_only
+				THEN 'medium'
 			ELSE 'low'
 		END`
 

@@ -172,6 +172,7 @@ export const config = {
 		ring: { minKeys: 5, windowSec: 3 * 3600, baselineSec: 90 * 86400, trafficFactor: 5 },
 		serialMinVotes: 5,
 		serialWindowSec: 300,
+		loyalMinVotes: 5,
 		mergeWindowSec: 24 * 3600,
 		repeatPenalty: { reputation: 0.2, xp: -30 },
 		multiplier: { windowSec: 30 * 86400, one: 0.8, many: 0.6 },
