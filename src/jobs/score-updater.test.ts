@@ -3,9 +3,9 @@ import {
 	calculateScore,
 	recalculateScore,
 	recomputeAllScores,
-	updateReputations,
 	updateScores,
 } from "@/jobs/score-updater"
+import { updateReputations } from "@/db/reputation"
 import type { Env } from "@/types"
 import { describe, expect, it, vi } from "vitest"
 
@@ -304,73 +304,6 @@ describe("confidence score floor", () => {
 
 		expect(result.effective_score).toBeGreaterThanOrEqual(config.reputation.minScoreForConfidence)
 		expect(result.confidence).toBe("high")
-	})
-})
-
-describe("updateReputations", () => {
-	interface DBCall {
-		sql: string
-		params: unknown[]
-	}
-
-	function createMockEnv(): { env: Env; calls: DBCall[] } {
-		const calls: DBCall[] = []
-		const db = {
-			prepare(sql: string) {
-				let params: unknown[] = []
-				return {
-					bind(...args: unknown[]) {
-						params = args
-						return this
-					},
-					async run() {
-						calls.push({ sql, params })
-					},
-				}
-			},
-		}
-		const env = { DB: db } as unknown as Env
-		return { env, calls }
-	}
-
-	it("issues a single SQL statement (no N+1)", async () => {
-		const { env, calls } = createMockEnv()
-		await updateReputations(env)
-		expect(calls).toHaveLength(1)
-	})
-
-	it("uses a CTE-based UPDATE that joins votes to consensus_lyrics", async () => {
-		const { env, calls } = createMockEnv()
-		await updateReputations(env)
-		const sql = calls[0].sql
-		expect(sql).toMatch(/WITH\s+consensus_lyrics\s+AS/i)
-		expect(sql).toMatch(/JOIN\s+consensus_lyrics/i)
-		expect(sql).toMatch(/UPDATE\s+users/i)
-		expect(sql).toMatch(/GREATEST\(.+LEAST\(/i)
-	})
-
-	it("excludes self-votes from reputation deltas", async () => {
-		const { env, calls } = createMockEnv()
-		await updateReputations(env)
-		expect(calls[0].sql).toMatch(/is_self_vote\s*=\s*0/i)
-	})
-
-	it("binds the configured threshold, delta, min, and max in order", async () => {
-		const { env, calls } = createMockEnv()
-		await updateReputations(env)
-		expect(calls[0].params).toEqual([
-			config.reputation.minVotesForConfidence,
-			config.reputation.consensusDelta,
-			-config.reputation.consensusDelta,
-			config.reputation.min,
-			config.reputation.max,
-		])
-	})
-
-	it("does not apply unary minus to a bind placeholder", async () => {
-		const { env, calls } = createMockEnv()
-		await updateReputations(env)
-		expect(calls[0].sql).not.toMatch(/-\s*\?/)
 	})
 })
 

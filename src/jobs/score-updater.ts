@@ -7,7 +7,8 @@ import {
 	awardPenaltyXp,
 } from "@/db/contribution-events"
 import { invalidateCacheForLyric } from "@/db/lyrics"
-import { CONSENSUS_LYRICS_CTE, VOTE_HIDE_PREDICATE } from "@/db/predicates"
+import { updateReputations } from "@/db/reputation"
+import { VOTE_HIDE_PREDICATE } from "@/db/predicates"
 import { Logger } from "@/infra/logger"
 import type { Confidence, Env } from "@/types"
 
@@ -257,32 +258,4 @@ export function calculateScore(lyricsId: number, votes: VoteWithUser[]): LyricsS
 		diversity_bonus: diversityBonus ? 1 : 0,
 		confidence,
 	}
-}
-
-export async function updateReputations(env: Env): Promise<void> {
-	// Do NOT add `deleted_at IS NULL` here. Reputation depends on historical
-	// voting signal; filtering deleted lyrics destroys it (and reintroduces the
-	// cascade-delete problem soft-delete was meant to solve).
-	await env.DB.prepare(`${CONSENSUS_LYRICS_CTE},
-		deltas AS (
-			SELECT v.user_id,
-				SUM(CASE WHEN v.vote = cl.consensus THEN ?::DOUBLE PRECISION ELSE ?::DOUBLE PRECISION END) AS delta
-			FROM votes v
-			JOIN consensus_lyrics cl ON v.lyrics_id = cl.id
-			WHERE v.is_self_vote = 0
-			GROUP BY v.user_id
-		)
-		UPDATE users
-		SET reputation = GREATEST(?, LEAST(?, reputation + d.delta))
-		FROM deltas d
-		WHERE users.id = d.user_id
-	`)
-		.bind(
-			config.reputation.minVotesForConfidence,
-			config.reputation.consensusDelta,
-			-config.reputation.consensusDelta,
-			config.reputation.min,
-			config.reputation.max
-		)
-		.run()
 }
