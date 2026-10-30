@@ -126,6 +126,12 @@ Returns the highest-scored match. Lookups run in order `v`, then `isrc`, then `s
 `artist` matches when it shares a whole credited name with the stored credit, so `Madvillain`, `Madvillain Madlib` and `Madlib & Madvillain` all find a song credited to `Madvillain, Madlib, MF Doom`. An exact credit wins when several variants match.
 Optional `album` and `duration` narrow results. Duration matching uses ±2s tolerance (configurable in `src/config.ts`).
 
+A `v` lookup also returns `variant`: `primary` when this is the lyric every caller gets, or `own` / `explore` when it was picked for the caller (their own submission, or an exploration arm). Only `primary` results and 404s are safe to share between callers.
+
+When `BLYRICS_API_INVALIDATE_URL` and `BLYRICS_API_INVALIDATE_SECRET` are set, every lyrics cache invalidation also POSTs `{ "videoIds": [...] }` to that URL with the secret as a Bearer token, so the Better Lyrics API can drop its shared copy.
+
+Requests carrying `BLYRICS_API_KEY` in the `x-blyrics-api-key` header skip the per-IP read rate limit, since the Better Lyrics API relays many users from a few Cloudflare IPs.
+
 ### Search lyrics
 
 Returns all matching entries, best match first.

@@ -104,6 +104,13 @@ export function readRecordingMatchEnabled(): boolean {
 	return false
 }
 
+function readBlyricsApiInvalidate(): Env["BLYRICS_API_INVALIDATE"] {
+	const url = process.env.BLYRICS_API_INVALIDATE_URL?.trim()
+	const secret = process.env.BLYRICS_API_INVALIDATE_SECRET?.trim()
+	if (!url || !secret) return null
+	return { url, secret }
+}
+
 export function createEnv(): Env {
 	const databaseUrl = process.env.DATABASE_URL
 	if (!databaseUrl) throw new Error("DATABASE_URL is required")
@@ -142,5 +149,7 @@ export function createEnv(): Env {
 		JEV: readJevGate(),
 		TYPESAFE: readTypesafeClient(),
 		RECORDING_MATCH_ENABLED: readRecordingMatchEnabled(),
+		BLYRICS_API_INVALIDATE: readBlyricsApiInvalidate(),
+		BLYRICS_API_KEY: process.env.BLYRICS_API_KEY?.trim() || null,
 	}
 }

@@ -1,5 +1,6 @@
-import { Elysia } from "elysia"
 import type { Env } from "@/types"
+import { isBlyricsApiRequest } from "@/utils/blyrics-api-auth"
+import { Elysia } from "elysia"
 
 export function clientIp(headers: Record<string, string | undefined>): string {
 	const xff = headers["x-forwarded-for"]
@@ -13,7 +14,9 @@ export const readRateLimit = new Elysia({ name: "read-rate-limit" }).onBeforeHan
 	{ as: "scoped" },
 	async (ctx) => {
 		const env = (ctx as unknown as { env: Env }).env
-		const ip = clientIp(ctx.headers as Record<string, string | undefined>)
+		const headers = ctx.headers as Record<string, string | undefined>
+		if (isBlyricsApiRequest(headers, env)) return
+		const ip = clientIp(headers)
 		const { success } = await env.READ_RATE_LIMITER.limit({ key: `ip:${ip}` })
 		if (!success) {
 			ctx.set.status = 429
