@@ -1,10 +1,11 @@
 import { config } from "@/config"
 import { getXp } from "@/db/contribution-events"
+import { listCouncilEvents } from "@/db/council-events"
 import { CURATOR_LEADERBOARD_CACHE_KEY } from "@/db/leaderboard"
 import { updateReputations } from "@/db/reputation"
 import { lyricsVotedByKeys } from "@/db/vote-strikes"
 import { recalculateScore } from "@/jobs/score-updater"
-import { runVoteIntegrity } from "@/jobs/vote-integrity"
+import { runVoteIntegrity, undoVoteStrike } from "@/jobs/vote-integrity"
 import {
 	type IntegrationDb,
 	describeIntegration,
@@ -416,6 +417,168 @@ describeIntegration("runVoteIntegrity", () => {
 			await runVoteIntegrity(db.env, NOW)
 
 			expect(await reputation(f.honest[0])).toBe(config.reputation.default)
+		})
+	})
+
+	describe("undoVoteStrike", () => {
+		async function preStrike(f: Fixture) {
+			return {
+				lyrics: await scores(f.targets),
+				xp: await getXp(db.env, f.submitter),
+				reputations: await reputations(),
+			}
+		}
+
+		it("restores exactly the pre-strike scores, xp and reputation", async () => {
+			const f = await voravit()
+			const admin = await seedKey(NOW - 300 * DAY)
+			const before = await preStrike(f)
+			await runVoteIntegrity(db.env, NOW)
+			const [strike] = await strikes()
+			const videoId = await videoIdOf(f.targets[0])
+			db.cache.store.set(`v:${videoId}`, "{}")
+			db.cache.store.set(CURATOR_LEADERBOARD_CACHE_KEY, "[]")
+			db.cache.store.set("feed:global:20", "[]")
+
+			expect(await undoVoteStrike(db.env, strike.id, admin)).toBe("undone")
+
+			expect(await scores(f.targets)).toEqual(before.lyrics)
+			expect(await getXp(db.env, f.submitter)).toBe(before.xp)
+			expect(await reputations()).toEqual(before.reputations)
+			expect(await discounted()).toEqual([])
+			expect(db.cache.store.has(`v:${videoId}`)).toBe(false)
+			expect(db.cache.store.has(CURATOR_LEADERBOARD_CACHE_KEY)).toBe(false)
+			expect(db.cache.store.has("feed:global:20")).toBe(false)
+		})
+
+		it("marks the strike undone and keeps its keys pointing at it", async () => {
+			const f = await voravit()
+			const admin = await seedKey(NOW - 300 * DAY)
+			await runVoteIntegrity(db.env, NOW)
+			const [strike] = await strikes()
+
+			await undoVoteStrike(db.env, strike.id, admin)
+
+			const { rows } = await db.pool.query(
+				"SELECT undone_at IS NOT NULL AS undone, undone_by FROM vote_strikes WHERE id = $1",
+				[strike.id]
+			)
+			expect(rows[0]).toEqual({ undone: true, undone_by: admin })
+			const { rows: keys } = await db.pool.query<{ id: number }>(
+				"SELECT id FROM users WHERE vote_strike_id = $1 ORDER BY id",
+				[strike.id]
+			)
+			expect(keys.map((k) => k.id)).toEqual(sorted([...f.ring, f.serial]))
+		})
+
+		it("undoing a repeat strike removes its penalty event and restores reputation", async () => {
+			const f = await voravit()
+			const admin = await seedKey(NOW - 300 * DAY)
+			await runVoteIntegrity(db.env, NOW)
+			await ringBurst(f.targets, NOW + 22 * HOUR)
+			for (const id of f.targets) await recalculateScore(db.env, id)
+			await updateReputations(db.env)
+			const before = await preStrike(f)
+			await runVoteIntegrity(db.env, NOW + 25 * HOUR)
+			const [, second] = await strikes()
+			expect(second.repeat).toBe(true)
+			expect(await penaltyEvents(f.submitter)).toHaveLength(1)
+
+			expect(await undoVoteStrike(db.env, second.id, admin)).toBe("undone")
+
+			expect(await penaltyEvents(f.submitter)).toEqual([])
+			expect(await scores(f.targets)).toEqual(before.lyrics)
+			expect(await getXp(db.env, f.submitter)).toBe(before.xp)
+			expect(await reputations()).toEqual(before.reputations)
+		})
+
+		it("logs a vote_strike_undo event and reads the strike event as undone", async () => {
+			const f = await voravit()
+			const admin = await seedKey(NOW - 300 * DAY)
+			await runVoteIntegrity(db.env, NOW)
+			const [strike] = await strikes()
+			const listed = async () =>
+				(await listCouncilEvents(db.env, { includeBookmarks: false, limit: 10 })).events.map(
+					(e) => [e.kind, e.undone]
+				)
+			expect(await listed()).toEqual([["vote_strike", false]])
+
+			await undoVoteStrike(db.env, strike.id, admin, NOW + HOUR)
+
+			const events = await councilEvents()
+			expect(events[1]).toEqual({
+				actor_id: admin,
+				kind: "vote_strike_undo",
+				source: "web",
+				lyrics_id: null,
+				ref_id: String(strike.id),
+				subject_user_id: f.submitter,
+				note: null,
+				created_at: NOW + HOUR,
+			})
+			expect(await listed()).toEqual([
+				["vote_strike_undo", false],
+				["vote_strike", true],
+			])
+		})
+
+		it("an undone strike does not make the next strike a repeat", async () => {
+			const f = await voravit()
+			const admin = await seedKey(NOW - 300 * DAY)
+			await runVoteIntegrity(db.env, NOW)
+			const [first] = await strikes()
+			await undoVoteStrike(db.env, first.id, admin)
+			const repBefore = await reputation(f.submitter)
+
+			await ringBurst(f.targets, NOW + 22 * HOUR)
+			expect(await runVoteIntegrity(db.env, NOW + 25 * HOUR)).toEqual({ strikes: 1, keys: 6 })
+
+			const [, second] = await strikes()
+			expect(second.repeat).toBe(false)
+			expect(await penaltyEvents(f.submitter)).toEqual([])
+			expect(await reputation(f.submitter)).toBe(repBefore)
+		})
+
+		describe("regressions", () => {
+			it("regression: does not re-strike keys the council cleared", async () => {
+				await voravit()
+				const admin = await seedKey(NOW - 300 * DAY)
+				await runVoteIntegrity(db.env, NOW)
+				const [strike] = await strikes()
+				await undoVoteStrike(db.env, strike.id, admin)
+				const before = await snapshot()
+
+				expect(await runVoteIntegrity(db.env, NOW + 30 * HOUR)).toEqual({ strikes: 0, keys: 0 })
+
+				expect(await snapshot()).toEqual(before)
+				expect(await discounted()).toEqual([])
+			})
+		})
+
+		describe("error paths", () => {
+			it("a second undo is already_undone and changes nothing", async () => {
+				await voravit()
+				const admin = await seedKey(NOW - 300 * DAY)
+				await runVoteIntegrity(db.env, NOW)
+				const [strike] = await strikes()
+				await undoVoteStrike(db.env, strike.id, admin)
+				const before = await snapshot()
+
+				expect(await undoVoteStrike(db.env, strike.id, admin)).toBe("already_undone")
+
+				expect(await snapshot()).toEqual(before)
+			})
+
+			it("an unknown strike is not_found and changes nothing", async () => {
+				await voravit()
+				const admin = await seedKey(NOW - 300 * DAY)
+				await runVoteIntegrity(db.env, NOW)
+				const before = await snapshot()
+
+				expect(await undoVoteStrike(db.env, 999999, admin)).toBe("not_found")
+
+				expect(await snapshot()).toEqual(before)
+			})
 		})
 	})
 

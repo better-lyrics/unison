@@ -232,6 +232,37 @@ describeIntegration("findSuspectKeys", () => {
 		])
 	})
 
+	it("skips keys the council cleared and still counts them as ring mates", async () => {
+		const submitter = await seedKey(T0 - 60 * DAY)
+		const target = await lyric(submitter)
+		const cleared = await freshVoters(
+			target,
+			Array.from({ length: ring.minKeys - 1 }, (_, i) => T0 + i * 15 * MINUTE)
+		)
+		const { rows } = await db.pool.query<{ id: number }>(
+			`INSERT INTO vote_strikes (submitter_id, kind, detected_at, key_count, vote_count, repeat,
+				backfill, undone_at, undone_by)
+			VALUES ($1, 'ring', $2, $3, $3, FALSE, FALSE, $2, $1) RETURNING id`,
+			[submitter, T0 + 2 * HOUR, cleared.length]
+		)
+		await db.pool.query("UPDATE users SET vote_strike_id = $1 WHERE id = ANY($2::int[])", [
+			rows[0].id,
+			cleared,
+		])
+		const newcomer = await freshVoter(target, T0 + 2 * HOUR + 30 * MINUTE)
+
+		expect(await findSuspectKeys(db.env)).toEqual([
+			{
+				userId: newcomer,
+				submitterId: submitter,
+				votes: 1,
+				ring: true,
+				serial: false,
+				lastVoteAt: T0 + 2 * HOUR + 30 * MINUTE,
+			},
+		])
+	})
+
 	describe("edge cases", () => {
 		it("4 fresh keys is not a ring, 5 is", async () => {
 			const submitter = await seedKey(T0 - 60 * DAY)

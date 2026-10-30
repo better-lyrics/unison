@@ -1,4 +1,6 @@
 import { COMMUNITY_KEY_ID, config } from "@/config"
+import { revokeStrikePenaltyXp } from "@/db/contribution-events"
+import { recordCouncilEvent } from "@/db/council-events"
 import type { D1Compat } from "@/infra/database"
 import { Logger } from "@/infra/logger"
 import type { Env } from "@/types"
@@ -50,7 +52,7 @@ export async function findSuspectKeys(env: Env): Promise<SuspectKey[]> {
 		FROM devoted d
 		JOIN users u ON u.id = d.user_id
 		LEFT JOIN rings r ON r.user_id = d.user_id AND r.sid = d.sid
-		WHERE u.votes_discounted_at IS NULL AND (r.user_id IS NOT NULL OR d.n >= ?)
+		WHERE u.votes_discounted_at IS NULL AND u.vote_strike_id IS NULL AND (r.user_id IS NOT NULL OR d.n >= ?)
 	`)
 		.bind(
 			COMMUNITY_KEY_ID,
@@ -217,6 +219,44 @@ export async function revokeStrikeXp(env: Env, strikeId: number): Promise<number
 		.bind(strikeId)
 		.first<{ xp: number }>()
 	return row?.xp ?? 0
+}
+
+export type UndoStrikeResult = "undone" | "not_found" | "already_undone"
+
+export async function undoStrike(
+	env: Env,
+	strikeId: number,
+	actorId: number,
+	now = Math.floor(Date.now() / 1000)
+): Promise<{ result: UndoStrikeResult; keyIds: number[] }> {
+	return env.DB.transaction(async (tx) => {
+		const strike = await tx
+			.prepare("SELECT submitter_id, undone_at FROM vote_strikes WHERE id = ? FOR UPDATE")
+			.bind(strikeId)
+			.first<{ submitter_id: number; undone_at: number | null }>()
+		if (!strike) return { result: "not_found", keyIds: [] }
+		if (strike.undone_at !== null) return { result: "already_undone", keyIds: [] }
+
+		await tx
+			.prepare("UPDATE vote_strikes SET undone_at = ?, undone_by = ? WHERE id = ?")
+			.bind(now, actorId, strikeId)
+			.run()
+		const keys = await tx
+			.prepare("UPDATE users SET votes_discounted_at = NULL WHERE vote_strike_id = ? RETURNING id")
+			.bind(strikeId)
+			.all<{ id: number }>()
+		await revokeStrikePenaltyXp({ ...env, DB: tx }, strikeId)
+		await recordCouncilEvent(tx, {
+			actorId,
+			kind: "vote_strike_undo",
+			source: "web",
+			subjectUserId: strike.submitter_id,
+			refId: strikeId,
+			note: null,
+			at: now,
+		})
+		return { result: "undone", keyIds: keys.results.map((k) => k.id).sort((a, b) => a - b) }
+	})
 }
 
 export async function lyricsVotedByKeys(env: Env, keyIds: number[]): Promise<number[]> {

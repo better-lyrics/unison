@@ -52,6 +52,8 @@ export const UNDONE_EXPR = `CASE
 		SELECT 1 FROM boosts b WHERE b.id = e.ref_id AND b.revoked_at IS NOT NULL)
 	WHEN e.kind = 'reject' THEN EXISTS (
 		SELECT 1 FROM rejections r WHERE r.id = e.ref_id AND ${REJECTION_UNDONE})
+	WHEN e.kind = 'vote_strike' THEN EXISTS (
+		SELECT 1 FROM vote_strikes s WHERE s.id = e.ref_id AND s.undone_at IS NOT NULL)
 	ELSE FALSE
 END`
 
@@ -60,6 +62,8 @@ const ACTIVE_EXPR = `CASE
 		SELECT 1 FROM boosts b WHERE b.id = e.ref_id AND b.revoked_at IS NULL)
 	WHEN e.kind = 'reject' THEN EXISTS (
 		SELECT 1 FROM rejections r WHERE r.id = e.ref_id AND r.revoked_at IS NULL)
+	WHEN e.kind = 'vote_strike' THEN EXISTS (
+		SELECT 1 FROM vote_strikes s WHERE s.id = e.ref_id AND s.undone_at IS NULL)
 	ELSE FALSE
 END`
 

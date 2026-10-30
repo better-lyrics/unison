@@ -113,6 +113,14 @@ export async function awardStrikePenaltyXp(
 	})
 }
 
+export async function revokeStrikePenaltyXp(env: Env, strikeId: number): Promise<void> {
+	await env.DB.prepare(
+		"DELETE FROM contribution_events WHERE kind = 'vote-manipulation' AND ref_type = 'strike' AND ref_id = ?"
+	)
+		.bind(strikeId)
+		.run()
+}
+
 export async function awardConsensusVotes(env: Env): Promise<void> {
 	await env.DB.prepare(`${CONSENSUS_LYRICS_CTE}
 		INSERT INTO contribution_events (user_id, delta, kind, ref_type, ref_id)

@@ -4,12 +4,14 @@ import { evictFeedCaches } from "@/db/feed"
 import { invalidateCuratorLeaderboardCache } from "@/db/leaderboard"
 import { updateReputations } from "@/db/reputation"
 import {
+	type UndoStrikeResult,
 	findSuspectKeys,
 	getStrikeSummary,
 	lyricsVotedByKeys,
 	recordStrikes,
 	revokeStrikeXp,
 	strikeNote,
+	undoStrike,
 } from "@/db/vote-strikes"
 import { Logger } from "@/infra/logger"
 import { recalculateScore } from "@/jobs/score-updater"
@@ -54,5 +56,24 @@ export async function runVoteIntegrity(
 	await evictFeedCaches(env)
 	await invalidateCuratorLeaderboardCache(env)
 	log.info("vote integrity", result)
+	return result
+}
+
+export async function undoVoteStrike(
+	env: Env,
+	strikeId: number,
+	actorId: number,
+	now = Math.floor(Date.now() / 1000)
+): Promise<UndoStrikeResult> {
+	const { result, keyIds } = await undoStrike(env, strikeId, actorId, now)
+	if (result !== "undone") return result
+
+	for (const id of await lyricsVotedByKeys(env, keyIds)) {
+		await recalculateScore(env, id)
+	}
+	await updateReputations(env)
+	await evictFeedCaches(env)
+	await invalidateCuratorLeaderboardCache(env)
+	log.info("vote strike undone", { strikeId, actorId, keys: keyIds.length })
 	return result
 }

@@ -78,7 +78,8 @@ describeIntegration("council dashboard routes (integration)", () => {
 		path: string,
 		opts: { token?: string; body?: unknown; env?: Env } = {}
 	): Promise<{ status: number; json: Envelope<T> }> => {
-		const headers: Record<string, string> = { "content-type": "application/json" }
+		const headers: Record<string, string> =
+			opts.body === undefined ? {} : { "content-type": "application/json" }
 		if (opts.token) headers.authorization = `Bearer ${opts.token}`
 		const res = await new Elysia().use(councilRoutes(opts.env ?? db.env)).handle(
 			new Request(`http://localhost${path}`, {
@@ -719,6 +720,77 @@ describeIntegration("council dashboard routes (integration)", () => {
 			const [a] = await applicants("mira", "?includeBelowCutoff=1")
 			expect(a.state).toBe("failed")
 			expect(a.retakeAt).toBeGreaterThan(1790000000)
+		})
+	})
+
+	describe("POST /committee/strikes/:id/undo", () => {
+		let strikeId: number
+		let sock: number
+
+		beforeEach(async () => {
+			const { rows } = await db.pool.query<{ id: number }>(
+				`INSERT INTO vote_strikes (submitter_id, kind, detected_at, key_count, vote_count, repeat,
+					backfill)
+				VALUES ($1, 'serial', 1795000000, 1, 5, FALSE, FALSE) RETURNING id`,
+				[submitter]
+			)
+			strikeId = rows[0].id
+			sock = await seedUser(db, "96".repeat(32))
+			await db.pool.query(
+				"UPDATE users SET votes_discounted_at = 1795000000, vote_strike_id = $1 WHERE id = $2",
+				[strikeId, sock]
+			)
+		})
+
+		const undo = (id: number | string, token: string) =>
+			call("POST", `/committee/strikes/${id}/undo`, { token })
+
+		it("lets an admin undo a strike without a body", async () => {
+			const res = await undo(strikeId, "admin")
+
+			expect(res.status).toBe(200)
+			expect(res.json.success).toBe(true)
+			const { rows } = await db.pool.query(
+				"SELECT undone_by FROM vote_strikes WHERE id = $1 AND undone_at IS NOT NULL",
+				[strikeId]
+			)
+			expect(rows).toEqual([{ undone_by: admin }])
+			const { rows: keys } = await db.pool.query(
+				"SELECT votes_discounted_at, vote_strike_id FROM users WHERE id = $1",
+				[sock]
+			)
+			expect(keys).toEqual([{ votes_discounted_at: null, vote_strike_id: strikeId }])
+		})
+
+		it("refuses a member who is not an admin", async () => {
+			const res = await undo(strikeId, "mira")
+
+			expect(res.status).toBe(403)
+			expect(res.json.code).toBe("NOT_COUNCIL_ADMIN")
+			const { rows } = await db.pool.query("SELECT undone_at FROM vote_strikes WHERE id = $1", [
+				strikeId,
+			])
+			expect(rows).toEqual([{ undone_at: null }])
+		})
+
+		it("answers 409 for a strike already undone", async () => {
+			await undo(strikeId, "admin")
+
+			const again = await undo(strikeId, "admin")
+
+			expect(again.status).toBe(409)
+			expect(again.json.code).toBe("STRIKE_ALREADY_UNDONE")
+		})
+
+		it("answers 404 for an unknown strike and 400 for a malformed id", async () => {
+			const missing = await undo(strikeId + 1000, "admin")
+			expect(missing.status).toBe(404)
+			expect(missing.json.code).toBe("NOT_FOUND")
+			for (const bad of ["abc", "0", "-3", "1.5"]) {
+				const res = await undo(bad, "admin")
+				expect(res.status).toBe(400)
+				expect(res.json.code).toBe("INVALID_ID")
+			}
 		})
 	})
 })
