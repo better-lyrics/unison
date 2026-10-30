@@ -24,6 +24,7 @@
     "submit": "tsx cli/submit.ts",
     "admin:delete": "tsx scripts/admin-delete.ts",
     "ttml:repair": "tsx scripts/repair-ttml.ts",
+    "vote-integrity": "tsx scripts/vote-integrity.ts",
     "dump:dry-run": "tsx scripts/dump-dry-run.ts",
     "exam:build": "tsx scripts/build-exam-bank.ts",
     "exam:seed": "tsx scripts/seed-exam.ts",
