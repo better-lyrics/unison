@@ -2,7 +2,7 @@ import { config } from "@/config"
 import { isCommittee } from "@/db/committee"
 import { type CouncilSource, recordCouncilEvent } from "@/db/council-events"
 import { softDeleteLyrics } from "@/db/lyrics"
-import { NOW_EPOCH } from "@/db/predicates"
+import { COUNTED_VOTER_PREDICATE, NOW_EPOCH } from "@/db/predicates"
 import { closeCase, insertOpenCase, lockLyricCases } from "@/db/report-cases"
 import type { Env } from "@/types"
 
@@ -10,7 +10,7 @@ const { reportHide } = config.moderation
 
 const qualifyingReports = (asOf: string) => `JOIN users u ON u.id = r.user_id
 	WHERE r.reason IN (${reportHide.reasons.map(() => "?").join(", ")})
-		AND u.reputation >= ? AND u.vote_count >= ? AND u.banned_at IS NULL
+		AND u.reputation >= ? AND u.vote_count >= ? AND ${COUNTED_VOTER_PREDICATE}
 		AND r.created_at > COALESCE(
 			(SELECT MAX(kept.decided_at) FROM report_cases kept
 				WHERE kept.lyrics_id = r.lyrics_id AND kept.status = 'kept' AND kept.decided_at <= ${asOf}),

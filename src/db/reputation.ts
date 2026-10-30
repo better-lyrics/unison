@@ -4,9 +4,9 @@ import type { Env } from "@/types"
 
 export async function updateReputations(env: Env, userIds?: number[]): Promise<void> {
 	if (userIds?.length === 0) return
-	const scope = userIds ? `WHERE u.id IN (${userIds.map(() => "?").join(", ")})` : ""
-	// Do NOT add `deleted_at IS NULL` here. Reputation depends on historical
-	// voting signal; filtering deleted lyrics destroys it.
+	const scoped = (column: string) => (userIds ? `AND ${column} = ANY(?::int[])` : "")
+	const scope = userIds ? [userIds] : []
+	// Deleted lyrics stay in: reputation is historical voting signal.
 	await env.DB.prepare(`${CONSENSUS_LYRICS_CTE},
 		consensus AS (
 			SELECT v.user_id,
@@ -14,17 +14,17 @@ export async function updateReputations(env: Env, userIds?: number[]): Promise<v
 			FROM votes v
 			JOIN consensus_lyrics cl ON v.lyrics_id = cl.id
 			JOIN users u ON u.id = v.user_id
-			WHERE v.is_self_vote = 0 AND ${COUNTED_VOTER_PREDICATE}
+			WHERE v.is_self_vote = 0 AND ${COUNTED_VOTER_PREDICATE} ${scoped("v.user_id")}
 			GROUP BY v.user_id
 		),
 		penalties AS (
-			SELECT user_id, COUNT(*) AS n FROM contribution_events
-			WHERE kind = 'penalized'
-			GROUP BY user_id
+			SELECT submitter_id AS user_id, COUNT(*) AS n FROM lyrics
+			WHERE reputation_penalized AND submitter_id IS NOT NULL ${scoped("submitter_id")}
+			GROUP BY submitter_id
 		),
 		strikes AS (
 			SELECT submitter_id AS user_id, COUNT(*) AS n FROM vote_strikes
-			WHERE repeat AND undone_at IS NULL
+			WHERE repeat AND undone_at IS NULL ${scoped("submitter_id")}
 			GROUP BY submitter_id
 		),
 		derived AS (
@@ -38,7 +38,7 @@ export async function updateReputations(env: Env, userIds?: number[]): Promise<v
 			LEFT JOIN consensus c ON c.user_id = u.id
 			LEFT JOIN penalties p ON p.user_id = u.id
 			LEFT JOIN strikes s ON s.user_id = u.id
-			${scope}
+			WHERE TRUE ${scoped("u.id")}
 		)
 		UPDATE users SET reputation = d.reputation
 		FROM derived d
@@ -46,13 +46,16 @@ export async function updateReputations(env: Env, userIds?: number[]): Promise<v
 	`)
 		.bind(
 			config.reputation.minVotesForConfidence,
+			...scope,
+			...scope,
+			...scope,
 			config.reputation.min,
 			config.reputation.max,
 			config.reputation.default,
 			config.reputation.consensusDelta,
 			-config.moderation.autoHide.reputationPenalty,
 			-config.voteIntegrity.repeatPenalty.reputation,
-			...(userIds ?? [])
+			...scope
 		)
 		.run()
 }

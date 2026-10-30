@@ -40,11 +40,16 @@ describeIntegration("derived reputation (integration)", () => {
 				.reputation
 		)
 
-	const penalize = (userId: number, lyricsId: number) =>
-		db.pool.query(
+	const flagPenalized = (lyricsId: number) =>
+		db.pool.query("UPDATE lyrics SET reputation_penalized = TRUE WHERE id = $1", [lyricsId])
+
+	const penalize = async (userId: number, lyricsId: number) => {
+		await flagPenalized(lyricsId)
+		await db.pool.query(
 			"INSERT INTO contribution_events (user_id, delta, kind, ref_type, ref_id) VALUES ($1, -30, 'penalized', 'lyric', $2)",
 			[userId, lyricsId]
 		)
+	}
 
 	beforeAll(async () => {
 		db = await openIntegrationDb()
@@ -75,7 +80,7 @@ describeIntegration("derived reputation (integration)", () => {
 		expect(await reputationOf(agreer)).toBeCloseTo(1.2)
 	})
 
-	it("subtracts the penalty for each penalized event", async () => {
+	it("subtracts the penalty for each penalised lyric", async () => {
 		const submitter = await user()
 		const a = await consensusLyric(submitter, -0.9)
 		const b = await consensusLyric(submitter, -0.9)
@@ -199,7 +204,7 @@ describeIntegration("derived reputation (integration)", () => {
 		it("stacks with penalized events and consensus", async () => {
 			const submitter = await user()
 			const voter = await user()
-			const removed = await consensusLyric(voter, -0.9)
+			const removed = await consensusLyric(submitter, -0.9)
 			await vote(await consensusLyric(voter, 0.9), submitter, 1)
 			await penalize(submitter, removed)
 			await strike(submitter, { repeat: true })
@@ -259,6 +264,33 @@ describeIntegration("derived reputation (integration)", () => {
 	})
 
 	describe("regressions", () => {
+		it("regression: a penalty flagged before the XP ledger existed still counts", async () => {
+			const submitter = await user()
+			await flagPenalized(await consensusLyric(submitter, -0.9))
+
+			await updateReputations(db.env)
+
+			expect(await reputationOf(submitter)).toBeCloseTo(
+				config.reputation.default - config.moderation.autoHide.reputationPenalty
+			)
+		})
+
+		it("regression: a penalised lyric that was later deleted still counts", async () => {
+			const submitter = await user()
+			const lyric = await consensusLyric(submitter, -0.9)
+			await flagPenalized(lyric)
+			await db.pool.query(
+				"UPDATE lyrics SET deleted_at = 1, deleted_by_user_id = $2, deleted_by_role = 'admin' WHERE id = $1",
+				[lyric, submitter]
+			)
+
+			await updateReputations(db.env)
+
+			expect(await reputationOf(submitter)).toBeCloseTo(
+				config.reputation.default - config.moderation.autoHide.reputationPenalty
+			)
+		})
+
 		it("regression: does not ratchet across runs", async () => {
 			const submitter = await user()
 			const voter = await user()

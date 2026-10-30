@@ -46,12 +46,18 @@ describeIntegration("council flags (integration)", () => {
 
 	const reporter = async (
 		n: number,
-		opts: { reputation?: number; votes?: number; banned?: boolean } = {}
+		opts: { reputation?: number; votes?: number; banned?: boolean; discounted?: boolean } = {}
 	): Promise<number> => {
 		const id = await seedUser(db, kid(n))
 		await db.pool.query(
-			"UPDATE users SET reputation = $2, vote_count = $3, banned_at = $4 WHERE id = $1",
-			[id, opts.reputation ?? 1.0, opts.votes ?? 5, opts.banned ? 1700000000 : null]
+			"UPDATE users SET reputation = $2, vote_count = $3, banned_at = $4, votes_discounted_at = $5 WHERE id = $1",
+			[
+				id,
+				opts.reputation ?? 1.0,
+				opts.votes ?? 5,
+				opts.banned ? 1700000000 : null,
+				opts.discounted ? 1700000000 : null,
+			]
 		)
 		return id
 	}
@@ -135,6 +141,12 @@ describeIntegration("council flags (integration)", () => {
 			it("does not count a banned reporter", async () => {
 				await reportBy(10, 2)
 				await report(await reporter(20, { banned: true }))
+				expect(await cases()).toEqual([])
+			})
+
+			it("does not count a reporter whose votes are discounted", async () => {
+				await reportBy(10, 2)
+				await report(await reporter(20, { discounted: true }))
 				expect(await cases()).toEqual([])
 			})
 

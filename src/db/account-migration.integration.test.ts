@@ -290,6 +290,7 @@ describeIntegration("account migration (integration)", () => {
 				[NEW_KEY]
 			)
 			const removed = await insertLyric(newUser.id, "vidRepPenalty")
+			await pool.query("UPDATE lyrics SET reputation_penalized = TRUE WHERE id = $1", [removed])
 			await pool.query(
 				"INSERT INTO contribution_events (user_id, delta, kind, ref_type, ref_id) VALUES ($1, -30, 'penalized', 'lyric', $2)",
 				[newUser.id, removed]
