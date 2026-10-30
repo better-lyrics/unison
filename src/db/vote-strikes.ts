@@ -218,3 +218,54 @@ export async function revokeStrikeXp(env: Env, strikeId: number): Promise<number
 		.first<{ xp: number }>()
 	return row?.xp ?? 0
 }
+
+export async function lyricsVotedByKeys(env: Env, keyIds: number[]): Promise<number[]> {
+	if (keyIds.length === 0) return []
+	const res = await env.DB.prepare(
+		`SELECT DISTINCT l.id FROM votes v
+		JOIN lyrics l ON l.id = v.lyrics_id
+		WHERE v.user_id = ANY(?::int[]) AND l.deleted_at IS NULL
+		ORDER BY l.id`
+	)
+		.bind(keyIds)
+		.all<{ id: number }>()
+	return res.results.map((r) => r.id)
+}
+
+export interface StrikeSummary {
+	kind: string
+	keyCount: number
+	voteCount: number
+	repeat: boolean
+	backfill: boolean
+}
+
+const count = (n: number, noun: string) => `${n} ${noun}${n === 1 ? "" : "s"}`
+
+export function strikeNote(s: StrikeSummary): string {
+	const base = `${s.kind}: ${count(s.keyCount, "key")}, ${count(s.voteCount, "vote")}`
+	if (s.repeat) return `${base} (repeat)`
+	return s.backfill ? `${base} (history before launch)` : base
+}
+
+export async function getStrikeSummary(env: Env, strikeId: number): Promise<StrikeSummary | null> {
+	const row = await env.DB.prepare(
+		"SELECT kind, key_count, vote_count, repeat, backfill FROM vote_strikes WHERE id = ?"
+	)
+		.bind(strikeId)
+		.first<{
+			kind: string
+			key_count: number
+			vote_count: number
+			repeat: boolean
+			backfill: boolean
+		}>()
+	if (!row) return null
+	return {
+		kind: row.kind,
+		keyCount: row.key_count,
+		voteCount: row.vote_count,
+		repeat: row.repeat,
+		backfill: row.backfill,
+	}
+}

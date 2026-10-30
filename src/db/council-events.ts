@@ -20,8 +20,10 @@ export type CouncilEventKind =
 	| "metadata_reject"
 	| "flag_remove"
 	| "flag_keep"
+	| "vote_strike"
+	| "vote_strike_undo"
 
-export type CouncilSource = "web" | "discord" | "admin"
+export type CouncilSource = "web" | "discord" | "admin" | "system"
 
 export const DECISION_KINDS: CouncilEventKind[] = [
 	"seal",

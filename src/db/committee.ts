@@ -10,10 +10,12 @@ export interface CommitteeMember {
 
 export interface MembershipAudit {
 	actorId: number | null
-	source: CouncilSource
+	source: MembershipSource
 }
 
-const ADDED_BY: Record<CouncilSource, string> = { discord: "bot", admin: "admin", web: "web" }
+type MembershipSource = Exclude<CouncilSource, "system">
+
+const ADDED_BY: Record<MembershipSource, string> = { discord: "bot", admin: "admin", web: "web" }
 
 export async function isCommittee(env: Env, userId: number): Promise<boolean> {
 	const row = await env.DB.prepare("SELECT 1 AS one FROM committee_members WHERE user_id = ?")
