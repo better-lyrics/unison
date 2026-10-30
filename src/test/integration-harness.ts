@@ -130,6 +130,8 @@ export async function wipeRevisionData(db: IntegrationDb): Promise<void> {
 	await db.pool.query("DELETE FROM votes")
 	await db.pool.query("DELETE FROM reports")
 	await db.pool.query("DELETE FROM lyrics")
+	await db.pool.query("UPDATE users SET vote_strike_id = NULL WHERE vote_strike_id IS NOT NULL")
+	await db.pool.query("DELETE FROM vote_strikes")
 	await db.pool.query("DELETE FROM users")
 	db.cache.store.clear()
 }
