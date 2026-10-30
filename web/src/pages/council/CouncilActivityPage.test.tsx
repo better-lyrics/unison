@@ -218,6 +218,69 @@ describe("CouncilActivityPage", () => {
     await waitFor(() => expect(calls(router)).toContain("/committee/events?kind=flags"))
   })
 
+  describe("vote strikes", () => {
+    const strikeData = () =>
+      councilData({
+        events: {
+          events: [
+            councilEvent({
+              id: 9,
+              kind: "vote_strike",
+              source: "system",
+              actor: null,
+              subject: { ...OLA },
+              lyric: null,
+              refId: 31,
+              at: NOW - 40 * DAY,
+              note: "ring: 59 keys, 63 votes (repeat)",
+            }),
+          ],
+          nextCursor: null,
+        },
+      })
+
+    it("names the vote check as the actor and shows the evidence", async () => {
+      stubCouncilApi(strikeData())
+      renderCouncil("/council/activity")
+      const item = (await screen.findAllByRole("listitem")).find((li) => li.textContent?.includes("Vote check"))
+      expect(item?.textContent).toContain("Vote check discounted fake votes for olafix52")
+      expect(item?.textContent).toContain("ring: 59 keys, 63 votes (repeat)")
+      expect(item?.textContent).toContain("System")
+    })
+
+    it("lets a council admin undo a strike of any age", async () => {
+      const log: string[] = []
+      stubCouncilApi(strikeData(), { admin: true }, [
+        {
+          match: (url, init) => init?.method === "POST" && url === "/committee/strikes/31/undo",
+          respond: (url, init) => {
+            log.push(`${url} ${init?.body === undefined}`)
+            return jsonResponse({ success: true, data: null })
+          },
+        },
+      ])
+      renderCouncil("/council/activity")
+      fireEvent.click(await screen.findByRole("button", { name: "Undo" }))
+      await waitFor(() => expect(log).toEqual(["/committee/strikes/31/undo true"]))
+      await screen.findByText("Restored the votes for olafix52")
+    })
+
+    it("offers no undo to a member who is not an admin", async () => {
+      stubCouncilApi(strikeData(), { admin: false })
+      renderCouncil("/council/activity")
+      await screen.findByText("ring: 59 keys, 63 votes (repeat)")
+      expect(screen.queryByRole("button", { name: "Undo" })).toBeNull()
+    })
+
+    it("filters to vote checks", async () => {
+      const router = stubCouncilApi(data())
+      renderCouncil("/council/activity")
+      await screen.findByRole("region", { name: "Today" })
+      fireEvent.click(screen.getByRole("button", { name: "Vote checks" }))
+      await waitFor(() => expect(calls(router)).toContain("/committee/events?kind=strikes"))
+    })
+  })
+
   it("says so when nothing matches", async () => {
     stubCouncilApi(councilData())
     renderCouncil("/council/activity")

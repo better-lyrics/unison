@@ -1,3 +1,4 @@
+import { eventSubject } from "@/components/council/EventSentence"
 import { fetchUserByHandle, isNotFound } from "@/lib/api"
 import { clearStoredSession } from "@/lib/auth"
 import { AUTHED_FETCH_ERRORS, AuthedFetchError } from "@/lib/authedFetch"
@@ -13,6 +14,7 @@ import {
   sealLyric,
   setApplicantOpinion,
   undoRejectLyric,
+  undoVoteStrike,
   unsealLyric,
   voteFlag,
   voteMetadata,
@@ -151,12 +153,20 @@ export function useUndoDecision() {
   const client = useQueryClient()
   return useMutation({
     mutationFn: (event: CouncilEvent) => {
+      if (event.kind === "vote_strike") {
+        if (event.refId === null) throw new Error(AUTHED_FETCH_ERRORS.REQUEST_FAILED)
+        return undoVoteStrike(event.refId)
+      }
       if (!event.lyric) throw new Error(AUTHED_FETCH_ERRORS.REQUEST_FAILED)
       if (event.kind === "seal") return unsealLyric(event.lyric.id)
       if (event.refId === null) throw new Error(AUTHED_FETCH_ERRORS.REQUEST_FAILED)
       return undoRejectLyric(event.lyric.id, event.refId)
     },
     onSuccess: (_, event) => {
+      if (event.kind === "vote_strike") {
+        pushToast({ kind: "info", group: DECISION_TOAST, message: `Restored the votes for ${eventSubject(event)}` })
+        return
+      }
       const verb = event.kind === "seal" ? DONE.seal.undo : DONE.reject.undo
       pushToast({ kind: "info", group: DECISION_TOAST, message: `${verb} “${event.lyric?.song}”` })
     },

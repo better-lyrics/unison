@@ -120,6 +120,10 @@ export function unsealLyric(lyricsId: number): Promise<void> {
   return send(`/lyrics/${lyricsId}/boost`, "DELETE")
 }
 
+export function undoVoteStrike(strikeId: number): Promise<void> {
+  return send(`/committee/strikes/${strikeId}/undo`, "POST")
+}
+
 export async function rejectLyric(lyricsId: number, note: string | null): Promise<number> {
   const { rejectionId } = await send<{ rejectionId: number }>(`/lyrics/${lyricsId}/reject`, "POST", { note })
   return rejectionId

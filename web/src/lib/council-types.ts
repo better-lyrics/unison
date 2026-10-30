@@ -172,8 +172,10 @@ export type CouncilEventKind =
   | "metadata_reject"
   | "flag_remove"
   | "flag_keep"
+  | "vote_strike"
+  | "vote_strike_undo"
 
-export type CouncilSource = "web" | "discord" | "admin"
+export type CouncilSource = "web" | "discord" | "admin" | "system"
 
 export interface CouncilEvent {
   id: number
@@ -189,7 +191,7 @@ export interface CouncilEvent {
   lyric: { id: number; videoId: string; song: string; artist: string } | null
 }
 
-export type EventGroup = "seals" | "rejections" | "edits" | "membership" | "flags"
+export type EventGroup = "seals" | "rejections" | "edits" | "membership" | "flags" | "strikes"
 
 export interface EventsPage {
   events: CouncilEvent[]
