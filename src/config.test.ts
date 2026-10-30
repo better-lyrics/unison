@@ -39,3 +39,47 @@ describe("config.translation", () => {
 		expect(config.translation.userAgent).toContain("Chrome/")
 	})
 })
+
+describe("voteIntegrity", () => {
+	const v = config.voteIntegrity
+
+	it("keeps devotedShare above half so a key maps to at most one submitter", () => {
+		expect(v.devotedShare).toBeGreaterThan(0.5)
+		expect(v.devotedShare).toBeLessThanOrEqual(1)
+	})
+
+	it("needs more than one key for a ring and more than one vote for a serial key", () => {
+		expect(v.ring.minKeys).toBeGreaterThan(1)
+		expect(v.serialMinVotes).toBeGreaterThan(1)
+	})
+
+	it("gives a serial key a positive window to fit its votes in", () => {
+		expect(v.serialWindowSec).toBeGreaterThan(0)
+	})
+
+	it("only ever lowers a ranking with the strike multipliers", () => {
+		expect(v.multiplier.one).toBeLessThan(1)
+		expect(v.multiplier.many).toBeLessThan(v.multiplier.one)
+		expect(v.multiplier.many).toBeGreaterThan(0)
+	})
+
+	it("looks back far enough to see a whole ring window and a whole serial window", () => {
+		expect(v.lookbackSec).toBeGreaterThanOrEqual(v.ring.windowSec + v.serialWindowSec)
+	})
+
+	it("needs a ring to beat a submitter's normal traffic, measured over many windows", () => {
+		expect(v.ring.trafficFactor).toBeGreaterThan(1)
+		expect(v.ring.baselineSec).toBeGreaterThanOrEqual(100 * v.ring.windowSec)
+		expect(v.ring.baselineSec).toBeGreaterThan(v.lookbackSec + v.ring.windowSec)
+	})
+
+	it("penalises a repeat strike", () => {
+		expect(v.repeatPenalty.reputation).toBeGreaterThan(0)
+		expect(v.repeatPenalty.xp).toBeLessThan(0)
+	})
+
+	it("needs more than one upvote to call a key loyal to a submitter", () => {
+		expect(v.loyalMinVotes).toBeGreaterThan(1)
+		expect(Number.isInteger(v.loyalMinVotes)).toBe(true)
+	})
+})

@@ -21,6 +21,7 @@ import { castFlagVote } from "@/db/flags"
 import { invalidateCacheForLyric } from "@/db/lyrics"
 import { castVote, createProposal } from "@/db/metadata-proposals"
 import { getOrCreateUser, getUserByKeyId } from "@/db/users"
+import { undoVoteStrike } from "@/jobs/vote-integrity"
 import type { Env } from "@/types"
 import { allowCouncilWrite, parseCouncilNote } from "@/utils/council-input"
 import { eitherAuth } from "@/utils/either-auth"
@@ -50,6 +51,7 @@ const EVENT_GROUPS: Record<string, CouncilEventKind[]> = {
 	edits: ["edit_approve", "edit_reject", "metadata_propose", "metadata_approve", "metadata_reject"],
 	membership: ["member_add", "member_remove", "applicant_approve", "applicant_reject"],
 	flags: ["flag_remove", "flag_keep"],
+	strikes: ["vote_strike", "vote_strike_undo"],
 }
 
 function parseOpinionBody(
@@ -332,3 +334,18 @@ export const councilRoutes = (env: Env) =>
 				return { success: true }
 			}
 		)
+		.post("/strikes/:id/undo", async ({ env, userId, keyId, councilAdmin, params, status }) => {
+			if (!councilAdmin) return status(403, notAdmin())
+			const id = parseId(params.id)
+			if (id === null) return status(400, buildError(ErrorCode.INVALID_ID))
+			if (!(await allowCouncilWrite(env, keyId)))
+				return status(429, buildError(ErrorCode.RATE_LIMITED))
+			switch (await undoVoteStrike(env, id, userId)) {
+				case "undone":
+					return { success: true }
+				case "not_found":
+					return status(404, buildError(ErrorCode.NOT_FOUND))
+				case "already_undone":
+					return status(409, buildError(ErrorCode.STRIKE_ALREADY_UNDONE))
+			}
+		})

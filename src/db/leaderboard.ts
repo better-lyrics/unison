@@ -6,6 +6,7 @@ import {
 	AUTO_HIDE_PREDICATE,
 	AUTO_HIDE_PREDICATE_JOINED,
 	RANKING_EXPR,
+	deboost,
 	noServableSyncedVariantServes,
 } from "@/db/predicates"
 import { windowCutoff } from "@/db/requests"
@@ -17,6 +18,9 @@ import { levelForXp } from "@/utils/xp"
 export const CURATOR_LEADERBOARD_CACHE_KEY = "leaderboard:users"
 
 const curatorBoardCacheKey = (limit: number) => `${CURATOR_LEADERBOARD_CACHE_KEY}:board:${limit}`
+
+const CREDITED_SCORE_EXPR =
+	"CASE WHEN loyal_only THEN LEAST(effective_score, 0) ELSE effective_score END"
 
 export async function invalidateCuratorLeaderboardCache(env: Env): Promise<void> {
 	const { rankScanLimit, topN } = config.requests.leaderboard
@@ -271,7 +275,7 @@ export async function getCuratorLeaderboard(
 		        COUNT(*) OVER () AS total_count
 		 FROM (
 		   SELECT submitter_id,
-		          SUM(effective_score) AS score,
+		          SUM(${deboost(CREDITED_SCORE_EXPR, "")}) AS score,
 		          COUNT(*) AS submission_count,
 		          SUM(upvotes) AS total_upvotes
 		   FROM lyrics

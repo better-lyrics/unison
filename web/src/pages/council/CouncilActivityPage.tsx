@@ -9,7 +9,7 @@ import { BlockHead } from "@/components/council/detail-parts"
 import { PageHead, cardClass } from "@/components/council/headings"
 import { Bone, skeletonKeys } from "@/components/skeleton"
 import { buttonClass, tagClass } from "@/components/ui"
-import { useCouncilLog, useCouncilMembers, useCouncilOverview } from "@/hooks/useCouncilData"
+import { useCouncilLog, useCouncilMembers, useCouncilOverview, useCouncilRole } from "@/hooks/useCouncilData"
 import { useUndoDecision } from "@/hooks/useCouncilMutations"
 import { cn } from "@/lib/cn"
 import { canUndo, groupByDay } from "@/lib/council-activity"
@@ -29,12 +29,14 @@ const KINDS: { value: KindFilter; label: string }[] = [
   { value: "edits", label: "Edits" },
   { value: "membership", label: "Membership" },
   { value: "flags", label: "Flags" },
+  { value: "strikes", label: "Vote checks" },
 ]
 
 const SOURCE: Record<CouncilSource, { label: string; className: string }> = {
   web: { label: "Web", className: "bg-unison-bg-hover text-unison-text-muted" },
   discord: { label: "Discord", className: "bg-[rgba(88,101,242,0.14)] text-unison-discord" },
   admin: { label: "Admin", className: "bg-unison-bg-hover text-unison-text-muted" },
+  system: { label: "System", className: "bg-unison-bg-hover text-unison-text-muted" },
 }
 
 export function CouncilActivityPage() {
@@ -63,6 +65,7 @@ export function CouncilActivityPage() {
     actor: actor || undefined,
     includeBookmarks: includeBookmarks || undefined,
   })
+  const isAdmin = useCouncilRole()?.admin ?? false
   const undo = useUndoDecision()
   const events = log.data?.pages.flatMap((page) => page.events)
 
@@ -123,7 +126,7 @@ export function CouncilActivityPage() {
                         key={event.id}
                         event={event}
                         now={now}
-                        undoable={canUndo(event, meKeyId, now)}
+                        undoable={canUndo(event, meKeyId, now, isAdmin)}
                         undoing={undo.isPending}
                         onUndo={() => undo.mutate(event)}
                       />

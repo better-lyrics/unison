@@ -1,11 +1,12 @@
 import { config } from "@/config"
+import { updateReputations } from "@/db/reputation"
 import {
 	calculateScore,
 	recalculateScore,
 	recomputeAllScores,
-	updateReputations,
 	updateScores,
 } from "@/jobs/score-updater"
+import { isReputationRefresh, refreshParams } from "@/test/reputation-refresh"
 import type { Env } from "@/types"
 import { describe, expect, it, vi } from "vitest"
 
@@ -307,70 +308,66 @@ describe("confidence score floor", () => {
 	})
 })
 
-describe("updateReputations", () => {
-	interface DBCall {
-		sql: string
-		params: unknown[]
-	}
+describe("loyal-only lyrics", () => {
+	const diverse = [
+		{ vote: 1, reputation: 1.0, avg_vote: -0.5, is_self_vote: 0 },
+		{ vote: 1, reputation: 1.0, avg_vote: 0.5, is_self_vote: 0 },
+		{ vote: 1, reputation: 1.0, avg_vote: 0.3, is_self_vote: 0 },
+	]
 
-	function createMockEnv(): { env: Env; calls: DBCall[] } {
-		const calls: DBCall[] = []
-		const db = {
-			prepare(sql: string) {
-				let params: unknown[] = []
-				return {
-					bind(...args: unknown[]) {
-						params = args
-						return this
-					},
-					async run() {
-						calls.push({ sql, params })
-					},
-				}
-			},
-		}
-		const env = { DB: db } as unknown as Env
-		return { env, calls }
-	}
+	it("forces low confidence when every independent upvote is missing", () => {
+		const result = calculateScore(1, diverse, true)
 
-	it("issues a single SQL statement (no N+1)", async () => {
-		const { env, calls } = createMockEnv()
-		await updateReputations(env)
-		expect(calls).toHaveLength(1)
+		expect(result.confidence).toBe("low")
 	})
 
-	it("uses a CTE-based UPDATE that joins votes to consensus_lyrics", async () => {
-		const { env, calls } = createMockEnv()
-		await updateReputations(env)
-		const sql = calls[0].sql
-		expect(sql).toMatch(/WITH\s+consensus_lyrics\s+AS/i)
-		expect(sql).toMatch(/JOIN\s+consensus_lyrics/i)
-		expect(sql).toMatch(/UPDATE\s+users/i)
-		expect(sql).toMatch(/GREATEST\(.+LEAST\(/i)
+	it("keeps effective_score, vote_count and diversity unchanged", () => {
+		const loyal = calculateScore(1, diverse, true)
+		const open = calculateScore(1, diverse)
+
+		expect(loyal.effective_score).toBe(open.effective_score)
+		expect(loyal.vote_count).toBe(open.vote_count)
+		expect(loyal.diversity_bonus).toBe(open.diversity_bonus)
+		expect(open.confidence).toBe("high")
 	})
 
-	it("excludes self-votes from reputation deltas", async () => {
-		const { env, calls } = createMockEnv()
-		await updateReputations(env)
-		expect(calls[0].sql).toMatch(/is_self_vote\s*=\s*0/i)
+	it("defaults to not loyal-only", () => {
+		expect(calculateScore(1, diverse).confidence).toBe(
+			calculateScore(1, diverse, false).confidence
+		)
 	})
+})
 
-	it("binds the configured threshold, delta, min, and max in order", async () => {
-		const { env, calls } = createMockEnv()
-		await updateReputations(env)
-		expect(calls[0].params).toEqual([
-			config.reputation.minVotesForConfidence,
-			config.reputation.consensusDelta,
-			-config.reputation.consensusDelta,
-			config.reputation.min,
-			config.reputation.max,
+describe("recalculateScore loyal_only", () => {
+	const votes = [
+		{ vote: 1, reputation: 1.0, avg_vote: 0.5, is_self_vote: 0 },
+		{ vote: 1, reputation: 1.0, avg_vote: 0.3, is_self_vote: 0 },
+		{ vote: 1, reputation: 1.0, avg_vote: 0.2, is_self_vote: 0 },
+	]
+
+	it("writes loyal_only and low confidence for a loyal-only lyric", async () => {
+		const { db, calls } = createMockDB([
+			{ video_id: "v1", deleted_at: null, submitter_id: null, loyal_only: true },
+			votes,
 		])
+		await recalculateScore({ DB: db } as unknown as Env, 1)
+
+		const update = calls.find((c) => c.sql.includes("UPDATE lyrics"))
+		expect(update?.sql).toMatch(/loyal_only\s*=\s*\?/)
+		expect(update?.params).toContain(true)
+		expect(update?.params).toContain("low")
 	})
 
-	it("does not apply unary minus to a bind placeholder", async () => {
-		const { env, calls } = createMockEnv()
-		await updateReputations(env)
-		expect(calls[0].sql).not.toMatch(/-\s*\?/)
+	it("writes loyal_only false for an open lyric", async () => {
+		const { db, calls } = createMockDB([
+			{ video_id: "v1", deleted_at: null, submitter_id: null, loyal_only: false },
+			votes,
+		])
+		await recalculateScore({ DB: db } as unknown as Env, 1)
+
+		const update = calls.find((c) => c.sql.includes("UPDATE lyrics"))
+		expect(update?.params).toContain(false)
+		expect(update?.params).toContain("medium")
 	})
 })
 
@@ -425,18 +422,9 @@ describe("auto-hide reputation penalty", () => {
 
 		await updateScores(env)
 
-		const userUpdate = calls.find(
-			(c) =>
-				c.sql.includes("UPDATE users") &&
-				c.sql.includes("reputation - ?") &&
-				c.sql.includes("WHERE id = ?")
-		)
+		const userUpdate = calls.find((c) => isReputationRefresh(c.sql))
 		expect(userUpdate).toBeDefined()
-		expect(userUpdate?.params).toEqual([
-			config.reputation.min,
-			config.moderation.autoHide.reputationPenalty,
-			42,
-		])
+		expect(userUpdate?.params).toEqual(refreshParams([42]))
 
 		const markUpdate = calls.find(
 			(c) => c.sql.includes("UPDATE lyrics") && c.sql.includes("reputation_penalized = TRUE")
@@ -473,15 +461,9 @@ describe("auto-hide reputation penalty", () => {
 
 		await updateScores(env)
 
-		const userUpdates = calls.filter(
-			(c) =>
-				c.sql.includes("UPDATE users") &&
-				c.sql.includes("reputation - ?") &&
-				c.sql.includes("WHERE id = ?")
-		)
+		const userUpdates = calls.filter((c) => isReputationRefresh(c.sql))
 		expect(userUpdates).toHaveLength(1)
-		const totalPenalty = config.moderation.autoHide.reputationPenalty * 2
-		expect(userUpdates[0].params).toEqual([config.reputation.min, totalPenalty, 42])
+		expect(userUpdates[0].params).toEqual(refreshParams([42]))
 	})
 
 	it("wraps the mark UPDATE and user-penalty updates in a single transaction", async () => {
@@ -499,12 +481,7 @@ describe("auto-hide reputation penalty", () => {
 
 		await updateScores(env)
 
-		const userPenalty = calls.find(
-			(c) =>
-				c.sql.includes("UPDATE users") &&
-				c.sql.includes("reputation - ?") &&
-				c.sql.includes("WHERE id = ?")
-		)
+		const userPenalty = calls.find((c) => isReputationRefresh(c.sql))
 		expect(userPenalty).toBeUndefined()
 	})
 
@@ -530,7 +507,7 @@ describe("auto-hide reputation penalty", () => {
 					},
 					async run(): Promise<void> {
 						calls.push({ sql, params })
-						if (sql.includes("UPDATE users") && sql.includes("reputation - ?")) {
+						if (isReputationRefresh(sql)) {
 							throw new Error("simulated failure")
 						}
 					},

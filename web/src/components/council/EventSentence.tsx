@@ -25,8 +25,8 @@ export function EventSentence({ event, links = false }: { event: CouncilEvent; l
     )
   return (
     <span className="[&_b]:font-medium [&_b]:text-unison-text">
-      <b>{event.actor?.displayName ?? "An admin"}</b> <span className={tone ? TONE_TEXT[tone] : undefined}>{verb}</span>{" "}
-      {subject}
+      <b>{event.source === "system" ? "Vote check" : (event.actor?.displayName ?? "An admin")}</b>{" "}
+      <span className={tone ? TONE_TEXT[tone] : undefined}>{verb}</span> {subject}
       {after ? ` ${after}` : null}
     </span>
   )

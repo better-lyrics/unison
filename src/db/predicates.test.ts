@@ -1,6 +1,7 @@
 import { config } from "@/config"
 import { describe, expect, it } from "vitest"
 import {
+	COUNTED_VOTER_PREDICATE,
 	noServableSyncedVariantServes,
 	PROVEN_EXPR_JOINED,
 	RANKING_EXPR,
@@ -77,5 +78,11 @@ describe("servable synced variant predicate", () => {
 			expect(served).not.toContain("IN (SELECT lyrics_id FROM lyrics_video_ids")
 			expect(notServed).not.toContain("IN (SELECT lyrics_id FROM lyrics_video_ids")
 		})
+	})
+})
+
+describe("COUNTED_VOTER_PREDICATE", () => {
+	it("excludes banned and discounted voters through the u alias", () => {
+		expect(COUNTED_VOTER_PREDICATE).toBe("(u.banned_at IS NULL AND u.votes_discounted_at IS NULL)")
 	})
 })

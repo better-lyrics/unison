@@ -1,5 +1,20 @@
 import { config } from "@/config"
 
+export const NOW_EPOCH = "EXTRACT(EPOCH FROM NOW())::INTEGER"
+
+const { multiplier } = config.voteIntegrity
+const repeatStrikesInWindow = `SELECT submitter_id FROM vote_strikes
+	WHERE repeat AND undone_at IS NULL AND detected_at > ${NOW_EPOCH} - ${multiplier.windowSec}`
+const strikeMultiplierExpr = (prefix: string) => `CASE
+	WHEN ${prefix}submitter_id IN (${repeatStrikesInWindow} GROUP BY submitter_id HAVING COUNT(*) >= 2)
+		THEN ${multiplier.many}
+	WHEN ${prefix}submitter_id IN (${repeatStrikesInWindow}) THEN ${multiplier.one}
+	ELSE 1
+END`
+
+export const deboost = (expr: string, prefix: string) =>
+	`(${expr} - ABS(${expr}) * (1 - ${strikeMultiplierExpr(prefix)}))`
+
 const { syncTypeBoost } = config.ranking
 const buildRankingExpr = (prefix: string, committeeBonus = false) => {
 	const syncTypeBoostExpr = `CASE ${prefix}sync_type
@@ -10,11 +25,14 @@ const buildRankingExpr = (prefix: string, committeeBonus = false) => {
 	const committeeBonusExpr = committeeBonus
 		? ` + CASE WHEN ${prefix}committee_approved_at IS NOT NULL THEN ${config.gamification.boost.rankingBonus} ELSE 0 END`
 		: ""
-	return `(
+	return deboost(
+		`(
 		(${prefix}effective_score * LN(${prefix}vote_count + ${config.ranking.confidenceBase})
 		+ ${config.ranking.recencyWeight} / (1.0 + (EXTRACT(EPOCH FROM NOW())::INTEGER - ${prefix}created_at) / 86400.0)${committeeBonusExpr})
 		* ${syncTypeBoostExpr}
-	)`
+	)`,
+		prefix
+	)
 }
 
 export const RANKING_EXPR = buildRankingExpr("")
@@ -23,8 +41,6 @@ export const RANKING_EXPR_JOINED = buildRankingExpr("l.")
 export const RANKING_EXPR_VARIANT = buildRankingExpr("l.", true)
 
 const { autoHide } = config.moderation
-
-export const NOW_EPOCH = "EXTRACT(EPOCH FROM NOW())::INTEGER"
 
 const buildVoteHidePredicate = (prefix: string) => `(
 	(
@@ -43,6 +59,24 @@ const buildVoteHidePredicate = (prefix: string) => `(
 // Uncorrelated IN so Postgres hashes the banned set once per query; COALESCE keeps a NULL submitter visible.
 const buildBannedSubmitterPredicate = (prefix: string) =>
 	`COALESCE(${prefix}submitter_id IN (SELECT id FROM users WHERE banned_at IS NOT NULL), FALSE)`
+
+export const COUNTED_VOTER_PREDICATE = "(u.banned_at IS NULL AND u.votes_discounted_at IS NULL)"
+
+const { loyalMinVotes, devotedShare } = config.voteIntegrity
+const loyalVoterExpr = `(
+	SELECT COUNT(*) FILTER (WHERE ol.submitter_id = l.submitter_id) >= ${loyalMinVotes}
+		AND COUNT(*) FILTER (WHERE ol.submitter_id = l.submitter_id) >= ${devotedShare} * COUNT(*)
+	FROM votes ov
+	JOIN lyrics ol ON ol.id = ov.lyrics_id
+	WHERE ov.user_id = v.user_id AND ov.vote = 1 AND ov.is_self_vote = 0
+)`
+
+export const LOYAL_ONLY_EXPR_JOINED = `COALESCE((
+	SELECT bool_and(${loyalVoterExpr})
+	FROM votes v
+	JOIN users u ON u.id = v.user_id
+	WHERE v.lyrics_id = l.id AND v.vote = 1 AND v.is_self_vote = 0 AND ${COUNTED_VOTER_PREDICATE}
+), FALSE)`
 
 export const BANNED_SUBMITTER_PREDICATE = buildBannedSubmitterPredicate("")
 export const BANNED_SUBMITTER_PREDICATE_JOINED = buildBannedSubmitterPredicate("l.")

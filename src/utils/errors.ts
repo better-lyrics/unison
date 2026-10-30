@@ -83,6 +83,7 @@ export const ErrorCode = {
 	INVALID_OPINION: "INVALID_OPINION",
 	PROTECTED_MEMBER: "PROTECTED_MEMBER",
 	FLAG_CONFLICT: "FLAG_CONFLICT",
+	STRIKE_ALREADY_UNDONE: "STRIKE_ALREADY_UNDONE",
 } as const
 
 export type ErrorCode = (typeof ErrorCode)[keyof typeof ErrorCode]
@@ -405,6 +406,10 @@ const TEMPLATES: Record<ErrorCode, Template> = {
 	FLAG_CONFLICT: {
 		error: "You cannot vote on this flag",
 		hint: "You submitted or reported this lyric, so another council member has to decide it.",
+	},
+	STRIKE_ALREADY_UNDONE: {
+		error: "Strike already undone",
+		hint: "Another council admin already restored these votes.",
 	},
 	INVALID_OPINION: {
 		error: "Invalid opinion",

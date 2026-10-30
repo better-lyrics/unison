@@ -7,7 +7,12 @@ import {
 	awardPenaltyXp,
 } from "@/db/contribution-events"
 import { invalidateCacheForLyric } from "@/db/lyrics"
-import { CONSENSUS_LYRICS_CTE, VOTE_HIDE_PREDICATE } from "@/db/predicates"
+import { updateReputations } from "@/db/reputation"
+import {
+	COUNTED_VOTER_PREDICATE,
+	LOYAL_ONLY_EXPR_JOINED,
+	VOTE_HIDE_PREDICATE,
+} from "@/db/predicates"
 import { Logger } from "@/infra/logger"
 import type { Confidence, Env } from "@/types"
 
@@ -30,10 +35,16 @@ interface LyricsScoreUpdate {
 
 export async function recalculateScore(env: Env, lyricsId: number): Promise<void> {
 	const row = await env.DB.prepare(
-		"SELECT video_id, deleted_at, submitter_id FROM lyrics WHERE id = ?"
+		`SELECT video_id, deleted_at, submitter_id, ${LOYAL_ONLY_EXPR_JOINED} AS loyal_only
+		FROM lyrics l WHERE l.id = ?`
 	)
 		.bind(lyricsId)
-		.first<{ video_id: string; deleted_at: number | null; submitter_id: number | null }>()
+		.first<{
+			video_id: string
+			deleted_at: number | null
+			submitter_id: number | null
+			loyal_only: boolean
+		}>()
 
 	if (!row || row.deleted_at !== null) return
 
@@ -41,13 +52,14 @@ export async function recalculateScore(env: Env, lyricsId: number): Promise<void
 		SELECT v.vote, u.reputation, u.avg_vote, v.is_self_vote
 		FROM votes v
 		JOIN users u ON v.user_id = u.id
-		WHERE v.lyrics_id = ? AND u.banned_at IS NULL
+		WHERE v.lyrics_id = ? AND ${COUNTED_VOTER_PREDICATE}
 	`)
 		.bind(lyricsId)
 		.all<VoteWithUser>()
 
 	const voteRows = votes.results || []
-	const update = calculateScore(lyricsId, voteRows)
+	const loyalOnly = row.loyal_only === true
+	const update = calculateScore(lyricsId, voteRows, loyalOnly)
 	const upvotes = voteRows.filter((v) => v.vote === 1).length
 	const downvotes = voteRows.filter((v) => v.vote === -1).length
 
@@ -59,6 +71,7 @@ export async function recalculateScore(env: Env, lyricsId: number): Promise<void
 			downvotes = ?,
 			diversity_bonus = ?,
 			confidence = ?,
+			loyal_only = ?,
 			score_updated_at = EXTRACT(EPOCH FROM NOW())::INTEGER
 		WHERE id = ?
 	`)
@@ -69,6 +82,7 @@ export async function recalculateScore(env: Env, lyricsId: number): Promise<void
 			downvotes,
 			update.diversity_bonus,
 			update.confidence,
+			loyalOnly,
 			update.id
 		)
 		.run()
@@ -170,10 +184,7 @@ export async function recomputeAllScores(env: Env): Promise<{ updated: number }>
 }
 
 async function applyAutoHidePenalty(env: Env): Promise<void> {
-	const penalty = config.moderation.autoHide.reputationPenalty
-	const minRep = config.reputation.min
-
-	const submitterPenalty = new Map<number, number>()
+	const penalized = new Set<number>()
 	const flippedIds: number[] = []
 
 	await env.DB.transaction(async (tx) => {
@@ -192,29 +203,28 @@ async function applyAutoHidePenalty(env: Env): Promise<void> {
 		if (rows.length === 0) return
 
 		for (const r of rows) {
-			submitterPenalty.set(r.submitter_id, (submitterPenalty.get(r.submitter_id) ?? 0) + penalty)
+			penalized.add(r.submitter_id)
 			flippedIds.push(r.id)
 			await awardPenaltyXp({ ...env, DB: tx }, r.submitter_id, r.id)
 		}
 
-		for (const [sid, totalPenalty] of submitterPenalty) {
-			await tx
-				.prepare("UPDATE users SET reputation = GREATEST(?, reputation - ?) WHERE id = ?")
-				.bind(minRep, totalPenalty, sid)
-				.run()
-		}
+		await updateReputations({ ...env, DB: tx }, [...penalized])
 	})
 
 	if (flippedIds.length === 0) return
 
 	log.info("applied auto-hide reputation penalty", {
-		affected_submitters: submitterPenalty.size,
+		affected_submitters: penalized.size,
 		affected_rows: flippedIds.length,
 		lyrics_ids: flippedIds.slice(0, 10),
 	})
 }
 
-export function calculateScore(lyricsId: number, votes: VoteWithUser[]): LyricsScoreUpdate {
+export function calculateScore(
+	lyricsId: number,
+	votes: VoteWithUser[],
+	loyalOnly = false
+): LyricsScoreUpdate {
 	let weightedSum = 0
 	let totalWeight = 0
 	let harshUpvotes = 0
@@ -244,6 +254,7 @@ export function calculateScore(lyricsId: number, votes: VoteWithUser[]): LyricsS
 	// This rule is also reproduced in SQL by backfill-confidence.ts; keep them in sync.
 	let confidence: Confidence = "low"
 	if (
+		!loyalOnly &&
 		votes.length >= config.reputation.minVotesForConfidence &&
 		effectiveScore >= config.reputation.minScoreForConfidence
 	) {
@@ -257,32 +268,4 @@ export function calculateScore(lyricsId: number, votes: VoteWithUser[]): LyricsS
 		diversity_bonus: diversityBonus ? 1 : 0,
 		confidence,
 	}
-}
-
-export async function updateReputations(env: Env): Promise<void> {
-	// Do NOT add `deleted_at IS NULL` here. Reputation depends on historical
-	// voting signal; filtering deleted lyrics destroys it (and reintroduces the
-	// cascade-delete problem soft-delete was meant to solve).
-	await env.DB.prepare(`${CONSENSUS_LYRICS_CTE},
-		deltas AS (
-			SELECT v.user_id,
-				SUM(CASE WHEN v.vote = cl.consensus THEN ?::DOUBLE PRECISION ELSE ?::DOUBLE PRECISION END) AS delta
-			FROM votes v
-			JOIN consensus_lyrics cl ON v.lyrics_id = cl.id
-			WHERE v.is_self_vote = 0
-			GROUP BY v.user_id
-		)
-		UPDATE users
-		SET reputation = GREATEST(?, LEAST(?, reputation + d.delta))
-		FROM deltas d
-		WHERE users.id = d.user_id
-	`)
-		.bind(
-			config.reputation.minVotesForConfidence,
-			config.reputation.consensusDelta,
-			-config.reputation.consensusDelta,
-			config.reputation.min,
-			config.reputation.max
-		)
-		.run()
 }

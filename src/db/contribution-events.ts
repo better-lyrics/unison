@@ -1,5 +1,5 @@
 import { config } from "@/config"
-import { CONSENSUS_LYRICS_CTE } from "@/db/predicates"
+import { CONSENSUS_LYRICS_CTE, COUNTED_VOTER_PREDICATE } from "@/db/predicates"
 import type { Confidence, Env } from "@/types"
 
 export interface ContributionEvent {
@@ -46,6 +46,33 @@ export async function awardConfidenceXp(
 			refId: lyricsId,
 		})
 	}
+}
+
+export async function revokeConfidenceXp(
+	env: Env,
+	submitterId: number,
+	lyricsIds: number[]
+): Promise<number> {
+	if (lyricsIds.length === 0) return 0
+	const row = await env.DB.prepare(`
+		WITH removed AS (
+			DELETE FROM contribution_events e
+			USING lyrics l
+			WHERE l.id = e.ref_id
+				AND e.user_id = ?
+				AND e.ref_type = 'lyric'
+				AND e.ref_id = ANY(?::int[])
+				AND (
+					(e.kind IN ('reached-medium', 'first-for-song') AND l.confidence = 'low')
+					OR (e.kind = 'reached-high' AND l.confidence <> 'high')
+				)
+			RETURNING e.delta
+		)
+		SELECT COALESCE(SUM(delta), 0)::int AS xp FROM removed
+	`)
+		.bind(submitterId, lyricsIds)
+		.first<{ xp: number }>()
+	return row?.xp ?? 0
 }
 
 export async function awardRequestFilledXp(
@@ -99,13 +126,36 @@ export async function awardPenaltyXp(
 	})
 }
 
+export async function awardStrikePenaltyXp(
+	env: Env,
+	submitterId: number,
+	strikeId: number
+): Promise<boolean> {
+	return addEvent(env, {
+		userId: submitterId,
+		delta: config.voteIntegrity.repeatPenalty.xp,
+		kind: "vote-manipulation",
+		refType: "strike",
+		refId: strikeId,
+	})
+}
+
+export async function revokeStrikePenaltyXp(env: Env, strikeId: number): Promise<void> {
+	await env.DB.prepare(
+		"DELETE FROM contribution_events WHERE kind = 'vote-manipulation' AND ref_type = 'strike' AND ref_id = ?"
+	)
+		.bind(strikeId)
+		.run()
+}
+
 export async function awardConsensusVotes(env: Env): Promise<void> {
 	await env.DB.prepare(`${CONSENSUS_LYRICS_CTE}
 		INSERT INTO contribution_events (user_id, delta, kind, ref_type, ref_id)
 		SELECT v.user_id, ?, 'consensus-vote', 'lyric', v.lyrics_id
 		FROM votes v
 		JOIN consensus_lyrics cl ON v.lyrics_id = cl.id
-		WHERE v.vote = cl.consensus AND v.is_self_vote = 0
+		JOIN users u ON u.id = v.user_id
+		WHERE v.vote = cl.consensus AND v.is_self_vote = 0 AND ${COUNTED_VOTER_PREDICATE}
 		ON CONFLICT (user_id, kind, ref_type, ref_id) DO NOTHING`)
 		.bind(config.reputation.minVotesForConfidence, config.gamification.xp.weights.consensusVote)
 		.run()

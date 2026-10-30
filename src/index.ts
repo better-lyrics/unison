@@ -27,6 +27,7 @@ import { cleanupFulfilledRequests } from "@/jobs/cleanup-fulfilled-requests"
 import { runDumpJob } from "@/jobs/dump"
 import { updateScores } from "@/jobs/score-updater"
 import { auditThresholds } from "@/jobs/threshold-audit"
+import { backfillVoteIntegrity, runVoteIntegrity } from "@/jobs/vote-integrity"
 import { adminRoutes } from "@/routes/admin"
 import { artworkRoutes } from "@/routes/artwork"
 import { authRoutes } from "@/routes/auth"
@@ -84,6 +85,9 @@ const app = new Elysia({ adapter: node() })
 			pattern: "0 */6 * * *",
 			async run() {
 				cronLog.info("starting score update")
+				await runVoteIntegrity(env).catch((err) =>
+					cronLog.error("vote integrity failed", { error: (err as Error).message })
+				)
 				const result = await updateScores(env)
 				cronLog.info("score update complete", { updated: result.updated })
 			},
@@ -250,6 +254,12 @@ backfillArtwork(env)
 		if (seeded > 0) log.info("artwork backfill complete", { seeded })
 	})
 	.catch((err) => log.error("artwork backfill failed", { error: (err as Error).message }))
+
+backfillVoteIntegrity(env)
+	.then((result) => {
+		if (result && result.strikes > 0) log.info("vote integrity backfill complete", result)
+	})
+	.catch((err) => log.error("vote integrity backfill failed", { error: (err as Error).message }))
 
 backfillAvatarPresets(env)
 	.then(({ seeded }) => {

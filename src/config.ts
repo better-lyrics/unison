@@ -164,6 +164,20 @@ export const config = {
 		voteWeightFloor: 0.5,
 	},
 
+	voteIntegrity: {
+		launchedAt: 1793491200,
+		freshSec: 600,
+		devotedShare: 0.8,
+		lookbackSec: 7 * 86400,
+		ring: { minKeys: 5, windowSec: 3 * 3600, baselineSec: 90 * 86400, trafficFactor: 5 },
+		serialMinVotes: 5,
+		serialWindowSec: 300,
+		loyalMinVotes: 5,
+		mergeWindowSec: 24 * 3600,
+		repeatPenalty: { reputation: 0.2, xp: -30 },
+		multiplier: { windowSec: 30 * 86400, one: 0.8, many: 0.6 },
+	},
+
 	ranking: {
 		recencyWeight: 0.5, // bonus for new entries, decays as 1/(1 + age_days)
 		confidenceBase: 2, // +N in ln(vote_count + N), keeps ln always positive

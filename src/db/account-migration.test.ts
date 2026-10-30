@@ -1,3 +1,4 @@
+import { isReputationRefresh, refreshParams } from "@/test/reputation-refresh"
 import type { Env } from "@/types"
 import { generatePetName } from "@/utils/petname"
 import { describe, expect, it } from "vitest"
@@ -240,6 +241,7 @@ describe("runMigration (merge case)", () => {
 				"reports",
 				"request_fulfillments",
 				"users",
+				"vote_strikes",
 				"votes",
 			].sort()
 		)
@@ -453,41 +455,35 @@ describe("runMigration nickname handling", () => {
 	})
 })
 
+// Reputation is derived from history now, so a merge recomputes the survivor instead of adding stored values.
 describe("runMigration reputation merge", () => {
-	function seedWithReps(oldRep: number, newRep: number) {
-		const seed = mergeSeed()
-		seed[4] = [
-			{ id: 1, key_id: "oldkey", reputation: oldRep },
-			{ id: 2, key_id: "newkey", reputation: newRep },
-		]
-		return seed
-	}
+	const refresh = (db: ReturnType<typeof makeMockDB>) =>
+		db.calls.find((c) => isReputationRefresh(c.sql))
 
-	function repParam(db: ReturnType<typeof makeMockDB>): number | undefined {
-		return db.calls.find((c) => c.sql.includes("UPDATE users SET reputation"))?.params[0] as
-			| number
-			| undefined
-	}
-
-	it("sums the earned deltas around the baseline so neither side is dropped", async () => {
-		const db = makeMockDB(seedWithReps(1.5, 1.4))
+	it("recomputes the survivor from the merged history", async () => {
+		const db = makeMockDB(mergeSeed())
 		await runMigration(makeEnv(db), { oldKey: "oldkey", newKey: "newkey", migrationId: 7 })
-		expect(repParam(db)).toBeCloseTo(1.9) // 1.5 + 1.4 - 1.0
+		expect(refresh(db)?.params).toEqual(refreshParams([1]))
 	})
 
-	it("clamps the merged reputation to the max", async () => {
-		const db = makeMockDB(seedWithReps(1.8, 1.7))
+	it("recomputes after votes and contribution events are re-pointed", async () => {
+		const db = makeMockDB(mergeSeed())
 		await runMigration(makeEnv(db), { oldKey: "oldkey", newKey: "newkey", migrationId: 7 })
-		expect(repParam(db)).toBe(2.0)
+		const at = (match: (sql: string) => boolean) => db.calls.findIndex((c) => match(c.sql))
+		const votesAt = at((sql) => sql.startsWith("UPDATE votes SET user_id"))
+		const eventsAt = at((sql) => sql.startsWith("UPDATE contribution_events SET user_id"))
+		expect(votesAt).toBeGreaterThanOrEqual(0)
+		expect(eventsAt).toBeGreaterThanOrEqual(0)
+		expect(at(isReputationRefresh)).toBeGreaterThan(Math.max(votesAt, eventsAt))
 	})
 
-	it("carries a penalty from either side instead of laundering it", async () => {
-		const db = makeMockDB(seedWithReps(1.0, 0.4))
+	it("never writes a stored reputation directly", async () => {
+		const db = makeMockDB(mergeSeed())
 		await runMigration(makeEnv(db), { oldKey: "oldkey", newKey: "newkey", migrationId: 7 })
-		expect(repParam(db)).toBeCloseTo(0.4) // 1.0 + 0.4 - 1.0
+		expect(db.calls.some((c) => c.sql.includes("UPDATE users SET reputation = ?"))).toBe(false)
 	})
 
-	it("does not merge reputation in the relabel case (no new identity)", async () => {
+	it("does not recompute reputation in the relabel case (no new identity)", async () => {
 		const db = makeMockDB([
 			{ id: 1 }, // old user
 			null, // new user (none)
@@ -503,7 +499,7 @@ describe("runMigration reputation merge", () => {
 			{ n: 0 }, // request collisions
 		])
 		await runMigration(makeEnv(db), { oldKey: "oldkey", newKey: "newkey", migrationId: 7 })
-		expect(repParam(db)).toBeUndefined()
+		expect(refresh(db)).toBeUndefined()
 	})
 })
 

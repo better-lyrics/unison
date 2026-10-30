@@ -215,6 +215,8 @@ CREATE INDEX IF NOT EXISTS idx_lyrics_submitter_created
 -- penalty has already been applied for this row.
 ALTER TABLE lyrics ADD COLUMN IF NOT EXISTS reputation_penalized BOOLEAN DEFAULT FALSE;
 
+ALTER TABLE lyrics ADD COLUMN IF NOT EXISTS loyal_only BOOLEAN NOT NULL DEFAULT FALSE;
+
 -- Language detection metadata.
 -- `language` keeps its semantic meaning (NULL = unknown).
 -- `language_source` records whether the language came from the submitter or
@@ -398,6 +400,7 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS featured_badges TEXT;
 -- Shadowban: every lyric by a banned user is hidden, nothing is deleted
 ALTER TABLE users ADD COLUMN IF NOT EXISTS banned_at INTEGER;
 CREATE INDEX IF NOT EXISTS idx_users_banned ON users(id) WHERE banned_at IS NOT NULL;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS votes_discounted_at INTEGER;
 
 -- ---- council entry exam ----
 -- Table structure only; question content and answer keys live only in seeded rows.
@@ -699,3 +702,53 @@ CREATE TABLE IF NOT EXISTS report_case_votes (
     created_at INTEGER NOT NULL DEFAULT (EXTRACT(EPOCH FROM NOW())::INTEGER),
     PRIMARY KEY (case_id, voter_id)
 );
+
+-- ---- vote integrity ----
+
+CREATE TABLE IF NOT EXISTS vote_strikes (
+    id SERIAL PRIMARY KEY,
+    submitter_id INTEGER NOT NULL REFERENCES users(id),
+    kind TEXT NOT NULL CHECK (kind IN ('ring', 'serial', 'both')),
+    detected_at INTEGER NOT NULL DEFAULT (EXTRACT(EPOCH FROM NOW())::INTEGER),
+    key_count INTEGER NOT NULL,
+    vote_count INTEGER NOT NULL,
+    repeat BOOLEAN NOT NULL,
+    backfill BOOLEAN NOT NULL,
+    xp_revoked INTEGER NOT NULL DEFAULT 0,
+    undone_at INTEGER,
+    undone_by INTEGER REFERENCES users(id),
+    CHECK (NOT (repeat AND backfill))
+);
+CREATE INDEX IF NOT EXISTS idx_vote_strikes_submitter ON vote_strikes(submitter_id, detected_at DESC);
+ALTER TABLE vote_strikes ADD COLUMN IF NOT EXISTS settled_at INTEGER;
+CREATE INDEX IF NOT EXISTS idx_vote_strikes_unsettled ON vote_strikes(id)
+    WHERE settled_at IS NULL AND undone_at IS NULL;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS vote_strike_id INTEGER REFERENCES vote_strikes(id);
+CREATE INDEX IF NOT EXISTS idx_users_vote_strike ON users(vote_strike_id) WHERE vote_strike_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_votes_created ON votes(created_at);
+
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint
+        WHERE conname = 'council_events_kind_check'
+            AND pg_get_constraintdef(oid) LIKE '%vote_strike%'
+    ) THEN
+        ALTER TABLE council_events DROP CONSTRAINT IF EXISTS council_events_kind_check;
+        ALTER TABLE council_events ADD CONSTRAINT council_events_kind_check CHECK (kind IN (
+            'seal', 'unseal', 'reject', 'unreject', 'edit_approve', 'edit_reject',
+            'bookmark', 'release', 'member_add', 'member_remove',
+            'applicant_approve', 'applicant_reject',
+            'metadata_propose', 'metadata_approve', 'metadata_reject',
+            'flag_remove', 'flag_keep', 'vote_strike', 'vote_strike_undo'));
+    END IF;
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint
+        WHERE conname = 'council_events_source_check'
+            AND pg_get_constraintdef(oid) LIKE '%system%'
+    ) THEN
+        ALTER TABLE council_events DROP CONSTRAINT IF EXISTS council_events_source_check;
+        ALTER TABLE council_events ADD CONSTRAINT council_events_source_check
+            CHECK (source IN ('web', 'discord', 'admin', 'system'));
+    END IF;
+END $$;
