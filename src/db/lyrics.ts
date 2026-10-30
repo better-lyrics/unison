@@ -15,6 +15,7 @@ import {
 	videoServesExpr,
 } from "@/db/predicates"
 import { closeOpenCaseForLyric, lockLyricCases } from "@/db/report-cases"
+import { notifyLyricsInvalidated } from "@/infra/blyrics-api"
 import { Logger } from "@/infra/logger"
 import type { Env, LyricsRow, LyricsSearchResult, LyricsSubmission } from "@/types"
 import { compress, decompress, isCompressed } from "@/utils/compression"
@@ -166,25 +167,37 @@ async function findOwnVariant(env: Env, videoId: string, keyId: string): Promise
 	return row
 }
 
+/** Which lyric a video lookup served: the one everyone gets, the caller's own, or an exploration arm. */
+export type ServedVariant = "primary" | "own" | "explore"
+
 export async function findByVideoId(
 	env: Env,
 	videoId: string,
 	keyId: string | null = null
 ): Promise<LyricsRow | null> {
+	return (await findServedByVideoId(env, videoId, keyId))?.row ?? null
+}
+
+export async function findServedByVideoId(
+	env: Env,
+	videoId: string,
+	keyId: string | null = null
+): Promise<{ row: LyricsRow; variant: ServedVariant } | null> {
 	const primary = await getPrimary(env, videoId)
 	if (!primary) return null
-	if (!keyId || primary.submitter_key_id === keyId) return primary
+	const served = { row: primary, variant: "primary" as ServedVariant }
+	if (!keyId || primary.submitter_key_id === keyId) return served
 
 	const own = await findOwnVariant(env, videoId, keyId)
-	if (own) return own
-	if (!config.exploration.enabled) return primary
+	if (own) return { row: own, variant: "own" }
+	if (!config.exploration.enabled) return served
 
 	const bucket = hashBucket(keyId, videoId)
 	const eps = epsilonForTier(primary.confidence)
-	if (bucket >= eps) return primary
+	if (bucket >= eps) return served
 
 	const challengers = await findEligibleChallengers(env, videoId, primary)
-	if (challengers.length === 0) return primary
+	if (challengers.length === 0) return served
 
 	const arm = selectArm(challengers, hashSeed(keyId, videoId))
 	exploreLog.info("explore.serve", {
@@ -197,7 +210,7 @@ export async function findByVideoId(
 		armVoteCount: arm.vote_count,
 		poolSize: challengers.length,
 	})
-	return arm
+	return { row: arm, variant: "explore" }
 }
 
 export async function findVariantsByVideoId(
@@ -504,6 +517,7 @@ async function cacheResult(env: Env, result: LyricsRow, videoId: string): Promis
 
 export async function invalidateCache(env: Env, videoId: string): Promise<void> {
 	await env.CACHE.delete(`v:${videoId}`)
+	notifyLyricsInvalidated(env, [videoId])
 }
 
 export async function invalidateCacheForLyric(env: Env, lyricsId: number): Promise<void> {
@@ -515,6 +529,10 @@ export async function invalidateCacheForLyric(env: Env, lyricsId: number): Promi
 		.bind(lyricsId, lyricsId)
 		.all<{ video_id: string }>()
 	await Promise.all(rows.results.map((r) => env.CACHE.delete(`v:${r.video_id}`)))
+	notifyLyricsInvalidated(
+		env,
+		rows.results.map((r) => r.video_id)
+	)
 }
 
 export async function invalidateCacheForSubmitter(env: Env, keyId: string): Promise<void> {
@@ -533,6 +551,10 @@ export async function invalidateCacheForSubmitter(env: Env, keyId: string): Prom
 		.bind(keyId, keyId)
 		.all<{ video_id: string }>()
 	await Promise.all(rows.results.map((r) => env.CACHE.delete(`v:${r.video_id}`)))
+	notifyLyricsInvalidated(
+		env,
+		rows.results.map((r) => r.video_id)
+	)
 }
 
 export async function invalidateCacheAfterDelete(env: Env, lyricsId: number): Promise<void> {

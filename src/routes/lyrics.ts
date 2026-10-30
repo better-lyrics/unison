@@ -6,7 +6,7 @@ import { getRevisionBar } from "@/db/lyric-revisions"
 import {
 	findByIsrc,
 	findBySongArtist,
-	findByVideoId,
+	findServedByVideoId,
 	findVariantsByVideoId,
 	getLyricsById,
 	searchByQuery,
@@ -83,10 +83,11 @@ export const lyricsRoutes = (env: Env) =>
 			"/",
 			async ({ query, env, lyricsUserId, lyricsKeyId, status }) => {
 				if (query.v) {
-					const result = await findByVideoId(env, query.v, lyricsKeyId)
-					if (!result) {
+					const served = await findServedByVideoId(env, query.v, lyricsKeyId)
+					if (!served) {
 						return status(404, buildError(ErrorCode.NOT_FOUND))
 					}
+					const result = served.row
 					const [userVote, fulfilled] = await Promise.all([
 						lyricsUserId ? getUserVote(env, result.id, lyricsUserId) : Promise.resolve(null),
 						getFulfillmentByLyricsId(env, result.id),
@@ -106,6 +107,7 @@ export const lyricsRoutes = (env: Env) =>
 								result.submitter_id != null ? actors.get(result.submitter_id) : undefined
 							),
 							userVote,
+							variant: served.variant,
 						},
 					}
 				}

@@ -1,4 +1,5 @@
 import { evictFeedCaches } from "@/db/feed"
+import { invalidateCache } from "@/db/lyrics"
 import { Logger } from "@/infra/logger"
 import type { Env, LyricsFormat } from "@/types"
 import { decompress, isCompressed } from "@/utils/compression"
@@ -82,7 +83,7 @@ export async function backfillFormatDetection(
 				changedVideoIds.add(row.video_id)
 				changed++
 
-				await env.CACHE.delete(`v:${row.video_id}`)
+				await invalidateCache(env, row.video_id)
 			} catch (err) {
 				log.warn("failed to backfill format for row", {
 					id: row.id,
