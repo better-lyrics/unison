@@ -53,7 +53,7 @@ describe("updateReputations", () => {
 	})
 
 	// Reputation is derived from history now (no per-run delta), so the binds name the formula terms.
-	it("binds threshold, clamp bounds, default, delta and the negative penalty in order", async () => {
+	it("binds threshold, clamp bounds, default, delta and the negative penalties in order", async () => {
 		const { env, calls } = createMockEnv()
 		await updateReputations(env)
 		expect(calls[0].params).toEqual([
@@ -63,13 +63,15 @@ describe("updateReputations", () => {
 			config.reputation.default,
 			config.reputation.consensusDelta,
 			-config.moderation.autoHide.reputationPenalty,
+			-config.voteIntegrity.repeatPenalty.reputation,
 		])
 	})
 
-	it("counts penalized events and only counted voters", async () => {
+	it("counts penalized events, live repeat strikes and only counted voters", async () => {
 		const { env, calls } = createMockEnv()
 		await updateReputations(env)
 		expect(calls[0].sql).toMatch(/kind = 'penalized'/)
+		expect(calls[0].sql).toMatch(/WHERE repeat AND undone_at IS NULL/)
 		expect(calls[0].sql).toContain(COUNTED_VOTER_PREDICATE)
 	})
 

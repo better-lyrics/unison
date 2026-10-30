@@ -10,5 +10,6 @@ export const refreshParams = (userIds: number[]): unknown[] => [
 	config.reputation.default,
 	config.reputation.consensusDelta,
 	-config.moderation.autoHide.reputationPenalty,
+	-config.voteIntegrity.repeatPenalty.reputation,
 	...userIds,
 ]

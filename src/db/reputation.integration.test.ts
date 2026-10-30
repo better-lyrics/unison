@@ -153,6 +153,68 @@ describeIntegration("derived reputation (integration)", () => {
 		})
 	})
 
+	describe("vote strikes", () => {
+		const strike = async (
+			submitterId: number,
+			opts: { repeat: boolean; backfill?: boolean; undone?: boolean }
+		) =>
+			db.pool.query(
+				`INSERT INTO vote_strikes (submitter_id, kind, key_count, vote_count, repeat, backfill, undone_at)
+				 VALUES ($1, 'ring', 5, 5, $2, $3, $4)`,
+				[submitterId, opts.repeat, opts.backfill ?? false, opts.undone ? 1 : null]
+			)
+
+		it("subtracts the repeat penalty for each repeat strike", async () => {
+			const submitter = await user()
+			await strike(submitter, { repeat: false })
+			await strike(submitter, { repeat: true })
+			await strike(submitter, { repeat: true })
+
+			await updateReputations(db.env)
+
+			expect(await reputationOf(submitter)).toBeCloseTo(
+				config.reputation.default - 2 * config.voteIntegrity.repeatPenalty.reputation
+			)
+		})
+
+		it("a first strike and a backfill strike cost nothing", async () => {
+			const submitter = await user()
+			await strike(submitter, { repeat: false, backfill: true })
+			await strike(submitter, { repeat: false })
+
+			await updateReputations(db.env)
+
+			expect(await reputationOf(submitter)).toBeCloseTo(config.reputation.default)
+		})
+
+		it("an undone repeat strike costs nothing", async () => {
+			const submitter = await user()
+			await strike(submitter, { repeat: true, undone: true })
+
+			await updateReputations(db.env)
+
+			expect(await reputationOf(submitter)).toBeCloseTo(config.reputation.default)
+		})
+
+		it("stacks with penalized events and consensus", async () => {
+			const submitter = await user()
+			const voter = await user()
+			const removed = await consensusLyric(voter, -0.9)
+			await vote(await consensusLyric(voter, 0.9), submitter, 1)
+			await penalize(submitter, removed)
+			await strike(submitter, { repeat: true })
+
+			await updateReputations(db.env)
+
+			expect(await reputationOf(submitter)).toBeCloseTo(
+				config.reputation.default +
+					config.reputation.consensusDelta -
+					config.moderation.autoHide.reputationPenalty -
+					config.voteIntegrity.repeatPenalty.reputation
+			)
+		})
+	})
+
 	describe("edge cases", () => {
 		it("clamps at the maximum", async () => {
 			const submitter = await user()
