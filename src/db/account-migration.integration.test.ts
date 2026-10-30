@@ -224,6 +224,100 @@ describeIntegration("account migration (integration)", () => {
 		).toBe(0)
 	})
 
+	describe("reputation", () => {
+		it("derives the survivor's reputation from the merged history", async () => {
+			const OTHER_KEY = `${"c".repeat(58)}other1`
+			await pool.query(
+				"INSERT INTO public_keys (key_id, public_key) VALUES ($1, 'x'), ($2, 'y'), ($3, 'z')",
+				[OLD_KEY, NEW_KEY, OTHER_KEY]
+			)
+			const oldUser = await one<{ id: number }>(
+				"INSERT INTO users (key_id, reputation) VALUES ($1, 2.0) RETURNING id",
+				[OLD_KEY]
+			)
+			const newUser = await one<{ id: number }>(
+				"INSERT INTO users (key_id, reputation) VALUES ($1, 2.0) RETURNING id",
+				[NEW_KEY]
+			)
+			const other = await one<{ id: number }>(
+				"INSERT INTO users (key_id) VALUES ($1) RETURNING id",
+				[OTHER_KEY]
+			)
+			const a = await insertLyric(other.id, "vidRepA")
+			const b = await insertLyric(other.id, "vidRepB")
+			await pool.query(
+				"UPDATE lyrics SET effective_score = 0.9, vote_count = 3 WHERE id IN ($1, $2)",
+				[a, b]
+			)
+			await pool.query(
+				"INSERT INTO votes (lyrics_id, user_id, vote, is_self_vote) VALUES ($1,$2,1,0), ($3,$4,1,0)",
+				[a, oldUser.id, b, newUser.id]
+			)
+
+			const plan = await computeMigrationPlan(env, OLD_KEY, NEW_KEY)
+			if ("error" in plan) throw new Error(plan.error)
+			const auditId = await createPreviewAudit(env, {
+				sessionId: "sess-rep",
+				discordId: "disc-rep",
+				oldKey: OLD_KEY,
+				newKey: NEW_KEY,
+				counts: plan.counts,
+			})
+			const result = await runMigration(env, {
+				oldKey: OLD_KEY,
+				newKey: NEW_KEY,
+				migrationId: auditId,
+			})
+			if ("error" in result) throw new Error(result.error)
+
+			const rep = await one<{ reputation: number }>("SELECT reputation FROM users WHERE id = $1", [
+				oldUser.id,
+			])
+			expect(Number(rep.reputation)).toBeCloseTo(1.2)
+		})
+
+		it("carries a penalty from the merged identity instead of laundering it", async () => {
+			await pool.query("INSERT INTO public_keys (key_id, public_key) VALUES ($1, 'x'), ($2, 'y')", [
+				OLD_KEY,
+				NEW_KEY,
+			])
+			const oldUser = await one<{ id: number }>(
+				"INSERT INTO users (key_id) VALUES ($1) RETURNING id",
+				[OLD_KEY]
+			)
+			const newUser = await one<{ id: number }>(
+				"INSERT INTO users (key_id, reputation) VALUES ($1, 0.8) RETURNING id",
+				[NEW_KEY]
+			)
+			const removed = await insertLyric(newUser.id, "vidRepPenalty")
+			await pool.query(
+				"INSERT INTO contribution_events (user_id, delta, kind, ref_type, ref_id) VALUES ($1, -30, 'penalized', 'lyric', $2)",
+				[newUser.id, removed]
+			)
+
+			const plan = await computeMigrationPlan(env, OLD_KEY, NEW_KEY)
+			if ("error" in plan) throw new Error(plan.error)
+			const auditId = await createPreviewAudit(env, {
+				sessionId: "sess-rep-penalty",
+				discordId: "disc-rep-penalty",
+				oldKey: OLD_KEY,
+				newKey: NEW_KEY,
+				counts: plan.counts,
+			})
+			const result = await runMigration(env, {
+				oldKey: OLD_KEY,
+				newKey: NEW_KEY,
+				migrationId: auditId,
+			})
+			if ("error" in result) throw new Error(result.error)
+
+			const rep = await one<{ reputation: number }>("SELECT reputation FROM users WHERE id = $1", [
+				oldUser.id,
+			])
+			expect(Number(rep.reputation)).toBeCloseTo(0.8)
+		})
+	})
+
 	it("restores the exact pre-image after a committed migration", async () => {
 		await pool.query("INSERT INTO public_keys (key_id, public_key) VALUES ($1, 'x'), ($2, 'y')", [
 			OLD_KEY,
