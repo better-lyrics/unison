@@ -6,6 +6,7 @@ import {
 	type UndoStrikeResult,
 	type UnsettledStrike,
 	findSuspectKeys,
+	hasAnyStrike,
 	lyricsVotedByKeys,
 	markStrikeSettled,
 	recordStrikes,
@@ -19,6 +20,14 @@ import { recalculateScore } from "@/jobs/score-updater"
 import type { Env } from "@/types"
 
 const log = new Logger("cron")
+
+export async function backfillVoteIntegrity(
+	env: Env,
+	now = Math.floor(Date.now() / 1000)
+): Promise<{ strikes: number; keys: number } | null> {
+	if (await hasAnyStrike(env)) return null
+	return runVoteIntegrity(env, now, { all: true })
+}
 
 export async function runVoteIntegrity(
 	env: Env,

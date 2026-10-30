@@ -466,3 +466,7 @@ export function strikeNote(s: StrikeSummary): string {
 	if (s.repeat) return `${base} (repeat)`
 	return s.backfill ? `${base} (history before launch)` : base
 }
+
+export async function hasAnyStrike(env: Env): Promise<boolean> {
+	return (await env.DB.prepare("SELECT 1 FROM vote_strikes LIMIT 1").first()) !== null
+}

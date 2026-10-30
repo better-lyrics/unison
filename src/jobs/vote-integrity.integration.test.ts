@@ -6,7 +6,7 @@ import { deboost } from "@/db/predicates"
 import { updateReputations } from "@/db/reputation"
 import { lyricsVotedByKeys } from "@/db/vote-strikes"
 import { recalculateScore } from "@/jobs/score-updater"
-import { runVoteIntegrity, undoVoteStrike } from "@/jobs/vote-integrity"
+import { backfillVoteIntegrity, runVoteIntegrity, undoVoteStrike } from "@/jobs/vote-integrity"
 import {
 	type IntegrationDb,
 	describeIntegration,
@@ -417,6 +417,44 @@ describeIntegration("runVoteIntegrity", () => {
 			expect(await runVoteIntegrity(db.env, NOW, { all: true })).toEqual({ strikes: 1, keys: 7 })
 			expect(await discounted()).toEqual(sorted([...f.ring, f.serial]))
 			for (const row of await scores(f.targets)) expect(row.vote_count).toBe(1)
+		})
+	})
+
+	describe("backfillVoteIntegrity", () => {
+		it("scans all history once while no strike exists", async () => {
+			const f = await voravit(NOW - lookbackSec - DAY)
+
+			expect(await backfillVoteIntegrity(db.env, NOW)).toEqual({ strikes: 1, keys: 7 })
+			expect(await discounted()).toEqual(sorted([...f.ring, f.serial]))
+		})
+
+		it("does nothing once any strike exists", async () => {
+			await voravit(NOW - lookbackSec - DAY)
+			await backfillVoteIntegrity(db.env, NOW)
+			const second = await voravit(NOW - lookbackSec - 2 * DAY)
+			const before = await snapshot()
+
+			expect(await backfillVoteIntegrity(db.env, NOW)).toBeNull()
+			expect(await snapshot()).toEqual(before)
+			expect(await discounted()).not.toContain(second.serial)
+		})
+
+		describe("edge cases", () => {
+			it("an undone strike still counts as existing, so undo is never re-struck by a restart", async () => {
+				const f = await voravit(NOW - lookbackSec - DAY)
+				await backfillVoteIntegrity(db.env, NOW)
+				const [{ id }] = await strikes()
+				const admin = await seedKey(NOW - 300 * DAY)
+				await undoVoteStrike(db.env, id, admin, NOW)
+
+				expect(await backfillVoteIntegrity(db.env, NOW)).toBeNull()
+				expect(await discounted()).not.toContain(f.serial)
+			})
+
+			it("finds nothing and writes nothing on a quiet database", async () => {
+				expect(await backfillVoteIntegrity(db.env, NOW)).toEqual({ strikes: 0, keys: 0 })
+				expect(await strikes()).toEqual([])
+			})
 		})
 	})
 

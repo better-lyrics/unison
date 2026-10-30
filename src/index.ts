@@ -27,7 +27,7 @@ import { cleanupFulfilledRequests } from "@/jobs/cleanup-fulfilled-requests"
 import { runDumpJob } from "@/jobs/dump"
 import { updateScores } from "@/jobs/score-updater"
 import { auditThresholds } from "@/jobs/threshold-audit"
-import { runVoteIntegrity } from "@/jobs/vote-integrity"
+import { backfillVoteIntegrity, runVoteIntegrity } from "@/jobs/vote-integrity"
 import { adminRoutes } from "@/routes/admin"
 import { artworkRoutes } from "@/routes/artwork"
 import { authRoutes } from "@/routes/auth"
@@ -254,6 +254,12 @@ backfillArtwork(env)
 		if (seeded > 0) log.info("artwork backfill complete", { seeded })
 	})
 	.catch((err) => log.error("artwork backfill failed", { error: (err as Error).message }))
+
+backfillVoteIntegrity(env)
+	.then((result) => {
+		if (result && result.strikes > 0) log.info("vote integrity backfill complete", result)
+	})
+	.catch((err) => log.error("vote integrity backfill failed", { error: (err as Error).message }))
 
 backfillAvatarPresets(env)
 	.then(({ seeded }) => {
