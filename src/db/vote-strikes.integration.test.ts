@@ -16,8 +16,15 @@ const MINUTE = 60
 const HOUR = 3600
 const DAY = 86400
 
-const { freshSec, devotedShare, ring, serialMinVotes, launchedAt, mergeWindowSec } =
-	config.voteIntegrity
+const {
+	freshSec,
+	devotedShare,
+	ring,
+	serialMinVotes,
+	serialWindowSec,
+	launchedAt,
+	mergeWindowSec,
+} = config.voteIntegrity
 
 let db: IntegrationDb
 let seq = 0
@@ -81,6 +88,89 @@ describeIntegration("findSuspectKeys", () => {
 
 	beforeEach(async () => {
 		await wipeRevisionData(db)
+	})
+
+	describe("vote direction and pace", () => {
+		const downvote = (userId: number, lyricsId: number, at: number) =>
+			db.pool.query(
+				"INSERT INTO votes (lyrics_id, user_id, vote, is_self_vote, created_at) VALUES ($1, $2, -1, 0, $3)",
+				[lyricsId, userId, at]
+			)
+
+		it("regression: a downvote raid never flags its target", async () => {
+			const target = await seedKey(T0 - 60 * DAY)
+			const targets = await lyrics(target, serialMinVotes * 2)
+			for (let k = 0; k < ring.minKeys; k++) {
+				const raider = await seedKey(T0 + k * MINUTE)
+				for (const [i, lyricsId] of targets.entries()) {
+					await downvote(raider, lyricsId, T0 + k * MINUTE + 30 + i * 10)
+				}
+			}
+
+			expect(await findSuspectKeys(db.env)).toEqual([])
+		})
+
+		it("regression: a long-time fan who upvotes one submitter for months is not serial", async () => {
+			const submitter = await seedKey(T0 - 300 * DAY)
+			const fan = await seedKey(T0 - 200 * DAY)
+			const targets = await lyrics(submitter, serialMinVotes * 4)
+			for (const [i, lyricsId] of targets.entries()) {
+				await vote(fan, lyricsId, T0 - 200 * DAY + 9 * MINUTE + i * DAY)
+			}
+
+			expect(await findSuspectKeys(db.env)).toEqual([])
+		})
+
+		it("a fresh key whose upvotes are spread over more than the window is not serial", async () => {
+			const submitter = await seedKey(T0 - 60 * DAY)
+			const key = await seedKey(T0)
+			const gap = Math.ceil(serialWindowSec / (serialMinVotes - 1)) + 1
+			for (const [i, lyricsId] of (await lyrics(submitter, serialMinVotes)).entries()) {
+				await vote(key, lyricsId, T0 + MINUTE + i * gap)
+			}
+
+			expect(await findSuspectKeys(db.env)).toEqual([])
+		})
+
+		it("a key that is not fresh is not serial, however fast it votes", async () => {
+			const submitter = await seedKey(T0 - 60 * DAY)
+			const key = await seedKey(T0 - freshSec)
+			for (const [i, lyricsId] of (await lyrics(submitter, serialMinVotes)).entries()) {
+				await vote(key, lyricsId, T0 + i * 10)
+			}
+
+			expect(await findSuspectKeys(db.env)).toEqual([])
+		})
+
+		it("the window is inclusive: the last vote exactly serialWindowSec after the first counts", async () => {
+			const submitter = await seedKey(T0 - 60 * DAY)
+			const inside = await seedKey(T0)
+			const outside = await seedKey(T0 + DAY)
+			const step = serialWindowSec / (serialMinVotes - 1)
+			for (const [i, lyricsId] of (await lyrics(submitter, serialMinVotes)).entries()) {
+				await vote(inside, lyricsId, T0 + MINUTE + i * step)
+			}
+			for (const [i, lyricsId] of (await lyrics(submitter, serialMinVotes)).entries()) {
+				const at = T0 + DAY + MINUTE + i * step + (i === serialMinVotes - 1 ? 1 : 0)
+				await vote(outside, lyricsId, at)
+			}
+
+			const result = await findSuspectKeys(db.env)
+			expect(result.map((r) => r.userId)).toEqual([inside])
+			expect(result[0]).toMatchObject({ serial: true, ring: false })
+		})
+
+		it("downvotes neither count toward devotion nor toward the serial count", async () => {
+			const submitter = await seedKey(T0 - 60 * DAY)
+			const key = await seedKey(T0)
+			const targets = await lyrics(submitter, serialMinVotes)
+			for (const [i, lyricsId] of targets.slice(0, serialMinVotes - 1).entries()) {
+				await vote(key, lyricsId, T0 + MINUTE + i * 10)
+			}
+			await downvote(key, targets[serialMinVotes - 1], T0 + 2 * MINUTE)
+
+			expect(await findSuspectKeys(db.env)).toEqual([])
+		})
 	})
 
 	it("flags a ring: 5 fresh keys on one submitter inside 3h", async () => {
@@ -316,13 +406,13 @@ describeIntegration("findSuspectKeys", () => {
 		it("4 votes is not serial, 5 is", async () => {
 			const below = await seedKey(T0 - 60 * DAY)
 			const at = await seedKey(T0 - 60 * DAY)
-			const belowKey = await seedKey(T0 - 30 * DAY)
-			const atKey = await seedKey(T0 - 30 * DAY)
+			const belowKey = await seedKey(T0 - MINUTE)
+			const atKey = await seedKey(T0 - MINUTE)
 			for (const [i, target] of (await lyrics(below, serialMinVotes - 1)).entries()) {
-				await vote(belowKey, target, T0 + i * HOUR)
+				await vote(belowKey, target, T0 + i * MINUTE)
 			}
 			for (const [i, target] of (await lyrics(at, serialMinVotes)).entries()) {
-				await vote(atKey, target, T0 + i * HOUR)
+				await vote(atKey, target, T0 + i * MINUTE)
 			}
 
 			expect(await findSuspectKeys(db.env)).toEqual([
@@ -332,7 +422,7 @@ describeIntegration("findSuspectKeys", () => {
 					votes: serialMinVotes,
 					ring: false,
 					serial: true,
-					lastVoteAt: T0 + (serialMinVotes - 1) * HOUR,
+					lastVoteAt: T0 + (serialMinVotes - 1) * MINUTE,
 				},
 			])
 		})
@@ -366,7 +456,7 @@ describeIntegration("findSuspectKeys", () => {
 		it("self votes never count toward devotion", async () => {
 			const submitter = await seedKey(T0 - 60 * DAY)
 			const other = await seedKey(T0 - 60 * DAY)
-			const voter = await seedKey(T0 - 30 * DAY)
+			const voter = await seedKey(T0 + HOUR - MINUTE)
 			for (const [i, own] of (await lyrics(voter, 10)).entries()) {
 				await vote(voter, own, T0 + i * 60, 1)
 			}
@@ -405,10 +495,10 @@ describeIntegration("findSuspectKeys", () => {
 				aLyrics[0],
 				Array.from({ length: ring.minKeys }, (_, i) => T0 + i * 10 * MINUTE)
 			)
-			const serialKey = await seedKey(T0 - 30 * DAY)
-			for (const [i, target] of bLyrics.entries()) await vote(serialKey, target, T0 + i * HOUR)
+			const serialKey = await seedKey(T0 - MINUTE)
+			for (const [i, target] of bLyrics.entries()) await vote(serialKey, target, T0 + i * MINUTE)
 			for (const [i, target] of aLyrics.slice(1).entries()) {
-				await vote(ringKeys[0], target, T0 + HOUR + i * 60)
+				await vote(ringKeys[0], target, T0 + MINUTE + i * 60)
 			}
 
 			const result = await findSuspectKeys(db.env)
@@ -438,7 +528,7 @@ describeIntegration("findSuspectKeys", () => {
 			const orphanOnly = await seedKey(T0)
 			for (const [i, target] of orphans.entries()) await vote(orphanOnly, target, T0 + 60 + i * 30)
 			const submitter = await seedKey(T0 - 60 * DAY)
-			const mixed = await seedKey(T0 - 30 * DAY)
+			const mixed = await seedKey(T0 + HOUR - MINUTE)
 			for (const [i, target] of orphans.entries()) await vote(mixed, target, T0 + i * 60)
 			for (const [i, target] of (await lyrics(submitter, serialMinVotes)).entries()) {
 				await vote(mixed, target, T0 + HOUR + i * 60)
@@ -489,7 +579,7 @@ describeIntegration("recordStrikes", () => {
 	}
 
 	async function serialKey(targets: number[], lastVoteAt: number): Promise<number> {
-		const key = await seedKey(lastVoteAt - 30 * DAY)
+		const key = await seedKey(lastVoteAt - targets.length * MINUTE)
 		for (const [i, target] of targets.entries()) {
 			await vote(key, target, lastVoteAt - (targets.length - 1 - i) * MINUTE)
 		}
@@ -962,7 +1052,7 @@ describeIntegration("revokeStrikeXp", () => {
 	}
 
 	async function sock(targets: number[], avgVote: number): Promise<number> {
-		const key = await seedKey(NOW - 30 * DAY)
+		const key = await seedKey(NOW - HOUR - MINUTE)
 		await db.pool.query("UPDATE users SET avg_vote = $1 WHERE id = $2", [avgVote, key])
 		for (const [i, target] of targets.entries()) await vote(key, target, NOW - HOUR + i * MINUTE)
 		return key

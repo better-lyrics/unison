@@ -62,7 +62,7 @@ async function ringBurst(targets: number[], start: number, size = 6): Promise<nu
 }
 
 async function serialKey(targets: number[], start: number): Promise<number> {
-	const key = await seedKey(start - 30 * DAY)
+	const key = await seedKey(start - MINUTE)
 	for (const [i, target] of targets.entries()) await vote(key, target, start + i * MINUTE)
 	return key
 }

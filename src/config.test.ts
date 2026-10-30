@@ -53,6 +53,10 @@ describe("voteIntegrity", () => {
 		expect(v.serialMinVotes).toBeGreaterThan(1)
 	})
 
+	it("gives a serial key a positive window to fit its votes in", () => {
+		expect(v.serialWindowSec).toBeGreaterThan(0)
+	})
+
 	it("only ever lowers a ranking with the strike multipliers", () => {
 		expect(v.multiplier.one).toBeLessThan(1)
 		expect(v.multiplier.many).toBeLessThan(v.multiplier.one)

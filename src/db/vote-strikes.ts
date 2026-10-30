@@ -17,7 +17,7 @@ export interface SuspectKey {
 }
 
 export async function findSuspectKeys(env: Env): Promise<SuspectKey[]> {
-	const { freshSec, devotedShare, ring, serialMinVotes } = config.voteIntegrity
+	const { freshSec, devotedShare, ring, serialMinVotes, serialWindowSec } = config.voteIntegrity
 	// Full scan of votes; restrict to voters active since the last run once votes passes ~1M rows.
 	const res = await env.DB.prepare(`
 		WITH counted AS (
@@ -26,7 +26,18 @@ export async function findSuspectKeys(env: Env): Promise<SuspectKey[]> {
 			JOIN lyrics l ON l.id = v.lyrics_id
 			JOIN users u ON u.id = v.user_id
 			JOIN users s ON s.id = l.submitter_id
-			WHERE v.is_self_vote = 0 AND u.banned_at IS NULL AND s.key_id <> ?
+			WHERE v.is_self_vote = 0 AND v.vote = 1 AND u.banned_at IS NULL AND s.key_id <> ?
+		),
+		bursts AS (
+			SELECT user_id, sid, MAX(in_window) AS peak
+			FROM (
+				SELECT user_id, sid, COUNT(*) OVER (
+					PARTITION BY user_id, sid ORDER BY created_at
+					RANGE BETWEEN CURRENT ROW AND ?::int FOLLOWING
+				) AS in_window
+				FROM counted
+			) w
+			GROUP BY user_id, sid
 		),
 		per_key AS (
 			SELECT user_id, COUNT(*) AS total, MIN(created_at) AS first_vote FROM counted GROUP BY user_id
@@ -48,14 +59,18 @@ export async function findSuspectKeys(env: Env): Promise<SuspectKey[]> {
 			GROUP BY a.user_id, a.sid
 			HAVING COUNT(*) >= ?
 		)
-		SELECT d.user_id, d.sid, d.n, d.last_vote, (r.user_id IS NOT NULL) AS ring, d.n >= ? AS serial
+		SELECT d.user_id, d.sid, d.n, d.last_vote, (r.user_id IS NOT NULL) AS ring,
+			(d.fresh AND b.peak >= ?) AS serial
 		FROM devoted d
 		JOIN users u ON u.id = d.user_id
 		LEFT JOIN rings r ON r.user_id = d.user_id AND r.sid = d.sid
-		WHERE u.votes_discounted_at IS NULL AND u.vote_strike_id IS NULL AND (r.user_id IS NOT NULL OR d.n >= ?)
+		JOIN bursts b ON b.user_id = d.user_id AND b.sid = d.sid
+		WHERE u.votes_discounted_at IS NULL AND u.vote_strike_id IS NULL
+			AND (r.user_id IS NOT NULL OR (d.fresh AND b.peak >= ?))
 	`)
 		.bind(
 			COMMUNITY_KEY_ID,
+			serialWindowSec,
 			freshSec,
 			devotedShare,
 			ring.windowSec,
