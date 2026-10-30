@@ -175,6 +175,16 @@ describeIntegration("findSuspectKeys", () => {
 			expect(await detectAll()).toEqual([])
 		})
 
+		it("regression: a new listener who upvotes one song at a time is not serial", async () => {
+			const submitter = await seedKey(T0 - 60 * DAY)
+			const listener = await seedKey(T0)
+			for (const [i, lyricsId] of (await lyrics(submitter, serialMinVotes + 2)).entries()) {
+				await vote(listener, lyricsId, T0 + MINUTE + i * 4 * MINUTE)
+			}
+
+			expect(await detectAll()).toEqual([])
+		})
+
 		it("a key that is not fresh is not serial, however fast it votes", async () => {
 			const submitter = await seedKey(T0 - 60 * DAY)
 			const key = await seedKey(T0 - freshSec)
