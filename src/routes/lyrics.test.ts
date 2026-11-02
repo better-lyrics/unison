@@ -1809,3 +1809,77 @@ describe("DELETE /lyrics/:id bearer path", () => {
 		})
 	})
 })
+
+describe("GET /lyrics/mine revision status", () => {
+	function mineRequest() {
+		return new Request("http://localhost/lyrics/mine", { headers: { "x-key-id": "user-key" } })
+	}
+
+	it("attaches each lyric's revision bar from one batched query", async () => {
+		const rows = [makeFeedRow({ id: 1 }), makeFeedRow({ id: 2, created_at: 1700000500 })]
+		const db = makeMockDB([
+			{ id: 42 },
+			rows,
+			[],
+			[
+				{
+					lyrics_id: 1,
+					rev_no: 3,
+					updated_at: 1700001000,
+					count: 4,
+					pending_rev_no: 4,
+					pending_reason: "text_drift",
+					pending_text_drift: 0.4,
+					pending_timing_drift: 0.1,
+					rejected_rev_no: null,
+					review_note: null,
+				},
+			],
+		])
+		const app = lyricsRoutes(makeEnv(db))
+
+		const res = await app.handle(mineRequest())
+		const body = (await res.json()) as { data: { id: number; revision: unknown }[] }
+
+		expect(res.status).toBe(200)
+		expect(body.data[0].revision).toEqual({
+			revNo: 3,
+			count: 4,
+			pending: { revNo: 4, pendingReason: "text_drift", textDrift: 0.4, timingDrift: 0.1 },
+			lastRejected: null,
+			updatedAt: 1700001000,
+		})
+		const revisionCalls = db.calls.filter((c) =>
+			/FROM lyric_revisions|JOIN lyric_revisions/.test(c.sql)
+		)
+		expect(revisionCalls).toHaveLength(1)
+		expect(revisionCalls[0].params).toEqual([[1, 2]])
+	})
+
+	describe("edge cases", () => {
+		it("falls back to a first-revision bar for a lyric with no revision row", async () => {
+			const db = makeMockDB([{ id: 42 }, [makeFeedRow({ id: 2, created_at: 1700000500 })], [], []])
+			const app = lyricsRoutes(makeEnv(db))
+
+			const res = await app.handle(mineRequest())
+			const body = (await res.json()) as { data: { revision: unknown }[] }
+
+			expect(body.data[0].revision).toEqual({
+				revNo: 1,
+				count: 1,
+				pending: null,
+				lastRejected: null,
+				updatedAt: 1700000500,
+			})
+		})
+
+		it("skips the revision query for an empty page", async () => {
+			const db = makeMockDB([{ id: 42 }, []])
+			const app = lyricsRoutes(makeEnv(db))
+
+			await app.handle(mineRequest())
+
+			expect(db.calls.some((c) => /lyric_revisions/.test(c.sql))).toBe(false)
+		})
+	})
+})
