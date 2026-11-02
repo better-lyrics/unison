@@ -21,7 +21,7 @@ import { toResponse, toSearchResponse } from "@/routes/lyrics.transformers"
 import { buildSealMarks, resolveActors } from "@/routes/marks"
 import type { Env, LyricsSubmission } from "@/types"
 import { ALBUM_HINT, isValidAlbum } from "@/utils/album"
-import { signedRequest } from "@/utils/auth"
+import { eitherAuth } from "@/utils/either-auth"
 import { ErrorCode, buildError } from "@/utils/errors"
 import { ISRC_HINT, normalizeIsrc } from "@/utils/isrc"
 import { normalizeLanguage } from "@/utils/language-code"
@@ -375,14 +375,14 @@ export const lyricsRoutes = (env: Env) =>
 				params: t.Object({ id: t.String() }),
 			}
 		)
-		.use(signedRequest)
-		.post("/submit", async ({ env, keyId, userId, signedPayload, status }) => {
+		.use(eitherAuth)
+		.post("/submit", async ({ env, keyId, userId, body, status }) => {
 			const { success } = await env.RATE_LIMITER.limit({ key: keyId })
 			if (!success) {
 				return status(429, buildError(ErrorCode.RATE_LIMITED))
 			}
 
-			const p = signedPayload
+			const p = body
 			if (
 				typeof p.videoId !== "string" ||
 				!p.videoId ||

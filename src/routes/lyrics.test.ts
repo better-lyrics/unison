@@ -70,10 +70,10 @@ function makeMockDB(queue: unknown[] = []) {
 	return db
 }
 
-function makeMockCache() {
+function makeMockCache(store: Record<string, string> = {}) {
 	return {
-		async get() {
-			return null
+		async get(key: string) {
+			return store[key] ?? null
 		},
 		async put() {},
 		async delete() {},
@@ -86,7 +86,10 @@ function makeMockCache() {
 	}
 }
 
-function makeEnv(db: ReturnType<typeof makeMockDB>): Env {
+function makeEnv(
+	db: ReturnType<typeof makeMockDB>,
+	cache: ReturnType<typeof makeMockCache> = makeMockCache()
+): Env {
 	const limiter = {
 		async limit() {
 			return { success: true }
@@ -94,7 +97,7 @@ function makeEnv(db: ReturnType<typeof makeMockDB>): Env {
 	}
 	return {
 		DB: db as unknown as Env["DB"],
-		CACHE: makeMockCache() as unknown as Env["CACHE"],
+		CACHE: cache as unknown as Env["CACHE"],
 		RATE_LIMITER: limiter as unknown as Env["RATE_LIMITER"],
 		READ_RATE_LIMITER: limiter as unknown as Env["READ_RATE_LIMITER"],
 		CACHE_TTL_SECONDS: "300",
@@ -1675,5 +1678,134 @@ describe("POST /lyrics/submit language normalization", () => {
 				expect(result.language).toBe("en")
 			})
 		}
+	})
+})
+
+function sessionCache(token: string, keyId: string) {
+	const issuedAt = Math.floor(Date.now() / 1000)
+	return makeMockCache({
+		[`session:${token}`]: JSON.stringify({ keyId, issuedAt, expiresAt: issuedAt + 600 }),
+	})
+}
+
+const BEARER_KEY_ID = "k".repeat(64)
+
+describe("POST /lyrics/submit bearer path", () => {
+	const submitBody = {
+		videoId: "dQw4w9WgXcQ",
+		song: "Song",
+		artist: "Artist",
+		duration: 200,
+		lyrics: RICHSYNC_TTML,
+		format: "ttml",
+	}
+
+	it("creates the lyric for the session user", async () => {
+		const db = makeMockDB([
+			{ id: 7 }, // lyrics derive user lookup
+			{ id: 7, key_id: BEARER_KEY_ID }, // getOrCreateUser
+			{ count: 0 },
+			null,
+			{ id: 99 },
+		])
+		const app = lyricsRoutes(makeEnv(db, sessionCache("tok", BEARER_KEY_ID)))
+
+		const res = await app.handle(
+			new Request("http://localhost/lyrics/submit", {
+				method: "POST",
+				headers: { "content-type": "application/json", authorization: "Bearer tok" },
+				body: JSON.stringify(submitBody),
+			})
+		)
+
+		expect(res.status).toBe(201)
+		const insertCall = db.calls.find((c) => /INSERT INTO lyrics/i.test(c.sql))
+		expect(insertCall).toBeDefined()
+		expect(insertCall?.params).toContain(7)
+	})
+
+	it("rejects an unknown session token with AUTH_REQUIRED", async () => {
+		const db = makeMockDB()
+		const app = lyricsRoutes(makeEnv(db))
+
+		const res = await app.handle(
+			new Request("http://localhost/lyrics/submit", {
+				method: "POST",
+				headers: { "content-type": "application/json", authorization: "Bearer nope" },
+				body: JSON.stringify(submitBody),
+			})
+		)
+
+		expect(res.status).toBe(401)
+		const body = (await res.json()) as { code: string }
+		expect(body.code).toBe("AUTH_REQUIRED")
+		expect(db.calls.find((c) => /INSERT INTO lyrics/i.test(c.sql))).toBeUndefined()
+	})
+
+	it("still validates the payload on the bearer path", async () => {
+		const db = makeMockDB([{ id: 7 }, { id: 7, key_id: BEARER_KEY_ID }])
+		const app = lyricsRoutes(makeEnv(db, sessionCache("tok", BEARER_KEY_ID)))
+
+		const res = await app.handle(
+			new Request("http://localhost/lyrics/submit", {
+				method: "POST",
+				headers: { "content-type": "application/json", authorization: "Bearer tok" },
+				body: JSON.stringify({ ...submitBody, format: "docx" }),
+			})
+		)
+
+		expect(res.status).toBe(400)
+		const body = (await res.json()) as { code: string }
+		expect(body.code).toBe("INVALID_PAYLOAD")
+	})
+})
+
+describe("DELETE /lyrics/:id bearer path", () => {
+	function bodilessDelete(token: string | null) {
+		return new Request("http://localhost/lyrics/5", {
+			method: "DELETE",
+			headers: token ? { authorization: `Bearer ${token}` } : {},
+		})
+	}
+
+	it("reaches the ownership check for the session user without a body or content-type", async () => {
+		const db = makeMockDB([
+			{ id: 7 },
+			{ id: 7, key_id: BEARER_KEY_ID },
+			{
+				id: 5,
+				video_id: "v",
+				submitter_id: 8,
+				deleted_at: null,
+				vote_count: 0,
+				effective_score: 0,
+			},
+		])
+		const app = lyricsRoutes(makeEnv(db, sessionCache("tok", BEARER_KEY_ID)))
+
+		const res = await app.handle(bodilessDelete("tok"))
+
+		expect(res.status).toBe(403)
+		const body = (await res.json()) as { code: string }
+		expect(body.code).toBe("NOT_OWNER")
+	})
+
+	it("returns 404 for a missing lyric on the bearer path", async () => {
+		const db = makeMockDB([{ id: 7 }, { id: 7, key_id: BEARER_KEY_ID }, null])
+		const app = lyricsRoutes(makeEnv(db, sessionCache("tok", BEARER_KEY_ID)))
+
+		const res = await app.handle(bodilessDelete("tok"))
+
+		expect(res.status).toBe(404)
+	})
+
+	describe("error paths", () => {
+		it("rejects a bodiless delete with no session", async () => {
+			const app = lyricsRoutes(makeEnv(makeMockDB()))
+
+			const res = await app.handle(bodilessDelete(null))
+
+			expect(res.status).toBe(401)
+		})
 	})
 })
