@@ -34,6 +34,8 @@ export interface Env {
 	JEV?: JevGate
 	TYPESAFE?: TypesafeClient | null
 	RECORDING_MATCH_ENABLED?: boolean
+	BLYRICS_API_INVALIDATE?: { url: string; secret: string } | null
+	BLYRICS_API_KEY?: string | null
 }
 
 export interface RateLimiter {
@@ -173,6 +175,8 @@ export interface LyricsResponse {
 	userVote?: 1 | -1 | null
 	marks?: Mark[]
 	createdAt?: number
+	/** Set on `GET /lyrics?v=`: whether this is the lyric every caller gets, or one personalized for this caller. */
+	variant?: "primary" | "own" | "explore"
 }
 
 export interface LyricsFulfillmentBadge {
