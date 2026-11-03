@@ -236,6 +236,7 @@ describe("POST /lyrics/:id/suggested-videos", () => {
 					match: { level: "same" as const, score: 1.9 },
 				},
 			],
+			linked: [],
 		})
 		const res = await authedApp().handle(
 			new Request("http://localhost/lyrics/7/suggested-videos", {
@@ -244,8 +245,11 @@ describe("POST /lyrics/:id/suggested-videos", () => {
 			})
 		)
 		expect(res.status).toBe(200)
-		const body = (await res.json()) as { data: { suggestions: Array<{ videoId: string }> } }
+		const body = (await res.json()) as {
+			data: { suggestions: Array<{ videoId: string }>; linked: unknown[] }
+		}
 		expect(body.data.suggestions[0].videoId).toBe("exactmatch1")
+		expect(body.data.linked).toEqual([])
 	})
 
 	it("rejects a non-owner with 403", async () => {

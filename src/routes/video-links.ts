@@ -90,7 +90,7 @@ export const videoLinkRoutes = (env: Env) =>
 				if (res.reason === "not_owner") return status(403, buildError(ErrorCode.NOT_OWNER))
 				return status(404, buildError(ErrorCode.NOT_FOUND))
 			}
-			return { success: true, data: { suggestions: res.suggestions } }
+			return { success: true, data: { suggestions: res.suggestions, linked: res.linked } }
 		})
 		.post("/suggested-videos", async ({ env, keyId, body, status }) => {
 			const song = parseSongForSuggestions(body)

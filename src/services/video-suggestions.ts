@@ -61,7 +61,7 @@ export function buildSuggestions(
 }
 
 export type SuggestResult =
-	| { ok: true; suggestions: SuggestedVideo[] }
+	| { ok: true; suggestions: SuggestedVideo[]; linked: SuggestedVideo[] }
 	| { ok: false; reason: "not_found" | "not_owner" }
 
 type Deps = { search?: SongSearch }
@@ -104,6 +104,15 @@ type VariantRow = {
 	deleted_at: number | null
 }
 
+// Linked videos are left out of the suggestions; this describes the ones the search found so clients can show them.
+export function linkedVideoDetails(
+	candidates: SongCandidate[],
+	meta: { song: string; artist: string; album: string | null; duration: number; videoId: string },
+	linked: Set<string>
+): Suggestion[] {
+	return buildSuggestions(candidates, meta, new Set()).filter((s) => linked.has(s.videoId))
+}
+
 export async function suggestVideosForVariant(
 	env: Env,
 	lyricsId: number,
@@ -122,24 +131,18 @@ export async function suggestVideosForVariant(
 	const candidates = await cachedSongSearch(env, row, deps.search)
 	const linked = new Set((await listVideoLinks(env, lyricsId)).map((v) => v.videoId))
 
-	const suggestions = buildSuggestions(
-		candidates,
-		{
-			song: row.song,
-			artist: row.artist,
-			album: row.album,
-			duration: row.duration,
-			videoId: row.video_id,
-		},
-		linked
-	)
+	const meta = {
+		song: row.song,
+		artist: row.artist,
+		album: row.album,
+		duration: row.duration,
+		videoId: row.video_id,
+	}
+	const target = { title: row.song, artist: row.artist, lyricsId }
 
 	return {
 		ok: true,
-		suggestions: await matchSuggestions(
-			env,
-			{ title: row.song, artist: row.artist, lyricsId },
-			suggestions
-		),
+		suggestions: await matchSuggestions(env, target, buildSuggestions(candidates, meta, linked)),
+		linked: linkedVideoDetails(candidates, meta, linked).map((s) => ({ ...s, match: null })),
 	}
 }
