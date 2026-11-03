@@ -172,6 +172,7 @@ export interface LyricsResponse {
 	fulfilled?: LyricsFulfillmentBadge | null
 	userVote?: 1 | -1 | null
 	marks?: Mark[]
+	createdAt?: number
 }
 
 export interface LyricsFulfillmentBadge {
