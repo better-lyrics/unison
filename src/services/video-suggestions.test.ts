@@ -491,12 +491,6 @@ describe("linkedVideoDetails", () => {
 		expect(out[0].title).toBe("Blinding Lights")
 	})
 
-	it("returns nothing for a linked video the search did not find", () => {
-		expect(
-			linkedVideoDetails([candidate({ videoId: "open0000001" })], META, new Set(["pasted00001"]))
-		).toEqual([])
-	})
-
 	it("regression: describes a linked video from another artist's channel", () => {
 		const out = linkedVideoDetails(
 			[

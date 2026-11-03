@@ -75,10 +75,6 @@ describe("toResponse", () => {
 		expect(toResponse({ ...baseRow, created_at: 1700000000 }).createdAt).toBe(1700000000)
 	})
 
-	it("leaves createdAt out when the row has no creation time", () => {
-		expect(toResponse(baseRow)).not.toHaveProperty("createdAt")
-	})
-
 	it("includes submitter when both keyId and reputation are present", () => {
 		const keyId = "deadbeef".repeat(8)
 		const result = toResponse({

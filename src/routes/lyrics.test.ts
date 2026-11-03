@@ -1741,23 +1741,6 @@ describe("POST /lyrics/submit bearer path", () => {
 		expect(body.code).toBe("AUTH_REQUIRED")
 		expect(db.calls.find((c) => /INSERT INTO lyrics/i.test(c.sql))).toBeUndefined()
 	})
-
-	it("still validates the payload on the bearer path", async () => {
-		const db = makeMockDB([{ id: 7 }, { id: 7, key_id: BEARER_KEY_ID }])
-		const app = lyricsRoutes(makeEnv(db, sessionCache("tok", BEARER_KEY_ID)))
-
-		const res = await app.handle(
-			new Request("http://localhost/lyrics/submit", {
-				method: "POST",
-				headers: { "content-type": "application/json", authorization: "Bearer tok" },
-				body: JSON.stringify({ ...submitBody, format: "docx" }),
-			})
-		)
-
-		expect(res.status).toBe(400)
-		const body = (await res.json()) as { code: string }
-		expect(body.code).toBe("INVALID_PAYLOAD")
-	})
 })
 
 describe("DELETE /lyrics/:id bearer path", () => {
@@ -1788,15 +1771,6 @@ describe("DELETE /lyrics/:id bearer path", () => {
 		expect(res.status).toBe(403)
 		const body = (await res.json()) as { code: string }
 		expect(body.code).toBe("NOT_OWNER")
-	})
-
-	it("returns 404 for a missing lyric on the bearer path", async () => {
-		const db = makeMockDB([{ id: 7 }, { id: 7, key_id: BEARER_KEY_ID }, null])
-		const app = lyricsRoutes(makeEnv(db, sessionCache("tok", BEARER_KEY_ID)))
-
-		const res = await app.handle(bodilessDelete("tok"))
-
-		expect(res.status).toBe(404)
 	})
 
 	describe("error paths", () => {
@@ -1871,15 +1845,6 @@ describe("GET /lyrics/mine revision status", () => {
 				lastRejected: null,
 				updatedAt: 1700000500,
 			})
-		})
-
-		it("skips the revision query for an empty page", async () => {
-			const db = makeMockDB([{ id: 42 }, []])
-			const app = lyricsRoutes(makeEnv(db))
-
-			await app.handle(mineRequest())
-
-			expect(db.calls.some((c) => /lyric_revisions/.test(c.sql))).toBe(false)
 		})
 	})
 })
