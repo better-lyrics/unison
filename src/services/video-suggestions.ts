@@ -19,14 +19,29 @@ function sharesCreditedArtist(c: SongCandidate, credit: string): boolean {
 	return names.some((name) => creditIncludesArtist(credit, stripTopicSuffix(name)))
 }
 
+type SuggestionMeta = {
+	song: string
+	artist: string
+	album: string | null
+	duration: number
+	videoId: string
+}
+
+function scored(c: SongCandidate, meta: SuggestionMeta): Suggestion {
+	const titleEq = normalizeSong(c.title) === normalizeSong(meta.song) ? 1 : 0
+	const artistEq = creditIncludesArtist(meta.artist, stripTopicSuffix(c.artist)) ? 1 : 0
+	const albumEq =
+		meta.album !== null && c.album !== null && normalize(c.album) === normalize(meta.album) ? 1 : 0
+	return { ...c, matchScore: 0.5 * titleEq + 0.3 * artistEq + 0.2 * albumEq }
+}
+
 export function buildSuggestions(
 	candidates: SongCandidate[],
-	meta: { song: string; artist: string; album: string | null; duration: number; videoId: string },
+	meta: SuggestionMeta,
 	linked: Set<string>
 ): Suggestion[] {
 	const normSong = normalizeSong(meta.song)
 	const hasArtist = normalizeArtist(meta.artist).length > 0
-	const normAlbum = meta.album ? normalize(meta.album) : null
 
 	const anchor =
 		candidates.find((c) => c.videoId === meta.videoId) ??
@@ -46,14 +61,7 @@ export function buildSuggestions(
 		.filter(
 			(c) => c.durationSeconds !== null && isWithinDurationDelta(c.durationSeconds, meta.duration)
 		)
-		.map((c) => {
-			const titleEq = normalizeSong(c.title) === normSong ? 1 : 0
-			const artistEq = creditIncludesArtist(meta.artist, stripTopicSuffix(c.artist)) ? 1 : 0
-			const albumEq =
-				normAlbum !== null && c.album !== null && normalize(c.album) === normAlbum ? 1 : 0
-			const matchScore = 0.5 * titleEq + 0.3 * artistEq + 0.2 * albumEq
-			return { ...c, matchScore }
-		})
+		.map((c) => scored(c, meta))
 		.sort(
 			(a, b) =>
 				VIDEO_TYPE_RANK[a.videoType] - VIDEO_TYPE_RANK[b.videoType] || b.matchScore - a.matchScore
@@ -104,13 +112,15 @@ type VariantRow = {
 	deleted_at: number | null
 }
 
-// Linked videos are left out of the suggestions; this describes the ones the search found so clients can show them.
+// Linking checks only the length, so linked videos skip the artist and duration filters.
 export function linkedVideoDetails(
 	candidates: SongCandidate[],
-	meta: { song: string; artist: string; album: string | null; duration: number; videoId: string },
+	meta: SuggestionMeta,
 	linked: Set<string>
 ): Suggestion[] {
-	return buildSuggestions(candidates, meta, new Set()).filter((s) => linked.has(s.videoId))
+	return candidates
+		.filter((c) => c.videoId !== meta.videoId && linked.has(c.videoId))
+		.map((c) => scored(c, meta))
 }
 
 export async function suggestVideosForVariant(

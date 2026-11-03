@@ -497,6 +497,24 @@ describe("linkedVideoDetails", () => {
 		).toEqual([])
 	})
 
+	it("regression: describes a linked video from another artist's channel", () => {
+		const out = linkedVideoDetails(
+			[
+				candidate({ videoId: META.videoId, artistChannelIds: ["UCweeknd"] }),
+				candidate({
+					videoId: "fanupload01",
+					artist: "Lyric Vault",
+					artists: ["Lyric Vault"],
+					artistChannelIds: ["UCfans"],
+					durationSeconds: null,
+				}),
+			],
+			META,
+			new Set(["fanupload01"])
+		)
+		expect(out.map((s) => s.videoId)).toEqual(["fanupload01"])
+	})
+
 	it("never describes the main video", () => {
 		expect(
 			linkedVideoDetails([candidate({ videoId: META.videoId })], META, new Set([META.videoId]))
