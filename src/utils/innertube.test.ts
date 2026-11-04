@@ -83,15 +83,57 @@ describe("getVideoDurationSeconds", () => {
 			expect(await getVideoDurationSeconds("vid")).toBe(213)
 		})
 
-		it("regression: a LOGIN_REQUIRED player response without video details yields null, not a throw", async () => {
+		it("regression: a LOGIN_REQUIRED player response falls back to the up-next duration of the same video", async () => {
 			create.mockResolvedValue({
 				getBasicInfo: async () => ({
 					basic_info: {},
 					playability_status: { status: "LOGIN_REQUIRED" },
 				}),
+				music: {
+					getUpNext: async () => ({
+						contents: [
+							{ video_id: "otherVid123", duration: { seconds: 999 } },
+							{ video_id: "Nz9IQFseTe8", duration: { seconds: 261 } },
+						],
+					}),
+				},
 			})
 			const { getVideoDurationSeconds } = await import("./innertube")
-			expect(await getVideoDurationSeconds("vid")).toBeNull()
+			expect(await getVideoDurationSeconds("Nz9IQFseTe8")).toBe(261)
+		})
+
+		it("reads the up-next duration from a wrapped song or its video counterpart", async () => {
+			create.mockResolvedValue({
+				getBasicInfo: async () => ({ basic_info: {} }),
+				music: {
+					getUpNext: async () => ({
+						contents: [
+							{
+								primary: { video_id: "audioTrack1", duration: { seconds: 260 } },
+								counterpart: [{ video_id: "musicVideo1", duration: { seconds: 262 } }],
+							},
+						],
+					}),
+				},
+			})
+			const { getVideoDurationSeconds } = await import("./innertube")
+			expect(await getVideoDurationSeconds("musicVideo1")).toBe(262)
+		})
+
+		it("returns null when neither the player nor up-next has the video", async () => {
+			create.mockResolvedValue({
+				getBasicInfo: async () => ({
+					basic_info: {},
+					playability_status: { status: "LOGIN_REQUIRED" },
+				}),
+				music: {
+					getUpNext: async () => ({
+						contents: [{ video_id: "otherVid123", duration: { seconds: 999 } }],
+					}),
+				},
+			})
+			const { getVideoDurationSeconds } = await import("./innertube")
+			expect(await getVideoDurationSeconds("Nz9IQFseTe8")).toBeNull()
 		})
 	})
 })

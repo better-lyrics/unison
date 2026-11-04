@@ -18,16 +18,67 @@ function getInnertube(): Promise<Innertube> {
 
 export const BASIC_INFO_CLIENT = "ANDROID_VR"
 
-export async function getVideoDurationSeconds(videoId: string): Promise<number | null> {
+function validSeconds(value: unknown): number | null {
+	return typeof value === "number" && Number.isFinite(value) && value > 0 ? value : null
+}
+
+async function upNextDurationSeconds(yt: Innertube, videoId: string): Promise<number | null> {
+	const panel = await yt.music.getUpNext(videoId, false)
+	for (const entry of panel.contents) {
+		const videos = "primary" in entry ? [entry.primary, ...(entry.counterpart ?? [])] : [entry]
+		for (const video of videos) {
+			if (video && "video_id" in video && video.video_id === videoId) {
+				return validSeconds(video.duration?.seconds)
+			}
+		}
+	}
+	return null
+}
+
+async function playerDurationSeconds(yt: Innertube, videoId: string): Promise<number | null> {
+	const info = await yt.getBasicInfo(videoId, { client: BASIC_INFO_CLIENT })
+	const duration = validSeconds(info.basic_info?.duration)
+	if (duration === null) {
+		log.warn("innertube player gave no duration", {
+			videoId,
+			status: info.playability_status?.status,
+		})
+	}
+	return duration
+}
+
+type DurationLookup = (yt: Innertube, videoId: string) => Promise<number | null>
+
+async function tryLookup(
+	source: string,
+	lookup: DurationLookup,
+	yt: Innertube,
+	videoId: string
+): Promise<number | null> {
 	try {
-		const yt = await getInnertube()
-		const info = await yt.getBasicInfo(videoId, { client: BASIC_INFO_CLIENT })
-		const duration = info.basic_info?.duration
-		return typeof duration === "number" ? duration : null
+		return await lookup(yt, videoId)
 	} catch (err) {
-		log.warn("innertube duration resolve failed", { videoId, error: (err as Error).message })
+		log.warn("innertube duration resolve failed", {
+			source,
+			videoId,
+			error: (err as Error).message,
+		})
 		return null
 	}
+}
+
+export async function getVideoDurationSeconds(videoId: string): Promise<number | null> {
+	let yt: Innertube
+	try {
+		yt = await getInnertube()
+	} catch (err) {
+		log.warn("innertube client init failed", { videoId, error: (err as Error).message })
+		return null
+	}
+	return (
+		(await tryLookup("up-next", upNextDurationSeconds, yt, videoId)) ??
+		(await tryLookup("player", playerDurationSeconds, yt, videoId))
+	)
 }
 
 export type SongCandidate = {
