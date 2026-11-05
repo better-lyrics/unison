@@ -59,6 +59,7 @@ const env = createEnv()
 const log = new Logger("app")
 const httpLog = new Logger("http")
 const cronLog = new Logger("cron")
+const erroredRequests = new WeakSet<Request>()
 
 const SPA = loadSpa(resolve(process.cwd(), "web/dist"))
 
@@ -134,20 +135,24 @@ const app = new Elysia({ adapter: node() })
 		s.__method = request.method
 		s.__url = new URL(request.url).pathname
 	})
-	.onAfterResponse(({ store, set }) => {
+	.onAfterResponse(({ request, store, set }) => {
 		const s = store as Record<string, unknown>
-		if (!s.__startTime) return
+		if (!s.__startTime || erroredRequests.has(request)) return
 		const duration = (performance.now() - (s.__startTime as number)).toFixed(1)
 		const status = typeof set.status === "number" ? set.status : 200
-		if (status >= 400) return // already logged by onError
-		httpLog.info(`${s.__method} ${s.__url} ${status} ${duration}ms`, {
+		if (status === 404) return // lyric misses are the normal result on the hottest routes
+		const fields = {
 			method: s.__method as string,
 			path: s.__url as string,
 			status,
 			latency_ms: Number(duration),
-		})
+		}
+		const line = `${s.__method} ${s.__url} ${status} ${duration}ms`
+		if (status >= 400) httpLog.warn(line, fields)
+		else httpLog.info(line, fields)
 	})
 	.onError(({ code, error, request, store, set }) => {
+		erroredRequests.add(request)
 		const s = store as Record<string, unknown>
 		const method = s.__method || request.method
 		const url = s.__url || new URL(request.url).pathname
