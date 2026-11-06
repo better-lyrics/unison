@@ -209,6 +209,18 @@ describeIntegration("GET /lyrics provider id lookups (integration)", () => {
 		expect(fetchMock).not.toHaveBeenCalled()
 	})
 
+	it("regression: a malformed provider id does not break a song and artist lookup that used to work", async () => {
+		const fetchMock = stubBiniLink({})
+
+		const { status, body } = await get(
+			`spotify=spotify:track:${SPOTIFY_ID}&song=Harbour+Lights+at+Dawn&artist=Mira+Castell`
+		)
+
+		expect(status).toBe(200)
+		expect(body.data?.matchedBy).toBe("song_artist")
+		expect(fetchMock).not.toHaveBeenCalled()
+	})
+
 	it("ignores provider ids while the lookup flag is off", async () => {
 		const fetchMock = stubBiniLink({})
 
