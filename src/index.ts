@@ -50,7 +50,8 @@ import { translateRoutes } from "@/routes/translate"
 import { userRoutes } from "@/routes/users"
 import { videoLinkRoutes } from "@/routes/video-links"
 import { voteBotRoutes, voteRoutes } from "@/routes/votes"
-import { loadSpa, serveSpa } from "@/spa"
+import { sharePage } from "@/share-meta"
+import { htmlDocument, loadSpa, serveSpa } from "@/spa"
 import { cors } from "@elysiajs/cors"
 import { cron } from "@elysiajs/cron"
 import { node } from "@elysiajs/node"
@@ -209,8 +210,12 @@ const app = new Elysia({ adapter: node() })
 	.use(migrationRoutes(env))
 	.use(adminRoutes(env))
 	.use(ogRoutes(env))
-	.get("/*", ({ request }) => {
-		const response = serveSpa(new URL(request.url).pathname, SPA)
+	.get("/*", async ({ request }) => {
+		const { pathname } = new URL(request.url)
+		if (SPA.indexHtml && !pathname.includes(".")) {
+			return htmlDocument(await sharePage(env, request, SPA.indexHtml))
+		}
+		const response = serveSpa(pathname, SPA)
 		if (!response) throw new NotFoundError()
 		return response
 	})
