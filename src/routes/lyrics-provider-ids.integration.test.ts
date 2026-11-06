@@ -251,7 +251,8 @@ describeLive("BiniLink live smoke", () => {
 
 	it("resolves an Apple Music id and looks up its ISRC", async (ctx) => {
 		const batch = await resolveProviderIds([{ service: "apple_music", id: "1438556832" }])
-		if (!batch || batch.results.length === 0) ctx.skip()
+		if (!batch || batch.pending.length > 0) ctx.skip()
+		expect(batch?.results).toHaveLength(1)
 		expect(batch?.results[0]).toMatchObject({ service: "apple_music", isrc: ISRC })
 		const youtube = batch?.results[0].youtube ?? null
 		expect(youtube === null || isVideoId(youtube)).toBe(true)
@@ -259,7 +260,8 @@ describeLive("BiniLink live smoke", () => {
 		await new Promise((resolve) => setTimeout(resolve, 1500))
 
 		const video = await lookupIsrcVideo(ISRC)
-		if (!video || video.kind !== "found") ctx.skip()
+		if (!video || video.kind === "pending") ctx.skip()
+		expect(video?.kind).toBe("found")
 		const videoId = video?.kind === "found" ? video.videoId : null
 		expect(videoId === null || isVideoId(videoId)).toBe(true)
 	})
