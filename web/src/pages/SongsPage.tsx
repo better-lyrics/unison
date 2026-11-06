@@ -1,6 +1,7 @@
 import { useSession } from "@/auth/useSession"
 import { EmptyState } from "@/components/EmptyState"
 import { LeaderboardSection, SeeAllLink } from "@/components/LeaderboardSection"
+import { RecentShelf } from "@/components/RecentShelf"
 import { SealedShelf } from "@/components/SealedShelf"
 import { SongRow, SongRowSkeletonList } from "@/components/SongRow"
 import { useAsyncData } from "@/hooks/useAsyncData"
@@ -19,6 +20,7 @@ export function SongsPage() {
     return (
       <div className="space-y-8">
         <SealedShelf />
+        <RecentShelf />
         <LeaderboardSection title="Most Wanted">
           <SongRowSkeletonList rows={5} />
         </LeaderboardSection>
@@ -30,6 +32,7 @@ export function SongsPage() {
     return (
       <div className="space-y-8">
         <SealedShelf />
+        <RecentShelf />
         <EmptyState title="Could not load leaderboard" hint={error.message} />
       </div>
     )
@@ -38,6 +41,7 @@ export function SongsPage() {
   return (
     <div className="space-y-8">
       <SealedShelf />
+      <RecentShelf />
       <LeaderboardSection
         title="Most Wanted"
         subtitle="Songs missing synced lyrics, ranked by reputation-weighted demand"

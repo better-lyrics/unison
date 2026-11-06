@@ -39,9 +39,9 @@ export async function evictFeedCaches(env: Env): Promise<number> {
 function globalFeedCacheKey(limit: number, filters: FeedFilters): string | null {
 	if (!hasAnyFilter(filters)) return `${GLOBAL_FEED_PREFIX}${limit}`
 	const { sealed, sort, sortDir, ...rest } = filters
-	const onlySealed = sealed && Object.values(rest).every((value) => value === undefined)
-	if (!onlySealed || sortDir === "asc") return null
-	return `${SEALED_FEED_PREFIX}${sort ?? "default"}:${limit}`
+	if (sortDir === "asc" || Object.values(rest).some((value) => value !== undefined)) return null
+	if (sealed) return `${SEALED_FEED_PREFIX}${sort ?? "default"}:${limit}`
+	return `${GLOBAL_FEED_PREFIX}${sort}:${limit}`
 }
 
 export async function getGlobalFeed(

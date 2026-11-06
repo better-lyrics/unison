@@ -161,6 +161,7 @@ export interface FeedEntry {
   format: LyricsFormat
   syncType: SyncType
   createdAt: number
+  voteCount?: number
   marks?: Mark[]
   submitter?: MarkActor
 }

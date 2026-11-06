@@ -186,11 +186,21 @@ describe("getGlobalFeed", () => {
 	it("does NOT read or write cache when any filter is present", async () => {
 		const { cache, gets, puts } = createRecordingCache()
 		const db = createMockDB([[{ id: 1 }]])
-		await getGlobalFeed(createEnv(db, cache), 20, 0, undefined, { sort: "newest" })
+		await getGlobalFeed(createEnv(db, cache), 20, 0, undefined, { syncType: "richsync" })
 
 		await flushMicrotasks()
 		expect(gets).toEqual([])
 		expect(puts).toEqual([])
+	})
+
+	it("caches page 0 of a sort-only global feed under a key per sort and limit", async () => {
+		const { cache, gets, puts } = createRecordingCache()
+		const db = createMockDB([[{ id: 1 }]])
+		await getGlobalFeed(createEnv(db, cache), 12, 0, undefined, { sort: "newest" })
+
+		await flushMicrotasks()
+		expect(gets).toEqual(["feed:global:newest:12"])
+		expect(puts).toEqual(["feed:global:newest:12"])
 	})
 
 	it("reads and writes cache when no filters are present (regression)", async () => {
@@ -310,12 +320,12 @@ describe("getGlobalFeed", () => {
 	})
 
 	describe("sealed cache regressions", () => {
-		it("regression: a non-sealed sort still skips the cache", async () => {
+		it("regression: a non-sealed sort never reads the sealed cache", async () => {
 			const { cache, gets } = createRecordingCache()
 			await getGlobalFeed(createEnv(createMockDB([[]]), cache), 12, 0, undefined, {
 				sort: "recently-sealed",
 			})
-			expect(gets).toEqual([])
+			expect(gets).toEqual(["feed:global:recently-sealed:12"])
 		})
 
 		it("regression: the sealed query keeps the seal predicate in the inner WHERE", async () => {

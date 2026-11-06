@@ -270,6 +270,11 @@ export async function fetchSealed(opts: {
   return getPage<FeedEntry>(`/feed?${search.toString()}`, opts.signal)
 }
 
+export async function fetchRecent(opts: { limit: number; signal?: AbortSignal }): Promise<Page<FeedEntry>> {
+  const search = new URLSearchParams({ sort: "newest", limit: String(opts.limit) })
+  return getPage<FeedEntry>(`/feed?${search.toString()}`, opts.signal)
+}
+
 async function getPage<T>(path: string, signal?: AbortSignal): Promise<Page<T>> {
   const res = await fetch(path, signal ? { signal } : undefined)
   if (!res.ok) await unwrapMutationError(res)
