@@ -95,7 +95,7 @@ export function LyricsPage() {
 
   return (
     <div className={artPageClass}>
-      <ArtBackground src={backdrop} />
+      <ArtBackground src={backdrop} moving={playing} />
       {variant ? (
         <SongHero
           variant={variant}

@@ -8,11 +8,16 @@ const STILL_FRAME_TIME = 4
 interface ArtBackgroundProps {
   src: string | null | undefined
   contained?: boolean
+  moving?: boolean
 }
 
-export function ArtBackground({ src, contained = false }: ArtBackgroundProps) {
+const reducedMotion = () => matchMedia("(prefers-reduced-motion: reduce)").matches
+
+export function ArtBackground({ src, contained = false, moving = false }: ArtBackgroundProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const warpRef = useRef<Kawarp | null>(null)
+  const movingRef = useRef(moving)
+  const settleRef = useRef<number | undefined>(undefined)
   const [shown, setShown] = useState(false)
 
   useEffect(() => {
@@ -25,18 +30,18 @@ export function ArtBackground({ src, contained = false }: ArtBackgroundProps) {
       console.warn("Could not start the background art", error)
       return
     }
+    if (reducedMotion()) warp.transitionDuration = 0
     warpRef.current = warp
-    const still = matchMedia("(prefers-reduced-motion: reduce)").matches
     const observer = new ResizeObserver(() => {
       const box = contained ? canvas.getBoundingClientRect() : { width: innerWidth, height: innerHeight }
       canvas.width = Math.max(1, Math.round(box.width * 0.5))
       canvas.height = Math.max(1, Math.round(box.height * 0.5))
       warp.resize()
-      if (still) warp.renderFrame(STILL_FRAME_TIME)
+      if (!movingRef.current) warp.renderFrame(STILL_FRAME_TIME)
     })
     observer.observe(canvas)
-    if (!still) warp.start()
     return () => {
+      window.clearTimeout(settleRef.current)
       observer.disconnect()
       warp.dispose()
       warpRef.current = null
@@ -44,13 +49,31 @@ export function ArtBackground({ src, contained = false }: ArtBackgroundProps) {
   }, [contained])
 
   useEffect(() => {
+    movingRef.current = moving
+    const warp = warpRef.current
+    if (!warp) return
+    window.clearTimeout(settleRef.current)
+    if (moving && !reducedMotion()) warp.start()
+    else warp.stop()
+  }, [moving])
+
+  useEffect(() => {
     const warp = warpRef.current
     if (!src || !warp) return
     warp
       .loadImage(src)
       .then(() => {
-        if (matchMedia("(prefers-reduced-motion: reduce)").matches) warp.renderFrame(STILL_FRAME_TIME)
         setShown(true)
+        if (movingRef.current && !reducedMotion()) return
+        if (reducedMotion()) {
+          warp.renderFrame(STILL_FRAME_TIME)
+          return
+        }
+        window.clearTimeout(settleRef.current)
+        warp.start()
+        settleRef.current = window.setTimeout(() => {
+          if (!movingRef.current) warp.stop()
+        }, warp.transitionDuration)
       })
       .catch((error: unknown) => console.warn("Could not load the background art", error))
   }, [src])
