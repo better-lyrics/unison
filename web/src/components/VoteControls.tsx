@@ -68,7 +68,7 @@ export function VoteControls({ variantId, videoId, variant, beforeReport }: Vote
 
   return (
     <>
-      <div className={cn(glassClass, "inline-flex h-[30px] items-center rounded-[10px] text-[13px] [corner-shape:superellipse(1.6)] [text-shadow:none]")}>
+      <div className={cn(glassClass, "inline-flex h-[30px] select-none items-center rounded-[10px] text-[13px] [corner-shape:superellipse(1.6)] [text-shadow:none]")}>
         <button
           type="button"
           aria-label={`Upvote variant, score ${variant.score}`}

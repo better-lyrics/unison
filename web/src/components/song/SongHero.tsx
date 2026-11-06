@@ -31,14 +31,14 @@ const SYNC_TIP: Record<SyncKind, string> = {
 const CONFIDENCE_TIP = "How sure we are this is the best version, from vote volume and rater agreement."
 
 const TITLE_SIZE = {
-  l: "text-[44px] max-[1000px]:text-[34px]",
-  m: "text-[40px] max-[1000px]:text-[30px]",
-  s: "text-[34px] max-[1000px]:text-[26px]",
+  l: "text-[44px] max-[1000px]:text-[34px] max-sm:text-[28px]",
+  m: "text-[40px] max-[1000px]:text-[30px] max-sm:text-[25px]",
+  s: "text-[34px] max-[1000px]:text-[26px] max-sm:text-[22px]",
 }
 
 const TAG_PILL = cn(
   glassClass,
-  "inline-flex h-[30px] cursor-default items-center gap-1.5 whitespace-nowrap rounded-[10px] px-3 text-[13px] font-medium text-(--ink-2) [corner-shape:superellipse(1.6)]",
+  "inline-flex h-[30px] cursor-default select-none items-center gap-1.5 whitespace-nowrap rounded-[10px] px-3 text-[13px] font-medium text-(--ink-2) [corner-shape:superellipse(1.6)]",
 )
 
 const PLAY_CIRCLE = cn(
@@ -47,9 +47,9 @@ const PLAY_CIRCLE = cn(
 )
 
 export const HERO_GRID =
-  "grid grid-cols-[168px_minmax(0,1fr)] items-center gap-7 pb-8 max-[1000px]:grid-cols-[128px_minmax(0,1fr)] max-[1000px]:gap-5 max-sm:grid-cols-1 max-sm:pb-6"
+  "grid grid-cols-[168px_minmax(0,1fr)] items-center gap-7 pb-8 max-[1000px]:grid-cols-[128px_minmax(0,1fr)] max-[1000px]:gap-5 max-sm:grid-cols-[88px_minmax(0,1fr)] max-sm:gap-x-4 max-sm:gap-y-0 max-sm:pb-6"
 
-export const HERO_ART = "w-full max-sm:w-[min(220px,60vw)]"
+export const HERO_ART = "w-full max-sm:row-span-2 max-sm:self-center"
 
 const COVER_FRAME =
   "group relative aspect-square w-full overflow-hidden rounded-2xl shadow-[0_24px_60px_rgba(0,0,0,0.35),0_6px_18px_rgba(0,0,0,0.25)] after:pointer-events-none after:absolute after:inset-0 after:rounded-[inherit] after:outline after:outline-1 after:-outline-offset-1 after:outline-white/10"
@@ -171,8 +171,8 @@ export function SongHero({ variant, versions, art, player }: SongHeroProps) {
       <div className={HERO_ART}>
         <Cover variant={variant} art={art} player={player} />
       </div>
-      <div className="min-w-0">
-        <div className={TITLE_SIZE[titleSize(variant.song)]}>
+      <div className="min-w-0 max-sm:contents">
+        <div className={cn(TITLE_SIZE[titleSize(variant.song)], "max-sm:self-end")}>
           <h1
             title={variant.song}
             className="-mr-[0.08em] -mb-[0.08em] line-clamp-2 pr-[0.08em] pb-[0.08em] font-black leading-[1.08] tracking-[-0.035em] text-balance"
@@ -183,12 +183,12 @@ export function SongHero({ variant, versions, art, player }: SongHeroProps) {
         </div>
         <p
           title={variant.album ? `${variant.artist} · ${variant.album}` : variant.artist}
-          className="mt-1.5 -mb-[0.16em] flex min-w-0 whitespace-nowrap pr-[0.08em] pb-[0.16em] text-[17px] font-medium max-[1000px]:text-[15px]"
+          className="mt-1.5 -mb-[0.16em] flex min-w-0 whitespace-nowrap max-sm:self-start pr-[0.08em] pb-[0.16em] text-[17px] font-medium max-[1000px]:text-[15px]"
         >
           <span className="max-w-full shrink-0 truncate text-(--ink-2)">{variant.artist}</span>
           {variant.album ? <span className="min-w-[3ch] truncate text-(--ink-3)">{` · ${variant.album}`}</span> : null}
         </p>
-        <div className="mt-3 flex flex-wrap gap-2 [text-shadow:none]">
+        <div className="mt-3 flex flex-wrap gap-2 [text-shadow:none] max-sm:col-span-2 max-sm:mt-4">
           <Tooltip label={SYNC_TIP[sync]}>
             <span className="inline-flex">
               <SyncTag kind={sync} size="tag" />
@@ -204,7 +204,7 @@ export function SongHero({ variant, versions, art, player }: SongHeroProps) {
             <span className={TAG_PILL}>{`${titleCase(variant.confidence)} confidence`}</span>
           </Tooltip>
         </div>
-        <div className="mt-4 flex flex-wrap items-center gap-2 [text-shadow:none]">
+        <div className="mt-4 flex flex-wrap items-center gap-2 [text-shadow:none] max-sm:col-span-2 max-sm:mt-3">
           <motion.button
             layout
             type="button"
@@ -247,7 +247,7 @@ export function SongHero({ variant, versions, art, player }: SongHeroProps) {
           </div>
         </div>
         {variant.hidden ? (
-          <p className="mt-4 text-[13px] font-medium text-unison-warn">
+          <p className="mt-4 text-[13px] font-medium text-unison-warn max-sm:col-span-2">
             This variant has been auto-hidden by community downvotes.
           </p>
         ) : null}
@@ -262,19 +262,19 @@ export function SongHeroSkeleton() {
       <div className={HERO_ART}>
         <Bone className="aspect-square w-full rounded-2xl" />
       </div>
-      <div className="min-w-0">
-        <div className={cn(TITLE_SIZE.l, "flex h-[1.08em] items-center")}>
+      <div className="min-w-0 max-sm:contents">
+        <div className={cn(TITLE_SIZE.l, "flex h-[1.08em] items-center max-sm:self-end")}>
           <Bone className="h-[0.72em] w-1/2 rounded-lg" />
         </div>
-        <div className="mt-1.5 flex h-[26px] items-center max-[1000px]:h-[23px]">
+        <div className="mt-1.5 flex h-[26px] items-center max-[1000px]:h-[23px] max-sm:self-start">
           <Bone className="h-3.5 w-1/4" />
         </div>
-        <div className="mt-3 flex gap-2">
+        <div className="mt-3 flex gap-2 max-sm:col-span-2 max-sm:mt-4">
           <Bone className="h-[30px] w-[93px] rounded-[10px]" />
           <Bone className="h-[30px] w-[66px] rounded-[10px]" />
           <Bone className="h-[30px] w-[117px] rounded-[10px]" />
         </div>
-        <div className="mt-4 flex gap-2">
+        <div className="mt-4 flex flex-wrap gap-2 max-sm:col-span-2 max-sm:mt-3">
           <Bone className="h-[30px] w-[69px] rounded-[10px]" />
           <Bone className="h-[30px] w-[131px] rounded-[10px]" />
           <Bone className="h-[30px] w-[86px] rounded-[10px]" />
