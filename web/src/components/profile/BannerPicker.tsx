@@ -53,7 +53,7 @@ export function BannerPicker({ ref, keyId, current, onSaved }: BannerPickerProps
     <div
       ref={ref}
       popover="auto"
-      className="fixed inset-[128px_32px_auto_auto] m-0 max-h-[min(520px,calc(100dvh-160px))] w-[360px] max-w-[calc(100vw-32px)] overflow-y-auto overscroll-contain rounded-[22px] border-0 bg-[rgba(20,19,24,0.82)] p-[18px] text-unison-text shadow-[inset_0_1px_0_rgba(255,255,255,0.1),inset_0_0_0_1px_rgba(255,255,255,0.06),0_24px_60px_rgba(0,0,0,0.45)] backdrop-blur-[24px] backdrop-saturate-[1.4] max-[1000px]:inset-[auto_16px_80px_16px] max-[1000px]:w-auto"
+      className="fixed inset-[128px_32px_auto_auto] m-0 max-h-[min(520px,calc(100dvh-160px))] w-[360px] max-w-[calc(100vw-32px)] overflow-y-auto overscroll-contain rounded-[28px] border-0 bg-[rgba(20,19,24,0.82)] p-[18px] text-unison-text shadow-[inset_0_1px_0_rgba(255,255,255,0.1),inset_0_0_0_1px_rgba(255,255,255,0.06),0_24px_60px_rgba(0,0,0,0.45)] backdrop-blur-[24px] backdrop-saturate-[1.4] max-[1000px]:inset-[auto_16px_80px_16px] max-[1000px]:w-auto"
     >
       <h2 className="m-0 text-[15px] font-bold">Banner</h2>
       <p className="mt-1 mb-3.5 text-xs text-(--ink-3)">Pick the cover of a song you synced.</p>
@@ -83,7 +83,7 @@ export function BannerPicker({ ref, keyId, current, onSaved }: BannerPickerProps
           type="button"
           disabled={saving !== null}
           onClick={() => pick(null)}
-          className="mt-3.5 h-9 cursor-pointer rounded-full bg-white/[0.08] px-3.5 text-[13px] font-medium text-(--ink-2) transition-[scale] duration-150 ease-out enabled:active:scale-[0.96] disabled:cursor-wait"
+          className="relative mt-3.5 h-9 cursor-pointer rounded-full bg-white/[0.08] px-3.5 text-[13px] font-medium text-(--ink-2) transition-[scale] duration-150 ease-out after:absolute after:inset-x-0 after:-inset-y-0.5 enabled:active:scale-[0.96] disabled:cursor-wait"
         >
           Remove banner
         </button>

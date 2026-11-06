@@ -24,7 +24,7 @@ export function VariantList({ variants, selectedId, onSelect }: VariantListProps
               aria-current={isSelected ? "true" : undefined}
               onClick={() => onSelect(variant.id)}
               className={cn(
-                "-mx-3 grid w-[calc(100%+1.5rem)] cursor-pointer grid-cols-[22px_32px_minmax(0,1fr)_auto] items-center gap-3 rounded-[14px] px-3 py-2.5 text-left transition-colors duration-150 ease-[cubic-bezier(0.2,0,0,1)]",
+                "-mx-3 grid w-[calc(100%+1.5rem)] cursor-pointer grid-cols-[22px_32px_minmax(0,1fr)_auto] items-center gap-3 rounded-2xl px-3 py-2.5 text-left transition-colors duration-150 ease-[cubic-bezier(0.2,0,0,1)]",
                 "focus:outline-none focus-visible:ring-2 focus-visible:ring-unison-border-strong",
                 isSelected
                   ? "bg-white/[0.14] shadow-[inset_0_1px_0_rgba(255,255,255,0.1),inset_0_0_0_1px_rgba(255,255,255,0.06)]"
@@ -37,7 +37,7 @@ export function VariantList({ variants, selectedId, onSelect }: VariantListProps
                   avatarUrl={submitter.avatarUrl}
                   keyId={submitter.keyId}
                   loading="lazy"
-                  className="size-8 rounded-full object-cover"
+                  className="size-8 rounded-full object-cover outline outline-1 -outline-offset-1 outline-white/10"
                 />
               ) : (
                 <span className="size-8 rounded-full bg-white/[0.08]" />

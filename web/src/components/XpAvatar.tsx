@@ -40,7 +40,7 @@ export function XpAvatar({ avatarUrl, keyId, level, progress, tiered, className 
         <UserAvatar
           avatarUrl={avatarUrl}
           keyId={keyId}
-          className="absolute inset-[8%] block size-[84%] rounded-full bg-unison-bg-elevated object-cover"
+          className="absolute inset-[8%] block size-[84%] rounded-full bg-unison-bg-elevated object-cover outline outline-1 -outline-offset-1 outline-white/10"
         />
       </div>
       {level === undefined ? null : (

@@ -113,7 +113,7 @@ function BadgeTile({
       type="button"
       data-earned={earned}
       onClick={() => open({ def, userBadge, rare, isCurrentTier, tierRank })}
-      className="group relative flex cursor-pointer hover:z-10 flex-col items-center gap-1.5 rounded-2xl bg-[rgba(15,14,19,0.22)] px-2 pt-3.5 pb-3 text-center backdrop-blur-[16px] transition-[background-color,scale] duration-150 ease-out [text-shadow:none] active:scale-[0.96] [@media(hover:hover)]:hover:bg-white/[0.08]"
+      className="group relative flex cursor-pointer hover:z-10 flex-col items-center gap-1.5 rounded-2xl bg-[rgba(15,14,19,0.22)] px-2 pt-3.5 pb-3 text-center backdrop-blur-[16px] transition-[background-color,scale] duration-150 ease-out [text-shadow:none] active:scale-[0.96] hover:bg-white/[0.08]"
     >
       <img
         src={resolveBadgeImage(def, tier, earned ? "color" : "silhouette")}

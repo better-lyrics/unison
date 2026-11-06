@@ -75,7 +75,7 @@ export function VoteControls({ variantId, videoId, variant, beforeReport }: Vote
           onClick={handleUp}
           className={cn(
             VOTE_BUTTON,
-            "rounded-l-full pr-3.5 pl-4 font-bold tabular-nums",
+            "rounded-l-full pr-4 pl-3.5 font-bold tabular-nums",
             upActive ? "text-[#86efac]" : "text-unison-text",
           )}
         >

@@ -191,7 +191,7 @@ function CuratorSubmissions({ keyId, total, owner = false }: SubmissionsListProp
               href={COMPOSER_URL}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex h-11 items-center gap-2 rounded-full bg-unison-text pr-[18px] pl-4 text-sm font-bold text-[#121116] transition-[background-color,scale] duration-150 ease-out active:scale-[0.96] [@media(hover:hover)]:hover:bg-white"
+              className="inline-flex h-11 items-center gap-2 rounded-full bg-unison-text pr-[18px] pl-4 text-sm font-bold text-[#121116] transition-[background-color,scale] duration-150 ease-out active:scale-[0.96] hover:bg-white"
             >
               <IconPlus className="size-[17px]" stroke={2} />
               Sync a song
@@ -258,7 +258,7 @@ function CuratorSubmissions({ keyId, total, owner = false }: SubmissionsListProp
             disabled={isFetchingNextPage}
             className={cn(
               glassClass,
-              "h-10 cursor-pointer rounded-full px-4 text-[13px] font-medium transition-[background-color,scale] duration-150 ease-out active:scale-[0.96] disabled:opacity-50 [text-shadow:none] [@media(hover:hover)]:hover:bg-white/[0.14]",
+              "h-10 cursor-pointer rounded-full px-4 text-[13px] font-medium transition-[background-color,scale] duration-150 ease-out active:not-disabled:scale-[0.96] disabled:opacity-50 [text-shadow:none] hover:bg-white/[0.14]",
             )}
           >
             {isFetchingNextPage ? "Loading..." : loadMoreError ? "Retry" : "Load more"}

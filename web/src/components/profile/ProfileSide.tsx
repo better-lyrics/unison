@@ -1,4 +1,5 @@
 import { IconCheck, IconDownload, IconPencil, IconShare } from "@tabler/icons-react"
+import { IconSwap } from "@/components/icons/IconSwap"
 import { OdometerNumber } from "@/components/OdometerNumber"
 import { DiscordChip } from "@/components/profile/DiscordChip"
 import { chipClass, chipIconClass, raisedChipClass } from "@/components/ui"
@@ -62,11 +63,12 @@ export function ProfileSide({ keyId, rank, gamification, owner, onEditProfile }:
       onClick={() => copy(profileUrl(rank.handle, keyId))}
       className={owner ? chipClass : raisedChipClass}
     >
-      {copied ? (
-        <IconCheck className={chipIconClass} stroke={1.75} />
-      ) : (
-        <IconShare className={chipIconClass} stroke={1.75} />
-      )}
+      <IconSwap
+        swapped={copied}
+        from={<IconShare className="size-full" stroke={1.75} />}
+        to={<IconCheck className="size-full" stroke={1.75} />}
+        className={chipIconClass}
+      />
       {copied ? "Copied" : "Share"}
     </button>
   )

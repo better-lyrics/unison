@@ -12,7 +12,7 @@ import { artTextShadowClass, glassClass } from "./ui"
 
 const tabClass = ({ isActive }: { isActive: boolean }) =>
 	cn(
-		"inline-flex h-[30px] items-center rounded-[9px] px-2.5 text-sm font-medium transition-colors duration-150",
+		"relative inline-flex h-[30px] items-center rounded-[9px] px-2.5 text-sm font-medium transition-colors duration-150 after:absolute after:inset-x-0 after:-inset-y-[5px]",
 		isActive ? "bg-white/[0.08] text-unison-text" : "text-(--ink-2) hover:bg-white/[0.08] hover:text-unison-text",
 	)
 

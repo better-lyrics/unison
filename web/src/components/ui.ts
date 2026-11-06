@@ -12,12 +12,12 @@ export const artPageClass = `[--color-unison-text-muted:var(--ink-3)] [--color-u
 export const glassClass =
   "bg-[rgba(15,14,19,0.28)] shadow-[inset_0_1px_0_rgba(255,255,255,0.1),inset_0_0_0_1px_rgba(255,255,255,0.06)] backdrop-blur-[20px] backdrop-saturate-150"
 
-export const glassActionClass = `${glassClass} inline-flex h-11 cursor-pointer items-center justify-center gap-2 whitespace-nowrap rounded-full px-[18px] text-sm font-bold text-unison-text transition-[background-color,scale] duration-150 ease-out hover:bg-white/[0.14] active:scale-[0.96] disabled:cursor-not-allowed disabled:opacity-60 disabled:active:scale-100`
+export const glassActionClass = `${glassClass} inline-flex h-11 cursor-pointer items-center justify-center gap-2 whitespace-nowrap rounded-full px-[18px] text-sm font-bold text-unison-text transition-[background-color,scale] duration-150 ease-out hover:bg-white/[0.14] active:not-disabled:scale-[0.96] disabled:cursor-not-allowed disabled:opacity-60`
 
 const CHIP_BASE =
-  "relative inline-flex h-[30px] cursor-pointer items-center whitespace-nowrap rounded-[10px] text-[13px] [corner-shape:superellipse(1.6)] [text-shadow:none] transition-[background-color,color,scale] duration-150 ease-out after:absolute after:-inset-x-1 after:-inset-y-[5px] active:scale-[0.96]"
+  "relative inline-flex h-[30px] cursor-pointer items-center whitespace-nowrap rounded-[10px] text-[13px] [corner-shape:superellipse(1.6)] [text-shadow:none] transition-[background-color,color,scale] duration-150 ease-out after:absolute after:-inset-x-1 after:-inset-y-[5px] active:not-disabled:scale-[0.96]"
 
-export const chipClass = `${glassClass} ${CHIP_BASE} gap-[7px] pr-3 pl-2.5 font-medium text-(--ink-2) [@media(hover:hover)]:hover:bg-white/[0.14] [@media(hover:hover)]:hover:text-unison-text`
+export const chipClass = `${glassClass} ${CHIP_BASE} gap-[7px] pr-3 pl-2.5 font-medium text-(--ink-2) hover:bg-white/[0.14] hover:text-unison-text`
 
 export const raisedChipClass = `${CHIP_BASE} gap-[7px] bg-[linear-gradient(180deg,#fff,#e8e8ee)] pr-3 pl-2.5 font-bold text-[#121116] shadow-[inset_0_1px_0_#fff,inset_0_-1px_0_rgba(18,17,22,0.14),0_1px_2px_rgba(0,0,0,0.25)]`
 

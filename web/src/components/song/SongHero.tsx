@@ -4,6 +4,7 @@ import { Tooltip } from "@/components/Tooltip"
 import { VoteControls } from "@/components/VoteControls"
 import { EditMetadataButton } from "@/components/council/EditMetadataButton"
 import { SealLyricButton } from "@/components/council/SealLyricButton"
+import { IconSwap } from "@/components/icons/IconSwap"
 import { PlayPauseIcon } from "@/components/icons/PlaybackIcons"
 import { YouTubeMusicIcon } from "@/components/icons/YouTubeMusicIcon"
 import { Bone } from "@/components/skeleton"
@@ -136,11 +137,12 @@ function ShareButton({ videoId }: { videoId: string }) {
         onClick={() => copy(`${window.location.origin}/song/${videoId}`)}
         className={cn(glassActionClass, "w-11 px-0")}
       >
-        {copied ? (
-          <IconCheck className="size-[18px]" stroke={1.75} />
-        ) : (
-          <IconShare className="size-[18px]" stroke={1.75} />
-        )}
+        <IconSwap
+          swapped={copied}
+          from={<IconShare className="size-full" stroke={1.75} />}
+          to={<IconCheck className="size-full" stroke={1.75} />}
+          className="size-[18px]"
+        />
       </button>
     </Tooltip>
   )
@@ -200,7 +202,7 @@ export function SongHero({ variant, versions, art, player }: SongHeroProps) {
             href={youTubeMusicUrl(variant.videoId)}
             target="_blank"
             rel="noopener noreferrer"
-            className={glassActionClass}
+            className={cn(glassActionClass, "pl-4")}
           >
             <YouTubeMusicIcon className="size-[18px]" />
             YouTube Music

@@ -92,7 +92,7 @@ function OwnerBlock({
     <section ref={ref} id="edit-profile" className="flex scroll-mt-8 flex-col gap-4">
       <div className="flex items-center gap-3">
         <h2 className="m-0 text-xl font-bold tracking-[-0.01em]">Edit profile</h2>
-        <button type="button" onClick={onPreview} className={cn(glassActionClass, "ml-auto h-9 px-3.5 text-[13px]")}>
+        <button type="button" onClick={onPreview} className={cn(glassActionClass, "ml-auto h-9 pr-3.5 pl-3 text-[13px]")}>
           <IconEye className="size-4" stroke={1.7} />
           Preview as a visitor
         </button>

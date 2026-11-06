@@ -112,13 +112,13 @@ function FeaturedBadges({ gamification, catalogue }: { gamification: UserGamific
               })
             }
             title={tier !== undefined ? `${def.name}, tier ${tier}` : def.name}
-            className="inline-flex cursor-pointer transition-[scale] duration-150 ease-out active:scale-[0.96]"
+            className="relative inline-flex cursor-pointer transition-[scale] duration-150 ease-out after:absolute after:-inset-x-[3px] after:-inset-y-1.5 active:scale-[0.96]"
           >
             <BadgeArt
               src={resolveBadgeImage(def, tier, "color")}
               silhouette={resolveBadgeImage(def, tier, "silhouette")}
               alt={def.name}
-              className="size-7 transition-[translate,scale] duration-200 ease-[cubic-bezier(0.2,0,0,1)] [@media(hover:hover)]:hover:-translate-y-0.5 [@media(hover:hover)]:hover:scale-110"
+              className="size-7 transition-[translate,scale] duration-200 ease-[cubic-bezier(0.2,0,0,1)] motion-safe:hover:-translate-y-0.5 motion-safe:hover:scale-110"
             />
           </button>
         )
@@ -200,7 +200,7 @@ export function ProfileCard({ keyId, rank, gamification, catalogue, art, onChang
             onClick={onChangeBanner}
             className={cn(
               glassActionClass,
-              "absolute top-16 right-4 opacity-0 transition-[opacity,background-color,scale] group-focus-within/banner:opacity-100 group-hover/banner:opacity-100 [@media(hover:none)]:opacity-100",
+              "absolute top-16 right-4 pl-4 opacity-0 transition-[opacity,background-color,scale] group-focus-within/banner:opacity-100 group-hover/banner:opacity-100 [@media(hover:none)]:opacity-100",
             )}
           >
             <IconPhoto className="size-[17px]" stroke={1.75} />

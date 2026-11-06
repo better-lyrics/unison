@@ -1,9 +1,5 @@
 import { cn } from "@/lib/cn"
-
-const SWAP =
-  "col-start-1 row-start-1 size-full transition-[opacity,scale,filter] duration-300 ease-[cubic-bezier(0.2,0,0,1)] motion-reduce:scale-100 motion-reduce:blur-none motion-reduce:transition-opacity motion-reduce:duration-150 motion-reduce:ease-linear"
-const SHOWN = "scale-100 opacity-100 blur-none"
-const HIDDEN = "scale-25 opacity-0 blur-[4px]"
+import { IconSwap } from "./IconSwap"
 
 export function PlayIcon({ className }: { className?: string }) {
   return (
@@ -29,9 +25,11 @@ export function PauseIcon({ className }: { className?: string }) {
 
 export function PlayPauseIcon({ playing, className }: { playing: boolean; className?: string }) {
   return (
-    <span className={cn("inline-grid size-[18px] shrink-0", className)}>
-      <PlayIcon className={cn(SWAP, "translate-x-px", playing ? HIDDEN : SHOWN)} />
-      <PauseIcon className={cn(SWAP, playing ? SHOWN : HIDDEN)} />
-    </span>
+    <IconSwap
+      swapped={playing}
+      from={<PlayIcon className="size-full translate-x-px" />}
+      to={<PauseIcon className="size-full" />}
+      className={cn("size-[18px]", className)}
+    />
   )
 }

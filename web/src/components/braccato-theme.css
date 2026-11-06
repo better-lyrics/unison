@@ -52,11 +52,23 @@ blyrics-letter-wave = true;
 	filter: none;
 }
 
-.blyrics-container > div:hover {
-	opacity: 1 !important;
-	filter: none !important;
-	transform: scale(var(--blyrics-hover-scale));
-	transition: opacity 0.3s ease, filter 0.3s ease, transform 0.3s ease;
+@media (hover: hover) {
+	.blyrics-container > div:hover {
+		opacity: 1 !important;
+		filter: none !important;
+		transform: scale(var(--blyrics-hover-scale));
+		transition: opacity 0.3s ease, filter 0.3s ease, transform 0.3s ease;
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.blyrics-container > div {
+		filter: none !important;
+	}
+
+	.blyrics-container > div:hover {
+		transform: none;
+	}
 }
 
 .blyrics-word-highlight {

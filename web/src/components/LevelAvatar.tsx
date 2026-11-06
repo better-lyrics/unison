@@ -13,7 +13,7 @@ export function LevelAvatar({ avatarUrl, keyId, level, className }: LevelAvatarP
   return (
     <div className={cn("relative size-[52px] shrink-0", className)}>
       <div className="absolute inset-0" style={levelHoleStyle(SONG_LEVEL_HOLE, level)}>
-        <UserAvatar avatarUrl={avatarUrl} keyId={keyId} className="block size-full rounded-full object-cover" />
+        <UserAvatar avatarUrl={avatarUrl} keyId={keyId} className="block size-full rounded-full object-cover outline outline-1 -outline-offset-1 outline-white/10" />
       </div>
       <span
         title={`Level ${level}`}
