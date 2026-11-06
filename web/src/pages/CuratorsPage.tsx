@@ -16,6 +16,8 @@ const NOT_RANKED: UserRankResponse = {
   discordLinked: false,
 }
 
+const SUBTITLE = "Ranked by total reputation-weighted contribution score"
+
 export function CuratorsPage() {
   const session = useSession()
   const { status, data, error } = useAsyncData(fetchCuratorLeaderboard, "leaderboard:curators")
@@ -35,8 +37,8 @@ export function CuratorsPage() {
 
   if (status === "loading" || (selfKeyId !== null && myRank.status === "loading")) {
     return (
-      <LeaderboardSection title="Leaderboard">
-        <CuratorRowSkeletonList rows={6} />
+      <LeaderboardSection title="Leaderboard" subtitle={SUBTITLE}>
+        <CuratorRowSkeletonList rows={20} />
       </LeaderboardSection>
     )
   }
@@ -62,7 +64,7 @@ export function CuratorsPage() {
 
   return (
     <BadgeCatalogueProvider>
-      <LeaderboardSection title="Leaderboard" subtitle="Ranked by total reputation-weighted contribution score">
+      <LeaderboardSection title="Leaderboard" subtitle={SUBTITLE}>
         {merged.list.length === 0 ? (
           signedIn ? (
             <EmptyState title="No one ranked yet" hint="Be the first by submitting lyrics from Better Lyrics." />

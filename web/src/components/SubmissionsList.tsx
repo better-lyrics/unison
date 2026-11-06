@@ -81,6 +81,19 @@ function SelectField({
   )
 }
 
+export function SubmissionsSkeleton() {
+  return (
+    <Section meta={<Bone className="h-3 w-12" />}>
+      <div className="flex flex-wrap gap-2">
+        <Bone className="h-10 min-w-[200px] flex-1 rounded-xl" />
+        <Bone className="h-10 w-[124px] rounded-xl" />
+        <Bone className="h-10 w-[113px] rounded-xl" />
+      </div>
+      <SongCoverTileSkeletons id="submission-skeleton" count={8} />
+    </Section>
+  )
+}
+
 function CuratorSubmissions({ keyId, total, owner = false }: SubmissionsListProps) {
   const [toolbar, setToolbar] = useState<ToolbarState>(DEFAULT_TOOLBAR)
 
@@ -114,18 +127,7 @@ function CuratorSubmissions({ keyId, total, owner = false }: SubmissionsListProp
     return uniqueById(data?.pages.flatMap((page) => page.submissions) ?? [])
   }, [data])
 
-  if (status === "pending") {
-    return (
-      <Section>
-        <div className="flex flex-wrap gap-2">
-          <Bone className="h-10 min-w-[200px] flex-1 rounded-xl" />
-          <Bone className="h-10 w-36 rounded-xl" />
-          <Bone className="h-10 w-32 rounded-xl" />
-        </div>
-        <SongCoverTileSkeletons id="submission-skeleton" count={4} />
-      </Section>
-    )
-  }
+  if (status === "pending") return <SubmissionsSkeleton />
   const listError = status === "error" && !isFetchNextPageError ? error.message : null
   if (listError !== null && !toolbarChanged) {
     return (

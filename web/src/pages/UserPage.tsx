@@ -3,6 +3,7 @@ import { Navigate, useParams } from "react-router-dom"
 import { EmptyState } from "@/components/EmptyState"
 import { ProfileSkeleton } from "@/components/ProfileSkeleton"
 import { UserProfileView } from "@/components/UserProfileView"
+import { useViewerOwns } from "@/auth/useSession"
 import { useAsyncData } from "@/hooks/useAsyncData"
 import { fetchUserRank } from "@/lib/api"
 
@@ -15,9 +16,10 @@ export function UserPage() {
     [keyId],
   )
   const rank = useAsyncData(rankFetcher, `leaderboard:user:${keyId}`)
+  const owns = useViewerOwns({ keyId })
 
   if (!keyId) return <EmptyState title="No user specified" />
-  if (rank.status === "loading") return <ProfileSkeleton />
+  if (rank.status === "loading") return <ProfileSkeleton owner={owns} />
   if (rank.status === "success" && rank.data.handle) {
     return <Navigate to={`/u/${rank.data.handle}`} replace />
   }

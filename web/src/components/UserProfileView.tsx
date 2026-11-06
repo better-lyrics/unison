@@ -1,7 +1,7 @@
 import "./profile.css"
 import { IconEye } from "@tabler/icons-react"
 import { type Ref, useCallback, useRef, useState } from "react"
-import { useOptionalSession } from "@/auth/useSession"
+import { useOptionalSession, useViewerOwns } from "@/auth/useSession"
 import { usePageArt } from "@/components/PageArt"
 import { BadgeCatalogueProvider, useBadgeCatalogue } from "@/components/BadgeCatalogueContext"
 import { BadgeModalProvider } from "@/components/BadgeModalContext"
@@ -206,6 +206,7 @@ function ProfileGate({
   gamification,
   gamSettled,
   isOwner,
+  skeletonOwner,
   onGamificationChange,
   onProfileChange,
 }: {
@@ -216,6 +217,7 @@ function ProfileGate({
   gamification: UserGamification | null
   gamSettled: boolean
   isOwner: boolean
+  skeletonOwner: boolean
   onGamificationChange: (updated: UserGamification) => void
   onProfileChange: () => Promise<void>
 }) {
@@ -224,7 +226,7 @@ function ProfileGate({
 
   if (rankError) return <EmptyState title="Could not load profile" hint={rankError.message} />
   if (rankLoading || !rank || !gamSettled || catalogueState.status === "loading") {
-    return <ProfileSkeleton owner={isOwner} />
+    return <ProfileSkeleton owner={skeletonOwner} />
   }
 
   return (
@@ -248,6 +250,7 @@ export function UserProfileView({ keyId }: UserProfileViewProps) {
 
   const session = useOptionalSession()
   const isOwner = session?.status === "signed-in" && session.identity.keyId === keyId
+  const ownsLikely = useViewerOwns({ keyId })
   const ownAvatarUrl =
     session?.status === "signed-in" && session.identity.keyId === keyId ? session.identity.avatarUrl : undefined
 
@@ -282,6 +285,7 @@ export function UserProfileView({ keyId }: UserProfileViewProps) {
           gamification={gam}
           gamSettled={gamSettled}
           isOwner={isOwner}
+          skeletonOwner={ownsLikely}
           onGamificationChange={onGamificationChange}
           onProfileChange={onProfileChange}
         />

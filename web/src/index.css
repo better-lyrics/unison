@@ -390,8 +390,8 @@ select {
 
 .lyrics-pane {
   transition:
-    opacity var(--reveal-dur) ease-in-out,
-    filter var(--reveal-dur) ease-in-out,
+    opacity 150ms ease-in-out,
+    filter 150ms ease-in-out,
     --ft 150ms ease-out,
     --fb 150ms ease-out;
   @starting-style {

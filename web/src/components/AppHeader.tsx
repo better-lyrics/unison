@@ -21,8 +21,8 @@ const tabClass = ({ isActive }: { isActive: boolean }) =>
 
 const deskTabClass = ({ isActive }: { isActive: boolean }) =>
 	cn(
-		"relative inline-flex h-[30px] items-center rounded-[9px] px-2.5 text-sm font-medium transition-colors duration-150 after:absolute after:inset-x-0 after:-inset-y-[5px]",
-		isActive ? "text-unison-text" : "text-(--ink-2) hover:bg-white/[0.08] hover:text-unison-text",
+		"relative inline-flex h-[30px] items-center rounded-[9px] px-2.5 text-sm font-medium transition-colors duration-150 after:absolute after:inset-x-0 after:-inset-y-[5px] hover:bg-white/[0.04]",
+		isActive ? "text-unison-text" : "text-(--ink-2) hover:text-unison-text",
 	)
 
 const navPill = (active: boolean) =>

@@ -3,6 +3,7 @@ import { useParams } from "react-router-dom"
 import { EmptyState } from "@/components/EmptyState"
 import { ProfileSkeleton } from "@/components/ProfileSkeleton"
 import { UserProfileView } from "@/components/UserProfileView"
+import { useViewerOwns } from "@/auth/useSession"
 import { useAsyncData } from "@/hooks/useAsyncData"
 import { fetchUserByHandle } from "@/lib/api"
 import { toHandle } from "@/lib/handle"
@@ -14,9 +15,10 @@ export function NicknamePage() {
   const handle = nickname ? toHandle(nickname) : ""
   const resolver = useCallback(() => fetchUserByHandle(nickname ?? ""), [nickname])
   const resolved = useAsyncData(resolver, `handle:${handle}`)
+  const owns = useViewerOwns({ handle })
 
   if (!nickname) return <EmptyState title="No curator specified" />
-  if (resolved.status === "loading") return <ProfileSkeleton />
+  if (resolved.status === "loading") return <ProfileSkeleton owner={owns} />
   if (resolved.status === "error") {
     return <EmptyState title="No curator found" hint={`No curator matches @${handle}.`} />
   }

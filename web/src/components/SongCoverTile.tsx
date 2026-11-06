@@ -85,10 +85,21 @@ export function SongCoverTileSkeletons({ id, count }: { id: string; count: numbe
   return (
     <ul className={COVER_GRID}>
       {skeletonKeys(id, count).map((key) => (
-        <li key={key} className="flex flex-col gap-2.5">
+        <li key={key} className="flex min-w-0 flex-col gap-2.5">
           <Bone className="aspect-square w-full rounded-xl" />
-          <Bone className="h-3.5 w-2/3" />
-          <Bone className="h-3 w-1/2" />
+          <div>
+            <div className="flex h-5 items-center">
+              <Bone className="h-3.5 w-2/3" />
+            </div>
+            <div className="mt-0.5 flex h-[18px] items-center">
+              <Bone className="h-3 w-1/2" />
+            </div>
+            <div className="mt-3 flex h-4 items-center gap-2">
+              <Bone className="size-3.5 rounded-full" />
+              <Bone className="h-3 w-24" />
+              <Bone className="ml-auto h-3 w-14" />
+            </div>
+          </div>
         </li>
       ))}
     </ul>
