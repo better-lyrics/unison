@@ -19,6 +19,8 @@ export type IsrcVideo =
 
 type Fields = Record<string, unknown>
 
+const INPUT_ERRORS = new Set([400, 413])
+
 let pausedUntil = 0
 
 export function pauseRemainingSec(): number {
@@ -47,7 +49,7 @@ async function post(path: string, body: unknown): Promise<Fields | null> {
 			const parsed: unknown = await res.json()
 			return typeof parsed === "object" && parsed !== null ? (parsed as Fields) : null
 		}
-		if (res.status === 429 || res.status >= 500) pause(res.headers.get("retry-after"))
+		if (!INPUT_ERRORS.has(res.status)) pause(res.headers.get("retry-after"))
 		log.warn("binilink rejected", { path, status: res.status })
 		return null
 	} catch (err) {
@@ -96,9 +98,10 @@ export async function lookupIsrcVideo(isrc: string): Promise<IsrcVideo | null> {
 	const body = await post("/api/v1/lookup", [isrc])
 	if (!body) return null
 
-	const hit = entries(body.results).find((entry) => entry.isrc === isrc)
+	const sameIsrc = (value: unknown) => typeof value === "string" && normalizeIsrc(value) === isrc
+	const hit = entries(body.results).find((entry) => sameIsrc(entry.isrc))
 	if (hit) return { kind: "found", videoId: youtube(hit.youtube) }
-	return Array.isArray(body.pending) && body.pending.includes(isrc)
+	return Array.isArray(body.pending) && body.pending.some(sameIsrc)
 		? { kind: "pending" }
 		: { kind: "missing" }
 }

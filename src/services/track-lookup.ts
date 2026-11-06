@@ -81,23 +81,31 @@ async function linkedVideo(env: Env, isrc: string): Promise<string | null> {
 	return videoId
 }
 
-/** Lookup order: the given ISRC, the ISRC BiniLink resolves, BiniLink's video for either, song and artist. */
+/** Lookup order: given ISRC, resolved ISRC, song and artist, then BiniLink's video for either ISRC. */
 export async function findLyricsByTrack(env: Env, query: TrackQuery): Promise<TrackMatch> {
 	const enabled = env.BINILINK_LOOKUP_ENABLED === true
 	const isrcs: string[] = []
 	const given = query.isrc ? normalizeIsrc(query.isrc) : null
-	if (given) isrcs.push(given)
+	if (given) {
+		const row = await findByIsrc(env, given)
+		if (row) return { kind: "found", row, matchedBy: "isrc" }
+		isrcs.push(given)
+	}
 
 	let retryAfterSec: number | null = null
 	if (enabled && query.providerIds.length > 0) {
 		const resolved = await resolveProviderIsrc(env, query.providerIds)
-		if (resolved.kind === "isrc" && !isrcs.includes(resolved.isrc)) isrcs.push(resolved.isrc)
 		if (resolved.kind === "pending") retryAfterSec = resolved.retryAfterSec
+		if (resolved.kind === "isrc" && resolved.isrc !== given) {
+			const row = await findByIsrc(env, resolved.isrc)
+			if (row) return { kind: "found", row, matchedBy: "isrc" }
+			isrcs.push(resolved.isrc)
+		}
 	}
 
-	for (const isrc of isrcs) {
-		const row = await findByIsrc(env, isrc)
-		if (row) return { kind: "found", row, matchedBy: "isrc" }
+	if (query.song && query.artist) {
+		const row = await findBySongArtist(env, query.song, query.artist, query.duration, query.album)
+		if (row) return { kind: "found", row, matchedBy: "song_artist" }
 	}
 	if (enabled) {
 		for (const isrc of isrcs) {
@@ -105,10 +113,6 @@ export async function findLyricsByTrack(env: Env, query: TrackQuery): Promise<Tr
 			const row = videoId ? await findByVideoId(env, videoId) : null
 			if (row) return { kind: "found", row, matchedBy: "linked_video" }
 		}
-	}
-	if (query.song && query.artist) {
-		const row = await findBySongArtist(env, query.song, query.artist, query.duration, query.album)
-		if (row) return { kind: "found", row, matchedBy: "song_artist" }
 	}
 	return retryAfterSec !== null ? { kind: "pending", retryAfterSec } : { kind: "none" }
 }
