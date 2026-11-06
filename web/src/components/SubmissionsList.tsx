@@ -217,7 +217,7 @@ function CuratorSubmissions({ keyId, total, owner = false }: SubmissionsListProp
               "h-10 cursor-pointer rounded-full px-4 text-[13px] font-medium transition-[background-color,scale] duration-150 ease-out active:not-disabled:scale-[0.96] disabled:opacity-50 [text-shadow:none] hover:bg-white/[0.14]",
             )}
           >
-            <SwapLabel text={isFetchingNextPage ? "Loading..." : loadMoreError ? "Retry" : "Load more"} />
+            <SwapLabel text={isFetchingNextPage ? "Loading…" : loadMoreError ? "Retry" : "Load more"} />
           </motion.button>
           {loadMoreError ? (
             <p role="alert" className="text-xs text-(--ink-3)">

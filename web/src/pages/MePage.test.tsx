@@ -156,7 +156,7 @@ describe("MePage", () => {
     )
     renderPage()
     await waitFor(() => expect(screen.getByText(valid.displayName)).toBeTruthy())
-    await waitFor(() => expect(screen.getByText("Ranked #7 of every Unison curator.")).toBeTruthy())
+    await waitFor(() => expect(screen.getByText("Ranked #7 among Unison curators.")).toBeTruthy())
     expect(screen.getByTestId("stat-submissions").textContent).toContain("5")
     expect(screen.getByTestId("stat-upvotes").textContent).toContain("23")
   })

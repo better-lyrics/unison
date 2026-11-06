@@ -25,7 +25,7 @@ function profileUrl(handle: string | null | undefined, keyId: string): string {
 
 function standingText(rank: UserRankResponse): string {
   if (rank.community) return "The shared community account."
-  return rank.ranked ? `Ranked #${rank.rank} of every Unison curator.` : "Not ranked yet."
+  return rank.ranked ? `Ranked #${rank.rank} among Unison curators.` : "Not ranked yet."
 }
 
 function Lede({ rank }: { rank: UserRankResponse }) {

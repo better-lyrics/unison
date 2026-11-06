@@ -16,7 +16,7 @@ const CARD = cn(glassClass, "rounded-[22px] p-[18px]")
 const LABEL = "mb-3 text-xs font-medium text-(--ink-3)"
 
 const SCORE_TIP =
-  "Ranking score, weighted by each voter's reputation. Higher shows first. Raw net votes in parentheses."
+  "Ranking score, weighted by voter reputation. Higher ranks first; the number in parentheses is net votes."
 const VOTES_TIP = "How many people have voted on this version."
 const REP_TIP = "Submitter reputation (0 to 2). Trusted users' votes and submissions count for more."
 

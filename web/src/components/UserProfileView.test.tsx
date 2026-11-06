@@ -106,7 +106,7 @@ describe("UserProfileView", () => {
     renderView()
 
     await waitFor(() => expect(screen.getByText("AlphaUser")).toBeTruthy())
-    expect(screen.getByText("Ranked #12 of every Unison curator.")).toBeTruthy()
+    expect(screen.getByText("Ranked #12 among Unison curators.")).toBeTruthy()
     expect(screen.getByTestId("stat-submissions").textContent).toContain("3")
     expect(screen.getByTestId("stat-upvotes").textContent).toContain("11")
 
@@ -191,7 +191,7 @@ describe("UserProfileView", () => {
 
     renderView()
     await waitFor(() => expect(screen.getByText("TopUser")).toBeTruthy())
-    expect(screen.getByText("Ranked #1 of every Unison curator.")).toBeTruthy()
+    expect(screen.getByText("Ranked #1 among Unison curators.")).toBeTruthy()
   })
 
   it("renders the unranked empty state", async () => {
