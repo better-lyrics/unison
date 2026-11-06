@@ -37,13 +37,17 @@ async function fetchBytes(url: string): Promise<Buffer | null> {
 	}
 }
 
+export function coverFromUrl(url: string, size = COVER_SIZE): Promise<Buffer | null> {
+	return fetchBytes(normalizeArtworkUrl(url, size))
+}
+
 export async function coverBytes(
 	env: Env,
 	videoId: string,
 	size = COVER_SIZE
 ): Promise<Buffer | null> {
 	const url = await resolveArtwork(env, videoId)
-	return url ? fetchBytes(normalizeArtworkUrl(url, size)) : null
+	return url ? coverFromUrl(url, size) : null
 }
 
 export function generatedAvatarSvg(seed: string): string {

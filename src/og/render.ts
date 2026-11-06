@@ -7,6 +7,7 @@ import { getSubmissionsByUser } from "@/db/profile"
 import { getProfileExtras } from "@/db/profile-settings"
 import { getUserByKeyId, resolveIdentity, resolvePeople } from "@/db/users"
 import { buildSealMarks } from "@/routes/marks"
+import { resolveArtwork } from "@/services/artwork"
 import type { Env } from "@/types"
 import { type Accent, accentHex, inks, scrimFor } from "@/utils/accent"
 import { syncTypeFor } from "@/utils/sync-type"
@@ -20,6 +21,7 @@ import {
 	badgeArt,
 	badgeSilhouette,
 	coverBytes,
+	coverFromUrl,
 	fingerprint,
 	sampleAccent,
 	sleeveBytes,
@@ -117,18 +119,40 @@ function palette(accent: Accent) {
 	}
 }
 
-export async function renderSongOg(env: Env, videoId: string): Promise<RenderedCard | null> {
+export async function loadSongCard(env: Env, videoId: string) {
 	const variants = await findVariantsByVideoId(env, videoId, VARIANT_LIMIT)
 	const top = variants[0]
 	if (!top) return null
-	const [cover, marks, people] = await Promise.all([
-		coverBytes(env, videoId),
+	const [artwork, marks, people] = await Promise.all([
+		resolveArtwork(env, videoId),
 		buildSealMarks(env, [top]),
 		top.submitter_id == null ? null : resolvePeople(env, [top.submitter_id]),
 	])
-	const art = cover ?? (await sleeveBytes(top.song, top.artist))
-	const person = top.submitter_id == null ? undefined : people?.get(top.submitter_id)
-	const sealed = marks.has(Number(top.id))
+	return {
+		top,
+		versions: variants.length,
+		sealed: marks.has(Number(top.id)),
+		person: top.submitter_id == null ? null : (people?.get(top.submitter_id) ?? null),
+		artwork,
+	}
+}
+
+export type SongCard = NonNullable<Awaited<ReturnType<typeof loadSongCard>>>
+
+async function songArt(card: SongCard): Promise<Buffer> {
+	const cover = card.artwork ? await coverFromUrl(card.artwork) : null
+	return cover ?? sleeveBytes(card.top.song, card.top.artist)
+}
+
+export async function songAccent(card: SongCard): Promise<string> {
+	return accentHex((await sampleAccent(await songArt(card))).hue)
+}
+
+export async function renderSongOg(env: Env, videoId: string): Promise<RenderedCard | null> {
+	const card = await loadSongCard(env, videoId)
+	if (!card) return null
+	const { top, person, sealed } = card
+	const art = await songArt(card)
 	const [wash, accent, avatar, seal] = await Promise.all([
 		washFrom(art, OG_WASH.width, OG_WASH.height),
 		sampleAccent(art),
@@ -142,7 +166,7 @@ export async function renderSongOg(env: Env, videoId: string): Promise<RenderedC
 		artist: top.artist,
 		album: top.album,
 		sync: syncTypeFor(top.sync_type, top.format),
-		versions: variants.length,
+		versions: card.versions,
 		sealed,
 		submitter:
 			person && avatar
@@ -157,7 +181,7 @@ export async function renderSongOg(env: Env, videoId: string): Promise<RenderedC
 	return { bytes: await encode(node, images, OG_JPEG, OG), accent: hex }
 }
 
-async function loadProfile(env: Env, keyId: string) {
+export async function loadProfileCard(env: Env, keyId: string) {
 	const user = await getUserByKeyId(env, keyId)
 	if (!user) return null
 	const [rank, identity, gamification, extras] = await Promise.all([
@@ -167,12 +191,25 @@ async function loadProfile(env: Env, keyId: string) {
 		getProfileExtras(env, keyId, null),
 	])
 	const tier = rank?.community ? null : gamification.tier
+	return { keyId, rank, identity, gamification, tier, banner: extras.banner ?? null }
+}
+
+export type ProfileCard = NonNullable<Awaited<ReturnType<typeof loadProfileCard>>>
+
+async function loadProfile(env: Env, keyId: string) {
+	const card = await loadProfileCard(env, keyId)
+	if (!card) return null
 	const [avatar, banner] = await Promise.all([
-		avatarBytes(identity.avatarUrl, keyId),
-		extras.banner ? coverBytes(env, extras.banner.videoId) : null,
+		avatarBytes(card.identity.avatarUrl, keyId),
+		card.banner ? coverFromUrl(card.banner.artworkUrl) : null,
 	])
 	const backed = await backedImage(avatar, await sampleAccent(avatar))
-	return { rank, identity, gamification, tier, avatar: backed, banner }
+	return { ...card, avatar: backed, banner }
+}
+
+export async function profileAccent(env: Env, keyId: string): Promise<string | null> {
+	const profile = await loadProfile(env, keyId)
+	return profile ? accentHex((await sampleAccent(profile.banner ?? profile.avatar)).hue) : null
 }
 
 type Profile = NonNullable<Awaited<ReturnType<typeof loadProfile>>>
