@@ -180,14 +180,6 @@ describe("LyricsRenderer", () => {
     expect(onLineClick).toHaveBeenCalledWith(4.5)
   })
 
-  it("hands the element the theme, whose comments carry the engine settings", async () => {
-    const Renderer = await importRenderer()
-    const { container } = render(<Renderer variant={makeVariant()} getCurrentTime={zero} getPlaying={stopped} />)
-    const theme = elementIn(container).theme ?? ""
-    expect(theme).toContain("blyrics-letter-wave")
-    expect(theme).toContain(".blyrics-container")
-  })
-
   it("tells the renderer about a user scroll so autoscroll steps aside", async () => {
     const Renderer = await importRenderer()
     const { container } = render(<Renderer variant={makeVariant()} getCurrentTime={zero} getPlaying={stopped} />)

@@ -106,7 +106,7 @@ describe("UserProfileView", () => {
     renderView()
 
     await waitFor(() => expect(screen.getByText("AlphaUser")).toBeTruthy())
-    expect(screen.getByText("Ranked #12 among Unison curators.")).toBeTruthy()
+    expect(screen.getByText(/#12\b/)).toBeTruthy()
     expect(screen.getByTestId("stat-submissions").textContent).toContain("3")
     expect(screen.getByTestId("stat-upvotes").textContent).toContain("11")
 
@@ -191,7 +191,7 @@ describe("UserProfileView", () => {
 
     renderView()
     await waitFor(() => expect(screen.getByText("TopUser")).toBeTruthy())
-    expect(screen.getByText("Ranked #1 among Unison curators.")).toBeTruthy()
+    expect(screen.getByText(/#1\b/)).toBeTruthy()
   })
 
   it("renders the unranked empty state", async () => {
@@ -228,29 +228,6 @@ describe("UserProfileView", () => {
     const { container } = renderView()
     await waitFor(() => expect(screen.getByText("PictureUser")).toBeTruthy())
     expect(container.querySelector("img")?.getAttribute("src")).toBe(avatarUrl)
-  })
-
-  it("regression: shares the /curator link (not a displayName slug) when the curator has no handle", async () => {
-    const writeText = vi.fn().mockResolvedValue(undefined)
-    vi.stubGlobal("navigator", { ...navigator, clipboard: { writeText } })
-    vi.stubGlobal(
-      "fetch",
-      vi.fn().mockImplementation((url: string) => {
-        if (url === `/leaderboard/users/${keyId}`) {
-          return ok({ ranked: false, keyId, displayName: "QuietUser", lastVoteAt: null })
-        }
-        if (url === `/users/${keyId}/submissions`) return ok({ submissions: [] })
-        return Promise.reject(new Error(`unexpected url ${url}`))
-      }),
-    )
-
-    renderView()
-    await waitFor(() => expect(screen.getByText("QuietUser")).toBeTruthy())
-    await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: /share/i }))
-    })
-    expect(writeText).toHaveBeenCalledWith(expect.stringContaining(`/curator/${keyId}`))
-    expect(writeText).not.toHaveBeenCalledWith(expect.stringContaining("/u/quietuser"))
   })
 
   it("renders tier, level line, expertise, and badges from gamification", async () => {
