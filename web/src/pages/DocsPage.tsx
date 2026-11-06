@@ -7,6 +7,7 @@ const BASE_URL = "https://unison.boidu.dev"
 const VIDEO_URL = "https://unison.boidu.dev/lyrics?v=dQw4w9WgXcQ"
 const SONG_ARTIST_URL = "https://unison.boidu.dev/lyrics?song=Never+Gonna+Give+You+Up&artist=Rick+Astley"
 const ISRC_URL = "https://unison.boidu.dev/lyrics?isrc=US2S70465012"
+const PROVIDER_ID_URL = "https://unison.boidu.dev/lyrics?apple_music=1438556832"
 const SEARCH_URL = "https://unison.boidu.dev/lyrics/search?q=never+gonna+give"
 const VARIANTS_URL = "https://unison.boidu.dev/lyrics/variants/dQw4w9WgXcQ?limit=5"
 const TRANSLATE_URL = "https://unison.boidu.dev/translate"
@@ -262,6 +263,29 @@ export function DocsPage() {
             matter. Pass <Code>song</Code> and <Code>artist</Code> too and an unknown ISRC falls back to them.
           </p>
           <CodeTabs tabs={fetchTabs(ISRC_URL)} />
+        </section>
+
+        <section className="space-y-3">
+          <h2 className="text-lg font-semibold text-unison-text">Fetch by Spotify, Apple Music or Tidal id</h2>
+          <p className="text-sm leading-relaxed text-unison-text-secondary">
+            <Code>spotify</Code>, <Code>apple_music</Code> and <Code>tidal</Code> take a track id, not a link. Unison
+            turns it into an ISRC with{" "}
+            <a
+              href="https://link.binimum.org"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-unison-text transition-colors hover:text-unison-text-secondary"
+            >
+              BiniLink
+            </a>{" "}
+            and looks that up. The response says how it matched in <Code>matchedBy</Code>. A <Code>linked_video</Code>{" "}
+            match can be a different release, so its timing may drift.
+          </p>
+          <p className="text-sm leading-relaxed text-unison-text-secondary">
+            A new id can answer <Code>503</Code> with <Code>Retry-After</Code> while it is being matched. Retry a few
+            times, then give up.
+          </p>
+          <CodeTabs tabs={fetchTabs(PROVIDER_ID_URL)} />
         </section>
 
         <section className="space-y-3">

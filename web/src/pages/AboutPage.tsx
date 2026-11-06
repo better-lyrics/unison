@@ -1,3 +1,4 @@
+import { GitHubCredit } from "@/components/GitHubCredit"
 import { COMPOSER_URL } from "@/lib/composer"
 import { Link } from "react-router-dom"
 
@@ -93,21 +94,24 @@ export function AboutPage() {
         <h2 className="text-lg font-semibold text-unison-text">The badges</h2>
         <p className="text-sm leading-relaxed text-unison-text-secondary">
           Every badge you see on Unison, the tier gems on the leaderboard and the achievement badges on profiles, was
-          drawn by the incredibly talented{" "}
+          drawn by the incredibly talented <GitHubCredit login="KiyoshiTheDevil" name="Kiyoshi" />. Thank you for making
+          Unison look this good!
+        </p>
+      </section>
+
+      <section className="space-y-3">
+        <h2 className="text-lg font-semibold text-unison-text">Track id lookups</h2>
+        <p className="text-sm leading-relaxed text-unison-text-secondary">
+          Finding lyrics from a Spotify, Apple Music or Tidal track id runs on{" "}
           <a
-            href="https://github.com/KiyoshiTheDevil"
+            href="https://link.binimum.org"
             target="_blank"
             rel="noopener noreferrer"
-            className="font-medium text-unison-text transition-colors hover:text-unison-text-secondary"
+            className="text-unison-text transition-colors hover:text-unison-text-secondary"
           >
-            <img
-              src="https://github.com/KiyoshiTheDevil.png?size=48"
-              alt=""
-              className="mr-1.5 inline-block size-5 rounded-full object-cover align-[-0.3em] ring-1 ring-white/10"
-            />
-            Kiyoshi
-          </a>
-          . Thank you for making Unison look this good!
+            BiniLink
+          </a>{" "}
+          by <GitHubCredit login="binimum" name="bini" />, which maps those ids to ISRCs. Thank you for building it!
         </p>
       </section>
 
