@@ -28,9 +28,16 @@ interface CopyButtonProps {
   className?: string
   iconClassName?: string
   withText?: boolean
+  radius?: number
 }
 
-export function CopyButton({ text, className, iconClassName = "size-4", withText = false }: CopyButtonProps) {
+export function CopyButton({
+  text,
+  className,
+  iconClassName = "size-4",
+  withText = false,
+  radius = 6,
+}: CopyButtonProps) {
   const [state, setState] = useState<CopyState>("idle")
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const mountedRef = useRef(true)
@@ -81,7 +88,7 @@ export function CopyButton({ text, className, iconClassName = "size-4", withText
         aria-label="Copy lyrics body to clipboard"
         aria-live="polite"
         title="Copy lyrics"
-        style={{ borderRadius: 6 }}
+        style={{ borderRadius: radius }}
         transition={{ layout: LAYOUT_TRANSITION }}
         className={cn(
           className,

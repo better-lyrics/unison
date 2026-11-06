@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useRef, useState } from "react"
+import { type ReactNode, useCallback, useEffect, useRef, useState } from "react"
 import { useSession } from "@/auth/useSession"
 import { useVoteMutations } from "@/hooks/useVoteMutations"
 import { cn } from "@/lib/cn"
+import { glassActionClass, glassClass } from "./ui"
 import { REPORT_REASONS, REPORT_REASON_LABEL, type ReportReason } from "@/lib/report-reasons"
 import { BlDownvoteIcon, BlReportIcon, BlUpvoteIcon } from "./icons/BlVoteIcons"
 
@@ -9,7 +10,11 @@ interface VoteControlsProps {
   variantId: number
   videoId: string
   variant: { score: number; userVote: 1 | -1 | null }
+  beforeReport?: ReactNode
 }
+
+const VOTE_BUTTON =
+  "inline-flex h-11 cursor-pointer items-center gap-2 transition-colors duration-150 ease-[cubic-bezier(0.2,0,0,1)] enabled:hover:bg-white/[0.08] disabled:cursor-not-allowed disabled:opacity-60"
 
 interface ReasonOption {
   reason: ReportReason
@@ -18,7 +23,7 @@ interface ReasonOption {
 
 const REASONS: ReasonOption[] = REPORT_REASONS.map((reason) => ({ reason, label: REPORT_REASON_LABEL[reason] }))
 
-export function VoteControls({ variantId, videoId, variant }: VoteControlsProps) {
+export function VoteControls({ variantId, videoId, variant, beforeReport }: VoteControlsProps) {
   const session = useSession()
   const mutations = useVoteMutations({ variantId, videoId })
   const disabled = session.status !== "signed-in"
@@ -59,81 +64,70 @@ export function VoteControls({ variantId, videoId, variant }: VoteControlsProps)
   const downActive = variant.userVote === -1
 
   return (
-    <div ref={containerRef} className="relative inline-flex items-center gap-1">
-      <button
-        type="button"
-        aria-label="Upvote variant"
-        aria-pressed={upActive}
-        disabled={disabled}
-        title={disabledTitle}
-        onClick={handleUp}
-        className={cn(
-          "group inline-flex h-7 w-7 items-center justify-center rounded border border-unison-border text-unison-text transition-colors",
-          !disabled && "hover:border-unison-border-strong",
-          upActive && "border-green-500/60 bg-green-500/10 text-green-300",
-          disabled && "cursor-not-allowed opacity-60",
-        )}
-      >
-        <BlUpvoteIcon
-          size={16}
-          className={cn("transition-opacity", upActive ? "opacity-100" : "opacity-50 group-hover:opacity-100")}
-        />
-      </button>
-      <span className="min-w-[2ch] text-center text-xs font-medium tabular-nums text-unison-text">{variant.score}</span>
-      <button
-        type="button"
-        aria-label="Downvote variant"
-        aria-pressed={downActive}
-        disabled={disabled}
-        title={disabledTitle}
-        onClick={handleDown}
-        className={cn(
-          "group inline-flex h-7 w-7 items-center justify-center rounded border border-unison-border text-unison-text transition-colors",
-          !disabled && "hover:border-unison-border-strong",
-          downActive && "border-amber-500/60 bg-amber-500/10 text-amber-300",
-          disabled && "cursor-not-allowed opacity-60",
-        )}
-      >
-        <BlDownvoteIcon
-          size={16}
-          className={cn("transition-opacity", downActive ? "opacity-100" : "opacity-50 group-hover:opacity-100")}
-        />
-      </button>
-      <button
-        type="button"
-        aria-label="Report variant"
-        aria-haspopup="menu"
-        aria-expanded={menuOpen}
-        disabled={disabled}
-        title={disabledTitle}
-        onClick={() => setMenuOpen((v) => !v)}
-        className={cn(
-          "ml-1 inline-flex h-7 items-center gap-1 rounded border border-unison-border pr-3 pl-2 text-xs text-unison-text-muted transition-colors",
-          !disabled && "hover:border-unison-border-strong hover:text-unison-text",
-          disabled && "cursor-not-allowed opacity-60",
-        )}
-      >
-        <BlReportIcon size={14} className="text-unison-text opacity-50" />
-        <span>Report</span>
-      </button>
-      {menuOpen && !disabled ? (
-        <div
-          role="menu"
-          className="absolute right-0 top-full z-10 mt-1 flex min-w-[140px] flex-col rounded-md border border-unison-border bg-unison-bg-elevated py-1 text-xs shadow-lg"
+    <>
+      <div className={cn(glassClass, "inline-flex h-11 items-center rounded-full")}>
+        <button
+          type="button"
+          aria-label="Upvote variant"
+          aria-pressed={upActive}
+          disabled={disabled}
+          title={disabledTitle}
+          onClick={handleUp}
+          className={cn(
+            VOTE_BUTTON,
+            "rounded-l-full pr-3.5 pl-4 font-bold tabular-nums",
+            upActive ? "text-[#86efac]" : "text-unison-text",
+          )}
         >
-          {REASONS.map((r) => (
-            <button
-              key={r.reason}
-              type="button"
-              role="menuitem"
-              onClick={() => handleReport(r.reason)}
-              className="px-3 py-1.5 text-left text-unison-text hover:bg-unison-bg-hover"
-            >
-              {r.label}
-            </button>
-          ))}
-        </div>
-      ) : null}
-    </div>
+          <BlUpvoteIcon size={18} />
+          {variant.score}
+        </button>
+        <span aria-hidden="true" className="h-5 w-px bg-white/[0.14]" />
+        <button
+          type="button"
+          aria-label="Downvote variant"
+          aria-pressed={downActive}
+          disabled={disabled}
+          title={disabledTitle}
+          onClick={handleDown}
+          className={cn(VOTE_BUTTON, "rounded-r-full pr-4 pl-3", downActive ? "text-[#fcd34d]" : "text-unison-text")}
+        >
+          <BlDownvoteIcon size={18} />
+        </button>
+      </div>
+      {beforeReport}
+      <div ref={containerRef} className="relative">
+        <button
+          type="button"
+          aria-label="Report variant"
+          aria-haspopup="menu"
+          aria-expanded={menuOpen}
+          disabled={disabled}
+          title={disabledTitle}
+          onClick={() => setMenuOpen((v) => !v)}
+          className={cn(glassActionClass, "w-11 px-0")}
+        >
+          <BlReportIcon size={18} />
+        </button>
+        {menuOpen && !disabled ? (
+          <div
+            role="menu"
+            className="absolute top-full right-0 z-10 mt-2 flex min-w-[160px] flex-col rounded-2xl bg-[rgba(20,19,24,0.92)] p-1.5 text-[13px] shadow-[inset_0_1px_0_rgba(255,255,255,0.1),inset_0_0_0_1px_rgba(255,255,255,0.06),0_12px_40px_rgba(0,0,0,0.5)] backdrop-blur-[20px]"
+          >
+            {REASONS.map((r) => (
+              <button
+                key={r.reason}
+                type="button"
+                role="menuitem"
+                onClick={() => handleReport(r.reason)}
+                className="cursor-pointer rounded-[10px] px-3 py-2 text-left font-medium text-unison-text transition-colors duration-150 hover:bg-white/[0.08]"
+              >
+                {r.label}
+              </button>
+            ))}
+          </div>
+        ) : null}
+      </div>
+    </>
   )
 }

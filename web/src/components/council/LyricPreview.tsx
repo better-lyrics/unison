@@ -1,7 +1,7 @@
 import { Kbd } from "@/components/Kbd"
 import { LyricsPanel } from "@/components/LyricsPanel"
 import { parseVariantLyrics } from "@/components/LyricsRenderer"
-import { VariantCover } from "@/components/VariantMetadata"
+import { VariantCover } from "@/components/VariantCover"
 import { Bone } from "@/components/skeleton"
 import { buttonClass } from "@/components/ui"
 import { useCouncilShortcuts } from "@/hooks/useCouncilShortcuts"

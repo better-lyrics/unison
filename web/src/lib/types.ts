@@ -187,8 +187,14 @@ export interface VariantSummary {
   userVote?: 1 | -1 | null
 }
 
+export interface VariantRevision {
+  revNo: number
+  updatedAt: number
+}
+
 export interface VariantFull extends VariantSummary {
   lyrics: string
+  revision?: VariantRevision
 }
 
 export interface QueueEntry {

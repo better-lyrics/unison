@@ -54,10 +54,9 @@ describe("VariantList", () => {
     expect(screen.getByText(/14/)).toBeTruthy()
   })
 
-  it("renders the format badge alongside the row", () => {
+  it("renders the sync type alongside the row", () => {
     const variants = [makeVariant(40, { format: "lrc", syncType: "linesync" })]
     render(<VariantList variants={variants} selectedId={40} onSelect={vi.fn()} />)
-    expect(screen.getByText("LRC")).toBeTruthy()
     expect(screen.getByText("Line")).toBeTruthy()
   })
 

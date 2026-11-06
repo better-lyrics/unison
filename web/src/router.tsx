@@ -55,7 +55,7 @@ const router = createBrowserRouter([
       { path: "sealed", element: <SealedPage /> },
       { path: "curators", element: <CuratorsPage /> },
       { path: "search", element: <SearchPage /> },
-      { path: "song/:videoId", element: <LyricsPage />, handle: ART_CHROME },
+      { path: "song/:videoId", element: <LyricsPage />, handle: { ...ART_CHROME, width: "stage" } },
       { path: "me", element: <MePage />, handle: ART_CHROME },
       { path: "curator/:keyId", element: <UserPage />, handle: ART_CHROME },
       { path: "u/:nickname", element: <NicknamePage />, handle: ART_CHROME },

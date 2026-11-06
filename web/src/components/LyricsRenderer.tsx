@@ -138,9 +138,9 @@ const LYRIC_SKELETON_LINES = [
   { id: "i", w: "w-11/12" },
 ]
 
-export function LyricsContentSkeleton() {
+export function LyricsContentSkeleton({ className }: { className?: string }) {
   return (
-    <div className="mx-auto flex h-[576px] w-full max-w-3xl flex-col justify-center gap-5">
+    <div className={cn("mx-auto flex h-[576px] w-full max-w-3xl flex-col justify-center gap-5", className)}>
       {LYRIC_SKELETON_LINES.map(({ id, w }) => (
         <Bone key={id} className={cn("h-5", w)} />
       ))}

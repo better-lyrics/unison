@@ -34,3 +34,36 @@ export function sleeveCss(song: string, artist: string): string {
   )
   return `${glow.join(", ")}, linear-gradient(140deg, ${stops[0]}, ${stops[1]} 60%, ${stops[2]})`
 }
+
+const SLEEVE_ANGLE = (140 * Math.PI) / 180
+
+export function sleeveDataUrl(song: string, artist: string, size: number): string | null {
+  const canvas = Object.assign(document.createElement("canvas"), { width: size, height: size })
+  const ctx = canvas.getContext("2d")
+  if (!ctx) return null
+  const { stops, glows } = sleevePaint(sleeveHue(song, artist))
+  const [dx, dy] = [Math.sin(SLEEVE_ANGLE), -Math.cos(SLEEVE_ANGLE)]
+  const half = (size * (Math.abs(dx) + Math.abs(dy))) / 2
+  const mid = size / 2
+  const linear = ctx.createLinearGradient(mid - dx * half, mid - dy * half, mid + dx * half, mid + dy * half)
+  linear.addColorStop(0, stops[0])
+  linear.addColorStop(0.6, stops[1])
+  linear.addColorStop(1, stops[2])
+  ctx.fillStyle = linear
+  ctx.fillRect(0, 0, size, size)
+  for (const glow of glows) {
+    const radial = ctx.createRadialGradient(
+      glow.x * size,
+      glow.y * size,
+      0,
+      glow.x * size,
+      glow.y * size,
+      glow.r * size,
+    )
+    radial.addColorStop(0, glow.color)
+    radial.addColorStop(1, glow.color.replace(/[\d.]+\)$/, "0)"))
+    ctx.fillStyle = radial
+    ctx.fillRect(0, 0, size, size)
+  }
+  return canvas.toDataURL("image/png")
+}

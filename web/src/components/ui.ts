@@ -8,6 +8,8 @@ export const editableCardClass = `${panelClass} space-y-3 p-4`
 export const glassClass =
   "bg-[rgba(15,14,19,0.28)] shadow-[inset_0_1px_0_rgba(255,255,255,0.1),inset_0_0_0_1px_rgba(255,255,255,0.06)] backdrop-blur-[20px] backdrop-saturate-150"
 
+export const glassActionClass = `${glassClass} inline-flex h-11 cursor-pointer items-center justify-center gap-2 whitespace-nowrap rounded-full px-[18px] text-sm font-bold text-unison-text transition-[background-color,scale] duration-150 ease-out hover:bg-white/[0.14] active:scale-[0.96] disabled:cursor-not-allowed disabled:opacity-60 disabled:active:scale-100`
+
 export const tagClass =
   "inline-flex items-center gap-1 rounded bg-unison-bg-hover px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-unison-text-secondary"
 

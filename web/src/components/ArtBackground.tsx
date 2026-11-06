@@ -11,7 +11,13 @@ export function ArtBackground({ src }: { src: string | null | undefined }) {
   useEffect(() => {
     const canvas = canvasRef.current
     if (!canvas) return
-    const warp = new Kawarp(canvas, WARP)
+    let warp: Kawarp
+    try {
+      warp = new Kawarp(canvas, WARP)
+    } catch (error: unknown) {
+      console.warn("Could not start the background art", error)
+      return
+    }
     warpRef.current = warp
     const still = matchMedia("(prefers-reduced-motion: reduce)").matches
     const observer = new ResizeObserver(() => {
