@@ -406,7 +406,7 @@ export function profileDownloadNode(card: ProfileDownloadData) {
 						gap: 22,
 						marginTop: 20,
 						paddingTop: 18,
-						borderTop: "1px solid rgba(255, 255, 255, 0.14)",
+						borderTop: "1px solid rgba(255, 255, 255, 0.025)",
 					}}
 				>
 					{card.stats.map(([value, label]) => (
