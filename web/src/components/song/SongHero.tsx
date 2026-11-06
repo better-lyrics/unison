@@ -175,7 +175,7 @@ export function SongHero({ variant, versions, art, player }: SongHeroProps) {
         <div className={cn(TITLE_SIZE[titleSize(variant.song)], "max-sm:self-end")}>
           <h1
             title={variant.song}
-            className="-mr-[0.08em] -mb-[0.08em] line-clamp-2 pr-[0.08em] pb-[0.08em] font-black leading-[1.08] tracking-[-0.035em] text-balance"
+            className="-mr-[0.08em] -mb-[0.08em] line-clamp-2 pr-[0.08em] pb-[0.08em] font-black leading-[1.08] tracking-[-0.035em] text-balance [text-box:trim-start_cap_alphabetic]"
           >
             {variant.song}
             {seal ? <SealStamp seal={seal} /> : null}
@@ -262,7 +262,7 @@ export function SongHeroSkeleton() {
         <Bone className="aspect-square w-full rounded-2xl" />
       </div>
       <div className="min-w-0 max-sm:contents">
-        <div className={cn(TITLE_SIZE.l, "flex h-[1.08em] items-center max-sm:self-end")}>
+        <div className={cn(TITLE_SIZE.l, "flex h-[0.98em] items-center max-sm:self-end")}>
           <Bone className="h-[0.72em] w-1/2 rounded-lg" />
         </div>
         <div className="mt-1.5 flex h-[26px] items-center max-[1000px]:h-[23px] max-sm:self-start">
