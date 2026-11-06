@@ -11,16 +11,18 @@ import {
   useInteractions,
   useRole,
 } from "@floating-ui/react"
-import { cloneElement, type ReactElement, useState } from "react"
+import { cloneElement, type ReactElement, type ReactNode, useState } from "react"
 import { cn } from "@/lib/cn"
 import { tooltipSurfaceClass } from "./ui"
 
 export function Tooltip({
   label,
   children,
+  className,
 }: {
-  label: string
+  label: ReactNode
   children: ReactElement<Record<string, unknown>>
+  className?: string
 }) {
   const [open, setOpen] = useState(false)
   const { refs, floatingStyles, context } = useFloating({
@@ -45,7 +47,7 @@ export function Tooltip({
             ref={refs.setFloating}
             style={floatingStyles}
             {...getFloatingProps()}
-            className={cn("z-50 max-w-[220px]", tooltipSurfaceClass)}
+            className={cn("z-50 max-w-[220px]", tooltipSurfaceClass, className)}
           >
             {label}
           </div>

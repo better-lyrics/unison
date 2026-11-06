@@ -1,7 +1,7 @@
 import { useBadgeModal } from "@/components/BadgeModalContext"
 import { OdometerNumber } from "@/components/OdometerNumber"
 import { SectionHeading } from "@/components/profile/SectionHeading"
-import { popoverSurfaceClass } from "@/components/ui"
+import { Tooltip } from "@/components/Tooltip"
 import { groupBadgesByCategory, isRareBadge, resolveBadgeImage } from "@/lib/badge-view"
 import { cn } from "@/lib/cn"
 import { titleCase } from "@/lib/format"
@@ -109,38 +109,39 @@ function BadgeTile({
   const pipsNext = !earned && progress?.next != null && progress.next <= 6 ? progress.next : null
   const { open } = useBadgeModal()
 
-  return (
-    <button
-      type="button"
-      data-earned={earned}
-      onClick={() => open({ def, userBadge, rare, isCurrentTier, tierRank })}
-      className="group relative flex cursor-pointer hover:z-10 flex-col items-center gap-1.5 rounded-2xl bg-[rgba(15,14,19,0.22)] px-2 pt-3.5 pb-3 text-center backdrop-blur-[16px] transition-[background-color,scale] duration-150 ease-out [text-shadow:none] active:scale-[0.96] hover:bg-white/[0.08]"
-    >
-      <img
-        src={resolveBadgeImage(def, tier, earned ? "color" : "silhouette")}
-        alt={def.name}
-        draggable={false}
-        className={cn("size-[52px] select-none object-contain", !earned && "opacity-35")}
-      />
-      <span className={cn("text-xs font-bold leading-[1.25]", earned ? "text-unison-text" : "text-(--ink-dim)")}>
-        {def.name}
-      </span>
-      {pipsNext !== null && progress ? <Pips current={progress.current} next={pipsNext} /> : null}
-      <BadgeMeta def={def} userBadge={userBadge} rare={rare} isCurrentTier={isCurrentTier} tierRank={tierRank} />
-
-      <div className={cn(popoverSurfaceClass, "pointer-events-none absolute bottom-full left-1/2 z-20 w-52 -translate-x-1/2 -translate-y-2 rounded-2xl p-3 text-left opacity-0 transition-opacity duration-150 ease-out group-hover:opacity-100")}>
-        <div className="text-[13px] font-bold text-unison-text">{def.name}</div>
-        <div
-          className={cn(
-            "mt-0.5 text-[11px] font-semibold",
-            earned ? "text-unison-medal-gold" : "text-unison-text-muted",
-          )}
-        >
-          {stateText(userBadge)}
-        </div>
-        <div className="mt-1.5 text-xs leading-[1.4] text-unison-text-secondary">{def.description}</div>
+  const tip = (
+    <>
+      <div className="text-[13px] font-bold text-unison-text">{def.name}</div>
+      <div
+        className={cn("mt-0.5 text-[11px] font-semibold", earned ? "text-unison-medal-gold" : "text-unison-text-muted")}
+      >
+        {stateText(userBadge)}
       </div>
-    </button>
+      <div className="mt-1.5 text-xs leading-[1.4] text-unison-text-secondary">{def.description}</div>
+    </>
+  )
+
+  return (
+    <Tooltip label={tip} className="w-52 rounded-2xl p-3">
+      <button
+        type="button"
+        data-earned={earned}
+        onClick={() => open({ def, userBadge, rare, isCurrentTier, tierRank })}
+        className="relative flex cursor-pointer flex-col items-center gap-1.5 rounded-2xl bg-[rgba(15,14,19,0.22)] px-2 pt-3.5 pb-3 text-center backdrop-saturate-150 transition-[background-color,scale] duration-150 ease-out [text-shadow:none] active:scale-[0.96] hover:bg-white/[0.08]"
+      >
+        <img
+          src={resolveBadgeImage(def, tier, earned ? "color" : "silhouette")}
+          alt={def.name}
+          draggable={false}
+          className={cn("size-[52px] select-none object-contain", !earned && "opacity-35")}
+        />
+        <span className={cn("text-xs font-bold leading-[1.25]", earned ? "text-unison-text" : "text-(--ink-dim)")}>
+          {def.name}
+        </span>
+        {pipsNext !== null && progress ? <Pips current={progress.current} next={pipsNext} /> : null}
+        <BadgeMeta def={def} userBadge={userBadge} rare={rare} isCurrentTier={isCurrentTier} tierRank={tierRank} />
+      </button>
+    </Tooltip>
   )
 }
 
