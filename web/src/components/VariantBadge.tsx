@@ -1,10 +1,12 @@
 import { tagClass } from "@/components/ui"
 import { cn } from "@/lib/cn"
-import type { LyricsFormat } from "@/lib/types"
+import { syncTypeFor } from "@/lib/sync-type"
+import type { LyricsFormat, SyncType } from "@/lib/types"
+import { SyncTag } from "./SyncTag"
 
 interface VariantBadgeProps {
   format: LyricsFormat
-  syncType?: string
+  syncType?: SyncType
   className?: string
 }
 
@@ -23,7 +25,7 @@ export function VariantBadge({ format, syncType, className }: VariantBadgeProps)
           <span aria-hidden="true" className="text-unison-text-muted">
             ·
           </span>
-          <span className="normal-case tracking-normal text-unison-text-secondary">{syncType}</span>
+          <SyncTag kind={syncTypeFor(syncType, format)} className="normal-case tracking-normal" />
         </>
       ) : null}
     </span>

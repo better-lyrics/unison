@@ -1,12 +1,13 @@
 import { IconBrandDiscordFilled, IconLoader2 } from "@tabler/icons-react"
-import { useCallback, useState } from "react"
+import { useState } from "react"
 import { useSession } from "@/auth/useSession"
 import { DiscordConnectLock, secondaryButtonClass } from "@/components/discord-ui"
 import { Tooltip } from "@/components/Tooltip"
 import { editableCardClass } from "@/components/ui"
 import { useAsyncData } from "@/hooks/useAsyncData"
+import { useMySongs } from "@/hooks/useMySongs"
 import type { DiscordLink } from "@/hooks/useDiscordLink"
-import { fetchAvatarCatalogue, fetchUserSubmissions, putAvatar } from "@/lib/api"
+import { fetchAvatarCatalogue, putAvatar } from "@/lib/api"
 import { useArtwork } from "@/lib/artwork"
 import { dicebearThumbsDataUri } from "@/lib/avatar"
 import type { AvatarChoice, UserSubmission } from "@/lib/types"
@@ -79,12 +80,10 @@ function SongTile({
 }
 
 function SongGroup({ keyId, ...rest }: TileState & { keyId: string; size: number; brokenSrcs: ReadonlySet<string> }) {
-  const fetcher = useCallback(() => fetchUserSubmissions(keyId), [keyId])
-  const submissions = useAsyncData(fetcher, `user:submissions:${keyId}`)
-  if (submissions.status !== "success") return null
-  const seen = new Set<string>()
-  const songs = submissions.data.submissions.filter((s) => !seen.has(s.videoId) && seen.add(s.videoId))
-  if (songs.length === 0) return null
+  const mine = useMySongs(keyId)
+  if (mine.status === "error") return <p className="text-xs text-red-400">Could not load your songs. Try again later.</p>
+  if (mine.status !== "success" || mine.songs.length === 0) return null
+  const songs = mine.songs
   return (
     <div className="space-y-2">
       <div className={groupLabelClass}>From your songs</div>

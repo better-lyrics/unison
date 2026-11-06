@@ -232,7 +232,9 @@ describe("SongsPage", () => {
         "fetch",
         vi.fn().mockImplementation((url: string) => {
           if (url === "/leaderboard/songs") return Promise.resolve(emptyBoard())
-          if (url.startsWith("/feed")) return Promise.resolve(jsonResponse({ success: true, data: [sealed] }))
+          if (url.startsWith("/feed")) {
+            return Promise.resolve(jsonResponse({ success: true, data: url.includes("sealed=1") ? [sealed] : [] }))
+          }
           if (url.startsWith("/artwork"))
             return Promise.resolve(jsonResponse({ success: true, data: { artworkUrl: null } }))
           return Promise.reject(new Error(`unexpected url ${url}`))
@@ -260,7 +262,9 @@ describe("SongsPage", () => {
         "fetch",
         vi.fn().mockImplementation((url: string) => {
           if (url === "/leaderboard/songs") return Promise.resolve(jsonResponse({ success: false, error: "boom" }, 500))
-          if (url.startsWith("/feed")) return Promise.resolve(jsonResponse({ success: true, data: [sealed] }))
+          if (url.startsWith("/feed")) {
+            return Promise.resolve(jsonResponse({ success: true, data: url.includes("sealed=1") ? [sealed] : [] }))
+          }
           if (url.startsWith("/artwork"))
             return Promise.resolve(jsonResponse({ success: true, data: { artworkUrl: null } }))
           return Promise.reject(new Error(`unexpected url ${url}`))

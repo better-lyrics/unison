@@ -739,6 +739,7 @@ function sealedEntries(): FeedEntry[] {
       videoId: v.videoId,
       song: v.song,
       artist: v.artist,
+      format: v.format,
       syncType: v.syncType,
       createdAt: seal.at ?? now,
       marks: [seal, ...(v.marks ?? []).filter((m) => m.type !== "seal")],

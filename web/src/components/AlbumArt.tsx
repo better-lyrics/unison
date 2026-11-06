@@ -1,11 +1,37 @@
-import { IconMusic } from "@tabler/icons-react"
+import { useState } from "react"
 import { useArtwork } from "@/lib/artwork"
 import { cn } from "@/lib/cn"
+import { sleeveCss } from "@/lib/sleeve"
 
-export function AlbumArt({ videoId, className }: { videoId: string; className?: string }) {
+interface CoverProps {
+  song: string
+  artist: string
+  className?: string
+}
+
+export function CoverImage({ src, song, artist, className }: CoverProps & { src: string | null | undefined }) {
+  const [failed, setFailed] = useState<string | null>(null)
+  const [loaded, setLoaded] = useState<string | null>(null)
+  return (
+    <div className={cn("relative size-full overflow-hidden", className)} style={{ background: sleeveCss(song, artist) }}>
+      {src && src !== failed ? (
+        <img
+          src={src}
+          alt=""
+          loading="lazy"
+          onLoad={() => setLoaded(src)}
+          onError={() => setFailed(src)}
+          className={cn(
+            "absolute inset-0 size-full object-cover transition-[opacity,filter] duration-(--reveal-dur) ease-in-out motion-reduce:transition-none",
+            loaded === src ? "opacity-100 blur-none" : "opacity-0 blur-(--reveal-blur)",
+          )}
+        />
+      ) : null}
+    </div>
+  )
+}
+
+export function AlbumArt({ videoId, ...cover }: CoverProps & { videoId: string }) {
   const { data: url } = useArtwork(videoId)
-  if (url) {
-    return <img src={url} alt="" loading="lazy" className={cn("size-full object-cover", className)} />
-  }
-  return <IconMusic className="size-6 text-unison-text opacity-50" stroke={1.5} />
+  return <CoverImage src={url} {...cover} />
 }

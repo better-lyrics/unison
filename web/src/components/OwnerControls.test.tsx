@@ -63,7 +63,7 @@ function renderControls() {
   return render(
     <AuthProvider>
       <HeaderProbe />
-      <OwnerControls />
+      <OwnerControls showDiscord={false} onProfileChange={async () => {}} />
     </AuthProvider>,
   )
 }

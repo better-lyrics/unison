@@ -1,4 +1,5 @@
 import { Kbd } from "@/components/Kbd"
+import { glassClass, popoverSurfaceClass } from "@/components/ui"
 import { type DropdownStatus, SearchDropdown } from "@/components/SearchDropdown"
 import { useDebouncedValue } from "@/hooks/useDebouncedValue"
 import { useSearchShortcut } from "@/hooks/useSearchShortcut"
@@ -16,21 +17,32 @@ import {
   useInteractions,
   useListNavigation,
   useRole,
+  useTransitionStyles,
 } from "@floating-ui/react"
 import { IconSearch, IconX } from "@tabler/icons-react"
 import { useQuery } from "@tanstack/react-query"
+import { useReducedMotion } from "motion/react"
+import { tokenMs, tokenValue } from "@/lib/motion-tokens"
 import { type KeyboardEvent, useEffect, useRef, useState } from "react"
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom"
 
 const MIN_QUERY_LENGTH = 2
+
+const dropdownMotion = () => ({
+  duration: { open: tokenMs("--dropdown-open-dur", 250), close: tokenMs("--dropdown-close-dur", 150) },
+  open: `scale(${tokenValue("--dropdown-pre-scale", "0.97")})`,
+  close: `scale(${tokenValue("--dropdown-closing-scale", "0.99")})`,
+  ease: tokenValue("--dropdown-ease", "cubic-bezier(0.22, 1, 0.36, 1)"),
+})
 const DEBOUNCE_MS = 200
 const MAX_SUGGESTIONS = 5
 
 interface SearchBarProps {
   compact?: boolean
+  glass?: boolean
 }
 
-export function SearchBar({ compact = false }: SearchBarProps) {
+export function SearchBar({ compact = false, glass = false }: SearchBarProps) {
   const location = useLocation()
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
@@ -97,12 +109,23 @@ export function SearchBar({ compact = false }: SearchBarProps) {
           : "results"
 
   const listRef = useRef<Array<HTMLElement | null>>([])
-  const { refs, floatingStyles, context } = useFloating<HTMLInputElement>({
+  const { refs, floatingStyles, context, placement } = useFloating<HTMLInputElement>({
     open,
     onOpenChange: setOpen,
     placement: "bottom-end",
     whileElementsMounted: autoUpdate,
     middleware: [offset(8), flip({ padding: 8 }), shift({ padding: 8 })],
+  })
+  const still = useReducedMotion()
+  const [dropdown] = useState(dropdownMotion)
+  const { isMounted, styles } = useTransitionStyles(context, {
+    duration: dropdown.duration,
+    initial: still ? { opacity: 0 } : { opacity: 0, transform: dropdown.open },
+    close: still ? { opacity: 0 } : { opacity: 0, transform: dropdown.close },
+    common: {
+      transformOrigin: placement.startsWith("top") ? "bottom right" : "top right",
+      transitionTimingFunction: dropdown.ease,
+    },
   })
   const role = useRole(context, { role: "combobox" })
   const dismiss = useDismiss(context)
@@ -183,7 +206,14 @@ export function SearchBar({ compact = false }: SearchBarProps) {
 
   return (
     <div className={cn("relative", compact ? "w-full" : "w-full max-w-xs")}>
-      <div className="flex h-9 items-center gap-2 rounded-md border border-unison-border bg-unison-bg-elevated px-2.5 transition-colors focus-within:border-unison-border-strong hover:border-unison-border-strong">
+      <div
+        className={cn(
+          "flex h-9 items-center gap-2 px-2.5",
+          glass
+            ? cn(glassClass, "rounded-[10px]")
+            : "rounded-md border border-unison-border bg-unison-bg-elevated transition-colors focus-within:border-unison-border-strong hover:border-unison-border-strong",
+        )}
+      >
         <IconSearch className="size-4 shrink-0 text-unison-text opacity-50" stroke={1.5} aria-hidden="true" />
         <input
           ref={(node) => {
@@ -217,15 +247,12 @@ export function SearchBar({ compact = false }: SearchBarProps) {
           </button>
         ) : null}
       </div>
-      {open ? (
+      {isMounted ? (
         <FloatingPortal>
-          <div
-            ref={refs.setFloating}
-            style={floatingStyles}
-            {...getFloatingProps()}
-            className="z-50 w-96 overflow-hidden rounded-xl border border-unison-border bg-unison-bg-elevated shadow-[0_16px_40px_-12px_rgba(0,0,0,0.7)]"
-          >
-            <SearchDropdown status={status} results={results} activeIndex={activeIndex} getRowProps={getRowProps} />
+          <div ref={refs.setFloating} style={floatingStyles} {...getFloatingProps()} className="z-50">
+            <div style={styles} className={cn(popoverSurfaceClass, "w-96 overflow-hidden rounded-2xl")}>
+              <SearchDropdown status={status} results={results} activeIndex={activeIndex} getRowProps={getRowProps} />
+            </div>
           </div>
         </FloatingPortal>
       ) : null}

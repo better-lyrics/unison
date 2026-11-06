@@ -13,7 +13,7 @@ const SPA_DIRECTIVES: Record<string, string[]> = {
 		"https://github.com",
 		"https://avatars.githubusercontent.com",
 	],
-	"connect-src": ["'self'", "https://unison-dumps.boidu.dev", "https://cloudflareinsights.com"],
+	"connect-src": ["'self'", "data:", "https://unison-dumps.boidu.dev", "https://cloudflareinsights.com"],
 	"frame-src": ["https://www.youtube.com"],
 	"object-src": ["'none'"],
 	"base-uri": ["'self'"],

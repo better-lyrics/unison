@@ -42,6 +42,7 @@ import { leaderboardRoutes } from "@/routes/leaderboard"
 import { linkRoutes, linkStartRoutes } from "@/routes/links"
 import { lyricsRoutes } from "@/routes/lyrics"
 import { migrationRoutes } from "@/routes/migrations"
+import { ogRoutes } from "@/routes/og"
 import { requestRoutes } from "@/routes/requests"
 import { reviewQueueBotRoutes, reviewQueueRoutes } from "@/routes/review-queue"
 import { revisionBotRoutes, revisionRoutes } from "@/routes/revisions"
@@ -49,7 +50,8 @@ import { translateRoutes } from "@/routes/translate"
 import { userRoutes } from "@/routes/users"
 import { videoLinkRoutes } from "@/routes/video-links"
 import { voteBotRoutes, voteRoutes } from "@/routes/votes"
-import { loadSpa, serveSpa } from "@/spa"
+import { sharePage } from "@/share-meta"
+import { htmlDocument, loadSpa, serveSpa } from "@/spa"
 import { cors } from "@elysiajs/cors"
 import { cron } from "@elysiajs/cron"
 import { node } from "@elysiajs/node"
@@ -207,8 +209,13 @@ const app = new Elysia({ adapter: node() })
 	.use(linkRoutes(env))
 	.use(migrationRoutes(env))
 	.use(adminRoutes(env))
-	.get("/*", ({ request }) => {
-		const response = serveSpa(new URL(request.url).pathname, SPA)
+	.use(ogRoutes(env))
+	.get("/*", async ({ request }) => {
+		const { pathname } = new URL(request.url)
+		if (SPA.indexHtml && !pathname.includes(".")) {
+			return htmlDocument(await sharePage(env, request, SPA.indexHtml))
+		}
+		const response = serveSpa(pathname, SPA)
 		if (!response) throw new NotFoundError()
 		return response
 	})

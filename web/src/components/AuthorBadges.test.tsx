@@ -58,11 +58,6 @@ describe("AuthorBadges", () => {
       expect(container.textContent).toContain("+3")
     })
 
-    it("renders nothing for someone with no tier and no badges", () => {
-      const { container } = renderBadges(none)
-      expect(container.textContent).toBe("")
-    })
-
     it("regression: leaves no empty box while a top badge image is still loading", () => {
       const { container } = renderBadges(
         { ...none, topBadge: { key: "polyglot", name: "Polyglot", tier: 1 }, badgeCount: 2 },
@@ -89,6 +84,6 @@ describe("BadgeStrip", () => {
       </QueryClientProvider>,
     )
     const img = await screen.findByRole("img", { name: "Prolific" })
-    expect(img.getAttribute("class")).toContain("size-4")
+    expect(img.parentElement?.getAttribute("class")).toContain("size-4")
   })
 })

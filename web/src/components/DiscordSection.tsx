@@ -1,5 +1,6 @@
 import { IconBrandDiscordFilled, IconLoader2 } from "@tabler/icons-react"
 import { DiscordConnectLock, discordButtonClass, secondaryButtonClass } from "@/components/discord-ui"
+import { Switch } from "@/components/council/Switch"
 import { editableCardClass } from "@/components/ui"
 import type { DiscordLink } from "@/hooks/useDiscordLink"
 
@@ -12,6 +13,7 @@ export interface DiscordSectionModel {
   error: string | null
   onConnect: () => void
   onDisconnect: () => void
+  showOnProfile?: { checked: boolean; onChange: (checked: boolean) => void }
 }
 
 export function DiscordSectionView({ model }: { model: DiscordSectionModel }) {
@@ -29,6 +31,11 @@ export function DiscordSectionView({ model }: { model: DiscordSectionModel }) {
         <p className="text-sm text-unison-text">
           Connected{model.username ? ` as ${model.username}` : ""}. Your roles update on their own.
         </p>
+        {model.showOnProfile ? (
+          <Switch checked={model.showOnProfile.checked} onChange={model.showOnProfile.onChange}>
+            Show Discord on my profile
+          </Switch>
+        ) : null}
         <button type="button" onClick={model.onDisconnect} disabled={model.working} className={secondaryButtonClass}>
           {model.working ? "Disconnecting..." : "Disconnect"}
         </button>
@@ -63,7 +70,13 @@ export function DiscordSectionView({ model }: { model: DiscordSectionModel }) {
   )
 }
 
-export function DiscordSection({ link }: { link: DiscordLink }) {
+export function DiscordSection({
+  link,
+  showOnProfile,
+}: {
+  link: DiscordLink
+  showOnProfile?: DiscordSectionModel["showOnProfile"]
+}) {
   return (
     <DiscordSectionView
       model={{
@@ -75,6 +88,7 @@ export function DiscordSection({ link }: { link: DiscordLink }) {
         error: link.error,
         onConnect: link.connect,
         onDisconnect: link.disconnect,
+        showOnProfile,
       }}
     />
   )

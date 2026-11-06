@@ -130,7 +130,7 @@ describe("SubmissionsList", () => {
     it("shows the empty profile state only when no filter is active", async () => {
       stubRoutes({ [base]: { submissions: [] } })
       renderList()
-      await waitFor(() => expect(screen.getByText(/no submissions yet/i)).toBeTruthy())
+      await waitFor(() => expect(screen.getByText(/no songs synced yet/i)).toBeTruthy())
     })
 
     it("keeps the toolbar and says no match when a filter matches nothing", async () => {
@@ -143,7 +143,7 @@ describe("SubmissionsList", () => {
       fireEvent.change(screen.getByLabelText("Filter by sync type"), { target: { value: "plain" } })
       await waitFor(() => expect(screen.getByText(/no submissions match/i)).toBeTruthy())
       expect(screen.getByLabelText("Filter by sync type")).toBeTruthy()
-      expect(screen.queryByText(/no submissions yet/i)).toBeNull()
+      expect(screen.queryByText(/no songs synced yet/i)).toBeNull()
     })
 
     it("does not send a whitespace-only search", async () => {

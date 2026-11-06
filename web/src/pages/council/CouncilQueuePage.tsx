@@ -22,6 +22,7 @@ import { videoIdFromInput } from "@/lib/youtube-music"
 import { IconCheck } from "@tabler/icons-react"
 import { useState } from "react"
 import { useCouncilContext } from "./context"
+import { languageName } from "@/lib/language"
 
 const entry = (item: QueueItem) => ({ key: String(item.id), itemType: "seal" as const, itemId: item.id })
 
@@ -122,7 +123,7 @@ export function CouncilQueuePage() {
                         flagOption("clean", "No flags"),
                         ...languageFilters(queue).map((language) => ({
                           key: language,
-                          label: language.toUpperCase(),
+                          label: languageName(language),
                           pressed: filters.languages.includes(language),
                           onToggle: () => toggleLanguage(language),
                         })),

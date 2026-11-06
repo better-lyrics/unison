@@ -2,12 +2,13 @@ import { motion } from "motion/react"
 import { Link } from "react-router-dom"
 import { Bone } from "@/components/skeleton"
 import { SongThumbnail } from "@/components/SongThumbnail"
-import { tagClass } from "@/components/ui"
-import { UserAvatar } from "@/components/UserAvatar"
+import { SubmitterLine } from "@/components/SubmitterLine"
 import { cn } from "@/lib/cn"
 import { formatElapsed } from "@/lib/format"
 import { EASE_OUT, sealStamp, staggerDelay, thudFrom, thudTransition } from "@/lib/motion-variants"
 import type { FeedEntry } from "@/lib/types"
+import { syncTypeFor } from "@/lib/sync-type"
+import { SyncTag } from "@/components/SyncTag"
 
 type SealedTileVariant = "shelf" | "card"
 
@@ -19,11 +20,6 @@ const FRAME: Record<SealedTileVariant, string> = {
   shelf: "flex w-[148px] shrink-0 flex-col gap-2",
   card: "flex flex-col overflow-hidden rounded-xl bg-white/[0.02]",
 }
-
-export const SYNC_LABEL = {
-  richsync: "Richsynced",
-  linesync: "Line synced",
-} as const satisfies Partial<Record<FeedEntry["syncType"], string>>
 
 interface SealedTileProps {
   entry: FeedEntry
@@ -42,7 +38,6 @@ export function SealedTile({
 }: SealedTileProps) {
   const seal = entry.marks?.find((mark) => mark.type === "seal")
   const isCard = variant === "card"
-  const syncLabel = entry.syncType === "plain" ? undefined : SYNC_LABEL[entry.syncType]
   const landAt = enterIndex === undefined ? null : enterDelay + staggerDelay(enterIndex)
   const sealClass = cn(
     "absolute drop-shadow-[0_2px_6px_rgba(0,0,0,0.5)]",
@@ -50,13 +45,7 @@ export function SealedTile({
   )
   const submitter = entry.submitter ? (
     <span className="flex min-w-0 items-center gap-1.5 text-[11px] text-unison-text-muted">
-      <UserAvatar
-        avatarUrl={entry.submitter.avatarUrl}
-        keyId={entry.submitter.keyId}
-        className="size-4 shrink-0 rounded-full"
-        loading="lazy"
-      />
-      <span className="truncate">{entry.submitter.displayName}</span>
+      <SubmitterLine submitter={entry.submitter} />
     </span>
   ) : null
 
@@ -76,6 +65,8 @@ export function SealedTile({
       <div className="relative">
         <SongThumbnail
           videoId={entry.videoId}
+          song={entry.song}
+          artist={entry.artist}
           className={cn("aspect-square w-full", isCard ? "rounded-none" : "rounded-[10px]")}
         />
         {seal && landAt !== null ? (
@@ -91,7 +82,7 @@ export function SealedTile({
         <span className="-mt-1 truncate text-xs text-unison-text-secondary">{entry.artist}</span>
         {isCard ? (
           <>
-            {syncLabel ? <span className={cn(tagClass, "w-fit")}>{syncLabel}</span> : null}
+            <SyncTag kind={syncTypeFor(entry.syncType, entry.format)} className="w-fit text-xs" />
             <span className="flex items-center justify-between gap-2">
               {submitter ?? <span />}
               {seal?.at !== undefined ? (

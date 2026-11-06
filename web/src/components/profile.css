@@ -1,66 +1,34 @@
-/* Delays are set inline per index so the stagger survives React reordering. */
-
-@keyframes pf-arc-fill {
-  from {
-    stroke-dashoffset: 277;
-  }
-}
-@keyframes pf-pop-in {
-  from {
-    opacity: 0;
-    transform: translateY(7px) scale(0.8);
-  }
-}
 @keyframes pf-rise-in {
   from {
     opacity: 0;
     transform: translateY(10px);
   }
 }
-@keyframes pf-divider-in {
-  from {
-    transform: scaleY(0);
-  }
-}
-@keyframes pf-bar-fill {
-  from {
-    transform: scaleX(0);
-  }
-}
 
-.pf-arc {
-  animation: pf-arc-fill 1.1s cubic-bezier(0.2, 0, 0, 1) 0.2s both;
-}
-.pf-featured {
-  position: relative;
-}
-.pf-featured::before {
-  content: "";
+.pf-banner-soft,
+.pf-banner-sharp {
   position: absolute;
-  left: 0;
-  top: 0;
-  bottom: 0;
-  width: 1px;
-  background: var(--color-unison-border);
-  animation: pf-divider-in 0.32s cubic-bezier(0.2, 0, 0, 1) 0.26s both;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
-@media (width < 640px) {
-  .pf-featured::before {
-    display: none;
-  }
+.pf-banner-soft {
+  inset: -40px -40px 0;
+  width: calc(100% + 80px);
+  height: calc(100% + 40px);
+  filter: blur(40px) saturate(1.4);
+  mask-image: linear-gradient(180deg, #000 40%, var(--pf-eased));
 }
-.pf-fbadge {
-  animation: pf-pop-in 0.4s cubic-bezier(0.2, 0, 0, 1) both;
+.pf-banner-sharp {
+  mask-image: linear-gradient(180deg, #000 0%, #000 46%, var(--pf-eased) 90%, transparent);
 }
-.pf-group {
-  animation: pf-rise-in 0.5s cubic-bezier(0.2, 0, 0, 1) both;
+:root {
+  --pf-eased: rgba(0, 0, 0, 0.96), rgba(0, 0, 0, 0.86), rgba(0, 0, 0, 0.7), rgba(0, 0, 0, 0.5),
+    rgba(0, 0, 0, 0.3), rgba(0, 0, 0, 0.14), rgba(0, 0, 0, 0.04), transparent;
 }
 .cs-reveal {
   animation: pf-rise-in 0.42s cubic-bezier(0.2, 0, 0, 1) both;
-}
-.pf-bar-fill {
-  transform-origin: left;
-  animation: pf-bar-fill 1s cubic-bezier(0.2, 0, 0, 1) 0.3s both;
 }
 
 @keyframes bm-fade {
@@ -108,16 +76,8 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .pf-arc,
-  .pf-fbadge,
-  .pf-group,
-  .cs-reveal,
-  .pf-bar-fill {
+  .cs-reveal {
     animation: none !important;
-  }
-  .pf-featured::before {
-    animation: none !important;
-    transform: none;
   }
   .bm-overlay,
   .bm-overlay.bm-closing,

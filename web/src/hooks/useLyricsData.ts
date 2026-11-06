@@ -1,5 +1,5 @@
 import { fetchLyricsVariant, fetchLyricsVariants, fetchRevisionDiff, fetchRevisions } from "@/lib/api"
-import { useQuery } from "@tanstack/react-query"
+import { keepPreviousData, useQuery } from "@tanstack/react-query"
 
 export const lyricsKeys = {
   variants: (videoId: string) => ["lyrics", "variants", videoId] as const,
@@ -28,6 +28,7 @@ export function useLyricsVariant(id: number | undefined) {
     },
     enabled: id !== undefined,
     staleTime: STALE_MS,
+    placeholderData: keepPreviousData,
   })
 }
 

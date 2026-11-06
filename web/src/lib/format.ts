@@ -7,6 +7,8 @@ const exactFormatter = new Intl.NumberFormat("en-US")
 
 const shortDateFormatter = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric" })
 
+const fullDateFormatter = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric" })
+
 export function formatRank(rank: number): string {
   return `#${rank}`
 }
@@ -29,6 +31,10 @@ export function titleCase(value: string): string {
 
 export function formatShortDate(epochSec: number): string {
   return shortDateFormatter.format(epochSec * 1000)
+}
+
+export function formatFullDate(epochSec: number): string {
+  return fullDateFormatter.format(epochSec * 1000)
 }
 
 const MINUTE = 60

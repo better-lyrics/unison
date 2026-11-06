@@ -2,22 +2,13 @@ import { readFileSync } from "node:fs"
 import { join } from "node:path"
 import { fileURLToPath } from "node:url"
 import { config } from "@/config"
-import { type BadgeDef, CATALOGUE } from "@/db/badges/definitions"
+import { CATALOGUE, badgeImageFile } from "@/db/badges/definitions"
 import type { Env } from "@/types"
 import { ErrorCode, buildError } from "@/utils/errors"
 import { readRateLimit } from "@/utils/read-rate-limit"
 import { Elysia, t } from "elysia"
 
 const ASSETS_DIR = fileURLToPath(new URL("../../assets/badges/", import.meta.url))
-
-function resolveImageFilename(def: BadgeDef, variant?: string, tier?: string): string {
-	if (variant === "silhouette") return `${def.key}_silhouette.svg`
-	if (variant === "mono") return `${def.key}_mono.svg`
-	if (!def.tiers) return `${def.key}.svg`
-	const parsed = Number.parseInt(tier ?? "", 10)
-	const level = Number.isInteger(parsed) && parsed >= 1 && parsed <= def.tiers.length ? parsed : 1
-	return `${def.key}_${level}.svg`
-}
 
 // The silhouette is a solid fill of each badge's exact shape. Used as an alpha mask, it lets
 // us paint a shape-following background of any color behind the art (no rectangle, no edge clip).
@@ -81,7 +72,7 @@ export const badgeRoutes = (env: Env) =>
 				if (!def) {
 					return status(404, buildError(ErrorCode.NOT_FOUND))
 				}
-				const filename = resolveImageFilename(def, query.variant, query.tier)
+				const filename = badgeImageFile(def, query.variant, Number.parseInt(query.tier ?? "", 10))
 				let svg: string
 				try {
 					svg = readFileSync(join(ASSETS_DIR, filename), "utf-8")

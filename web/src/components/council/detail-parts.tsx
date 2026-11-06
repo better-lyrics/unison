@@ -35,6 +35,8 @@ export function DetailHeader({
     <div className="flex items-start gap-[22px]">
       <SongThumbnail
         videoId={videoId}
+        song={title}
+        artist={artist}
         className="size-[104px] rounded-xl outline outline-1 -outline-offset-1 outline-white/10"
       />
       <div className="min-w-0">

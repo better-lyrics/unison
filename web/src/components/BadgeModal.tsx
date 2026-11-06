@@ -1,3 +1,4 @@
+import { glassClass, popoverSurfaceClass } from "@/components/ui"
 import { resolveBadgeImage, transparentBadgeUrl } from "@/lib/badge-view"
 import { cn } from "@/lib/cn"
 import { titleCase } from "@/lib/format"
@@ -44,8 +45,6 @@ function stateChipText(sel: BadgeModalSelection): string {
   return "Locked"
 }
 
-// The metric line only appears when it adds information beyond the state chip
-// (tier progress, a rank, or an earned date). Otherwise it is omitted.
 function metricNode(sel: BadgeModalSelection): ReactNode {
   const { def, userBadge } = sel
   const earned = userBadge?.earned ?? false
@@ -69,19 +68,6 @@ function metricNode(sel: BadgeModalSelection): ReactNode {
       )
     }
     return null
-  }
-  if (earned) {
-    const rank = sel.isCurrentTier && sel.tierRank != null ? `Rank #${sel.tierRank}` : null
-    const earnedAt = formatEarnedAt(userBadge?.earnedAt)
-    if (rank || earnedAt) {
-      return (
-        <>
-          {rank ? <b className="font-bold text-unison-medal-gold">{rank}</b> : null}
-          {rank && earnedAt ? " · " : null}
-          {earnedAt ? `Earned ${earnedAt}` : null}
-        </>
-      )
-    }
   }
   return null
 }
@@ -113,9 +99,9 @@ function TierLadder({ def, current }: { def: BadgeDef; current: number }) {
 function Chip({ tone, children }: { tone: "on" | "off" | "rare" | "cat"; children: ReactNode }) {
   const toneClass = {
     on: "bg-[rgba(255,200,61,0.14)] text-unison-medal-gold",
-    off: "bg-unison-surface text-unison-text-muted",
+    off: "bg-white/[0.06] text-unison-text-muted",
     rare: "bg-[rgba(245,166,35,0.14)] text-unison-warn",
-    cat: "bg-unison-surface text-unison-text-secondary",
+    cat: "bg-white/[0.06] text-unison-text-secondary",
   }[tone]
   return (
     <span className={cn("inline-flex h-6 items-center rounded-full px-2.5 text-[11.5px] font-semibold", toneClass)}>
@@ -184,7 +170,9 @@ export function BadgeModal({ selection, closing, onRequestClose, onExited }: Bad
         aria-modal="true"
         aria-label={def.name}
         className={cn(
-          "bm-card relative w-[380px] max-w-full overflow-hidden rounded-[20px] bg-black shadow-[inset_0_0_0_1px_var(--color-unison-border-strong),0_24px_60px_rgba(0,0,0,0.5)]",
+          "bm-card relative w-[380px] max-w-full overflow-hidden rounded-[24px]",
+          popoverSurfaceClass,
+          "bg-[#121117] backdrop-blur-none backdrop-saturate-100",
           closing && "bm-closing",
         )}
       >
@@ -193,7 +181,10 @@ export function BadgeModal({ selection, closing, onRequestClose, onExited }: Bad
           type="button"
           aria-label="Close"
           onClick={onRequestClose}
-          className="absolute top-3.5 right-3.5 z-[3] grid size-[30px] cursor-pointer place-items-center rounded-[9px] bg-unison-surface text-unison-text-secondary transition-colors hover:bg-unison-bg-hover hover:text-unison-text"
+          className={cn(
+            glassClass,
+            "absolute top-3.5 right-3.5 z-[3] grid size-8 cursor-pointer place-items-center rounded-full text-unison-text-secondary transition-[background-color,color,scale] duration-150 ease-out hover:bg-white/[0.14] hover:text-unison-text active:scale-[0.96]",
+          )}
         >
           <IconX className="size-[15px]" stroke={2} />
         </button>

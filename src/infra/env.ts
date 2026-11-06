@@ -108,20 +108,15 @@ export function createEnv(): Env {
 
 	const pool = getPool(databaseUrl)
 	const redis = getRedis(redisUrl)
+	const unlimited = readFlag("RATE_LIMITS_DISABLED")
+	const limiter = ({ maxRequests, windowSeconds }: { maxRequests: number; windowSeconds: number }) =>
+		new RedisRateLimiter(redis, unlimited ? Number.MAX_SAFE_INTEGER : maxRequests, windowSeconds)
 
 	return {
 		DB: new D1Compat(pool),
 		CACHE: new KVCompat(redis),
-		RATE_LIMITER: new RedisRateLimiter(
-			redis,
-			config.rateLimit.write.maxRequests,
-			config.rateLimit.write.windowSeconds
-		),
-		READ_RATE_LIMITER: new RedisRateLimiter(
-			redis,
-			config.rateLimit.read.maxRequests,
-			config.rateLimit.read.windowSeconds
-		),
+		RATE_LIMITER: limiter(config.rateLimit.write),
+		READ_RATE_LIMITER: limiter(config.rateLimit.read),
 		CACHE_TTL_SECONDS: process.env.CACHE_TTL_SECONDS || "604800",
 		DUMPS_ENABLED: readFlag("DUMPS_ENABLED"),
 		DUMP_PUBLIC_BASE_URL: process.env.DUMP_PUBLIC_BASE_URL || "",

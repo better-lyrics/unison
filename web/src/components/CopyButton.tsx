@@ -2,7 +2,8 @@ import { IconCheck, IconCopy, IconX } from "@tabler/icons-react"
 import { AnimatePresence, MotionConfig, motion } from "motion/react"
 import { useCallback, useEffect, useRef, useState } from "react"
 import { cn } from "@/lib/cn"
-import { iconSwapVariants, labelSwapVariants, LAYOUT_TRANSITION, SWAP_TRANSITION } from "@/lib/motion-variants"
+import { SwapLabel } from "@/components/SwapLabel"
+import { ICON_SWAP_TRANSITION, iconSwapVariants, LAYOUT_TRANSITION } from "@/lib/motion-variants"
 
 type CopyState = "idle" | "copied" | "failed"
 
@@ -28,9 +29,16 @@ interface CopyButtonProps {
   className?: string
   iconClassName?: string
   withText?: boolean
+  radius?: number
 }
 
-export function CopyButton({ text, className, iconClassName = "size-4", withText = false }: CopyButtonProps) {
+export function CopyButton({
+  text,
+  className,
+  iconClassName = "size-4",
+  withText = false,
+  radius = 6,
+}: CopyButtonProps) {
   const [state, setState] = useState<CopyState>("idle")
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const mountedRef = useRef(true)
@@ -81,7 +89,7 @@ export function CopyButton({ text, className, iconClassName = "size-4", withText
         aria-label="Copy lyrics body to clipboard"
         aria-live="polite"
         title="Copy lyrics"
-        style={{ borderRadius: 6 }}
+        style={{ borderRadius: radius }}
         transition={{ layout: LAYOUT_TRANSITION }}
         className={cn(
           className,
@@ -101,26 +109,14 @@ export function CopyButton({ text, className, iconClassName = "size-4", withText
             initial="initial"
             animate="animate"
             exit="exit"
-            transition={SWAP_TRANSITION}
+            transition={ICON_SWAP_TRANSITION}
             className="inline-flex"
           >
             <Icon className={iconClassName} stroke={1.75} />
           </motion.span>
         </AnimatePresence>
         {withText ? (
-          <AnimatePresence initial={false} mode="popLayout">
-            <motion.span
-              key={LABEL[state]}
-              layout
-              variants={labelSwapVariants}
-              initial="initial"
-              animate="animate"
-              exit="exit"
-              transition={SWAP_TRANSITION}
-            >
-              {LABEL[state]}
-            </motion.span>
-          </AnimatePresence>
+          <SwapLabel text={LABEL[state]} />
         ) : (
           <span className="sr-only">{LABEL[state]}</span>
         )}

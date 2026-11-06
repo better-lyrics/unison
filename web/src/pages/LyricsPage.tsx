@@ -1,34 +1,33 @@
+import { usePageArt } from "@/components/PageArt"
 import { EmptyState } from "@/components/EmptyState"
 import { LyricsContentSkeleton } from "@/components/LyricsRenderer"
 import { LyricsPanel } from "@/components/LyricsPanel"
-import { VariantList, VariantListSkeleton } from "@/components/VariantList"
-import { VariantMetadata, VariantMetadataSkeleton } from "@/components/VariantMetadata"
-import { EditMetadataButton } from "@/components/council/EditMetadataButton"
-import { SealLyricButton } from "@/components/council/SealLyricButton"
-import { VoteControls } from "@/components/VoteControls"
-import { YouTubeMusicIcon } from "@/components/icons/YouTubeMusicIcon"
+import { SongHero, SongHeroSkeleton } from "@/components/song/SongHero"
+import { SongRail } from "@/components/song/SongRail"
 import { Bone } from "@/components/skeleton"
+import { useFillHeight } from "@/hooks/useFillHeight"
 import { useLyricsVariant, useLyricsVariants } from "@/hooks/useLyricsData"
 import { useYouTubePlayer } from "@/hooks/useYouTubePlayer"
-import { youTubeMusicUrl } from "@/lib/youtube-music"
+import { artworkImageUrl, useArtwork } from "@/lib/artwork"
+import { sleeveDataUrl } from "@/lib/sleeve"
 import { useCallback, useMemo, useState } from "react"
-import { useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom"
+import { useParams, useSearchParams } from "react-router-dom"
+
+const BODY =
+  "grid grid-cols-[minmax(0,1fr)_340px] gap-12 pt-2 pb-8 max-[1000px]:pb-[88px] max-[1000px]:grid-cols-[minmax(0,1fr)] max-[1000px]:gap-7 max-[1000px]:pt-0"
+const LYRICS_FILL = "lyrics-fill"
+const LYRICS_SIZE = `${LYRICS_FILL} h-[max(var(--fill-height,560px),240px)] max-w-none max-[1000px]:h-[70dvh]`
+const SLEEVE_SIZE = 630
 
 export function LyricsPage() {
   const { videoId } = useParams<{ videoId: string }>()
   const [params, setParams] = useSearchParams()
   const [playerActive, setPlayerActive] = useState(false)
   const variantIdParam = params.get("variantId")
-  const navigate = useNavigate()
-  const location = useLocation()
-
-  const handleBack = useCallback(() => {
-    if (location.key === "default") navigate("/")
-    else navigate(-1)
-  }, [location.key, navigate])
+  const lyricsRef = useFillHeight(`.${LYRICS_FILL}`)
 
   const safeVideoId = videoId ?? ""
-  const { ref, getCurrentTime, getPlaying, seekTo, play } = useYouTubePlayer(
+  const { ref, getCurrentTime, getPlaying, playing, ready, failed, seekTo, play, pause } = useYouTubePlayer(
     safeVideoId.length > 0 ? safeVideoId : null,
     { playerVars: { autoplay: 1 } },
   )
@@ -39,7 +38,11 @@ export function LyricsPage() {
     setPlayerActive(false)
   }
 
-  const activatePlayer = useCallback(() => setPlayerActive(true), [])
+  const togglePlay = useCallback(() => {
+    if (!playerActive) setPlayerActive(true)
+    else if (getPlaying()) pause()
+    else play()
+  }, [playerActive, getPlaying, pause, play])
 
   const variantsQuery = useLyricsVariants(safeVideoId)
 
@@ -51,6 +54,12 @@ export function LyricsPage() {
   }, [requestedId, variants])
 
   const variantQuery = useLyricsVariant(selectedId)
+
+  const { data: art, isPending: artPending } = useArtwork(safeVideoId)
+  const lead = variants[0]
+  const sleeve = useMemo(() => (lead ? sleeveDataUrl(lead.song, lead.artist, SLEEVE_SIZE) : null), [lead])
+  const backdrop = art ? artworkImageUrl(safeVideoId) : artPending ? null : sleeve
+  usePageArt(backdrop, playing)
 
   const handleSelect = useCallback(
     (id: number) => {
@@ -83,67 +92,32 @@ export function LyricsPage() {
     return <EmptyState title="No lyrics yet" hint="Request this song via the Better Lyrics extension." />
   }
 
-  const variant = variantQuery.data?.variant
+  const loaded = variantQuery.data?.variant
+  const variant = loaded && variants.some((v) => v.id === loaded.id) ? loaded : undefined
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <button
-          type="button"
-          onClick={handleBack}
-          className="cursor-pointer text-xs text-unison-text-muted transition-colors hover:text-unison-text"
-        >
-          ‹ back
-        </button>
-        {variant && selectedId !== undefined ? (
-          <div className="flex items-center gap-3">
-            <EditMetadataButton
-              videoId={safeVideoId}
-              lyricsId={variant.id}
-              current={{ song: variant.song, artist: variant.artist, album: variant.album ?? null }}
-            />
-            <SealLyricButton videoId={safeVideoId} lyricsId={variant.id} />
-            <VoteControls
-              variantId={variant.id}
-              videoId={safeVideoId}
-              variant={{ score: variant.score, userVote: variant.userVote ?? null }}
-            />
-          </div>
-        ) : (
-          <Bone className="h-9 w-28 rounded-lg" />
-        )}
-      </div>
-      <div className="grid gap-6 sm:grid-cols-[minmax(0,384px)_minmax(0,1fr)]">
-        <div className="space-y-4">
-          {variant ? (
-            <VariantMetadata
-              variant={variant}
-              playerRef={ref}
-              playerActive={playerActive}
-              onActivatePlayer={activatePlayer}
-            />
-          ) : (
-            <VariantMetadataSkeleton />
-          )}
-          <a
-            href={youTubeMusicUrl(safeVideoId)}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex items-center justify-center gap-2 rounded-[10px] bg-white/[0.08] px-4 py-3 text-[13px] font-semibold text-unison-text shadow-[0_1px_2px_rgba(0,0,0,0.4),inset_0_1px_0_0_rgba(255,255,255,0.07)] transition-colors hover:bg-white/[0.12] active:translate-y-px"
-          >
-            <YouTubeMusicIcon className="size-[18px]" />
-            Open on YouTube Music
-          </a>
-        </div>
-        <div className="space-y-4">
+    <div>
+      {variant ? (
+        <SongHero
+          variant={variant}
+          versions={variants.length}
+          art={art}
+          player={{ ref, active: playerActive, playing, ready, failed, onToggle: togglePlay }}
+        />
+      ) : (
+        <SongHeroSkeleton />
+      )}
+      <div className={BODY}>
+        <div ref={lyricsRef} className="lyrics-view min-w-0">
           <LyricsPanel
             variant={variantQuery.isLoading ? undefined : variant}
             getCurrentTime={getCurrentTime}
             getPlaying={getPlaying}
             onLineClick={handleLineClick}
+            lyricsClassName={LYRICS_SIZE}
           />
-          <VariantList variants={variants} selectedId={selectedId ?? -1} onSelect={handleSelect} />
         </div>
+        <SongRail variant={variant} variants={variants} selectedId={selectedId ?? -1} onSelect={handleSelect} />
       </div>
     </div>
   )
@@ -151,27 +125,19 @@ export function LyricsPage() {
 
 function LyricsPageSkeleton() {
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <Bone className="h-4 w-12" />
-        <Bone className="h-9 w-28 rounded-lg" />
-      </div>
-      <div className="grid gap-6 sm:grid-cols-[minmax(0,384px)_minmax(0,1fr)]">
-        <div className="space-y-4">
-          <VariantMetadataSkeleton />
-          <Bone className="h-11 w-full rounded-[10px]" />
-        </div>
-        <div className="space-y-4">
-          <div className="overflow-hidden rounded-lg border border-unison-border bg-unison-bg-elevated">
-            <div className="flex items-center justify-between border-b border-unison-border/60 px-3 py-2">
-              <Bone className="h-8 w-32 rounded-md" />
-              <Bone className="h-7 w-36 rounded-md" />
-            </div>
-            <div className="p-4">
-              <LyricsContentSkeleton />
-            </div>
+    <div>
+      <SongHeroSkeleton />
+      <div className={BODY}>
+        <div className="min-w-0">
+          <div className="mb-2 flex items-center gap-1.5">
+            <Bone className="h-9 w-[124px] rounded-full" />
+            <Bone className="ml-auto h-9 w-48 rounded-full" />
           </div>
-          <VariantListSkeleton rows={4} />
+          <LyricsContentSkeleton className={LYRICS_SIZE} />
+        </div>
+        <div className="flex flex-col gap-4">
+          <Bone className="h-[150px] rounded-[22px]" />
+          <Bone className="h-[130px] rounded-[22px]" />
         </div>
       </div>
     </div>

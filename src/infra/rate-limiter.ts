@@ -27,8 +27,9 @@ export class RedisRateLimiter {
 		key: string
 		maxRequests?: number
 		windowSeconds?: number
+		scale?: number
 	}): Promise<{ success: boolean; resetSeconds: number }> {
-		const max = opts.maxRequests ?? this.maxRequests
+		const max = (opts.maxRequests ?? this.maxRequests) * (opts.scale ?? 1)
 		const window = opts.windowSeconds ?? this.windowSeconds
 		const redisKey = `rl:${opts.key}`
 		try {

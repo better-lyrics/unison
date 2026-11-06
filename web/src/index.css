@@ -47,6 +47,7 @@ html {
 
 :root {
   --app-header-h: 69px;
+  --ink-2: var(--color-unison-text-secondary);
 }
 
 body {
@@ -61,8 +62,8 @@ body {
    lyric colours from --blyrics-text-color there, so setting it lower down never reaches them. */
 :root {
   --blyrics-text-color: var(--color-unison-text);
-  --blyrics-inactive-opacity: 0.2;
   --blyrics-font-size: 2rem;
+  --noto-sans-universal: "Noto Sans JP", "Noto Sans KR", "Noto Sans";
 }
 
 /* The element is the scroller braccato autoscrolls, which is what centres the active line. The
@@ -98,6 +99,57 @@ braccato-lyrics:has(.blyrics-user-scrolling)::-webkit-scrollbar-thumb {
 /* lyrics.css spends --blyrics-padding-bottom but hardcodes the top. */
 braccato-lyrics .blyrics-container {
   padding-top: var(--blyrics-padding-top, 2rem);
+}
+
+.lyrics-view braccato-lyrics {
+  margin-inline: -28px;
+  padding-inline: 28px;
+  box-sizing: border-box;
+}
+
+.lyrics-view braccato-lyrics .blyrics-container {
+  font-family: var(--blyrics-font-family);
+  --blyrics-font-size: 2.5rem;
+  --blyrics-line-height: 1.25;
+  --blyrics-padding: 14px;
+  --blyrics-padding-top: 0px;
+  background: none;
+  margin: 0;
+  padding-inline: 0;
+  max-width: none;
+}
+
+@media (max-width: 1000px) {
+  .lyrics-view braccato-lyrics {
+    margin-inline: -20px;
+    padding-inline: 20px;
+  }
+
+  .lyrics-view braccato-lyrics .blyrics-container {
+    --blyrics-font-size: 1.85rem;
+  }
+}
+
+.raw-lyrics {
+  margin: 0;
+  padding: 4px 0 24px;
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  line-height: 1.7;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  tab-size: 2;
+  --bh-text: var(--color-unison-text);
+  --bh-bgText: var(--ink-2, var(--color-unison-text-secondary));
+  --bh-timestamp: hsl(231 40% 72%);
+  --bh-wordTime: hsl(231 24% 60%);
+  --bh-agent: hsl(43 55% 62%);
+  --bh-meta: hsl(330 32% 66%);
+  --bh-tag: var(--ink-3, var(--color-unison-text-secondary));
+  --bh-attr: var(--ink-dim, var(--color-unison-text-muted));
+  --bh-value: hsl(142 34% 64%);
+  --bh-punct: var(--ink-4, var(--color-unison-text-muted));
+  --bh-comment: var(--ink-4, var(--color-unison-text-muted));
 }
 
 /* Exam clips live in narrow A/B columns, so shrink the type and tighten the line
@@ -251,4 +303,104 @@ select {
   [role="button"]:not(:disabled) {
     cursor: pointer;
   }
+}
+
+:root {
+  --dropdown-open-dur: 250ms;
+  --dropdown-close-dur: 150ms;
+  --dropdown-pre-scale: 0.97;
+  --dropdown-closing-scale: 0.99;
+  --dropdown-ease: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.t-dropdown {
+  transform-origin: top left;
+  transform: scale(1);
+  opacity: 1;
+  transition:
+    transform var(--dropdown-open-dur) var(--dropdown-ease),
+    opacity var(--dropdown-open-dur) var(--dropdown-ease);
+  @starting-style {
+    transform: scale(var(--dropdown-pre-scale));
+    opacity: 0;
+  }
+}
+.t-dropdown[data-origin="top-right"] { transform-origin: top right; }
+.t-dropdown[data-origin="top-center"] { transform-origin: top center; }
+.t-dropdown[data-origin="bottom-left"] { transform-origin: bottom left; }
+.t-dropdown[data-origin="bottom-center"] { transform-origin: bottom center; }
+.t-dropdown[data-origin="bottom-right"] { transform-origin: bottom right; }
+
+.t-dropdown.is-closing,
+.t-dropdown[popover]:not(:popover-open) {
+  transform: scale(var(--dropdown-closing-scale));
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    transform var(--dropdown-close-dur) var(--dropdown-ease),
+    opacity var(--dropdown-close-dur) var(--dropdown-ease),
+    overlay var(--dropdown-close-dur) allow-discrete,
+    display var(--dropdown-close-dur) allow-discrete;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .t-dropdown { transition: none !important; }
+}
+
+:root {
+  --reveal-dur: 400ms;
+  --reveal-blur: 2px;
+}
+
+.t-reveal {
+  transition:
+    opacity var(--reveal-dur) ease-in-out,
+    filter var(--reveal-dur) ease-in-out;
+  @starting-style {
+    opacity: 0;
+    filter: blur(var(--reveal-blur));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .t-reveal { transition: none !important; }
+}
+
+@property --scrim {
+  syntax: "<number>";
+  inherits: true;
+  initial-value: 0.45;
+}
+
+@property --ft {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 0px;
+}
+
+@property --fb {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 0px;
+}
+
+:root {
+  transition: --scrim 700ms ease-out;
+}
+
+.lyrics-pane {
+  transition:
+    opacity var(--reveal-dur) ease-in-out,
+    filter var(--reveal-dur) ease-in-out,
+    --ft 150ms ease-out,
+    --fb 150ms ease-out;
+  @starting-style {
+    opacity: 0;
+    filter: blur(var(--reveal-blur));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root,
+  .lyrics-pane { transition: none !important; }
 }

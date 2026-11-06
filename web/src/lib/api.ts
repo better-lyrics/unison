@@ -13,6 +13,7 @@ import type {
   FeedEntry,
   LyricsSearchHit,
   Page,
+  ProfileSettings,
   QueueEntry,
   SealedSort,
   SealedSyncFilter,
@@ -96,6 +97,15 @@ export async function putAvatar(choice: AvatarChoice): Promise<{ avatarUrl: stri
     method: "PUT",
     headers: { "content-type": "application/json" },
     body: JSON.stringify(choice),
+  })
+}
+
+export async function putProfileSettings(change: Partial<ProfileSettings>): Promise<ProfileSettings> {
+  if (IS_SPA_EXPANSION_SEED) return (await import("./dev-seed")).seedSetProfileSettings(change)
+  return authedFetch<ProfileSettings>("/users/me/profile", {
+    method: "PUT",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(change),
   })
 }
 
@@ -257,6 +267,17 @@ export async function fetchSealed(opts: {
   const search = new URLSearchParams({ sealed: "1", sort: opts.sort, limit: String(opts.limit) })
   if (opts.syncType) search.set("syncType", opts.syncType)
   if (opts.cursor) search.set("cursor", opts.cursor)
+  return getPage<FeedEntry>(`/feed?${search.toString()}`, opts.signal)
+}
+
+export type FeedGridSort = "newest" | "top-rated"
+
+export async function fetchFeedGrid(opts: {
+  sort: FeedGridSort
+  limit: number
+  signal?: AbortSignal
+}): Promise<Page<FeedEntry>> {
+  const search = new URLSearchParams({ sort: opts.sort, limit: String(opts.limit) })
   return getPage<FeedEntry>(`/feed?${search.toString()}`, opts.signal)
 }
 

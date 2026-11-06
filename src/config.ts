@@ -1,8 +1,17 @@
 export const COMMUNITY_KEY_ID = "cea10b57de8e060ed1a180a00c2bc717a2ab4f231d88fd33ffa6a50a04f23b6e"
 
 export const config = {
+	og: {
+		cacheControl: "public, max-age=3600, s-maxage=86400, stale-while-revalidate=604800",
+		downloadCacheControl: "public, max-age=300",
+		siteOrigin: "https://unison.betterlyrics.org",
+		memoryEntries: 100,
+	},
 	artwork: {
 		size: 544,
+		washSize: 256,
+		fetchTimeoutMs: 3000,
+		imageCacheControl: "public, max-age=86400, s-maxage=2592000, stale-while-revalidate=604800",
 		positiveTtlSeconds: 60 * 60 * 24 * 30,
 		negativeTtlSeconds: 60 * 60 * 24 * 7,
 		refreshProbability: 0.03,
@@ -145,6 +154,10 @@ export const config = {
 			animated: { steps: [65, 50, 40] },
 			static: { steps: [80, 70, 60] },
 		},
+		write: { maxRequests: 20, windowSeconds: 3600 },
+	},
+
+	profile: {
 		write: { maxRequests: 20, windowSeconds: 3600 },
 	},
 
@@ -303,6 +316,8 @@ export const config = {
 			maxRequests: 600,
 			windowSeconds: 60,
 		},
+		// One SPA page fans out into many cover reads; a forged header only earns this bounded budget
+		spaReadScale: 5,
 		write: {
 			maxRequests: 10,
 			windowSeconds: 60,

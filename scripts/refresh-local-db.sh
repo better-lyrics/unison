@@ -26,7 +26,7 @@ docker inspect "$CONTAINER" >/dev/null 2>&1 || {
   echo "ERROR: container '$CONTAINER' not found (set UNISON_PG_CONTAINER to override)." >&2; exit 1; }
 
 echo "==> Dumping production (read-only) with the container's pg18 client ..."
-docker exec "$CONTAINER" pg_dump "$PROD_URL" --no-owner --no-privileges --format=custom -f /tmp/unison-prod.dump
+docker exec "$CONTAINER" pg_dump "$PROD_URL" --no-owner --no-privileges --exclude-table-data=public.translation_cache --format=custom -f /tmp/unison-prod.dump
 
 echo "==> Restoring into local unison (${LOCAL_URL##*@}) ..."
 docker exec "$CONTAINER" pg_restore --no-owner --no-privileges --clean --if-exists --dbname "$LOCAL_URL" /tmp/unison-prod.dump \

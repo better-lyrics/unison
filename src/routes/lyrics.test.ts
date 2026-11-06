@@ -656,6 +656,7 @@ describe("GET /lyrics/mine", () => {
 					displayName: "Council Cat",
 					tier: "legendary",
 					level: 1,
+					levelProgress: 0,
 					badgeCount: 0,
 					topBadge: null,
 					featured: [],

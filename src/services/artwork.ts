@@ -1,7 +1,9 @@
 import { config } from "@/config"
 import { findSongForVideo, getVideoArtwork, upsertVideoArtwork } from "@/db/artwork"
+import { log } from "@/infra/logger"
 import { type SongSearch, findSongCandidate } from "@/services/song-search"
 import type { Env } from "@/types"
+import { isAlbumArtUrl, normalizeArtworkUrl } from "@/utils/artwork"
 
 const NEGATIVE = "__none__"
 const key = (videoId: string) => `artwork:v2:${videoId}`
@@ -70,4 +72,26 @@ export async function resolveArtwork(
 	await upsertVideoArtwork(env, videoId, resolved)
 	await writeCache(env, videoId, resolved)
 	return resolved
+}
+
+export interface ArtworkImage {
+	bytes: Buffer
+	type: string
+}
+
+export async function fetchArtworkImage(url: string, size: number): Promise<ArtworkImage | null> {
+	if (!isAlbumArtUrl(url)) return null
+	const sized = normalizeArtworkUrl(url, size)
+	try {
+		const res = await fetch(sized, { signal: AbortSignal.timeout(config.artwork.fetchTimeoutMs) })
+		if (!res.ok) {
+			log.warn("artwork image rejected", { url: sized, status: res.status })
+			return null
+		}
+		const type = res.headers.get("content-type") ?? "image/jpeg"
+		return { bytes: Buffer.from(await res.arrayBuffer()), type }
+	} catch (error) {
+		log.warn("artwork image failed", { url: sized, error: (error as Error).message })
+		return null
+	}
 }

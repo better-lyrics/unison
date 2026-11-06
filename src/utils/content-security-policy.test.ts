@@ -34,9 +34,10 @@ describe("SPA_CONTENT_SECURITY_POLICY", () => {
 	})
 
 	describe("exfiltration", () => {
-		it("limits fetch and XHR to the API origin, the dump manifest host and the analytics endpoint", () => {
+		it("limits fetch and XHR to the API origin, inline art, the dump manifest host and the analytics endpoint", () => {
 			expect(csp.get("connect-src")).toEqual([
 				"'self'",
+				"data:",
 				"https://unison-dumps.boidu.dev",
 				"https://cloudflareinsights.com",
 			])

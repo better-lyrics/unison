@@ -76,9 +76,9 @@ describe("GET /artwork", () => {
 			expect(body.data?.artworkUrl).toBe(STORED)
 		})
 
-		it("accepts the bounds 32 and 1024", async () => {
+		it("accepts the bounds 32 and 2048", async () => {
 			expect((await get("&size=32")).body.data?.artworkUrl).toContain("=w32-h32-")
-			expect((await get("&size=1024")).body.data?.artworkUrl).toContain("=w1024-h1024-")
+			expect((await get("&size=2048")).body.data?.artworkUrl).toContain("=w2048-h2048-")
 		})
 
 		it("keeps a missing cover null when a size is given", async () => {
@@ -90,7 +90,7 @@ describe("GET /artwork", () => {
 			expect(await res.json()).toEqual({ success: true, data: { artworkUrl: null } })
 		})
 
-		it.each([["31"], ["1025"], ["0"], ["-5"], ["abc"], ["25.5"]])(
+		it.each([["31"], ["2049"], ["0"], ["-5"], ["abc"], ["25.5"]])(
 			"rejects an out of range or malformed size %s",
 			async (size) => {
 				expect((await get(`&size=${size}`)).status).toBe(422)
