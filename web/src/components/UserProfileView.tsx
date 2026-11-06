@@ -58,7 +58,7 @@ function ExpertiseStrip({ entries }: { entries: ExpertiseEntry[] }) {
 
 function PreviewBar({ onExit }: { onExit: () => void }) {
   return (
-    <div className={cn(PANEL, "mb-6 flex items-center justify-between gap-3 py-2.5 pr-2.5 pl-4")}>
+    <div className={cn(PANEL, "t-reveal mb-6 flex items-center justify-between gap-3 py-2.5 pr-2.5 pl-4")}>
       <span className="flex items-center gap-2 text-sm text-(--ink-2)">
         <IconEye className="size-4" stroke={1.7} />
         You're previewing your public profile.

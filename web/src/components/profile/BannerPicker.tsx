@@ -1,6 +1,7 @@
 import { autoUpdate, flip, offset, shift, size, useFloating } from "@floating-ui/react"
 import { useQueries } from "@tanstack/react-query"
 import { type RefObject, useEffect, useState } from "react"
+import { Bone, skeletonKeys } from "@/components/skeleton"
 import { useMySongs } from "@/hooks/useMySongs"
 import { putProfileSettings } from "@/lib/api"
 import { artworkQuery } from "@/lib/artwork"
@@ -20,7 +21,7 @@ interface BannerPickerProps {
 }
 
 export function BannerPicker({ ref, anchor, keyId, current, onSaved }: BannerPickerProps) {
-  const { refs, floatingStyles } = useFloating({
+  const { refs, floatingStyles, placement } = useFloating({
     strategy: "fixed",
     transform: false,
     placement: "bottom-end",
@@ -39,7 +40,8 @@ export function BannerPicker({ ref, anchor, keyId, current, onSaved }: BannerPic
     ],
   })
 
-  const songs = useMySongs(keyId) ?? []
+  const mine = useMySongs(keyId)
+  const songs = mine ?? []
 
   useEffect(() => ref.current?.showPopover(), [ref])
   const arts = useQueries({ queries: songs.map((s) => artworkQuery(s.videoId, TILE_SIZE)) })
@@ -50,6 +52,7 @@ export function BannerPicker({ ref, anchor, keyId, current, onSaved }: BannerPic
     seenArt.add(url)
     return [{ song, url }]
   })
+  const pending = mine === null ? 8 : arts.filter((art) => art.isPending).length
 
   const [saving, setSaving] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -75,7 +78,7 @@ export function BannerPicker({ ref, anchor, keyId, current, onSaved }: BannerPic
         refs.setFloating(node)
       }}
       popover="auto"
-      data-origin="top-right"
+      data-origin={placement.startsWith("top") ? "bottom-right" : "top-right"}
       style={floatingStyles}
       className={cn(
         popoverSurfaceClass,
@@ -103,6 +106,9 @@ export function BannerPicker({ ref, anchor, keyId, current, onSaved }: BannerPic
           >
             <img src={url} alt="" loading="lazy" className="size-full object-cover" />
           </button>
+        ))}
+        {skeletonKeys("banner-pick", pending).map((key) => (
+          <Bone key={key} className="aspect-square rounded-[10px]" />
         ))}
       </div>
       {current ? (

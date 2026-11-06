@@ -8,6 +8,7 @@ import { XpAvatar } from "@/components/XpAvatar"
 import { useBadgeImage } from "@/hooks/useBadgeImage"
 import type { ProfileArt } from "@/hooks/useProfileArt"
 import { isRareBadge, resolveBadgeImage } from "@/lib/badge-view"
+import { SwapLabel } from "@/components/SwapLabel"
 import { cn } from "@/lib/cn"
 import { formatCompact, titleCase } from "@/lib/format"
 import { levelProgress } from "@/lib/level"
@@ -125,7 +126,7 @@ export function ProfileCard({ keyId, rank, gamification, catalogue, art, onChang
     >
       <ArtBackground src={art.wash} contained />
       {art.banner ? (
-        <div aria-hidden="true" className="absolute inset-x-0 top-0 isolate h-[64%] overflow-hidden">
+        <div key={art.banner} aria-hidden="true" className="t-reveal absolute inset-x-0 top-0 isolate h-[64%] overflow-hidden">
           <img src={art.banner} alt="" className="pf-banner-soft" />
           <img src={art.banner} alt="" className="pf-banner-sharp" />
         </div>
@@ -180,7 +181,7 @@ export function ProfileCard({ keyId, rank, gamification, catalogue, art, onChang
             )}
           >
             <IconPhoto className="size-[17px]" stroke={1.75} />
-            {art.banner ? "Change banner" : "Add banner"}
+            <SwapLabel text={art.banner ? "Change banner" : "Add banner"} />
           </button>
         </div>
       ) : null}

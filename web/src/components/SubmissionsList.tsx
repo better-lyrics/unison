@@ -12,7 +12,10 @@ import { cn } from "@/lib/cn"
 import { COMPOSER_URL } from "@/lib/composer"
 import { formatExact } from "@/lib/format"
 import type { SubmissionSort, SubmissionSyncType } from "@/lib/types"
+import { motion } from "motion/react"
 import { type ReactNode, useMemo, useState } from "react"
+import { SwapLabel } from "@/components/SwapLabel"
+import { LAYOUT_TRANSITION } from "@/lib/motion-variants"
 
 interface SubmissionsListProps {
   keyId: string
@@ -194,7 +197,7 @@ function CuratorSubmissions({ keyId, total, owner = false }: SubmissionsListProp
       ) : visible.length === 0 ? (
         <p className="text-[13px] text-(--ink-3)">No submissions match these filters.</p>
       ) : (
-        <ul className={cn(COVER_GRID, "t-reveal")}>
+        <ul className={cn(COVER_GRID, "t-reveal", isPlaceholderData && "opacity-60")}>
           {visible.map((s) => (
             <SongCoverTile key={s.id} song={s} />
           ))}
@@ -202,7 +205,10 @@ function CuratorSubmissions({ keyId, total, owner = false }: SubmissionsListProp
       )}
       {hasNextPage && !isPlaceholderData ? (
         <div className="flex flex-col items-start gap-2">
-          <button
+          <motion.button
+            layout
+            transition={{ layout: LAYOUT_TRANSITION }}
+            style={{ borderRadius: 9999 }}
             type="button"
             onClick={() => void fetchNextPage()}
             disabled={isFetchingNextPage}
@@ -211,8 +217,8 @@ function CuratorSubmissions({ keyId, total, owner = false }: SubmissionsListProp
               "h-10 cursor-pointer rounded-full px-4 text-[13px] font-medium transition-[background-color,scale] duration-150 ease-out active:not-disabled:scale-[0.96] disabled:opacity-50 [text-shadow:none] hover:bg-white/[0.14]",
             )}
           >
-            {isFetchingNextPage ? "Loading..." : loadMoreError ? "Retry" : "Load more"}
-          </button>
+            <SwapLabel text={isFetchingNextPage ? "Loading..." : loadMoreError ? "Retry" : "Load more"} />
+          </motion.button>
           {loadMoreError ? (
             <p role="alert" className="text-xs text-(--ink-3)">
               {loadMoreError}
