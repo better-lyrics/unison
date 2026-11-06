@@ -11,18 +11,24 @@ interface CoverProps {
 
 export function CoverImage({ src, song, artist, className }: CoverProps & { src: string | null | undefined }) {
   const [failed, setFailed] = useState<string | null>(null)
-  if (src && src !== failed) {
-    return (
-      <img
-        src={src}
-        alt=""
-        loading="lazy"
-        onError={() => setFailed(src)}
-        className={cn("size-full object-cover", className)}
-      />
-    )
-  }
-  return <div className={cn("size-full", className)} style={{ background: sleeveCss(song, artist) }} />
+  const [loaded, setLoaded] = useState<string | null>(null)
+  return (
+    <div className={cn("relative size-full overflow-hidden", className)} style={{ background: sleeveCss(song, artist) }}>
+      {src && src !== failed ? (
+        <img
+          src={src}
+          alt=""
+          loading="lazy"
+          onLoad={() => setLoaded(src)}
+          onError={() => setFailed(src)}
+          className={cn(
+            "absolute inset-0 size-full object-cover transition-[opacity,filter] duration-400 ease-in-out motion-reduce:transition-none",
+            loaded === src ? "opacity-100 blur-none" : "opacity-0 blur-[2px]",
+          )}
+        />
+      ) : null}
+    </div>
+  )
 }
 
 export function AlbumArt({ videoId, ...cover }: CoverProps & { videoId: string }) {

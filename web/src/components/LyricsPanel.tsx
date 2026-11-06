@@ -78,10 +78,10 @@ export function LyricsPanel({ variant, getCurrentTime, getPlaying, onLineClick, 
         ) : null}
       </div>
       <div
-        key={mode}
+        key={`${mode}:${variant ? "ready" : "loading"}`}
         ref={setPane}
         className={cn(
-          "[--fb:0px] [--ft:0px] [text-shadow:none] [mask-image:linear-gradient(transparent,#000_var(--ft),#000_calc(100%-var(--fb)),transparent)]",
+          "t-reveal [--fb:0px] [--ft:0px] [text-shadow:none] [mask-image:linear-gradient(transparent,#000_var(--ft),#000_calc(100%-var(--fb)),transparent)]",
           edges.up && "[--ft:56px]",
           edges.down && "[--fb:72px]",
         )}

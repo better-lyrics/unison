@@ -12,6 +12,7 @@ import {
   useRole,
   useTransitionStyles,
 } from "@floating-ui/react"
+import { useReducedMotion } from "motion/react"
 import { cloneElement, type ReactElement, type ReactNode, useState } from "react"
 import { cn } from "@/lib/cn"
 import { tooltipSurfaceClass } from "./ui"
@@ -36,9 +37,11 @@ export function Tooltip({
     whileElementsMounted: autoUpdate,
   })
   const hover = useHover(context, { move: false, delay: { open: TOOLTIP_DELAY_MS } })
+  const still = useReducedMotion()
   const { isMounted, styles } = useTransitionStyles(context, {
     duration: { open: 150, close: 50 },
-    initial: { opacity: 0, transform: "scale(0.98)" },
+    initial: still ? { opacity: 0 } : { opacity: 0, transform: "scale(0.98)" },
+    common: { transitionTimingFunction: "ease-out" },
   })
   const focus = useFocus(context)
   const dismiss = useDismiss(context)

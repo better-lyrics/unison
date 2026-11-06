@@ -92,7 +92,8 @@ export function LyricsPage() {
     return <EmptyState title="No lyrics yet" hint="Request this song via the Better Lyrics extension." />
   }
 
-  const variant = variantQuery.data?.variant
+  const loaded = variantQuery.data?.variant
+  const variant = loaded && variants.some((v) => v.id === loaded.id) ? loaded : undefined
 
   return (
     <div>

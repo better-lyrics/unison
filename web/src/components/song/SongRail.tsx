@@ -47,7 +47,7 @@ function StatsCard({ variant, versions }: { variant: VariantFull; versions: numb
   const seal = variant.marks?.find((mark) => mark.type === "seal")
   const revision = variant.revision
   return (
-    <div className={CARD}>
+    <div className={cn(CARD, "t-reveal")}>
       <div className="grid grid-cols-[repeat(3,auto)] justify-between">
         <Stat
           tip={SCORE_TIP}
@@ -111,7 +111,7 @@ function StatsCard({ variant, versions }: { variant: VariantFull; versions: numb
 
 function SyncedByCard({ submitter }: { submitter: NonNullable<VariantFull["submitter"]> }) {
   return (
-    <div className={CARD}>
+    <div className={cn(CARD, "t-reveal")}>
       <p className={LABEL}>Synced by</p>
       <Link to={`/curator/${submitter.keyId}`} className="flex items-center gap-3">
         <XpAvatar

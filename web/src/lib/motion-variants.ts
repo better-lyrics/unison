@@ -1,6 +1,8 @@
 import type { Transition, Variants } from "motion/react"
 
-export const SWAP_TRANSITION: Transition = { duration: 0.18, ease: "easeInOut" }
+export const SWAP_TRANSITION: Transition = { duration: 0.15, ease: "easeInOut" }
+
+export const ICON_SWAP_TRANSITION: Transition = { duration: 0.25, ease: "easeInOut" }
 
 export const LAYOUT_TRANSITION: Transition = { duration: 0.3, ease: [0.22, 1, 0.36, 1] }
 

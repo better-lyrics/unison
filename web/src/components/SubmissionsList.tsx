@@ -194,7 +194,7 @@ function CuratorSubmissions({ keyId, total, owner = false }: SubmissionsListProp
       ) : visible.length === 0 ? (
         <p className="text-[13px] text-(--ink-3)">No submissions match these filters.</p>
       ) : (
-        <ul className={COVER_GRID}>
+        <ul className={cn(COVER_GRID, "t-reveal")}>
           {visible.map((s) => (
             <SongCoverTile key={s.id} song={s} />
           ))}

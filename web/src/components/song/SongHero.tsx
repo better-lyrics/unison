@@ -155,7 +155,7 @@ export function SongHero({ variant, versions, art, player }: SongHeroProps) {
   const sync = syncTypeFor(variant.syncType, variant.format)
   const seal = variant.marks?.find((mark) => mark.type === "seal")
   return (
-    <section className={HERO_GRID}>
+    <section className={cn(HERO_GRID, "t-reveal")}>
       <div className={HERO_ART}>
         <Cover variant={variant} art={art} player={player} />
       </div>

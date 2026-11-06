@@ -346,3 +346,22 @@ select {
 @media (prefers-reduced-motion: reduce) {
   .t-dropdown { transition: none !important; }
 }
+
+:root {
+  --reveal-dur: 400ms;
+  --reveal-blur: 2px;
+}
+
+.t-reveal {
+  transition:
+    opacity var(--reveal-dur) ease-in-out,
+    filter var(--reveal-dur) ease-in-out;
+  @starting-style {
+    opacity: 0;
+    filter: blur(var(--reveal-blur));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .t-reveal { transition: none !important; }
+}

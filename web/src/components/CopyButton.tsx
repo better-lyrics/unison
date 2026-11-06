@@ -3,7 +3,7 @@ import { AnimatePresence, MotionConfig, motion } from "motion/react"
 import { useCallback, useEffect, useRef, useState } from "react"
 import { cn } from "@/lib/cn"
 import { SwapLabel } from "@/components/SwapLabel"
-import { iconSwapVariants, LAYOUT_TRANSITION, SWAP_TRANSITION } from "@/lib/motion-variants"
+import { ICON_SWAP_TRANSITION, iconSwapVariants, LAYOUT_TRANSITION } from "@/lib/motion-variants"
 
 type CopyState = "idle" | "copied" | "failed"
 
@@ -109,7 +109,7 @@ export function CopyButton({
             initial="initial"
             animate="animate"
             exit="exit"
-            transition={SWAP_TRANSITION}
+            transition={ICON_SWAP_TRANSITION}
             className="inline-flex"
           >
             <Icon className={iconClassName} stroke={1.75} />

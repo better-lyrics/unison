@@ -57,7 +57,7 @@ blyrics-letter-wave = true;
 		opacity: 1 !important;
 		filter: none !important;
 		transform: scale(var(--blyrics-hover-scale));
-		transition: opacity 0.3s ease, filter 0.3s ease, transform 0.3s ease;
+		transition: opacity 0.3s ease, filter 0.3s ease, transform 0.3s ease !important;
 	}
 }
 

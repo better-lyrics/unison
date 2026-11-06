@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query"
 import { LeaderboardSection } from "@/components/LeaderboardSection"
 import { COVER_GRID, SongCoverTile, SongCoverTileSkeletons } from "@/components/SongCoverTile"
 import { type FeedGridSort, fetchFeedGrid } from "@/lib/api"
+import { cn } from "@/lib/cn"
 
 const GRID_LIMIT = 8
 
@@ -25,7 +26,7 @@ export function FeedGrid({ sort, title, subtitle }: FeedGridProps) {
       {isPending ? (
         <SongCoverTileSkeletons id={`feed-grid-${sort}`} count={GRID_LIMIT} />
       ) : (
-        <ul className={COVER_GRID}>
+        <ul className={cn(COVER_GRID, "t-reveal")}>
           {data.items.map((entry) => (
             <SongCoverTile key={entry.id} song={entry} />
           ))}
