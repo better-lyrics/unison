@@ -55,6 +55,8 @@ export interface UserStats {
   lastVoteAt: number | null
   discordLinked: boolean
   avatarUrl?: string | null
+  banner?: { videoId: string; artworkUrl: string }
+  discord?: { id: string; username: string }
 }
 
 export interface RankedUserStats extends UserStats {

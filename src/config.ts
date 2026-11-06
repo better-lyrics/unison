@@ -148,6 +148,10 @@ export const config = {
 		write: { maxRequests: 20, windowSeconds: 3600 },
 	},
 
+	profile: {
+		write: { maxRequests: 20, windowSeconds: 3600 },
+	},
+
 	migration: {
 		sessionTtlSeconds: 900, // time to open the new extension and finish the OAuth prove
 		commitLockSeconds: 60,

@@ -33,6 +33,10 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_type TEXT;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_ref TEXT;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_updated_at INTEGER;
 
+-- Profile card: banner from a synced song's cover, opt-in Discord name
+ALTER TABLE users ADD COLUMN IF NOT EXISTS banner_video_id TEXT;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS show_discord BOOLEAN NOT NULL DEFAULT FALSE;
+
 -- Discord account links (Discord user <-> Better Lyrics key)
 CREATE TABLE IF NOT EXISTS discord_links (
     discord_id TEXT PRIMARY KEY,

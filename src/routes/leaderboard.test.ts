@@ -429,6 +429,44 @@ describe("GET /leaderboard/users/:keyId", () => {
 		expect(json.data.discordLinked).toBe(true)
 	})
 
+	describe("profile extras", () => {
+		const keyId = "c".repeat(64)
+		const LINK = { discord_id: "d1", key_id: keyId, discord_username: "alice", linked_at: 1 }
+
+		async function profile(settings: Record<string, unknown>, seed: Record<string, string> = {}) {
+			const db = makeMockDB([
+				{ last_vote_at: null }, // getLastVoteAt
+				LINK, // getByKeyId
+				[], // getCuratorLeaderboard
+				{ nickname: null }, // resolveIdentity
+				settings, // getProfileExtras
+			])
+			const res = await leaderboardRoutes(makeEnv(db, makeMockCache(seed))).handle(
+				new Request(`http://localhost/leaderboard/users/${keyId}`)
+			)
+			return ((await res.json()) as { data: Record<string, unknown> }).data
+		}
+
+		it("regression: keeps a linked Discord name private until the curator opts in", async () => {
+			const data = await profile({ banner_video_id: null, banner_live: false, show_discord: false })
+			expect("discord" in data).toBe(false)
+			expect(data.discordLinked).toBe(true)
+		})
+
+		it("shows the Discord name once the curator opts in", async () => {
+			const data = await profile({ banner_video_id: null, banner_live: false, show_discord: true })
+			expect(data.discord).toEqual({ id: "d1", username: "alice" })
+		})
+
+		it("drops a banner whose song the curator no longer has live lyrics for", async () => {
+			const data = await profile(
+				{ banner_video_id: "dQw4w9WgXcQ", banner_live: false, show_discord: false },
+				{ "artwork:v2:dQw4w9WgXcQ": "https://lh3.googleusercontent.com/cover=w544-h544" }
+			)
+			expect("banner" in data).toBe(false)
+		})
+	})
+
 	it("returns ranked: false with displayName and null lastVoteAt for an unknown user", async () => {
 		const keyId = "b".repeat(64)
 		const db = makeMockDB([{ last_vote_at: null }, null, [], { nickname: null }])

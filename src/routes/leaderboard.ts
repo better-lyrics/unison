@@ -1,4 +1,5 @@
 import { config } from "@/config"
+import { getProfileExtras } from "@/db/profile-settings"
 import { getByKeyId } from "@/db/discordLinks"
 import {
 	CURATOR_LEADERBOARD_CACHE_KEY,
@@ -149,6 +150,7 @@ export const leaderboardRoutes = (env: Env) =>
 					getByKeyId(env, params.keyId),
 				])
 				const { displayName, handle, avatarUrl } = await resolveIdentity(env, params.keyId)
+				const extras = await getProfileExtras(env, params.keyId, link)
 				const discordLinked = link !== null
 				if (row) {
 					const { nickname: _nickname, ...rest } = row
@@ -162,6 +164,7 @@ export const leaderboardRoutes = (env: Env) =>
 							lastVoteAt,
 							discordLinked,
 							avatarUrl,
+							...extras,
 						},
 					}
 				}
@@ -175,6 +178,7 @@ export const leaderboardRoutes = (env: Env) =>
 						lastVoteAt,
 						discordLinked,
 						avatarUrl,
+						...extras,
 					},
 				}
 			},

@@ -39,6 +39,7 @@ export const ErrorCode = {
 	DISCORD_AVATAR_UNAVAILABLE: "DISCORD_AVATAR_UNAVAILABLE",
 	SONG_NOT_SUBMITTED: "SONG_NOT_SUBMITTED",
 	SONG_ARTWORK_UNAVAILABLE: "SONG_ARTWORK_UNAVAILABLE",
+	INVALID_PROFILE_SETTINGS: "INVALID_PROFILE_SETTINGS",
 	AVATAR_PRESET_EXISTS: "AVATAR_PRESET_EXISTS",
 	AVATAR_IMAGE_INVALID: "AVATAR_IMAGE_INVALID",
 	CDN_UNAVAILABLE: "CDN_UNAVAILABLE",
@@ -235,6 +236,10 @@ const TEMPLATES: Record<ErrorCode, Template> = {
 	SONG_ARTWORK_UNAVAILABLE: {
 		error: "Song cover unavailable",
 		hint: "This song has no cover art yet. Pick another song or picture.",
+	},
+	INVALID_PROFILE_SETTINGS: {
+		error: "Invalid profile settings",
+		hint: "Send banner as a YouTube video id or null, and showDiscord as true or false.",
 	},
 	AVATAR_PRESET_EXISTS: {
 		error: "Avatar already exists",

@@ -1,16 +1,33 @@
 import { config } from "@/config"
 import { getUserBadges, setFeatured } from "@/db/badges"
 import { getFulfillmentStatsBySubmitter } from "@/db/fulfillments"
-import { decodeSubmissionCursor, encodeSubmissionCursor, getSubmissionsByUser } from "@/db/profile"
+import {
+	decodeSubmissionCursor,
+	encodeSubmissionCursor,
+	getSubmissionsByUser,
+	hasSubmissionForVideo,
+} from "@/db/profile"
+import { type ProfileSettingsChange, setProfileSettings } from "@/db/profile-settings"
 import { resolveKeyIdByHandle } from "@/db/users"
+import { resolveArtwork } from "@/services/artwork"
 import type { Env } from "@/types"
 import { eitherAuth } from "@/utils/either-auth"
 import { ErrorCode, buildError } from "@/utils/errors"
 import { readRateLimit } from "@/utils/read-rate-limit"
+import { isVideoId } from "@/utils/video-id"
 import { Elysia, t } from "elysia"
 
 const DEFAULT_LIMIT = 20
 const MAX_LIMIT = 50
+
+function parseProfileSettings(body: unknown): ProfileSettingsChange | null {
+	if (!body || typeof body !== "object") return null
+	const { banner, showDiscord } = body as { banner?: unknown; showDiscord?: unknown }
+	if (banner !== undefined && banner !== null && !isVideoId(banner)) return null
+	if (showDiscord !== undefined && typeof showDiscord !== "boolean") return null
+	if (banner === undefined && showDiscord === undefined) return null
+	return { banner, showDiscord }
+}
 
 function parseFeaturedKeys(body: unknown): string[] | null {
 	if (!body || typeof body !== "object") return null
@@ -118,4 +135,26 @@ export const userRoutes = (env: Env) =>
 				return status(400, buildError(ErrorCode.INVALID_FEATURED_BADGES, { hint }))
 			}
 			return { success: true, data: result.gamification }
+		})
+		.put("/me/profile", async ({ env, keyId, body, status }) => {
+			const { success } = await env.RATE_LIMITER.limit({
+				key: `profile_write:${keyId}`,
+				maxRequests: config.profile.write.maxRequests,
+				windowSeconds: config.profile.write.windowSeconds,
+			})
+			if (!success) return status(429, buildError(ErrorCode.RATE_LIMITED))
+
+			const change = parseProfileSettings(body)
+			if (!change) return status(400, buildError(ErrorCode.INVALID_PROFILE_SETTINGS))
+			if (change.banner) {
+				if (!(await hasSubmissionForVideo(env, keyId, change.banner))) {
+					return status(403, buildError(ErrorCode.SONG_NOT_SUBMITTED))
+				}
+				if (!(await resolveArtwork(env, change.banner))) {
+					return status(409, buildError(ErrorCode.SONG_ARTWORK_UNAVAILABLE))
+				}
+			}
+			const saved = await setProfileSettings(env, keyId, change)
+			if (!saved) return status(404, buildError(ErrorCode.NOT_FOUND))
+			return { success: true, data: saved }
 		})
