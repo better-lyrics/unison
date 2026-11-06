@@ -24,7 +24,7 @@ export function SyncTag({ kind, size = "inline", className }: SyncTagProps) {
   return (
     <span
       className={cn(
-        "inline-flex h-8 items-center gap-2 whitespace-nowrap rounded-[10px] pr-3 pl-2.5 text-[13px] font-bold backdrop-blur-[16px] [corner-shape:superellipse(1.6)]",
+        "inline-flex h-8 items-center gap-2 whitespace-nowrap rounded-[10px] pr-3 pl-2.5 text-[13px] font-bold backdrop-saturate-150 [corner-shape:superellipse(1.6)]",
         className,
       )}
       style={{ color: kind === "unsynced" ? "var(--ink-2, var(--color-unison-text-secondary))" : color, background: tint }}
