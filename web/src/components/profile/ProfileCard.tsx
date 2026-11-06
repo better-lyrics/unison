@@ -162,7 +162,7 @@ export function ProfileCard({ keyId, rank, gamification, catalogue, art, onChang
         </h1>
         {rank.handle ? <p className="mt-2.5 text-sm font-medium text-(--ink-3)">@{rank.handle}</p> : null}
         {gamification && catalogue ? <FeaturedBadges gamification={gamification} catalogue={catalogue} /> : null}
-        <div className="mt-5 flex gap-[22px] pt-[18px] shadow-[inset_0_1px_0_var(--tw-shadow-color,rgba(255,255,255,0.025))]">
+        <div className="mt-5 flex gap-[22px] pt-[18px] shadow-[inset_0_1px_0_var(--tw-shadow-color,rgba(255,255,255,0.03))]">
           <Stat value={String(rank.ranked ? rank.submissionCount : 0)} label="Songs synced" testId="stat-submissions" />
           <Stat value={formatCompact(rank.ranked ? rank.totalUpvotes : 0)} label="Upvotes" testId="stat-upvotes" />
           {gamification ? (
