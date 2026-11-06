@@ -51,7 +51,9 @@ export function PageArtProvider({ children }: { children: ReactNode }) {
   const { pathname } = useLocation()
   const fallback = useMemo(defaultArt, [])
   const src = art?.src ?? fallback
-  useArtPalette(src, art?.src ? 0 : DEFAULT_SCRIM_FLOOR)
+  const [onScreen, setOnScreen] = useState<string | null>(null)
+  const paletteSrc = onScreen ?? src
+  useArtPalette(paletteSrc, paletteSrc === fallback ? DEFAULT_SCRIM_FLOOR : 0)
 
   const previewSrc = preview?.pathname === pathname ? preview.src : null
 
@@ -69,7 +71,7 @@ export function PageArtProvider({ children }: { children: ReactNode }) {
   return (
     <SetPageArt value={setArt}>
       <PreviewPageArt value={previewArt}>
-        <ArtBackground src={previewSrc ?? src} moving={art?.moving ?? false} />
+        <ArtBackground src={previewSrc ?? src} moving={art?.moving ?? false} onShow={setOnScreen} />
         {children}
       </PreviewPageArt>
     </SetPageArt>
@@ -87,8 +89,21 @@ export function usePageArt(src: string | null | undefined, moving = false) {
 export function useSongArtPreview({ videoId, song, artist }: { videoId: string; song: string; artist: string }) {
   const previewArt = useContext(PreviewPageArt)
   const { data: cover } = useArtwork(videoId)
-  const show = () => previewArt(cover ? artworkImageUrl(videoId) : sleeveDataUrl(song, artist, PREVIEW_SLEEVE_SIZE))
-  const hide = () => previewArt(null)
+  const active = useRef(false)
+  const show = () => {
+    active.current = true
+    previewArt(cover ? artworkImageUrl(videoId) : sleeveDataUrl(song, artist, PREVIEW_SLEEVE_SIZE))
+  }
+  const hide = () => {
+    active.current = false
+    previewArt(null)
+  }
+  useEffect(
+    () => () => {
+      if (active.current) previewArt(null)
+    },
+    [previewArt],
+  )
   return {
     onPointerEnter: (e: PointerEvent) => {
       if (e.pointerType === "mouse") show()

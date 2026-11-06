@@ -4,17 +4,21 @@ import { cn } from "@/lib/cn"
 
 const WARP = { warpIntensity: 0.9, blurPasses: 8, saturation: 1.4, animationSpeed: 0.8 }
 const SETTLE_MS = 1500
+const PAGE_SCALE = 0.5
 
 interface ArtBackgroundProps {
   src: string | null | undefined
   contained?: boolean
   moving?: boolean
+  dithering?: number
   onReady?: () => void
+  onShow?: (src: string) => void
 }
 
 const reducedMotion = () => matchMedia("(prefers-reduced-motion: reduce)").matches
+const artFadeMs = () => Number.parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--art-fade"))
 
-export function ArtBackground({ src, contained = false, moving = false, onReady }: ArtBackgroundProps) {
+export function ArtBackground({ src, contained = false, moving = false, dithering, onReady, onShow }: ArtBackgroundProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const warpRef = useRef<Kawarp | null>(null)
   const movingRef = useRef(moving)
@@ -49,7 +53,12 @@ export function ArtBackground({ src, contained = false, moving = false, onReady 
     if (!canvas) return
     let warp: Kawarp
     try {
-      warp = new Kawarp(canvas, { ...WARP, animationSpeed: movingRef.current ? WARP.animationSpeed : 0 })
+      warp = new Kawarp(canvas, {
+        ...WARP,
+        dithering,
+        transitionDuration: artFadeMs() || undefined,
+        animationSpeed: movingRef.current ? WARP.animationSpeed : 0,
+      })
     } catch (error: unknown) {
       console.warn("Could not start the background art", error)
       setFailed(true)
@@ -59,8 +68,9 @@ export function ArtBackground({ src, contained = false, moving = false, onReady 
     warpRef.current = warp
     const observer = new ResizeObserver(() => {
       const box = contained ? canvas.getBoundingClientRect() : { width: innerWidth, height: innerHeight }
-      canvas.width = Math.max(1, Math.round(box.width * 0.5))
-      canvas.height = Math.max(1, Math.round(box.height * 0.5))
+      const scale = contained ? devicePixelRatio : PAGE_SCALE
+      canvas.width = Math.max(1, Math.round(box.width * scale))
+      canvas.height = Math.max(1, Math.round(box.height * scale))
       warp.resize()
       warp.renderFrame()
     })
@@ -71,7 +81,7 @@ export function ArtBackground({ src, contained = false, moving = false, onReady 
       warp.dispose()
       warpRef.current = null
     }
-  }, [contained])
+  }, [contained, dithering])
 
   useEffect(() => {
     movingRef.current = moving
@@ -80,6 +90,8 @@ export function ArtBackground({ src, contained = false, moving = false, onReady 
   }, [moving, update])
 
   const targetRef = useRef(src)
+  const onShowRef = useRef(onShow)
+  onShowRef.current = onShow
   const drainingRef = useRef<Kawarp | null>(null)
 
   const drain = useCallback(
@@ -91,6 +103,8 @@ export function ArtBackground({ src, contained = false, moving = false, onReady 
         applied = targetRef.current
         try {
           await warp.loadImage(applied)
+          if (warpRef.current !== warp) break
+          onShowRef.current?.(applied)
           setShown(true)
           setFailed(false)
           update(warp)

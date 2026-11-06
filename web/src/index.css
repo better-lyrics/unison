@@ -384,8 +384,43 @@ select {
   initial-value: 0px;
 }
 
+@property --ink-2 {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: rgba(245, 245, 247, 0.72);
+}
+
+@property --ink-3 {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: rgba(245, 245, 247, 0.72);
+}
+
+@property --ink-dim {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: rgba(245, 245, 247, 0.48);
+}
+
+@property --ink-4 {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: rgba(245, 245, 247, 0.48);
+}
+
 :root {
-  transition: --scrim 700ms ease-out;
+  --art-fade: 1000ms;
+  --art-ease: cubic-bezier(0.37, 0, 0.63, 1);
+  transition:
+    --scrim var(--art-fade) var(--art-ease),
+    --ink-2 var(--art-fade) var(--art-ease),
+    --ink-3 var(--art-fade) var(--art-ease),
+    --ink-dim var(--art-fade) var(--art-ease),
+    --ink-4 var(--art-fade) var(--art-ease);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root { transition: none; }
 }
 
 .lyrics-pane {
