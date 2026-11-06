@@ -1,10 +1,9 @@
+import { makeMemoryCache } from "@/test/integration-harness"
 import type { Env } from "@/types"
 import { describe, expect, it } from "vitest"
 import { type SongShareInput, sharePage, songShare } from "./share-meta"
 
 const INDEX = `<!doctype html><html><head><meta name="theme-color" content="#28292c" /><title>Unison: Better Lyrics Leaderboards</title><meta name="description" content="Most-wanted songs and top curators for Better Lyrics." /></head><body><div id="root"></div></body></html>`
-
-const env = {} as Env
 
 const song = (title: string): SongShareInput => ({
 	videoId: "BI9HQCzpDgQ",
@@ -28,11 +27,14 @@ const request = (path: string) =>
 		headers: { host: "unison.betterlyrics.org", "x-forwarded-proto": "https" },
 	})
 
-const page = (path: string, share: SongShareInput | null) =>
-	sharePage(env, request(path), INDEX, {
-		song: async () => (share ? songShare(share, "#d92626") : null),
-		profile: async () => null,
-	})
+const page = (path: string, share: SongShareInput | null) => {
+	const cache = makeMemoryCache()
+	cache.store.set(
+		"share:song:BI9HQCzpDgQ",
+		JSON.stringify(share ? songShare(share, "#d92626") : null)
+	)
+	return sharePage({ CACHE: cache } as unknown as Env, request(path), INDEX)
+}
 
 describe("share meta", () => {
 	it("escapes a hostile title in every tag", async () => {
@@ -43,12 +45,14 @@ describe("share meta", () => {
 
 	it("serves the plain app page when the song is missing or the lookup fails", async () => {
 		expect(await page("/song/BI9HQCzpDgQ", null)).toBe(INDEX)
-		const failing = await sharePage(env, request("/song/BI9HQCzpDgQ"), INDEX, {
-			song: async () => {
-				throw new Error("db down")
+		const down = {
+			CACHE: {
+				get: async () => {
+					throw new Error("redis down")
+				},
 			},
-			profile: async () => null,
-		})
+		} as unknown as Env
+		const failing = await sharePage(down, request("/song/BI9HQCzpDgQ"), INDEX)
 		expect(failing).toBe(INDEX)
 	})
 

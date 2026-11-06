@@ -31,11 +31,6 @@ export interface Share {
 	author: { name: string; path: string }
 }
 
-export interface ShareLoaders {
-	song: (env: Env, videoId: string) => Promise<Share | null>
-	profile: (env: Env, keyId: string) => Promise<Share | null>
-}
-
 export type SongShareInput = {
 	videoId: string
 	top: Pick<
@@ -149,8 +144,8 @@ async function cached<T>(env: Env, key: string, ttl: number, load: () => Promise
 	return value
 }
 
-export const shareLoaders: ShareLoaders = {
-	song: (env, videoId) =>
+export const shareLoaders = {
+	song: (env: Env, videoId: string): Promise<Share | null> =>
 		cached(env, `share:song:${videoId}`, SHARE_TTL_SECONDS, async () => {
 			const card = await loadSongCard(env, videoId)
 			if (!card) return null
@@ -163,7 +158,7 @@ export const shareLoaders: ShareLoaders = {
 			)
 			return songShare(input, accent)
 		}),
-	profile: (env, keyId) =>
+	profile: (env: Env, keyId: string): Promise<Share | null> =>
 		cached(env, `share:profile:${keyId}`, SHARE_TTL_SECONDS, async () => {
 			const card = await loadProfileCard(env, keyId)
 			if (!card) return null
@@ -184,7 +179,7 @@ export function requestOrigin(request: Request): string {
 	return `${proto ?? url.protocol.replace(":", "")}://${host}`
 }
 
-export async function findShare(env: Env, pathname: string, loaders: ShareLoaders) {
+async function findShare(env: Env, pathname: string): Promise<Share | null> {
 	const [, rawSection, id] = pathname.split("/")
 	const section = rawSection?.toLowerCase()
 	if (!id || pathname.split("/").length !== 3) return null
@@ -194,8 +189,8 @@ export async function findShare(env: Env, pathname: string, loaders: ShareLoader
 	} catch {
 		return null
 	}
-	if (section === "song" && isVideoId(decoded)) return loaders.song(env, decoded)
-	if (section === "curator" && KEY_ID.test(decoded)) return loaders.profile(env, decoded)
+	if (section === "song" && isVideoId(decoded)) return shareLoaders.song(env, decoded)
+	if (section === "curator" && KEY_ID.test(decoded)) return shareLoaders.profile(env, decoded)
 	if (section === "u" && NICKNAME.test(decoded)) {
 		const keyId = await cached(
 			env,
@@ -203,7 +198,7 @@ export async function findShare(env: Env, pathname: string, loaders: ShareLoader
 			SHARE_TTL_SECONDS,
 			() => resolveKeyIdByHandle(env, decoded)
 		)
-		return keyId ? loaders.profile(env, keyId) : null
+		return keyId ? shareLoaders.profile(env, keyId) : null
 	}
 	return null
 }
@@ -247,15 +242,10 @@ export function injectShare(indexHtml: string, tags: string): string {
 		.replace("</head>", () => `${tags}</head>`)
 }
 
-export async function sharePage(
-	env: Env,
-	request: Request,
-	indexHtml: string,
-	loaders: ShareLoaders = shareLoaders
-): Promise<string> {
+export async function sharePage(env: Env, request: Request, indexHtml: string): Promise<string> {
 	const { pathname } = new URL(request.url)
 	try {
-		const share = await findShare(env, pathname, loaders)
+		const share = await findShare(env, pathname)
 		return share
 			? injectShare(indexHtml, shareTags(share, requestOrigin(request), pathname))
 			: indexHtml
@@ -265,12 +255,7 @@ export async function sharePage(
 	}
 }
 
-export async function oembedFor(
-	env: Env,
-	request: Request,
-	target: string,
-	loaders: ShareLoaders = shareLoaders
-) {
+export async function oembedFor(env: Env, request: Request, target: string) {
 	const origin = requestOrigin(request)
 	let url: URL
 	try {
@@ -279,7 +264,7 @@ export async function oembedFor(
 		return null
 	}
 	if (url.origin !== origin) return null
-	const share = await findShare(env, url.pathname, loaders)
+	const share = await findShare(env, url.pathname)
 	if (!share) return null
 	return {
 		version: "1.0",
