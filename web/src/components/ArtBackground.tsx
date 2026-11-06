@@ -2,7 +2,7 @@ import { Kawarp } from "@kawarp/core"
 import { useCallback, useEffect, useRef, useState } from "react"
 import { cn } from "@/lib/cn"
 
-const WARP = { warpIntensity: 0.9, blurPasses: 8, saturation: 1.4, animationSpeed: 0.8 }
+const WARP = { warpIntensity: 0.9, blurPasses: 8, saturation: 1.5, animationSpeed: 0.8 }
 const SETTLE_MS = 1500
 const PAGE_SCALE = 0.5
 
