@@ -5,6 +5,7 @@ import { LyricsPanel } from "@/components/LyricsPanel"
 import { SongHero, SongHeroSkeleton } from "@/components/song/SongHero"
 import { SongRail } from "@/components/song/SongRail"
 import { Bone } from "@/components/skeleton"
+import { useFillHeight } from "@/hooks/useFillHeight"
 import { useLyricsVariant, useLyricsVariants } from "@/hooks/useLyricsData"
 import { useYouTubePlayer } from "@/hooks/useYouTubePlayer"
 import { artworkImageUrl, useArtwork } from "@/lib/artwork"
@@ -13,8 +14,9 @@ import { useCallback, useMemo, useState } from "react"
 import { useParams, useSearchParams } from "react-router-dom"
 
 const BODY =
-  "grid grid-cols-[minmax(0,1fr)_340px] gap-12 pt-2 pb-[88px] max-[1000px]:grid-cols-[minmax(0,1fr)] max-[1000px]:gap-7 max-[1000px]:pt-0"
-const LYRICS_SIZE = "h-[calc(100dvh-8rem)] min-h-[420px] max-w-none"
+  "grid grid-cols-[minmax(0,1fr)_340px] gap-12 pt-2 pb-8 max-[1000px]:pb-[88px] max-[1000px]:grid-cols-[minmax(0,1fr)] max-[1000px]:gap-7 max-[1000px]:pt-0"
+const LYRICS_FILL = "lyrics-fill"
+const LYRICS_SIZE = `${LYRICS_FILL} h-[max(var(--fill-height,560px),360px)] max-w-none max-[1000px]:h-[70dvh]`
 const SLEEVE_SIZE = 630
 
 export function LyricsPage() {
@@ -22,6 +24,7 @@ export function LyricsPage() {
   const [params, setParams] = useSearchParams()
   const [playerActive, setPlayerActive] = useState(false)
   const variantIdParam = params.get("variantId")
+  const lyricsRef = useFillHeight(`.${LYRICS_FILL}`)
 
   const safeVideoId = videoId ?? ""
   const { ref, getCurrentTime, getPlaying, playing, seekTo, play, pause } = useYouTubePlayer(
@@ -104,7 +107,7 @@ export function LyricsPage() {
         <SongHeroSkeleton />
       )}
       <div className={BODY}>
-        <div className="lyrics-view min-w-0">
+        <div ref={lyricsRef} className="lyrics-view min-w-0">
           <LyricsPanel
             variant={variantQuery.isLoading ? undefined : variant}
             getCurrentTime={getCurrentTime}
