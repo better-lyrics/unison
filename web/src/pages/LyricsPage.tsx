@@ -14,7 +14,7 @@ import { useParams, useSearchParams } from "react-router-dom"
 
 const BODY =
   "grid grid-cols-[minmax(0,1fr)_340px] gap-12 pt-2 pb-[88px] max-[1000px]:grid-cols-[minmax(0,1fr)] max-[1000px]:gap-7 max-[1000px]:pt-0"
-const LYRICS_SIZE = "h-[560px] max-w-none max-[1000px]:h-[440px] max-sm:h-[70dvh]"
+const LYRICS_SIZE = "h-[calc(100dvh-8rem)] min-h-[420px] max-w-none"
 const SLEEVE_SIZE = 630
 
 export function LyricsPage() {
