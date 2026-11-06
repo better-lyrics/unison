@@ -4,7 +4,7 @@ import { useSession } from "@/auth/useSession"
 import { usePresence } from "@/hooks/usePresence"
 import { useVoteMutations } from "@/hooks/useVoteMutations"
 import { cn } from "@/lib/cn"
-import { glassActionClass, glassClass, popoverSurfaceClass } from "./ui"
+import { chipClass, glassClass, popoverSurfaceClass } from "./ui"
 import { REPORT_REASONS, REPORT_REASON_LABEL, type ReportReason } from "@/lib/report-reasons"
 import { BlDownvoteIcon, BlReportIcon, BlUpvoteIcon } from "./icons/BlVoteIcons"
 
@@ -16,7 +16,7 @@ interface VoteControlsProps {
 }
 
 const VOTE_BUTTON =
-  "relative isolate inline-flex h-11 cursor-pointer items-center gap-2 before:absolute before:inset-1 before:-z-10 before:rounded-full before:transition-colors before:duration-150 before:ease-[cubic-bezier(0.2,0,0,1)] transition-colors duration-150 enabled:hover:before:bg-white/[0.08] disabled:cursor-not-allowed disabled:opacity-60"
+  "relative isolate inline-flex h-[30px] cursor-pointer items-center gap-1.5 before:absolute before:inset-0.5 before:-z-10 before:rounded-[8px] before:transition-colors before:duration-150 before:ease-[cubic-bezier(0.2,0,0,1)] transition-colors duration-150 enabled:hover:before:bg-white/[0.08] disabled:cursor-not-allowed disabled:opacity-60"
 
 interface ReasonOption {
   reason: ReportReason
@@ -68,7 +68,7 @@ export function VoteControls({ variantId, videoId, variant, beforeReport }: Vote
 
   return (
     <>
-      <div className={cn(glassClass, "inline-flex h-11 items-center rounded-full")}>
+      <div className={cn(glassClass, "inline-flex h-[30px] items-center rounded-[10px] text-[13px] [corner-shape:superellipse(1.6)] [text-shadow:none]")}>
         <button
           type="button"
           aria-label={`Upvote variant, score ${variant.score}`}
@@ -78,11 +78,11 @@ export function VoteControls({ variantId, videoId, variant, beforeReport }: Vote
           onClick={handleUp}
           className={cn(
             VOTE_BUTTON,
-            "rounded-l-full pr-4 pl-3.5 font-bold tabular-nums",
+            "pr-3 pl-2.5 font-bold tabular-nums",
             upActive ? "text-[#86efac]" : "text-unison-text",
           )}
         >
-          <BlUpvoteIcon size={18} />
+          <BlUpvoteIcon size={15} />
           <NumberFlow key={variantId} value={variant.score} />
         </button>
         <span aria-hidden="true" className="h-5 w-px bg-white/[0.14]" />
@@ -93,9 +93,9 @@ export function VoteControls({ variantId, videoId, variant, beforeReport }: Vote
           disabled={disabled}
           title={disabledTitle}
           onClick={handleDown}
-          className={cn(VOTE_BUTTON, "rounded-r-full pr-4 pl-3", downActive ? "text-[#fcd34d]" : "text-unison-text")}
+          className={cn(VOTE_BUTTON, "pr-2.5 pl-2", downActive ? "text-[#fcd34d]" : "text-unison-text")}
         >
-          <BlDownvoteIcon size={18} />
+          <BlDownvoteIcon size={15} />
         </button>
       </div>
       {beforeReport}
@@ -108,9 +108,9 @@ export function VoteControls({ variantId, videoId, variant, beforeReport }: Vote
           disabled={disabled}
           title={disabledTitle}
           onClick={() => setMenuOpen((v) => !v)}
-          className={cn(glassActionClass, "w-11 px-0")}
+          className={cn(chipClass, "w-[30px] justify-center px-0")}
         >
-          <BlReportIcon size={18} />
+          <BlReportIcon size={15} />
         </button>
         {menu.mounted ? (
           <div

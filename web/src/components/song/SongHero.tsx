@@ -9,7 +9,7 @@ import { IconSwap } from "@/components/icons/IconSwap"
 import { PlayPauseIcon } from "@/components/icons/PlaybackIcons"
 import { YouTubeMusicIcon } from "@/components/icons/YouTubeMusicIcon"
 import { Bone } from "@/components/skeleton"
-import { glassActionClass, glassClass } from "@/components/ui"
+import { chipClass, chipIconClass, glassClass, raisedChipClass } from "@/components/ui"
 import { useCopied } from "@/hooks/useCopied"
 import { cn } from "@/lib/cn"
 import { titleCase } from "@/lib/format"
@@ -150,13 +150,13 @@ function ShareButton({ videoId }: { videoId: string }) {
         type="button"
         aria-label={copied ? "Link copied" : "Share"}
         onClick={() => copy(`${window.location.origin}/song/${videoId}`)}
-        className={cn(glassActionClass, "w-11 px-0")}
+        className={cn(chipClass, "w-[30px] justify-center px-0")}
       >
         <IconSwap
           swapped={copied}
           from={<IconShare className="size-full" stroke={1.75} />}
           to={<IconCheck className="size-full" stroke={1.75} />}
-          className="size-[18px]"
+          className={chipIconClass}
         />
       </button>
     </Tooltip>
@@ -210,11 +210,11 @@ export function SongHero({ variant, versions, art, player }: SongHeroProps) {
             type="button"
             onClick={player.onToggle}
             transition={{ layout: LAYOUT_TRANSITION }}
-            style={{ borderRadius: 9999 }}
-            className="inline-flex h-11 cursor-pointer items-center justify-center gap-2 whitespace-nowrap rounded-full bg-unison-text pr-[18px] pl-4 max-sm:flex-1 text-sm font-bold text-[#121116] transition-[background-color,scale] duration-150 ease-out hover:bg-white active:scale-[0.96]"
+            style={{ borderRadius: 10 }}
+            className={cn(raisedChipClass, "max-sm:flex-1 max-sm:justify-center")}
           >
             <motion.span layout className="inline-flex">
-              <PlayPauseIcon playing={player.playing} />
+              <PlayPauseIcon playing={player.playing} className={chipIconClass} />
             </motion.span>
             <SwapLabel text={player.playing ? "Pause" : "Play"} />
           </motion.button>
@@ -222,9 +222,9 @@ export function SongHero({ variant, versions, art, player }: SongHeroProps) {
             href={youTubeMusicUrl(variant.videoId)}
             target="_blank"
             rel="noopener noreferrer"
-            className={cn(glassActionClass, "pl-4 max-sm:flex-1 max-sm:justify-center")}
+            className={cn(chipClass, "max-sm:flex-1 max-sm:justify-center")}
           >
-            <YouTubeMusicIcon className="size-[18px]" />
+            <YouTubeMusicIcon className={chipIconClass} />
             YouTube Music
           </a>
           <span aria-hidden="true" className="hidden basis-full max-sm:block" />
@@ -234,8 +234,6 @@ export function SongHero({ variant, versions, art, player }: SongHeroProps) {
             variant={{ score: variant.score, userVote: variant.userVote ?? null }}
             beforeReport={<ShareButton videoId={variant.videoId} />}
           />
-        </div>
-        <div className="mt-3 flex flex-wrap items-center gap-2 empty:hidden">
           <EditMetadataButton
             videoId={variant.videoId}
             lyricsId={variant.id}
@@ -272,11 +270,11 @@ export function SongHeroSkeleton() {
           <Bone className="h-8 w-[117px] rounded-[10px]" />
         </div>
         <div className="mt-4 flex gap-2">
-          <Bone className="h-11 w-[87px] rounded-full" />
-          <Bone className="h-11 w-[157px] rounded-full" />
-          <Bone className="h-11 w-[114px] rounded-full" />
-          <Bone className="size-11 rounded-full" />
-          <Bone className="size-11 rounded-full" />
+          <Bone className="h-[30px] w-[69px] rounded-[10px]" />
+          <Bone className="h-[30px] w-[131px] rounded-[10px]" />
+          <Bone className="h-[30px] w-[86px] rounded-[10px]" />
+          <Bone className="size-[30px] rounded-[10px]" />
+          <Bone className="size-[30px] rounded-[10px]" />
         </div>
       </div>
     </section>
