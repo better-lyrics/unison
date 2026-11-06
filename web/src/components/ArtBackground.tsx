@@ -1,5 +1,6 @@
 import { Kawarp } from "@kawarp/core"
 import { useCallback, useEffect, useRef, useState } from "react"
+import { Bone } from "@/components/skeleton"
 import { cn } from "@/lib/cn"
 
 const WARP = { warpIntensity: 0.9, blurPasses: 8, saturation: 1.4, animationSpeed: 0.8 }
@@ -19,6 +20,7 @@ export function ArtBackground({ src, contained = false, moving = false }: ArtBac
   const movingRef = useRef(moving)
   const settleRef = useRef<number | undefined>(undefined)
   const [shown, setShown] = useState(false)
+  const [failed, setFailed] = useState(false)
 
   const play = useCallback((warp: Kawarp) => {
     window.clearTimeout(settleRef.current)
@@ -50,6 +52,7 @@ export function ArtBackground({ src, contained = false, moving = false }: ArtBac
       warp = new Kawarp(canvas, { ...WARP, animationSpeed: movingRef.current ? WARP.animationSpeed : 0 })
     } catch (error: unknown) {
       console.warn("Could not start the background art", error)
+      setFailed(true)
       return
     }
     if (reducedMotion()) warp.transitionDuration = 0
@@ -83,17 +86,26 @@ export function ArtBackground({ src, contained = false, moving = false }: ArtBac
       .loadImage(src)
       .then(() => {
         setShown(true)
+        setFailed(false)
         update(warp)
       })
       .catch((error: unknown) => {
         console.warn("Could not load the background art", error)
         setShown(false)
+        setFailed(true)
       })
   }, [src, update])
 
-  const fade = cn("transition-opacity duration-700 ease-out", shown ? "opacity-100" : "opacity-0")
+  const fade = cn("transition-opacity duration-700 ease-out motion-reduce:duration-150", shown ? "opacity-100" : "opacity-0")
 
-  if (contained) return <canvas ref={canvasRef} className={cn("absolute inset-0 block size-full", fade)} />
+  if (contained) {
+    return (
+      <>
+        {shown || failed ? null : <Bone className="absolute inset-0 rounded-none" />}
+        <canvas ref={canvasRef} className={cn("absolute inset-0 block size-full", fade)} />
+      </>
+    )
+  }
 
   return (
     <>
