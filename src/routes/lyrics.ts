@@ -4,8 +4,6 @@ import { parseFeedFilters } from "@/db/feed-filters"
 import { getFulfillmentByLyricsId } from "@/db/fulfillments"
 import { getRevisionBar } from "@/db/lyric-revisions"
 import {
-	findByIsrc,
-	findBySongArtist,
 	findServedByVideoId,
 	findVariantsByVideoId,
 	getLyricsById,
@@ -19,12 +17,14 @@ import { Logger } from "@/infra/logger"
 import { toFeedResponse } from "@/routes/feed"
 import { toResponse, toSearchResponse } from "@/routes/lyrics.transformers"
 import { buildSealMarks, resolveActors } from "@/routes/marks"
+import { findLyricsByTrack } from "@/services/track-lookup"
 import type { Env, LyricsSubmission } from "@/types"
 import { ALBUM_HINT, isValidAlbum } from "@/utils/album"
 import { signedRequest } from "@/utils/auth"
 import { ErrorCode, buildError } from "@/utils/errors"
 import { ISRC_HINT, normalizeIsrc } from "@/utils/isrc"
 import { normalizeLanguage } from "@/utils/language-code"
+import { PROVIDER_ID_HINT, readProviderIds } from "@/utils/provider-id"
 import { readRateLimit } from "@/utils/read-rate-limit"
 import { getSession } from "@/utils/session"
 import { validateLyricContent } from "@/utils/validate-lyrics"
@@ -81,7 +81,7 @@ export const lyricsRoutes = (env: Env) =>
 		})
 		.get(
 			"/",
-			async ({ query, env, lyricsUserId, lyricsKeyId, status, set }) => {
+			async ({ query, env, lyricsUserId, lyricsKeyId, set, status }) => {
 				// CORS sends `vary: *`, which Cloudflare never caches; the allowed origin still varies.
 				set.headers.vary = "Origin"
 				if (query.v) {
@@ -114,21 +114,30 @@ export const lyricsRoutes = (env: Env) =>
 					}
 				}
 
-				if (query.isrc !== undefined || (query.song && query.artist)) {
-					const result =
-						(query.isrc !== undefined ? await findByIsrc(env, query.isrc) : null) ??
-						(query.song && query.artist
-							? await findBySongArtist(
-									env,
-									query.song,
-									query.artist,
-									parseDuration(query.duration),
-									query.album
-								)
-							: null)
-					if (!result) {
+				const hasOtherLookup = query.isrc !== undefined || Boolean(query.song && query.artist)
+				const parsedIds = readProviderIds(query)
+				if (parsedIds === null && !hasOtherLookup) {
+					return status(400, buildError(ErrorCode.INVALID_ID, { hint: PROVIDER_ID_HINT }))
+				}
+				const providerIds = parsedIds ?? []
+
+				if (hasOtherLookup || providerIds.length > 0) {
+					const match = await findLyricsByTrack(env, {
+						isrc: query.isrc,
+						providerIds,
+						song: query.song,
+						artist: query.artist,
+						album: query.album,
+						duration: parseDuration(query.duration),
+					})
+					if (match.kind === "pending") {
+						set.headers["retry-after"] = String(match.retryAfterSec)
+						return status(503, buildError(ErrorCode.LOOKUP_PENDING))
+					}
+					if (match.kind === "none") {
 						return status(404, buildError(ErrorCode.NOT_FOUND))
 					}
+					const result = match.row
 					const [userVote, fulfilled] = await Promise.all([
 						lyricsUserId ? getUserVote(env, result.id, lyricsUserId) : Promise.resolve(null),
 						getFulfillmentByLyricsId(env, result.id),
@@ -148,6 +157,7 @@ export const lyricsRoutes = (env: Env) =>
 								result.submitter_id != null ? actors.get(result.submitter_id) : undefined
 							),
 							userVote,
+							matchedBy: match.matchedBy,
 						},
 					}
 				}
@@ -158,6 +168,9 @@ export const lyricsRoutes = (env: Env) =>
 				query: t.Object({
 					v: t.Optional(t.String()),
 					isrc: t.Optional(t.String()),
+					spotify: t.Optional(t.String()),
+					apple_music: t.Optional(t.String()),
+					tidal: t.Optional(t.String()),
 					song: t.Optional(t.String()),
 					artist: t.Optional(t.String()),
 					album: t.Optional(t.String()),

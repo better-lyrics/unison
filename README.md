@@ -118,11 +118,21 @@ Chrome and Chromium-based browsers only. Firefox does not implement `externally_
 ```
 GET /lyrics?v=<videoId>
 GET /lyrics?isrc=<isrc>
+GET /lyrics?spotify=<trackId>
+GET /lyrics?apple_music=<trackId>
+GET /lyrics?tidal=<trackId>
 GET /lyrics?song=<song>&artist=<artist>
 GET /lyrics?song=<song>&artist=<artist>&album=<album>&duration=<seconds>
 ```
 
 Returns the highest-scored match. Lookups run in order `v`, then `isrc`, then `song` + `artist`, so an unknown ISRC falls back to song and artist when both are given. ISRCs match in any case, with or without hyphens.
+
+`spotify`, `apple_music` and `tidal` take a track id, not a link. Unison asks [BiniLink](https://link.binimum.org) for that track's ISRC and looks it up. When no lyric has the ISRC and `song` + `artist` find nothing either, Unison tries the YouTube video BiniLink links to the ISRC, and that applies to `isrc` lookups too. When several ids are sent, the first one that resolves wins, in the order `spotify`, `apple_music`, `tidal`.
+
+Lookups other than `v` return `matchedBy`: `isrc`, `linked_video` or `song_artist`. A `linked_video` match can come from a different release, so its timing may drift.
+
+A new id can answer `503 LOOKUP_PENDING` with `Retry-After` while BiniLink matches it, and so can an id Unison has not looked up before while BiniLink is down. Retry a few times, then give up. An `isrc`-only lookup never answers 503. A malformed id answers `400 INVALID_ID` when the request has nothing else to look up; next to `isrc` or `song` + `artist` it is ignored, so those lookups keep working. Provider ids only match when `BINILINK_LOOKUP_ENABLED=true`; without it they never find anything.
+
 `artist` matches when it shares a whole credited name with the stored credit, so `Madvillain`, `Madvillain Madlib` and `Madlib & Madvillain` all find a song credited to `Madvillain, Madlib, MF Doom`. An exact credit wins when several variants match.
 Optional `album` and `duration` narrow results. Duration matching uses ±2s tolerance (configurable in `src/config.ts`).
 
@@ -329,6 +339,10 @@ CREATE SCHEMA IF NOT EXISTS public_dump AUTHORIZATION unison_dump;
 Set `DUMP_DATABASE_URL` to a connection string that authenticates as that
 role. If it's unset, the pipeline uses `DATABASE_URL` as before.
 
+## Thanks
+
+Track id lookups run on [BiniLink](https://link.binimum.org) by [bini](https://binimum.org), a public API that maps Spotify, Apple Music, Tidal and YouTube tracks to ISRCs. Thanks to bini for building it.
+
 ## Funding
 
 > [!IMPORTANT]
@@ -355,4 +369,4 @@ The dump itself is dual-licensed.
   services, labels, distributors) needs a commercial license. Email
   `enterprise@boidu.dev` with "Unison" in the subject.
 
-Required attribution: `Lyrics from Unison (https://unison.boidu.dev)`.
+Required attribution: `Lyrics from Unison (https://unison.betterlyrics.org)`.

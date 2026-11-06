@@ -8,7 +8,7 @@ import { IconCheck, IconCopy, IconDownload } from "@tabler/icons-react"
 import { Fragment, type ReactNode, useState } from "react"
 
 const FALLBACK_LATEST_URL = "https://unison-dumps.boidu.dev/dumps/latest.dump"
-const ATTRIBUTION = "Lyrics from Unison (https://unison.boidu.dev)"
+const ATTRIBUTION = "Lyrics from Unison (https://unison.betterlyrics.org)"
 const ENTERPRISE_MAILTO = "mailto:enterprise@boidu.dev?subject=Unison%20commercial%20license%20inquiry"
 
 const RESTORE_SNIPPET = `# 1. Download and verify

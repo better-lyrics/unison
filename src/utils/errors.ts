@@ -22,6 +22,7 @@ export const ErrorCode = {
 	CANNOT_UNLINK_PRIMARY: "CANNOT_UNLINK_PRIMARY",
 	NOT_FOUND: "NOT_FOUND",
 	MISSING_QUERY: "MISSING_QUERY",
+	LOOKUP_PENDING: "LOOKUP_PENDING",
 	INVALID_SIGNED_BODY: "INVALID_SIGNED_BODY",
 	TIMESTAMP_EXPIRED: "TIMESTAMP_EXPIRED",
 	NONCE_REPLAY: "NONCE_REPLAY",
@@ -166,6 +167,10 @@ const TEMPLATES: Record<ErrorCode, Template> = {
 	MISSING_QUERY: {
 		error: "Provide either 'v' (videoId) or 'song' + 'artist'",
 		hint: "To search, add either a video link or both the song and artist names.",
+	},
+	LOOKUP_PENDING: {
+		error: "Lookup pending",
+		hint: "We're still matching this track. Try again in a few seconds.",
 	},
 	INVALID_SIGNED_BODY: {
 		error: "INVALID_SIGNED_BODY",
