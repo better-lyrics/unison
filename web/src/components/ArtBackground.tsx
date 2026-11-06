@@ -1,9 +1,9 @@
 import { Kawarp } from "@kawarp/core"
-import { useEffect, useRef, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import { cn } from "@/lib/cn"
 
 const WARP = { warpIntensity: 0.9, blurPasses: 8, saturation: 1.4, animationSpeed: 0.8 }
-const STILL_FRAME_TIME = 4
+const SETTLE_MS = 1500
 
 interface ArtBackgroundProps {
   src: string | null | undefined
@@ -20,12 +20,34 @@ export function ArtBackground({ src, contained = false, moving = false }: ArtBac
   const settleRef = useRef<number | undefined>(undefined)
   const [shown, setShown] = useState(false)
 
+  const play = useCallback((warp: Kawarp) => {
+    window.clearTimeout(settleRef.current)
+    warp.animationSpeed = WARP.animationSpeed
+    warp.start()
+  }, [])
+
+  const pause = useCallback((warp: Kawarp) => {
+    window.clearTimeout(settleRef.current)
+    warp.animationSpeed = 0
+    warp.start()
+    settleRef.current = window.setTimeout(() => warp.stop(), Math.max(SETTLE_MS, warp.transitionDuration))
+  }, [])
+
+  const update = useCallback(
+    (warp: Kawarp) => {
+      if (reducedMotion()) warp.renderFrame()
+      else if (movingRef.current) play(warp)
+      else pause(warp)
+    },
+    [play, pause],
+  )
+
   useEffect(() => {
     const canvas = canvasRef.current
     if (!canvas) return
     let warp: Kawarp
     try {
-      warp = new Kawarp(canvas, WARP)
+      warp = new Kawarp(canvas, { ...WARP, animationSpeed: movingRef.current ? WARP.animationSpeed : 0 })
     } catch (error: unknown) {
       console.warn("Could not start the background art", error)
       return
@@ -37,7 +59,7 @@ export function ArtBackground({ src, contained = false, moving = false }: ArtBac
       canvas.width = Math.max(1, Math.round(box.width * 0.5))
       canvas.height = Math.max(1, Math.round(box.height * 0.5))
       warp.resize()
-      if (!movingRef.current) warp.renderFrame(STILL_FRAME_TIME)
+      warp.renderFrame()
     })
     observer.observe(canvas)
     return () => {
@@ -51,11 +73,8 @@ export function ArtBackground({ src, contained = false, moving = false }: ArtBac
   useEffect(() => {
     movingRef.current = moving
     const warp = warpRef.current
-    if (!warp) return
-    window.clearTimeout(settleRef.current)
-    if (moving && !reducedMotion()) warp.start()
-    else warp.stop()
-  }, [moving])
+    if (warp) update(warp)
+  }, [moving, update])
 
   useEffect(() => {
     const warp = warpRef.current
@@ -64,19 +83,10 @@ export function ArtBackground({ src, contained = false, moving = false }: ArtBac
       .loadImage(src)
       .then(() => {
         setShown(true)
-        if (movingRef.current && !reducedMotion()) return
-        if (reducedMotion()) {
-          warp.renderFrame(STILL_FRAME_TIME)
-          return
-        }
-        window.clearTimeout(settleRef.current)
-        warp.start()
-        settleRef.current = window.setTimeout(() => {
-          if (!movingRef.current) warp.stop()
-        }, warp.transitionDuration)
+        update(warp)
       })
       .catch((error: unknown) => console.warn("Could not load the background art", error))
-  }, [src])
+  }, [src, update])
 
   const fade = cn("transition-opacity duration-700 ease-out", shown ? "opacity-100" : "opacity-0")
 
