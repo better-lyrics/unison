@@ -121,6 +121,7 @@ export function ProfileCard({ keyId, rank, gamification, catalogue, art, onChang
   const progress = gamification ? levelProgress(gamification.xp, gamification.xpForNext, gamification.xpFloor) : null
   const tier = rank.community ? null : (gamification?.tier ?? null)
   const [ready, setReady] = useState(false)
+  const [brokenBanner, setBrokenBanner] = useState<string | null>(null)
   const markReady = useCallback(() => setReady(true), [])
   useEffect(() => {
     const timer = window.setTimeout(markReady, CARD_ART_WAIT_MS)
@@ -139,9 +140,9 @@ export function ProfileCard({ keyId, rank, gamification, catalogue, art, onChang
         inert={!ready}
       >
         <ArtBackground src={art.wash} contained onReady={markReady} />
-        {art.banner ? (
+        {art.banner && art.banner !== brokenBanner ? (
           <div key={art.banner} aria-hidden="true" className="t-reveal absolute inset-x-0 top-0 isolate h-[64%] overflow-hidden">
-            <img src={art.banner} alt="" className="pf-banner-soft" />
+            <img src={art.banner} alt="" onError={() => setBrokenBanner(art.banner)} className="pf-banner-soft" />
             <img src={art.banner} alt="" className="pf-banner-sharp" />
           </div>
         ) : null}
