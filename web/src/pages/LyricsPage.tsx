@@ -135,7 +135,7 @@ export function LyricsPage() {
             Open on YouTube Music
           </a>
         </div>
-        <div className="space-y-4">
+        <div className="lyrics-view space-y-4">
           <LyricsPanel
             variant={variantQuery.isLoading ? undefined : variant}
             getCurrentTime={getCurrentTime}

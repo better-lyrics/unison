@@ -184,7 +184,7 @@ describe("LyricsRenderer", () => {
     const Renderer = await importRenderer()
     const { container } = render(<Renderer variant={makeVariant()} getCurrentTime={zero} getPlaying={stopped} />)
     const theme = elementIn(container).theme ?? ""
-    expect(theme).toContain("blyrics-target-scroll-pos-ratio")
+    expect(theme).toContain("blyrics-letter-wave")
     expect(theme).toContain(".blyrics-container")
   })
 

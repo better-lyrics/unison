@@ -61,8 +61,8 @@ body {
    lyric colours from --blyrics-text-color there, so setting it lower down never reaches them. */
 :root {
   --blyrics-text-color: var(--color-unison-text);
-  --blyrics-inactive-opacity: 0.2;
   --blyrics-font-size: 2rem;
+  --noto-sans-universal: "Noto Sans JP", "Noto Sans KR", "Noto Sans";
 }
 
 /* The element is the scroller braccato autoscrolls, which is what centres the active line. The
@@ -98,6 +98,35 @@ braccato-lyrics:has(.blyrics-user-scrolling)::-webkit-scrollbar-thumb {
 /* lyrics.css spends --blyrics-padding-bottom but hardcodes the top. */
 braccato-lyrics .blyrics-container {
   padding-top: var(--blyrics-padding-top, 2rem);
+}
+
+.lyrics-view braccato-lyrics {
+  margin-inline: -28px;
+  padding-inline: 28px;
+  box-sizing: border-box;
+}
+
+.lyrics-view braccato-lyrics .blyrics-container {
+  font-family: var(--blyrics-font-family);
+  --blyrics-font-size: 2.5rem;
+  --blyrics-line-height: 1.25;
+  --blyrics-padding: 14px;
+  --blyrics-padding-top: 0px;
+  background: none;
+  margin: 0;
+  padding-inline: 0;
+  max-width: none;
+}
+
+@media (max-width: 1000px) {
+  .lyrics-view braccato-lyrics {
+    margin-inline: -20px;
+    padding-inline: 20px;
+  }
+
+  .lyrics-view braccato-lyrics .blyrics-container {
+    --blyrics-font-size: 1.85rem;
+  }
 }
 
 /* Exam clips live in narrow A/B columns, so shrink the type and tighten the line
