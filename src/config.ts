@@ -406,6 +406,18 @@ export const config = {
 			"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
 	},
 
+	binilink: {
+		baseUrl: "https://link.binimum.org",
+		userAgent: "Unison (+https://unison.boidu.dev)",
+		timeoutMs: 1000,
+		pauseSec: 30,
+		maxPauseSec: 300,
+		pendingRetryAfterSec: 2,
+		trackTtlSec: 30 * 24 * 60 * 60,
+		missTtlSec: 24 * 60 * 60,
+		videoTtlSec: 24 * 60 * 60,
+	},
+
 	council: {
 		bookmarkTtlSec: 3 * 24 * 60 * 60,
 		bookmarkCap: 5,
