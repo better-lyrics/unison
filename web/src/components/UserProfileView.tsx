@@ -137,7 +137,7 @@ function ProfileBody({
   }
 
   return (
-    <div className="t-reveal">
+    <div>
       {owner && bannerAnchor ? (
         <BannerPicker
           ref={pickerRef}

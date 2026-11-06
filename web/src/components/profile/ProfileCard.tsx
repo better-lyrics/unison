@@ -6,7 +6,7 @@ import { BetterLyricsLogo } from "@/components/BetterLyricsLogo"
 import { useBadgeModal } from "@/components/BadgeModalContext"
 import { glassActionClass, glassClass } from "@/components/ui"
 import { XpAvatar } from "@/components/XpAvatar"
-import { bone } from "@/components/skeleton"
+import { Bone } from "@/components/skeleton"
 import { useBadgeImage } from "@/hooks/useBadgeImage"
 import type { ProfileArt } from "@/hooks/useProfileArt"
 import { isRareBadge, resolveBadgeImage } from "@/lib/badge-view"
@@ -122,81 +122,76 @@ export function ProfileCard({ keyId, rank, gamification, catalogue, art, onChang
   const markReady = useCallback(() => setReady(true), [])
 
   return (
-    <div
-      className={cn(
-        "relative isolate aspect-[5/7] w-full overflow-hidden rounded-[28px] shadow-[0_40px_100px_rgba(0,0,0,0.55)]",
-        RIM,
-      )}
-    >
-      <ArtBackground src={art.wash} contained onReady={markReady} />
-      {art.banner ? (
-        <div key={art.banner} aria-hidden="true" className="t-reveal absolute inset-x-0 top-0 isolate h-[64%] overflow-hidden">
-          <img src={art.banner} alt="" className="pf-banner-soft" />
-          <img src={art.banner} alt="" className="pf-banner-sharp" />
-        </div>
-      ) : null}
+    <div className="relative">
+      {ready ? null : <Bone className="absolute inset-0 rounded-[28px]" />}
       <div
-        aria-hidden="true"
-        className="absolute inset-0 bg-[linear-gradient(180deg,rgba(10,9,13,calc(var(--scrim)*0.4)),transparent_22%,transparent_42%,rgba(10,9,13,calc(var(--scrim)+0.1)))]"
-      />
-      <div className="absolute inset-0 flex min-w-0 flex-col p-6">
-        <div className="flex items-center justify-between gap-2">
-          <span className={cn(PILL, "gap-2 pr-3.5 pl-[9px]")}>
-            <BetterLyricsLogo size={20} />
-            Unison
-          </span>
-          {tier ? <Standing tier={tier} rank={rank.ranked ? rank.rank : null} /> : null}
-        </div>
-        <XpAvatar
-          avatarUrl={art.avatar}
-          keyId={keyId}
-          level={gamification?.level}
-          progress={progress?.pct ?? null}
-          tiered={Boolean(tier)}
-          className="mt-auto size-[116px] shrink-0"
-        />
-        <h1
-          title={rank.displayName}
-          className={cn(
-            NAME_SIZE[nameSize(rank.displayName)],
-            "mt-3.5 -mr-[0.08em] -mb-[0.08em] line-clamp-2 pr-[0.08em] pb-[0.08em] font-black leading-[1.08] tracking-[-0.035em] text-balance [overflow-wrap:anywhere]",
-          )}
-        >
-          {rank.displayName}
-        </h1>
-        {rank.handle ? <p className="mt-2.5 text-sm font-medium text-(--ink-3)">@{rank.handle}</p> : null}
-        {gamification && catalogue ? <FeaturedBadges gamification={gamification} catalogue={catalogue} /> : null}
-        <div className="mt-5 flex gap-[22px] pt-[18px] shadow-[inset_0_1px_0_var(--tw-shadow-color,rgba(255,255,255,0.03))]">
-          <Stat value={String(rank.ranked ? rank.submissionCount : 0)} label="Songs synced" testId="stat-submissions" />
-          <Stat value={formatCompact(rank.ranked ? rank.totalUpvotes : 0)} label="Upvotes" testId="stat-upvotes" />
-          {gamification ? (
-            <Stat value={String(gamification.counts.earned)} label="Badges" testId="stat-badges" />
-          ) : null}
-        </div>
-      </div>
-      {onChangeBanner ? (
-        <div className="group/banner absolute inset-x-0 top-0 h-[58%]">
-          <button
-            type="button"
-            onClick={(event) => onChangeBanner(event.currentTarget)}
-            className={cn(
-              glassActionClass,
-              "absolute top-16 right-4 pl-4 opacity-0 backdrop-blur-[20px] transition-[opacity,background-color,scale] group-focus-within/banner:opacity-100 group-hover/banner:opacity-100 [@media(hover:none)]:opacity-100",
-            )}
-          >
-            <IconPhoto className="size-[17px]" stroke={1.75} />
-            <SwapLabel text={art.banner ? "Change banner" : "Add banner"} />
-          </button>
-        </div>
-      ) : null}
-      <div
-        aria-hidden="true"
         className={cn(
-          "absolute inset-0 z-20 bg-[#121116] transition-opacity duration-400 ease-in-out motion-reduce:transition-none",
-          ready && "pointer-events-none opacity-0",
+          "relative isolate aspect-[5/7] w-full overflow-hidden rounded-[28px] shadow-[0_40px_100px_rgba(0,0,0,0.55)] transition-opacity duration-400 ease-in-out motion-reduce:transition-none",
+          RIM,
+          !ready && "opacity-0",
         )}
       >
-        {ready ? null : <div className={cn(bone, "size-full rounded-none")} />}
+        <ArtBackground src={art.wash} contained onReady={markReady} />
+        {art.banner ? (
+          <div key={art.banner} aria-hidden="true" className="t-reveal absolute inset-x-0 top-0 isolate h-[64%] overflow-hidden">
+            <img src={art.banner} alt="" className="pf-banner-soft" />
+            <img src={art.banner} alt="" className="pf-banner-sharp" />
+          </div>
+        ) : null}
+        <div
+          aria-hidden="true"
+          className="absolute inset-0 bg-[linear-gradient(180deg,rgba(10,9,13,calc(var(--scrim)*0.4)),transparent_22%,transparent_42%,rgba(10,9,13,calc(var(--scrim)+0.1)))]"
+        />
+        <div className="absolute inset-0 flex min-w-0 flex-col p-6">
+          <div className="flex items-center justify-between gap-2">
+            <span className={cn(PILL, "gap-2 pr-3.5 pl-[9px]")}>
+              <BetterLyricsLogo size={20} />
+              Unison
+            </span>
+            {tier ? <Standing tier={tier} rank={rank.ranked ? rank.rank : null} /> : null}
+          </div>
+          <XpAvatar
+            avatarUrl={art.avatar}
+            keyId={keyId}
+            level={gamification?.level}
+            progress={progress?.pct ?? null}
+            tiered={Boolean(tier)}
+            className="mt-auto size-[116px] shrink-0"
+          />
+          <h1
+            title={rank.displayName}
+            className={cn(
+              NAME_SIZE[nameSize(rank.displayName)],
+              "mt-3.5 -mr-[0.08em] -mb-[0.08em] line-clamp-2 pr-[0.08em] pb-[0.08em] font-black leading-[1.08] tracking-[-0.035em] text-balance [overflow-wrap:anywhere]",
+            )}
+          >
+            {rank.displayName}
+          </h1>
+          {rank.handle ? <p className="mt-2.5 text-sm font-medium text-(--ink-3)">@{rank.handle}</p> : null}
+          {gamification && catalogue ? <FeaturedBadges gamification={gamification} catalogue={catalogue} /> : null}
+          <div className="mt-5 flex gap-[22px] pt-[18px] shadow-[inset_0_1px_0_var(--tw-shadow-color,rgba(255,255,255,0.03))]">
+            <Stat value={String(rank.ranked ? rank.submissionCount : 0)} label="Songs synced" testId="stat-submissions" />
+            <Stat value={formatCompact(rank.ranked ? rank.totalUpvotes : 0)} label="Upvotes" testId="stat-upvotes" />
+            {gamification ? (
+              <Stat value={String(gamification.counts.earned)} label="Badges" testId="stat-badges" />
+            ) : null}
+          </div>
+        </div>
+        {onChangeBanner ? (
+          <div className="group/banner absolute inset-x-0 top-0 h-[58%]">
+            <button
+              type="button"
+              onClick={(event) => onChangeBanner(event.currentTarget)}
+              className={cn(
+                glassActionClass,
+                "absolute top-16 right-4 pl-4 opacity-0 backdrop-blur-[20px] transition-[opacity,background-color,scale] group-focus-within/banner:opacity-100 group-hover/banner:opacity-100 [@media(hover:none)]:opacity-100",
+              )}
+            >
+              <IconPhoto className="size-[17px]" stroke={1.75} />
+              <SwapLabel text={art.banner ? "Change banner" : "Add banner"} />
+            </button>
+          </div>
+        ) : null}
       </div>
     </div>
   )
