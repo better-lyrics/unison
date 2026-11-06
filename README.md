@@ -369,4 +369,4 @@ The dump itself is dual-licensed.
   services, labels, distributors) needs a commercial license. Email
   `enterprise@boidu.dev` with "Unison" in the subject.
 
-Required attribution: `Lyrics from Unison (https://unison.boidu.dev)`.
+Required attribution: `Lyrics from Unison (https://unison.betterlyrics.org)`.

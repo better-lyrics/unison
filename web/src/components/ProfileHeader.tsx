@@ -37,7 +37,7 @@ interface ProfileLink {
 
 function profileLink(handle: string | null, keyId: string): ProfileLink {
   const origin = typeof window !== "undefined" ? window.location.origin : ""
-  const host = typeof window !== "undefined" ? window.location.host : "unison.boidu.dev"
+  const host = typeof window !== "undefined" ? window.location.host : "unison.betterlyrics.org"
   if (!handle) {
     const path = `/curator/${keyId}`
     return { handle: null, path, url: `${origin}${path}`, label: `${keyId.slice(0, 6)}…${keyId.slice(-6)}` }

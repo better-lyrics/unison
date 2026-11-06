@@ -10,7 +10,7 @@ import {
 } from "@/utils/ttml-timing"
 
 const STORAGE_BASE = "https://lyrics-storage.binimum.org"
-const UNISON_BASE = "https://unison.boidu.dev"
+const UNISON_BASE = "https://unison.betterlyrics.org"
 
 interface Degrade {
 	kind: "lag" | "early" | "drift"

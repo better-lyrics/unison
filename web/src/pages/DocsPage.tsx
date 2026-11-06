@@ -2,15 +2,15 @@ import { CodeBlock, CodeLangProvider, type CodeTab, CodeTabs } from "@/component
 import { COMPOSER_URL } from "@/lib/composer"
 import type { ReactNode } from "react"
 
-const BASE_URL = "https://unison.boidu.dev"
+const BASE_URL = "https://unison.betterlyrics.org"
 
-const VIDEO_URL = "https://unison.boidu.dev/lyrics?v=dQw4w9WgXcQ"
-const SONG_ARTIST_URL = "https://unison.boidu.dev/lyrics?song=Never+Gonna+Give+You+Up&artist=Rick+Astley"
-const ISRC_URL = "https://unison.boidu.dev/lyrics?isrc=US2S70465012"
-const PROVIDER_ID_URL = "https://unison.boidu.dev/lyrics?apple_music=1438556832"
-const SEARCH_URL = "https://unison.boidu.dev/lyrics/search?q=never+gonna+give"
-const VARIANTS_URL = "https://unison.boidu.dev/lyrics/variants/dQw4w9WgXcQ?limit=5"
-const TRANSLATE_URL = "https://unison.boidu.dev/translate"
+const VIDEO_URL = `${BASE_URL}/lyrics?v=dQw4w9WgXcQ`
+const SONG_ARTIST_URL = `${BASE_URL}/lyrics?song=Never+Gonna+Give+You+Up&artist=Rick+Astley`
+const ISRC_URL = `${BASE_URL}/lyrics?isrc=US2S70465012`
+const PROVIDER_ID_URL = `${BASE_URL}/lyrics?apple_music=1438556832`
+const SEARCH_URL = `${BASE_URL}/lyrics/search?q=never+gonna+give`
+const VARIANTS_URL = `${BASE_URL}/lyrics/variants/dQw4w9WgXcQ?limit=5`
+const TRANSLATE_URL = `${BASE_URL}/translate`
 
 // A GET in each language, generated from the URL so every reference section stays in lockstep.
 function fetchTabs(url: string): CodeTab[] {
@@ -59,7 +59,7 @@ if (success) {
     language: "python",
     code: `import requests
 
-res = requests.get("https://unison.boidu.dev/lyrics", params={"v": "dQw4w9WgXcQ"})
+res = requests.get("${BASE_URL}/lyrics", params={"v": "dQw4w9WgXcQ"})
 body = res.json()
 
 if body["success"]:

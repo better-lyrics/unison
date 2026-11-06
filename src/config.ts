@@ -408,7 +408,7 @@ export const config = {
 
 	binilink: {
 		baseUrl: "https://link.binimum.org",
-		userAgent: "Unison (+https://unison.boidu.dev)",
+		userAgent: "Unison (+https://unison.betterlyrics.org)",
 		timeoutMs: 1500,
 		pauseSec: 30,
 		maxPauseSec: 300,

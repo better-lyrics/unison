@@ -27,7 +27,7 @@ describe("DocsPage", () => {
 
   it("documents the base URL and the primary fetch endpoint", () => {
     renderPage()
-    expect(screen.getAllByText("https://unison.boidu.dev").length).toBeGreaterThan(0)
+    expect(screen.getAllByText("https://unison.betterlyrics.org").length).toBeGreaterThan(0)
     expect(screen.getAllByText(/\/lyrics\?v=/).length).toBeGreaterThan(0)
   })
 
@@ -93,6 +93,6 @@ describe("DocsPage", () => {
     const copyButtons = screen.getAllByRole("button", { name: /copy/i })
     fireEvent.click(copyButtons[0])
     expect(writeText).toHaveBeenCalledTimes(1)
-    expect(writeText.mock.calls[0][0]).toContain("unison.boidu.dev/lyrics")
+    expect(writeText.mock.calls[0][0]).toContain("unison.betterlyrics.org/lyrics")
   })
 })
