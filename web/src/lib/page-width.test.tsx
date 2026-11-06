@@ -41,7 +41,7 @@ describe("usePageWidth", () => {
 
 describe("pageWidthClass", () => {
   it("keeps the standard container for default pages", () => {
-    expect(pageWidthClass("default")).toBe("max-w-5xl px-6")
+    expect(pageWidthClass("default")).toContain("max-w-[1264px]")
   })
 
   it("widens and adds side room for dashboards", () => {

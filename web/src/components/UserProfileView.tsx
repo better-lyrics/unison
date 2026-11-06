@@ -2,7 +2,7 @@ import "./profile.css"
 import { IconEye } from "@tabler/icons-react"
 import { type Ref, useCallback, useRef, useState } from "react"
 import { useOptionalSession } from "@/auth/useSession"
-import { ArtBackground } from "@/components/ArtBackground"
+import { usePageArt } from "@/components/PageArt"
 import { BadgeCatalogueProvider, useBadgeCatalogue } from "@/components/BadgeCatalogueContext"
 import { BadgeModalProvider } from "@/components/BadgeModalContext"
 import { BadgeWall } from "@/components/BadgeWall"
@@ -17,7 +17,6 @@ import { PROFILE_STAGE } from "@/components/profile/layout"
 import { ProfileSkeleton } from "@/components/ProfileSkeleton"
 import { SubmissionsList } from "@/components/SubmissionsList"
 import { artPageClass, glassActionClass, glassClass } from "@/components/ui"
-import { useArtPalette } from "@/hooks/useArtPalette"
 import { setAsyncData, useAsyncData } from "@/hooks/useAsyncData"
 import { useProfileArt } from "@/hooks/useProfileArt"
 import { fetchUserBadges, fetchUserRank } from "@/lib/api"
@@ -125,7 +124,7 @@ function ProfileBody({
   onProfileChange: () => Promise<void>
 }) {
   const art = useProfileArt(rank)
-  useArtPalette(art.wash)
+  usePageArt(art.wash)
   const [preview, setPreview] = useState(false)
   const editRef = useRef<HTMLElement>(null)
   const pickerRef = useRef<HTMLDivElement>(null)
@@ -138,7 +137,6 @@ function ProfileBody({
 
   return (
     <div className={artPageClass}>
-      <ArtBackground src={art.wash} />
       {owner ? (
         <BannerPicker
           ref={pickerRef}

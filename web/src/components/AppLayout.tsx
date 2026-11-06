@@ -6,6 +6,7 @@ import { Outlet } from "react-router-dom"
 import { AppHeader } from "./AppHeader"
 import { BadgeAssetPreloader } from "./BadgeAssetPreloader"
 import { BadgeCatalogueProvider } from "./BadgeCatalogueContext"
+import { PageArtProvider } from "./PageArt"
 import { ToastViewport } from "./ToastViewport"
 
 // Stable reference so the preloader effect does not re-run on every render.
@@ -17,13 +18,15 @@ export function AppLayout() {
     <AuthProvider>
       <BadgeCatalogueProvider>
         <BadgeAssetPreloader variants={COLOR_VARIANTS} fetchPriority="high" />
-        <div className="min-h-full">
-          <AppHeader width={width} />
-          <main className={cn("mx-auto py-8", pageWidthClass(width))}>
-            <Outlet />
-          </main>
-          <ToastViewport />
-        </div>
+        <PageArtProvider>
+          <div className="min-h-full">
+            <AppHeader width={width} />
+            <main className={cn("mx-auto py-8", pageWidthClass(width))}>
+              <Outlet />
+            </main>
+            <ToastViewport />
+          </div>
+        </PageArtProvider>
       </BadgeCatalogueProvider>
     </AuthProvider>
   )

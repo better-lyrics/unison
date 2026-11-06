@@ -1,4 +1,4 @@
-import { ArtBackground } from "@/components/ArtBackground"
+import { usePageArt } from "@/components/PageArt"
 import { EmptyState } from "@/components/EmptyState"
 import { LyricsContentSkeleton } from "@/components/LyricsRenderer"
 import { LyricsPanel } from "@/components/LyricsPanel"
@@ -6,7 +6,6 @@ import { SongHero, SongHeroSkeleton } from "@/components/song/SongHero"
 import { SongRail } from "@/components/song/SongRail"
 import { Bone } from "@/components/skeleton"
 import { artPageClass } from "@/components/ui"
-import { useArtPalette } from "@/hooks/useArtPalette"
 import { useLyricsVariant, useLyricsVariants } from "@/hooks/useLyricsData"
 import { useYouTubePlayer } from "@/hooks/useYouTubePlayer"
 import { artworkImageUrl, useArtwork } from "@/lib/artwork"
@@ -58,7 +57,7 @@ export function LyricsPage() {
   const lead = variants[0]
   const sleeve = useMemo(() => (lead ? sleeveDataUrl(lead.song, lead.artist, SLEEVE_SIZE) : null), [lead])
   const backdrop = art ? artworkImageUrl(safeVideoId) : artPending ? null : sleeve
-  useArtPalette(backdrop)
+  usePageArt(backdrop, playing)
 
   const handleSelect = useCallback(
     (id: number) => {
@@ -95,7 +94,6 @@ export function LyricsPage() {
 
   return (
     <div className={artPageClass}>
-      <ArtBackground src={backdrop} moving={playing} />
       {variant ? (
         <SongHero
           variant={variant}
