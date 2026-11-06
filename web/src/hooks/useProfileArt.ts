@@ -14,12 +14,12 @@ export interface ProfileArt {
   avatar: string | null | undefined
 }
 
-async function backAvatar(src: string): Promise<string> {
+async function backAvatar(src: string): Promise<string | null> {
   try {
     return await backedImage(src, await sampleAccent(src))
   } catch (error: unknown) {
     console.warn("Could not back the avatar", error)
-    return src
+    return null
   }
 }
 
@@ -32,11 +32,12 @@ export function useProfileArt(rank: UserRankResponse): ProfileArt {
     enabled: Boolean(avatarUrl),
     staleTime: Number.POSITIVE_INFINITY,
   })
+  const unreadable = !avatarUrl || backed === null
   const sleeve = useMemo(
-    () => (avatarUrl ? null : sleeveDataUrl(displayName, keyId, SLEEVE_SIZE)),
-    [avatarUrl, displayName, keyId],
+    () => (unreadable ? sleeveDataUrl(displayName, keyId, SLEEVE_SIZE) : null),
+    [unreadable, displayName, keyId],
   )
   const avatar = avatarUrl ? (backed ?? avatarUrl) : avatarUrl
   const bannerWash = rank.banner ? artworkImageUrl(rank.banner.videoId) : null
-  return { banner, wash: bannerWash ?? (avatarUrl ? (backed ?? null) : sleeve), avatar }
+  return { banner, wash: bannerWash ?? (unreadable ? sleeve : (backed ?? null)), avatar }
 }
