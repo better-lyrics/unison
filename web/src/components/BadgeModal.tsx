@@ -172,6 +172,7 @@ export function BadgeModal({ selection, closing, onRequestClose, onExited }: Bad
         className={cn(
           "bm-card relative w-[380px] max-w-full overflow-hidden rounded-[24px]",
           popoverSurfaceClass,
+          "bg-[#121117] backdrop-blur-none backdrop-saturate-100",
           closing && "bm-closing",
         )}
       >
