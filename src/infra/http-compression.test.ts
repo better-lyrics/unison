@@ -6,7 +6,7 @@ import { badgeRoutes } from "@/routes/badges"
 import type { Env } from "@/types"
 import { cors } from "@elysiajs/cors"
 import { node } from "@elysiajs/node"
-import { Elysia } from "elysia"
+import { Elysia, NotFoundError } from "elysia"
 import { describe, expect, it } from "vitest"
 import { httpCompression } from "./http-compression"
 
@@ -372,6 +372,26 @@ describe("httpCompression", () => {
 				expect(headers(after)).toEqual(headers(before))
 			}
 		)
+
+		it("regression: answers GET and HEAD with the small body an onError hook returns", async () => {
+			const app = appWith((a) =>
+				a
+					.onError(({ set }) => {
+						set.status = 404
+						return { success: false, error: "Not Found" }
+					})
+					.get("/*", () => {
+						throw new NotFoundError()
+					})
+			)
+			const request = (method: string) =>
+				app.handle(new Request("http://localhost/package.json", { method }))
+
+			const res = await request("GET")
+			expect(res.status).toBe(404)
+			expect(await res.json()).toEqual({ success: false, error: "Not Found" })
+			expect((await request("HEAD")).status).toBe(404)
+		})
 
 		it("adds accept-encoding to a vary value the handler set", async () => {
 			const app = appWith((a) =>

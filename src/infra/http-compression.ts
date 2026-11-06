@@ -31,16 +31,21 @@ function isJsonBody(value: unknown): value is object {
 
 export const httpCompression = new Elysia({ name: "http-compression" }).mapResponse(
 	{ as: "global" },
-	async ({ request, responseValue, set }) => {
+	async (context) => {
+		const { request, responseValue, set } = context
 		const isStatus = responseValue instanceof ElysiaCustomStatusResponse
 		const body: unknown = isStatus ? responseValue.response : responseValue
 		if (!isJsonBody(body)) return
 		set.headers.vary = withAcceptEncoding(set.headers.vary)
-		if (!acceptsGzip(request.headers.get("accept-encoding"))) return
+		// Elysia's onError path sends whatever mapResponse returns, even undefined.
+		const mustRespond = "error" in context
+		const accepts = acceptsGzip(request.headers.get("accept-encoding"))
+		if (!accepts && !mustRespond) return
 		const json = JSON.stringify(body)
-		if (json.length < config.http.compressMinBytes) return
-		set.headers["content-encoding"] = "gzip"
-		return new Response(await gzip(json), {
+		const compress = accepts && json.length >= config.http.compressMinBytes
+		if (!compress && !mustRespond) return
+		if (compress) set.headers["content-encoding"] = "gzip"
+		return new Response(compress ? await gzip(json) : json, {
 			status: isStatus ? responseValue.code : undefined,
 			headers: { "content-type": "application/json" },
 		})
