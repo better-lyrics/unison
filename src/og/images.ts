@@ -135,9 +135,9 @@ export function badgeArt(file: string): Promise<Buffer | null> {
 	return cachedAsset(`badge:${file}`, () => readFile(`${BADGE_DIR}${file}`))
 }
 
-export function badgeSilhouette(key: string): Promise<Buffer | null> {
-	return cachedAsset(`silhouette:${key}`, async () => {
-		const svg = await readFile(`${BADGE_DIR}${key}_silhouette.svg`)
+export function badgeSilhouette(file: string): Promise<Buffer | null> {
+	return cachedAsset(`silhouette:${file}`, async () => {
+		const svg = await readFile(`${BADGE_DIR}${file}`)
 		const alpha = await sharp(svg, { density: 288 })
 			.resize(SILHOUETTE_SIZE, SILHOUETTE_SIZE, { fit: "contain", background: "#0000" })
 			.ensureAlpha()

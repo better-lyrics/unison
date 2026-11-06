@@ -371,22 +371,20 @@ export function profileDownloadNode(card: ProfileDownloadData) {
 					style={{ marginTop: "auto" }}
 				/>
 				<span
-					style={
-						{
-							marginTop: 14,
-							fontSize: nameSize,
-							fontWeight: 900,
-							lineHeight: 1.08,
-							letterSpacing: "-0.035em",
-							lineClamp: 2,
-							textWrap: "balance",
-							overflowWrap: "anywhere",
-							paddingRight: "0.08em",
-							paddingBottom: "0.08em",
-							marginRight: "-0.08em",
-							marginBottom: "-0.08em",
-						} as CSSProperties
-					}
+					style={{
+						marginTop: 14,
+						fontSize: nameSize,
+						fontWeight: 900,
+						lineHeight: 1.08,
+						letterSpacing: "-0.035em",
+						lineClamp: 2,
+						textWrap: "balance",
+						overflowWrap: "anywhere",
+						paddingRight: "0.08em",
+						paddingBottom: "0.08em",
+						marginRight: "-0.08em",
+						marginBottom: "-0.08em",
+					}}
 				>
 					{card.name}
 				</span>

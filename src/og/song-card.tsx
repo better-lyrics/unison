@@ -92,16 +92,14 @@ export function songCardNode(card: SongCardData) {
 				}}
 			>
 				<span
-					style={
-						{
-							fontSize: size,
-							fontWeight: 900,
-							letterSpacing: -size * 0.035,
-							lineHeight: 1.08,
-							lineClamp: 2,
-							textWrap: "balance",
-						} as CSSProperties
-					}
+					style={{
+						fontSize: size,
+						fontWeight: 900,
+						letterSpacing: -size * 0.035,
+						lineHeight: 1.08,
+						lineClamp: 2,
+						textWrap: "balance",
+					}}
 				>
 					{card.song}
 				</span>

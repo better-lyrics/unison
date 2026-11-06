@@ -26,16 +26,15 @@ export function inksFor(ink: Record<"--ink-2" | "--ink-3", string>): Inks {
 }
 
 // The padding keeps descenders out of the clip
-export const fitLine = (width: number): CSSProperties =>
-	({
-		width,
-		whiteSpace: "nowrap",
-		overflow: "hidden",
-		textOverflow: "ellipsis",
-		textFit: "shrink consistent 70%",
-		paddingBottom: "0.16em",
-		marginBottom: "-0.16em",
-	}) as CSSProperties
+export const fitLine = (width: number): CSSProperties => ({
+	width,
+	whiteSpace: "nowrap",
+	overflow: "hidden",
+	textOverflow: "ellipsis",
+	textFit: "shrink consistent 70%",
+	paddingBottom: "0.16em",
+	marginBottom: "-0.16em",
+})
 
 export function Frame({ children }: { children: ReactNode }) {
 	return (
@@ -153,22 +152,20 @@ export function SyncTag({ kind, ink }: { kind: SyncKind; ink: Inks }) {
 	const color = look.color ?? ink.three
 	return (
 		<div
-			style={
-				{
-					display: "flex",
-					alignItems: "center",
-					gap: 10,
-					height: 46,
-					padding: "0 18px 0 14px",
-					borderRadius: 14,
-					cornerShape: "superellipse(1.6)",
-					background: look.tint,
-					backdropFilter: "blur(16px)",
-					color,
-					fontSize: 20,
-					fontWeight: 700,
-				} as CSSProperties
-			}
+			style={{
+				display: "flex",
+				alignItems: "center",
+				gap: 10,
+				height: 46,
+				padding: "0 18px 0 14px",
+				borderRadius: 14,
+				cornerShape: "superellipse(1.6)",
+				background: look.tint,
+				backdropFilter: "blur(16px)",
+				color,
+				fontSize: 20,
+				fontWeight: 700,
+			}}
 		>
 			<SyncIcon kind={kind} size={24} color={color} />
 			{look.label}

@@ -1,6 +1,6 @@
 import { config } from "@/config"
 import { getUserBadges } from "@/db/badges"
-import { CATALOGUE } from "@/db/badges/definitions"
+import { CATALOGUE, badgeImageFile } from "@/db/badges/definitions"
 import { getCuratorRank } from "@/db/leaderboard"
 import { findVariantsByVideoId } from "@/db/lyrics"
 import { getSubmissionsByUser } from "@/db/profile"
@@ -89,15 +89,19 @@ async function encode(
 	return Buffer.from(out)
 }
 
-function badgeFile(key: string, tier?: number | null): string {
+function badgeFile(key: string, variant?: string, tier?: number | null): string | null {
 	const def = CATALOGUE.find((b) => b.key === key)
-	if (!def?.tiers) return `${key}.svg`
-	const level = tier && tier >= 1 && tier <= def.tiers.length ? tier : 1
-	return `${key}_${level}.svg`
+	return def ? badgeImageFile(def, variant, tier) : null
 }
 
 async function tierGem(images: Images, tier: string): Promise<Gem | null> {
-	const [art, silhouette] = await Promise.all([badgeArt(badgeFile(tier)), badgeSilhouette(tier)])
+	const artFile = badgeFile(tier)
+	const silhouetteFile = badgeFile(tier, "silhouette")
+	if (!artFile) return null
+	const [art, silhouette] = await Promise.all([
+		badgeArt(artFile),
+		silhouetteFile ? badgeSilhouette(silhouetteFile) : null,
+	])
 	if (!art) return null
 	return {
 		art: images.asset(`badge:${tier}`, art),
@@ -254,8 +258,9 @@ export async function renderProfileDownload(env: Env, keyId: string): Promise<Re
 	const featured = await Promise.all(
 		gamification.featured.slice(0, config.gamification.featured.maxSlots).map(async (key) => {
 			const tier = gamification.badges.find((b) => b.key === key)?.tier
-			const art = await badgeArt(badgeFile(key, tier))
-			return art ? images.asset(`badge:${badgeFile(key, tier)}`, art) : null
+			const file = badgeFile(key, undefined, tier)
+			const art = file ? await badgeArt(file) : null
+			return art ? images.asset(`badge:${file}`, art) : null
 		})
 	)
 	const node = profileDownloadNode({
