@@ -81,7 +81,9 @@ export const lyricsRoutes = (env: Env) =>
 		})
 		.get(
 			"/",
-			async ({ query, env, lyricsUserId, lyricsKeyId, status }) => {
+			async ({ query, env, lyricsUserId, lyricsKeyId, status, set }) => {
+				// CORS sends `vary: *`, which Cloudflare never caches; the allowed origin still varies.
+				set.headers.vary = "Origin"
 				if (query.v) {
 					const served = await findServedByVideoId(env, query.v, lyricsKeyId)
 					if (!served) {
