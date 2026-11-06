@@ -1,5 +1,6 @@
 import { IconPhoto } from "@tabler/icons-react"
 import { ArtBackground } from "@/components/ArtBackground"
+import { BadgeArt } from "@/components/BadgeArt"
 import { BetterLyricsLogo } from "@/components/BetterLyricsLogo"
 import { useBadgeModal } from "@/components/BadgeModalContext"
 import { glassActionClass, glassClass } from "@/components/ui"
@@ -38,31 +39,6 @@ interface ProfileCardProps {
   catalogue: BadgeCatalogue | null
   art: ProfileArt
   onChangeBanner?: () => void
-}
-
-function BadgeArt({
-  src,
-  silhouette,
-  alt = "",
-  className,
-}: {
-  src: string | null
-  silhouette: string | null
-  alt?: string
-  className?: string
-}) {
-  return (
-    <span className={cn("relative shrink-0", className)}>
-      {silhouette ? (
-        <span
-          aria-hidden="true"
-          className="absolute inset-0 bg-[rgba(10,9,13,0.2)]"
-          style={{ mask: `url("${silhouette}") center / contain no-repeat` }}
-        />
-      ) : null}
-      {src ? <img src={src} alt={alt} draggable={false} className="relative block size-full" /> : null}
-    </span>
-  )
 }
 
 function Standing({ tier, rank }: { tier: string; rank: number | null }) {

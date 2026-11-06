@@ -1,3 +1,4 @@
+import { BadgeArt } from "@/components/BadgeArt"
 import { TierChip } from "@/components/TierChip"
 import { Tooltip } from "@/components/Tooltip"
 import { useBadgeImage } from "@/hooks/useBadgeImage"
@@ -22,7 +23,7 @@ function useStripImages(featured: LeaderboardBadge[], topBadge: LeaderboardBadge
   const shown = featured.length > 0 ? featured : topBadge ? [topBadge] : []
   return shown.flatMap((b) => {
     const src = badgeImage(b.key, b.tier)
-    return src ? [{ badge: b, src }] : []
+    return src ? [{ badge: b, src, silhouette: badgeImage(b.key, b.tier, "silhouette") }] : []
   })
 }
 
@@ -33,9 +34,9 @@ export function BadgeStrip({ featured, topBadge, badgeCount, size = "md", classN
   const extra = featured.length > 0 ? 0 : badgeCount - 1
   return (
     <span className={cn("inline-flex items-center", sizes.gap, className)}>
-      {images.map(({ badge, src }) => (
+      {images.map(({ badge, src, silhouette }) => (
         <Tooltip key={badge.key} label={badge.name}>
-          <img src={src} alt={badge.name} className={cn(sizes.icon, "object-contain")} />
+          <BadgeArt src={src} silhouette={silhouette} alt={badge.name} className={sizes.icon} />
         </Tooltip>
       ))}
       {extra > 0 ? <span className={cn(sizes.count, "text-unison-text-muted")}>+{extra}</span> : null}

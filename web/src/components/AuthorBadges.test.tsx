@@ -89,6 +89,6 @@ describe("BadgeStrip", () => {
       </QueryClientProvider>,
     )
     const img = await screen.findByRole("img", { name: "Prolific" })
-    expect(img.getAttribute("class")).toContain("size-4")
+    expect(img.parentElement?.getAttribute("class")).toContain("size-4")
   })
 })
