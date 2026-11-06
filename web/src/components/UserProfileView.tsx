@@ -138,7 +138,7 @@ function ProfileBody({
 
   return (
     <div>
-      {owner ? (
+      {owner && bannerAnchor ? (
         <BannerPicker
           ref={pickerRef}
           anchor={bannerAnchor}

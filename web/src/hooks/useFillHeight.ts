@@ -1,6 +1,5 @@
 import { useCallback } from "react"
 
-// Viewport space left below `target`, so it fills the screen without making the page scroll
 export function useFillHeight(target: string) {
   return useCallback(
     (container: HTMLElement | null) => {

@@ -70,7 +70,7 @@ export function VoteControls({ variantId, videoId, variant, beforeReport }: Vote
       <div className={cn(glassClass, "inline-flex h-11 items-center rounded-full")}>
         <button
           type="button"
-          aria-label="Upvote variant"
+          aria-label={`Upvote variant, score ${variant.score}`}
           aria-pressed={upActive}
           disabled={disabled}
           title={disabledTitle}

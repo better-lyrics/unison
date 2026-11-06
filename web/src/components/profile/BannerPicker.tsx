@@ -1,8 +1,8 @@
 import { autoUpdate, flip, offset, shift, size, useFloating } from "@floating-ui/react"
 import { useQueries } from "@tanstack/react-query"
-import { type RefObject, useCallback, useState } from "react"
-import { useAsyncData } from "@/hooks/useAsyncData"
-import { fetchUserSubmissions, putProfileSettings } from "@/lib/api"
+import { type RefObject, useEffect, useState } from "react"
+import { useMySongs } from "@/hooks/useMySongs"
+import { putProfileSettings } from "@/lib/api"
 import { artworkQuery } from "@/lib/artwork"
 import { AuthedFetchError } from "@/lib/authedFetch"
 import { cn } from "@/lib/cn"
@@ -39,13 +39,9 @@ export function BannerPicker({ ref, anchor, keyId, current, onSaved }: BannerPic
     ],
   })
 
-  const fetcher = useCallback(() => fetchUserSubmissions(keyId), [keyId])
-  const submissions = useAsyncData(fetcher, `user:submissions:${keyId}`)
-  const seenVideos = new Set<string>()
-  const songs =
-    submissions.status === "success"
-      ? submissions.data.submissions.filter((s) => !seenVideos.has(s.videoId) && seenVideos.add(s.videoId))
-      : []
+  const songs = useMySongs(keyId) ?? []
+
+  useEffect(() => ref.current?.showPopover(), [ref])
   const arts = useQueries({ queries: songs.map((s) => artworkQuery(s.videoId, TILE_SIZE)) })
   const seenArt = new Set<string>()
   const covers = songs.flatMap((song, i) => {
