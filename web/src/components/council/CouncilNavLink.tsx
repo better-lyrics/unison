@@ -1,11 +1,13 @@
 import { useCouncilRole, useOpenWorkCount } from "@/hooks/useCouncilData"
 import { plural } from "@/lib/format"
+import type { ReactNode } from "react"
 import { NavLink, type NavLinkProps } from "react-router-dom"
 
 interface CouncilNavLinkProps {
   className: NavLinkProps["className"]
   role?: string
   onClick?: () => void
+  indicator?: (active: boolean) => ReactNode
 }
 
 export function CouncilNavLink(props: CouncilNavLinkProps) {
@@ -13,7 +15,7 @@ export function CouncilNavLink(props: CouncilNavLinkProps) {
   return <MemberLink {...props} />
 }
 
-function MemberLink({ className, role, onClick }: CouncilNavLinkProps) {
+function MemberLink({ className, role, onClick, indicator }: CouncilNavLinkProps) {
   const open = useOpenWorkCount()
   return (
     <NavLink
@@ -26,12 +28,17 @@ function MemberLink({ className, role, onClick }: CouncilNavLinkProps) {
         return `${base ?? ""} inline-flex items-center gap-1.5`
       }}
     >
-      Council
-      {open > 0 ? (
-        <span className="min-w-4 rounded-full bg-unison-medal-gold-wash px-1 text-center font-mono text-[10px] leading-4 text-unison-medal-gold tabular-nums">
-          {open}
-        </span>
-      ) : null}
+      {({ isActive }) => (
+        <>
+          {indicator?.(isActive)}
+          <span className="relative">Council</span>
+          {open > 0 ? (
+            <span className="relative min-w-4 rounded-full bg-unison-medal-gold-wash px-1 text-center font-mono text-[10px] leading-4 text-unison-medal-gold tabular-nums">
+              {open}
+            </span>
+          ) : null}
+        </>
+      )}
     </NavLink>
   )
 }

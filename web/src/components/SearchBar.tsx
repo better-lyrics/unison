@@ -17,9 +17,11 @@ import {
   useInteractions,
   useListNavigation,
   useRole,
+  useTransitionStyles,
 } from "@floating-ui/react"
 import { IconSearch, IconX } from "@tabler/icons-react"
 import { useQuery } from "@tanstack/react-query"
+import { useReducedMotion } from "motion/react"
 import { type KeyboardEvent, useEffect, useRef, useState } from "react"
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom"
 
@@ -105,6 +107,13 @@ export function SearchBar({ compact = false, glass = false }: SearchBarProps) {
     placement: "bottom-end",
     whileElementsMounted: autoUpdate,
     middleware: [offset(8), flip({ padding: 8 }), shift({ padding: 8 })],
+  })
+  const still = useReducedMotion()
+  const { isMounted, styles } = useTransitionStyles(context, {
+    duration: { open: 250, close: 150 },
+    initial: still ? { opacity: 0 } : { opacity: 0, transform: "scale(0.97)" },
+    close: still ? { opacity: 0 } : { opacity: 0, transform: "scale(0.99)" },
+    common: { transformOrigin: "top right", transitionTimingFunction: "cubic-bezier(0.22, 1, 0.36, 1)" },
   })
   const role = useRole(context, { role: "combobox" })
   const dismiss = useDismiss(context)
@@ -226,15 +235,12 @@ export function SearchBar({ compact = false, glass = false }: SearchBarProps) {
           </button>
         ) : null}
       </div>
-      {open ? (
+      {isMounted ? (
         <FloatingPortal>
-          <div
-            ref={refs.setFloating}
-            style={floatingStyles}
-            {...getFloatingProps()}
-            className={cn(popoverSurfaceClass, "z-50 w-96 overflow-hidden rounded-2xl")}
-          >
-            <SearchDropdown status={status} results={results} activeIndex={activeIndex} getRowProps={getRowProps} />
+          <div ref={refs.setFloating} style={floatingStyles} {...getFloatingProps()} className="z-50">
+            <div style={styles} className={cn(popoverSurfaceClass, "w-96 overflow-hidden rounded-2xl")}>
+              <SearchDropdown status={status} results={results} activeIndex={activeIndex} getRowProps={getRowProps} />
+            </div>
           </div>
         </FloatingPortal>
       ) : null}

@@ -1,12 +1,15 @@
 import { IconMenu2, IconX } from "@tabler/icons-react"
+import { motion } from "motion/react"
 import { useEffect, useRef, useState } from "react"
 import { Link, NavLink } from "react-router-dom"
 import { usePresence } from "@/hooks/usePresence"
 import { cn } from "@/lib/cn"
+import { LAYOUT_TRANSITION } from "@/lib/motion-variants"
 import { type PageWidth, pageWidthClass } from "@/lib/page-width"
 import { BetterLyricsLogo } from "./BetterLyricsLogo"
 import { CouncilNavLink } from "./council/CouncilNavLink"
 import { SearchBar } from "./SearchBar"
+import { IconSwap } from "./icons/IconSwap"
 import { SignInControl } from "./SignInControl"
 import { artTextShadowClass, glassClass, popoverSurfaceClass } from "./ui"
 
@@ -15,6 +18,34 @@ const tabClass = ({ isActive }: { isActive: boolean }) =>
 		"relative inline-flex h-[30px] items-center rounded-[9px] px-2.5 text-sm font-medium transition-colors duration-150 after:absolute after:inset-x-0 after:-inset-y-[5px]",
 		isActive ? "bg-white/[0.08] text-unison-text" : "text-(--ink-2) hover:bg-white/[0.08] hover:text-unison-text",
 	)
+
+const deskTabClass = ({ isActive }: { isActive: boolean }) =>
+	cn(
+		"relative inline-flex h-[30px] items-center rounded-[9px] px-2.5 text-sm font-medium transition-colors duration-150 after:absolute after:inset-x-0 after:-inset-y-[5px]",
+		isActive ? "text-unison-text" : "text-(--ink-2) hover:bg-white/[0.08] hover:text-unison-text",
+	)
+
+const navPill = (active: boolean) =>
+	active ? (
+		<motion.span
+			layoutId="nav-pill"
+			transition={LAYOUT_TRANSITION}
+			className="absolute inset-0 rounded-[9px] bg-white/[0.08]"
+		/>
+	) : null
+
+function NavTab({ to, end, children }: { to: string; end?: boolean; children: string }) {
+	return (
+		<NavLink to={to} end={end} className={deskTabClass}>
+			{({ isActive }) => (
+				<>
+					{navPill(isActive)}
+					<span className="relative">{children}</span>
+				</>
+			)}
+		</NavLink>
+	)
+}
 
 export function AppHeader({ width }: { width: PageWidth }) {
 	const [menuOpen, setMenuOpen] = useState(false)
@@ -72,22 +103,14 @@ export function AppHeader({ width }: { width: PageWidth }) {
 						"gap-0.5 rounded-xl p-[3px]",
 					)}
 				>
-					<NavLink to="/" end className={tabClass}>
+					<NavTab to="/" end>
 						Songs
-					</NavLink>
-					<NavLink to="/curators" className={tabClass}>
-						Leaderboard
-					</NavLink>
-					<CouncilNavLink className={tabClass} />
-					<NavLink to="/about" className={tabClass}>
-						About
-					</NavLink>
-					<NavLink to="/downloads" className={tabClass}>
-						Downloads
-					</NavLink>
-					<NavLink to="/docs" className={tabClass}>
-						Docs
-					</NavLink>
+					</NavTab>
+					<NavTab to="/curators">Leaderboard</NavTab>
+					<CouncilNavLink className={deskTabClass} indicator={navPill} />
+					<NavTab to="/about">About</NavTab>
+					<NavTab to="/downloads">Downloads</NavTab>
+					<NavTab to="/docs">Docs</NavTab>
 				</nav>
 				<div className="hidden lg:flex lg:justify-self-end lg:w-full lg:max-w-xs">
 					<SearchBar glass />
@@ -107,11 +130,12 @@ export function AppHeader({ width }: { width: PageWidth }) {
 						aria-haspopup="menu"
 						className="group cursor-pointer rounded-md p-1.5 text-unison-text transition-colors hover:bg-unison-bg-hover lg:hidden"
 					>
-						{menuOpen ? (
-							<IconX className="size-5 opacity-70 transition-opacity group-hover:opacity-100" stroke={1.5} />
-						) : (
-							<IconMenu2 className="size-5 opacity-70 transition-opacity group-hover:opacity-100" stroke={1.5} />
-						)}
+						<IconSwap
+							swapped={menuOpen}
+							from={<IconMenu2 className="size-full" stroke={1.5} />}
+							to={<IconX className="size-full" stroke={1.5} />}
+							className="size-5 opacity-70 transition-opacity group-hover:opacity-100"
+						/>
 					</button>
 				</div>
 			</div>

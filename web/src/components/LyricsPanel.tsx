@@ -8,7 +8,9 @@ import { downloadTextFile } from "@/lib/download"
 import { pickTranslationLanguage, translationLanguages } from "@/lib/lyric-translations"
 import { MIME_BY_FORMAT, lyricsFilename } from "@/lib/lyrics-download"
 import type { VariantFull } from "@/lib/types"
+import { motion } from "motion/react"
 import { useMemo, useState } from "react"
+import { LAYOUT_TRANSITION } from "@/lib/motion-variants"
 import { languageName } from "@/lib/language"
 import { useScrollEdges } from "@/hooks/useScrollEdges"
 
@@ -34,7 +36,7 @@ export function LyricsPanel({ variant, getCurrentTime, getPlaying, onLineClick, 
   const lang = pickTranslationLanguage(languages, pickedLang)
   const [pane, setPane] = useState<HTMLDivElement | null>(null)
   const edges = useScrollEdges(pane)
-  const segment = (active: boolean, label: string, onClick: () => void) => (
+  const segment = (group: string, active: boolean, label: string, onClick: () => void) => (
     <button
       key={label}
       type="button"
@@ -42,15 +44,20 @@ export function LyricsPanel({ variant, getCurrentTime, getPlaying, onLineClick, 
       onClick={onClick}
       className={cn(
         "relative h-[30px] cursor-pointer rounded-full px-3 text-xs after:absolute after:inset-x-0 after:-inset-y-[5px] font-medium transition-colors duration-150 ease-[cubic-bezier(0.2,0,0,1)]",
-        active
-          ? "bg-white/[0.14] text-unison-text"
-          : "text-(--ink-3,var(--color-unison-text-muted)) hover:text-unison-text",
+        active ? "text-unison-text" : "text-(--ink-3,var(--color-unison-text-muted)) hover:text-unison-text",
       )}
     >
-      {label}
+      {active ? (
+        <motion.span
+          layoutId={group}
+          transition={LAYOUT_TRANSITION}
+          className="absolute inset-0 rounded-full bg-white/[0.14]"
+        />
+      ) : null}
+      <span className="relative">{label}</span>
     </button>
   )
-  const tab = (value: Mode, label: string) => segment(mode === value, label, () => setMode(value))
+  const tab = (value: Mode, label: string) => segment("lyrics-mode", mode === value, label, () => setMode(value))
   return (
     <div>
       <div className="mb-2 flex flex-wrap items-center gap-1.5">
@@ -60,9 +67,11 @@ export function LyricsPanel({ variant, getCurrentTime, getPlaying, onLineClick, 
           {tab("raw", "Raw")}
         </fieldset>
         {mode === "synced" && languages.length > 1 ? (
-          <fieldset className={SEGMENTS_CLASS}>
+          <fieldset className={cn(SEGMENTS_CLASS, "t-reveal")}>
             <legend className="sr-only">Translation language</legend>
-            {languages.map((code) => segment(code === lang, languageName(code), () => setPickedLang(code)))}
+            {languages.map((code) =>
+              segment("lyrics-language", code === lang, languageName(code), () => setPickedLang(code)),
+            )}
           </fieldset>
         ) : null}
         {variant ? (

@@ -1,3 +1,4 @@
+import NumberFlow from "@number-flow/react"
 import { type ReactNode, useCallback, useEffect, useRef, useState } from "react"
 import { useSession } from "@/auth/useSession"
 import { usePresence } from "@/hooks/usePresence"
@@ -15,7 +16,7 @@ interface VoteControlsProps {
 }
 
 const VOTE_BUTTON =
-  "relative isolate inline-flex h-11 cursor-pointer items-center gap-2 before:absolute before:inset-1 before:-z-10 before:rounded-full before:transition-colors before:duration-150 before:ease-[cubic-bezier(0.2,0,0,1)] enabled:hover:before:bg-white/[0.08] disabled:cursor-not-allowed disabled:opacity-60"
+  "relative isolate inline-flex h-11 cursor-pointer items-center gap-2 before:absolute before:inset-1 before:-z-10 before:rounded-full before:transition-colors before:duration-150 before:ease-[cubic-bezier(0.2,0,0,1)] transition-colors duration-150 enabled:hover:before:bg-white/[0.08] disabled:cursor-not-allowed disabled:opacity-60"
 
 interface ReasonOption {
   reason: ReportReason
@@ -82,7 +83,7 @@ export function VoteControls({ variantId, videoId, variant, beforeReport }: Vote
           )}
         >
           <BlUpvoteIcon size={18} />
-          {variant.score}
+          <NumberFlow value={variant.score} />
         </button>
         <span aria-hidden="true" className="h-5 w-px bg-white/[0.14]" />
         <button
