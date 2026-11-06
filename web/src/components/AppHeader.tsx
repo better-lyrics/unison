@@ -2,7 +2,6 @@ import { IconMenu2, IconX } from "@tabler/icons-react"
 import { useEffect, useRef, useState } from "react"
 import { Link, NavLink } from "react-router-dom"
 import { cn } from "@/lib/cn"
-import { useArtChrome } from "@/lib/route-chrome"
 import { type PageWidth, pageWidthClass } from "@/lib/page-width"
 import { BetterLyricsLogo } from "./BetterLyricsLogo"
 import { CouncilNavLink } from "./council/CouncilNavLink"
@@ -18,7 +17,6 @@ const tabClass = ({ isActive }: { isActive: boolean }) =>
 
 export function AppHeader({ width }: { width: PageWidth }) {
 	const [menuOpen, setMenuOpen] = useState(false)
-	const art = useArtChrome()
 	const headerRef = useRef<HTMLElement | null>(null)
 	const closeMenu = () => setMenuOpen(false)
 
@@ -43,7 +41,9 @@ export function AppHeader({ width }: { width: PageWidth }) {
 			ref={headerRef}
 			className={cn(
 				"top-0 z-10",
-				art ? "relative" : "sticky border-b border-unison-border bg-unison-bg/80 backdrop-blur",
+				width === "wide"
+					? "sticky bg-[rgba(15,14,19,0.28)] shadow-[inset_0_-1px_0_rgba(255,255,255,0.06)] backdrop-blur-[20px] backdrop-saturate-150"
+					: "relative",
 			)}
 		>
 			<div

@@ -38,14 +38,10 @@ export function sleeveCss(song: string, artist: string): string {
 const SLEEVE_ANGLE = (140 * Math.PI) / 180
 
 export function sleeveDataUrl(song: string, artist: string, size: number): string | null {
-  return sleeveHueDataUrl(sleeveHue(song, artist), size)
-}
-
-export function sleeveHueDataUrl(hue: number, size: number): string | null {
   const canvas = Object.assign(document.createElement("canvas"), { width: size, height: size })
   const ctx = canvas.getContext("2d")
   if (!ctx) return null
-  const { stops, glows } = sleevePaint(hue)
+  const { stops, glows } = sleevePaint(sleeveHue(song, artist))
   const [dx, dy] = [Math.sin(SLEEVE_ANGLE), -Math.cos(SLEEVE_ANGLE)]
   const half = (size * (Math.abs(dx) + Math.abs(dy))) / 2
   const mid = size / 2
