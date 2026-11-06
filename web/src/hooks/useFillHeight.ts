@@ -9,7 +9,8 @@ export function useFillHeight(target: string) {
         if (!pane) return
         let below = 0
         for (let node = pane.parentElement; node && node !== document.body; node = node.parentElement) {
-          below += Number.parseFloat(getComputedStyle(node).paddingBottom) || 0
+          const style = getComputedStyle(node)
+          below += (Number.parseFloat(style.paddingBottom) || 0) + (Number.parseFloat(style.marginBottom) || 0)
         }
         const top = pane.getBoundingClientRect().top + window.scrollY
         container.style.setProperty("--fill-height", `${Math.max(0, window.innerHeight - top - below)}px`)

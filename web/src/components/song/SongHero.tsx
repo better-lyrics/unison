@@ -20,7 +20,6 @@ import type { Mark, VariantFull } from "@/lib/types"
 import { youTubeMusicUrl } from "@/lib/youtube-music"
 import { IconCheck, IconShare } from "@tabler/icons-react"
 import { motion } from "motion/react"
-import { useEffect, useState } from "react"
 
 const SYNC_TIP: Record<SyncKind, string> = {
   syllable: "Syllable synced: each syllable highlights as it is sung.",
@@ -32,9 +31,9 @@ const SYNC_TIP: Record<SyncKind, string> = {
 const CONFIDENCE_TIP = "How sure we are this is the best version, from vote volume and rater agreement."
 
 const TITLE_SIZE = {
-  l: "text-[72px] max-[1000px]:text-[46px]",
-  m: "text-[62px] max-[1000px]:text-[40px]",
-  s: "text-[50px] max-[1000px]:text-[34px]",
+  l: "text-[44px] max-[1000px]:text-[34px]",
+  m: "text-[40px] max-[1000px]:text-[30px]",
+  s: "text-[34px] max-[1000px]:text-[26px]",
 }
 
 const TAG_PILL = cn(
@@ -44,15 +43,13 @@ const TAG_PILL = cn(
 
 const PLAY_CIRCLE = cn(
   glassClass,
-  "grid size-16 cursor-pointer place-items-center rounded-full bg-[rgba(15,14,19,0.45)] text-unison-text backdrop-blur-[12px] transition-[opacity,scale] duration-200 ease-[cubic-bezier(0.2,0,0,1)] active:scale-[0.96]",
+  "grid size-12 cursor-pointer place-items-center rounded-full bg-[rgba(15,14,19,0.45)] text-unison-text backdrop-blur-[12px] transition-[opacity,scale] duration-200 ease-[cubic-bezier(0.2,0,0,1)] active:scale-[0.96]",
 )
 
 export const HERO_GRID =
-  "grid grid-cols-[320px_minmax(0,1fr)] items-end gap-12 pt-2 pb-10 max-[1000px]:grid-cols-1 max-[1000px]:gap-7 max-[1000px]:pt-0 max-[1000px]:pb-7"
+  "grid grid-cols-[168px_minmax(0,1fr)] items-center gap-7 pb-8 max-[1000px]:grid-cols-[128px_minmax(0,1fr)] max-[1000px]:gap-5 max-sm:grid-cols-1 max-sm:pb-6"
 
-export const HERO_ART = "w-full max-[1000px]:w-[min(260px,70vw)] max-sm:w-full"
-
-const AUTOPLAY_GRACE_MS = 1500
+export const HERO_ART = "w-full max-sm:w-[min(220px,60vw)]"
 
 const COVER_FRAME =
   "group relative aspect-square w-full overflow-hidden rounded-2xl shadow-[0_24px_60px_rgba(0,0,0,0.35),0_6px_18px_rgba(0,0,0,0.25)] after:pointer-events-none after:absolute after:inset-0 after:rounded-[inherit] after:outline after:outline-1 after:-outline-offset-1 after:outline-white/10"
@@ -80,23 +77,11 @@ interface SongHeroProps {
 
 function Cover({ variant, art, player }: Omit<SongHeroProps, "versions">) {
   const label = player.playing ? "Pause" : "Play"
-  const [started, setStarted] = useState(false)
-  const [stalled, setStalled] = useState(false)
-  if (player.active && player.playing && !started) setStarted(true)
-  if (!player.active && (started || stalled)) {
-    setStarted(false)
-    setStalled(false)
-  }
-  useEffect(() => {
-    if (!player.active || !player.ready || player.playing) return
-    const timer = window.setTimeout(() => setStalled(true), AUTOPLAY_GRACE_MS)
-    return () => window.clearTimeout(timer)
-  }, [player.active, player.ready, player.playing])
-  const covered = !(player.active && (started || stalled || player.failed))
+  const covered = !(player.active && (player.playing || player.failed))
   return (
     <div className={COVER_FRAME}>
       {player.active ? (
-        <div inert={covered} className="absolute inset-0 bg-black">
+        <div inert className="pointer-events-none absolute inset-0 bg-black">
           <div ref={player.ref} className="size-full" />
         </div>
       ) : null}
@@ -120,7 +105,7 @@ function Cover({ variant, art, player }: Omit<SongHeroProps, "versions">) {
               "opacity-0 group-hover:pointer-events-auto group-hover:opacity-100 focus-visible:pointer-events-auto focus-visible:opacity-100",
             )}
           >
-            <PlayPauseIcon playing={player.playing} className="size-[26px]" />
+            <PlayPauseIcon playing={player.playing} className="size-5" />
           </button>
         </div>
       ) : (
@@ -136,7 +121,7 @@ function Cover({ variant, art, player }: Omit<SongHeroProps, "versions">) {
               "opacity-0 group-hover:opacity-100 group-focus-visible/play:opacity-100 group-active/play:scale-[0.96]",
             )}
           >
-            <PlayPauseIcon playing={false} className="size-[26px]" />
+            <PlayPauseIcon playing={false} className="size-5" />
           </span>
         </button>
       )}
@@ -198,12 +183,12 @@ export function SongHero({ variant, versions, art, player }: SongHeroProps) {
         </div>
         <p
           title={variant.album ? `${variant.artist} · ${variant.album}` : variant.artist}
-          className="mt-3 -mb-[0.16em] flex min-w-0 whitespace-nowrap pr-[0.08em] pb-[0.16em] text-xl font-medium max-[1000px]:text-[17px]"
+          className="mt-1.5 -mb-[0.16em] flex min-w-0 whitespace-nowrap pr-[0.08em] pb-[0.16em] text-[17px] font-medium max-[1000px]:text-[15px]"
         >
           <span className="max-w-full shrink-0 truncate text-(--ink-2)">{variant.artist}</span>
           {variant.album ? <span className="min-w-[3ch] truncate text-(--ink-3)">{` · ${variant.album}`}</span> : null}
         </p>
-        <div className="mt-[22px] flex flex-wrap gap-2 [text-shadow:none]">
+        <div className="mt-3 flex flex-wrap gap-2 [text-shadow:none]">
           <Tooltip label={SYNC_TIP[sync]}>
             <span className="inline-flex">
               <SyncTag kind={sync} size="tag" />
@@ -219,7 +204,7 @@ export function SongHero({ variant, versions, art, player }: SongHeroProps) {
             <span className={TAG_PILL}>{`${titleCase(variant.confidence)} confidence`}</span>
           </Tooltip>
         </div>
-        <div className="mt-[26px] flex flex-wrap items-center gap-2 [text-shadow:none]">
+        <div className="mt-4 flex flex-wrap items-center gap-2 [text-shadow:none]">
           <motion.button
             layout
             type="button"
@@ -276,17 +261,17 @@ export function SongHeroSkeleton() {
       </div>
       <div className="min-w-0">
         <div className={cn(TITLE_SIZE.l, "flex h-[1.08em] items-center")}>
-          <Bone className="h-[0.72em] w-3/4 rounded-xl" />
+          <Bone className="h-[0.72em] w-1/2 rounded-lg" />
         </div>
-        <div className="mt-3 flex h-7 items-center">
-          <Bone className="h-4 w-1/3" />
+        <div className="mt-1.5 flex h-[26px] items-center max-[1000px]:h-[23px]">
+          <Bone className="h-3.5 w-1/4" />
         </div>
-        <div className="mt-[22px] flex gap-2">
+        <div className="mt-3 flex gap-2">
           <Bone className="h-8 w-[93px] rounded-[10px]" />
           <Bone className="h-8 w-[66px] rounded-[10px]" />
           <Bone className="h-8 w-[117px] rounded-[10px]" />
         </div>
-        <div className="mt-[26px] flex gap-2">
+        <div className="mt-4 flex gap-2">
           <Bone className="h-11 w-[87px] rounded-full" />
           <Bone className="h-11 w-[157px] rounded-full" />
           <Bone className="h-11 w-[114px] rounded-full" />
