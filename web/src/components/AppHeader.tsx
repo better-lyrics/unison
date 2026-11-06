@@ -8,7 +8,7 @@ import { BetterLyricsLogo } from "./BetterLyricsLogo"
 import { CouncilNavLink } from "./council/CouncilNavLink"
 import { SearchBar } from "./SearchBar"
 import { SignInControl } from "./SignInControl"
-import { artTextShadowClass, glassClass } from "./ui"
+import { artTextShadowClass, glassClass, popoverSurfaceClass } from "./ui"
 
 const tabClass = ({ isActive }: { isActive: boolean }) =>
 	cn(
@@ -116,7 +116,7 @@ export function AppHeader({ width }: { width: PageWidth }) {
 			{menuOpen ? (
 				<div
 					role="menu"
-					className="absolute right-6 top-full mt-2 flex w-56 flex-col gap-2 rounded-lg border border-unison-border bg-unison-bg-elevated p-3 shadow-lg lg:hidden"
+					className={cn(popoverSurfaceClass, "absolute right-6 top-full mt-2 flex w-56 flex-col gap-2 rounded-2xl p-3 lg:hidden")}
 				>
 					<nav className="flex flex-col gap-1">
 						<NavLink to="/" end role="menuitem" onClick={closeMenu} className={tabClass}>

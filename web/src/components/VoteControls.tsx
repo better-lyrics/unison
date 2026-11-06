@@ -2,7 +2,7 @@ import { type ReactNode, useCallback, useEffect, useRef, useState } from "react"
 import { useSession } from "@/auth/useSession"
 import { useVoteMutations } from "@/hooks/useVoteMutations"
 import { cn } from "@/lib/cn"
-import { glassActionClass, glassClass } from "./ui"
+import { glassActionClass, glassClass, popoverSurfaceClass } from "./ui"
 import { REPORT_REASONS, REPORT_REASON_LABEL, type ReportReason } from "@/lib/report-reasons"
 import { BlDownvoteIcon, BlReportIcon, BlUpvoteIcon } from "./icons/BlVoteIcons"
 
@@ -112,7 +112,7 @@ export function VoteControls({ variantId, videoId, variant, beforeReport }: Vote
         {menuOpen && !disabled ? (
           <div
             role="menu"
-            className="absolute top-full right-0 z-10 mt-2 flex min-w-[160px] flex-col rounded-2xl bg-[rgba(20,19,24,0.92)] p-1.5 text-[13px] shadow-[inset_0_1px_0_rgba(255,255,255,0.1),inset_0_0_0_1px_rgba(255,255,255,0.06),0_12px_40px_rgba(0,0,0,0.5)] backdrop-blur-[20px]"
+            className={cn(popoverSurfaceClass, "absolute top-full right-0 z-10 mt-2 flex min-w-[160px] flex-col rounded-2xl p-1.5 text-[13px]")}
           >
             {REASONS.map((r) => (
               <button

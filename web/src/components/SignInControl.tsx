@@ -3,7 +3,7 @@ import { UserAvatar } from "@/components/UserAvatar";
 import { IconCheck, IconCopy, IconFileUpload, IconLogout, IconUser } from "@tabler/icons-react";
 import { type ChangeEvent, useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { glassClass } from "@/components/ui";
+import { glassClass, popoverSurfaceClass } from "@/components/ui";
 import { cn } from "@/lib/cn";
 
 export function SignInControl({ glass = false }: { glass?: boolean }) {
@@ -64,7 +64,7 @@ export function SignInControl({ glass = false }: { glass?: boolean }) {
           aria-haspopup="menu"
           aria-expanded={open}
           aria-label={identity.displayName}
-          className={cn("flex cursor-pointer items-center gap-2 rounded-full p-1 pr-3 transition-colors hover:bg-unison-bg-hover", glass && glassClass)}
+          className={cn("flex cursor-pointer items-center gap-2 rounded-full p-1 pr-3 transition-colors", glass ? cn(glassClass, "hover:bg-white/[0.14]") : "hover:bg-unison-bg-hover")}
         >
           <UserAvatar
             avatarUrl={identity.avatarUrl}
@@ -79,7 +79,7 @@ export function SignInControl({ glass = false }: { glass?: boolean }) {
           <div
             role="menu"
             data-state="open"
-            className="absolute right-0 z-20 mt-2 w-56 rounded-lg border border-unison-border bg-unison-bg-elevated p-3 shadow-lg"
+            className={cn(popoverSurfaceClass, "absolute right-0 z-20 mt-2 w-56 rounded-2xl p-3")}
           >
             <div className="space-y-2 pb-3">
               <p className="text-[10px] uppercase tracking-wider text-unison-text-muted">
@@ -153,7 +153,7 @@ export function SignInControl({ glass = false }: { glass?: boolean }) {
           <div
             role="menu"
             data-state="open"
-            className="absolute right-0 z-20 mt-2 w-64 rounded-lg border border-unison-border bg-unison-bg-elevated p-3 shadow-lg"
+            className={cn(popoverSurfaceClass, "absolute right-0 z-20 mt-2 w-64 rounded-2xl p-3")}
           >
             <div className="space-y-2 pb-3">
               <button

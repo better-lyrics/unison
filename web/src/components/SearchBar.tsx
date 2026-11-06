@@ -1,5 +1,5 @@
 import { Kbd } from "@/components/Kbd"
-import { glassClass } from "@/components/ui"
+import { glassClass, popoverSurfaceClass } from "@/components/ui"
 import { type DropdownStatus, SearchDropdown } from "@/components/SearchDropdown"
 import { useDebouncedValue } from "@/hooks/useDebouncedValue"
 import { useSearchShortcut } from "@/hooks/useSearchShortcut"
@@ -232,7 +232,7 @@ export function SearchBar({ compact = false, glass = false }: SearchBarProps) {
             ref={refs.setFloating}
             style={floatingStyles}
             {...getFloatingProps()}
-            className="z-50 w-96 overflow-hidden rounded-xl border border-unison-border bg-unison-bg-elevated shadow-[0_16px_40px_-12px_rgba(0,0,0,0.7)]"
+            className={cn(popoverSurfaceClass, "z-50 w-96 overflow-hidden rounded-2xl")}
           >
             <SearchDropdown status={status} results={results} activeIndex={activeIndex} getRowProps={getRowProps} />
           </div>

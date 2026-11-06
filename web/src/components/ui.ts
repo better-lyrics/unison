@@ -26,8 +26,10 @@ export const chipIconClass = "size-[15px] shrink-0"
 export const tagClass =
   "inline-flex items-center gap-1 rounded bg-unison-bg-hover px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-unison-text-secondary"
 
-export const tooltipSurfaceClass =
-  "rounded-md border border-unison-border-strong bg-[#0b0a0e] px-2.5 py-1.5 text-[11px] font-medium leading-snug text-unison-text shadow-[0_10px_28px_rgba(0,0,0,0.55)]"
+export const popoverSurfaceClass =
+  "bg-[rgba(15,14,19,0.42)] text-unison-text shadow-[inset_0_1px_0_rgba(255,255,255,0.1),inset_0_0_0_1px_rgba(255,255,255,0.06),0_16px_48px_rgba(0,0,0,0.35)] backdrop-blur-[24px] backdrop-saturate-[1.8]"
+
+export const tooltipSurfaceClass = `${popoverSurfaceClass} rounded-[10px] px-2.5 py-1.5 text-[11px] font-medium leading-snug`
 
 const BUTTON_BASE =
   "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md font-medium transition-[color,background-color,box-shadow,opacity,scale] duration-150 ease-[cubic-bezier(0.2,0,0,1)] active:scale-[0.96] disabled:cursor-not-allowed disabled:opacity-50 disabled:active:scale-100"

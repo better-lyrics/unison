@@ -5,6 +5,7 @@ import { fetchUserSubmissions, putProfileSettings } from "@/lib/api"
 import { artworkQuery } from "@/lib/artwork"
 import { AuthedFetchError } from "@/lib/authedFetch"
 import { cn } from "@/lib/cn"
+import { popoverSurfaceClass } from "@/components/ui"
 
 const TILE_SIZE = 400
 
@@ -53,7 +54,10 @@ export function BannerPicker({ ref, keyId, current, onSaved }: BannerPickerProps
     <div
       ref={ref}
       popover="auto"
-      className="fixed inset-[128px_32px_auto_auto] m-0 max-h-[min(520px,calc(100dvh-160px))] w-[360px] max-w-[calc(100vw-32px)] overflow-y-auto overscroll-contain rounded-[28px] border-0 bg-[rgba(20,19,24,0.82)] p-[18px] text-unison-text shadow-[inset_0_1px_0_rgba(255,255,255,0.1),inset_0_0_0_1px_rgba(255,255,255,0.06),0_24px_60px_rgba(0,0,0,0.45)] backdrop-blur-[24px] backdrop-saturate-[1.4] max-[1000px]:inset-[auto_16px_80px_16px] max-[1000px]:w-auto"
+      className={cn(
+        popoverSurfaceClass,
+        "fixed inset-[128px_32px_auto_auto] m-0 max-h-[min(520px,calc(100dvh-160px))] w-[360px] max-w-[calc(100vw-32px)] overflow-y-auto overscroll-contain rounded-[28px] border-0 p-[18px] max-[1000px]:inset-[auto_16px_80px_16px] max-[1000px]:w-auto",
+      )}
     >
       <h2 className="m-0 text-[15px] font-bold">Banner</h2>
       <p className="mt-1 mb-3.5 text-xs text-(--ink-3)">Pick the cover of a song you synced.</p>
