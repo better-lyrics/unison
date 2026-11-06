@@ -8,7 +8,7 @@ import { BetterLyricsLogo } from "./BetterLyricsLogo"
 import { CouncilNavLink } from "./council/CouncilNavLink"
 import { SearchBar } from "./SearchBar"
 import { SignInControl } from "./SignInControl"
-import { glassClass } from "./ui"
+import { artTextShadowClass, glassClass } from "./ui"
 
 const artTabClass = ({ isActive }: { isActive: boolean }) =>
 	cn(
@@ -66,7 +66,7 @@ export function AppHeader({ width }: { width: PageWidth }) {
 					aria-label="Unison home"
 					className={cn(
 						"flex items-center gap-2 transition-opacity hover:opacity-80 sm:justify-self-start",
-						art && "[text-shadow:0_1px_16px_rgba(0,0,0,0.3)]",
+						art && artTextShadowClass,
 					)}
 				>
 					<BetterLyricsLogo size={20} />

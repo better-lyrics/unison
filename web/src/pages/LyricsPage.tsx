@@ -5,6 +5,7 @@ import { LyricsPanel } from "@/components/LyricsPanel"
 import { SongHero, SongHeroSkeleton } from "@/components/song/SongHero"
 import { SongRail } from "@/components/song/SongRail"
 import { Bone } from "@/components/skeleton"
+import { artPageClass } from "@/components/ui"
 import { useArtPalette } from "@/hooks/useArtPalette"
 import { useLyricsVariant, useLyricsVariants } from "@/hooks/useLyricsData"
 import { useYouTubePlayer } from "@/hooks/useYouTubePlayer"
@@ -13,7 +14,6 @@ import { sleeveDataUrl } from "@/lib/sleeve"
 import { useCallback, useMemo, useState } from "react"
 import { useParams, useSearchParams } from "react-router-dom"
 
-const PAGE = "[text-shadow:0_1px_16px_rgba(0,0,0,0.3)]"
 const BODY =
   "grid grid-cols-[minmax(0,1fr)_340px] gap-12 pt-2 pb-[88px] max-[1000px]:grid-cols-[minmax(0,1fr)] max-[1000px]:gap-7 max-[1000px]:pt-0"
 const LYRICS_SIZE = "h-[560px] max-w-none max-[1000px]:h-[440px]"
@@ -94,7 +94,7 @@ export function LyricsPage() {
   const variant = variantQuery.data?.variant
 
   return (
-    <div className={PAGE}>
+    <div className={artPageClass}>
       <ArtBackground src={backdrop} />
       {variant ? (
         <SongHero
@@ -124,7 +124,7 @@ export function LyricsPage() {
 
 function LyricsPageSkeleton() {
   return (
-    <div className={PAGE}>
+    <div className={artPageClass}>
       <SongHeroSkeleton />
       <div className={BODY}>
         <div className="min-w-0">

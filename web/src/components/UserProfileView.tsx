@@ -12,10 +12,10 @@ import { OwnerControls } from "@/components/OwnerControls"
 import { ProfileCard } from "@/components/profile/ProfileCard"
 import { ProfileSide } from "@/components/profile/ProfileSide"
 import { SectionHeading } from "@/components/profile/SectionHeading"
-import { PROFILE_PAGE, PROFILE_STAGE } from "@/components/profile/layout"
+import { PROFILE_STAGE } from "@/components/profile/layout"
 import { ProfileSkeleton } from "@/components/ProfileSkeleton"
 import { SubmissionsList } from "@/components/SubmissionsList"
-import { glassActionClass, glassClass } from "@/components/ui"
+import { artPageClass, glassActionClass, glassClass } from "@/components/ui"
 import { useArtPalette } from "@/hooks/useArtPalette"
 import { setAsyncData, useAsyncData } from "@/hooks/useAsyncData"
 import { useProfileArt } from "@/hooks/useProfileArt"
@@ -129,7 +129,7 @@ function ProfileBody({
   }
 
   return (
-    <div className={PROFILE_PAGE}>
+    <div className={artPageClass}>
       <ArtBackground src={art.wash} />
       {isOwner && preview ? <PreviewBar onExit={() => setPreview(false)} /> : null}
       <section className={PROFILE_STAGE}>
