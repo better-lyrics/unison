@@ -1,4 +1,5 @@
 import { CoverImage } from "@/components/AlbumArt"
+import { SwapLabel } from "@/components/SwapLabel"
 import { SyncTag } from "@/components/SyncTag"
 import { Tooltip } from "@/components/Tooltip"
 import { VoteControls } from "@/components/VoteControls"
@@ -12,11 +13,13 @@ import { glassActionClass, glassClass } from "@/components/ui"
 import { useCopied } from "@/hooks/useCopied"
 import { cn } from "@/lib/cn"
 import { titleCase } from "@/lib/format"
+import { LAYOUT_TRANSITION } from "@/lib/motion-variants"
 import { languageName } from "@/lib/language"
 import { type SyncKind, syncTypeFor } from "@/lib/sync-type"
 import type { Mark, VariantFull } from "@/lib/types"
 import { youTubeMusicUrl } from "@/lib/youtube-music"
 import { IconCheck, IconShare } from "@tabler/icons-react"
+import { motion } from "motion/react"
 
 const SYNC_TIP: Record<SyncKind, string> = {
   syllable: "Syllable synced: each syllable highlights as it is sung.",
@@ -190,14 +193,19 @@ export function SongHero({ variant, versions, art, player }: SongHeroProps) {
           </Tooltip>
         </div>
         <div className="mt-[26px] flex flex-wrap items-center gap-2 [text-shadow:none]">
-          <button
+          <motion.button
+            layout
             type="button"
             onClick={player.onToggle}
+            transition={{ layout: LAYOUT_TRANSITION }}
+            style={{ borderRadius: 9999 }}
             className="inline-flex h-11 cursor-pointer items-center justify-center gap-2 whitespace-nowrap rounded-full bg-unison-text pr-[18px] pl-4 max-sm:flex-1 text-sm font-bold text-[#121116] transition-[background-color,scale] duration-150 ease-out hover:bg-white active:scale-[0.96]"
           >
-            <PlayPauseIcon playing={player.playing} />
-            {player.playing ? "Pause" : "Play"}
-          </button>
+            <motion.span layout className="inline-flex">
+              <PlayPauseIcon playing={player.playing} />
+            </motion.span>
+            <SwapLabel text={player.playing ? "Pause" : "Play"} />
+          </motion.button>
           <a
             href={youTubeMusicUrl(variant.videoId)}
             target="_blank"

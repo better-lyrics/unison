@@ -1,9 +1,12 @@
 import { IconCheck, IconDownload, IconPencil, IconShare } from "@tabler/icons-react"
+import { motion } from "motion/react"
 import { IconSwap } from "@/components/icons/IconSwap"
+import { SwapLabel } from "@/components/SwapLabel"
 import { OdometerNumber } from "@/components/OdometerNumber"
 import { DiscordChip } from "@/components/profile/DiscordChip"
 import { chipClass, chipIconClass, raisedChipClass } from "@/components/ui"
 import { useCopied } from "@/hooks/useCopied"
+import { LAYOUT_TRANSITION } from "@/lib/motion-variants"
 import { plural } from "@/lib/format"
 import { levelProgress } from "@/lib/level"
 import type { UserGamification, UserRankResponse } from "@/lib/types"
@@ -58,19 +61,24 @@ function LevelLine({ gamification }: { gamification: UserGamification }) {
 export function ProfileSide({ keyId, rank, gamification, owner, onEditProfile }: ProfileSideProps) {
   const [copied, copy] = useCopied()
   const share = (
-    <button
+    <motion.button
+      layout
       type="button"
       onClick={() => copy(profileUrl(rank.handle, keyId))}
+      transition={{ layout: LAYOUT_TRANSITION }}
+      style={{ borderRadius: 10 }}
       className={owner ? chipClass : raisedChipClass}
     >
-      <IconSwap
-        swapped={copied}
-        from={<IconShare className="size-full" stroke={1.75} />}
-        to={<IconCheck className="size-full" stroke={1.75} />}
-        className={chipIconClass}
-      />
-      {copied ? "Copied" : "Share"}
-    </button>
+      <motion.span layout className="inline-flex">
+        <IconSwap
+          swapped={copied}
+          from={<IconShare className="size-full" stroke={1.75} />}
+          to={<IconCheck className="size-full" stroke={1.75} />}
+          className={chipIconClass}
+        />
+      </motion.span>
+      <SwapLabel text={copied ? "Copied" : "Share"} />
+    </motion.button>
   )
 
   return (

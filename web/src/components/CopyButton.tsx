@@ -2,7 +2,8 @@ import { IconCheck, IconCopy, IconX } from "@tabler/icons-react"
 import { AnimatePresence, MotionConfig, motion } from "motion/react"
 import { useCallback, useEffect, useRef, useState } from "react"
 import { cn } from "@/lib/cn"
-import { iconSwapVariants, labelSwapVariants, LAYOUT_TRANSITION, SWAP_TRANSITION } from "@/lib/motion-variants"
+import { SwapLabel } from "@/components/SwapLabel"
+import { iconSwapVariants, LAYOUT_TRANSITION, SWAP_TRANSITION } from "@/lib/motion-variants"
 
 type CopyState = "idle" | "copied" | "failed"
 
@@ -115,19 +116,7 @@ export function CopyButton({
           </motion.span>
         </AnimatePresence>
         {withText ? (
-          <AnimatePresence initial={false} mode="popLayout">
-            <motion.span
-              key={LABEL[state]}
-              layout
-              variants={labelSwapVariants}
-              initial="initial"
-              animate="animate"
-              exit="exit"
-              transition={SWAP_TRANSITION}
-            >
-              {LABEL[state]}
-            </motion.span>
-          </AnimatePresence>
+          <SwapLabel text={LABEL[state]} />
         ) : (
           <span className="sr-only">{LABEL[state]}</span>
         )}
