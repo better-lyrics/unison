@@ -1,92 +1,104 @@
 import "./profile.css"
 import { IconEye } from "@tabler/icons-react"
-import { useCallback, useState } from "react"
+import { type Ref, useCallback, useRef, useState } from "react"
 import { useOptionalSession } from "@/auth/useSession"
+import { ArtBackground } from "@/components/ArtBackground"
 import { BadgeCatalogueProvider, useBadgeCatalogue } from "@/components/BadgeCatalogueContext"
 import { BadgeModalProvider } from "@/components/BadgeModalContext"
 import { BadgeWall } from "@/components/BadgeWall"
-import { CollapsibleSection } from "@/components/CollapsibleSection"
 import { EmptyState } from "@/components/EmptyState"
 import { FeaturedBadgeEditor } from "@/components/FeaturedBadgeEditor"
 import { OwnerControls } from "@/components/OwnerControls"
-import { ProfileHeader } from "@/components/ProfileHeader"
+import { ProfileCard } from "@/components/profile/ProfileCard"
+import { ProfileSide } from "@/components/profile/ProfileSide"
+import { SectionHeading } from "@/components/profile/SectionHeading"
+import { PROFILE_PAGE, PROFILE_STAGE } from "@/components/profile/layout"
 import { ProfileSkeleton } from "@/components/ProfileSkeleton"
-import { StatPills } from "@/components/StatPills"
 import { SubmissionsList } from "@/components/SubmissionsList"
+import { glassActionClass, glassClass } from "@/components/ui"
+import { useArtPalette } from "@/hooks/useArtPalette"
 import { setAsyncData, useAsyncData } from "@/hooks/useAsyncData"
+import { useProfileArt } from "@/hooks/useProfileArt"
 import { fetchUserBadges, fetchUserRank } from "@/lib/api"
-import { formatRank } from "@/lib/format"
+import { cn } from "@/lib/cn"
+import { formatRank, titleCase } from "@/lib/format"
+import { languageName } from "@/lib/language"
 import type { BadgeCatalogue, ExpertiseEntry, UserGamification, UserRankResponse } from "@/lib/types"
 
 interface UserProfileViewProps {
   keyId: string
 }
 
+const PANEL = cn(glassClass, "rounded-[22px] bg-[rgba(15,14,19,0.34)] p-6 backdrop-blur-[24px] [text-shadow:none]")
+
 function ExpertiseStrip({ entries }: { entries: ExpertiseEntry[] }) {
   return (
-    <CollapsibleSection title="Top expertise" defaultOpen={false} className="mt-12">
-      <div className="flex flex-wrap gap-2.5">
+    <section className="flex flex-col gap-4">
+      <SectionHeading title="Top expertise" />
+      <div className="flex flex-wrap gap-2 [text-shadow:none]">
         {entries.map((entry) => (
           <span
             key={`${entry.scope}:${entry.name}`}
-            className="inline-flex items-baseline gap-2 rounded-[10px] bg-[rgba(255,255,255,0.025)] px-3.5 py-2.5 shadow-[inset_0_0_0_1px_var(--color-unison-border)]"
+            className={cn(
+              glassClass,
+              "inline-flex items-baseline gap-2 rounded-xl px-3.5 py-2.5 backdrop-blur-[16px] [corner-shape:superellipse(1.6)]",
+            )}
           >
-            <span className="text-xs capitalize text-unison-text-muted">{entry.scope}</span>
-            <span className="text-sm font-semibold text-unison-text">{entry.name}</span>
-            <span className="text-[12.5px] font-bold text-unison-medal-gold">{formatRank(entry.rank)}</span>
+            <span className="text-xs text-(--ink-3)">{titleCase(entry.scope)}</span>
+            <span className="text-sm font-bold">
+              {entry.scope === "language" ? languageName(entry.name) : entry.name}
+            </span>
+            <span className="text-[13px] font-bold text-unison-medal-gold tabular-nums">{formatRank(entry.rank)}</span>
           </span>
         ))}
       </div>
-    </CollapsibleSection>
+    </section>
+  )
+}
+
+function PreviewBar({ onExit }: { onExit: () => void }) {
+  return (
+    <div className={cn(PANEL, "mb-6 flex items-center justify-between gap-3 py-2.5 pr-2.5 pl-4")}>
+      <span className="flex items-center gap-2 text-sm text-(--ink-2)">
+        <IconEye className="size-4" stroke={1.7} />
+        You're previewing your public profile.
+      </span>
+      <button type="button" onClick={onExit} className={cn(glassActionClass, "h-9 px-3.5 text-[13px]")}>
+        Exit preview
+      </button>
+    </div>
   )
 }
 
 function OwnerBlock({
+  ref,
   gamification,
   catalogue,
   onGamificationChange,
+  onPreview,
 }: {
+  ref: Ref<HTMLElement>
   gamification: UserGamification | null
   catalogue: BadgeCatalogue | null
   onGamificationChange: (updated: UserGamification) => void
+  onPreview: () => void
 }) {
-  const [preview, setPreview] = useState(false)
-
-  if (preview) {
-    return (
-      <div className="mt-12 flex items-center justify-between gap-3 rounded-lg bg-white/[0.04] py-2.5 pr-3.5 pl-4">
-        <span className="flex items-center gap-2 text-sm text-unison-text-secondary">
-          <IconEye className="size-4" stroke={1.7} />
-          You're previewing your public profile.
-        </span>
-        <button
-          type="button"
-          onClick={() => setPreview(false)}
-          className="cursor-pointer rounded-md bg-unison-bg-hover px-3 py-1.5 text-sm font-medium text-unison-text transition-colors hover:bg-unison-bg-elevated active:scale-[0.96]"
-        >
-          Exit preview
-        </button>
-      </div>
-    )
-  }
-
   return (
-    <div className="mt-12 space-y-6">
-      <div className="flex justify-end">
-        <button
-          type="button"
-          onClick={() => setPreview(true)}
-          className="inline-flex cursor-pointer items-center gap-2 rounded-lg bg-unison-surface py-2 pr-4 pl-3 text-[13px] font-medium text-unison-text-secondary transition-colors hover:bg-unison-bg-hover hover:text-unison-text active:scale-[0.96]"
-        >
-          <IconEye className="size-3" stroke={1.7} />
+    <section ref={ref} id="edit-profile" className="flex scroll-mt-8 flex-col gap-4">
+      <div className="flex items-center gap-3">
+        <h2 className="m-0 text-xl font-bold tracking-[-0.01em]">Edit profile</h2>
+        <button type="button" onClick={onPreview} className={cn(glassActionClass, "ml-auto h-9 px-3.5 text-[13px]")}>
+          <IconEye className="size-4" stroke={1.7} />
           Preview as a visitor
         </button>
       </div>
-      {gamification && catalogue ? (
-        <FeaturedBadgeEditor gamification={gamification} catalogue={catalogue} onSaved={onGamificationChange} />
-      ) : null}
-      <OwnerControls />
-    </div>
+      <div className={cn(PANEL, "space-y-6")}>
+        {gamification && catalogue ? (
+          <FeaturedBadgeEditor gamification={gamification} catalogue={catalogue} onSaved={onGamificationChange} />
+        ) : null}
+        <OwnerControls />
+      </div>
+    </section>
   )
 }
 
@@ -105,39 +117,47 @@ function ProfileBody({
   isOwner: boolean
   onGamificationChange: (updated: UserGamification) => void
 }) {
+  const art = useProfileArt(rank)
+  useArtPalette(art.wash)
+  const [preview, setPreview] = useState(false)
+  const editRef = useRef<HTMLElement>(null)
+  const owner = isOwner && !preview
+
+  const editProfile = () => {
+    const still = matchMedia("(prefers-reduced-motion: reduce)").matches
+    editRef.current?.scrollIntoView({ behavior: still ? "auto" : "smooth", block: "start" })
+  }
+
   return (
-    <div>
-      <ProfileHeader keyId={keyId} rank={rank} gamification={gamification} catalogue={catalogue} />
+    <div className={PROFILE_PAGE}>
+      <ArtBackground src={art.wash} />
+      {isOwner && preview ? <PreviewBar onExit={() => setPreview(false)} /> : null}
+      <section className={PROFILE_STAGE}>
+        <div className="w-full max-w-[400px]">
+          <ProfileCard keyId={keyId} rank={rank} gamification={gamification} catalogue={catalogue} art={art} />
+        </div>
+        <ProfileSide keyId={keyId} rank={rank} gamification={gamification} owner={owner} onEditProfile={editProfile} />
+      </section>
 
-      <div className="mt-6">
-        {rank.ranked ? (
-          <StatPills score={rank.score} submissions={rank.submissionCount} upvotes={rank.totalUpvotes} />
-        ) : (
-          <EmptyState
-            title="No leaderboard activity yet"
-            hint="Submit lyrics via Better Lyrics to start showing up on the leaderboard."
-          />
-        )}
-      </div>
-
-      {isOwner ? (
-        <OwnerBlock gamification={gamification} catalogue={catalogue} onGamificationChange={onGamificationChange} />
-      ) : null}
-
-      <div className="mt-12">
+      <div className="flex flex-col gap-14 pb-[108px]">
+        <SubmissionsList keyId={keyId} total={rank.ranked ? rank.submissionCount : undefined} owner={owner} />
+        {gamification?.topExpertise && gamification.topExpertise.length > 0 ? (
+          <ExpertiseStrip entries={gamification.topExpertise} />
+        ) : null}
         {gamification && catalogue ? (
-          <BadgeWall gamification={gamification} catalogue={catalogue} defaultOpen={false} />
+          <BadgeWall gamification={gamification} catalogue={catalogue} />
         ) : (
           <EmptyState title="Achievements unavailable" hint="Achievements couldn't be loaded right now." />
         )}
-      </div>
-
-      {gamification?.topExpertise && gamification.topExpertise.length > 0 ? (
-        <ExpertiseStrip entries={gamification.topExpertise} />
-      ) : null}
-
-      <div className="mt-12">
-        <SubmissionsList keyId={keyId} />
+        {owner ? (
+          <OwnerBlock
+            ref={editRef}
+            gamification={gamification}
+            catalogue={catalogue}
+            onGamificationChange={onGamificationChange}
+            onPreview={() => setPreview(true)}
+          />
+        ) : null}
       </div>
     </div>
   )

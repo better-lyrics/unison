@@ -4,7 +4,12 @@ import { useEffect, useRef } from "react"
 const WARP = { warpIntensity: 0.9, blurPasses: 8, saturation: 1.4, animationSpeed: 0.8 }
 const STILL_FRAME_TIME = 4
 
-export function ArtBackground({ src }: { src: string | null | undefined }) {
+interface ArtBackgroundProps {
+  src: string | null | undefined
+  contained?: boolean
+}
+
+export function ArtBackground({ src, contained = false }: ArtBackgroundProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const warpRef = useRef<Kawarp | null>(null)
 
@@ -21,8 +26,9 @@ export function ArtBackground({ src }: { src: string | null | undefined }) {
     warpRef.current = warp
     const still = matchMedia("(prefers-reduced-motion: reduce)").matches
     const observer = new ResizeObserver(() => {
-      canvas.width = Math.max(1, Math.round(innerWidth * 0.5))
-      canvas.height = Math.max(1, Math.round(innerHeight * 0.5))
+      const box = contained ? canvas.getBoundingClientRect() : { width: innerWidth, height: innerHeight }
+      canvas.width = Math.max(1, Math.round(box.width * 0.5))
+      canvas.height = Math.max(1, Math.round(box.height * 0.5))
       warp.resize()
       if (still) warp.renderFrame(STILL_FRAME_TIME)
     })
@@ -33,7 +39,7 @@ export function ArtBackground({ src }: { src: string | null | undefined }) {
       warp.dispose()
       warpRef.current = null
     }
-  }, [])
+  }, [contained])
 
   useEffect(() => {
     const warp = warpRef.current
@@ -45,6 +51,8 @@ export function ArtBackground({ src }: { src: string | null | undefined }) {
       })
       .catch((error: unknown) => console.warn("Could not load the background art", error))
   }, [src])
+
+  if (contained) return <canvas ref={canvasRef} className="absolute inset-0 block size-full" />
 
   return (
     <>

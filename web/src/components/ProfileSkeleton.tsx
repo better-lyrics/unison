@@ -1,60 +1,36 @@
-import { cn } from "@/lib/cn"
-
-const shimmer = "animate-pulse bg-white/[0.04] motion-reduce:animate-none"
-
-function Block({ className }: { className?: string }) {
-  return <div className={cn(shimmer, "rounded-md", className)} />
-}
-
-function CollapsedSectionSkeleton({
-  titleWidth = "w-28",
-  summary = false,
-}: { titleWidth?: string; summary?: boolean }) {
-  return (
-    <div className="flex h-7 items-center gap-2">
-      <Block className="size-4" />
-      <Block className={cn("h-[18px]", titleWidth)} />
-      {summary ? <Block className="ml-auto h-3 w-16" /> : null}
-    </div>
-  )
-}
-
-// Reserves the owner's edit block so the sections below it don't shift when data resolves.
-function OwnerBlockSkeleton() {
-  return (
-    <div className="mt-12 space-y-6">
-      <div className="flex justify-end">
-        <Block className="h-9 w-40 rounded-lg" />
-      </div>
-      <CollapsedSectionSkeleton titleWidth="w-32" summary />
-      <CollapsedSectionSkeleton />
-      <CollapsedSectionSkeleton />
-      <CollapsedSectionSkeleton />
-    </div>
-  )
-}
+import { PROFILE_PAGE, PROFILE_STAGE } from "@/components/profile/layout"
+import { Bone, skeletonKeys } from "@/components/skeleton"
 
 export function ProfileSkeleton({ owner = false }: { owner?: boolean }) {
   return (
-    <div>
-      <div className="flex items-start gap-5">
-        <div className={cn(shimmer, "size-[92px] shrink-0 rounded-full")} />
-        <div className="min-w-0 flex-1 pt-1">
-          <Block className="h-[30px] w-56" />
-          <div className="mt-3.5 flex gap-2.5">
-            <Block className="h-7 w-28 rounded-full" />
-            <Block className="h-7 w-20 rounded-full" />
+    <div className={PROFILE_PAGE}>
+      <section className={PROFILE_STAGE}>
+        <Bone className="aspect-[5/7] w-full max-w-[400px] rounded-[28px]" />
+        <div className="flex min-w-0 flex-col gap-5">
+          <div className="space-y-2.5">
+            <Bone className="h-10 w-4/5 rounded-xl max-[1000px]:h-8" />
+            <Bone className="h-10 w-3/5 rounded-xl max-[1000px]:h-8" />
+          </div>
+          <Bone className="h-4 w-48" />
+          <div className="flex gap-2">
+            {owner ? (
+              <>
+                <Bone className="h-[30px] w-32 rounded-[10px]" />
+                <Bone className="h-[30px] w-28 rounded-[10px]" />
+              </>
+            ) : null}
+            <Bone className="h-[30px] w-20 rounded-[10px]" />
           </div>
         </div>
+      </section>
+      <div className="flex flex-col gap-4">
+        <Bone className="h-6 w-36" />
+        <div className="grid grid-cols-4 gap-5 max-[1000px]:grid-cols-2 max-[1000px]:gap-4">
+          {skeletonKeys("profile-tile", 4).map((key) => (
+            <Bone key={key} className="aspect-square w-full rounded-xl" />
+          ))}
+        </div>
       </div>
-
-      <div className="mt-6 flex flex-wrap gap-3">
-        <Block className="h-12 w-40 rounded-full" />
-        <Block className="h-12 w-44 rounded-full" />
-        <Block className="h-12 w-40 rounded-full" />
-      </div>
-
-      {owner ? <OwnerBlockSkeleton /> : null}
     </div>
   )
 }

@@ -48,7 +48,7 @@ afterEach(() => {
 })
 
 describe("UserProfileView", () => {
-  it("renders the name, rank pill, stat values, and submissions", async () => {
+  it("renders the name, rank, card stats, and submissions", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn().mockImplementation((url: string) => {
@@ -106,8 +106,7 @@ describe("UserProfileView", () => {
     renderView()
 
     await waitFor(() => expect(screen.getByText("AlphaUser")).toBeTruthy())
-    expect(screen.getByText("Rank #12")).toBeTruthy()
-    expect(screen.getByTestId("stat-score").textContent).toContain("7.4")
+    expect(screen.getByText("Ranked #12 of every Unison curator.")).toBeTruthy()
     expect(screen.getByTestId("stat-submissions").textContent).toContain("3")
     expect(screen.getByTestId("stat-upvotes").textContent).toContain("11")
 
@@ -168,7 +167,7 @@ describe("UserProfileView", () => {
     expect(writeText.mock.calls[0][0]).toContain("/u/alphauser")
   })
 
-  it("shows a gold rank pill for a rank-1 curator", async () => {
+  it("states the rank of a rank-1 curator", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn().mockImplementation((url: string) => {
@@ -192,7 +191,7 @@ describe("UserProfileView", () => {
 
     renderView()
     await waitFor(() => expect(screen.getByText("TopUser")).toBeTruthy())
-    expect(screen.getByText("Rank #1")).toBeTruthy()
+    expect(screen.getByText("Ranked #1 of every Unison curator.")).toBeTruthy()
   })
 
   it("renders the unranked empty state", async () => {
@@ -209,8 +208,8 @@ describe("UserProfileView", () => {
 
     renderView()
     await waitFor(() => expect(screen.getByText("QuietUser")).toBeTruthy())
-    expect(screen.getByText(/no leaderboard activity yet/i)).toBeTruthy()
-    await waitFor(() => expect(screen.getByText(/no submissions yet/i)).toBeTruthy())
+    expect(screen.getByText(/new curator/i)).toBeTruthy()
+    await waitFor(() => expect(screen.getByText("No songs synced yet")).toBeTruthy())
   })
 
   it("shows the curator's chosen avatar in the header", async () => {
@@ -299,7 +298,7 @@ describe("UserProfileView", () => {
     await waitFor(() => expect(screen.getAllByText("Most Loved").length).toBeGreaterThan(0))
   })
 
-  it("renders the community account with a Community chip and no rank pill", async () => {
+  it("names the community account and shows no rank", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn().mockImplementation((url: string) => {
@@ -352,8 +351,8 @@ describe("UserProfileView", () => {
     )
 
     renderView()
-    await waitFor(() => expect(screen.getByText("Community account")).toBeTruthy())
-    expect(screen.queryByText(/Rank #/)).toBeNull()
+    await waitFor(() => expect(screen.getByText("The shared community account.")).toBeTruthy())
+    expect(screen.queryByText(/Rank(ed)? #/)).toBeNull()
   })
 
   it("does not crash for a user with no tier and no earned badges", async () => {

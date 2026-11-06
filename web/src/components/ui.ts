@@ -10,6 +10,15 @@ export const glassClass =
 
 export const glassActionClass = `${glassClass} inline-flex h-11 cursor-pointer items-center justify-center gap-2 whitespace-nowrap rounded-full px-[18px] text-sm font-bold text-unison-text transition-[background-color,scale] duration-150 ease-out hover:bg-white/[0.14] active:scale-[0.96] disabled:cursor-not-allowed disabled:opacity-60 disabled:active:scale-100`
 
+const CHIP_BASE =
+  "relative inline-flex h-[30px] cursor-pointer items-center whitespace-nowrap rounded-[10px] text-[13px] [corner-shape:superellipse(1.6)] [text-shadow:none] transition-[background-color,color,scale] duration-150 ease-out after:absolute after:-inset-x-1 after:-inset-y-[5px] active:scale-[0.96]"
+
+export const chipClass = `${glassClass} ${CHIP_BASE} gap-[7px] pr-3 pl-2.5 font-medium text-(--ink-2) [@media(hover:hover)]:hover:bg-white/[0.14] [@media(hover:hover)]:hover:text-unison-text`
+
+export const raisedChipClass = `${CHIP_BASE} gap-[7px] bg-[linear-gradient(180deg,#fff,#e8e8ee)] pr-3 pl-2.5 font-bold text-[#121116] shadow-[inset_0_1px_0_#fff,inset_0_-1px_0_rgba(18,17,22,0.14),0_1px_2px_rgba(0,0,0,0.25)]`
+
+export const chipIconClass = "size-[15px] shrink-0"
+
 export const tagClass =
   "inline-flex items-center gap-1 rounded bg-unison-bg-hover px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-unison-text-secondary"
 
