@@ -5,7 +5,6 @@ import { LyricsPanel } from "@/components/LyricsPanel"
 import { SongHero, SongHeroSkeleton } from "@/components/song/SongHero"
 import { SongRail } from "@/components/song/SongRail"
 import { Bone } from "@/components/skeleton"
-import { artPageClass } from "@/components/ui"
 import { useLyricsVariant, useLyricsVariants } from "@/hooks/useLyricsData"
 import { useYouTubePlayer } from "@/hooks/useYouTubePlayer"
 import { artworkImageUrl, useArtwork } from "@/lib/artwork"
@@ -93,7 +92,7 @@ export function LyricsPage() {
   const variant = variantQuery.data?.variant
 
   return (
-    <div className={artPageClass}>
+    <div>
       {variant ? (
         <SongHero
           variant={variant}
@@ -122,7 +121,7 @@ export function LyricsPage() {
 
 function LyricsPageSkeleton() {
   return (
-    <div className={artPageClass}>
+    <div>
       <SongHeroSkeleton />
       <div className={BODY}>
         <div className="min-w-0">

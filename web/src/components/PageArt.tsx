@@ -3,11 +3,12 @@ import { useArtPalette } from "@/hooks/useArtPalette"
 import { ArtBackground } from "./ArtBackground"
 
 const DEFAULT_ART_SIZE = 256
-const DEFAULT_BASE = ["#0d0b14", "#17112a", "#0b1020"]
+const DEFAULT_SCRIM_FLOOR = 0.4
+const DEFAULT_BASE = ["#0b0809", "#140a0d", "#060506"]
 const DEFAULT_GLOWS = [
-  { x: 0.25, y: 0.3, r: 0.6, color: "rgba(92, 56, 150, 0.45)" },
-  { x: 0.8, y: 0.7, r: 0.55, color: "rgba(38, 64, 130, 0.4)" },
-  { x: 0.6, y: 0.15, r: 0.4, color: "rgba(140, 50, 90, 0.25)" },
+  { x: 0.22, y: 0.28, r: 0.6, color: "rgba(196, 28, 48, 0.5)" },
+  { x: 0.82, y: 0.72, r: 0.55, color: "rgba(110, 12, 28, 0.45)" },
+  { x: 0.65, y: 0.12, r: 0.35, color: "rgba(255, 86, 64, 0.18)" },
 ]
 
 function defaultArt(): string | null {
@@ -40,7 +41,7 @@ export function PageArtProvider({ children }: { children: ReactNode }) {
   const [art, setArt] = useState<PageArt | null>(null)
   const fallback = useMemo(defaultArt, [])
   const src = art?.src ?? fallback
-  useArtPalette(src)
+  useArtPalette(src, art?.src ? 0 : DEFAULT_SCRIM_FLOOR)
   return (
     <SetPageArt value={setArt}>
       <ArtBackground src={src} moving={art?.moving ?? false} />

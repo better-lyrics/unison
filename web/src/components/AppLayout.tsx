@@ -7,6 +7,7 @@ import { AppHeader } from "./AppHeader"
 import { BadgeAssetPreloader } from "./BadgeAssetPreloader"
 import { BadgeCatalogueProvider } from "./BadgeCatalogueContext"
 import { PageArtProvider } from "./PageArt"
+import { artPageClass } from "./ui"
 import { ToastViewport } from "./ToastViewport"
 
 // Stable reference so the preloader effect does not re-run on every render.
@@ -19,7 +20,7 @@ export function AppLayout() {
       <BadgeCatalogueProvider>
         <BadgeAssetPreloader variants={COLOR_VARIANTS} fetchPriority="high" />
         <PageArtProvider>
-          <div className="min-h-full">
+          <div className={cn("min-h-full", artPageClass)}>
             <AppHeader width={width} />
             <main className={cn("mx-auto py-8", pageWidthClass(width))}>
               <Outlet />

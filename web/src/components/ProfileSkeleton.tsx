@@ -1,10 +1,9 @@
 import { PROFILE_STAGE } from "@/components/profile/layout"
-import { artPageClass } from "@/components/ui"
 import { Bone, skeletonKeys } from "@/components/skeleton"
 
 export function ProfileSkeleton({ owner = false }: { owner?: boolean }) {
   return (
-    <div className={artPageClass}>
+    <div>
       <section className={PROFILE_STAGE}>
         <Bone className="aspect-[5/7] w-full max-w-[400px] rounded-[28px]" />
         <div className="flex min-w-0 flex-col gap-5">

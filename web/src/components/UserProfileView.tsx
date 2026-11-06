@@ -16,7 +16,7 @@ import { SectionHeading } from "@/components/profile/SectionHeading"
 import { PROFILE_STAGE } from "@/components/profile/layout"
 import { ProfileSkeleton } from "@/components/ProfileSkeleton"
 import { SubmissionsList } from "@/components/SubmissionsList"
-import { artPageClass, glassActionClass, glassClass } from "@/components/ui"
+import { glassActionClass, glassClass } from "@/components/ui"
 import { setAsyncData, useAsyncData } from "@/hooks/useAsyncData"
 import { useProfileArt } from "@/hooks/useProfileArt"
 import { fetchUserBadges, fetchUserRank } from "@/lib/api"
@@ -136,7 +136,7 @@ function ProfileBody({
   }
 
   return (
-    <div className={artPageClass}>
+    <div>
       {owner ? (
         <BannerPicker
           ref={pickerRef}
