@@ -174,7 +174,7 @@ export function requestOrigin(request: Request): string {
 	return `${proto ?? url.protocol.replace(":", "")}://${host}`
 }
 
-async function findShare(env: Env, pathname: string, loaders: ShareLoaders) {
+export async function findShare(env: Env, pathname: string, loaders: ShareLoaders) {
 	const [, section, id] = pathname.split("/")
 	if (!id || pathname.split("/").length !== 3) return null
 	const decoded = decodeURIComponent(id)
@@ -241,5 +241,32 @@ export async function sharePage(
 	} catch (error) {
 		log.warn("share meta failed", { pathname, error: (error as Error).message })
 		return indexHtml
+	}
+}
+
+export async function oembedFor(
+	env: Env,
+	request: Request,
+	target: string,
+	loaders: ShareLoaders = shareLoaders
+) {
+	const origin = requestOrigin(request)
+	let url: URL
+	try {
+		url = new URL(target)
+	} catch {
+		return null
+	}
+	if (url.origin !== origin) return null
+	const share = await findShare(env, url.pathname, loaders)
+	if (!share) return null
+	return {
+		version: "1.0",
+		type: "link",
+		title: share.title,
+		provider_name: "Unison",
+		provider_url: origin,
+		author_name: share.author.name,
+		author_url: `${origin}${share.author.path}`,
 	}
 }

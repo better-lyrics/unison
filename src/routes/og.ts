@@ -5,11 +5,12 @@ import {
 	renderProfileOg,
 	renderSongOg,
 } from "@/og/render"
+import { type ShareLoaders, oembedFor, shareLoaders } from "@/share-meta"
 import type { Env } from "@/types"
 import { ErrorCode, buildError } from "@/utils/errors"
 import { readRateLimit } from "@/utils/read-rate-limit"
 import { isVideoId } from "@/utils/video-id"
-import { Elysia } from "elysia"
+import { Elysia, t } from "elysia"
 
 type Renderer = (env: Env, id: string) => Promise<RenderedCard | null>
 
@@ -54,7 +55,8 @@ export const ogRoutes = (
 		song: renderSongOg,
 		profile: renderProfileOg,
 		download: renderProfileDownload,
-	}
+	},
+	shares: ShareLoaders = shareLoaders
 ) => {
 	const serve = async (
 		{
@@ -93,4 +95,17 @@ export const ogRoutes = (
 		.get("/og/song/:file", (ctx) => serve(ctx, "jpg", isVideoId, renderers.song))
 		.get("/og/user/:file", (ctx) => serve(ctx, "jpg", isKeyId, renderers.profile))
 		.get("/card/user/:file", (ctx) => serve(ctx, "png", isKeyId, renderers.download))
+		.get(
+			"/oembed",
+			async ({ request, query, set }) => {
+				const body = await oembedFor(env, request, query.url ?? "", shares)
+				if (!body) {
+					set.status = 404
+					return buildError(ErrorCode.NOT_FOUND)
+				}
+				set.headers["cache-control"] = "public, max-age=3600"
+				return body
+			},
+			{ query: t.Object({ url: t.Optional(t.String()), format: t.Optional(t.String()) }) }
+		)
 }

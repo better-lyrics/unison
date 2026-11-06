@@ -1,3 +1,4 @@
+import { songShare } from "@/share-meta"
 import type { Env } from "@/types"
 import { describe, expect, it } from "vitest"
 import { ogRoutes } from "./og"
@@ -27,10 +28,39 @@ const KEY = "a".repeat(64)
 function app() {
 	const card = async (_env: Env, id: string) =>
 		id === VIDEO || id === KEY ? { bytes: Buffer.from("img"), accent: "#d92626" } : null
-	return ogRoutes(env, { song: card, profile: card, download: card })
+	const share = async (_env: Env, id: string) =>
+		id === VIDEO
+			? songShare(
+					{
+						videoId: VIDEO,
+						top: {
+							id: 41,
+							song: "Paper Lanterns",
+							artist: "The Quiet Hours",
+							album: null,
+							sync_type: "linesync",
+							format: "lrc",
+							upvotes: 3,
+						},
+						versions: 1,
+						sealed: false,
+						person: { displayName: "mukeenanyafiq", avatarUrl: null, keyId: KEY },
+						artwork: null,
+					},
+					"#d92626"
+				)
+			: null
+	return ogRoutes(
+		env,
+		{ song: card, profile: card, download: card },
+		{ song: share, profile: async () => null }
+	)
 }
 
-const get = (path: string) => app().handle(new Request(`http://localhost${path}`))
+const get = (path: string) =>
+	app().handle(new Request(`http://localhost${path}`, { headers: { host: "unison.test" } }))
+
+const oembed = (url: string) => get(`/oembed?format=json&url=${encodeURIComponent(url)}`)
 
 describe("share card routes", () => {
 	it("rejects an id that is not a video id or key id", async () => {
@@ -52,5 +82,16 @@ describe("share card routes", () => {
 		)
 		const download = await get(`/card/user/${KEY}.png`)
 		expect(download.headers.get("content-type")).toBe("image/png")
+	})
+
+	it("answers oEmbed only for our own song and profile links", async () => {
+		expect((await oembed(`https://evil.example/song/${VIDEO}`)).status).toBe(404)
+		expect((await oembed("http://unison.test/sealed")).status).toBe(404)
+		const res = await oembed(`http://unison.test/song/${VIDEO}`)
+		expect(await res.json()).toMatchObject({
+			provider_name: "Unison",
+			author_name: "Synced by mukeenanyafiq",
+			author_url: `http://unison.test/curator/${KEY}`,
+		})
 	})
 })
