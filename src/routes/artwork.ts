@@ -41,7 +41,7 @@ export const artworkRoutes = (env: Env) =>
 					? await fetchArtworkImage(artworkUrl, config.artwork.washSize)
 					: null
 				if (!image) {
-					set.headers["cache-control"] = "public, max-age=3600"
+					set.headers["cache-control"] = artworkUrl ? "public, max-age=60" : "public, max-age=3600"
 					return status(404, buildError(ErrorCode.NOT_FOUND))
 				}
 				return new Response(new Uint8Array(image.bytes), {

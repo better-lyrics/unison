@@ -149,8 +149,10 @@ export const leaderboardRoutes = (env: Env) =>
 					getLastVoteAt(env, params.keyId),
 					getByKeyId(env, params.keyId),
 				])
-				const { displayName, handle, avatarUrl } = await resolveIdentity(env, params.keyId)
-				const extras = await getProfileExtras(env, params.keyId, link)
+				const [{ displayName, handle, avatarUrl }, extras] = await Promise.all([
+					resolveIdentity(env, params.keyId),
+					getProfileExtras(env, params.keyId, link),
+				])
 				const discordLinked = link !== null
 				if (row) {
 					const { nickname: _nickname, ...rest } = row

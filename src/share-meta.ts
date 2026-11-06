@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto"
+import { config } from "@/config"
 import { CATALOGUE } from "@/db/badges/definitions"
 import { resolveKeyIdByHandle } from "@/db/users"
 import { log } from "@/infra/logger"
@@ -19,6 +20,7 @@ const SHARE_TTL_SECONDS = 300
 const MISS_TTL_SECONDS = 60
 const ACCENT_TTL_SECONDS = 60 * 60 * 24 * 30
 const KEY_ID = /^[0-9a-fA-F]{64}$/
+const NICKNAME = new RegExp(config.auth.nickname.pattern)
 
 export interface Share {
 	title: string
@@ -193,7 +195,7 @@ export async function findShare(env: Env, pathname: string, loaders: ShareLoader
 	}
 	if (section === "song" && isVideoId(decoded)) return loaders.song(env, decoded)
 	if (section === "curator" && KEY_ID.test(decoded)) return loaders.profile(env, decoded)
-	if (section === "u") {
+	if (section === "u" && NICKNAME.test(decoded)) {
 		const keyId = await cached(env, `share:handle:${decoded.toLowerCase()}`, SHARE_TTL_SECONDS, () =>
 			resolveKeyIdByHandle(env, decoded)
 		)
@@ -238,7 +240,7 @@ export function injectShare(indexHtml: string, tags: string): string {
 	return indexHtml
 		.replace(/<title>[\s\S]*?<\/title>/, "")
 		.replace(/<meta name="(description|theme-color)"[^>]*>/g, "")
-		.replace("</head>", `${tags}</head>`)
+		.replace("</head>", () => `${tags}</head>`)
 }
 
 export async function sharePage(
