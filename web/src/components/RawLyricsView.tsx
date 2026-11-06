@@ -16,7 +16,7 @@ export function RawLyricsView({ body, format }: RawLyricsViewProps) {
   }, [body, format])
 
   return (
-    <div className="h-[576px] overflow-auto rounded-md">
+    <div data-scroller className="h-[576px] overflow-auto rounded-md">
       <pre ref={preRef} className="raw-lyrics" />
     </div>
   )

@@ -9,6 +9,7 @@ import { MIME_BY_FORMAT, lyricsFilename } from "@/lib/lyrics-download"
 import type { VariantFull } from "@/lib/types"
 import { useMemo, useState } from "react"
 import { languageName } from "@/lib/language"
+import { useScrollEdges } from "@/hooks/useScrollEdges"
 
 const HEADER_ACTION_CLASS =
   "inline-flex cursor-pointer items-center gap-1.5 rounded-md border border-unison-border bg-unison-bg-elevated px-2 py-1 text-xs text-unison-text-secondary transition-colors hover:border-unison-border-strong hover:bg-unison-bg-hover hover:text-unison-text"
@@ -28,6 +29,8 @@ export function LyricsPanel({ variant, getCurrentTime, getPlaying, onLineClick, 
   const [pickedLang, setPickedLang] = useState<string>()
   const languages = useMemo(() => (variant ? translationLanguages(parseVariantLyrics(variant)) : []), [variant])
   const lang = pickTranslationLanguage(languages, pickedLang)
+  const [pane, setPane] = useState<HTMLDivElement | null>(null)
+  const edges = useScrollEdges(pane)
   const segment = (active: boolean, label: string, onClick: () => void) => (
     <button
       key={label}
@@ -69,7 +72,15 @@ export function LyricsPanel({ variant, getCurrentTime, getPlaying, onLineClick, 
           </div>
         ) : null}
       </div>
-      <div className="p-4">
+      <div
+        key={mode}
+        ref={setPane}
+        className={cn(
+          "p-4 [--fb:0px] [--ft:0px] [mask-image:linear-gradient(transparent,#000_var(--ft),#000_calc(100%-var(--fb)),transparent)]",
+          edges.up && "[--ft:56px]",
+          edges.down && "[--fb:72px]",
+        )}
+      >
         {!variant ? (
           <LyricsContentSkeleton />
         ) : mode === "synced" ? (
