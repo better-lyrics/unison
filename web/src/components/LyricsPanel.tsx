@@ -14,10 +14,12 @@ import { LAYOUT_TRANSITION } from "@/lib/motion-variants"
 import { languageName } from "@/lib/language"
 import { useScrollEdges } from "@/hooks/useScrollEdges"
 
-const TOOL_CLASS =
-  "relative inline-flex h-[30px] cursor-pointer items-center gap-1.5 rounded-[10px] px-3 [corner-shape:superellipse(1.6)] text-xs font-medium text-(--ink-2,var(--color-unison-text-secondary)) transition-[color,background-color,scale] duration-150 ease-[cubic-bezier(0.2,0,0,1)] hover:bg-white/[0.08] hover:text-unison-text after:absolute after:inset-x-0 after:-inset-y-0.5 active:not-disabled:scale-[0.96]"
+const TOOL_CLASS = cn(
+  glassClass,
+  "relative inline-flex h-[30px] cursor-pointer items-center gap-1.5 rounded-[10px] px-3 [corner-shape:superellipse(1.6)] backdrop-blur-[12px] text-xs font-medium text-(--ink-2,var(--color-unison-text-secondary)) transition-[color,background-color,scale] duration-150 ease-[cubic-bezier(0.2,0,0,1)] hover:bg-white/[0.08] hover:text-unison-text after:absolute after:inset-x-0 after:-inset-y-0.5 active:not-disabled:scale-[0.96]",
+)
 
-const SEGMENTS_CLASS = cn(glassClass, "inline-flex rounded-[10px] p-[3px] [corner-shape:superellipse(1.6)]")
+const SEGMENTS_CLASS = cn(glassClass, "inline-flex rounded-[10px] p-[3px] backdrop-blur-[12px] [corner-shape:superellipse(1.6)]")
 
 type Mode = "synced" | "raw"
 
@@ -60,8 +62,8 @@ export function LyricsPanel({ variant, getCurrentTime, getPlaying, onLineClick, 
   )
   const tab = (value: Mode, label: string) => segment("lyrics-mode", mode === value, label, () => setMode(value))
   return (
-    <div>
-      <div className="mb-2 flex flex-wrap items-center gap-1.5">
+    <div className="group/lyrics relative">
+      <div className="pointer-events-none absolute inset-x-0 top-0 z-10 flex flex-wrap items-center gap-1.5 opacity-0 transition-opacity duration-150 ease-out group-focus-within/lyrics:pointer-events-auto group-focus-within/lyrics:opacity-100 group-hover/lyrics:pointer-events-auto group-hover/lyrics:opacity-100 [@media(hover:none)]:pointer-events-auto [@media(hover:none)]:opacity-100">
         <fieldset className={SEGMENTS_CLASS}>
           <legend className="sr-only">Lyrics display mode</legend>
           {tab("synced", "Synced")}

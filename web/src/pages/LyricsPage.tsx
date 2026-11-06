@@ -4,7 +4,6 @@ import { LyricsContentSkeleton } from "@/components/LyricsRenderer"
 import { LyricsPanel } from "@/components/LyricsPanel"
 import { SongHero, SongHeroSkeleton } from "@/components/song/SongHero"
 import { SongRail, SongRailSkeleton } from "@/components/song/SongRail"
-import { Bone } from "@/components/skeleton"
 import { useFillHeight } from "@/hooks/useFillHeight"
 import { useLyricsVariant, useLyricsVariants } from "@/hooks/useLyricsData"
 import { useYouTubePlayer } from "@/hooks/useYouTubePlayer"
@@ -129,11 +128,6 @@ function LyricsPageSkeleton() {
       <SongHeroSkeleton />
       <div className={BODY}>
         <div className="min-w-0">
-          <div className="mb-2 flex items-center gap-1.5">
-            <Bone className="h-[30px] w-[115px] rounded-[10px]" />
-            <Bone className="ml-auto h-[30px] w-[75px] rounded-[10px]" />
-            <Bone className="h-[30px] w-[101px] rounded-[10px]" />
-          </div>
           <LyricsContentSkeleton className={LYRICS_SIZE} />
         </div>
         <SongRailSkeleton />
