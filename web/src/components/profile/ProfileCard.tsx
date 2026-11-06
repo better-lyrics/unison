@@ -1,10 +1,12 @@
 import { IconPhoto } from "@tabler/icons-react"
+import { useCallback, useState } from "react"
 import { ArtBackground } from "@/components/ArtBackground"
 import { BadgeArt } from "@/components/BadgeArt"
 import { BetterLyricsLogo } from "@/components/BetterLyricsLogo"
 import { useBadgeModal } from "@/components/BadgeModalContext"
 import { glassActionClass, glassClass } from "@/components/ui"
 import { XpAvatar } from "@/components/XpAvatar"
+import { bone } from "@/components/skeleton"
 import { useBadgeImage } from "@/hooks/useBadgeImage"
 import type { ProfileArt } from "@/hooks/useProfileArt"
 import { isRareBadge, resolveBadgeImage } from "@/lib/badge-view"
@@ -116,6 +118,8 @@ function Stat({ value, label, testId }: { value: string; label: string; testId: 
 export function ProfileCard({ keyId, rank, gamification, catalogue, art, onChangeBanner }: ProfileCardProps) {
   const progress = gamification ? levelProgress(gamification.xp, gamification.xpForNext, gamification.xpFloor) : null
   const tier = rank.community ? null : (gamification?.tier ?? null)
+  const [ready, setReady] = useState(false)
+  const markReady = useCallback(() => setReady(true), [])
 
   return (
     <div
@@ -124,7 +128,7 @@ export function ProfileCard({ keyId, rank, gamification, catalogue, art, onChang
         RIM,
       )}
     >
-      <ArtBackground src={art.wash} contained />
+      <ArtBackground src={art.wash} contained onReady={markReady} />
       {art.banner ? (
         <div key={art.banner} aria-hidden="true" className="t-reveal absolute inset-x-0 top-0 isolate h-[64%] overflow-hidden">
           <img src={art.banner} alt="" className="pf-banner-soft" />
@@ -185,6 +189,15 @@ export function ProfileCard({ keyId, rank, gamification, catalogue, art, onChang
           </button>
         </div>
       ) : null}
+      <div
+        aria-hidden="true"
+        className={cn(
+          "absolute inset-0 z-20 bg-[#121116] transition-opacity duration-400 ease-in-out motion-reduce:transition-none",
+          ready && "pointer-events-none opacity-0",
+        )}
+      >
+        {ready ? null : <div className={cn(bone, "size-full rounded-none")} />}
+      </div>
     </div>
   )
 }

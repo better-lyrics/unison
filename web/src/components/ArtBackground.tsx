@@ -1,6 +1,5 @@
 import { Kawarp } from "@kawarp/core"
 import { useCallback, useEffect, useRef, useState } from "react"
-import { Bone } from "@/components/skeleton"
 import { cn } from "@/lib/cn"
 
 const WARP = { warpIntensity: 0.9, blurPasses: 8, saturation: 1.4, animationSpeed: 0.8 }
@@ -10,11 +9,12 @@ interface ArtBackgroundProps {
   src: string | null | undefined
   contained?: boolean
   moving?: boolean
+  onReady?: () => void
 }
 
 const reducedMotion = () => matchMedia("(prefers-reduced-motion: reduce)").matches
 
-export function ArtBackground({ src, contained = false, moving = false }: ArtBackgroundProps) {
+export function ArtBackground({ src, contained = false, moving = false, onReady }: ArtBackgroundProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const warpRef = useRef<Kawarp | null>(null)
   const movingRef = useRef(moving)
@@ -98,14 +98,11 @@ export function ArtBackground({ src, contained = false, moving = false }: ArtBac
 
   const fade = cn("transition-opacity duration-700 ease-out motion-reduce:duration-150", shown ? "opacity-100" : "opacity-0")
 
-  if (contained) {
-    return (
-      <>
-        {shown || failed ? null : <Bone className="absolute inset-0 rounded-none" />}
-        <canvas ref={canvasRef} className={cn("absolute inset-0 block size-full", fade)} />
-      </>
-    )
-  }
+  useEffect(() => {
+    if (shown || failed) onReady?.()
+  }, [shown, failed, onReady])
+
+  if (contained) return <canvas ref={canvasRef} className="absolute inset-0 block size-full" />
 
   return (
     <>
