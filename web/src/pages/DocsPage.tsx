@@ -278,12 +278,12 @@ export function DocsPage() {
             >
               BiniLink
             </a>{" "}
-            and looks that up. The response says how it matched in <Code>matchedBy</Code>. A <Code>linked_video</Code>{" "}
+            and looks that up. <Code>matchedBy</Code> in the response says how it matched. A <Code>linked_video</Code>{" "}
             match can be a different release, so its timing may drift.
           </p>
           <p className="text-sm leading-relaxed text-unison-text-secondary">
-            A new id can answer <Code>503</Code> with <Code>Retry-After</Code> while it is being matched or BiniLink is
-            down. Retry a few times, then give up.
+            A lookup with a new id can return <Code>503</Code> with <Code>Retry-After</Code> while BiniLink is still
+            matching it or is down. Retry a few times, then give up.
           </p>
           <CodeTabs tabs={fetchTabs(PROVIDER_ID_URL)} />
         </section>

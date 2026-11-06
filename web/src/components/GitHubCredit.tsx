@@ -1,7 +1,7 @@
-export function GitHubCredit({ login, name }: { login: string; name: string }) {
+export function GitHubCredit({ login, name, href }: { login: string; name: string; href?: string }) {
   return (
     <a
-      href={`https://github.com/${login}`}
+      href={href ?? `https://github.com/${login}`}
       target="_blank"
       rel="noopener noreferrer"
       className="font-medium text-unison-text transition-colors hover:text-unison-text-secondary"

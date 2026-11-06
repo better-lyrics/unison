@@ -341,7 +341,7 @@ role. If it's unset, the pipeline uses `DATABASE_URL` as before.
 
 ## Thanks
 
-Track id lookups run on [BiniLink](https://link.binimum.org) by bini, a public API that maps Spotify, Apple Music, Tidal and YouTube tracks to ISRCs. Thanks to bini for building it.
+Track id lookups run on [BiniLink](https://link.binimum.org) by [bini](https://binimum.org), a public API that maps Spotify, Apple Music, Tidal and YouTube tracks to ISRCs. Thanks to bini for building it.
 
 ## Funding
 

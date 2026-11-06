@@ -102,7 +102,7 @@ export function AboutPage() {
       <section className="space-y-3">
         <h2 className="text-lg font-semibold text-unison-text">Track id lookups</h2>
         <p className="text-sm leading-relaxed text-unison-text-secondary">
-          Finding lyrics from a Spotify, Apple Music or Tidal track id runs on{" "}
+          Looking up lyrics by a Spotify, Apple Music or Tidal track id works because of{" "}
           <a
             href="https://link.binimum.org"
             target="_blank"
@@ -110,8 +110,9 @@ export function AboutPage() {
             className="text-unison-text transition-colors hover:text-unison-text-secondary"
           >
             BiniLink
-          </a>{" "}
-          by <GitHubCredit login="binimum" name="bini" />, which maps those ids to ISRCs. Thank you for building it!
+          </a>
+          , which turns those ids into ISRCs. It's built by the wonderful{" "}
+          <GitHubCredit login="binimum" name="bini" href="https://binimum.org" />. Thank you for making this possible!
         </p>
       </section>
 
