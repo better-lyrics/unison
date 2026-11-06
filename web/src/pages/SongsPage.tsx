@@ -30,7 +30,7 @@ export function SongsPage() {
 
   if (status === "loading") {
     return (
-      <div className="space-y-8">
+      <div className="space-y-16 max-sm:space-y-12">
         <SealedShelf />
         <FeedGrid {...TOP_VOTED} />
       <FeedGrid {...RECENTLY_SYNCED} />
@@ -43,7 +43,7 @@ export function SongsPage() {
 
   if (status === "error") {
     return (
-      <div className="space-y-8">
+      <div className="space-y-16 max-sm:space-y-12">
         <SealedShelf />
         <FeedGrid {...TOP_VOTED} />
       <FeedGrid {...RECENTLY_SYNCED} />
@@ -53,7 +53,7 @@ export function SongsPage() {
   }
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-16 max-sm:space-y-12">
       <SealedShelf />
       <FeedGrid {...TOP_VOTED} />
       <FeedGrid {...RECENTLY_SYNCED} />
