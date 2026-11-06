@@ -8,8 +8,7 @@ import { Bone } from "@/components/skeleton"
 import { useFillHeight } from "@/hooks/useFillHeight"
 import { useLyricsVariant, useLyricsVariants } from "@/hooks/useLyricsData"
 import { useYouTubePlayer } from "@/hooks/useYouTubePlayer"
-import { artworkImageUrl, useArtwork } from "@/lib/artwork"
-import { sleeveDataUrl } from "@/lib/sleeve"
+import { songBackdrop, useArtwork } from "@/lib/artwork"
 import { useCallback, useMemo, useState } from "react"
 import { useParams, useSearchParams } from "react-router-dom"
 
@@ -17,7 +16,6 @@ const BODY =
   "grid grid-cols-[minmax(0,1fr)_340px] gap-12 pt-2 pb-8 max-[1000px]:pb-[88px] max-[1000px]:grid-cols-[minmax(0,1fr)] max-[1000px]:gap-7 max-[1000px]:pt-0"
 const LYRICS_FILL = "lyrics-fill"
 const LYRICS_SIZE = `${LYRICS_FILL} h-[max(var(--fill-height,560px),240px)] max-w-none max-[1000px]:h-[70dvh]`
-const SLEEVE_SIZE = 630
 
 export function LyricsPage() {
   const { videoId } = useParams<{ videoId: string }>()
@@ -57,8 +55,10 @@ export function LyricsPage() {
 
   const { data: art, isPending: artPending } = useArtwork(safeVideoId)
   const lead = variants[0]
-  const sleeve = useMemo(() => (lead ? sleeveDataUrl(lead.song, lead.artist, SLEEVE_SIZE) : null), [lead])
-  const backdrop = art ? artworkImageUrl(safeVideoId) : artPending ? null : sleeve
+  const backdrop = useMemo(
+    () => (artPending || !lead ? null : songBackdrop(safeVideoId, Boolean(art), lead.song, lead.artist)),
+    [artPending, lead, art, safeVideoId],
+  )
   usePageArt(backdrop, playing)
 
   const handleSelect = useCallback(

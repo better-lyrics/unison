@@ -1,14 +1,12 @@
 import { createContext, type FocusEvent, type PointerEvent, type ReactNode, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react"
 import { useLocation } from "react-router-dom"
 import { useArtPalette } from "@/hooks/useArtPalette"
-import { artworkImageUrl, useArtwork } from "@/lib/artwork"
-import { sleeveDataUrl } from "@/lib/sleeve"
+import { songBackdrop, useArtwork } from "@/lib/artwork"
 import { ArtBackground } from "./ArtBackground"
 
 const DEFAULT_ART_SIZE = 256
 const PREVIEW_ENTER_MS = 200
 const PREVIEW_LEAVE_MS = 400
-const PREVIEW_SLEEVE_SIZE = 64
 const DEFAULT_SCRIM_FLOOR = 0.3
 const DEFAULT_BASE = ["#050505", "#070606", "#040404"]
 const DEFAULT_GLOWS = [
@@ -92,7 +90,7 @@ export function useSongArtPreview({ videoId, song, artist }: { videoId: string; 
   const active = useRef(false)
   const show = () => {
     active.current = true
-    previewArt(cover ? artworkImageUrl(videoId) : sleeveDataUrl(song, artist, PREVIEW_SLEEVE_SIZE))
+    previewArt(songBackdrop(videoId, Boolean(cover), song, artist))
   }
   const hide = () => {
     active.current = false

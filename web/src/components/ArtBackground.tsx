@@ -55,7 +55,6 @@ export function ArtBackground({ src, contained = false, moving = false, ditherin
     try {
       warp = new Kawarp(canvas, {
         ...WARP,
-        dithering,
         transitionDuration: artFadeMs() || undefined,
         animationSpeed: movingRef.current ? WARP.animationSpeed : 0,
       })
@@ -81,7 +80,7 @@ export function ArtBackground({ src, contained = false, moving = false, ditherin
       warp.dispose()
       warpRef.current = null
     }
-  }, [contained, dithering])
+  }, [contained])
 
   useEffect(() => {
     movingRef.current = moving
@@ -89,7 +88,12 @@ export function ArtBackground({ src, contained = false, moving = false, ditherin
     if (warp) update(warp)
   }, [moving, update])
 
+  useEffect(() => {
+    if (warpRef.current && dithering !== undefined) warpRef.current.dithering = dithering
+  }, [dithering])
+
   const targetRef = useRef(src)
+  const loadedRef = useRef<Kawarp | null>(null)
   const onShowRef = useRef(onShow)
   onShowRef.current = onShow
   const drainingRef = useRef<Kawarp | null>(null)
@@ -104,15 +108,17 @@ export function ArtBackground({ src, contained = false, moving = false, ditherin
         try {
           await warp.loadImage(applied)
           if (warpRef.current !== warp) break
+          const crossfaded = loadedRef.current === warp
+          loadedRef.current = warp
           onShowRef.current?.(applied)
           setShown(true)
           setFailed(false)
           update(warp)
+          if (crossfaded) await new Promise((resolve) => window.setTimeout(resolve, warp.transitionDuration))
         } catch (error: unknown) {
           console.warn("Could not load the background art", error)
           setFailed(true)
         }
-        await new Promise((resolve) => window.setTimeout(resolve, warp.transitionDuration))
       }
       if (drainingRef.current === warp) drainingRef.current = null
     },

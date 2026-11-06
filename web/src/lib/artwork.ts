@@ -1,5 +1,6 @@
 import { type UseQueryResult, useQuery } from "@tanstack/react-query"
 import { fetchArtwork } from "@/lib/api"
+import { sleeveDataUrl } from "@/lib/sleeve"
 
 export function youtubeThumbnailUrl(videoId: string): string {
   return `https://i.ytimg.com/vi/${videoId}/maxresdefault.jpg`
@@ -11,6 +12,12 @@ export function youtubeThumbnailFallbackUrl(videoId: string): string {
 
 export function artworkImageUrl(videoId: string): string {
   return `/artwork/image?v=${encodeURIComponent(videoId)}`
+}
+
+const BACKDROP_SLEEVE_SIZE = 630
+
+export function songBackdrop(videoId: string, hasCover: boolean, song: string, artist: string): string | null {
+  return hasCover ? artworkImageUrl(videoId) : sleeveDataUrl(song, artist, BACKDROP_SLEEVE_SIZE)
 }
 
 const ARTWORK_SIZE = /=w\d+-h\d+/

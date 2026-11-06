@@ -136,7 +136,7 @@ export function ProfileCard({ keyId, rank, gamification, catalogue, art, onChang
       {ready ? null : <Bone className="absolute inset-0 rounded-[28px]" />}
       <div
         className={cn(
-          "relative isolate aspect-[5/7] w-full overflow-hidden rounded-[28px] shadow-[0_40px_100px_rgba(0,0,0,0.55)] transition-opacity duration-(--reveal-dur) ease-in-out motion-reduce:transition-none",
+          "art-palette relative isolate aspect-[5/7] w-full overflow-hidden rounded-[28px] shadow-[0_40px_100px_rgba(0,0,0,0.55)] transition-opacity duration-(--reveal-dur) ease-in-out motion-reduce:transition-none",
           RIM,
           !ready && "opacity-0",
         )}
