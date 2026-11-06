@@ -11,10 +11,11 @@ const videoKey = (isrc: string) => `binilink:isrc:${isrc}`
 
 export type MatchedBy = "isrc" | "linked_video" | "song_artist"
 
-type Resolution =
+type Resolution = (
 	| { kind: "isrc"; isrc: string }
 	| { kind: "missing" }
 	| { kind: "pending"; retryAfterSec: number }
+) & { calledBinilink: boolean }
 
 export type TrackMatch =
 	| { kind: "found"; row: LyricsRow; matchedBy: MatchedBy }
@@ -33,7 +34,8 @@ export type TrackQuery = {
 export async function resolveProviderIsrc(env: Env, ids: ProviderId[]): Promise<Resolution> {
 	const cached = await Promise.all(ids.map((id) => env.CACHE.get(trackKey(id))))
 	const uncached = ids.filter((_, i) => cached[i] === null)
-	const batch = uncached.length > 0 ? await resolveProviderIds(uncached) : null
+	const calledBinilink = uncached.length > 0
+	const batch = calledBinilink ? await resolveProviderIds(uncached) : null
 
 	if (batch) {
 		await Promise.all([
@@ -54,34 +56,40 @@ export async function resolveProviderIsrc(env: Env, ids: ProviderId[]): Promise<
 	for (const [i, id] of ids.entries()) {
 		const isrc =
 			cached[i] ?? batch?.results.find((r) => r.service === id.service && r.id === id.id)?.isrc
-		if (isrc && isrc !== MISS) return { kind: "isrc", isrc }
+		if (isrc && isrc !== MISS) return { kind: "isrc", isrc, calledBinilink }
 	}
-	if (uncached.length === 0) return { kind: "missing" }
+	if (!calledBinilink) return { kind: "missing", calledBinilink }
 	if (!batch) {
 		return {
 			kind: "pending",
 			retryAfterSec: pauseRemainingSec() || config.binilink.pendingRetryAfterSec,
+			calledBinilink,
 		}
 	}
 	return batch.pending.length > 0
-		? { kind: "pending", retryAfterSec: config.binilink.pendingRetryAfterSec }
-		: { kind: "missing" }
+		? { kind: "pending", retryAfterSec: config.binilink.pendingRetryAfterSec, calledBinilink }
+		: { kind: "missing", calledBinilink }
 }
 
-async function linkedVideo(env: Env, isrc: string): Promise<string | null> {
+async function linkedVideo(
+	env: Env,
+	isrc: string,
+	canFetch: boolean
+): Promise<{ videoId: string | null; fetched: boolean }> {
 	const cached = await env.CACHE.get(videoKey(isrc))
-	if (cached !== null) return cached === MISS ? null : cached
+	if (cached !== null) return { videoId: cached === MISS ? null : cached, fetched: false }
+	if (!canFetch) return { videoId: null, fetched: false }
 
 	const result = await lookupIsrcVideo(isrc)
-	if (!result || result.kind === "pending") return null
+	if (!result || result.kind === "pending") return { videoId: null, fetched: true }
 	const videoId = result.kind === "found" ? result.videoId : null
 	await env.CACHE.put(videoKey(isrc), videoId ?? MISS, {
 		expirationTtl: config.binilink.videoTtlSec,
 	})
-	return videoId
+	return { videoId, fetched: true }
 }
 
-/** Lookup order: given ISRC, resolved ISRC, song and artist, then BiniLink's video for either ISRC. */
+/** Lookup order: given ISRC, resolved ISRC, song and artist, then BiniLink's video for either ISRC. At most one BiniLink call per request. */
 export async function findLyricsByTrack(env: Env, query: TrackQuery): Promise<TrackMatch> {
 	const enabled = env.BINILINK_LOOKUP_ENABLED === true
 	const isrcs: string[] = []
@@ -93,8 +101,10 @@ export async function findLyricsByTrack(env: Env, query: TrackQuery): Promise<Tr
 	}
 
 	let retryAfterSec: number | null = null
+	let calledBinilink = false
 	if (enabled && query.providerIds.length > 0) {
 		const resolved = await resolveProviderIsrc(env, query.providerIds)
+		calledBinilink = resolved.calledBinilink
 		if (resolved.kind === "pending") retryAfterSec = resolved.retryAfterSec
 		if (resolved.kind === "isrc" && resolved.isrc !== given) {
 			const row = await findByIsrc(env, resolved.isrc)
@@ -109,7 +119,8 @@ export async function findLyricsByTrack(env: Env, query: TrackQuery): Promise<Tr
 	}
 	if (enabled) {
 		for (const isrc of isrcs) {
-			const videoId = await linkedVideo(env, isrc)
+			const { videoId, fetched } = await linkedVideo(env, isrc, !calledBinilink)
+			calledBinilink ||= fetched
 			const row = videoId ? await findByVideoId(env, videoId) : null
 			if (row) return { kind: "found", row, matchedBy: "linked_video" }
 		}

@@ -22,6 +22,7 @@ type Fields = Record<string, unknown>
 const INPUT_ERRORS = new Set([400, 413])
 
 let pausedUntil = 0
+let probing = false
 
 export function pauseRemainingSec(): number {
 	return Math.max(0, Math.ceil((pausedUntil - Date.now()) / 1000))
@@ -33,11 +34,15 @@ function pause(retryAfter: string | null): void {
 		Number.isFinite(requested) && requested > 0
 			? Math.min(requested, config.binilink.maxPauseSec)
 			: config.binilink.pauseSec
-	pausedUntil = Date.now() + seconds * 1000
+	pausedUntil = Math.max(pausedUntil, Date.now() + seconds * 1000)
 }
 
+/** After a pause ends, one request probes BiniLink and the rest skip it until that one answers. */
 async function post(path: string, body: unknown): Promise<Fields | null> {
 	if (Date.now() < pausedUntil) return null
+	const probe = pausedUntil > 0
+	if (probe && probing) return null
+	probing = probe
 	try {
 		const res = await fetch(`${config.binilink.baseUrl}${path}`, {
 			method: "POST",
@@ -47,6 +52,7 @@ async function post(path: string, body: unknown): Promise<Fields | null> {
 		})
 		if (res.ok) {
 			const parsed: unknown = await res.json()
+			if (probe) pausedUntil = 0
 			return typeof parsed === "object" && parsed !== null ? (parsed as Fields) : null
 		}
 		if (!INPUT_ERRORS.has(res.status)) pause(res.headers.get("retry-after"))
@@ -56,6 +62,8 @@ async function post(path: string, body: unknown): Promise<Fields | null> {
 		pause(null)
 		log.warn("binilink failed", { path, error: (err as Error).message })
 		return null
+	} finally {
+		if (probe) probing = false
 	}
 }
 
