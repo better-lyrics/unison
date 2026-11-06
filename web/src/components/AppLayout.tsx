@@ -24,7 +24,7 @@ export function AppLayout() {
           <PageArtProvider>
             <div className={cn("min-h-full", artPageClass)}>
               <AppHeader width={width} />
-              <main className={cn("mx-auto py-8", pageWidthClass(width))}>
+              <main className={cn("mx-auto py-8 max-sm:pt-3", pageWidthClass(width))}>
                 <Outlet />
               </main>
               <ToastViewport />

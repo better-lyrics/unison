@@ -213,7 +213,7 @@ export function SongHero({ variant, versions, art, player }: SongHeroProps) {
             style={{ borderRadius: 10 }}
             className={cn(
               raisedChipClass,
-              "shadow-[inset_0_1px_0_#fff,inset_0_-1px_0_rgba(18,17,22,0.14)] max-sm:flex-1 max-sm:justify-center",
+              "shadow-[inset_0_1px_0_#fff,inset_0_-1px_0_rgba(18,17,22,0.14)]",
             )}
           >
             <motion.span layout className="inline-flex">
@@ -225,12 +225,11 @@ export function SongHero({ variant, versions, art, player }: SongHeroProps) {
             href={youTubeMusicUrl(variant.videoId)}
             target="_blank"
             rel="noopener noreferrer"
-            className={cn(chipClass, "max-sm:flex-1 max-sm:justify-center")}
+            className={cn(chipClass, "max-sm:w-[30px] max-sm:justify-center max-sm:px-0")}
           >
             <YouTubeMusicIcon className={chipIconClass} />
-            YouTube Music
+            <span className="max-sm:sr-only">YouTube Music</span>
           </a>
-          <span aria-hidden="true" className="hidden basis-full max-sm:block" />
           <VoteControls
             variantId={variant.id}
             videoId={variant.videoId}
@@ -276,7 +275,7 @@ export function SongHeroSkeleton() {
         </div>
         <div className="mt-4 flex flex-wrap gap-2 max-sm:col-span-2 max-sm:mt-3">
           <Bone className="h-[30px] w-[69px] rounded-[10px]" />
-          <Bone className="h-[30px] w-[131px] rounded-[10px]" />
+          <Bone className="h-[30px] w-[131px] rounded-[10px] max-sm:w-[30px]" />
           <Bone className="h-[30px] w-[86px] rounded-[10px]" />
           <Bone className="size-[30px] rounded-[10px]" />
           <Bone className="size-[30px] rounded-[10px]" />
