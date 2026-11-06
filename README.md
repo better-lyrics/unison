@@ -131,7 +131,7 @@ Returns the highest-scored match. Lookups run in order `v`, then `isrc`, then `s
 
 Lookups other than `v` return `matchedBy`: `isrc`, `linked_video` or `song_artist`. A `linked_video` match can come from a different release, so its timing may drift.
 
-A new id can answer `503 LOOKUP_PENDING` with `Retry-After` while BiniLink matches it, and so can an id Unison has not looked up before while BiniLink is down. Retry a few times, then give up. An `isrc`-only lookup never answers 503. A malformed id answers `400 INVALID_ID`. Provider ids only match when `BINILINK_LOOKUP_ENABLED=true`; without it they never find anything.
+A new id can answer `503 LOOKUP_PENDING` with `Retry-After` while BiniLink matches it, and so can an id Unison has not looked up before while BiniLink is down. Retry a few times, then give up. An `isrc`-only lookup never answers 503. A malformed id answers `400 INVALID_ID` when the request has nothing else to look up; next to `isrc` or `song` + `artist` it is ignored, so those lookups keep working. Provider ids only match when `BINILINK_LOOKUP_ENABLED=true`; without it they never find anything.
 
 `artist` matches when it shares a whole credited name with the stored credit, so `Madvillain`, `Madvillain Madlib` and `Madlib & Madvillain` all find a song credited to `Madvillain, Madlib, MF Doom`. An exact credit wins when several variants match.
 Optional `album` and `duration` narrow results. Duration matching uses ±2s tolerance (configurable in `src/config.ts`).

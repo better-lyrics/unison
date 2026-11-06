@@ -112,12 +112,14 @@ export const lyricsRoutes = (env: Env) =>
 					}
 				}
 
-				const providerIds = readProviderIds(query)
-				if (providerIds === null) {
+				const hasOtherLookup = query.isrc !== undefined || Boolean(query.song && query.artist)
+				const parsedIds = readProviderIds(query)
+				if (parsedIds === null && !hasOtherLookup) {
 					return status(400, buildError(ErrorCode.INVALID_ID, { hint: PROVIDER_ID_HINT }))
 				}
+				const providerIds = parsedIds ?? []
 
-				if (query.isrc !== undefined || providerIds.length > 0 || (query.song && query.artist)) {
+				if (hasOtherLookup || providerIds.length > 0) {
 					const match = await findLyricsByTrack(env, {
 						isrc: query.isrc,
 						providerIds,
