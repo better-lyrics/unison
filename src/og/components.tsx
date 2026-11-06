@@ -152,7 +152,7 @@ export function OgBrand({ left }: { left?: boolean }) {
 				borderRadius: 999,
 				background: "rgba(18, 17, 22, 0.42)",
 				backdropFilter: "blur(24px) saturate(160%)",
-				boxShadow: "inset 0 0 0 1px rgba(255, 255, 255, 0.14), 0 8px 24px rgba(0, 0, 0, 0.25)",
+				boxShadow: "inset 0 0 0 1px rgba(255, 255, 255, 0.14), 0 4px 14px rgba(0, 0, 0, 0.12)",
 				fontSize: 26,
 				fontWeight: 700,
 			}}
