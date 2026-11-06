@@ -20,6 +20,7 @@ import type { Mark, VariantFull } from "@/lib/types"
 import { youTubeMusicUrl } from "@/lib/youtube-music"
 import { IconCheck, IconShare } from "@tabler/icons-react"
 import { motion } from "motion/react"
+import { useState } from "react"
 
 const SYNC_TIP: Record<SyncKind, string> = {
   syllable: "Syllable synced: each syllable highlights as it is sung.",
@@ -75,13 +76,21 @@ interface SongHeroProps {
 
 function Cover({ variant, art, player }: Omit<SongHeroProps, "versions">) {
   const label = player.playing ? "Pause" : "Play"
+  const [started, setStarted] = useState(false)
+  if (player.playing && !started) setStarted(true)
+  const covered = !(player.active && started)
   return (
     <div className={COVER_FRAME}>
-      {player.active ? (
-        <div ref={player.ref} className="size-full bg-black" />
-      ) : (
+      {player.active ? <div ref={player.ref} className="absolute inset-0 bg-black" /> : null}
+      <div
+        aria-hidden={!covered}
+        className={cn(
+          "absolute inset-0 transition-[opacity,filter] duration-400 ease-in-out motion-reduce:transition-none",
+          !covered && "pointer-events-none opacity-0 blur-[2px]",
+        )}
+      >
         <CoverImage src={art} song={variant.song} artist={variant.artist} />
-      )}
+      </div>
       {player.active ? (
         <div className="pointer-events-none absolute inset-0 grid place-items-center">
           <button
