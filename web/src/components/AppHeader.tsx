@@ -10,24 +10,15 @@ import { SearchBar } from "./SearchBar"
 import { SignInControl } from "./SignInControl"
 import { artTextShadowClass, glassClass } from "./ui"
 
-const artTabClass = ({ isActive }: { isActive: boolean }) =>
+const tabClass = ({ isActive }: { isActive: boolean }) =>
 	cn(
 		"inline-flex h-[30px] items-center rounded-[9px] px-2.5 text-sm font-medium transition-colors duration-150",
 		isActive ? "bg-white/[0.08] text-unison-text" : "text-(--ink-2) hover:bg-white/[0.08] hover:text-unison-text",
 	)
 
-const tabClass = ({ isActive }: { isActive: boolean }) =>
-	cn(
-		"rounded-md px-3 py-1.5 text-sm font-medium transition-colors",
-		isActive
-			? "bg-unison-bg-elevated text-unison-text"
-			: "text-unison-text-secondary hover:text-unison-text hover:bg-unison-bg-hover",
-	)
-
 export function AppHeader({ width }: { width: PageWidth }) {
 	const [menuOpen, setMenuOpen] = useState(false)
 	const art = useArtChrome()
-	const navTab = art ? artTabClass : tabClass
 	const headerRef = useRef<HTMLElement | null>(null)
 	const closeMenu = () => setMenuOpen(false)
 
@@ -57,7 +48,7 @@ export function AppHeader({ width }: { width: PageWidth }) {
 		>
 			<div
 				className={cn(
-					"mx-auto flex items-center justify-between gap-4 py-4 sm:grid sm:grid-cols-[auto_auto_1fr_auto] sm:gap-6",
+					"mx-auto flex items-center justify-between gap-4 py-4 lg:grid lg:grid-cols-[auto_auto_1fr_auto] lg:gap-6",
 					pageWidthClass(width),
 				)}
 			>
@@ -65,8 +56,8 @@ export function AppHeader({ width }: { width: PageWidth }) {
 					to="/"
 					aria-label="Unison home"
 					className={cn(
-						"flex items-center gap-2 transition-opacity hover:opacity-80 sm:justify-self-start",
-						art && artTextShadowClass,
+						"flex items-center gap-2 transition-opacity hover:opacity-80 lg:justify-self-start",
+						artTextShadowClass,
 					)}
 				>
 					<BetterLyricsLogo size={20} />
@@ -74,36 +65,37 @@ export function AppHeader({ width }: { width: PageWidth }) {
 				</Link>
 				<nav
 					className={cn(
-						"hidden items-center sm:flex sm:justify-self-start",
-						art ? cn(glassClass, "gap-0.5 rounded-xl p-[3px]") : "gap-1",
+						"hidden items-center lg:flex lg:justify-self-start",
+						glassClass,
+						"gap-0.5 rounded-xl p-[3px]",
 					)}
 				>
-					<NavLink to="/" end className={navTab}>
+					<NavLink to="/" end className={tabClass}>
 						Songs
 					</NavLink>
-					<NavLink to="/curators" className={navTab}>
+					<NavLink to="/curators" className={tabClass}>
 						Leaderboard
 					</NavLink>
-					<CouncilNavLink className={navTab} />
-					<NavLink to="/about" className={navTab}>
+					<CouncilNavLink className={tabClass} />
+					<NavLink to="/about" className={tabClass}>
 						About
 					</NavLink>
-					<NavLink to="/downloads" className={navTab}>
+					<NavLink to="/downloads" className={tabClass}>
 						Downloads
 					</NavLink>
-					<NavLink to="/docs" className={navTab}>
+					<NavLink to="/docs" className={tabClass}>
 						Docs
 					</NavLink>
 				</nav>
-				<div className="hidden sm:flex sm:justify-self-end sm:w-full sm:max-w-xs">
-					<SearchBar glass={art} />
+				<div className="hidden lg:flex lg:justify-self-end lg:w-full lg:max-w-xs">
+					<SearchBar glass />
 				</div>
-				<div className="flex items-center gap-2 sm:justify-self-end">
-					<div className="sm:hidden">
+				<div className="flex items-center gap-2 lg:justify-self-end">
+					<div className="lg:hidden">
 						<SearchBar compact />
 					</div>
-					<div className="hidden sm:block">
-						<SignInControl glass={art} />
+					<div className="hidden lg:block">
+						<SignInControl glass />
 					</div>
 					<button
 						type="button"
@@ -111,7 +103,7 @@ export function AppHeader({ width }: { width: PageWidth }) {
 						aria-label={menuOpen ? "Close menu" : "Open menu"}
 						aria-expanded={menuOpen}
 						aria-haspopup="menu"
-						className="group cursor-pointer rounded-md p-1.5 text-unison-text transition-colors hover:bg-unison-bg-hover sm:hidden"
+						className="group cursor-pointer rounded-md p-1.5 text-unison-text transition-colors hover:bg-unison-bg-hover lg:hidden"
 					>
 						{menuOpen ? (
 							<IconX className="size-5 opacity-70 transition-opacity group-hover:opacity-100" stroke={1.5} />
@@ -124,7 +116,7 @@ export function AppHeader({ width }: { width: PageWidth }) {
 			{menuOpen ? (
 				<div
 					role="menu"
-					className="absolute right-6 top-full mt-2 flex w-56 flex-col gap-2 rounded-lg border border-unison-border bg-unison-bg-elevated p-3 shadow-lg sm:hidden"
+					className="absolute right-6 top-full mt-2 flex w-56 flex-col gap-2 rounded-lg border border-unison-border bg-unison-bg-elevated p-3 shadow-lg lg:hidden"
 				>
 					<nav className="flex flex-col gap-1">
 						<NavLink to="/" end role="menuitem" onClick={closeMenu} className={tabClass}>

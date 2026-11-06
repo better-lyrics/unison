@@ -47,6 +47,7 @@ html {
 
 :root {
   --app-header-h: 69px;
+  --ink-2: var(--color-unison-text-secondary);
 }
 
 body {
