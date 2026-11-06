@@ -1,17 +1,11 @@
 import { resolveProviderIsrc } from "@/services/track-lookup"
+import { makeMemoryCache } from "@/test/integration-harness"
 import type { Env } from "@/types"
 import type { ProviderId } from "@/utils/provider-id"
 import { afterEach, describe, expect, it, vi } from "vitest"
 
 function memoryEnv(): Env {
-	const store = new Map<string, string>()
-	const cache = {
-		get: async (key: string) => store.get(key) ?? null,
-		put: async (key: string, value: string) => {
-			store.set(key, value)
-		},
-	}
-	return { CACHE: cache as unknown as Env["CACHE"], BINILINK_LOOKUP_ENABLED: true } as Env
+	return { CACHE: makeMemoryCache() as unknown as Env["CACHE"] } as Env
 }
 
 afterEach(() => {
