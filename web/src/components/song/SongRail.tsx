@@ -1,5 +1,6 @@
 import { AuthorBadges } from "@/components/AuthorBadges"
-import { LevelAvatar } from "@/components/LevelAvatar"
+import { XpAvatar } from "@/components/XpAvatar"
+import { SONG_LEVEL_HOLE } from "@/lib/level-hole"
 import { Tooltip } from "@/components/Tooltip"
 import { UserAvatar } from "@/components/UserAvatar"
 import { VariantList } from "@/components/VariantList"
@@ -113,7 +114,15 @@ function SyncedByCard({ submitter }: { submitter: NonNullable<VariantFull["submi
     <div className={CARD}>
       <p className={LABEL}>Synced by</p>
       <Link to={`/curator/${submitter.keyId}`} className="flex items-center gap-3">
-        <LevelAvatar avatarUrl={submitter.avatarUrl} keyId={submitter.keyId} level={submitter.level} />
+        <XpAvatar
+          avatarUrl={submitter.avatarUrl}
+          keyId={submitter.keyId}
+          level={submitter.level}
+          progress={submitter.levelProgress ?? null}
+          tiered={Boolean(submitter.tier)}
+          hole={SONG_LEVEL_HOLE}
+          className="size-[52px] shrink-0"
+        />
         <div className="min-w-0">
           <div className="truncate text-[15px] font-bold">{submitter.displayName}</div>
           <div className="mt-[3px] font-mono text-[11px] text-(--ink-3)">{shortKey(submitter.keyId)}</div>

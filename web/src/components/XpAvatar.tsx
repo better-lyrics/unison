@@ -1,6 +1,6 @@
 import { UserAvatar } from "@/components/UserAvatar"
 import { cn } from "@/lib/cn"
-import { levelHoleStyle, PROFILE_LEVEL_HOLE } from "@/lib/level-hole"
+import { type LevelHoleGeometry, levelHoleStyle, PROFILE_LEVEL_HOLE } from "@/lib/level-hole"
 
 const RING_RADIUS = 47
 const RING_CIRCUMFERENCE = 2 * Math.PI * RING_RADIUS
@@ -11,15 +11,37 @@ interface XpAvatarProps {
   level?: number
   progress: number | null
   tiered: boolean
+  hole?: LevelHoleGeometry
   className?: string
 }
 
-export function XpAvatar({ avatarUrl, keyId, level, progress, tiered, className }: XpAvatarProps) {
+const PILL_TEXT = 0.52
+
+function pillStyle({ box, pillHeight, pillWidth, offset }: LevelHoleGeometry) {
+  const pct = (value: number) => `${(value / box) * 100}%`
+  return {
+    right: pct(offset),
+    bottom: pct(offset),
+    height: pct(pillHeight),
+    minWidth: pct(pillWidth.narrow),
+    fontSize: `${(pillHeight / box) * 100 * PILL_TEXT}cqw`,
+  }
+}
+
+export function XpAvatar({
+  avatarUrl,
+  keyId,
+  level,
+  progress,
+  tiered,
+  hole = PROFILE_LEVEL_HOLE,
+  className,
+}: XpAvatarProps) {
   return (
     <div className={cn("relative [container-type:size]", className)}>
       <div
         className="absolute inset-0"
-        style={level === undefined ? undefined : levelHoleStyle(PROFILE_LEVEL_HOLE, level)}
+        style={level === undefined ? undefined : levelHoleStyle(hole, level)}
       >
         <svg className="absolute inset-0 size-full -rotate-90" viewBox="0 0 100 100" aria-hidden="true">
           <circle cx="50" cy="50" r={RING_RADIUS} fill="none" strokeWidth="3" stroke="rgba(255,255,255,0.18)" />
@@ -46,7 +68,8 @@ export function XpAvatar({ avatarUrl, keyId, level, progress, tiered, className 
       {level === undefined ? null : (
         <span
           title={`Level ${level}`}
-          className="absolute right-[2%] bottom-[2%] grid h-[22%] min-w-[22%] place-items-center rounded-full bg-unison-text px-[5%] text-[11.5cqw] font-black tabular-nums text-[#121116]"
+          style={pillStyle(hole)}
+          className="absolute grid place-items-center rounded-full bg-unison-text px-[5%] font-black tabular-nums text-[#121116]"
         >
           {level}
         </span>

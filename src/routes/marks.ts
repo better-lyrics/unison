@@ -5,7 +5,7 @@ import { getXpForUsers } from "@/db/contribution-events"
 import { getCuratorTierMap } from "@/db/leaderboard"
 import type { Env, Mark, MarkActor } from "@/types"
 import { generatePetName } from "@/utils/petname"
-import { levelForXp } from "@/utils/xp"
+import { levelForXp, levelProgress } from "@/utils/xp"
 
 export async function resolveActors(
 	env: Env,
@@ -33,11 +33,14 @@ export async function resolveActors(
 	for (const user of results) {
 		const id = Number(user.id)
 		const summary = summaries.get(id)
+		const xp = xpMap.get(id) ?? 0
+		const info = levelForXp(xp, config.gamification.xp.levelThresholds)
 		actors.set(id, {
 			keyId: user.key_id,
 			displayName: user.nickname ?? generatePetName(user.key_id),
 			tier: tierMap.get(user.key_id) ?? null,
-			level: levelForXp(xpMap.get(id) ?? 0, config.gamification.xp.levelThresholds).level,
+			level: info.level,
+			levelProgress: levelProgress(xp, info.xpForNext, info.xpFloor),
 			badgeCount: summary?.badgeCount ?? 0,
 			topBadge: summary?.topBadge ?? null,
 			featured: summary?.featured ?? [],

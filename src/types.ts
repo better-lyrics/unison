@@ -117,6 +117,7 @@ export interface SubmitterInfo {
 	displayName: string
 	tier: TierName | null
 	level: number
+	levelProgress: number
 	badgeCount: number
 	topBadge: BadgeRef | null
 	featured: BadgeRef[]
@@ -128,6 +129,7 @@ export interface MarkActor {
 	displayName: string
 	tier: TierName | null
 	level: number
+	levelProgress: number
 	badgeCount: number
 	topBadge: BadgeRef | null
 	featured: BadgeRef[]

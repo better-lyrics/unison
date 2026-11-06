@@ -128,6 +128,7 @@ export interface VariantSubmitter {
   displayName: string
   tier: TierName | null
   level: number
+  levelProgress?: number
   badgeCount: number
   topBadge: LeaderboardBadge | null
   featured: LeaderboardBadge[]
