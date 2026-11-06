@@ -85,7 +85,7 @@ export function SignInControl({ glass = false }: { glass?: boolean }) {
             className={cn(popoverSurfaceClass, "t-dropdown absolute right-0 z-20 mt-2 w-56 rounded-2xl p-3", presence.closing && "is-closing")}
           >
             <div className="space-y-2 pb-3">
-              <p className="text-[10px] uppercase tracking-wider text-unison-text-muted">
+              <p className="text-xs text-unison-text-muted">
                 Key ID
               </p>
               <div className="flex items-center gap-2">
