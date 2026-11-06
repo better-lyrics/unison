@@ -77,7 +77,17 @@ export function Logo({ size }: { size: number }) {
 	)
 }
 
-export function QrCode({ qr, size, color }: { qr: QrModules; size: number; color: string }) {
+const QR_PLATE_PAD = 1.6
+
+export function QrCode({
+	qr,
+	size,
+	ink,
+	plate,
+}: { qr: QrModules; size: number; ink: string; plate: string }) {
+	const pad = QR_PLATE_PAD
+	const view = qr.size + pad * 2
+	const unit = size / view
 	const eye = (x: number, y: number) => (
 		<g key={`${x}-${y}`}>
 			<rect
@@ -87,13 +97,13 @@ export function QrCode({ qr, size, color }: { qr: QrModules; size: number; color
 				height={6}
 				rx={2}
 				fill="none"
-				stroke={color}
+				stroke={ink}
 				strokeWidth={1}
 			/>
-			<rect x={x + 2} y={y + 2} width={3} height={3} rx={1} fill={color} />
+			<rect x={x + 2} y={y + 2} width={3} height={3} rx={0.5} fill={ink} />
 		</g>
 	)
-	const logo = (qr.hole.size - 0.8) * (size / qr.size)
+	const logo = (qr.hole.size - 0.8) * unit
 	return (
 		<div
 			style={{ position: "relative", display: "flex", width: size, height: size, flexShrink: 0 }}
@@ -101,12 +111,13 @@ export function QrCode({ qr, size, color }: { qr: QrModules; size: number; color
 			<svg
 				aria-hidden="true"
 				xmlns="http://www.w3.org/2000/svg"
-				viewBox={`0 0 ${qr.size} ${qr.size}`}
+				viewBox={`${-pad} ${-pad} ${view} ${view}`}
 				width={size}
 				height={size}
 			>
+				<rect x={-pad} y={-pad} width={view} height={view} rx={2.5 + pad} fill={plate} />
 				{qr.dots.map(([x, y]) => (
-					<circle key={`${x}-${y}`} cx={x + 0.5} cy={y + 0.5} r={0.42} fill={color} />
+					<circle key={`${x}-${y}`} cx={x + 0.5} cy={y + 0.5} r={0.44} fill={ink} />
 				))}
 				{eye(0, 0)}
 				{eye(qr.size - 7, 0)}

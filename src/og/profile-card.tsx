@@ -54,7 +54,7 @@ export interface ProfileDownloadData extends ProfileBase {
 
 export const CARD_SIZE = { width: 400, height: 560 }
 
-const QR_INK = "rgba(236, 232, 245, 0.82)"
+const QR = { ink: "#16151b", plate: "#fff" }
 
 const WALL_RING: RingGeometry = {
 	radius: 46.25,
@@ -430,7 +430,7 @@ export function profileDownloadNode(card: ProfileDownloadData) {
 					))}
 					{card.qr ? (
 						<div style={{ display: "flex", marginLeft: "auto" }}>
-							<QrCode qr={card.qr} size={42} color={QR_INK} />
+							<QrCode qr={card.qr} size={42} ink={QR.ink} plate={QR.plate} />
 						</div>
 					) : null}
 				</div>
