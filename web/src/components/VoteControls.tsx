@@ -14,7 +14,7 @@ interface VoteControlsProps {
 }
 
 const VOTE_BUTTON =
-  "inline-flex h-11 cursor-pointer items-center gap-2 transition-colors duration-150 ease-[cubic-bezier(0.2,0,0,1)] enabled:hover:bg-white/[0.08] disabled:cursor-not-allowed disabled:opacity-60"
+  "relative isolate inline-flex h-11 cursor-pointer items-center gap-2 before:absolute before:inset-1 before:-z-10 before:rounded-full before:transition-colors before:duration-150 before:ease-[cubic-bezier(0.2,0,0,1)] enabled:hover:before:bg-white/[0.08] disabled:cursor-not-allowed disabled:opacity-60"
 
 interface ReasonOption {
   reason: ReportReason

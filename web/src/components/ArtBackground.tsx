@@ -1,5 +1,6 @@
 import { Kawarp } from "@kawarp/core"
-import { useEffect, useRef } from "react"
+import { useEffect, useRef, useState } from "react"
+import { cn } from "@/lib/cn"
 
 const WARP = { warpIntensity: 0.9, blurPasses: 8, saturation: 1.4, animationSpeed: 0.8 }
 const STILL_FRAME_TIME = 4
@@ -12,6 +13,7 @@ interface ArtBackgroundProps {
 export function ArtBackground({ src, contained = false }: ArtBackgroundProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const warpRef = useRef<Kawarp | null>(null)
+  const [shown, setShown] = useState(false)
 
   useEffect(() => {
     const canvas = canvasRef.current
@@ -48,15 +50,18 @@ export function ArtBackground({ src, contained = false }: ArtBackgroundProps) {
       .loadImage(src)
       .then(() => {
         if (matchMedia("(prefers-reduced-motion: reduce)").matches) warp.renderFrame(STILL_FRAME_TIME)
+        setShown(true)
       })
       .catch((error: unknown) => console.warn("Could not load the background art", error))
   }, [src])
 
-  if (contained) return <canvas ref={canvasRef} className="absolute inset-0 block size-full" />
+  const fade = cn("transition-opacity duration-700 ease-out", shown ? "opacity-100" : "opacity-0")
+
+  if (contained) return <canvas ref={canvasRef} className={cn("absolute inset-0 block size-full", fade)} />
 
   return (
     <>
-      <canvas ref={canvasRef} className="fixed inset-0 -z-30 block h-dvh w-screen" />
+      <canvas ref={canvasRef} className={cn("fixed inset-0 -z-30 block h-dvh w-screen", fade)} />
       <div
         aria-hidden="true"
         className="pointer-events-none fixed inset-0 -z-20 bg-[linear-gradient(180deg,rgba(10,9,13,calc(var(--scrim)*0.6)),rgba(10,9,13,var(--scrim))_55%,rgba(10,9,13,calc(var(--scrim)+0.25)))]"
