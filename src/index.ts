@@ -42,6 +42,7 @@ import { leaderboardRoutes } from "@/routes/leaderboard"
 import { linkRoutes, linkStartRoutes } from "@/routes/links"
 import { lyricsRoutes } from "@/routes/lyrics"
 import { migrationRoutes } from "@/routes/migrations"
+import { ogRoutes } from "@/routes/og"
 import { requestRoutes } from "@/routes/requests"
 import { reviewQueueBotRoutes, reviewQueueRoutes } from "@/routes/review-queue"
 import { revisionBotRoutes, revisionRoutes } from "@/routes/revisions"
@@ -207,6 +208,7 @@ const app = new Elysia({ adapter: node() })
 	.use(linkRoutes(env))
 	.use(migrationRoutes(env))
 	.use(adminRoutes(env))
+	.use(ogRoutes(env))
 	.get("/*", ({ request }) => {
 		const response = serveSpa(new URL(request.url).pathname, SPA)
 		if (!response) throw new NotFoundError()
