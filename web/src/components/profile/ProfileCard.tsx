@@ -136,6 +136,7 @@ export function ProfileCard({ keyId, rank, gamification, catalogue, art, onChang
           RIM,
           !ready && "opacity-0",
         )}
+        inert={!ready}
       >
         <ArtBackground src={art.wash} contained onReady={markReady} />
         {art.banner ? (

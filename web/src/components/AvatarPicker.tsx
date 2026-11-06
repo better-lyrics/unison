@@ -81,6 +81,7 @@ function SongTile({
 
 function SongGroup({ keyId, ...rest }: TileState & { keyId: string; size: number; brokenSrcs: ReadonlySet<string> }) {
   const mine = useMySongs(keyId)
+  if (mine.status === "error") return <p className="text-xs text-red-400">Could not load your songs. Try again later.</p>
   if (mine.status !== "success" || mine.songs.length === 0) return null
   const songs = mine.songs
   return (

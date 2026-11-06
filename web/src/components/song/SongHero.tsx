@@ -83,6 +83,10 @@ function Cover({ variant, art, player }: Omit<SongHeroProps, "versions">) {
   const [started, setStarted] = useState(false)
   const [stalled, setStalled] = useState(false)
   if (player.active && player.playing && !started) setStarted(true)
+  if (!player.active && (started || stalled)) {
+    setStarted(false)
+    setStalled(false)
+  }
   useEffect(() => {
     if (!player.active || !player.ready || player.playing) return
     const timer = window.setTimeout(() => setStalled(true), AUTOPLAY_GRACE_MS)
@@ -176,7 +180,7 @@ export function SongHero({ variant, versions, art, player }: SongHeroProps) {
   return (
     <section className={cn(HERO_GRID, "t-reveal")}>
       <div className={HERO_ART}>
-        <Cover key={variant.videoId} variant={variant} art={art} player={player} />
+        <Cover variant={variant} art={art} player={player} />
       </div>
       <div className="min-w-0">
         <div className={TITLE_SIZE[titleSize(variant.song)]}>
