@@ -1,6 +1,8 @@
 import { useSession } from "@/auth/useSession";
 import { UserAvatar } from "@/components/UserAvatar";
 import { IconCheck, IconCopy, IconFileUpload, IconLogout, IconUser } from "@tabler/icons-react";
+import { IconSwap } from "@/components/icons/IconSwap";
+import { useCopied } from "@/hooks/useCopied";
 import { type ChangeEvent, useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { glassClass, popoverSurfaceClass } from "@/components/ui";
@@ -19,7 +21,7 @@ export function SignInControl({ glass = false }: { glass?: boolean }) {
       return value ? menu : null;
     });
   const fileInputRef = useRef<HTMLInputElement | null>(null);
-  const [copied, setCopied] = useState(false);
+  const [copied, copy] = useCopied();
   const wrapperRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -49,11 +51,7 @@ export function SignInControl({ glass = false }: { glass?: boolean }) {
 
   if (session.status === "signed-in") {
     const { identity } = session;
-    const copyKey = async () => {
-      await navigator.clipboard.writeText(identity.keyId);
-      setCopied(true);
-      window.setTimeout(() => setCopied(false), 1500);
-    };
+    const copyKey = () => copy(identity.keyId);
     const signOut = () => {
       setOpen(false);
       session.signOut();
@@ -101,11 +99,12 @@ export function SignInControl({ glass = false }: { glass?: boolean }) {
                   aria-label={copied ? "Copied" : "Copy key id"}
                   className="group cursor-pointer shrink-0 rounded-md p-1 text-unison-text transition-colors hover:bg-unison-bg-hover"
                 >
-                  {copied ? (
-                    <IconCheck className="size-4 opacity-50 transition-opacity group-hover:opacity-100" stroke={1.5} />
-                  ) : (
-                    <IconCopy className="size-4 opacity-50 transition-opacity group-hover:opacity-100" stroke={1.5} />
-                  )}
+                  <IconSwap
+                    swapped={copied}
+                    from={<IconCopy className="size-full" stroke={1.5} />}
+                    to={<IconCheck className="size-full" stroke={1.5} />}
+                    className="size-4 opacity-50 transition-opacity group-hover:opacity-100"
+                  />
                 </button>
               </div>
             </div>
