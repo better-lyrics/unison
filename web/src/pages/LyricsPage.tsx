@@ -130,9 +130,9 @@ function LyricsPageSkeleton() {
       <div className={BODY}>
         <div className="min-w-0">
           <div className="mb-2 flex items-center gap-1.5">
-            <Bone className="h-9 w-[117px] rounded-full" />
-            <Bone className="ml-auto h-9 w-[101px] rounded-full" />
-            <Bone className="h-9 w-[75px] rounded-full" />
+            <Bone className="h-[30px] w-[115px] rounded-[10px]" />
+            <Bone className="ml-auto h-[30px] w-[101px] rounded-[10px]" />
+            <Bone className="h-[30px] w-[75px] rounded-[10px]" />
           </div>
           <LyricsContentSkeleton className={LYRICS_SIZE} />
         </div>
