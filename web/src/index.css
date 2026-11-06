@@ -365,3 +365,42 @@ select {
 @media (prefers-reduced-motion: reduce) {
   .t-reveal { transition: none !important; }
 }
+
+@property --scrim {
+  syntax: "<number>";
+  inherits: true;
+  initial-value: 0.45;
+}
+
+@property --ft {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 0px;
+}
+
+@property --fb {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 0px;
+}
+
+:root {
+  transition: --scrim 700ms ease-out;
+}
+
+.lyrics-pane {
+  transition:
+    opacity var(--reveal-dur) ease-in-out,
+    filter var(--reveal-dur) ease-in-out,
+    --ft 150ms ease-out,
+    --fb 150ms ease-out;
+  @starting-style {
+    opacity: 0;
+    filter: blur(var(--reveal-blur));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root,
+  .lyrics-pane { transition: none !important; }
+}

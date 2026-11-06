@@ -90,7 +90,7 @@ export function LyricsPanel({ variant, getCurrentTime, getPlaying, onLineClick, 
         key={`${mode}:${variant ? "ready" : "loading"}`}
         ref={setPane}
         className={cn(
-          "t-reveal [--fb:0px] [--ft:0px] [text-shadow:none] [mask-image:linear-gradient(transparent,#000_var(--ft),#000_calc(100%-var(--fb)),transparent)]",
+          "lyrics-pane [text-shadow:none] [mask-image:linear-gradient(transparent,#000_var(--ft),#000_calc(100%-var(--fb)),transparent)]",
           edges.up && "[--ft:56px]",
           edges.down && "[--fb:72px]",
         )}
