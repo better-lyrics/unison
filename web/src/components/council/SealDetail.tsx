@@ -13,6 +13,7 @@ import { ActionBar } from "./ActionBar"
 import { CouncilHistory } from "./CouncilHistory"
 import { LyricPreview } from "./LyricPreview"
 import { BlockHead, Callout, Chip, DetailCard, DetailHeader, PersonCard } from "./detail-parts"
+import { languageName } from "@/lib/language"
 
 interface SealDetailProps {
   item: QueueItem
@@ -64,7 +65,7 @@ export function SealDetail(props: SealDetailProps) {
         chips={
           <>
             <VariantBadge format={item.format} syncType={item.syncType} className="h-6 px-2" />
-            {item.language ? <Chip>{item.language.toUpperCase()}</Chip> : null}
+            {item.language ? <Chip>{languageName(item.language)}</Chip> : null}
             <Chip>{titleCase(item.confidence)} confidence</Chip>
             {item.variants > 1 ? <Chip>{item.variants} variants</Chip> : null}
           </>

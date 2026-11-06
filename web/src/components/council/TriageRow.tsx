@@ -12,6 +12,7 @@ import { formatElapsed, formatRemaining, plural } from "@/lib/format"
 import { IconAlertTriangle, IconBookmark, IconBookmarkFilled } from "@tabler/icons-react"
 import type { ReactNode } from "react"
 import { Link } from "react-router-dom"
+import { languageName } from "@/lib/language"
 
 const SOON_SEC = 12 * 3600
 
@@ -146,7 +147,7 @@ export function queueRowParts(item: QueueItem, heldByOther: boolean, now: number
           </>
         ) : null}
         <VariantBadge format={item.format} />
-        {item.language ? <span>{item.language.toUpperCase()}</span> : null}
+        {item.language ? <span>{languageName(item.language)}</span> : null}
         <Sep />
         <span>{formatElapsed(now - item.createdAt)} waiting</span>
         {item.flags.length > 0 ? (

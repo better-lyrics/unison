@@ -104,7 +104,7 @@ describe("VariantMetadata", () => {
   it("renders ISRC and the language pill when present", () => {
     renderMeta(makeVariant({ isrc: "USRC12345678", language: "en" }))
     expect(screen.getByText("USRC12345678")).toBeTruthy()
-    expect(screen.getByText("EN")).toBeTruthy()
+    expect(screen.getByText("English")).toBeTruthy()
   })
 
   it("omits the ISRC row when missing", () => {

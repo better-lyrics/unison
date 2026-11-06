@@ -9,6 +9,7 @@ import type { Mark, VariantFull } from "@/lib/types"
 import { IconPlayerPlayFilled } from "@tabler/icons-react"
 import { AnimatePresence, MotionConfig, motion } from "motion/react"
 import { Link } from "react-router-dom"
+import { languageName } from "@/lib/language"
 
 const SYNC_TIP: Record<string, string> = {
   richsync: "Word-by-word synced lyrics that highlight as the song plays.",
@@ -26,14 +27,6 @@ const SCORE_TIP =
   "Ranking score, weighted by each voter's reputation. Higher shows first. Raw net votes in parentheses."
 const VOTES_TIP = "How many people have voted on this version."
 const REP_TIP = "Submitter reputation (0 to 2). Trusted users' votes and submissions count for more."
-
-function langName(code: string): string {
-  try {
-    return new Intl.DisplayNames(["en"], { type: "language" }).of(code) ?? code
-  } catch {
-    return code
-  }
-}
 
 function truncateKey(keyId: string): string {
   return keyId.length <= 12 ? keyId : `${keyId.slice(0, 8)}…${keyId.slice(-4)}`
@@ -270,9 +263,7 @@ export function VariantMetadata({ variant, playerRef, playerActive, onActivatePl
               {variant.syncType}
             </Pill>
             <Pill tip={FORMAT_TIP[variant.format] ?? variant.format}>{variant.format.toUpperCase()}</Pill>
-            {variant.language ? (
-              <Pill tip={`Lyrics language: ${langName(variant.language)}.`}>{variant.language.toUpperCase()}</Pill>
-            ) : null}
+            {variant.language ? <Pill tip="Lyrics language.">{languageName(variant.language)}</Pill> : null}
             <Pill tip={CONFIDENCE_TIP(variant.confidence)}>{variant.confidence}</Pill>
           </div>
           <div className="h-px bg-unison-border" />

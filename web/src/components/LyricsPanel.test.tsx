@@ -47,15 +47,15 @@ describe("LyricsPanel translation picker", () => {
   it("offers each submitted language when the lyrics carry more than one, first picked", () => {
     panel(variant(ttml(EN + ES)))
     expect(picker()).not.toBeNull()
-    expect(screen.getByRole("button", { name: "EN" }).getAttribute("aria-pressed")).toBe("true")
-    expect(screen.getByRole("button", { name: "ES" }).getAttribute("aria-pressed")).toBe("false")
+    expect(screen.getByRole("button", { name: "English" }).getAttribute("aria-pressed")).toBe("true")
+    expect(screen.getByRole("button", { name: "Spanish" }).getAttribute("aria-pressed")).toBe("false")
   })
 
   it("moves the pick to the clicked language", () => {
     panel(variant(ttml(EN + ES)))
-    fireEvent.click(screen.getByRole("button", { name: "ES" }))
-    expect(screen.getByRole("button", { name: "ES" }).getAttribute("aria-pressed")).toBe("true")
-    expect(screen.getByRole("button", { name: "EN" }).getAttribute("aria-pressed")).toBe("false")
+    fireEvent.click(screen.getByRole("button", { name: "Spanish" }))
+    expect(screen.getByRole("button", { name: "Spanish" }).getAttribute("aria-pressed")).toBe("true")
+    expect(screen.getByRole("button", { name: "English" }).getAttribute("aria-pressed")).toBe("false")
   })
 
   describe("edge cases", () => {
@@ -85,11 +85,11 @@ describe("LyricsPanel translation picker", () => {
   describe("invariants", () => {
     it("remembers the pick across a trip to raw mode, which has no picker", () => {
       panel(variant(ttml(EN + ES)))
-      fireEvent.click(screen.getByRole("button", { name: "ES" }))
+      fireEvent.click(screen.getByRole("button", { name: "Spanish" }))
       fireEvent.click(screen.getByRole("button", { name: "Raw" }))
       expect(picker()).toBeNull()
       fireEvent.click(screen.getByRole("button", { name: "Synced" }))
-      expect(screen.getByRole("button", { name: "ES" }).getAttribute("aria-pressed")).toBe("true")
+      expect(screen.getByRole("button", { name: "Spanish" }).getAttribute("aria-pressed")).toBe("true")
     })
   })
 })
