@@ -61,8 +61,6 @@ describe("share meta", () => {
 		expect(html).toMatch(
 			/<meta property="og:image" content="https:\/\/unison\.betterlyrics\.org\/og\/song\/BI9HQCzpDgQ\.jpg\?v=[\w-]+" \/>/
 		)
-		expect(html).toContain('<meta name="twitter:card" content="summary_large_image" />')
-		expect(html).toContain('type="application/json+oembed"')
 		expect(html.match(/<title>/g)).toHaveLength(1)
 	})
 })

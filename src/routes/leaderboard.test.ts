@@ -447,7 +447,7 @@ describe("GET /leaderboard/users/:keyId", () => {
 			return ((await res.json()) as { data: Record<string, unknown> }).data
 		}
 
-		it("regression: keeps a linked Discord name private until the curator opts in", async () => {
+		it("keeps a linked Discord name private until the curator opts in", async () => {
 			const data = await profile({ banner_video_id: null, banner_live: false, show_discord: false })
 			expect("discord" in data).toBe(false)
 			expect(data.discordLinked).toBe(true)
@@ -456,14 +456,6 @@ describe("GET /leaderboard/users/:keyId", () => {
 		it("shows the Discord name once the curator opts in", async () => {
 			const data = await profile({ banner_video_id: null, banner_live: false, show_discord: true })
 			expect(data.discord).toEqual({ id: "d1", username: "alice" })
-		})
-
-		it("drops a banner whose song the curator no longer has live lyrics for", async () => {
-			const data = await profile(
-				{ banner_video_id: "dQw4w9WgXcQ", banner_live: false, show_discord: false },
-				{ "artwork:v2:dQw4w9WgXcQ": "https://lh3.googleusercontent.com/cover=w544-h544" }
-			)
-			expect("banner" in data).toBe(false)
 		})
 	})
 

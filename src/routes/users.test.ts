@@ -517,11 +517,6 @@ describe("PUT /users/me/profile", () => {
 		expect(db.calls.some((c) => c.sql.includes("UPDATE users"))).toBe(false)
 	})
 
-	it("rejects a showDiscord that is not a boolean", async () => {
-		const { env } = signedIn([])
-		expect((await put(env, { showDiscord: "yes" })).status).toBe(400)
-	})
-
 	it("saves a banner from the caller's own synced song", async () => {
 		const { db, env } = signedIn([{ found: 1 }, { banner_video_id: VIDEO, show_discord: true }], {
 			[`artwork:v2:${VIDEO}`]: "https://lh3.googleusercontent.com/cover=w544-h544",

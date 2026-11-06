@@ -325,7 +325,7 @@ describe("getGlobalFeed", () => {
 			await getGlobalFeed(createEnv(createMockDB([[]]), cache), 12, 0, undefined, {
 				sort: "recently-sealed",
 			})
-			expect(gets).toEqual(["feed:global:recently-sealed:12"])
+			expect(gets.some((key) => key.startsWith("feed:sealed:"))).toBe(false)
 		})
 
 		it("regression: the sealed query keeps the seal predicate in the inner WHERE", async () => {

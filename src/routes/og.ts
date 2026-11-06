@@ -5,7 +5,7 @@ import {
 	renderProfileOg,
 	renderSongOg,
 } from "@/og/render"
-import { type ShareLoaders, oembedFor, shareLoaders } from "@/share-meta"
+import { oembedFor, shareLoaders } from "@/share-meta"
 import type { Env } from "@/types"
 import { ErrorCode, buildError } from "@/utils/errors"
 import { readRateLimit } from "@/utils/read-rate-limit"
@@ -14,13 +14,11 @@ import { Elysia, t } from "elysia"
 
 type Renderer = (env: Env, id: string) => Promise<RenderedCard | null>
 
-interface Renderers {
-	song: Renderer
-	profile: Renderer
-	download: Renderer
-}
-
 const KEY_ID = /^[0-9a-fA-F]{64}$/
+
+export function cardMemoKey(url: string, version: string): string {
+	return `${new URL(url).pathname}:${version}`
+}
 
 const recent = new Map<string, Promise<RenderedCard | null>>()
 
@@ -49,15 +47,7 @@ function remember(url: string, load: () => Promise<RenderedCard | null>) {
 	return pending
 }
 
-export const ogRoutes = (
-	env: Env,
-	renderers: Renderers = {
-		song: renderSongOg,
-		profile: renderProfileOg,
-		download: renderProfileDownload,
-	},
-	shares: ShareLoaders = shareLoaders
-) => {
+export const ogRoutes = (env: Env) => {
 	const serve = async (
 		{
 			request,
@@ -78,9 +68,7 @@ export const ogRoutes = (
 		}
 		const current = await share(env, id)
 		const card = current
-			? await remember(`${new URL(request.url).pathname}:${current.version}`, () =>
-					renderer(env, id)
-				)
+			? await remember(cardMemoKey(request.url, current.version), () => renderer(env, id))
 			: null
 		if (!card) {
 			set.status = 404
@@ -99,18 +87,25 @@ export const ogRoutes = (
 		.decorate("env", env)
 		.use(readRateLimit)
 		.get("/og/song/:file", (ctx) =>
-			serve(ctx, "jpg", isVideoId, shares.song, renderers.song, config.og.cacheControl)
+			serve(ctx, "jpg", isVideoId, shareLoaders.song, renderSongOg, config.og.cacheControl)
 		)
 		.get("/og/user/:file", (ctx) =>
-			serve(ctx, "jpg", isKeyId, shares.profile, renderers.profile, config.og.cacheControl)
+			serve(ctx, "jpg", isKeyId, shareLoaders.profile, renderProfileOg, config.og.cacheControl)
 		)
 		.get("/card/user/:file", (ctx) =>
-			serve(ctx, "png", isKeyId, shares.profile, renderers.download, config.og.downloadCacheControl)
+			serve(
+				ctx,
+				"png",
+				isKeyId,
+				shareLoaders.profile,
+				renderProfileDownload,
+				config.og.downloadCacheControl
+			)
 		)
 		.get(
 			"/oembed",
 			async ({ request, query, set }) => {
-				const body = await oembedFor(env, request, query.url ?? "", shares)
+				const body = await oembedFor(env, request, query.url ?? "")
 				if (!body) {
 					set.status = 404
 					return buildError(ErrorCode.NOT_FOUND)
