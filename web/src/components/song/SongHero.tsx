@@ -235,7 +235,7 @@ export function SongHero({ variant, versions, art, player }: SongHeroProps) {
             beforeReport={<ShareButton videoId={variant.videoId} />}
           />
         </div>
-        <div className="mt-3 flex flex-wrap items-center gap-2 [text-shadow:none] empty:hidden">
+        <div className="mt-3 flex flex-wrap items-center gap-2 empty:hidden">
           <EditMetadataButton
             videoId={variant.videoId}
             lyricsId={variant.id}
