@@ -13,7 +13,7 @@ describe("sync type parity with the server", () => {
       const web = SYNC_KINDS[kind as keyof typeof SYNC_KINDS]
       expect(look.label).toBe(web.label)
       expect(look.tint).toBe(web.tint)
-      expect(look.color ?? web.color).toBe(web.color)
+      expect(look.color).toBe(web.color.startsWith("var(--ink") ? null : web.color)
     }
   })
 })

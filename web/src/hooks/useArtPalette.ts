@@ -13,7 +13,10 @@ export function useArtPalette(src: string | null | undefined, scrimFloor = 0): A
       .then((next) => {
         if (live) setAccent(next)
       })
-      .catch((error: unknown) => console.warn("Could not sample the art palette", error))
+      .catch((error: unknown) => {
+        console.warn("Could not sample the art palette", error)
+        if (live) setAccent(null)
+      })
     return () => {
       live = false
     }

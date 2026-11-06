@@ -85,7 +85,10 @@ export function ArtBackground({ src, contained = false, moving = false }: ArtBac
         setShown(true)
         update(warp)
       })
-      .catch((error: unknown) => console.warn("Could not load the background art", error))
+      .catch((error: unknown) => {
+        console.warn("Could not load the background art", error)
+        setShown(false)
+      })
   }, [src, update])
 
   const fade = cn("transition-opacity duration-700 ease-out", shown ? "opacity-100" : "opacity-0")
