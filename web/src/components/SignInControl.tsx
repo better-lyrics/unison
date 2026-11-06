@@ -5,12 +5,14 @@ import { type ChangeEvent, useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { glassClass, popoverSurfaceClass } from "@/components/ui";
 import { cn } from "@/lib/cn";
+import { usePresence } from "@/hooks/usePresence";
 
 export function SignInControl({ glass = false }: { glass?: boolean }) {
   const session = useSession();
   const menu = session.status === "signed-in" ? "account" : "sign-in";
   const [openMenu, setOpenMenu] = useState<"account" | "sign-in" | null>(null);
   const open = openMenu === menu;
+  const presence = usePresence(open);
   const setOpen = (next: boolean | ((current: boolean) => boolean)) =>
     setOpenMenu((current) => {
       const value = typeof next === "function" ? next(current === menu) : next;
@@ -75,11 +77,12 @@ export function SignInControl({ glass = false }: { glass?: boolean }) {
             {identity.displayName}
           </span>
         </button>
-        {open ? (
+        {presence.mounted ? (
           <div
             role="menu"
+            data-origin="top-right"
             data-state="open"
-            className={cn(popoverSurfaceClass, "absolute right-0 z-20 mt-2 w-56 rounded-2xl p-3")}
+            className={cn(popoverSurfaceClass, "t-dropdown absolute right-0 z-20 mt-2 w-56 rounded-2xl p-3", presence.closing && "is-closing")}
           >
             <div className="space-y-2 pb-3">
               <p className="text-[10px] uppercase tracking-wider text-unison-text-muted">
@@ -149,11 +152,12 @@ export function SignInControl({ glass = false }: { glass?: boolean }) {
         >
           Sign in
         </button>
-        {open ? (
+        {presence.mounted ? (
           <div
             role="menu"
+            data-origin="top-right"
             data-state="open"
-            className={cn(popoverSurfaceClass, "absolute right-0 z-20 mt-2 w-64 rounded-2xl p-3")}
+            className={cn(popoverSurfaceClass, "t-dropdown absolute right-0 z-20 mt-2 w-64 rounded-2xl p-3", presence.closing && "is-closing")}
           >
             <div className="space-y-2 pb-3">
               <button

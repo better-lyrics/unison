@@ -22,6 +22,7 @@ interface BannerPickerProps {
 export function BannerPicker({ ref, anchor, keyId, current, onSaved }: BannerPickerProps) {
   const { refs, floatingStyles } = useFloating({
     strategy: "fixed",
+    transform: false,
     placement: "bottom-end",
     elements: { reference: anchor },
     whileElementsMounted: autoUpdate,
@@ -78,10 +79,11 @@ export function BannerPicker({ ref, anchor, keyId, current, onSaved }: BannerPic
         refs.setFloating(node)
       }}
       popover="auto"
+      data-origin="top-right"
       style={floatingStyles}
       className={cn(
         popoverSurfaceClass,
-        "inset-auto m-0 w-[360px] max-w-[calc(100vw-32px)] overflow-y-auto overscroll-contain rounded-[28px] border-0 p-[18px] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
+        "t-dropdown inset-auto m-0 w-[360px] max-w-[calc(100vw-32px)] overflow-y-auto overscroll-contain rounded-[28px] border-0 p-[18px] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
       )}
     >
       <h2 className="m-0 text-[15px] font-bold">Banner</h2>

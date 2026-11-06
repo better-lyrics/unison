@@ -1,6 +1,7 @@
 import { IconMenu2, IconX } from "@tabler/icons-react"
 import { useEffect, useRef, useState } from "react"
 import { Link, NavLink } from "react-router-dom"
+import { usePresence } from "@/hooks/usePresence"
 import { cn } from "@/lib/cn"
 import { type PageWidth, pageWidthClass } from "@/lib/page-width"
 import { BetterLyricsLogo } from "./BetterLyricsLogo"
@@ -17,6 +18,7 @@ const tabClass = ({ isActive }: { isActive: boolean }) =>
 
 export function AppHeader({ width }: { width: PageWidth }) {
 	const [menuOpen, setMenuOpen] = useState(false)
+	const menu = usePresence(menuOpen)
 	const headerRef = useRef<HTMLElement | null>(null)
 	const closeMenu = () => setMenuOpen(false)
 
@@ -113,10 +115,11 @@ export function AppHeader({ width }: { width: PageWidth }) {
 					</button>
 				</div>
 			</div>
-			{menuOpen ? (
+			{menu.mounted ? (
 				<div
 					role="menu"
-					className={cn(popoverSurfaceClass, "absolute right-6 top-full mt-2 flex w-56 flex-col gap-2 rounded-2xl p-3 lg:hidden")}
+					data-origin="top-right"
+					className={cn(popoverSurfaceClass, "t-dropdown absolute right-6 top-full mt-2 flex w-56 flex-col gap-2 rounded-2xl p-3 lg:hidden", menu.closing && "is-closing")}
 				>
 					<nav className="flex flex-col gap-1">
 						<NavLink to="/" end role="menuitem" onClick={closeMenu} className={tabClass}>

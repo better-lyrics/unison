@@ -10,10 +10,13 @@ import {
   useHover,
   useInteractions,
   useRole,
+  useTransitionStyles,
 } from "@floating-ui/react"
 import { cloneElement, type ReactElement, type ReactNode, useState } from "react"
 import { cn } from "@/lib/cn"
 import { tooltipSurfaceClass } from "./ui"
+
+const TOOLTIP_DELAY_MS = 80
 
 export function Tooltip({
   label,
@@ -32,7 +35,11 @@ export function Tooltip({
     middleware: [offset(8), flip(), shift({ padding: 8 })],
     whileElementsMounted: autoUpdate,
   })
-  const hover = useHover(context, { move: false })
+  const hover = useHover(context, { move: false, delay: { open: TOOLTIP_DELAY_MS } })
+  const { isMounted, styles } = useTransitionStyles(context, {
+    duration: { open: 150, close: 50 },
+    initial: { opacity: 0, transform: "scale(0.98)" },
+  })
   const focus = useFocus(context)
   const dismiss = useDismiss(context)
   const role = useRole(context, { role: "tooltip" })
@@ -41,15 +48,12 @@ export function Tooltip({
   return (
     <>
       {cloneElement(children, getReferenceProps({ ref: refs.setReference, ...children.props }))}
-      {open ? (
+      {isMounted ? (
         <FloatingPortal>
-          <div
-            ref={refs.setFloating}
-            style={floatingStyles}
-            {...getFloatingProps()}
-            className={cn("z-50 max-w-[220px]", tooltipSurfaceClass, className)}
-          >
-            {label}
+          <div ref={refs.setFloating} style={floatingStyles} {...getFloatingProps()} className="z-50">
+            <div style={styles} className={cn("max-w-[220px]", tooltipSurfaceClass, className)}>
+              {label}
+            </div>
           </div>
         </FloatingPortal>
       ) : null}

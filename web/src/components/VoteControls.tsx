@@ -1,5 +1,6 @@
 import { type ReactNode, useCallback, useEffect, useRef, useState } from "react"
 import { useSession } from "@/auth/useSession"
+import { usePresence } from "@/hooks/usePresence"
 import { useVoteMutations } from "@/hooks/useVoteMutations"
 import { cn } from "@/lib/cn"
 import { glassActionClass, glassClass, popoverSurfaceClass } from "./ui"
@@ -30,6 +31,7 @@ export function VoteControls({ variantId, videoId, variant, beforeReport }: Vote
   const disabledTitle = disabled ? "Sign in to vote" : undefined
 
   const [menuOpen, setMenuOpen] = useState(false)
+  const menu = usePresence(menuOpen && !disabled)
   const containerRef = useRef<HTMLDivElement | null>(null)
 
   useEffect(() => {
@@ -109,10 +111,15 @@ export function VoteControls({ variantId, videoId, variant, beforeReport }: Vote
         >
           <BlReportIcon size={18} />
         </button>
-        {menuOpen && !disabled ? (
+        {menu.mounted ? (
           <div
             role="menu"
-            className={cn(popoverSurfaceClass, "absolute top-full right-0 z-10 mt-2 flex min-w-[160px] flex-col rounded-2xl p-1.5 text-[13px]")}
+            data-origin="top-right"
+            className={cn(
+              popoverSurfaceClass,
+              "t-dropdown absolute top-full right-0 z-10 mt-2 flex min-w-[160px] flex-col rounded-2xl p-1.5 text-[13px]",
+              menu.closing && "is-closing",
+            )}
           >
             {REASONS.map((r) => (
               <button
