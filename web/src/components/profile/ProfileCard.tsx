@@ -200,7 +200,7 @@ export function ProfileCard({ keyId, rank, gamification, catalogue, art, onChang
             onClick={onChangeBanner}
             className={cn(
               glassActionClass,
-              "absolute top-16 right-4 pl-4 opacity-0 transition-[opacity,background-color,scale] group-focus-within/banner:opacity-100 group-hover/banner:opacity-100 [@media(hover:none)]:opacity-100",
+              "absolute top-16 right-4 pl-4 opacity-0 backdrop-blur-[20px] transition-[opacity,background-color,scale] group-focus-within/banner:opacity-100 group-hover/banner:opacity-100 [@media(hover:none)]:opacity-100",
             )}
           >
             <IconPhoto className="size-[17px]" stroke={1.75} />

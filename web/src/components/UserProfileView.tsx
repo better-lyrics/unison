@@ -30,7 +30,7 @@ interface UserProfileViewProps {
   keyId: string
 }
 
-const PANEL = cn(glassClass, "rounded-[22px] bg-[rgba(15,14,19,0.34)] p-6 backdrop-blur-[24px] [text-shadow:none]")
+const PANEL = cn(glassClass, "rounded-[22px] bg-[rgba(15,14,19,0.34)] p-6 [text-shadow:none]")
 
 function ExpertiseStrip({ entries }: { entries: ExpertiseEntry[] }) {
   return (
