@@ -95,7 +95,11 @@ function Cover({ variant, art, player }: Omit<SongHeroProps, "versions">) {
   const covered = !(player.active && (started || stalled || player.failed))
   return (
     <div className={COVER_FRAME}>
-      {player.active ? <div ref={player.ref} inert={covered} className="absolute inset-0 bg-black" /> : null}
+      {player.active ? (
+        <div inert={covered} className="absolute inset-0 bg-black">
+          <div ref={player.ref} className="size-full" />
+        </div>
+      ) : null}
       <div
         aria-hidden={!covered}
         className={cn(
