@@ -36,6 +36,7 @@ export interface Env {
 	RECORDING_MATCH_ENABLED?: boolean
 	BLYRICS_API_INVALIDATE?: { url: string; secret: string } | null
 	BLYRICS_API_KEY?: string | null
+	BINILINK_LOOKUP_ENABLED?: boolean
 }
 
 export interface RateLimiter {

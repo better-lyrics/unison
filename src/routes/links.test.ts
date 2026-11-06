@@ -80,7 +80,7 @@ function makeMockCache(seed: Record<string, string> = {}) {
 const OAUTH = {
 	clientId: "client-1",
 	clientSecret: "secret-1",
-	redirectUri: "https://unison.boidu.dev/links/discord/callback",
+	redirectUri: "https://unison.betterlyrics.org/links/discord/callback",
 }
 
 function makeEnv(

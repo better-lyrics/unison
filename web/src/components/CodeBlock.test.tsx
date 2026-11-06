@@ -9,9 +9,9 @@ afterEach(() => {
 
 describe("CodeBlock", () => {
   it("renders the label and the code text", () => {
-    render(<CodeBlock code={'curl "https://unison.boidu.dev/lyrics?v=abc"'} language="bash" label="cURL" />)
+    render(<CodeBlock code={'curl "https://unison.betterlyrics.org/lyrics?v=abc"'} language="bash" label="cURL" />)
     expect(screen.getByText("cURL")).toBeTruthy()
-    expect(document.body.textContent).toContain("https://unison.boidu.dev/lyrics?v=abc")
+    expect(document.body.textContent).toContain("https://unison.betterlyrics.org/lyrics?v=abc")
   })
 
   it("highlights the bash command word with a color", () => {

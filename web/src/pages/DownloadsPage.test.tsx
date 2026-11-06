@@ -14,7 +14,7 @@ const manifest = {
   row_counts: { lyrics: 184231, requested_songs: 9821, lyrics_requests: 14502 },
   format: "pg_dump custom (-Fc), Postgres 18",
   license: "ODbL-1.0",
-  attribution_text: "Lyrics from Unison (https://unison.boidu.dev)",
+  attribution_text: "Lyrics from Unison (https://unison.betterlyrics.org)",
   enterprise_contact: "enterprise@boidu.dev",
 }
 
@@ -103,7 +103,7 @@ describe("DownloadsPage", () => {
       }),
     )
     renderPage()
-    await waitFor(() => expect(screen.getByText("Lyrics from Unison (https://unison.boidu.dev)")).toBeTruthy())
+    await waitFor(() => expect(screen.getByText("Lyrics from Unison (https://unison.betterlyrics.org)")).toBeTruthy())
   })
 
   it("renders the enterprise mailto link", async () => {

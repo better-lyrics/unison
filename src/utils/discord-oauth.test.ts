@@ -11,7 +11,7 @@ const HASH = "8342729096ea3675442027381ff50dfe"
 const CFG = {
 	clientId: "client-123",
 	clientSecret: "secret-xyz",
-	redirectUri: "https://unison.boidu.dev/links/discord/callback",
+	redirectUri: "https://unison.betterlyrics.org/links/discord/callback",
 }
 
 describe("buildAuthorizeUrl", () => {

@@ -2,14 +2,15 @@ import { CodeBlock, CodeLangProvider, type CodeTab, CodeTabs } from "@/component
 import { COMPOSER_URL } from "@/lib/composer"
 import type { ReactNode } from "react"
 
-const BASE_URL = "https://unison.boidu.dev"
+const BASE_URL = "https://unison.betterlyrics.org"
 
-const VIDEO_URL = "https://unison.boidu.dev/lyrics?v=dQw4w9WgXcQ"
-const SONG_ARTIST_URL = "https://unison.boidu.dev/lyrics?song=Never+Gonna+Give+You+Up&artist=Rick+Astley"
-const ISRC_URL = "https://unison.boidu.dev/lyrics?isrc=US2S70465012"
-const SEARCH_URL = "https://unison.boidu.dev/lyrics/search?q=never+gonna+give"
-const VARIANTS_URL = "https://unison.boidu.dev/lyrics/variants/dQw4w9WgXcQ?limit=5"
-const TRANSLATE_URL = "https://unison.boidu.dev/translate"
+const VIDEO_URL = `${BASE_URL}/lyrics?v=dQw4w9WgXcQ`
+const SONG_ARTIST_URL = `${BASE_URL}/lyrics?song=Never+Gonna+Give+You+Up&artist=Rick+Astley`
+const ISRC_URL = `${BASE_URL}/lyrics?isrc=US2S70465012`
+const PROVIDER_ID_URL = `${BASE_URL}/lyrics?apple_music=1438556832`
+const SEARCH_URL = `${BASE_URL}/lyrics/search?q=never+gonna+give`
+const VARIANTS_URL = `${BASE_URL}/lyrics/variants/dQw4w9WgXcQ?limit=5`
+const TRANSLATE_URL = `${BASE_URL}/translate`
 
 // A GET in each language, generated from the URL so every reference section stays in lockstep.
 function fetchTabs(url: string): CodeTab[] {
@@ -58,7 +59,7 @@ if (success) {
     language: "python",
     code: `import requests
 
-res = requests.get("https://unison.boidu.dev/lyrics", params={"v": "dQw4w9WgXcQ"})
+res = requests.get("${BASE_URL}/lyrics", params={"v": "dQw4w9WgXcQ"})
 body = res.json()
 
 if body["success"]:
@@ -179,6 +180,32 @@ const VIDEO_RESPONSE = `{
   }
 }`
 
+const PROVIDER_ID_RESPONSE = `{
+  "success": true,
+  "data": {
+    "id": 4821,
+    "videoId": "dQw4w9WgXcQ",
+    "song": "Never Gonna Give You Up",
+    "artist": "Rick Astley",
+    "isrc": "GBARL9300135",
+    "format": "ttml",
+    "syncType": "richsync",
+    "language": "en",
+    "score": 42,
+    "voteCount": 47,
+    "confidence": "high",
+    "matchedBy": "isrc",
+    "lyrics": "<tt xmlns=\\"http://www.w3.org/ns/ttml\\"> ... </tt>"
+  }
+}`
+
+const LOOKUP_PENDING_RESPONSE = `{
+  "success": false,
+  "error": "Lookup pending",
+  "code": "LOOKUP_PENDING",
+  "hint": "We're still matching this track. Try again in a few seconds."
+}`
+
 const SEARCH_RESPONSE = `{
   "success": true,
   "data": [
@@ -262,6 +289,31 @@ export function DocsPage() {
             matter. Pass <Code>song</Code> and <Code>artist</Code> too and an unknown ISRC falls back to them.
           </p>
           <CodeTabs tabs={fetchTabs(ISRC_URL)} />
+        </section>
+
+        <section className="space-y-3">
+          <h2 className="text-lg font-semibold text-unison-text">Fetch by Spotify, Apple Music or Tidal id</h2>
+          <p className="text-sm leading-relaxed text-unison-text-secondary">
+            <Code>spotify</Code>, <Code>apple_music</Code> and <Code>tidal</Code> take a track id, not a link. Unison
+            turns it into an ISRC with{" "}
+            <a
+              href="https://link.binimum.org"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-unison-text transition-colors hover:text-unison-text-secondary"
+            >
+              BiniLink
+            </a>{" "}
+            and looks that up. <Code>matchedBy</Code> in the response says how it matched. A <Code>linked_video</Code>{" "}
+            match can be a different release, so its timing may drift.
+          </p>
+          <p className="text-sm leading-relaxed text-unison-text-secondary">
+            A lookup with a new id can return <Code>503</Code> with <Code>Retry-After</Code> while BiniLink is still
+            matching it or is down. Retry a few times, then give up.
+          </p>
+          <CodeTabs tabs={fetchTabs(PROVIDER_ID_URL)} />
+          <CodeBlock code={PROVIDER_ID_RESPONSE} language="json" label="JSON response" />
+          <CodeBlock code={LOOKUP_PENDING_RESPONSE} language="json" label="503 response" />
         </section>
 
         <section className="space-y-3">
