@@ -1,4 +1,5 @@
 import { config } from "@/config"
+import { httpCompression } from "@/infra/http-compression"
 import { readMalformedTtml, readRevisionFixture } from "@/test/lyric-fixtures"
 import type { Env, FeedItem } from "@/types"
 import { decompress } from "@/utils/compression"
@@ -6,6 +7,8 @@ import { canonicalJson, hashPublicKey } from "@/utils/crypto"
 import { ISRC_HINT } from "@/utils/isrc"
 import { findXmlProblem } from "@/utils/validation"
 import { VIDEO_ID_HINT } from "@/utils/video-id"
+import { cors } from "@elysiajs/cors"
+import { Elysia } from "elysia"
 import { describe, expect, it } from "vitest"
 import { lyricsRoutes } from "./lyrics"
 
@@ -152,6 +155,35 @@ describe("GET /lyrics duration query parsing", () => {
 
 		const findCall = db.calls.find((c) => /ABS\(l\.duration - \?\)/.test(c.sql))
 		expect(durationParamOf(findCall)).toBe(200)
+	})
+})
+
+describe("GET /lyrics vary header", () => {
+	const appWithCors = () =>
+		new Elysia()
+			.use(cors({ origin: true }))
+			.use(httpCompression)
+			.use(lyricsRoutes(makeEnv(makeMockDB([null, null]))))
+
+	const get = (path: string) =>
+		appWithCors().handle(
+			new Request(`http://localhost${path}`, {
+				headers: { origin: "https://music.youtube.com", "accept-encoding": "gzip" },
+			})
+		)
+
+	it("lets a CDN cache a lookup without changing the CORS grant", async () => {
+		const res = await get("/lyrics?song=Foo&artist=Bar")
+
+		expect(res.status).toBe(404)
+		expect(res.headers.get("vary")).toBe("Origin, Accept-Encoding")
+		expect(res.headers.get("access-control-allow-origin")).toBe("https://music.youtube.com")
+	})
+
+	it("leaves every other lyrics route on the CORS default", async () => {
+		const res = await get("/lyrics/search?q=foo")
+
+		expect(res.headers.get("vary")).toBe("*")
 	})
 })
 
