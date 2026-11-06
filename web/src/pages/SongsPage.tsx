@@ -1,13 +1,25 @@
 import { useSession } from "@/auth/useSession"
 import { EmptyState } from "@/components/EmptyState"
 import { LeaderboardSection, SeeAllLink } from "@/components/LeaderboardSection"
-import { RecentShelf } from "@/components/RecentShelf"
+import { FeedGrid } from "@/components/FeedGrid"
 import { SealedShelf } from "@/components/SealedShelf"
 import { SongRow, SongRowSkeletonList } from "@/components/SongRow"
 import { useAsyncData } from "@/hooks/useAsyncData"
 import { fetchSongLeaderboard } from "@/lib/api"
 
 const MOST_WANTED_PREVIEW = 10
+
+const TOP_VOTED = {
+  sort: "top-rated",
+  title: "Top Voted",
+  subtitle: "The lyrics the community rates highest",
+} as const
+
+const RECENTLY_SYNCED = {
+  sort: "newest",
+  title: "Recently Synced",
+  subtitle: "New lyrics the community upvoted",
+} as const
 
 const mostWantedAction = <SeeAllLink to="/queue" label="See all most wanted songs" />
 
@@ -20,7 +32,8 @@ export function SongsPage() {
     return (
       <div className="space-y-8">
         <SealedShelf />
-        <RecentShelf />
+        <FeedGrid {...TOP_VOTED} />
+      <FeedGrid {...RECENTLY_SYNCED} />
         <LeaderboardSection title="Most Wanted">
           <SongRowSkeletonList rows={5} />
         </LeaderboardSection>
@@ -32,7 +45,8 @@ export function SongsPage() {
     return (
       <div className="space-y-8">
         <SealedShelf />
-        <RecentShelf />
+        <FeedGrid {...TOP_VOTED} />
+      <FeedGrid {...RECENTLY_SYNCED} />
         <EmptyState title="Could not load leaderboard" hint={error.message} />
       </div>
     )
@@ -41,7 +55,8 @@ export function SongsPage() {
   return (
     <div className="space-y-8">
       <SealedShelf />
-      <RecentShelf />
+      <FeedGrid {...TOP_VOTED} />
+      <FeedGrid {...RECENTLY_SYNCED} />
       <LeaderboardSection
         title="Most Wanted"
         subtitle="Songs missing synced lyrics, ranked by reputation-weighted demand"

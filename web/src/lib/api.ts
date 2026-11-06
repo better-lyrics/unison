@@ -270,8 +270,14 @@ export async function fetchSealed(opts: {
   return getPage<FeedEntry>(`/feed?${search.toString()}`, opts.signal)
 }
 
-export async function fetchRecent(opts: { limit: number; signal?: AbortSignal }): Promise<Page<FeedEntry>> {
-  const search = new URLSearchParams({ sort: "newest", limit: String(opts.limit) })
+export type FeedGridSort = "newest" | "top-rated"
+
+export async function fetchFeedGrid(opts: {
+  sort: FeedGridSort
+  limit: number
+  signal?: AbortSignal
+}): Promise<Page<FeedEntry>> {
+  const search = new URLSearchParams({ sort: opts.sort, limit: String(opts.limit) })
   return getPage<FeedEntry>(`/feed?${search.toString()}`, opts.signal)
 }
 
