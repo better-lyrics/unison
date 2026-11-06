@@ -11,6 +11,7 @@ function sealedEntry(i: number): FeedEntry {
     videoId: `vidSealed${String(i).padStart(2, "0")}`,
     song: `Sealed Song ${i}`,
     artist: `Artist ${i}`,
+    format: "ttml",
     syncType: "richsync",
     createdAt: 1_760_000_000,
     marks: [{ type: "seal", label: "BLCA", icon: "/badges/committee/image.svg", at: 1_760_000_000 - i }],

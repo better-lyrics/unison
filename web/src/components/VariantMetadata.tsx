@@ -10,11 +10,14 @@ import { IconPlayerPlayFilled } from "@tabler/icons-react"
 import { AnimatePresence, MotionConfig, motion } from "motion/react"
 import { Link } from "react-router-dom"
 import { languageName } from "@/lib/language"
+import { type SyncKind, syncTypeFor } from "@/lib/sync-type"
+import { SyncTag } from "@/components/SyncTag"
 
-const SYNC_TIP: Record<string, string> = {
-  richsync: "Word-by-word synced lyrics that highlight as the song plays.",
-  linesync: "Line-by-line synced lyrics.",
-  plain: "Plain text with no timing.",
+const SYNC_TIP: Record<SyncKind, string> = {
+  syllable: "Syllable synced: each syllable highlights as it is sung.",
+  word: "Word synced: each word highlights as it is sung.",
+  line: "Line synced: each line highlights as it is sung.",
+  unsynced: "Plain text with no timing.",
 }
 const FORMAT_TIP: Record<string, string> = {
   ttml: "TTML: rich timed-text lyrics format.",
@@ -109,16 +112,11 @@ export function VariantCover({ variant, playerRef, playerActive, onActivatePlaye
   return <div className="relative aspect-square w-full">{poster}</div>
 }
 
-function Pill({ tip, gold, children }: { tip: string; gold?: boolean; children: React.ReactNode }) {
+function Pill({ tip, children }: { tip: string; children: React.ReactNode }) {
   return (
     <Tooltip label={tip}>
       <span
-        className={cn(
-          "inline-flex cursor-default items-center gap-1.5 rounded-full border px-2.5 py-1.5 text-[11px] font-semibold leading-none",
-          gold
-            ? "border-unison-medal-gold/35 bg-unison-medal-gold/10 text-unison-medal-gold"
-            : "border-unison-border bg-white/[0.03] text-unison-text-secondary",
-        )}
+        className="inline-flex cursor-default items-center gap-1.5 rounded-full border border-unison-border bg-white/[0.03] px-2.5 py-1.5 text-[11px] font-semibold leading-none text-unison-text-secondary"
       >
         {children}
       </span>
@@ -222,6 +220,7 @@ interface VariantMetadataProps {
 }
 
 export function VariantMetadata({ variant, playerRef, playerActive, onActivatePlayer }: VariantMetadataProps) {
+  const syncKind = syncTypeFor(variant.syncType, variant.format)
   return (
     <aside className="overflow-hidden rounded-xl border border-unison-border bg-unison-bg-elevated">
       <VariantCover variant={variant} playerRef={playerRef} playerActive={playerActive} onActivatePlayer={onActivatePlayer} />
@@ -259,8 +258,8 @@ export function VariantMetadata({ variant, playerRef, playerActive, onActivatePl
             <MarkCallout key={`${mark.type}:${mark.at ?? mark.label}`} mark={mark} />
           ))}
           <div className="flex flex-wrap gap-1.5">
-            <Pill tip={SYNC_TIP[variant.syncType] ?? variant.syncType} gold={variant.syncType === "richsync"}>
-              {variant.syncType}
+            <Pill tip={SYNC_TIP[syncKind]}>
+              <SyncTag kind={syncKind} />
             </Pill>
             <Pill tip={FORMAT_TIP[variant.format] ?? variant.format}>{variant.format.toUpperCase()}</Pill>
             {variant.language ? <Pill tip="Lyrics language.">{languageName(variant.language)}</Pill> : null}

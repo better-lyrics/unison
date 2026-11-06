@@ -10,6 +10,8 @@ import { formatCompact, formatExact, formatRelativeTime } from "@/lib/format"
 import type { SubmissionSort, SubmissionSyncType } from "@/lib/types"
 import { useMemo, useState } from "react"
 import { Link } from "react-router-dom"
+import { syncTypeFor } from "@/lib/sync-type"
+import { SyncTag } from "@/components/SyncTag"
 
 interface SubmissionsListProps {
   keyId: string
@@ -164,7 +166,7 @@ function CuratorSubmissions({ keyId }: SubmissionsListProps) {
                       ) : null}
                     </p>
                     <p className="truncate text-xs text-unison-text-muted">
-                      {s.artist} · {s.syncType} · {formatRelativeTime(s.createdAt)}
+                      {s.artist} · <SyncTag kind={syncTypeFor(s.syncType, s.format)} /> · {formatRelativeTime(s.createdAt)}
                     </p>
                   </div>
                   <p

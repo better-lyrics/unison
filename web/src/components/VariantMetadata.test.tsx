@@ -118,9 +118,9 @@ describe("VariantMetadata", () => {
     expect(screen.getByText("LRC")).toBeTruthy()
   })
 
-  it("renders the sync type pill as-is", () => {
+  it("names the sync type the way Better Lyrics does", () => {
     renderMeta(makeVariant({ syncType: "linesync" }))
-    expect(screen.getByText("linesync")).toBeTruthy()
+    expect(screen.getByText("Line")).toBeTruthy()
   })
 
   it("renders the effective score with one decimal and the raw score in parentheses", () => {
@@ -250,11 +250,11 @@ describe("VariantMetadata", () => {
   })
 
   describe("tooltips", () => {
-    it("shows the richsync tooltip on hover", async () => {
+    it("shows the sync type tooltip on hover", async () => {
       renderMeta(makeVariant({ syncType: "richsync" }))
-      fireEvent.mouseEnter(screen.getByText("richsync"))
+      fireEvent.mouseEnter(screen.getByText("Syllable").parentElement as HTMLElement)
       const tip = await screen.findByRole("tooltip")
-      expect(tip.textContent).toContain("Word-by-word synced lyrics")
+      expect(tip.textContent).toContain("each syllable highlights")
     })
   })
 

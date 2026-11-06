@@ -58,7 +58,7 @@ describe("VariantList", () => {
     const variants = [makeVariant(40, { format: "lrc", syncType: "linesync" })]
     render(<VariantList variants={variants} selectedId={40} onSelect={vi.fn()} />)
     expect(screen.getByText("LRC")).toBeTruthy()
-    expect(screen.getByText("linesync")).toBeTruthy()
+    expect(screen.getByText("Line")).toBeTruthy()
   })
 
   it("renders an empty list when given no variants", () => {

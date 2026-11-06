@@ -12,7 +12,7 @@ describe("VariantBadge", () => {
 
   it("renders the sync type label", () => {
     render(<VariantBadge format="lrc" syncType="linesync" />)
-    expect(screen.getByText("linesync")).toBeTruthy()
+    expect(screen.getByText("Line")).toBeTruthy()
   })
 
   it("applies a TTML-specific class", () => {

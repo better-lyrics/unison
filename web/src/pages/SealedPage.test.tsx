@@ -11,6 +11,7 @@ function sealedEntry(i: number, overrides: Partial<FeedEntry> = {}): FeedEntry {
     videoId: `vidSealed${String(i).padStart(2, "0")}`,
     song: `Sealed Song ${i}`,
     artist: `Artist ${i}`,
+    format: "ttml",
     syncType: "richsync",
     createdAt: 1_760_000_000,
     marks: [{ type: "seal", label: "BLCA", icon: "/badges/committee/image.svg", at: 1_760_000_000 - i }],
@@ -87,7 +88,7 @@ describe("SealedPage", () => {
       const spy = stubFeed(() => json({ success: true, data: [sealedEntry(1)] }))
       renderPage()
       await waitFor(() => expect(screen.getByText("Sealed Song 1")).toBeTruthy())
-      fireEvent.click(screen.getByRole("button", { name: "Richsynced" }))
+      fireEvent.click(screen.getByRole("button", { name: "Syllable or word" }))
       await waitFor(() =>
         expect(feedCalls(spy)).toContain("/feed?sealed=1&sort=recently-sealed&limit=24&syncType=richsync"),
       )
@@ -108,7 +109,7 @@ describe("SealedPage", () => {
       renderPage("/sealed?sort=top-rated&sync=linesync")
       await waitFor(() => expect(feedCalls(spy)).toEqual(["/feed?sealed=1&sort=top-rated&limit=24&syncType=linesync"]))
       expect(screen.getByRole("button", { name: "Top rated" }).getAttribute("aria-pressed")).toBe("true")
-      expect(screen.getByRole("button", { name: "Line synced" }).getAttribute("aria-pressed")).toBe("true")
+      expect(screen.getByRole("button", { name: "Line" }).getAttribute("aria-pressed")).toBe("true")
     })
 
     it("loads the next page on Load more and appends it", async () => {
@@ -131,13 +132,12 @@ describe("SealedPage", () => {
   })
 
   describe("regressions", () => {
-    it("regression: the richsync filter and the card chip share one label", async () => {
+    it("regression: the richsync filter names the kind the card chip shows", async () => {
       stubFeed(() => json({ success: true, data: [sealedEntry(1)] }))
       renderPage()
       await waitFor(() => expect(screen.getByText("Sealed Song 1")).toBeTruthy())
-      expect(screen.getByRole("button", { name: "Richsynced" })).toBeTruthy()
-      expect(screen.getAllByText("Richsynced")).toHaveLength(2)
-      expect(screen.queryByText(/word synced/i)).toBeNull()
+      expect(screen.getByRole("button", { name: "Syllable or word" })).toBeTruthy()
+      expect(screen.getByText("Syllable")).toBeTruthy()
     })
 
     it("regression: a next page that repeats an already shown lyric does not duplicate its card", async () => {

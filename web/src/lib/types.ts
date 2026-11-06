@@ -150,6 +150,7 @@ export interface FeedEntry {
   videoId: string
   song: string
   artist: string
+  format: LyricsFormat
   syncType: SyncType
   createdAt: number
   marks?: Mark[]
