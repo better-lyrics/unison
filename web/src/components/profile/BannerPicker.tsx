@@ -9,7 +9,6 @@ import { cn } from "@/lib/cn"
 import { popoverSurfaceClass } from "@/components/ui"
 
 const TILE_SIZE = 400
-const MAX_HEIGHT = 520
 const EDGE = 16
 
 interface BannerPickerProps {
@@ -33,7 +32,7 @@ export function BannerPicker({ ref, anchor, keyId, current, onSaved }: BannerPic
       size({
         padding: EDGE,
         apply({ availableHeight, elements }) {
-          elements.floating.style.maxHeight = `${Math.min(MAX_HEIGHT, availableHeight)}px`
+          elements.floating.style.maxHeight = `${availableHeight}px`
         },
       }),
     ],
