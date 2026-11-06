@@ -90,15 +90,18 @@ export async function resolveProviderIds(ids: ProviderId[]): Promise<ResolveBatc
 	const body = await post("/api/v1/resolve", ids)
 	if (!body) return null
 
+	const requested = (id: ProviderId) => ids.some((asked) => sameId(asked, id))
 	const results = entries(body.results).flatMap((entry): ResolvedTrack[] => {
 		const [id] = providerIds([entry])
 		const isrc = typeof entry.isrc === "string" ? normalizeIsrc(entry.isrc) : null
-		return id && isrc ? [{ ...id, isrc, youtube: youtube(entry.youtube) }] : []
+		return id && isrc && requested(id) ? [{ ...id, isrc, youtube: youtube(entry.youtube) }] : []
 	})
 	return {
 		results,
-		missing: [...providerIds(body.not_found), ...providerIds(body.no_isrc)],
-		pending: providerIds(body.pending).filter((p) => !results.some((r) => sameId(r, p))),
+		missing: [...providerIds(body.not_found), ...providerIds(body.no_isrc)].filter(requested),
+		pending: providerIds(body.pending).filter(
+			(p) => requested(p) && !results.some((r) => sameId(r, p))
+		),
 	}
 }
 
