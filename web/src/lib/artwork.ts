@@ -15,15 +15,21 @@ export function sizedArtworkUrl(url: string, size: number): string {
   return url.replace(ARTWORK_SIZE, `=w${size}-h${size}`)
 }
 
+export function artworkQuery(videoId: string, size?: number) {
+  return {
+    queryKey: ["artwork", videoId, size ?? null],
+    queryFn: () => fetchArtwork(videoId, size),
+    staleTime: 1000 * 60 * 60,
+    gcTime: 1000 * 60 * 60,
+  }
+}
+
 export function useArtwork(
   videoId: string,
   opts: { enabled?: boolean; size?: number } = {},
 ): UseQueryResult<string | null> {
   return useQuery({
-    queryKey: ["artwork", videoId, opts.size ?? null],
-    queryFn: () => fetchArtwork(videoId, opts.size),
+    ...artworkQuery(videoId, opts.size),
     enabled: (opts.enabled ?? true) && videoId.length > 0,
-    staleTime: 1000 * 60 * 60,
-    gcTime: 1000 * 60 * 60,
   })
 }

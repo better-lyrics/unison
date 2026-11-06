@@ -11,13 +11,14 @@ import type {
   CuratorsLeaderboardResponse,
   ExpertiseEntry,
   LeaderboardBadge,
+  ProfileSettings,
   SongsLeaderboardResponse,
   TierName,
   UserBadge,
   UserGamification,
   UserRankResponse,
-  UserSubmission,
   UserStats,
+  UserSubmission,
   UserSubmissionsResponse,
 } from "./types"
 
@@ -173,15 +174,24 @@ export async function seedSongs(): Promise<SongsLeaderboardResponse> {
   return { mostWanted: [], needsFixing: [] }
 }
 
+const seedSettings: ProfileSettings = { banner: "60ItHLz5WEA", showDiscord: true }
+
 function seedProfileExtras(keyId: string): Partial<UserStats> {
   if (keyId === "a".repeat(64)) return { avatarUrl: "/pfp/butler.svg" }
   if (keyId !== "f".repeat(64)) return {}
-  const song = SEED_SUBMISSIONS[1]
-  const artworkUrl = sleeveDataUrl(song.song, song.artist, 640)
+  const song = SEED_SUBMISSIONS.find((s) => s.videoId === seedSettings.banner)
+  const artworkUrl = song ? sleeveDataUrl(song.song, song.artist, 640) : null
   return {
-    banner: artworkUrl ? { videoId: song.videoId, artworkUrl } : undefined,
-    discord: { id: "80351110224678912", username: "farouk.stein" },
+    banner: song && artworkUrl ? { videoId: song.videoId, artworkUrl } : undefined,
+    discord: seedSettings.showDiscord ? { id: "80351110224678912", username: "farouk.stein" } : undefined,
   }
+}
+
+export async function seedSetProfileSettings(change: Partial<ProfileSettings>): Promise<ProfileSettings> {
+  await delay()
+  if (change.banner !== undefined) seedSettings.banner = change.banner
+  if (change.showDiscord !== undefined) seedSettings.showDiscord = change.showDiscord
+  return { ...seedSettings }
 }
 
 export async function seedUserRank(keyId: string): Promise<UserRankResponse> {

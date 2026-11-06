@@ -4,10 +4,16 @@ import { CollapsibleSection } from "@/components/CollapsibleSection"
 import { DiscordSection } from "@/components/DiscordSection"
 import { NicknameEditor } from "@/components/NicknameEditor"
 import { type DiscordLink, useDiscordLink } from "@/hooks/useDiscordLink"
-import type { ReactNode } from "react"
+import { type ReactNode, useState } from "react"
+import { putProfileSettings } from "@/lib/api"
 
 // The signed-in owner's editing controls, shown on their own profile wherever it renders.
-export function OwnerControls() {
+interface OwnerControlsProps {
+  showDiscord: boolean
+  onProfileChange: () => Promise<void>
+}
+
+export function OwnerControls({ showDiscord, onProfileChange }: OwnerControlsProps) {
   const session = useSession()
   const discord = useDiscordLink()
 
@@ -24,6 +30,17 @@ export function OwnerControls() {
     },
   }
 
+  const [discordShown, setDiscordShown] = useState(showDiscord)
+  const toggleDiscord = async (checked: boolean) => {
+    setDiscordShown(checked)
+    try {
+      await putProfileSettings({ showDiscord: checked })
+      await onProfileChange()
+    } catch {
+      setDiscordShown(!checked)
+    }
+  }
+
   return (
     <>
       <OwnerSection title="Profile picture" subtitle="Pick how you appear across Unison.">
@@ -33,7 +50,7 @@ export function OwnerControls() {
         <NicknameEditor />
       </OwnerSection>
       <OwnerSection title="Discord" subtitle="Link your account for leaderboard roles.">
-        <DiscordSection link={link} />
+        <DiscordSection link={link} showOnProfile={{ checked: discordShown, onChange: toggleDiscord }} />
       </OwnerSection>
     </>
   )

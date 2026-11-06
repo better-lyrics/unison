@@ -13,6 +13,7 @@ import type {
   FeedEntry,
   LyricsSearchHit,
   Page,
+  ProfileSettings,
   QueueEntry,
   SealedSort,
   SealedSyncFilter,
@@ -96,6 +97,15 @@ export async function putAvatar(choice: AvatarChoice): Promise<{ avatarUrl: stri
     method: "PUT",
     headers: { "content-type": "application/json" },
     body: JSON.stringify(choice),
+  })
+}
+
+export async function putProfileSettings(change: Partial<ProfileSettings>): Promise<ProfileSettings> {
+  if (IS_SPA_EXPANSION_SEED) return (await import("./dev-seed")).seedSetProfileSettings(change)
+  return authedFetch<ProfileSettings>("/users/me/profile", {
+    method: "PUT",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(change),
   })
 }
 

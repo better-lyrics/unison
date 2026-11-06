@@ -59,6 +59,11 @@ export interface UserStats {
   discord?: { id: string; username: string }
 }
 
+export interface ProfileSettings {
+  banner: string | null
+  showDiscord: boolean
+}
+
 export interface RankedUserStats extends UserStats {
   ranked: true
   reputation: number

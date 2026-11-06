@@ -9,6 +9,7 @@ import { BadgeWall } from "@/components/BadgeWall"
 import { EmptyState } from "@/components/EmptyState"
 import { FeaturedBadgeEditor } from "@/components/FeaturedBadgeEditor"
 import { OwnerControls } from "@/components/OwnerControls"
+import { BannerPicker } from "@/components/profile/BannerPicker"
 import { ProfileCard } from "@/components/profile/ProfileCard"
 import { ProfileSide } from "@/components/profile/ProfileSide"
 import { SectionHeading } from "@/components/profile/SectionHeading"
@@ -76,12 +77,16 @@ function OwnerBlock({
   catalogue,
   onGamificationChange,
   onPreview,
+  showDiscord,
+  onProfileChange,
 }: {
   ref: Ref<HTMLElement>
   gamification: UserGamification | null
   catalogue: BadgeCatalogue | null
   onGamificationChange: (updated: UserGamification) => void
   onPreview: () => void
+  showDiscord: boolean
+  onProfileChange: () => Promise<void>
 }) {
   return (
     <section ref={ref} id="edit-profile" className="flex scroll-mt-8 flex-col gap-4">
@@ -96,7 +101,7 @@ function OwnerBlock({
         {gamification && catalogue ? (
           <FeaturedBadgeEditor gamification={gamification} catalogue={catalogue} onSaved={onGamificationChange} />
         ) : null}
-        <OwnerControls />
+        <OwnerControls showDiscord={showDiscord} onProfileChange={onProfileChange} />
       </div>
     </section>
   )
@@ -109,6 +114,7 @@ function ProfileBody({
   catalogue,
   isOwner,
   onGamificationChange,
+  onProfileChange,
 }: {
   keyId: string
   rank: UserRankResponse
@@ -116,11 +122,13 @@ function ProfileBody({
   catalogue: BadgeCatalogue | null
   isOwner: boolean
   onGamificationChange: (updated: UserGamification) => void
+  onProfileChange: () => Promise<void>
 }) {
   const art = useProfileArt(rank)
   useArtPalette(art.wash)
   const [preview, setPreview] = useState(false)
   const editRef = useRef<HTMLElement>(null)
+  const pickerRef = useRef<HTMLDivElement>(null)
   const owner = isOwner && !preview
 
   const editProfile = () => {
@@ -131,10 +139,25 @@ function ProfileBody({
   return (
     <div className={artPageClass}>
       <ArtBackground src={art.wash} />
+      {owner ? (
+        <BannerPicker
+          ref={pickerRef}
+          keyId={keyId}
+          current={rank.banner?.videoId ?? null}
+          onSaved={onProfileChange}
+        />
+      ) : null}
       {isOwner && preview ? <PreviewBar onExit={() => setPreview(false)} /> : null}
       <section className={PROFILE_STAGE}>
         <div className="w-full max-w-[400px]">
-          <ProfileCard keyId={keyId} rank={rank} gamification={gamification} catalogue={catalogue} art={art} />
+          <ProfileCard
+            keyId={keyId}
+            rank={rank}
+            gamification={gamification}
+            catalogue={catalogue}
+            art={art}
+            onChangeBanner={owner && rank.ranked && rank.submissionCount > 0 ? () => pickerRef.current?.showPopover() : undefined}
+          />
         </div>
         <ProfileSide keyId={keyId} rank={rank} gamification={gamification} owner={owner} onEditProfile={editProfile} />
       </section>
@@ -156,6 +179,8 @@ function ProfileBody({
             catalogue={catalogue}
             onGamificationChange={onGamificationChange}
             onPreview={() => setPreview(true)}
+            showDiscord={rank.discord !== undefined}
+            onProfileChange={onProfileChange}
           />
         ) : null}
       </div>
@@ -172,6 +197,7 @@ function ProfileGate({
   gamSettled,
   isOwner,
   onGamificationChange,
+  onProfileChange,
 }: {
   keyId: string
   rank: UserRankResponse | null
@@ -181,6 +207,7 @@ function ProfileGate({
   gamSettled: boolean
   isOwner: boolean
   onGamificationChange: (updated: UserGamification) => void
+  onProfileChange: () => Promise<void>
 }) {
   const catalogueState = useBadgeCatalogue()
   const catalogue = catalogueState.status === "success" ? catalogueState.data : null
@@ -198,6 +225,7 @@ function ProfileGate({
       catalogue={catalogue}
       isOwner={isOwner}
       onGamificationChange={onGamificationChange}
+      onProfileChange={onProfileChange}
     />
   )
 }
@@ -219,7 +247,14 @@ export function UserProfileView({ keyId }: UserProfileViewProps) {
     setAsyncData(`user:badges:${updated.keyId}`, updated)
   }, [])
 
-  const fetchedRank = rank.status === "success" ? rank.data : null
+  const [rankOverride, setRankOverride] = useState<UserRankResponse | null>(null)
+  const onProfileChange = useCallback(async () => {
+    const fresh = await fetchUserRank(keyId)
+    setAsyncData(`leaderboard:user:${keyId}`, fresh)
+    setRankOverride(fresh)
+  }, [keyId])
+
+  const fetchedRank = rankOverride?.keyId === keyId ? rankOverride : rank.status === "success" ? rank.data : null
   const shownRank =
     fetchedRank && ownAvatarUrl !== undefined ? { ...fetchedRank, avatarUrl: ownAvatarUrl } : fetchedRank
   const fetched = gamification.status === "success" ? gamification.data : null
@@ -238,6 +273,7 @@ export function UserProfileView({ keyId }: UserProfileViewProps) {
           gamSettled={gamSettled}
           isOwner={isOwner}
           onGamificationChange={onGamificationChange}
+          onProfileChange={onProfileChange}
         />
       </BadgeModalProvider>
     </BadgeCatalogueProvider>
