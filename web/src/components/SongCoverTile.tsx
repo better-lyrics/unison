@@ -47,27 +47,38 @@ export function SongCoverTile({ song: s }: { song: CoverTileSong }) {
           <p title={s.artist} className={cn("mt-0.5 truncate text-xs text-(--ink-3)", OVERHANG)}>
             {s.artist}
           </p>
-          {s.submitter ? (
-            <p className="mt-1.5 flex min-w-0 items-center gap-1.5 text-xs text-(--ink-2)">
-              <UserAvatar
-                avatarUrl={s.submitter.avatarUrl}
-                keyId={s.submitter.keyId}
-                className="size-4 shrink-0 rounded-full"
-                loading="lazy"
-              />
-              <span className="truncate">{s.submitter.displayName}</span>
-            </p>
-          ) : null}
-          <div className="mt-1.5 flex items-center gap-2 text-xs text-(--ink-dim) [text-shadow:none]">
-            <SyncTag kind={syncTypeFor(s.syncType, s.format)} />
-            <span className="truncate">{formatRelativeTime(s.createdAt)}</span>
-            {s.voteCount === undefined ? null : (
-              <span
-                title={`${formatExact(s.voteCount)} votes`}
-                className="ml-auto whitespace-nowrap font-mono text-[11px]"
-              >
-                {formatCompact(s.voteCount)} {s.voteCount === 1 ? "vote" : "votes"}
-              </span>
+          <div className="mt-3 flex min-w-0 items-center gap-2 text-xs text-(--ink-dim) [text-shadow:none]">
+            {s.submitter ? (
+              <>
+                <UserAvatar
+                  avatarUrl={s.submitter.avatarUrl}
+                  keyId={s.submitter.keyId}
+                  className="size-4 shrink-0 rounded-full"
+                  loading="lazy"
+                />
+                <span
+                  title={`${s.submitter.displayName} · ${formatRelativeTime(s.createdAt)}`}
+                  className="min-w-0 truncate"
+                >
+                  <span className="text-(--ink-2)">{s.submitter.displayName}</span>
+                  {" · "}
+                  {formatRelativeTime(s.createdAt)}
+                </span>
+                <SyncTag kind={syncTypeFor(s.syncType, s.format)} className="ml-auto" />
+              </>
+            ) : (
+              <>
+                <SyncTag kind={syncTypeFor(s.syncType, s.format)} />
+                <span className="truncate">{formatRelativeTime(s.createdAt)}</span>
+                {s.voteCount === undefined ? null : (
+                  <span
+                    title={`${formatExact(s.voteCount)} votes`}
+                    className="ml-auto whitespace-nowrap font-mono text-[11px]"
+                  >
+                    {formatCompact(s.voteCount)} {s.voteCount === 1 ? "vote" : "votes"}
+                  </span>
+                )}
+              </>
             )}
           </div>
         </div>
