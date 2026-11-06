@@ -8,6 +8,7 @@ import {
 	Logo,
 	OgBrand,
 	Pill,
+	QrCode,
 	RIM,
 	type RingGeometry,
 	TEXT,
@@ -18,6 +19,7 @@ import {
 	fitLine,
 } from "./components"
 import { FONT_STACK } from "./fonts"
+import type { QrModules } from "./qr"
 
 export interface Gem {
 	art: string
@@ -47,9 +49,12 @@ export interface ProfileDownloadData extends ProfileBase {
 	banner: string | null
 	featured: Gem[]
 	stats: [string, string][]
+	qr: QrModules | null
 }
 
 export const CARD_SIZE = { width: 400, height: 560 }
+
+const QR_INK = "rgba(236, 232, 245, 0.82)"
 
 const WALL_RING: RingGeometry = {
 	radius: 46.25,
@@ -416,9 +421,16 @@ export function profileDownloadNode(card: ProfileDownloadData) {
 							>
 								{value}
 							</span>
-							<span style={{ marginTop: 6, fontSize: 12, color: card.ink.three }}>{label}</span>
+							<span style={{ marginTop: 6, fontSize: 12, lineHeight: "14px", color: card.ink.three }}>
+								{label}
+							</span>
 						</div>
 					))}
+					{card.qr ? (
+						<div style={{ display: "flex", marginLeft: "auto" }}>
+							<QrCode qr={card.qr} size={42} color={QR_INK} />
+						</div>
+					) : null}
 				</div>
 			</div>
 			<div style={{ ...fill, borderRadius: 28, boxShadow: RIM }} />

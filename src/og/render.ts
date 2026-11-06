@@ -3,6 +3,7 @@ import { getUserBadges } from "@/db/badges"
 import { CATALOGUE, badgeImageFile } from "@/db/badges/definitions"
 import { getCuratorRank } from "@/db/leaderboard"
 import { countVariantsByVideoId, findByVideoId } from "@/db/lyrics"
+import { profileQrUrl, qrModules } from "@/og/qr"
 import { getSubmissionsByUser } from "@/db/profile"
 import { getProfileExtras } from "@/db/profile-settings"
 import { getUserByKeyId, resolveIdentity, resolvePeople } from "@/db/users"
@@ -299,6 +300,7 @@ export async function renderProfileDownload(env: Env, keyId: string): Promise<Re
 	const node = profileDownloadNode({
 		...base,
 		handle: identity.handle,
+		qr: identity.handle ? qrModules(profileQrUrl(identity.handle)) : null,
 		banner: profile.banner ? images.add("banner", profile.banner) : null,
 		featured: featured.filter((gem): gem is Gem => gem !== null),
 		stats: [

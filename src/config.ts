@@ -4,6 +4,7 @@ export const config = {
 	og: {
 		cacheControl: "public, max-age=3600, s-maxage=86400, stale-while-revalidate=604800",
 		downloadCacheControl: "public, max-age=300",
+		siteOrigin: "https://unison.betterlyrics.org",
 		memoryEntries: 100,
 	},
 	artwork: {
