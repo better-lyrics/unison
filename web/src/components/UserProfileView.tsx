@@ -128,6 +128,7 @@ function ProfileBody({
   const [preview, setPreview] = useState(false)
   const editRef = useRef<HTMLElement>(null)
   const pickerRef = useRef<HTMLDivElement>(null)
+  const [bannerAnchor, setBannerAnchor] = useState<HTMLElement | null>(null)
   const owner = isOwner && !preview
 
   const editProfile = () => {
@@ -140,6 +141,7 @@ function ProfileBody({
       {owner ? (
         <BannerPicker
           ref={pickerRef}
+          anchor={bannerAnchor}
           keyId={keyId}
           current={rank.banner?.videoId ?? null}
           onSaved={onProfileChange}
@@ -154,7 +156,14 @@ function ProfileBody({
             gamification={gamification}
             catalogue={catalogue}
             art={art}
-            onChangeBanner={owner && rank.ranked && rank.submissionCount > 0 ? () => pickerRef.current?.showPopover() : undefined}
+            onChangeBanner={
+              owner && rank.ranked && rank.submissionCount > 0
+                ? (anchor) => {
+                    setBannerAnchor(anchor)
+                    pickerRef.current?.showPopover()
+                  }
+                : undefined
+            }
           />
         </div>
         <ProfileSide keyId={keyId} rank={rank} gamification={gamification} owner={owner} onEditProfile={editProfile} />

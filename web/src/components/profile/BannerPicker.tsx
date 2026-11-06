@@ -1,3 +1,4 @@
+import { autoUpdate, flip, offset, shift, size, useFloating } from "@floating-ui/react"
 import { useQueries } from "@tanstack/react-query"
 import { type RefObject, useCallback, useState } from "react"
 import { useAsyncData } from "@/hooks/useAsyncData"
@@ -8,15 +9,36 @@ import { cn } from "@/lib/cn"
 import { popoverSurfaceClass } from "@/components/ui"
 
 const TILE_SIZE = 400
+const MAX_HEIGHT = 520
+const EDGE = 16
 
 interface BannerPickerProps {
   ref: RefObject<HTMLDivElement | null>
+  anchor: HTMLElement | null
   keyId: string
   current: string | null
   onSaved: () => Promise<void>
 }
 
-export function BannerPicker({ ref, keyId, current, onSaved }: BannerPickerProps) {
+export function BannerPicker({ ref, anchor, keyId, current, onSaved }: BannerPickerProps) {
+  const { refs, floatingStyles } = useFloating({
+    strategy: "fixed",
+    placement: "bottom-end",
+    elements: { reference: anchor },
+    whileElementsMounted: autoUpdate,
+    middleware: [
+      offset(8),
+      flip({ padding: EDGE }),
+      shift({ padding: EDGE }),
+      size({
+        padding: EDGE,
+        apply({ availableHeight, elements }) {
+          elements.floating.style.maxHeight = `${Math.min(MAX_HEIGHT, availableHeight)}px`
+        },
+      }),
+    ],
+  })
+
   const fetcher = useCallback(() => fetchUserSubmissions(keyId), [keyId])
   const submissions = useAsyncData(fetcher, `user:submissions:${keyId}`)
   const seenVideos = new Set<string>()
@@ -52,11 +74,15 @@ export function BannerPicker({ ref, keyId, current, onSaved }: BannerPickerProps
 
   return (
     <div
-      ref={ref}
+      ref={(node) => {
+        ref.current = node
+        refs.setFloating(node)
+      }}
       popover="auto"
+      style={floatingStyles}
       className={cn(
         popoverSurfaceClass,
-        "fixed inset-[128px_32px_auto_auto] m-0 max-h-[min(520px,calc(100dvh-160px))] w-[360px] max-w-[calc(100vw-32px)] overflow-y-auto overscroll-contain rounded-[28px] border-0 p-[18px] max-[1000px]:inset-[auto_16px_80px_16px] max-[1000px]:w-auto",
+        "inset-auto m-0 w-[360px] max-w-[calc(100vw-32px)] overflow-y-auto overscroll-contain rounded-[28px] border-0 p-[18px] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
       )}
     >
       <h2 className="m-0 text-[15px] font-bold">Banner</h2>

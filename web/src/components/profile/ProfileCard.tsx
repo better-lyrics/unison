@@ -38,7 +38,7 @@ interface ProfileCardProps {
   gamification: UserGamification | null
   catalogue: BadgeCatalogue | null
   art: ProfileArt
-  onChangeBanner?: () => void
+  onChangeBanner?: (anchor: HTMLElement) => void
 }
 
 function Standing({ tier, rank }: { tier: string; rank: number | null }) {
@@ -173,7 +173,7 @@ export function ProfileCard({ keyId, rank, gamification, catalogue, art, onChang
         <div className="group/banner absolute inset-x-0 top-0 h-[58%]">
           <button
             type="button"
-            onClick={onChangeBanner}
+            onClick={(event) => onChangeBanner(event.currentTarget)}
             className={cn(
               glassActionClass,
               "absolute top-16 right-4 pl-4 opacity-0 backdrop-blur-[20px] transition-[opacity,background-color,scale] group-focus-within/banner:opacity-100 group-hover/banner:opacity-100 [@media(hover:none)]:opacity-100",
