@@ -1,10 +1,11 @@
-import { Elysia, t } from "elysia"
-import { resolveArtwork } from "@/services/artwork"
+import { config } from "@/config"
+import { fetchArtworkImage, resolveArtwork } from "@/services/artwork"
 import type { Env } from "@/types"
 import { normalizeArtworkUrl } from "@/utils/artwork"
 import { ErrorCode, buildError } from "@/utils/errors"
 import { readRateLimit } from "@/utils/read-rate-limit"
 import { isVideoId } from "@/utils/video-id"
+import { Elysia, t } from "elysia"
 
 export const artworkRoutes = (env: Env) =>
 	new Elysia({ prefix: "/artwork" })
@@ -30,4 +31,25 @@ export const artworkRoutes = (env: Env) =>
 					size: t.Optional(t.Integer({ minimum: 32, maximum: 2048 })),
 				}),
 			}
+		)
+		.get(
+			"/image",
+			async ({ env, query, status, set }) => {
+				if (!isVideoId(query.v)) return status(400, buildError(ErrorCode.INVALID_ID))
+				const artworkUrl = await resolveArtwork(env, query.v)
+				const image = artworkUrl
+					? await fetchArtworkImage(artworkUrl, config.artwork.washSize)
+					: null
+				if (!image) {
+					set.headers["cache-control"] = "public, max-age=3600"
+					return status(404, buildError(ErrorCode.NOT_FOUND))
+				}
+				return new Response(new Uint8Array(image.bytes), {
+					headers: {
+						"content-type": image.type,
+						"cache-control": config.artwork.imageCacheControl,
+					},
+				})
+			},
+			{ query: t.Object({ v: t.String() }) }
 		)

@@ -7,6 +7,9 @@ export const config = {
 	},
 	artwork: {
 		size: 544,
+		washSize: 256,
+		fetchTimeoutMs: 3000,
+		imageCacheControl: "public, max-age=86400, s-maxage=2592000, stale-while-revalidate=604800",
 		positiveTtlSeconds: 60 * 60 * 24 * 30,
 		negativeTtlSeconds: 60 * 60 * 24 * 7,
 		refreshProbability: 0.03,

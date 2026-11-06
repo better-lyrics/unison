@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query"
 import { useMemo } from "react"
 import { backedImage, sampleAccent } from "@/lib/accent"
-import { sizedArtworkUrl } from "@/lib/artwork"
+import { artworkImageUrl, sizedArtworkUrl } from "@/lib/artwork"
 import { sleeveDataUrl } from "@/lib/sleeve"
 import type { UserRankResponse } from "@/lib/types"
 
@@ -37,5 +37,6 @@ export function useProfileArt(rank: UserRankResponse): ProfileArt {
     [avatarUrl, displayName, keyId],
   )
   const avatar = avatarUrl ? (backed ?? avatarUrl) : avatarUrl
-  return { banner, wash: banner ?? (avatarUrl ? (backed ?? null) : sleeve), avatar }
+  const bannerWash = rank.banner ? artworkImageUrl(rank.banner.videoId) : null
+  return { banner, wash: bannerWash ?? (avatarUrl ? (backed ?? null) : sleeve), avatar }
 }

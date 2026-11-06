@@ -1,7 +1,7 @@
 import { readFile } from "node:fs/promises"
 import { fileURLToPath } from "node:url"
 import { log } from "@/infra/logger"
-import { resolveArtwork } from "@/services/artwork"
+import { fetchArtworkImage, resolveArtwork } from "@/services/artwork"
 import type { Env } from "@/types"
 import { type Accent, accentFromPixels } from "@/utils/accent"
 import { normalizeArtworkUrl } from "@/utils/artwork"
@@ -37,8 +37,8 @@ async function fetchBytes(url: string): Promise<Buffer | null> {
 	}
 }
 
-export function coverFromUrl(url: string, size = COVER_SIZE): Promise<Buffer | null> {
-	return fetchBytes(normalizeArtworkUrl(url, size))
+export async function coverFromUrl(url: string, size = COVER_SIZE): Promise<Buffer | null> {
+	return (await fetchArtworkImage(url, size))?.bytes ?? null
 }
 
 export async function coverBytes(

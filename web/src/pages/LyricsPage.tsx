@@ -9,7 +9,7 @@ import { artPageClass } from "@/components/ui"
 import { useArtPalette } from "@/hooks/useArtPalette"
 import { useLyricsVariant, useLyricsVariants } from "@/hooks/useLyricsData"
 import { useYouTubePlayer } from "@/hooks/useYouTubePlayer"
-import { useArtwork } from "@/lib/artwork"
+import { artworkImageUrl, useArtwork } from "@/lib/artwork"
 import { sleeveDataUrl } from "@/lib/sleeve"
 import { useCallback, useMemo, useState } from "react"
 import { useParams, useSearchParams } from "react-router-dom"
@@ -57,7 +57,7 @@ export function LyricsPage() {
   const { data: art, isPending: artPending } = useArtwork(safeVideoId)
   const lead = variants[0]
   const sleeve = useMemo(() => (lead ? sleeveDataUrl(lead.song, lead.artist, SLEEVE_SIZE) : null), [lead])
-  const backdrop = art ?? (artPending ? null : sleeve)
+  const backdrop = art ? artworkImageUrl(safeVideoId) : artPending ? null : sleeve
   useArtPalette(backdrop)
 
   const handleSelect = useCallback(

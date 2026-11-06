@@ -9,6 +9,10 @@ export function youtubeThumbnailFallbackUrl(videoId: string): string {
   return `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`
 }
 
+export function artworkImageUrl(videoId: string): string {
+  return `/artwork/image?v=${encodeURIComponent(videoId)}`
+}
+
 const ARTWORK_SIZE = /=w\d+-h\d+/
 
 export function sizedArtworkUrl(url: string, size: number): string {
