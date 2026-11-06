@@ -80,8 +80,9 @@ function SongTile({
 }
 
 function SongGroup({ keyId, ...rest }: TileState & { keyId: string; size: number; brokenSrcs: ReadonlySet<string> }) {
-  const songs = useMySongs(keyId)
-  if (!songs || songs.length === 0) return null
+  const mine = useMySongs(keyId)
+  if (mine.status !== "success" || mine.songs.length === 0) return null
+  const songs = mine.songs
   return (
     <div className="space-y-2">
       <div className={groupLabelClass}>From your songs</div>

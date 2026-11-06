@@ -41,7 +41,7 @@ export function BannerPicker({ ref, anchor, keyId, current, onSaved }: BannerPic
   })
 
   const mine = useMySongs(keyId)
-  const songs = mine ?? []
+  const songs = mine.status === "success" ? mine.songs : []
 
   useEffect(() => ref.current?.showPopover(), [ref])
   const arts = useQueries({ queries: songs.map((s) => artworkQuery(s.videoId, TILE_SIZE)) })
@@ -52,7 +52,7 @@ export function BannerPicker({ ref, anchor, keyId, current, onSaved }: BannerPic
     seenArt.add(url)
     return [{ song, url }]
   })
-  const pending = mine === null ? 8 : arts.filter((art) => art.isPending).length
+  const pending = mine.status === "loading" ? 8 : arts.filter((art) => art.isPending).length
 
   const [saving, setSaving] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -121,6 +121,7 @@ export function BannerPicker({ ref, anchor, keyId, current, onSaved }: BannerPic
           Remove banner
         </button>
       ) : null}
+      {mine.status === "error" ? <p className="mt-3 text-xs text-red-400">Could not load your songs. Try again later.</p> : null}
       {error ? <p className="mt-3 text-xs text-red-400">{error}</p> : null}
     </div>
   )

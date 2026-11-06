@@ -20,7 +20,7 @@ import type { Mark, VariantFull } from "@/lib/types"
 import { youTubeMusicUrl } from "@/lib/youtube-music"
 import { IconCheck, IconShare } from "@tabler/icons-react"
 import { motion } from "motion/react"
-import { useState } from "react"
+import { useEffect, useState } from "react"
 
 const SYNC_TIP: Record<SyncKind, string> = {
   syllable: "Syllable synced: each syllable highlights as it is sung.",
@@ -52,6 +52,8 @@ export const HERO_GRID =
 
 export const HERO_ART = "w-full max-[1000px]:w-[min(260px,70vw)] max-sm:w-full"
 
+const AUTOPLAY_GRACE_MS = 1500
+
 const COVER_FRAME =
   "group relative aspect-square w-full overflow-hidden rounded-2xl shadow-[0_24px_60px_rgba(0,0,0,0.35),0_6px_18px_rgba(0,0,0,0.25)] after:pointer-events-none after:absolute after:inset-0 after:rounded-[inherit] after:outline after:outline-1 after:-outline-offset-1 after:outline-white/10"
 
@@ -64,6 +66,7 @@ export interface HeroPlayer {
   ref: (node: HTMLDivElement | null) => void
   active: boolean
   playing: boolean
+  ready: boolean
   failed: boolean
   onToggle: () => void
 }
@@ -78,16 +81,22 @@ interface SongHeroProps {
 function Cover({ variant, art, player }: Omit<SongHeroProps, "versions">) {
   const label = player.playing ? "Pause" : "Play"
   const [started, setStarted] = useState(false)
-  if (player.playing && !started) setStarted(true)
-  const covered = !(player.active && (started || player.failed))
+  const [stalled, setStalled] = useState(false)
+  if (player.active && player.playing && !started) setStarted(true)
+  useEffect(() => {
+    if (!player.active || !player.ready || player.playing) return
+    const timer = window.setTimeout(() => setStalled(true), AUTOPLAY_GRACE_MS)
+    return () => window.clearTimeout(timer)
+  }, [player.active, player.ready, player.playing])
+  const covered = !(player.active && (started || stalled || player.failed))
   return (
     <div className={COVER_FRAME}>
-      {player.active ? <div ref={player.ref} className="absolute inset-0 bg-black" /> : null}
+      {player.active ? <div ref={player.ref} inert={covered} className="absolute inset-0 bg-black" /> : null}
       <div
         aria-hidden={!covered}
         className={cn(
-          "absolute inset-0 transition-[opacity,filter] duration-400 ease-in-out motion-reduce:transition-none",
-          !covered && "pointer-events-none opacity-0 blur-[2px]",
+          "absolute inset-0 transition-[opacity,filter] duration-(--reveal-dur) ease-in-out motion-reduce:transition-none",
+          !covered && "pointer-events-none opacity-0 blur-(--reveal-blur)",
         )}
       >
         <CoverImage src={art} song={variant.song} artist={variant.artist} />

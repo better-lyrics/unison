@@ -83,7 +83,7 @@ export function VoteControls({ variantId, videoId, variant, beforeReport }: Vote
           )}
         >
           <BlUpvoteIcon size={18} />
-          <NumberFlow value={variant.score} />
+          <NumberFlow key={variantId} value={variant.score} />
         </button>
         <span aria-hidden="true" className="h-5 w-px bg-white/[0.14]" />
         <button

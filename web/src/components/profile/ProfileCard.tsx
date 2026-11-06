@@ -1,5 +1,5 @@
 import { IconPhoto } from "@tabler/icons-react"
-import { useCallback, useState } from "react"
+import { useCallback, useEffect, useState } from "react"
 import { ArtBackground } from "@/components/ArtBackground"
 import { BadgeArt } from "@/components/BadgeArt"
 import { BetterLyricsLogo } from "@/components/BetterLyricsLogo"
@@ -26,6 +26,8 @@ const PILL = cn(
   glassClass,
   "inline-flex h-9 items-center whitespace-nowrap rounded-full text-sm font-bold backdrop-blur-[24px] [text-shadow:none]",
 )
+
+const CARD_ART_WAIT_MS = 3000
 
 const RIM =
   "after:pointer-events-none after:absolute after:inset-0 after:rounded-[inherit] after:shadow-[inset_0_1px_0_rgba(255,255,255,0.1),inset_0_0_0_1px_rgba(255,255,255,0.06)]"
@@ -120,13 +122,17 @@ export function ProfileCard({ keyId, rank, gamification, catalogue, art, onChang
   const tier = rank.community ? null : (gamification?.tier ?? null)
   const [ready, setReady] = useState(false)
   const markReady = useCallback(() => setReady(true), [])
+  useEffect(() => {
+    const timer = window.setTimeout(markReady, CARD_ART_WAIT_MS)
+    return () => window.clearTimeout(timer)
+  }, [markReady])
 
   return (
     <div className="relative">
       {ready ? null : <Bone className="absolute inset-0 rounded-[28px]" />}
       <div
         className={cn(
-          "relative isolate aspect-[5/7] w-full overflow-hidden rounded-[28px] shadow-[0_40px_100px_rgba(0,0,0,0.55)] transition-opacity duration-400 ease-in-out motion-reduce:transition-none",
+          "relative isolate aspect-[5/7] w-full overflow-hidden rounded-[28px] shadow-[0_40px_100px_rgba(0,0,0,0.55)] transition-opacity duration-(--reveal-dur) ease-in-out motion-reduce:transition-none",
           RIM,
           !ready && "opacity-0",
         )}

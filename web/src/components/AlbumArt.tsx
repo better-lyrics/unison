@@ -22,8 +22,8 @@ export function CoverImage({ src, song, artist, className }: CoverProps & { src:
           onLoad={() => setLoaded(src)}
           onError={() => setFailed(src)}
           className={cn(
-            "absolute inset-0 size-full object-cover transition-[opacity,filter] duration-400 ease-in-out motion-reduce:transition-none",
-            loaded === src ? "opacity-100 blur-none" : "opacity-0 blur-[2px]",
+            "absolute inset-0 size-full object-cover transition-[opacity,filter] duration-(--reveal-dur) ease-in-out motion-reduce:transition-none",
+            loaded === src ? "opacity-100 blur-none" : "opacity-0 blur-(--reveal-blur)",
           )}
         />
       ) : null}

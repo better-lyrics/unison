@@ -91,6 +91,7 @@ export interface UseYouTubePlayerResult {
   getCurrentTime: () => number
   getPlaying: () => boolean
   playing: boolean
+  ready: boolean
   failed: boolean
   seekTo: (seconds: number) => void
   play: () => void
@@ -106,6 +107,7 @@ export function useYouTubePlayer(videoId: string | null, options?: UseYouTubePla
   const playerRef = useRef<YTPlayer | null>(null)
   const [playing, setPlaying] = useState(false)
   const [failed, setFailed] = useState(false)
+  const [ready, setReady] = useState(false)
   // YT.Player methods aren't attached until onReady fires; calling one earlier
   // throws. The rAF sync loop polls every frame, so the getters must stay inert
   // until the player is ready or one throw kills the loop permanently.
@@ -138,6 +140,7 @@ export function useYouTubePlayer(videoId: string | null, options?: UseYouTubePla
         events: {
           onReady: () => {
             if (cancelled) return
+            setReady(true)
             readyRef.current = true
             if (pendingSeekRef.current !== null) {
               player.seekTo(pendingSeekRef.current, true)
@@ -165,6 +168,7 @@ export function useYouTubePlayer(videoId: string | null, options?: UseYouTubePla
       readyRef.current = false
       setPlaying(false)
       setFailed(false)
+      setReady(false)
       pendingSeekRef.current = null
       pendingPlayRef.current = false
       const player = playerRef.current
@@ -212,5 +216,5 @@ export function useYouTubePlayer(videoId: string | null, options?: UseYouTubePla
     return player.getPlayerState() === YT_STATE_PLAYING
   }, [])
 
-  return { ref: setNode, getCurrentTime, getPlaying, playing, failed, seekTo, play, pause }
+  return { ref: setNode, getCurrentTime, getPlaying, playing, ready, failed, seekTo, play, pause }
 }

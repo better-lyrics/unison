@@ -27,6 +27,13 @@ import { type KeyboardEvent, useEffect, useRef, useState } from "react"
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom"
 
 const MIN_QUERY_LENGTH = 2
+
+const dropdownMotion = () => ({
+  duration: { open: tokenMs("--dropdown-open-dur", 250), close: tokenMs("--dropdown-close-dur", 150) },
+  open: `scale(${tokenValue("--dropdown-pre-scale", "0.97")})`,
+  close: `scale(${tokenValue("--dropdown-closing-scale", "0.99")})`,
+  ease: tokenValue("--dropdown-ease", "cubic-bezier(0.22, 1, 0.36, 1)"),
+})
 const DEBOUNCE_MS = 200
 const MAX_SUGGESTIONS = 5
 
@@ -110,13 +117,14 @@ export function SearchBar({ compact = false, glass = false }: SearchBarProps) {
     middleware: [offset(8), flip({ padding: 8 }), shift({ padding: 8 })],
   })
   const still = useReducedMotion()
+  const [dropdown] = useState(dropdownMotion)
   const { isMounted, styles } = useTransitionStyles(context, {
-    duration: { open: tokenMs("--dropdown-open-dur", 250), close: tokenMs("--dropdown-close-dur", 150) },
-    initial: still ? { opacity: 0 } : { opacity: 0, transform: `scale(${tokenValue("--dropdown-pre-scale", "0.97")})` },
-    close: still ? { opacity: 0 } : { opacity: 0, transform: `scale(${tokenValue("--dropdown-closing-scale", "0.99")})` },
+    duration: dropdown.duration,
+    initial: still ? { opacity: 0 } : { opacity: 0, transform: dropdown.open },
+    close: still ? { opacity: 0 } : { opacity: 0, transform: dropdown.close },
     common: {
       transformOrigin: placement.startsWith("top") ? "bottom right" : "top right",
-      transitionTimingFunction: tokenValue("--dropdown-ease", "cubic-bezier(0.22, 1, 0.36, 1)"),
+      transitionTimingFunction: dropdown.ease,
     },
   })
   const role = useRole(context, { role: "combobox" })
