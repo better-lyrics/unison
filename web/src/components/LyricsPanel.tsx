@@ -15,9 +15,9 @@ import { languageName } from "@/lib/language"
 import { useScrollEdges } from "@/hooks/useScrollEdges"
 
 const TOOL_CLASS =
-  "relative inline-flex h-9 cursor-pointer items-center gap-1.5 rounded-full px-3 text-xs font-medium text-(--ink-2,var(--color-unison-text-secondary)) transition-[color,background-color,scale] duration-150 ease-[cubic-bezier(0.2,0,0,1)] hover:bg-white/[0.08] hover:text-unison-text after:absolute after:inset-x-0 after:-inset-y-0.5 active:not-disabled:scale-[0.96]"
+  "relative inline-flex h-9 cursor-pointer items-center gap-1.5 rounded-[10px] px-3 [corner-shape:superellipse(1.6)] text-xs font-medium text-(--ink-2,var(--color-unison-text-secondary)) transition-[color,background-color,scale] duration-150 ease-[cubic-bezier(0.2,0,0,1)] hover:bg-white/[0.08] hover:text-unison-text after:absolute after:inset-x-0 after:-inset-y-0.5 active:not-disabled:scale-[0.96]"
 
-const SEGMENTS_CLASS = cn(glassClass, "inline-flex rounded-full p-[3px]")
+const SEGMENTS_CLASS = cn(glassClass, "inline-flex rounded-[10px] p-[3px] [corner-shape:superellipse(1.6)]")
 
 type Mode = "synced" | "raw"
 
@@ -43,7 +43,7 @@ export function LyricsPanel({ variant, getCurrentTime, getPlaying, onLineClick, 
       aria-pressed={active}
       onClick={onClick}
       className={cn(
-        "relative h-[30px] cursor-pointer rounded-full px-3 text-xs after:absolute after:inset-x-0 after:-inset-y-[5px] font-medium transition-colors duration-150 ease-[cubic-bezier(0.2,0,0,1)]",
+        "relative h-[30px] cursor-pointer rounded-[7px] px-3 text-xs [corner-shape:superellipse(1.6)] after:absolute after:inset-x-0 after:-inset-y-[5px] font-medium transition-colors duration-150 ease-[cubic-bezier(0.2,0,0,1)]",
         active ? "text-unison-text" : "text-(--ink-3,var(--color-unison-text-muted)) hover:text-unison-text",
       )}
     >
@@ -51,8 +51,8 @@ export function LyricsPanel({ variant, getCurrentTime, getPlaying, onLineClick, 
         <motion.span
           layoutId={group}
           transition={LAYOUT_TRANSITION}
-          style={{ borderRadius: 9999 }}
-          className="absolute inset-0 bg-white/[0.14]"
+          style={{ borderRadius: 7 }}
+          className="absolute inset-0 bg-white/[0.14] [corner-shape:superellipse(1.6)]"
         />
       ) : null}
       <span className="relative">{label}</span>

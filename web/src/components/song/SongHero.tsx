@@ -38,7 +38,7 @@ const TITLE_SIZE = {
 
 const TAG_PILL = cn(
   glassClass,
-  "inline-flex h-8 cursor-default items-center gap-1.5 whitespace-nowrap rounded-[10px] px-3 text-[13px] font-medium text-(--ink-2) [corner-shape:superellipse(1.6)]",
+  "inline-flex h-[30px] cursor-default items-center gap-1.5 whitespace-nowrap rounded-[10px] px-3 text-[13px] font-medium text-(--ink-2) [corner-shape:superellipse(1.6)]",
 )
 
 const PLAY_CIRCLE = cn(
@@ -211,7 +211,10 @@ export function SongHero({ variant, versions, art, player }: SongHeroProps) {
             onClick={player.onToggle}
             transition={{ layout: LAYOUT_TRANSITION }}
             style={{ borderRadius: 10 }}
-            className={cn(raisedChipClass, "max-sm:flex-1 max-sm:justify-center")}
+            className={cn(
+              raisedChipClass,
+              "shadow-[inset_0_1px_0_#fff,inset_0_-1px_0_rgba(18,17,22,0.14)] max-sm:flex-1 max-sm:justify-center",
+            )}
           >
             <motion.span layout className="inline-flex">
               <PlayPauseIcon playing={player.playing} className={chipIconClass} />
@@ -234,12 +237,14 @@ export function SongHero({ variant, versions, art, player }: SongHeroProps) {
             variant={{ score: variant.score, userVote: variant.userVote ?? null }}
             beforeReport={<ShareButton videoId={variant.videoId} />}
           />
-          <EditMetadataButton
-            videoId={variant.videoId}
-            lyricsId={variant.id}
-            current={{ song: variant.song, artist: variant.artist, album: variant.album ?? null }}
-          />
-          <SealLyricButton videoId={variant.videoId} lyricsId={variant.id} />
+          <div className="flex items-center gap-2 before:mr-1 before:h-5 before:w-px before:bg-white/[0.14] empty:hidden">
+            <EditMetadataButton
+              videoId={variant.videoId}
+              lyricsId={variant.id}
+              current={{ song: variant.song, artist: variant.artist, album: variant.album ?? null }}
+            />
+            <SealLyricButton videoId={variant.videoId} lyricsId={variant.id} />
+          </div>
         </div>
         {variant.hidden ? (
           <p className="mt-4 text-[13px] font-medium text-unison-warn">
@@ -265,9 +270,9 @@ export function SongHeroSkeleton() {
           <Bone className="h-3.5 w-1/4" />
         </div>
         <div className="mt-3 flex gap-2">
-          <Bone className="h-8 w-[93px] rounded-[10px]" />
-          <Bone className="h-8 w-[66px] rounded-[10px]" />
-          <Bone className="h-8 w-[117px] rounded-[10px]" />
+          <Bone className="h-[30px] w-[93px] rounded-[10px]" />
+          <Bone className="h-[30px] w-[66px] rounded-[10px]" />
+          <Bone className="h-[30px] w-[117px] rounded-[10px]" />
         </div>
         <div className="mt-4 flex gap-2">
           <Bone className="h-[30px] w-[69px] rounded-[10px]" />
