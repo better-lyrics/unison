@@ -79,21 +79,37 @@ export function ArtBackground({ src, contained = false, moving = false, onReady 
     if (warp) update(warp)
   }, [moving, update])
 
+  const targetRef = useRef(src)
+  const drainingRef = useRef<Kawarp | null>(null)
+
+  const drain = useCallback(
+    async (warp: Kawarp) => {
+      if (drainingRef.current === warp) return
+      drainingRef.current = warp
+      let applied: string | null | undefined
+      while (warpRef.current === warp && targetRef.current && targetRef.current !== applied) {
+        applied = targetRef.current
+        try {
+          await warp.loadImage(applied)
+          setShown(true)
+          setFailed(false)
+          update(warp)
+        } catch (error: unknown) {
+          console.warn("Could not load the background art", error)
+          setFailed(true)
+        }
+        await new Promise((resolve) => window.setTimeout(resolve, warp.transitionDuration))
+      }
+      if (drainingRef.current === warp) drainingRef.current = null
+    },
+    [update],
+  )
+
   useEffect(() => {
+    targetRef.current = src
     const warp = warpRef.current
-    if (!src || !warp) return
-    warp
-      .loadImage(src)
-      .then(() => {
-        setShown(true)
-        setFailed(false)
-        update(warp)
-      })
-      .catch((error: unknown) => {
-        console.warn("Could not load the background art", error)
-        setFailed(true)
-      })
-  }, [src, update])
+    if (warp) void drain(warp)
+  }, [src, drain])
 
   const fade = cn("transition-opacity duration-700 ease-out motion-reduce:duration-150", shown ? "opacity-100" : "opacity-0")
 
