@@ -32,7 +32,7 @@ export function SearchPage() {
   }
 
   if (isLoading) {
-    return <SearchResultRowSkeletonList rows={6} />
+    return <SearchResultRowSkeletonList rows={20} />
   }
 
   if (error) {

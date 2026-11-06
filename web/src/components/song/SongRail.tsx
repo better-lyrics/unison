@@ -154,16 +154,28 @@ interface SongRailProps {
   onSelect: (id: number) => void
 }
 
+const STATS_BONE = "h-[170px] rounded-[22px]"
+const SYNCED_BY_BONE = "h-[159px] rounded-[22px]"
+
+export function SongRailSkeleton() {
+  return (
+    <div className="flex flex-col gap-4">
+      <Bone className={STATS_BONE} />
+      <Bone className={SYNCED_BY_BONE} />
+    </div>
+  )
+}
+
 export function SongRail({ variant, variants, selectedId, onSelect }: SongRailProps) {
   return (
     <aside className="flex flex-col gap-4 [text-shadow:none]">
       {variant ? (
         <StatsCard variant={variant} versions={variants.length} />
       ) : (
-        <Bone className="h-[150px] rounded-[22px]" />
+        <Bone className={STATS_BONE} />
       )}
       {variant?.submitter ? <SyncedByCard submitter={variant.submitter} /> : null}
-      {!variant ? <Bone className="h-[130px] rounded-[22px]" /> : null}
+      {!variant ? <Bone className={SYNCED_BY_BONE} /> : null}
       {variants.length > 1 ? (
         <div className={CARD}>
           <p className={LABEL}>{`${variants.length} versions`}</p>

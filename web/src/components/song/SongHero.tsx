@@ -275,17 +275,23 @@ export function SongHeroSkeleton() {
         <Bone className="aspect-square w-full rounded-2xl" />
       </div>
       <div className="min-w-0">
-        <Bone className="h-16 w-3/4 rounded-xl max-[1000px]:h-11" />
-        <Bone className="mt-4 h-6 w-1/3" />
+        <div className={cn(TITLE_SIZE.l, "flex h-[1.08em] items-center")}>
+          <Bone className="h-[0.72em] w-3/4 rounded-xl" />
+        </div>
+        <div className="mt-3 flex h-7 items-center">
+          <Bone className="h-4 w-1/3" />
+        </div>
         <div className="mt-[22px] flex gap-2">
-          <Bone className="h-8 w-24 rounded-[10px]" />
-          <Bone className="h-8 w-20 rounded-[10px]" />
-          <Bone className="h-8 w-32 rounded-[10px]" />
+          <Bone className="h-8 w-[93px] rounded-[10px]" />
+          <Bone className="h-8 w-[66px] rounded-[10px]" />
+          <Bone className="h-8 w-[117px] rounded-[10px]" />
         </div>
         <div className="mt-[26px] flex gap-2">
-          <Bone className="h-11 w-24 rounded-full" />
-          <Bone className="h-11 w-40 rounded-full" />
-          <Bone className="h-11 w-28 rounded-full" />
+          <Bone className="h-11 w-[87px] rounded-full" />
+          <Bone className="h-11 w-[157px] rounded-full" />
+          <Bone className="h-11 w-[114px] rounded-full" />
+          <Bone className="size-11 rounded-full" />
+          <Bone className="size-11 rounded-full" />
         </div>
       </div>
     </section>

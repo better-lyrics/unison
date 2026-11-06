@@ -21,7 +21,11 @@ const RECENTLY_SYNCED = {
   subtitle: "New lyrics the community upvoted",
 } as const
 
-const mostWantedAction = <SeeAllLink to="/queue" label="See all most wanted songs" />
+const MOST_WANTED = {
+  title: "Most Wanted",
+  subtitle: "Songs missing synced lyrics, ranked by reputation-weighted demand",
+  action: <SeeAllLink to="/queue" label="See all most wanted songs" />,
+} as const
 
 export function SongsPage() {
   const session = useSession()
@@ -34,8 +38,8 @@ export function SongsPage() {
         <SealedShelf />
         <FeedGrid {...TOP_VOTED} />
       <FeedGrid {...RECENTLY_SYNCED} />
-        <LeaderboardSection title="Most Wanted">
-          <SongRowSkeletonList rows={5} />
+        <LeaderboardSection {...MOST_WANTED}>
+          <SongRowSkeletonList rows={MOST_WANTED_PREVIEW} />
         </LeaderboardSection>
       </div>
     )
@@ -57,11 +61,7 @@ export function SongsPage() {
       <SealedShelf />
       <FeedGrid {...TOP_VOTED} />
       <FeedGrid {...RECENTLY_SYNCED} />
-      <LeaderboardSection
-        title="Most Wanted"
-        subtitle="Songs missing synced lyrics, ranked by reputation-weighted demand"
-        action={mostWantedAction}
-      >
+      <LeaderboardSection {...MOST_WANTED}>
         {data.mostWanted.length === 0 ? (
           signedIn ? (
             <EmptyState

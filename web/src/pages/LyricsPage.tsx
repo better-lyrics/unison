@@ -3,7 +3,7 @@ import { EmptyState } from "@/components/EmptyState"
 import { LyricsContentSkeleton } from "@/components/LyricsRenderer"
 import { LyricsPanel } from "@/components/LyricsPanel"
 import { SongHero, SongHeroSkeleton } from "@/components/song/SongHero"
-import { SongRail } from "@/components/song/SongRail"
+import { SongRail, SongRailSkeleton } from "@/components/song/SongRail"
 import { Bone } from "@/components/skeleton"
 import { useFillHeight } from "@/hooks/useFillHeight"
 import { useLyricsVariant, useLyricsVariants } from "@/hooks/useLyricsData"
@@ -130,15 +130,13 @@ function LyricsPageSkeleton() {
       <div className={BODY}>
         <div className="min-w-0">
           <div className="mb-2 flex items-center gap-1.5">
-            <Bone className="h-9 w-[124px] rounded-full" />
-            <Bone className="ml-auto h-9 w-48 rounded-full" />
+            <Bone className="h-9 w-[117px] rounded-full" />
+            <Bone className="ml-auto h-9 w-[101px] rounded-full" />
+            <Bone className="h-9 w-[75px] rounded-full" />
           </div>
           <LyricsContentSkeleton className={LYRICS_SIZE} />
         </div>
-        <div className="flex flex-col gap-4">
-          <Bone className="h-[150px] rounded-[22px]" />
-          <Bone className="h-[130px] rounded-[22px]" />
-        </div>
+        <SongRailSkeleton />
       </div>
     </div>
   )
