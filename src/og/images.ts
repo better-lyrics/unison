@@ -146,9 +146,9 @@ export function badgeSilhouette(file: string): Promise<Buffer | null> {
 			.resize(SILHOUETTE_SIZE, SILHOUETTE_SIZE, { fit: "contain", background: "#0000" })
 			.ensureAlpha()
 			.extractChannel(3)
-			.linear(SILHOUETTE_TINT.alpha, 0)
 			.raw()
 			.toBuffer()
+		for (let i = 0; i < alpha.length; i++) alpha[i] = Math.round(alpha[i] * SILHOUETTE_TINT.alpha)
 		const { r, g, b } = SILHOUETTE_TINT
 		return sharp({
 			create: {
