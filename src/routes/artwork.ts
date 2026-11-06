@@ -27,7 +27,7 @@ export const artworkRoutes = (env: Env) =>
 			{
 				query: t.Object({
 					v: t.Optional(t.String()),
-					size: t.Optional(t.Integer({ minimum: 32, maximum: 1024 })),
+					size: t.Optional(t.Integer({ minimum: 32, maximum: 2048 })),
 				}),
 			}
 		)
