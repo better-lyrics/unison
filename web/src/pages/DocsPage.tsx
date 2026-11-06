@@ -180,6 +180,32 @@ const VIDEO_RESPONSE = `{
   }
 }`
 
+const PROVIDER_ID_RESPONSE = `{
+  "success": true,
+  "data": {
+    "id": 4821,
+    "videoId": "dQw4w9WgXcQ",
+    "song": "Never Gonna Give You Up",
+    "artist": "Rick Astley",
+    "isrc": "GBARL9300135",
+    "format": "ttml",
+    "syncType": "richsync",
+    "language": "en",
+    "score": 42,
+    "voteCount": 47,
+    "confidence": "high",
+    "matchedBy": "isrc",
+    "lyrics": "<tt xmlns=\\"http://www.w3.org/ns/ttml\\"> ... </tt>"
+  }
+}`
+
+const LOOKUP_PENDING_RESPONSE = `{
+  "success": false,
+  "error": "Lookup pending",
+  "code": "LOOKUP_PENDING",
+  "hint": "We're still matching this track. Try again in a few seconds."
+}`
+
 const SEARCH_RESPONSE = `{
   "success": true,
   "data": [
@@ -286,6 +312,8 @@ export function DocsPage() {
             matching it or is down. Retry a few times, then give up.
           </p>
           <CodeTabs tabs={fetchTabs(PROVIDER_ID_URL)} />
+          <CodeBlock code={PROVIDER_ID_RESPONSE} language="json" label="JSON response" />
+          <CodeBlock code={LOOKUP_PENDING_RESPONSE} language="json" label="503 response" />
         </section>
 
         <section className="space-y-3">
