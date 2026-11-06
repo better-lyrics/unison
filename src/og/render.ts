@@ -2,7 +2,7 @@ import { config } from "@/config"
 import { getUserBadges } from "@/db/badges"
 import { CATALOGUE, badgeImageFile } from "@/db/badges/definitions"
 import { getCuratorRank } from "@/db/leaderboard"
-import { findVariantsByVideoId } from "@/db/lyrics"
+import { countVariantsByVideoId, findByVideoId } from "@/db/lyrics"
 import { getSubmissionsByUser } from "@/db/profile"
 import { getProfileExtras } from "@/db/profile-settings"
 import { getUserByKeyId, resolveIdentity, resolvePeople } from "@/db/users"
@@ -48,7 +48,6 @@ const OG = { width: 1200, height: 630 }
 const OG_WASH = { width: 600, height: 315 }
 const CARD_SCALE = 3
 const JPEG_QUALITY = 88
-const VARIANT_LIMIT = 50
 const WALL_SUBMISSIONS = 24
 const WALL_COVER_SIZE = 400
 
@@ -120,17 +119,17 @@ function palette(accent: Accent) {
 }
 
 export async function loadSongCard(env: Env, videoId: string) {
-	const variants = await findVariantsByVideoId(env, videoId, VARIANT_LIMIT)
-	const top = variants[0]
+	const top = await findByVideoId(env, videoId)
 	if (!top) return null
-	const [artwork, marks, people] = await Promise.all([
+	const [versions, artwork, marks, people] = await Promise.all([
+		countVariantsByVideoId(env, videoId),
 		resolveArtwork(env, videoId),
 		buildSealMarks(env, [top]),
 		top.submitter_id == null ? null : resolvePeople(env, [top.submitter_id]),
 	])
 	return {
 		top,
-		versions: variants.length,
+		versions,
 		sealed: marks.has(Number(top.id)),
 		person: top.submitter_id == null ? null : (people?.get(top.submitter_id) ?? null),
 		artwork,

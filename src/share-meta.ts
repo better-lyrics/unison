@@ -16,6 +16,7 @@ import { isVideoId } from "@/utils/video-id"
 import { levelProgress } from "@/utils/xp"
 
 const SHARE_TTL_SECONDS = 300
+const MISS_TTL_SECONDS = 60
 const ACCENT_TTL_SECONDS = 60 * 60 * 24 * 30
 const KEY_ID = /^[0-9a-fA-F]{64}$/
 
@@ -24,6 +25,7 @@ export interface Share {
 	description: string
 	themeColor: string
 	image: string
+	version: string
 	author: { name: string; path: string }
 }
 
@@ -93,6 +95,7 @@ export function profileVersion(card: ProfileShareInput): string {
 
 export function songShare(card: SongShareInput, themeColor: string): Share {
 	const { top, person } = card
+	const version = songVersion(card)
 	const details = [
 		syncLine(syncTypeFor(top.sync_type, top.format)),
 		card.sealed ? "Council sealed" : null,
@@ -103,7 +106,8 @@ export function songShare(card: SongShareInput, themeColor: string): Share {
 		title: `${top.song} · ${top.artist}`,
 		description: details.filter(Boolean).join(" · "),
 		themeColor,
-		image: `/og/song/${card.videoId}.jpg?v=${songVersion(card)}`,
+		image: `/og/song/${card.videoId}.jpg?v=${version}`,
+		version,
 		author: person
 			? { name: `Synced by ${person.displayName}`, path: `/curator/${person.keyId}` }
 			: { name: "Unison", path: "/" },
@@ -113,6 +117,7 @@ export function songShare(card: SongShareInput, themeColor: string): Share {
 export function profileShare(card: ProfileShareInput, themeColor: string): Share {
 	const { rank, identity, gamification } = card
 	const tierName = card.tier ? CATALOGUE.find((b) => b.key === card.tier)?.name : null
+	const version = profileVersion(card)
 	return {
 		title: identity.displayName,
 		description: rank
@@ -123,7 +128,8 @@ export function profileShare(card: ProfileShareInput, themeColor: string): Share
 				].join(" · ")
 			: "New curator on Unison",
 		themeColor,
-		image: `/og/user/${card.keyId}.jpg?v=${profileVersion(card)}`,
+		image: `/og/user/${card.keyId}.jpg?v=${version}`,
+		version,
 		author: {
 			name: rank && tierName ? `${tierName} curator · Rank #${rank.rank}` : "New curator",
 			path: `/curator/${card.keyId}`,
@@ -135,7 +141,9 @@ async function cached<T>(env: Env, key: string, ttl: number, load: () => Promise
 	const hit = await env.CACHE.get(key)
 	if (hit !== null) return JSON.parse(hit)
 	const value = await load()
-	if (value !== null) await env.CACHE.put(key, JSON.stringify(value), { expirationTtl: ttl })
+	await env.CACHE.put(key, JSON.stringify(value), {
+		expirationTtl: value === null ? MISS_TTL_SECONDS : ttl,
+	})
 	return value
 }
 
@@ -177,11 +185,18 @@ export function requestOrigin(request: Request): string {
 export async function findShare(env: Env, pathname: string, loaders: ShareLoaders) {
 	const [, section, id] = pathname.split("/")
 	if (!id || pathname.split("/").length !== 3) return null
-	const decoded = decodeURIComponent(id)
+	let decoded: string
+	try {
+		decoded = decodeURIComponent(id)
+	} catch {
+		return null
+	}
 	if (section === "song" && isVideoId(decoded)) return loaders.song(env, decoded)
 	if (section === "curator" && KEY_ID.test(decoded)) return loaders.profile(env, decoded)
 	if (section === "u") {
-		const keyId = await resolveKeyIdByHandle(env, decoded)
+		const keyId = await cached(env, `share:handle:${decoded.toLowerCase()}`, SHARE_TTL_SECONDS, () =>
+			resolveKeyIdByHandle(env, decoded)
+		)
 		return keyId ? loaders.profile(env, keyId) : null
 	}
 	return null

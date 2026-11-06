@@ -3,6 +3,7 @@ export const COMMUNITY_KEY_ID = "cea10b57de8e060ed1a180a00c2bc717a2ab4f231d88fd3
 export const config = {
 	og: {
 		cacheControl: "public, max-age=3600, s-maxage=86400, stale-while-revalidate=604800",
+		downloadCacheControl: "public, max-age=300",
 		memoryEntries: 100,
 	},
 	artwork: {

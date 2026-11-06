@@ -25,9 +25,25 @@ const env = {
 const VIDEO = "BI9HQCzpDgQ"
 const KEY = "a".repeat(64)
 
+let renders = 0
+let profileVersion = "p1"
+
 function app() {
-	const card = async (_env: Env, id: string) =>
-		id === VIDEO || id === KEY ? { bytes: Buffer.from("img"), accent: "#d92626" } : null
+	const card = async (_env: Env, id: string) => {
+		renders++
+		return id === VIDEO || id === KEY ? { bytes: Buffer.from("img"), accent: "#d92626" } : null
+	}
+	const profile = async (_env: Env, id: string) =>
+		id === KEY
+			? {
+					title: "mukeenanyafiq",
+					description: "New curator on Unison",
+					themeColor: "#d92626",
+					image: `/og/user/${KEY}.jpg?v=${profileVersion}`,
+					version: profileVersion,
+					author: { name: "New curator", path: `/curator/${KEY}` },
+				}
+			: null
 	const share = async (_env: Env, id: string) =>
 		id === VIDEO
 			? songShare(
@@ -53,7 +69,7 @@ function app() {
 	return ogRoutes(
 		env,
 		{ song: card, profile: card, download: card },
-		{ song: share, profile: async () => null }
+		{ song: share, profile }
 	)
 }
 
@@ -82,6 +98,16 @@ describe("share card routes", () => {
 		)
 		const download = await get(`/card/user/${KEY}.png`)
 		expect(download.headers.get("content-type")).toBe("image/png")
+	})
+
+	it("regression: renders a card once per version, whatever the query string", async () => {
+		const before = renders
+		await get(`/og/user/${KEY}.jpg?x=1`)
+		await get(`/og/user/${KEY}.jpg?x=2`)
+		expect(renders - before).toBe(1)
+		profileVersion = "p2"
+		await get(`/og/user/${KEY}.jpg?x=1`)
+		expect(renders - before).toBe(2)
 	})
 
 	it("answers oEmbed only for our own song and profile links", async () => {

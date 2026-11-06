@@ -66,7 +66,9 @@ export const ogRoutes = (
 		}: { request: Request; params: { file: string }; set: { status?: number | string } },
 		ext: "jpg" | "png",
 		valid: (id: string) => boolean,
-		renderer: Renderer
+		share: (env: Env, id: string) => Promise<{ version: string } | null>,
+		renderer: Renderer,
+		cacheControl: string
 	) => {
 		const { file } = params
 		const id = file.endsWith(`.${ext}`) ? file.slice(0, -ext.length - 1) : ""
@@ -74,8 +76,12 @@ export const ogRoutes = (
 			set.status = 400
 			return buildError(ErrorCode.INVALID_ID)
 		}
-		const url = new URL(request.url)
-		const card = await remember(url.pathname + url.search, () => renderer(env, id))
+		const current = await share(env, id)
+		const card = current
+			? await remember(`${new URL(request.url).pathname}:${current.version}`, () =>
+					renderer(env, id)
+				)
+			: null
 		if (!card) {
 			set.status = 404
 			return buildError(ErrorCode.NOT_FOUND)
@@ -83,7 +89,7 @@ export const ogRoutes = (
 		return new Response(new Uint8Array(card.bytes), {
 			headers: {
 				"content-type": ext === "jpg" ? "image/jpeg" : "image/png",
-				"cache-control": config.og.cacheControl,
+				"cache-control": cacheControl,
 			},
 		})
 	}
@@ -92,9 +98,15 @@ export const ogRoutes = (
 	return new Elysia()
 		.decorate("env", env)
 		.use(readRateLimit)
-		.get("/og/song/:file", (ctx) => serve(ctx, "jpg", isVideoId, renderers.song))
-		.get("/og/user/:file", (ctx) => serve(ctx, "jpg", isKeyId, renderers.profile))
-		.get("/card/user/:file", (ctx) => serve(ctx, "png", isKeyId, renderers.download))
+		.get("/og/song/:file", (ctx) =>
+			serve(ctx, "jpg", isVideoId, shares.song, renderers.song, config.og.cacheControl)
+		)
+		.get("/og/user/:file", (ctx) =>
+			serve(ctx, "jpg", isKeyId, shares.profile, renderers.profile, config.og.cacheControl)
+		)
+		.get("/card/user/:file", (ctx) =>
+			serve(ctx, "png", isKeyId, shares.profile, renderers.download, config.og.downloadCacheControl)
+		)
 		.get(
 			"/oembed",
 			async ({ request, query, set }) => {
