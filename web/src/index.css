@@ -129,6 +129,28 @@ braccato-lyrics .blyrics-container {
   }
 }
 
+.raw-lyrics {
+  margin: 0;
+  padding: 4px 0 24px;
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  line-height: 1.7;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  tab-size: 2;
+  --bh-text: var(--color-unison-text);
+  --bh-bgText: var(--ink-2, var(--color-unison-text-secondary));
+  --bh-timestamp: hsl(231 40% 72%);
+  --bh-wordTime: hsl(231 24% 60%);
+  --bh-agent: hsl(43 55% 62%);
+  --bh-meta: hsl(330 32% 66%);
+  --bh-tag: var(--ink-3, var(--color-unison-text-secondary));
+  --bh-attr: var(--ink-dim, var(--color-unison-text-muted));
+  --bh-value: hsl(142 34% 64%);
+  --bh-punct: var(--ink-4, var(--color-unison-text-muted));
+  --bh-comment: var(--ink-4, var(--color-unison-text-muted));
+}
+
 /* Exam clips live in narrow A/B columns, so shrink the type and tighten the line
    spacing there (scoped, so the full-size player on the lyrics page is untouched). */
 .exam-lyrics .blyrics-container {
