@@ -1,8 +1,14 @@
-import { createContext, type ReactNode, useContext, useEffect, useMemo, useState } from "react"
+import { createContext, type FocusEvent, type PointerEvent, type ReactNode, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react"
+import { useLocation } from "react-router-dom"
 import { useArtPalette } from "@/hooks/useArtPalette"
+import { artworkImageUrl, useArtwork } from "@/lib/artwork"
+import { sleeveDataUrl } from "@/lib/sleeve"
 import { ArtBackground } from "./ArtBackground"
 
 const DEFAULT_ART_SIZE = 256
+const PREVIEW_ENTER_MS = 200
+const PREVIEW_LEAVE_MS = 400
+const PREVIEW_SLEEVE_SIZE = 64
 const DEFAULT_SCRIM_FLOOR = 0.3
 const DEFAULT_BASE = ["#050505", "#070606", "#040404"]
 const DEFAULT_GLOWS = [
@@ -36,16 +42,36 @@ interface PageArt {
 }
 
 const SetPageArt = createContext<(art: PageArt | null) => void>(() => {})
+const PreviewPageArt = createContext<(src: string | null) => void>(() => {})
 
 export function PageArtProvider({ children }: { children: ReactNode }) {
   const [art, setArt] = useState<PageArt | null>(null)
+  const [preview, setPreview] = useState<{ src: string | null; pathname: string } | null>(null)
+  const previewTimer = useRef<number | undefined>(undefined)
+  const { pathname } = useLocation()
   const fallback = useMemo(defaultArt, [])
   const src = art?.src ?? fallback
   useArtPalette(src, art?.src ? 0 : DEFAULT_SCRIM_FLOOR)
+
+  const previewSrc = preview?.pathname === pathname ? preview.src : null
+
+  const previewArt = useCallback(
+    (next: string | null) => {
+      window.clearTimeout(previewTimer.current)
+      previewTimer.current = window.setTimeout(
+        () => setPreview({ src: next, pathname }),
+        next ? PREVIEW_ENTER_MS : PREVIEW_LEAVE_MS,
+      )
+    },
+    [pathname],
+  )
+
   return (
     <SetPageArt value={setArt}>
-      <ArtBackground src={src} moving={art?.moving ?? false} />
-      {children}
+      <PreviewPageArt value={previewArt}>
+        <ArtBackground src={previewSrc ?? src} moving={art?.moving ?? false} />
+        {children}
+      </PreviewPageArt>
     </SetPageArt>
   )
 }
@@ -56,4 +82,23 @@ export function usePageArt(src: string | null | undefined, moving = false) {
     setArt({ src: src ?? null, moving })
   }, [setArt, src, moving])
   useEffect(() => () => setArt(null), [setArt])
+}
+
+export function useSongArtPreview({ videoId, song, artist }: { videoId: string; song: string; artist: string }) {
+  const previewArt = useContext(PreviewPageArt)
+  const { data: cover } = useArtwork(videoId)
+  const show = () => previewArt(cover ? artworkImageUrl(videoId) : sleeveDataUrl(song, artist, PREVIEW_SLEEVE_SIZE))
+  const hide = () => previewArt(null)
+  return {
+    onPointerEnter: (e: PointerEvent) => {
+      if (e.pointerType === "mouse") show()
+    },
+    onPointerLeave: (e: PointerEvent) => {
+      if (e.pointerType === "mouse") hide()
+    },
+    onFocus: (e: FocusEvent) => {
+      if (e.currentTarget.matches(":focus-visible")) show()
+    },
+    onBlur: hide,
+  }
 }

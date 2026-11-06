@@ -1,4 +1,5 @@
 import { Link } from "react-router-dom"
+import { useSongArtPreview } from "@/components/PageArt"
 import { Bone, skeletonKeys } from "@/components/skeleton"
 import { SongThumbnail } from "@/components/SongThumbnail"
 import { SyncTag } from "@/components/SyncTag"
@@ -24,9 +25,10 @@ export interface CoverTileSong {
 }
 
 export function SongCoverTile({ song: s }: { song: CoverTileSong }) {
+  const preview = useSongArtPreview(s)
   return (
     <li className="min-w-0">
-      <Link to={`/song/${s.videoId}`} className="flex min-w-0 flex-col gap-2.5 rounded-xl">
+      <Link to={`/song/${s.videoId}`} {...preview} className="flex min-w-0 flex-col gap-2.5 rounded-xl">
         <SongThumbnail
           videoId={s.videoId}
           song={s.song}

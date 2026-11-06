@@ -91,7 +91,6 @@ export function ArtBackground({ src, contained = false, moving = false, onReady 
       })
       .catch((error: unknown) => {
         console.warn("Could not load the background art", error)
-        setShown(false)
         setFailed(true)
       })
   }, [src, update])
