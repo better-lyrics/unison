@@ -1,15 +1,13 @@
-import { IconBrandDiscordFilled, IconCheck, IconShare, IconStarFilled } from "@tabler/icons-react"
+import { IconCheck, IconShare, IconStarFilled } from "@tabler/icons-react"
 import { useState } from "react"
 import { useBadgeModal } from "@/components/BadgeModalContext"
 import { OdometerNumber } from "@/components/OdometerNumber"
 import { TierChip } from "@/components/TierChip"
 import { isRareBadge, resolveBadgeImage } from "@/lib/badge-view"
-import { UserAvatar } from "@/components/UserAvatar"
+import { XpAvatar } from "@/components/XpAvatar"
 import { cn } from "@/lib/cn"
 import { levelProgress } from "@/lib/level"
 import type { BadgeCatalogue, UserGamification, UserRankResponse } from "@/lib/types"
-
-const RING_CIRCUMFERENCE = 277
 
 interface ProfileHeaderProps {
   keyId: string
@@ -103,7 +101,6 @@ export function ProfileHeader({ keyId, rank, gamification, catalogue }: ProfileH
   const link = profileLink(rank.handle ?? null, keyId)
 
   const progress = gamification ? levelProgress(gamification.xp, gamification.xpForNext, gamification.xpFloor) : null
-  const ringOffset = progress ? RING_CIRCUMFERENCE * (1 - progress.pct) : RING_CIRCUMFERENCE
   const tierDef =
     gamification?.tier && catalogue ? catalogue.badges.find((d) => d.key === gamification.tier) : undefined
   const gemSrc = tierDef ? resolveBadgeImage(tierDef, undefined, "color") : undefined
@@ -124,45 +121,14 @@ export function ProfileHeader({ keyId, rank, gamification, catalogue }: ProfileH
 
   return (
     <header className="grid grid-cols-[auto_1fr] items-start gap-x-5 sm:flex sm:gap-5">
-      <div className="relative size-[92px] shrink-0 max-sm:col-start-1 max-sm:row-start-1">
-        <svg
-          className="absolute inset-0"
-          style={{ transform: "rotate(-90deg)" }}
-          width="92"
-          height="92"
-          viewBox="0 0 92 92"
-          aria-hidden="true"
-        >
-          <circle cx="46" cy="46" r="44" fill="none" strokeWidth="4" stroke="rgba(255,255,255,0.1)" />
-          {progress ? (
-            <circle
-              className="pf-arc"
-              cx="46"
-              cy="46"
-              r="44"
-              fill="none"
-              strokeWidth="4"
-              stroke="var(--color-unison-medal-gold)"
-              strokeLinecap="round"
-              strokeDasharray={RING_CIRCUMFERENCE}
-              strokeDashoffset={ringOffset}
-            />
-          ) : null}
-        </svg>
-        <UserAvatar
-          avatarUrl={rank.avatarUrl}
-          keyId={keyId}
-          className="absolute top-2 left-2 block size-[76px] rounded-full bg-unison-bg-elevated"
-        />
-        {rank.discordLinked ? (
-          <span
-            title="Discord linked"
-            className="absolute right-0 bottom-0 z-10 grid size-[26px] place-items-center rounded-full border-4 border-unison-bg bg-[#5865f2]"
-          >
-            <IconBrandDiscordFilled className="size-3.5 text-white" />
-          </span>
-        ) : null}
-      </div>
+      <XpAvatar
+        avatarUrl={rank.avatarUrl}
+        keyId={keyId}
+        level={gamification?.level}
+        progress={progress?.pct ?? null}
+        tiered={Boolean(gamification?.tier)}
+        className="size-[92px] shrink-0 max-sm:col-start-1 max-sm:row-start-1"
+      />
 
       <div className="contents min-w-0 pt-1 sm:block sm:flex-1">
         <div className="flex flex-wrap items-center gap-3.5 max-sm:col-start-2 max-sm:row-start-1 max-sm:pt-1">
