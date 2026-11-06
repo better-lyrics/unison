@@ -46,7 +46,7 @@ const PLAY_CIRCLE = cn(
 export const HERO_GRID =
   "grid grid-cols-[320px_minmax(0,1fr)] items-end gap-12 pt-2 pb-10 max-[1000px]:grid-cols-1 max-[1000px]:gap-7 max-[1000px]:pt-0 max-[1000px]:pb-7"
 
-export const HERO_ART = "w-full max-[1000px]:w-[min(260px,70vw)]"
+export const HERO_ART = "w-full max-[1000px]:w-[min(260px,70vw)] max-sm:w-full"
 
 const COVER_FRAME =
   "group relative aspect-square w-full overflow-hidden rounded-2xl shadow-[0_24px_60px_rgba(0,0,0,0.35),0_6px_18px_rgba(0,0,0,0.25)] after:pointer-events-none after:absolute after:inset-0 after:rounded-[inherit] after:outline after:outline-1 after:-outline-offset-1 after:outline-white/10"
@@ -193,7 +193,7 @@ export function SongHero({ variant, versions, art, player }: SongHeroProps) {
           <button
             type="button"
             onClick={player.onToggle}
-            className="inline-flex h-11 cursor-pointer items-center gap-2 whitespace-nowrap rounded-full bg-unison-text pr-[18px] pl-4 text-sm font-bold text-[#121116] transition-[background-color,scale] duration-150 ease-out hover:bg-white active:scale-[0.96]"
+            className="inline-flex h-11 cursor-pointer items-center justify-center gap-2 whitespace-nowrap rounded-full bg-unison-text pr-[18px] pl-4 max-sm:flex-1 text-sm font-bold text-[#121116] transition-[background-color,scale] duration-150 ease-out hover:bg-white active:scale-[0.96]"
           >
             <PlayPauseIcon playing={player.playing} />
             {player.playing ? "Pause" : "Play"}
@@ -202,11 +202,12 @@ export function SongHero({ variant, versions, art, player }: SongHeroProps) {
             href={youTubeMusicUrl(variant.videoId)}
             target="_blank"
             rel="noopener noreferrer"
-            className={cn(glassActionClass, "pl-4")}
+            className={cn(glassActionClass, "pl-4 max-sm:flex-1 max-sm:justify-center")}
           >
             <YouTubeMusicIcon className="size-[18px]" />
             YouTube Music
           </a>
+          <span aria-hidden="true" className="hidden basis-full max-sm:block" />
           <VoteControls
             variantId={variant.id}
             videoId={variant.videoId}
