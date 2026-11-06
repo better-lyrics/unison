@@ -17,7 +17,11 @@ interface YTPlayerCtorOptions {
   width?: string | number
   height?: string | number
   playerVars?: Record<string, string | number>
-  events?: { onReady?: () => void; onStateChange?: (event: { data: number }) => void }
+  events?: {
+    onReady?: () => void
+    onStateChange?: (event: { data: number }) => void
+    onError?: (event: { data: number }) => void
+  }
 }
 
 interface YTNamespace {
@@ -87,6 +91,7 @@ export interface UseYouTubePlayerResult {
   getCurrentTime: () => number
   getPlaying: () => boolean
   playing: boolean
+  failed: boolean
   seekTo: (seconds: number) => void
   play: () => void
   pause: () => void
@@ -100,6 +105,7 @@ export function useYouTubePlayer(videoId: string | null, options?: UseYouTubePla
   const [node, setNode] = useState<HTMLDivElement | null>(null)
   const playerRef = useRef<YTPlayer | null>(null)
   const [playing, setPlaying] = useState(false)
+  const [failed, setFailed] = useState(false)
   // YT.Player methods aren't attached until onReady fires; calling one earlier
   // throws. The rAF sync loop polls every frame, so the getters must stay inert
   // until the player is ready or one throw kills the loop permanently.
@@ -145,6 +151,9 @@ export function useYouTubePlayer(videoId: string | null, options?: UseYouTubePla
           onStateChange: ({ data }) => {
             if (!cancelled && data !== YT_STATE_BUFFERING) setPlaying(data === YT_STATE_PLAYING)
           },
+          onError: () => {
+            if (!cancelled) setFailed(true)
+          },
         },
       })
       playerRef.current = player
@@ -155,6 +164,7 @@ export function useYouTubePlayer(videoId: string | null, options?: UseYouTubePla
       cancelled = true
       readyRef.current = false
       setPlaying(false)
+      setFailed(false)
       pendingSeekRef.current = null
       pendingPlayRef.current = false
       const player = playerRef.current
@@ -202,5 +212,5 @@ export function useYouTubePlayer(videoId: string | null, options?: UseYouTubePla
     return player.getPlayerState() === YT_STATE_PLAYING
   }, [])
 
-  return { ref: setNode, getCurrentTime, getPlaying, playing, seekTo, play, pause }
+  return { ref: setNode, getCurrentTime, getPlaying, playing, failed, seekTo, play, pause }
 }

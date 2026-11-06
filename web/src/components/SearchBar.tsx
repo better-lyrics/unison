@@ -22,6 +22,7 @@ import {
 import { IconSearch, IconX } from "@tabler/icons-react"
 import { useQuery } from "@tanstack/react-query"
 import { useReducedMotion } from "motion/react"
+import { tokenMs, tokenValue } from "@/lib/motion-tokens"
 import { type KeyboardEvent, useEffect, useRef, useState } from "react"
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom"
 
@@ -101,7 +102,7 @@ export function SearchBar({ compact = false, glass = false }: SearchBarProps) {
           : "results"
 
   const listRef = useRef<Array<HTMLElement | null>>([])
-  const { refs, floatingStyles, context } = useFloating<HTMLInputElement>({
+  const { refs, floatingStyles, context, placement } = useFloating<HTMLInputElement>({
     open,
     onOpenChange: setOpen,
     placement: "bottom-end",
@@ -110,10 +111,13 @@ export function SearchBar({ compact = false, glass = false }: SearchBarProps) {
   })
   const still = useReducedMotion()
   const { isMounted, styles } = useTransitionStyles(context, {
-    duration: { open: 250, close: 150 },
-    initial: still ? { opacity: 0 } : { opacity: 0, transform: "scale(0.97)" },
-    close: still ? { opacity: 0 } : { opacity: 0, transform: "scale(0.99)" },
-    common: { transformOrigin: "top right", transitionTimingFunction: "cubic-bezier(0.22, 1, 0.36, 1)" },
+    duration: { open: tokenMs("--dropdown-open-dur", 250), close: tokenMs("--dropdown-close-dur", 150) },
+    initial: still ? { opacity: 0 } : { opacity: 0, transform: `scale(${tokenValue("--dropdown-pre-scale", "0.97")})` },
+    close: still ? { opacity: 0 } : { opacity: 0, transform: `scale(${tokenValue("--dropdown-closing-scale", "0.99")})` },
+    common: {
+      transformOrigin: placement.startsWith("top") ? "bottom right" : "top right",
+      transitionTimingFunction: tokenValue("--dropdown-ease", "cubic-bezier(0.22, 1, 0.36, 1)"),
+    },
   })
   const role = useRole(context, { role: "combobox" })
   const dismiss = useDismiss(context)

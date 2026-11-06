@@ -27,7 +27,7 @@ export function LyricsPage() {
   const lyricsRef = useFillHeight(`.${LYRICS_FILL}`)
 
   const safeVideoId = videoId ?? ""
-  const { ref, getCurrentTime, getPlaying, playing, seekTo, play, pause } = useYouTubePlayer(
+  const { ref, getCurrentTime, getPlaying, playing, failed, seekTo, play, pause } = useYouTubePlayer(
     safeVideoId.length > 0 ? safeVideoId : null,
     { playerVars: { autoplay: 1 } },
   )
@@ -102,7 +102,7 @@ export function LyricsPage() {
           variant={variant}
           versions={variants.length}
           art={art}
-          player={{ ref, active: playerActive, playing, onToggle: togglePlay }}
+          player={{ ref, active: playerActive, playing, failed, onToggle: togglePlay }}
         />
       ) : (
         <SongHeroSkeleton />

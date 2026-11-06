@@ -64,6 +64,7 @@ export interface HeroPlayer {
   ref: (node: HTMLDivElement | null) => void
   active: boolean
   playing: boolean
+  failed: boolean
   onToggle: () => void
 }
 
@@ -78,7 +79,7 @@ function Cover({ variant, art, player }: Omit<SongHeroProps, "versions">) {
   const label = player.playing ? "Pause" : "Play"
   const [started, setStarted] = useState(false)
   if (player.playing && !started) setStarted(true)
-  const covered = !(player.active && started)
+  const covered = !(player.active && (started || player.failed))
   return (
     <div className={COVER_FRAME}>
       {player.active ? <div ref={player.ref} className="absolute inset-0 bg-black" /> : null}
@@ -166,7 +167,7 @@ export function SongHero({ variant, versions, art, player }: SongHeroProps) {
   return (
     <section className={cn(HERO_GRID, "t-reveal")}>
       <div className={HERO_ART}>
-        <Cover variant={variant} art={art} player={player} />
+        <Cover key={variant.videoId} variant={variant} art={art} player={player} />
       </div>
       <div className="min-w-0">
         <div className={TITLE_SIZE[titleSize(variant.song)]}>

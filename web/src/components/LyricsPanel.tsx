@@ -51,7 +51,8 @@ export function LyricsPanel({ variant, getCurrentTime, getPlaying, onLineClick, 
         <motion.span
           layoutId={group}
           transition={LAYOUT_TRANSITION}
-          className="absolute inset-0 rounded-full bg-white/[0.14]"
+          style={{ borderRadius: 9999 }}
+          className="absolute inset-0 bg-white/[0.14]"
         />
       ) : null}
       <span className="relative">{label}</span>

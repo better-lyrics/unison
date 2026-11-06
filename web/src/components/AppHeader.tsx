@@ -30,7 +30,8 @@ const navPill = (active: boolean) =>
 		<motion.span
 			layoutId="nav-pill"
 			transition={LAYOUT_TRANSITION}
-			className="absolute inset-0 rounded-[9px] bg-white/[0.08]"
+			style={{ borderRadius: 9 }}
+			className="absolute inset-0 bg-white/[0.08]"
 		/>
 	) : null
 

@@ -88,7 +88,7 @@ export function profileVersion(card: ProfileShareInput): string {
 		gamification.level,
 		Math.round(levelProgress(gamification.xp, gamification.xpForNext, gamification.xpFloor) * 20),
 		gamification.counts.earned,
-		gamification.featured,
+		gamification.featured.map((key) => [key, gamification.badges.find((b) => b.key === key)?.tier]),
 		rank?.rank,
 		rank?.submissionCount,
 		rank?.totalUpvotes,

@@ -185,7 +185,10 @@ function ProfileBody({
             gamification={gamification}
             catalogue={catalogue}
             onGamificationChange={onGamificationChange}
-            onPreview={() => setPreview(true)}
+            onPreview={() => {
+              setBannerAnchor(null)
+              setPreview(true)
+            }}
             showDiscord={rank.discord !== undefined}
             onProfileChange={onProfileChange}
           />
