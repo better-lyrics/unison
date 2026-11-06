@@ -45,7 +45,7 @@ export interface ProfileWallData extends ProfileBase {
 export interface ProfileDownloadData extends ProfileBase {
 	handle: string | null
 	banner: string | null
-	featured: string[]
+	featured: Gem[]
 	stats: [string, string][]
 }
 
@@ -395,8 +395,8 @@ export function profileDownloadNode(card: ProfileDownloadData) {
 				) : null}
 				{card.featured.length > 0 ? (
 					<div style={{ display: "flex", gap: 6, marginTop: 14 }}>
-						{card.featured.map((src) => (
-							<img alt="" key={src} src={src} style={{ width: 28, height: 28 }} />
+						{card.featured.map((gem) => (
+							<TierGem key={gem.art} art={gem.art} silhouette={gem.silhouette} size={28} />
 						))}
 					</div>
 				) : null}

@@ -40,6 +40,31 @@ interface ProfileCardProps {
   onChangeBanner?: () => void
 }
 
+function BadgeArt({
+  src,
+  silhouette,
+  alt = "",
+  className,
+}: {
+  src: string | null
+  silhouette: string | null
+  alt?: string
+  className?: string
+}) {
+  return (
+    <span className={cn("relative shrink-0", className)}>
+      {silhouette ? (
+        <span
+          aria-hidden="true"
+          className="absolute inset-0 bg-[rgba(10,9,13,0.2)]"
+          style={{ mask: `url("${silhouette}") center / contain no-repeat` }}
+        />
+      ) : null}
+      {src ? <img src={src} alt={alt} draggable={false} className="relative block size-full" /> : null}
+    </span>
+  )
+}
+
 function Standing({ tier, rank }: { tier: string; rank: number | null }) {
   const badgeImage = useBadgeImage()
   const gem = badgeImage(tier)
@@ -50,16 +75,7 @@ function Standing({ tier, rank }: { tier: string; rank: number | null }) {
       title={rank === null ? name : `${name}, rank #${rank}`}
       className={cn(PILL, "gap-1.5 pr-3 pl-[9px] text-[13px]")}
     >
-      <span className="relative size-5 shrink-0">
-        {silhouette ? (
-          <span
-            aria-hidden="true"
-            className="absolute inset-0 bg-[rgba(10,9,13,0.2)]"
-            style={{ mask: `url("${silhouette}") center / contain no-repeat` }}
-          />
-        ) : null}
-        {gem ? <img src={gem} alt="" className="relative size-full" /> : null}
-      </span>
+      <BadgeArt src={gem} silhouette={silhouette} className="size-5" />
       {name}
       {rank === null ? null : <b className="ml-0.5 text-unison-medal-gold">#{rank}</b>}
     </span>
@@ -98,10 +114,10 @@ function FeaturedBadges({ gamification, catalogue }: { gamification: UserGamific
             title={tier !== undefined ? `${def.name}, tier ${tier}` : def.name}
             className="inline-flex cursor-pointer transition-[scale] duration-150 ease-out active:scale-[0.96]"
           >
-            <img
+            <BadgeArt
               src={resolveBadgeImage(def, tier, "color")}
+              silhouette={resolveBadgeImage(def, tier, "silhouette")}
               alt={def.name}
-              draggable={false}
               className="size-7 transition-[translate,scale] duration-200 ease-[cubic-bezier(0.2,0,0,1)] [@media(hover:hover)]:hover:-translate-y-0.5 [@media(hover:hover)]:hover:scale-110"
             />
           </button>

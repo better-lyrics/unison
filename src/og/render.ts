@@ -96,9 +96,9 @@ function badgeFile(key: string, variant?: string, tier?: number | null): string 
 	return def ? badgeImageFile(def, variant, tier) : null
 }
 
-async function tierGem(images: Images, tier: string): Promise<Gem | null> {
-	const artFile = badgeFile(tier)
-	const silhouetteFile = badgeFile(tier, "silhouette")
+async function badgeGem(images: Images, key: string, tier?: number | null): Promise<Gem | null> {
+	const artFile = badgeFile(key, undefined, tier)
+	const silhouetteFile = badgeFile(key, "silhouette")
 	if (!artFile) return null
 	const [art, silhouette] = await Promise.all([
 		badgeArt(artFile),
@@ -106,8 +106,8 @@ async function tierGem(images: Images, tier: string): Promise<Gem | null> {
 	])
 	if (!art) return null
 	return {
-		art: images.asset(`badge:${tier}`, art),
-		silhouette: silhouette ? images.asset(`silhouette:${tier}`, silhouette) : null,
+		art: images.asset(`badge:${artFile}`, art),
+		silhouette: silhouette ? images.asset(`silhouette:${silhouetteFile}`, silhouette) : null,
 	}
 }
 
@@ -224,7 +224,7 @@ async function profileBase(
 	const [washBytes, accent, gem] = await Promise.all([
 		washFrom(washSource, wash.width, wash.height),
 		sampleAccent(washSource),
-		tier ? tierGem(images, tier) : null,
+		tier ? badgeGem(images, tier) : null,
 	])
 	const { scrim, ink, accent: hex } = palette(accent)
 	return {
@@ -293,18 +293,15 @@ export async function renderProfileDownload(env: Env, keyId: string): Promise<Re
 	const images = new Images()
 	const { base, accent } = await profileBase(images, profile, washSource, CARD_SIZE)
 	const featured = await Promise.all(
-		gamification.featured.slice(0, config.gamification.featured.maxSlots).map(async (key) => {
-			const tier = gamification.badges.find((b) => b.key === key)?.tier
-			const file = badgeFile(key, undefined, tier)
-			const art = file ? await badgeArt(file) : null
-			return art ? images.asset(`badge:${file}`, art) : null
-		})
+		gamification.featured
+			.slice(0, config.gamification.featured.maxSlots)
+			.map((key) => badgeGem(images, key, gamification.badges.find((b) => b.key === key)?.tier))
 	)
 	const node = profileDownloadNode({
 		...base,
 		handle: identity.handle,
 		banner: profile.banner ? images.add("banner", profile.banner) : null,
-		featured: featured.filter((src): src is string => src !== null),
+		featured: featured.filter((gem): gem is Gem => gem !== null),
 		stats: [
 			[String(rank ? rank.submissionCount : 0), "Songs synced"],
 			[compact.format(rank ? rank.totalUpvotes : 0), "Upvotes"],
