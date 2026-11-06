@@ -282,8 +282,8 @@ export function DocsPage() {
             match can be a different release, so its timing may drift.
           </p>
           <p className="text-sm leading-relaxed text-unison-text-secondary">
-            A new id can answer <Code>503</Code> with <Code>Retry-After</Code> while it is being matched. Retry a few
-            times, then give up.
+            A new id can answer <Code>503</Code> with <Code>Retry-After</Code> while it is being matched or BiniLink is
+            down. Retry a few times, then give up.
           </p>
           <CodeTabs tabs={fetchTabs(PROVIDER_ID_URL)} />
         </section>

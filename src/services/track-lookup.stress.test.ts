@@ -77,14 +77,15 @@ describe("resolveProviderIsrc under a BiniLink outage", () => {
 		const { spy } = stubUpstream(hang)
 		const { env } = memoryEnv()
 
+		const distinct = new Set(Array.from({ length: 500 }, (_, i) => spotify(i).id)).size
 		const first = await concurrently(500, (i) => lookup.resolveProviderIsrc(env, [spotify(i)]))
 		expect(maxMs(first)).toBeLessThan(timeoutMs * 2)
 		expect(first.every((r) => r.value.kind === "pending")).toBe(true)
-		expect(spy).toHaveBeenCalledTimes(500)
+		expect(spy).toHaveBeenCalledTimes(distinct)
 
 		const second = await concurrently(500, (i) => lookup.resolveProviderIsrc(env, [spotify(i)]))
 		expect(maxMs(second)).toBeLessThan(50)
-		expect(spy).toHaveBeenCalledTimes(500)
+		expect(spy).toHaveBeenCalledTimes(distinct)
 		expect(second[0].value).toMatchObject({ kind: "pending", retryAfterSec: pauseSec })
 	})
 
@@ -120,9 +121,11 @@ describe("resolveProviderIsrc under a BiniLink outage", () => {
 
 		vi.setSystemTime(Date.now() + (pauseSec + 1) * 1000)
 		const wave = await concurrently(300, (i) => lookup.resolveProviderIsrc(env, [spotify(i)]))
+		const probeId = JSON.parse(spy.mock.calls[1][1].body as string)[0].id
+		const sharingProbe = Array.from({ length: 300 }, (_, i) => spotify(i).id === probeId)
 
 		expect(maxMs(wave)).toBeLessThan(timeoutMs * 2)
-		expect(wave.filter((r) => r.ms > timeoutMs / 2)).toHaveLength(1)
+		expect(wave.every((r, i) => r.ms > timeoutMs / 2 === sharingProbe[i])).toBe(true)
 		expect(spy).toHaveBeenCalledTimes(2)
 	})
 
@@ -213,7 +216,7 @@ describe("resolveProviderIsrc with a healthy BiniLink", () => {
 
 		const first = await concurrently(1000, (i) => lookup.resolveProviderIsrc(env, [ids[i % 20]]))
 		const firstWaveFetches = spy.mock.calls.length
-		expect(firstWaveFetches).toBe(1000)
+		expect(firstWaveFetches).toBe(ids.length)
 
 		const second = await concurrently(1000, (i) => lookup.resolveProviderIsrc(env, [ids[i % 20]]))
 		expect(spy).toHaveBeenCalledTimes(firstWaveFetches)
@@ -226,7 +229,7 @@ describe("resolveProviderIsrc with a healthy BiniLink", () => {
 })
 
 describe("resolveProviderIsrc with mixed pending and results", () => {
-	it("returns a result over a pending id and never caches the pending one", async () => {
+	it("returns a result over a pending id and never caches the pending one as a miss", async () => {
 		const pending = spotify(1)
 		const resolved = appleMusic(1)
 		const { spy } = stubUpstream(async () =>
@@ -242,16 +245,15 @@ describe("resolveProviderIsrc with mixed pending and results", () => {
 		const wave = await concurrently(300, () => lookup.resolveProviderIsrc(env, [pending, resolved]))
 
 		expect(wave.every((r) => r.value.kind === "isrc" && r.value.isrc === isrcFor(1))).toBe(true)
-		expect(cache.store.has(`binilink:${pending.service}:${pending.id}`)).toBe(false)
+		expect(cache.store.get(`binilink:${pending.service}:${pending.id}`)).not.toBe("__none__")
 		expect(cache.store.get(`binilink:${resolved.service}:${resolved.id}`)).toBe(isrcFor(1))
+		expect(spy).toHaveBeenCalledTimes(1)
 
-		const calls = spy.mock.calls.length
 		await lookup.resolveProviderIsrc(env, [pending, resolved])
-		expect(spy).toHaveBeenCalledTimes(calls + 1)
-		expect(JSON.parse(spy.mock.calls[calls][1].body as string)).toEqual([pending])
+		expect(spy).toHaveBeenCalledTimes(1)
 	})
 
-	it("answers pending for an all-pending batch and asks again next time", async () => {
+	it("answers pending for an all-pending batch with one shared call and no cached miss", async () => {
 		const ids = [spotify(2), appleMusic(2)]
 		const { spy } = stubUpstream(async (body) =>
 			json({ results: [], not_found: [], no_isrc: [], pending: body })
@@ -262,7 +264,7 @@ describe("resolveProviderIsrc with mixed pending and results", () => {
 
 		expect(wave.every((r) => r.value.kind === "pending")).toBe(true)
 		expect(wave[0].value).toMatchObject({ kind: "pending", retryAfterSec: pendingRetryAfterSec })
-		expect([...cache.store.keys()].filter((k) => k.startsWith("binilink:"))).toEqual([])
-		expect(spy).toHaveBeenCalledTimes(300)
+		expect([...cache.store.values()]).not.toContain("__none__")
+		expect(spy).toHaveBeenCalledTimes(1)
 	})
 })

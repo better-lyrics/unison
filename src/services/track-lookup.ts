@@ -6,6 +6,7 @@ import { normalizeIsrc } from "@/utils/isrc"
 import type { ProviderId } from "@/utils/provider-id"
 
 const MISS = "__none__"
+const PENDING = "__pending__"
 const trackKey = (id: ProviderId) => `binilink:${id.service}:${id.id}`
 const videoKey = (isrc: string) => `binilink:isrc:${isrc}`
 
@@ -33,42 +34,52 @@ export type TrackQuery = {
 
 export async function resolveProviderIsrc(env: Env, ids: ProviderId[]): Promise<Resolution> {
 	const cached = await Promise.all(ids.map((id) => env.CACHE.get(trackKey(id))))
+	const known = cached.find((value) => value !== null && value !== MISS && value !== PENDING)
+	if (known) return { kind: "isrc", isrc: known, calledBinilink: false }
+
+	const pending = { kind: "pending", retryAfterSec: config.binilink.pendingRetryAfterSec } as const
 	const uncached = ids.filter((_, i) => cached[i] === null)
-	const calledBinilink = uncached.length > 0
-	const batch = calledBinilink ? await resolveProviderIds(uncached) : null
-
-	if (batch) {
-		await Promise.all([
-			...batch.results.map((r) =>
-				env.CACHE.put(trackKey(r), r.isrc, { expirationTtl: config.binilink.trackTtlSec })
-			),
-			...batch.results.map((r) =>
-				env.CACHE.put(videoKey(r.isrc), r.youtube ?? MISS, {
-					expirationTtl: config.binilink.videoTtlSec,
-				})
-			),
-			...batch.missing.map((id) =>
-				env.CACHE.put(trackKey(id), MISS, { expirationTtl: config.binilink.missTtlSec })
-			),
-		])
+	if (uncached.length === 0) {
+		return cached.includes(PENDING)
+			? { ...pending, calledBinilink: false }
+			: { kind: "missing", calledBinilink: false }
 	}
 
-	for (const [i, id] of ids.entries()) {
-		const isrc =
-			cached[i] ?? batch?.results.find((r) => r.service === id.service && r.id === id.id)?.isrc
-		if (isrc && isrc !== MISS) return { kind: "isrc", isrc, calledBinilink }
-	}
-	if (!calledBinilink) return { kind: "missing", calledBinilink }
+	const batch = await resolveProviderIds(uncached)
 	if (!batch) {
 		return {
 			kind: "pending",
 			retryAfterSec: pauseRemainingSec() || config.binilink.pendingRetryAfterSec,
-			calledBinilink,
+			calledBinilink: true,
 		}
 	}
-	return batch.pending.length > 0
-		? { kind: "pending", retryAfterSec: config.binilink.pendingRetryAfterSec, calledBinilink }
-		: { kind: "missing", calledBinilink }
+
+	await Promise.all([
+		...batch.results.map((r) =>
+			env.CACHE.put(trackKey(r), r.isrc, { expirationTtl: config.binilink.trackTtlSec })
+		),
+		...batch.results.map((r) =>
+			env.CACHE.put(videoKey(r.isrc), r.youtube ?? MISS, {
+				expirationTtl: config.binilink.videoTtlSec,
+			})
+		),
+		...batch.missing.map((id) =>
+			env.CACHE.put(trackKey(id), MISS, { expirationTtl: config.binilink.missTtlSec })
+		),
+		...batch.pending.map((id) =>
+			env.CACHE.put(trackKey(id), PENDING, {
+				expirationTtl: config.binilink.pendingRetryAfterSec,
+			})
+		),
+	])
+
+	for (const id of ids) {
+		const hit = batch.results.find((r) => r.service === id.service && r.id === id.id)
+		if (hit) return { kind: "isrc", isrc: hit.isrc, calledBinilink: true }
+	}
+	return batch.pending.length > 0 || cached.includes(PENDING)
+		? { ...pending, calledBinilink: true }
+		: { kind: "missing", calledBinilink: true }
 }
 
 async function linkedVideo(
@@ -77,11 +88,18 @@ async function linkedVideo(
 	canFetch: boolean
 ): Promise<{ videoId: string | null; fetched: boolean }> {
 	const cached = await env.CACHE.get(videoKey(isrc))
-	if (cached !== null) return { videoId: cached === MISS ? null : cached, fetched: false }
+	if (cached === MISS || cached === PENDING) return { videoId: null, fetched: false }
+	if (cached !== null) return { videoId: cached, fetched: false }
 	if (!canFetch) return { videoId: null, fetched: false }
 
 	const result = await lookupIsrcVideo(isrc)
-	if (!result || result.kind === "pending") return { videoId: null, fetched: true }
+	if (!result) return { videoId: null, fetched: true }
+	if (result.kind === "pending") {
+		await env.CACHE.put(videoKey(isrc), PENDING, {
+			expirationTtl: config.binilink.pendingRetryAfterSec,
+		})
+		return { videoId: null, fetched: true }
+	}
 	const videoId = result.kind === "found" ? result.videoId : null
 	await env.CACHE.put(videoKey(isrc), videoId ?? MISS, {
 		expirationTtl: config.binilink.videoTtlSec,

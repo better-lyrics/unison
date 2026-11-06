@@ -37,8 +37,20 @@ function pause(retryAfter: string | null): void {
 	pausedUntil = Math.max(pausedUntil, Date.now() + seconds * 1000)
 }
 
+const inflight = new Map<string, Promise<Fields | null>>()
+
+/** Concurrent callers asking the same thing share one request. */
+function post(path: string, body: unknown): Promise<Fields | null> {
+	const key = `${path} ${JSON.stringify(body)}`
+	const running = inflight.get(key)
+	if (running) return running
+	const request = send(path, body).finally(() => inflight.delete(key))
+	inflight.set(key, request)
+	return request
+}
+
 /** After a pause ends, one request probes BiniLink and the rest skip it until that one answers. */
-async function post(path: string, body: unknown): Promise<Fields | null> {
+async function send(path: string, body: unknown): Promise<Fields | null> {
 	if (Date.now() < pausedUntil) return null
 	const probe = pausedUntil > 0
 	if (probe && probing) return null
