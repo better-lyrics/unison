@@ -2,7 +2,7 @@ import { Link } from "react-router-dom"
 import { Bone, skeletonKeys } from "@/components/skeleton"
 import { SongThumbnail } from "@/components/SongThumbnail"
 import { SyncTag } from "@/components/SyncTag"
-import { UserAvatar } from "@/components/UserAvatar"
+import { SubmitterLine } from "@/components/SubmitterLine"
 import { cn } from "@/lib/cn"
 import { formatCompact, formatExact, formatRelativeTime } from "@/lib/format"
 import { syncTypeFor } from "@/lib/sync-type"
@@ -50,20 +50,14 @@ export function SongCoverTile({ song: s }: { song: CoverTileSong }) {
           <div className="mt-3 flex min-w-0 items-center gap-2 text-xs text-(--ink-dim) [text-shadow:none]">
             {s.submitter ? (
               <>
-                <UserAvatar
-                  avatarUrl={s.submitter.avatarUrl}
-                  keyId={s.submitter.keyId}
-                  className="size-4 shrink-0 rounded-full"
-                  loading="lazy"
-                />
-                <span
+                <SubmitterLine
+                  submitter={s.submitter}
+                  nameClassName="text-(--ink-2)"
                   title={`${s.submitter.displayName} · ${formatRelativeTime(s.createdAt)}`}
-                  className="min-w-0 truncate"
                 >
-                  <span className="text-(--ink-2)">{s.submitter.displayName}</span>
                   {" · "}
                   {formatRelativeTime(s.createdAt)}
-                </span>
+                </SubmitterLine>
                 <SyncTag kind={syncTypeFor(s.syncType, s.format)} className="ml-auto" />
               </>
             ) : (

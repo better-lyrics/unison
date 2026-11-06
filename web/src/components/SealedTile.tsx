@@ -2,7 +2,7 @@ import { motion } from "motion/react"
 import { Link } from "react-router-dom"
 import { Bone } from "@/components/skeleton"
 import { SongThumbnail } from "@/components/SongThumbnail"
-import { UserAvatar } from "@/components/UserAvatar"
+import { SubmitterLine } from "@/components/SubmitterLine"
 import { cn } from "@/lib/cn"
 import { formatElapsed } from "@/lib/format"
 import { EASE_OUT, sealStamp, staggerDelay, thudFrom, thudTransition } from "@/lib/motion-variants"
@@ -45,13 +45,7 @@ export function SealedTile({
   )
   const submitter = entry.submitter ? (
     <span className="flex min-w-0 items-center gap-1.5 text-[11px] text-unison-text-muted">
-      <UserAvatar
-        avatarUrl={entry.submitter.avatarUrl}
-        keyId={entry.submitter.keyId}
-        className="size-4 shrink-0 rounded-full"
-        loading="lazy"
-      />
-      <span className="truncate">{entry.submitter.displayName}</span>
+      <SubmitterLine submitter={entry.submitter} />
     </span>
   ) : null
 
