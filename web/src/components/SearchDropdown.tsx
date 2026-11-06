@@ -37,7 +37,7 @@ export function SearchDropdown({ status, results, activeIndex, getRowProps }: Se
                 activeIndex === index && "bg-unison-bg-hover shadow-inset-rim",
               )}
             >
-              <SongThumbnail videoId={hit.videoId} className="size-10" />
+              <SongThumbnail videoId={hit.videoId} song={hit.song} artist={hit.artist} className="size-10" />
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-medium text-unison-text">{hit.song}</p>
                 <p className="truncate text-xs text-unison-text-secondary">{hit.artist}</p>

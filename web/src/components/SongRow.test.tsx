@@ -62,10 +62,9 @@ describe("SongRow", () => {
     expect(img?.getAttribute("src")).toBe("https://example.com/thumb.jpg")
   })
 
-  it("falls back to a placeholder icon when thumbnailUrl is null", () => {
+  it("falls back to the sleeve when thumbnailUrl is null", () => {
     const { container } = renderRow(needsFixingEntry)
     expect(container.querySelector("img")).toBeNull()
-    expect(container.querySelector("svg")).toBeTruthy()
   })
 
   it("links the card body to YouTube Music in a new tab", () => {

@@ -2,7 +2,7 @@ import { Bone, skeletonKeys } from "@/components/skeleton"
 import { formatCompact, formatExact, formatRank } from "@/lib/format"
 import type { SongLeaderboardEntry } from "@/lib/types"
 import { youTubeMusicUrl } from "@/lib/youtube-music"
-import { IconMusic } from "@tabler/icons-react"
+import { CoverImage } from "@/components/AlbumArt"
 
 interface SongRowProps {
   entry: SongLeaderboardEntry
@@ -23,11 +23,7 @@ export function SongRow({ entry }: SongRowProps) {
       >
         <span className="shrink-0 font-mono text-xs tabular-nums text-unison-text-muted">{formatRank(entry.rank)}</span>
         <div className="flex size-12 shrink-0 items-center justify-center overflow-hidden rounded-md bg-unison-bg-hover">
-          {entry.thumbnailUrl ? (
-            <img src={entry.thumbnailUrl} alt="" className="size-full object-cover" loading="lazy" />
-          ) : (
-            <IconMusic className="size-6 opacity-50 text-unison-text" stroke={1.5} />
-          )}
+          <CoverImage src={entry.thumbnailUrl} song={entry.song} artist={entry.artist} />
         </div>
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-medium text-unison-text">{entry.song}</p>

@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
-import { cleanup, render, waitFor } from "@testing-library/react"
+import { cleanup, fireEvent, render, waitFor } from "@testing-library/react"
 import type { ReactNode } from "react"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { AlbumArt } from "@/components/AlbumArt"
@@ -24,17 +24,35 @@ describe("AlbumArt", () => {
       "fetch",
       vi.fn().mockResolvedValue(jsonResponse({ success: true, data: { artworkUrl: "https://art/x=w544-h544" } })),
     )
-    const { container } = render(wrap(<AlbumArt videoId="dQw4w9WgXcQ" />))
+    const { container } = render(wrap(<AlbumArt videoId="dQw4w9WgXcQ" song="Paper Lanterns" artist="Halden" />))
     await waitFor(() => expect(container.querySelector("img")).not.toBeNull())
     expect(container.querySelector("img")?.getAttribute("src")).toBe("https://art/x=w544-h544")
   })
 
   describe("fallback", () => {
-    it("keeps the music-note placeholder when there is no square art", async () => {
-      vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse({ success: true, data: { artworkUrl: null } })))
-      const { container } = render(wrap(<AlbumArt videoId="dQw4w9WgXcQ" />))
-      await waitFor(() => expect(container.querySelector("svg")).not.toBeNull())
+    it("paints the sleeve when there is no square art", async () => {
+      const fetch = vi.fn().mockResolvedValue(jsonResponse({ success: true, data: { artworkUrl: null } }))
+      vi.stubGlobal("fetch", fetch)
+      const { container } = render(wrap(<AlbumArt videoId="dQw4w9WgXcQ" song="Paper Lanterns" artist="Halden" />))
+      await waitFor(() => expect(fetch).toHaveBeenCalled())
       expect(container.querySelector("img")).toBeNull()
+      expect(container.firstElementChild?.tagName).toBe("DIV")
+    })
+
+    it("paints the sleeve when the cover fails to load", async () => {
+      vi.stubGlobal(
+        "fetch",
+        vi.fn().mockResolvedValue(jsonResponse({ success: true, data: { artworkUrl: "https://art/x=w544-h544" } })),
+      )
+      const { container } = render(wrap(<AlbumArt videoId="dQw4w9WgXcQ" song="Paper Lanterns" artist="Halden" />))
+      const img = await waitFor(() => {
+        const found = container.querySelector("img")
+        expect(found).not.toBeNull()
+        return found as HTMLImageElement
+      })
+      fireEvent.error(img)
+      expect(container.querySelector("img")).toBeNull()
+      expect(container.firstElementChild?.tagName).toBe("DIV")
     })
   })
 })

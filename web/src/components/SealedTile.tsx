@@ -71,6 +71,8 @@ export function SealedTile({
       <div className="relative">
         <SongThumbnail
           videoId={entry.videoId}
+          song={entry.song}
+          artist={entry.artist}
           className={cn("aspect-square w-full", isCard ? "rounded-none" : "rounded-[10px]")}
         />
         {seal && landAt !== null ? (

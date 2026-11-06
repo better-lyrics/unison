@@ -1,11 +1,31 @@
-import { IconMusic } from "@tabler/icons-react"
+import { useState } from "react"
 import { useArtwork } from "@/lib/artwork"
 import { cn } from "@/lib/cn"
+import { sleeveCss } from "@/lib/sleeve"
 
-export function AlbumArt({ videoId, className }: { videoId: string; className?: string }) {
-  const { data: url } = useArtwork(videoId)
-  if (url) {
-    return <img src={url} alt="" loading="lazy" className={cn("size-full object-cover", className)} />
+interface CoverProps {
+  song: string
+  artist: string
+  className?: string
+}
+
+export function CoverImage({ src, song, artist, className }: CoverProps & { src: string | null | undefined }) {
+  const [failed, setFailed] = useState<string | null>(null)
+  if (src && src !== failed) {
+    return (
+      <img
+        src={src}
+        alt=""
+        loading="lazy"
+        onError={() => setFailed(src)}
+        className={cn("size-full object-cover", className)}
+      />
+    )
   }
-  return <IconMusic className="size-6 text-unison-text opacity-50" stroke={1.5} />
+  return <div className={cn("size-full", className)} style={{ background: sleeveCss(song, artist) }} />
+}
+
+export function AlbumArt({ videoId, ...cover }: CoverProps & { videoId: string }) {
+  const { data: url } = useArtwork(videoId)
+  return <CoverImage src={url} {...cover} />
 }
