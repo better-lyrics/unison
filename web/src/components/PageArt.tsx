@@ -3,12 +3,12 @@ import { useArtPalette } from "@/hooks/useArtPalette"
 import { ArtBackground } from "./ArtBackground"
 
 const DEFAULT_ART_SIZE = 256
-const DEFAULT_SCRIM_FLOOR = 0.4
-const DEFAULT_BASE = ["#0b0809", "#140a0d", "#060506"]
+const DEFAULT_SCRIM_FLOOR = 0.36
+const DEFAULT_BASE = ["#1a0609", "#2a080e", "#0c0506"]
 const DEFAULT_GLOWS = [
-  { x: 0.22, y: 0.28, r: 0.6, color: "rgba(196, 28, 48, 0.5)" },
-  { x: 0.82, y: 0.72, r: 0.55, color: "rgba(110, 12, 28, 0.45)" },
-  { x: 0.65, y: 0.12, r: 0.35, color: "rgba(255, 86, 64, 0.18)" },
+  { x: 0.2, y: 0.25, r: 0.7, color: "rgba(224, 30, 52, 0.8)" },
+  { x: 0.85, y: 0.75, r: 0.65, color: "rgba(150, 14, 34, 0.7)" },
+  { x: 0.6, y: 0.1, r: 0.45, color: "rgba(255, 90, 66, 0.35)" },
 ]
 
 function defaultArt(): string | null {
