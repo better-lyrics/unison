@@ -5,6 +5,9 @@ export const panelClass = "rounded-lg bg-white/[0.02]"
 // Panels that hold controls or editable content also want inner padding and vertical rhythm.
 export const editableCardClass = `${panelClass} space-y-3 p-4`
 
+export const glassClass =
+  "bg-[rgba(15,14,19,0.28)] shadow-[inset_0_1px_0_rgba(255,255,255,0.1),inset_0_0_0_1px_rgba(255,255,255,0.06)] backdrop-blur-[20px] backdrop-saturate-150"
+
 export const tagClass =
   "inline-flex items-center gap-1 rounded bg-unison-bg-hover px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-unison-text-secondary"
 

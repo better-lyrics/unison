@@ -2,11 +2,19 @@ import { IconMenu2, IconX } from "@tabler/icons-react"
 import { useEffect, useRef, useState } from "react"
 import { Link, NavLink } from "react-router-dom"
 import { cn } from "@/lib/cn"
+import { useArtChrome } from "@/lib/route-chrome"
 import { type PageWidth, pageWidthClass } from "@/lib/page-width"
 import { BetterLyricsLogo } from "./BetterLyricsLogo"
 import { CouncilNavLink } from "./council/CouncilNavLink"
 import { SearchBar } from "./SearchBar"
 import { SignInControl } from "./SignInControl"
+import { glassClass } from "./ui"
+
+const artTabClass = ({ isActive }: { isActive: boolean }) =>
+	cn(
+		"inline-flex h-[30px] items-center rounded-[9px] px-2.5 text-sm font-medium transition-colors duration-150",
+		isActive ? "bg-white/[0.08] text-unison-text" : "text-(--ink-2) hover:bg-white/[0.08] hover:text-unison-text",
+	)
 
 const tabClass = ({ isActive }: { isActive: boolean }) =>
 	cn(
@@ -18,6 +26,8 @@ const tabClass = ({ isActive }: { isActive: boolean }) =>
 
 export function AppHeader({ width }: { width: PageWidth }) {
 	const [menuOpen, setMenuOpen] = useState(false)
+	const art = useArtChrome()
+	const navTab = art ? artTabClass : tabClass
 	const headerRef = useRef<HTMLElement | null>(null)
 	const closeMenu = () => setMenuOpen(false)
 
@@ -40,7 +50,10 @@ export function AppHeader({ width }: { width: PageWidth }) {
 	return (
 		<header
 			ref={headerRef}
-			className="sticky top-0 z-10 border-b border-unison-border bg-unison-bg/80 backdrop-blur"
+			className={cn(
+				"top-0 z-10",
+				art ? "relative" : "sticky border-b border-unison-border bg-unison-bg/80 backdrop-blur",
+			)}
 		>
 			<div
 				className={cn(
@@ -51,38 +64,46 @@ export function AppHeader({ width }: { width: PageWidth }) {
 				<Link
 					to="/"
 					aria-label="Unison home"
-					className="flex items-center gap-2 transition-opacity hover:opacity-80 sm:justify-self-start"
+					className={cn(
+						"flex items-center gap-2 transition-opacity hover:opacity-80 sm:justify-self-start",
+						art && "[text-shadow:0_1px_16px_rgba(0,0,0,0.3)]",
+					)}
 				>
 					<BetterLyricsLogo size={20} />
 					<span className="text-base font-semibold tracking-tight">Unison</span>
 				</Link>
-				<nav className="hidden items-center gap-1 sm:flex sm:justify-self-start">
-					<NavLink to="/" end className={tabClass}>
+				<nav
+					className={cn(
+						"hidden items-center sm:flex sm:justify-self-start",
+						art ? cn(glassClass, "gap-0.5 rounded-xl p-[3px]") : "gap-1",
+					)}
+				>
+					<NavLink to="/" end className={navTab}>
 						Songs
 					</NavLink>
-					<NavLink to="/curators" className={tabClass}>
+					<NavLink to="/curators" className={navTab}>
 						Leaderboard
 					</NavLink>
-					<CouncilNavLink className={tabClass} />
-					<NavLink to="/about" className={tabClass}>
+					<CouncilNavLink className={navTab} />
+					<NavLink to="/about" className={navTab}>
 						About
 					</NavLink>
-					<NavLink to="/downloads" className={tabClass}>
+					<NavLink to="/downloads" className={navTab}>
 						Downloads
 					</NavLink>
-					<NavLink to="/docs" className={tabClass}>
+					<NavLink to="/docs" className={navTab}>
 						Docs
 					</NavLink>
 				</nav>
 				<div className="hidden sm:flex sm:justify-self-end sm:w-full sm:max-w-xs">
-					<SearchBar />
+					<SearchBar glass={art} />
 				</div>
 				<div className="flex items-center gap-2 sm:justify-self-end">
 					<div className="sm:hidden">
 						<SearchBar compact />
 					</div>
 					<div className="hidden sm:block">
-						<SignInControl />
+						<SignInControl glass={art} />
 					</div>
 					<button
 						type="button"

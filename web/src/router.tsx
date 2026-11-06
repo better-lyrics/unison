@@ -18,6 +18,7 @@ import { SearchPage } from "./pages/SearchPage"
 import { SongsPage } from "./pages/SongsPage"
 import { UserPage } from "./pages/UserPage"
 import { councilRoute } from "./pages/council/routes"
+import { ART_CHROME } from "./lib/route-chrome"
 
 // Dev-only state gallery for the link/profile UI. The import.meta.env.DEV branch
 // is statically false in production builds, so this whole block (and the lazy
@@ -54,10 +55,10 @@ const router = createBrowserRouter([
       { path: "sealed", element: <SealedPage /> },
       { path: "curators", element: <CuratorsPage /> },
       { path: "search", element: <SearchPage /> },
-      { path: "song/:videoId", element: <LyricsPage /> },
-      { path: "me", element: <MePage /> },
-      { path: "curator/:keyId", element: <UserPage /> },
-      { path: "u/:nickname", element: <NicknamePage /> },
+      { path: "song/:videoId", element: <LyricsPage />, handle: ART_CHROME },
+      { path: "me", element: <MePage />, handle: ART_CHROME },
+      { path: "curator/:keyId", element: <UserPage />, handle: ART_CHROME },
+      { path: "u/:nickname", element: <NicknamePage />, handle: ART_CHROME },
       { path: "about", element: <AboutPage /> },
       { path: "downloads", element: <DownloadsPage /> },
       { path: "docs", element: <DocsPage /> },

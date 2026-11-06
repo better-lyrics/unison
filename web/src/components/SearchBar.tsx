@@ -1,4 +1,5 @@
 import { Kbd } from "@/components/Kbd"
+import { glassClass } from "@/components/ui"
 import { type DropdownStatus, SearchDropdown } from "@/components/SearchDropdown"
 import { useDebouncedValue } from "@/hooks/useDebouncedValue"
 import { useSearchShortcut } from "@/hooks/useSearchShortcut"
@@ -28,9 +29,10 @@ const MAX_SUGGESTIONS = 5
 
 interface SearchBarProps {
   compact?: boolean
+  glass?: boolean
 }
 
-export function SearchBar({ compact = false }: SearchBarProps) {
+export function SearchBar({ compact = false, glass = false }: SearchBarProps) {
   const location = useLocation()
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
@@ -183,7 +185,14 @@ export function SearchBar({ compact = false }: SearchBarProps) {
 
   return (
     <div className={cn("relative", compact ? "w-full" : "w-full max-w-xs")}>
-      <div className="flex h-9 items-center gap-2 rounded-md border border-unison-border bg-unison-bg-elevated px-2.5 transition-colors focus-within:border-unison-border-strong hover:border-unison-border-strong">
+      <div
+        className={cn(
+          "flex h-9 items-center gap-2 px-2.5",
+          glass
+            ? cn(glassClass, "rounded-[10px]")
+            : "rounded-md border border-unison-border bg-unison-bg-elevated transition-colors focus-within:border-unison-border-strong hover:border-unison-border-strong",
+        )}
+      >
         <IconSearch className="size-4 shrink-0 text-unison-text opacity-50" stroke={1.5} aria-hidden="true" />
         <input
           ref={(node) => {

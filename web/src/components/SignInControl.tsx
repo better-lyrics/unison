@@ -3,8 +3,10 @@ import { UserAvatar } from "@/components/UserAvatar";
 import { IconCheck, IconCopy, IconFileUpload, IconLogout, IconUser } from "@tabler/icons-react";
 import { type ChangeEvent, useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
+import { glassClass } from "@/components/ui";
+import { cn } from "@/lib/cn";
 
-export function SignInControl() {
+export function SignInControl({ glass = false }: { glass?: boolean }) {
   const session = useSession();
   const menu = session.status === "signed-in" ? "account" : "sign-in";
   const [openMenu, setOpenMenu] = useState<"account" | "sign-in" | null>(null);
@@ -62,7 +64,7 @@ export function SignInControl() {
           aria-haspopup="menu"
           aria-expanded={open}
           aria-label={identity.displayName}
-          className="flex cursor-pointer items-center gap-2 rounded-full p-1 pr-3 transition-colors hover:bg-unison-bg-hover"
+          className={cn("flex cursor-pointer items-center gap-2 rounded-full p-1 pr-3 transition-colors hover:bg-unison-bg-hover", glass && glassClass)}
         >
           <UserAvatar
             avatarUrl={identity.avatarUrl}
@@ -143,7 +145,7 @@ export function SignInControl() {
           onClick={() => setOpen((o) => !o)}
           aria-haspopup="menu"
           aria-expanded={open}
-          className="cursor-pointer rounded-md bg-unison-bg-elevated px-3 py-1.5 text-sm font-medium text-unison-text transition-colors hover:bg-unison-bg-hover"
+          className={cn("cursor-pointer px-3 py-1.5 text-sm font-medium text-unison-text transition-colors hover:bg-unison-bg-hover", glass ? cn(glassClass, "h-9 rounded-[10px]") : "rounded-md bg-unison-bg-elevated")}
         >
           Sign in
         </button>
