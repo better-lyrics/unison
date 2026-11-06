@@ -11,8 +11,8 @@ import { songBackdrop, useArtwork } from "@/lib/artwork"
 import { useCallback, useMemo, useState } from "react"
 import { useParams, useSearchParams } from "react-router-dom"
 
-const BODY =
-  "grid grid-cols-[minmax(0,1fr)_340px] gap-12 pt-2 max-[1000px]:pb-[88px] max-[1000px]:grid-cols-[minmax(0,1fr)] max-[1000px]:gap-7 max-[1000px]:pt-0"
+const PAGE =
+  "grid grid-cols-[minmax(0,1fr)_340px] items-start gap-x-12 min-[1001px]:-mb-8 max-[1000px]:grid-cols-[minmax(0,1fr)] max-[1000px]:gap-y-7 max-[1000px]:pb-[88px]"
 const LYRICS_FILL = "lyrics-fill"
 const LYRICS_SIZE = `${LYRICS_FILL} h-[max(var(--fill-height,560px),240px)] max-w-none max-[1000px]:h-[70dvh]`
 
@@ -82,7 +82,7 @@ export function LyricsPage() {
 
   if (!videoId) return <EmptyState title="No video specified" />
 
-  if (variantsQuery.isLoading) return <LyricsPageSkeleton />
+  if (variantsQuery.isLoading) return <LyricsPageSkeleton lyricsRef={lyricsRef} />
   if (variantsQuery.isError) {
     const message = variantsQuery.error instanceof Error ? variantsQuery.error.message : "Unknown error"
     return <EmptyState title="Could not load lyrics" hint={message} />
@@ -95,19 +95,19 @@ export function LyricsPage() {
   const variant = loaded && variants.some((v) => v.id === loaded.id) ? loaded : undefined
 
   return (
-    <div className="min-[1001px]:-mb-8">
-      {variant ? (
-        <SongHero
-          variant={variant}
-          versions={variants.length}
-          art={art}
-          player={{ ref, active: playerActive, playing, ready, failed, onToggle: togglePlay }}
-        />
-      ) : (
-        <SongHeroSkeleton />
-      )}
-      <div className={BODY}>
-        <div ref={lyricsRef} className="lyrics-view min-w-0">
+    <div className={PAGE}>
+      <div className="min-w-0">
+        {variant ? (
+          <SongHero
+            variant={variant}
+            versions={variants.length}
+            art={art}
+            player={{ ref, active: playerActive, playing, ready, failed, onToggle: togglePlay }}
+          />
+        ) : (
+          <SongHeroSkeleton />
+        )}
+        <div ref={lyricsRef} className="lyrics-view">
           <LyricsPanel
             variant={variantQuery.isLoading ? undefined : variant}
             getCurrentTime={getCurrentTime}
@@ -116,22 +116,22 @@ export function LyricsPage() {
             lyricsClassName={LYRICS_SIZE}
           />
         </div>
-        <SongRail variant={variant} variants={variants} selectedId={selectedId ?? -1} onSelect={handleSelect} />
       </div>
+      <SongRail variant={variant} variants={variants} selectedId={selectedId ?? -1} onSelect={handleSelect} />
     </div>
   )
 }
 
-function LyricsPageSkeleton() {
+function LyricsPageSkeleton({ lyricsRef }: { lyricsRef: (node: HTMLElement | null) => void }) {
   return (
-    <div className="min-[1001px]:-mb-8">
-      <SongHeroSkeleton />
-      <div className={BODY}>
-        <div className="min-w-0">
+    <div className={PAGE}>
+      <div className="min-w-0">
+        <SongHeroSkeleton />
+        <div ref={lyricsRef} className="lyrics-view">
           <LyricsContentSkeleton className={LYRICS_SIZE} />
         </div>
-        <SongRailSkeleton />
       </div>
+      <SongRailSkeleton />
     </div>
   )
 }
