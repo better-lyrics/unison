@@ -314,6 +314,8 @@ export const config = {
 			maxRequests: 600,
 			windowSeconds: 60,
 		},
+		// One SPA page fans out into many cover reads; a forged header only earns this bounded budget
+		spaReadScale: 5,
 		write: {
 			maxRequests: 10,
 			windowSeconds: 60,
