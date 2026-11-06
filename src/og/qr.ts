@@ -19,7 +19,9 @@ export function qrModules(text: string): QrModules {
 	const inHole = (x: number, y: number) =>
 		x >= start && x < start + LOGO_HOLE && y >= start && y < start + LOGO_HOLE
 	const inFinder = (x: number, y: number) =>
-		(x < FINDER && y < FINDER) || (x >= size - FINDER && y < FINDER) || (x < FINDER && y >= size - FINDER)
+		(x < FINDER && y < FINDER) ||
+		(x >= size - FINDER && y < FINDER) ||
+		(x < FINDER && y >= size - FINDER)
 	const corner = size - CORNER_RADIUS
 	const pastCorner = (x: number, y: number) =>
 		x + 0.5 > corner &&

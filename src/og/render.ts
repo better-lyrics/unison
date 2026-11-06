@@ -3,7 +3,6 @@ import { getUserBadges } from "@/db/badges"
 import { CATALOGUE, badgeImageFile } from "@/db/badges/definitions"
 import { getCuratorRank } from "@/db/leaderboard"
 import { countVariantsByVideoId, findByVideoId } from "@/db/lyrics"
-import { profileQrUrl, qrModules } from "@/og/qr"
 import { getSubmissionsByUser } from "@/db/profile"
 import { getProfileExtras } from "@/db/profile-settings"
 import { getUserByKeyId, resolveIdentity, resolvePeople } from "@/db/users"
@@ -35,6 +34,7 @@ import {
 	profileDownloadNode,
 	profileWallNode,
 } from "./profile-card"
+import { profileQrUrl, qrModules } from "./qr"
 import { songCardNode } from "./song-card"
 
 export interface RenderedCard {

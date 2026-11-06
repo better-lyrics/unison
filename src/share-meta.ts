@@ -185,7 +185,8 @@ export function requestOrigin(request: Request): string {
 }
 
 export async function findShare(env: Env, pathname: string, loaders: ShareLoaders) {
-	const [, section, id] = pathname.split("/")
+	const [, rawSection, id] = pathname.split("/")
+	const section = rawSection?.toLowerCase()
 	if (!id || pathname.split("/").length !== 3) return null
 	let decoded: string
 	try {
@@ -196,8 +197,11 @@ export async function findShare(env: Env, pathname: string, loaders: ShareLoader
 	if (section === "song" && isVideoId(decoded)) return loaders.song(env, decoded)
 	if (section === "curator" && KEY_ID.test(decoded)) return loaders.profile(env, decoded)
 	if (section === "u" && NICKNAME.test(decoded)) {
-		const keyId = await cached(env, `share:handle:${decoded.toLowerCase()}`, SHARE_TTL_SECONDS, () =>
-			resolveKeyIdByHandle(env, decoded)
+		const keyId = await cached(
+			env,
+			`share:handle:${decoded.toLowerCase()}`,
+			SHARE_TTL_SECONDS,
+			() => resolveKeyIdByHandle(env, decoded)
 		)
 		return keyId ? loaders.profile(env, keyId) : null
 	}

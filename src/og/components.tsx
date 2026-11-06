@@ -1,7 +1,7 @@
-import type { QrModules } from "./qr"
 import { SYNC_KINDS, type SyncKind } from "@/utils/sync-type"
 import type { CSSProperties, ReactNode } from "react"
 import { FONT_STACK } from "./fonts"
+import type { QrModules } from "./qr"
 
 export const TEXT = "#f5f5f7"
 export const GOLD = "#ffc83d"
@@ -80,13 +80,24 @@ export function Logo({ size }: { size: number }) {
 export function QrCode({ qr, size, color }: { qr: QrModules; size: number; color: string }) {
 	const eye = (x: number, y: number) => (
 		<g key={`${x}-${y}`}>
-			<rect x={x + 0.5} y={y + 0.5} width={6} height={6} rx={2} fill="none" stroke={color} strokeWidth={1} />
+			<rect
+				x={x + 0.5}
+				y={y + 0.5}
+				width={6}
+				height={6}
+				rx={2}
+				fill="none"
+				stroke={color}
+				strokeWidth={1}
+			/>
 			<rect x={x + 2} y={y + 2} width={3} height={3} rx={1} fill={color} />
 		</g>
 	)
 	const logo = (qr.hole.size - 0.8) * (size / qr.size)
 	return (
-		<div style={{ position: "relative", display: "flex", width: size, height: size, flexShrink: 0 }}>
+		<div
+			style={{ position: "relative", display: "flex", width: size, height: size, flexShrink: 0 }}
+		>
 			<svg
 				aria-hidden="true"
 				xmlns="http://www.w3.org/2000/svg"

@@ -421,7 +421,9 @@ export function profileDownloadNode(card: ProfileDownloadData) {
 							>
 								{value}
 							</span>
-							<span style={{ marginTop: 6, fontSize: 12, lineHeight: "14px", color: card.ink.three }}>
+							<span
+								style={{ marginTop: 6, fontSize: 12, lineHeight: "14px", color: card.ink.three }}
+							>
 								{label}
 							</span>
 						</div>
