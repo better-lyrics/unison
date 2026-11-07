@@ -29,7 +29,7 @@ function homeSubtitle(lyrics: number | null): [string, string, string] {
 
 export const PAGE_COPY = {
 	home: {
-		title: "Unison · Every word, on time",
+		title: "Unison · The public database for synced lyrics",
 		headline: ["Every word,", "on time."],
 		subtitle: (lyrics: number | null) => homeSubtitle(lyrics).join(""),
 	},
