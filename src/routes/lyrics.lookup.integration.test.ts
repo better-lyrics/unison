@@ -61,6 +61,25 @@ describeIntegration("GET /lyrics lookups (integration)", () => {
 		})
 	})
 
+	describe("etag", () => {
+		it("answers a repeat lookup with 304 and no body while the lyric is unchanged", async () => {
+			const first = await app.handle(new Request("http://localhost/lyrics?v=lkW3jsz0Gnc"))
+			const etag = first.headers.get("etag")
+			expect(etag).toMatch(/^W\//)
+
+			for (const query of ["v=lkW3jsz0Gnc", "isrc=US2S70465012"]) {
+				const repeat = await app.handle(
+					new Request(`http://localhost/lyrics?${query}`, {
+						headers: { "if-none-match": etag ?? "" },
+					})
+				)
+				expect(repeat.status).toBe(304)
+				expect(repeat.headers.get("etag")).toBe(etag)
+				expect(await repeat.text()).toBe("")
+			}
+		})
+	})
+
 	describe("isrc", () => {
 		it("finds a lyric by ISRC", async () => {
 			const { status, body } = await get("isrc=US2S70465012")
