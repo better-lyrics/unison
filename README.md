@@ -181,7 +181,7 @@ Environment variables are listed under [Configuration](#configuration).
 | `song` + `artist` | `Explorer`, `Justice` | `artist` matches any one credited name. Add `album` or `duration` (seconds, ±2 s) to narrow it. |
 | `spotify`, `apple_music`, `tidal` | track id | A track id, not a link. Resolved to an ISRC through [BiniLink](https://link.binimum.org). If several are sent, the first that resolves wins, in that order. |
 
-A `v` lookup only checks that video. Without `v`, Unison tries `isrc`, then the ISRC behind a Spotify, Apple Music or Tidal id, then `song` + `artist`, and returns the first match.
+Use `v` when you can: it's the fastest lookup. Without `v`, Unison falls back to `isrc`, then Spotify / Apple Music / Tidal id, then `song` + `artist`, and returns the first match. The fallbacks can take longer to answer.
 
 Besides the lyric, the response can carry:
 
