@@ -88,6 +88,21 @@ GET /lyrics/search?q=explorer+justice
 
 Every response is `{ "success": true, "data": ... }`, or `{ "success": false, "error": ..., "code": ... }` with an HTTP error status. The full rules for each endpoint are in the [Reference](#reference).
 
+## Caching
+
+Keep the lyrics you fetch, and check whether they changed before you download them again. Unison is [self-funded](#funding), and a check on a lyric that hasn't changed sends back an empty response instead of the whole file.
+
+Every `GET /lyrics` lookup sends an `ETag`. Save it with the lyric and send it back as `If-None-Match`. If the lyric is the same, Unison answers `304 Not Modified` with no body, and you use the copy you have:
+
+```bash
+curl -i "https://unison.betterlyrics.org/lyrics?v=Ugr4KKK_SqY" \
+  -H 'If-None-Match: <the ETag you saved>'
+```
+
+The tag changes when someone edits the lyric or its song details, or when another version moves to the top. Votes, confidence and the submitter's stats can change under the same tag, so a saved copy may show old numbers. A `304` still counts toward the rate limit.
+
+In a browser you don't have to do anything: `fetch` keeps the response and checks the `ETag` on its own.
+
 ## Signed requests
 
 All write operations require signed requests using ECDSA P-256:
@@ -368,6 +383,10 @@ A Better Lyrics Council member approved the lyric. Sealed lyrics get a small ran
 ### Is there a rate limit?
 
 Yes. Reads are limited per IP, and submissions have their own limit. Over the limit, Unison answers `429 RATE_LIMITED`.
+
+### Should I cache lyrics?
+
+Yes. Save each lyric with its `ETag` and check it with `If-None-Match` before you download it again. See [Caching](#caching).
 
 ### Can I use the lyrics in my own app?
 

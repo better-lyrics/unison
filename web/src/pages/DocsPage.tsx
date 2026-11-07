@@ -12,6 +12,21 @@ const SEARCH_URL = `${BASE_URL}/lyrics/search?q=never+gonna+give`
 const VARIANTS_URL = `${BASE_URL}/lyrics/variants/dQw4w9WgXcQ?limit=5`
 const TRANSLATE_URL = `${BASE_URL}/translate`
 
+const CACHE_CODE = `const saved = store.get(videoId) // { etag, data } from an earlier call
+const res = await fetch("${VIDEO_URL}", {
+  headers: saved ? { "If-None-Match": saved.etag } : {},
+})
+
+if (res.status === 304) {
+  render(saved.data.lyrics, saved.data.format)
+} else {
+  const { success, data } = await res.json()
+  if (success) {
+    store.set(videoId, { etag: res.headers.get("ETag"), data })
+    render(data.lyrics, data.format)
+  }
+}`
+
 // A GET in each language, generated from the URL so every reference section stays in lockstep.
 function fetchTabs(url: string): CodeTab[] {
   return [
@@ -336,6 +351,23 @@ export function DocsPage() {
             <Code>GET /lyrics/:id</Code> fetches one specific version by its numeric id.
           </p>
           <CodeTabs tabs={fetchTabs(VARIANTS_URL)} />
+        </section>
+
+        <section className="space-y-3">
+          <h2 className="text-lg font-semibold text-unison-text">Caching</h2>
+          <p className="text-sm leading-relaxed text-unison-text-secondary">
+            Keep the lyrics you fetch, and check whether they changed before you download them again. Every{" "}
+            <Code>/lyrics</Code> lookup sends an <Code>ETag</Code>. Save it with the lyric and send it back as{" "}
+            <Code>If-None-Match</Code>. If the lyric is the same, you get <Code>304</Code> with no body and use the copy
+            you have.
+          </p>
+          <CodeBlock code={CACHE_CODE} language="javascript" label="JavaScript" />
+          <p className="text-sm leading-relaxed text-unison-text-secondary">
+            The tag changes when someone edits the lyric or its song details, or when another version moves to the top.
+            Votes and confidence can change under the same tag. A <Code>304</Code> still counts toward the rate limit.
+            In a browser, <Code>fetch</Code> already checks the <Code>ETag</Code> on its own, so you only need this when
+            you store lyrics yourself.
+          </p>
         </section>
 
         <section className="space-y-3">
