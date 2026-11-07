@@ -1,8 +1,9 @@
-import { IconBrandDiscordFilled, IconLoader2 } from "@tabler/icons-react"
-import { DiscordConnectLock, discordButtonClass, secondaryButtonClass } from "@/components/discord-ui"
 import { Switch } from "@/components/council/Switch"
+import { DiscordConnectLock, discordButtonClass, secondaryButtonClass } from "@/components/discord-ui"
+import { DiscordIcon } from "@/components/icons/DiscordIcon"
 import { editableCardClass } from "@/components/ui"
 import type { DiscordLink } from "@/hooks/useDiscordLink"
+import { IconLoader2 } from "@tabler/icons-react"
 
 export interface DiscordSectionModel {
   status: "loading" | "linked" | "unlinked"
@@ -60,7 +61,7 @@ export function DiscordSectionView({ model }: { model: DiscordSectionModel }) {
           {model.connecting ? (
             <IconLoader2 className="size-5 animate-spin" stroke={1.5} />
           ) : (
-            <IconBrandDiscordFilled className="size-5" />
+            <DiscordIcon className="size-5" />
           )}
           {model.connecting ? "Connecting..." : "Connect with Discord"}
         </button>

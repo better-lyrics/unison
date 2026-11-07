@@ -5,16 +5,11 @@ import {
   AuthFlowTitle as Title,
 } from "@/components/AuthFlowLayout"
 import { discordButtonClass, secondaryButtonClass } from "@/components/discord-ui"
-import {
-  IconAlertTriangle,
-  IconBrandDiscordFilled,
-  IconCircleCheck,
-  IconLoader2,
-  IconProgressDown,
-} from "@tabler/icons-react"
+import { DiscordIcon } from "@/components/icons/DiscordIcon"
+import { IconAlertTriangle, IconCircleCheck, IconLoader2, IconProgressDown } from "@tabler/icons-react"
 
 const installIcon = <IconProgressDown className="size-7 text-unison-text-secondary" stroke={1.5} />
-const discordIcon = <IconBrandDiscordFilled className="size-7 text-white" />
+const discordIcon = <DiscordIcon className="size-7 text-white" />
 const warnIcon = <IconAlertTriangle className="size-7 text-amber-400" stroke={1.5} />
 const successIcon = <IconCircleCheck className="size-7 text-emerald-400" stroke={1.5} />
 
@@ -63,7 +58,7 @@ export function MigrateView({ model }: { model: MigrateViewModel }) {
             {model.connecting ? (
               <IconLoader2 className="size-5 animate-spin" stroke={1.5} />
             ) : (
-              <IconBrandDiscordFilled className="size-5" />
+              <DiscordIcon className="size-5" />
             )}
             {model.connecting ? "Connecting..." : "Connect with Discord"}
           </button>

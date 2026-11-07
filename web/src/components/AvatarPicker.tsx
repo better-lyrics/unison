@@ -1,16 +1,17 @@
-import { IconBrandDiscordFilled, IconLoader2 } from "@tabler/icons-react"
-import { useState } from "react"
 import { useSession } from "@/auth/useSession"
-import { DiscordConnectLock, secondaryButtonClass } from "@/components/discord-ui"
 import { Tooltip } from "@/components/Tooltip"
+import { DiscordConnectLock, secondaryButtonClass } from "@/components/discord-ui"
+import { DiscordIcon } from "@/components/icons/DiscordIcon"
 import { editableCardClass } from "@/components/ui"
 import { useAsyncData } from "@/hooks/useAsyncData"
-import { useMySongs } from "@/hooks/useMySongs"
 import type { DiscordLink } from "@/hooks/useDiscordLink"
+import { useMySongs } from "@/hooks/useMySongs"
 import { fetchAvatarCatalogue, putAvatar } from "@/lib/api"
 import { useArtwork } from "@/lib/artwork"
 import { dicebearThumbsDataUri } from "@/lib/avatar"
 import type { AvatarChoice, UserSubmission } from "@/lib/types"
+import { IconLoader2 } from "@tabler/icons-react"
+import { useState } from "react"
 
 interface AvatarOption {
   key: string
@@ -81,7 +82,8 @@ function SongTile({
 
 function SongGroup({ keyId, ...rest }: TileState & { keyId: string; size: number; brokenSrcs: ReadonlySet<string> }) {
   const mine = useMySongs(keyId)
-  if (mine.status === "error") return <p className="text-xs text-red-400">Could not load your songs. Try again later.</p>
+  if (mine.status === "error")
+    return <p className="text-xs text-red-400">Could not load your songs. Try again later.</p>
   if (mine.status !== "success" || mine.songs.length === 0) return null
   const songs = mine.songs
   return (
@@ -190,7 +192,7 @@ export function AvatarPicker({ discord }: { discord: DiscordLink }) {
               aria-disabled={!discord.canConnect}
               className={`${secondaryButtonClass} aria-disabled:cursor-not-allowed aria-disabled:opacity-60`}
             >
-              <IconBrandDiscordFilled className="size-4" />
+              <DiscordIcon className="size-4" />
               {discord.connecting ? "Connecting..." : "Use my Discord photo"}
             </button>
           </DiscordConnectLock>

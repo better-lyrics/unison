@@ -1,12 +1,13 @@
 import { BadgeStrip } from "@/components/AuthorBadges"
 import { MedalRank } from "@/components/MedalRank"
 import { UserAvatar } from "@/components/UserAvatar"
+import { DiscordIcon } from "@/components/icons/DiscordIcon"
 import { Bone, skeletonKeys } from "@/components/skeleton"
 import { useBadgeImage } from "@/hooks/useBadgeImage"
 import { cn } from "@/lib/cn"
 import { formatCompact, formatExact } from "@/lib/format"
 import type { CuratorLeaderboardEntry } from "@/lib/types"
-import { IconBrandDiscordFilled, IconStarFilled } from "@tabler/icons-react"
+import { IconStarFilled } from "@tabler/icons-react"
 import { Link } from "react-router-dom"
 
 interface CuratorRowProps {
@@ -56,7 +57,7 @@ export function CuratorRow({ entry, isSelf = false, appended = false }: CuratorR
               title="Discord connected"
               className="absolute -right-0.5 -bottom-0.5 z-10 grid size-[18px] place-items-center rounded-full border-2 border-unison-bg bg-[#5865f2]"
             >
-              <IconBrandDiscordFilled className="size-2.5 text-white" />
+              <DiscordIcon className="size-2.5 text-white" />
               <span className="sr-only">Discord connected</span>
             </span>
           ) : null}
