@@ -102,8 +102,9 @@ braccato-lyrics .blyrics-container {
 }
 
 .lyrics-view braccato-lyrics {
-  margin-inline: -38px;
-  padding-inline: 28px;
+  width: auto;
+  margin-inline: -38px -12px;
+  padding-inline: 28px 12px;
   box-sizing: border-box;
 }
 
