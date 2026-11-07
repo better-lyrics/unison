@@ -2,6 +2,7 @@ import { Kawarp } from "@kawarp/core"
 import { useCallback, useEffect, useRef, useState } from "react"
 import { cn } from "@/lib/cn"
 import { tokenMs } from "@/lib/motion-tokens"
+import { isTouchScreen } from "@/lib/touch-screen"
 
 const WARP = { warpIntensity: 0.9, blurPasses: 8, saturation: 1.5, animationSpeed: 0.8 }
 const SETTLE_MS = 1500
@@ -17,8 +18,7 @@ interface ArtBackgroundProps {
 }
 
 const reducedMotion = () => matchMedia("(prefers-reduced-motion: reduce)").matches
-const touchScreen = () => matchMedia("(pointer: coarse)").matches
-const animates = (moving: boolean) => moving && !touchScreen()
+const animates = (moving: boolean) => moving && !isTouchScreen()
 
 export function ArtBackground({ src, contained = false, moving = false, dithering, onReady, onShow }: ArtBackgroundProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
