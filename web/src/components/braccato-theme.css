@@ -69,10 +69,12 @@ blyrics-letter-wave = true;
 	}
 }
 
-.blyrics-word-highlight {
-	--blyrics-glow-color: color(display-p3 1 1 1 / 0.0001);
-}
+@media not (pointer: coarse) {
+	.blyrics-word-highlight {
+		--blyrics-glow-color: color(display-p3 1 1 1 / 0.0001);
+	}
 
-.blyrics-word-highlight[data-long-word] {
-	--blyrics-glow-color: color(display-p3 1 1 1 / 1);
+	.blyrics-word-highlight[data-long-word] {
+		--blyrics-glow-color: color(display-p3 1 1 1 / 1);
+	}
 }
