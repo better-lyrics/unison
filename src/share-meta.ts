@@ -12,10 +12,12 @@ import {
 	loadProfileCard,
 	loadSongCard,
 	pageAccent,
+	pageWashKey,
 	profileAccent,
 	songAccent,
 } from "@/og/render"
 import type { Env } from "@/types"
+import { sharedInFlight } from "@/utils/in-flight"
 import { SYNC_KINDS, type SyncKind, syncTypeFor } from "@/utils/sync-type"
 import { isVideoId } from "@/utils/video-id"
 import { levelProgress } from "@/utils/xp"
@@ -166,15 +168,7 @@ export function pageShare(source: PageSource, themeColor: string): Share {
 	}
 }
 
-const inFlight = new Map<string, Promise<unknown>>()
-
-function once<T>(key: string, load: () => Promise<T>): Promise<T> {
-	const pending = inFlight.get(key) as Promise<T> | undefined
-	if (pending) return pending
-	const next = load().finally(() => inFlight.delete(key))
-	inFlight.set(key, next)
-	return next
-}
+const pageInFlight = sharedInFlight<Share>()
 
 async function cached<T>(env: Env, key: string, ttl: number, load: () => Promise<T>): Promise<T> {
 	const hit = await env.CACHE.get(key)
@@ -213,12 +207,12 @@ export const shareLoaders = {
 			return accent ? profileShare(card, accent) : null
 		}),
 	page: (env: Env, page: Page): Promise<Share> =>
-		once(`share:page:${page}`, () =>
+		pageInFlight(`share:page:${page}`, () =>
 			cached(env, `share:page:${page}`, SHARE_TTL_SECONDS, async () => {
 				const source = await loadPageCard(env, page)
 				const accent = await cached(
 					env,
-					`share:accent:page:${pageVersion(source)}`,
+					`share:accent:page:${hash([pageWashKey(source)])}`,
 					ACCENT_TTL_SECONDS,
 					() => pageAccent(env, source)
 				)
@@ -290,8 +284,9 @@ const WEBSITE_LD = JSON.stringify({
 }).replace(/</g, "\\u003c")
 
 export function shareTags(share: Share, origin: string, pathname: string): string {
-	const page = `${origin}${pathname}`
-	const canonical = `${config.og.siteOrigin}${pageFor(pathname) ? pagePath(pathname) : pathname}`
+	const path = pageFor(pathname) ? pagePath(pathname) : pathname
+	const page = `${origin}${path}`
+	const canonical = `${config.og.siteOrigin}${path}`
 	const image = `${origin}${share.image}`
 	const oembed = `${origin}/oembed?url=${encodeURIComponent(page)}&format=json`
 	const meta = (attr: "name" | "property", key: string, value: string) =>

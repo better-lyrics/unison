@@ -378,6 +378,20 @@ export async function loadPageCard(env: Env, page: Page): Promise<PageSource> {
 	}
 }
 
+export function pageWashKey(source: PageSource): unknown {
+	switch (source.page) {
+		case "home":
+		case "downloads":
+			return [source.page, source.top]
+		case "leaderboard":
+			return [source.page, source.curators[0]?.keyId, source.curators[0]?.avatarUrl]
+		case "sealed":
+			return [source.page, source.sealed[0]]
+		case "docs":
+			return [source.page, source.sealed]
+	}
+}
+
 async function pageCovers(env: Env, videoIds: string[]): Promise<Buffer[]> {
 	const covers = await Promise.all(videoIds.map((id) => coverBytes(env, id, PAGE_COVER_SIZE)))
 	return covers.filter((cover): cover is Buffer => cover !== null)
