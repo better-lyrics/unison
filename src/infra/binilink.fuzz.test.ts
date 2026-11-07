@@ -216,13 +216,12 @@ const isTrack = (id: ProviderId) =>
 	PROVIDER_SERVICES.includes(id.service) && typeof id.id === "string"
 
 describe(`binilink fuzz (FUZZ_SEED=${SEED})`, () => {
-	it("readProviderIds returns null or well-formed ids in priority order", () => {
+	it("readProviderIds returns only well-formed ids in priority order", () => {
 		for (let i = 0; i < 5000; i++) {
 			const query: Partial<Record<(typeof PROVIDER_SERVICES)[number], string>> = {}
 			for (const service of PROVIDER_SERVICES) if (rand() < 0.6) query[service] = fuzzString()
 
-			const ids = readProviderIds(query)
-			if (ids === null) continue
+			const { ids } = readProviderIds(query)
 			const order = ids.map((id) => PROVIDER_SERVICES.indexOf(id.service))
 			check(
 				order.every((n, j) => j === 0 || n > order[j - 1]) &&

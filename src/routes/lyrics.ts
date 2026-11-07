@@ -130,11 +130,10 @@ export const lyricsRoutes = (env: Env) =>
 				}
 
 				const hasOtherLookup = query.isrc !== undefined || Boolean(query.song && query.artist)
-				const parsedIds = readProviderIds(query)
-				if (parsedIds === null && !hasOtherLookup) {
+				const { ids: providerIds, malformed } = readProviderIds(query)
+				if (malformed && providerIds.length === 0 && !hasOtherLookup) {
 					return status(400, buildError(ErrorCode.INVALID_ID, { hint: PROVIDER_ID_HINT }))
 				}
-				const providerIds = parsedIds ?? []
 
 				if (hasOtherLookup || providerIds.length > 0) {
 					const match = await findLyricsByTrack(env, {
