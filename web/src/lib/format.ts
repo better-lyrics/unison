@@ -5,6 +5,8 @@ const compactFormatter = new Intl.NumberFormat("en-US", {
 
 const exactFormatter = new Intl.NumberFormat("en-US")
 
+const decimalFormatter = new Intl.NumberFormat("en-US", { maximumFractionDigits: 1 })
+
 const shortDateFormatter = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric" })
 
 const fullDateFormatter = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric" })
@@ -19,6 +21,10 @@ export function formatCompact(n: number): string {
 
 export function formatExact(n: number): string {
   return exactFormatter.format(n)
+}
+
+export function formatDecimal(n: number): string {
+  return decimalFormatter.format(n)
 }
 
 export function plural(n: number, one: string, many: string): string {
