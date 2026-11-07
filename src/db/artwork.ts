@@ -149,13 +149,15 @@ export async function markArtworkUncopyable(
 	env: Env,
 	videoId: string,
 	artworkUrl: string
-): Promise<void> {
-	await env.DB.prepare(
+): Promise<boolean> {
+	const row = await env.DB.prepare(
 		`UPDATE song_artwork SET fallback_bytes = ?
-		 WHERE video_id = ? AND artwork_url = ? AND fallback_url IS NULL`
+		 WHERE video_id = ? AND artwork_url = ? AND fallback_url IS NULL
+		 RETURNING video_id`
 	)
 		.bind(UNCOPYABLE_BYTES, videoId, artworkUrl)
-		.run()
+		.first<{ video_id: string }>()
+	return row !== null
 }
 
 export async function insertVideoArtworkIfAbsent(

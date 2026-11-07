@@ -152,6 +152,7 @@ function maybeRefresh(env: Env, videoId: string, sources: ArtworkSource[], rando
 		await writeCachedCover(env, videoId, {
 			url: fresh.url,
 			fallbackUrl: stored?.fallbackUrl ?? null,
+			...(stored?.uncopyable ? { uncopyable: true } : {}),
 		})
 	})().catch((error) =>
 		log.warn("artwork refresh failed", { videoId, error: (error as Error).message })

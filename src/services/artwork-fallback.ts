@@ -31,8 +31,9 @@ function isTransient(error: unknown): boolean {
 }
 
 async function giveUp(env: Env, videoId: string, artworkUrl: string): Promise<void> {
-	await markArtworkUncopyable(env, videoId, artworkUrl)
-	await writeCachedCover(env, videoId, { url: artworkUrl, fallbackUrl: null, uncopyable: true })
+	if (await markArtworkUncopyable(env, videoId, artworkUrl)) {
+		await writeCachedCover(env, videoId, { url: artworkUrl, fallbackUrl: null, uncopyable: true })
+	}
 }
 
 async function decodes(bytes: Buffer): Promise<boolean> {
