@@ -5,7 +5,11 @@ import {
 	revokeStrikePenaltyXp,
 } from "@/db/contribution-events"
 import { recordCouncilEvent } from "@/db/council-events"
-import { LOYAL_ONLY_EXPR_JOINED, RIVAL_DOWNVOTE_EXPR } from "@/db/predicates"
+import {
+	COUNTED_VOTE_PREDICATE,
+	LOYAL_ONLY_EXPR_JOINED,
+	RIVAL_DOWNVOTE_EXPR,
+} from "@/db/predicates"
 import { Logger } from "@/infra/logger"
 import type { Env } from "@/types"
 
@@ -599,4 +603,37 @@ export function strikeNote(s: StrikeSummary): string {
 
 export async function hasAnyStrike(env: Env): Promise<boolean> {
 	return (await env.DB.prepare("SELECT 1 FROM vote_strikes LIMIT 1").first()) !== null
+}
+
+export async function hasRivalStrike(env: Env): Promise<boolean> {
+	return (
+		(await env.DB.prepare("SELECT 1 FROM vote_strikes WHERE kind = 'rival' LIMIT 1").first()) !==
+		null
+	)
+}
+
+export async function staleRivalLyrics(env: Env): Promise<number[]> {
+	const res = await env.DB.prepare(
+		`SELECT l.id FROM lyrics l
+		WHERE l.deleted_at IS NULL
+			AND l.id IN (SELECT lyrics_id FROM votes WHERE vote = -1)
+			AND l.downvotes <> (
+				SELECT COUNT(*) FROM votes v JOIN users u ON u.id = v.user_id
+				WHERE v.lyrics_id = l.id AND v.vote = -1 AND ${COUNTED_VOTE_PREDICATE}
+			)
+		ORDER BY l.id`
+	).all<{ id: number }>()
+	return res.results.map((r) => r.id)
+}
+
+export async function lyricsDownvotedBy(env: Env, userId: number): Promise<number[]> {
+	const res = await env.DB.prepare(
+		`SELECT l.id FROM votes v
+		JOIN lyrics l ON l.id = v.lyrics_id
+		WHERE v.user_id = ? AND v.vote = -1 AND v.is_self_vote = 0 AND l.deleted_at IS NULL
+		ORDER BY l.id`
+	)
+		.bind(userId)
+		.all<{ id: number }>()
+	return res.results.map((r) => r.id)
 }

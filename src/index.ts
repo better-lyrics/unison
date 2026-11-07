@@ -27,7 +27,11 @@ import { cleanupFulfilledRequests } from "@/jobs/cleanup-fulfilled-requests"
 import { runDumpJob } from "@/jobs/dump"
 import { updateScores } from "@/jobs/score-updater"
 import { auditThresholds } from "@/jobs/threshold-audit"
-import { backfillVoteIntegrity, runVoteIntegrity } from "@/jobs/vote-integrity"
+import {
+	backfillRivalStrikes,
+	backfillVoteIntegrity,
+	runVoteIntegrity,
+} from "@/jobs/vote-integrity"
 import { adminRoutes } from "@/routes/admin"
 import { artworkRoutes } from "@/routes/artwork"
 import { authRoutes } from "@/routes/auth"
@@ -272,6 +276,12 @@ backfillVoteIntegrity(env)
 		if (result && result.strikes > 0) log.info("vote integrity backfill complete", result)
 	})
 	.catch((err) => log.error("vote integrity backfill failed", { error: (err as Error).message }))
+
+backfillRivalStrikes(env)
+	.then((strikes) => {
+		if (strikes) log.info("rival strike backfill complete", { strikes })
+	})
+	.catch((err) => log.error("rival strike backfill failed", { error: (err as Error).message }))
 
 backfillAvatarPresets(env)
 	.then(({ seeded }) => {

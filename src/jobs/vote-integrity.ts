@@ -6,13 +6,18 @@ import { updateReputations } from "@/db/reputation"
 import {
 	type UndoStrikeResult,
 	type UnsettledStrike,
+	findRivalVoters,
 	findSuspectKeys,
 	hasAnyStrike,
+	hasRivalStrike,
+	lyricsDownvotedBy,
 	lyricsVotedByKeys,
 	markStrikeSettled,
+	recordRivalStrikes,
 	recordStrikes,
 	revokeStrikeXp,
 	staleLoyalLyrics,
+	staleRivalLyrics,
 	undoStrike,
 	unsettledStrikes,
 	votersOn,
@@ -38,10 +43,13 @@ export async function runVoteIntegrity(
 ): Promise<{ strikes: number; keys: number }> {
 	const suspects = await findSuspectKeys(env, { now, all: opts.all })
 	const recorded = suspects.length > 0 ? await recordStrikes(env, suspects, now) : []
+	const rivals = await findRivalVoters(env, { now, all: opts.all })
+	const rivalStrikes = rivals.length > 0 ? await recordRivalStrikes(env, rivals, now) : []
 	const result = {
-		strikes: recorded.length,
+		strikes: recorded.length + rivalStrikes.length,
 		keys: recorded.reduce((sum, s) => sum + s.keyIds.length, 0),
 	}
+	const resynced = await resyncLyrics(env, await staleRivalLyrics(env))
 
 	let settled = 0
 	for (const strike of await unsettledStrikes(env)) {
@@ -53,12 +61,38 @@ export async function runVoteIntegrity(
 		}
 	}
 	const swept = await sweepLoyalLyrics(env)
-	if (settled === 0 && swept === 0) return result
+	if (settled === 0 && swept === 0 && resynced === 0) return result
 
 	await evictFeedCaches(env)
 	await invalidateCuratorLeaderboardCache(env)
-	log.info("vote integrity", { ...result, settled, swept })
+	log.info("vote integrity", { ...result, settled, swept, resynced })
 	return result
+}
+
+export async function backfillRivalStrikes(
+	env: Env,
+	now = Math.floor(Date.now() / 1000)
+): Promise<number | null> {
+	if (await hasRivalStrike(env)) return null
+	const voters = await findRivalVoters(env, { now, all: true })
+	return voters.length > 0 ? (await recordRivalStrikes(env, voters, now)).length : 0
+}
+
+export async function refreshRivalTargets(env: Env, userId: number): Promise<void> {
+	await resyncLyrics(env, await lyricsDownvotedBy(env, userId))
+}
+
+async function resyncLyrics(env: Env, lyricsIds: number[]): Promise<number> {
+	let resynced = 0
+	for (const id of lyricsIds) {
+		try {
+			await recalculateScore(env, id)
+			resynced++
+		} catch (err) {
+			log.error("rival downvote recalculation failed", { lyricsId: id, error: String(err) })
+		}
+	}
+	return resynced
 }
 
 async function sweepLoyalLyrics(env: Env): Promise<number> {
