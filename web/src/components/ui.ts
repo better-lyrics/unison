@@ -6,6 +6,7 @@ export const panelClass = "rounded-lg bg-white/[0.02]"
 export const editableCardClass = `${panelClass} space-y-3 p-4`
 
 export const artTextShadowClass = "[text-shadow:0_1px_16px_rgba(0,0,0,0.3)]"
+export const artClippedTextShadowClass = "[text-shadow:none] drop-shadow-[0_1px_16px_rgba(0,0,0,0.3)]"
 
 export const artPageClass = `[--color-unison-text-muted:var(--ink-3)] [--color-unison-text-secondary:var(--ink-2)] ${artTextShadowClass}`
 
