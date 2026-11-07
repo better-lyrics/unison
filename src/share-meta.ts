@@ -152,17 +152,17 @@ export const pageVersion = (source: PageSource) => hash([source])
 
 export function pageShare(source: PageSource, themeColor: string): Share {
 	const copy = PAGE_COPY[source.page]
-	const description =
+	const subtitle =
 		source.page === "home"
 			? PAGE_COPY.home.subtitle(source.lyrics)
 			: PAGE_COPY[source.page].subtitle
 	const version = pageVersion(source)
 	return {
 		title: copy.title,
-		description,
+		description: source.page === "home" ? PAGE_COPY.home.description : subtitle,
 		themeColor,
 		image: `/og/page/${source.page}.jpg?v=${version}`,
-		imageAlt: `${copy.headline.join(" ")} ${description}`,
+		imageAlt: `${copy.headline.join(" ")} ${subtitle}`,
 		version,
 		author: { name: "Unison", path: "/" },
 	}
