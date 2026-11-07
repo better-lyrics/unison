@@ -14,7 +14,7 @@ export function BadgeArt({ src, silhouette, alt = "", className, ...rest }: Badg
       {silhouette ? (
         <span
           aria-hidden="true"
-          className="absolute inset-0 bg-[rgba(10,9,13,0.2)]"
+          className="absolute inset-0 bg-[rgba(10,9,13,0.6)]"
           style={{ mask: `url("${silhouette}") center / contain no-repeat` }}
         />
       ) : null}

@@ -1,7 +1,7 @@
 import { BadgeArt } from "@/components/BadgeArt"
 import { TierChip } from "@/components/TierChip"
 import { Tooltip } from "@/components/Tooltip"
-import { useBadgeImage } from "@/hooks/useBadgeImage"
+import { useBadgeArt } from "@/hooks/useBadgeImage"
 import { cn } from "@/lib/cn"
 import type { LeaderboardBadge, TierName } from "@/lib/types"
 
@@ -19,11 +19,11 @@ const STRIP_SIZES = {
 }
 
 function useStripImages(featured: LeaderboardBadge[], topBadge: LeaderboardBadge | null) {
-  const badgeImage = useBadgeImage()
+  const badgeArt = useBadgeArt()
   const shown = featured.length > 0 ? featured : topBadge ? [topBadge] : []
   return shown.flatMap((b) => {
-    const src = badgeImage(b.key, b.tier)
-    return src ? [{ badge: b, src, silhouette: badgeImage(b.key, b.tier, "silhouette") }] : []
+    const art = badgeArt(b.key, b.tier)
+    return art ? [{ badge: b, ...art }] : []
   })
 }
 
@@ -52,12 +52,12 @@ interface AuthorBadgesProps {
 }
 
 export function AuthorBadges({ tier, featured, topBadge, badgeCount }: AuthorBadgesProps) {
-  const badgeImage = useBadgeImage()
+  const badgeArt = useBadgeArt()
   const hasStrip = useStripImages(featured, topBadge).length > 0
   if (!tier && !hasStrip) return null
   return (
     <span className="inline-flex flex-wrap items-center gap-2">
-      {tier ? <TierChip tier={tier} gemSrc={badgeImage(tier) ?? undefined} /> : null}
+      {tier ? <TierChip tier={tier} gem={badgeArt(tier)} /> : null}
       {hasStrip ? <BadgeStrip featured={featured} topBadge={topBadge} badgeCount={badgeCount} /> : null}
     </span>
   )

@@ -1,4 +1,5 @@
 import { glassClass, popoverSurfaceClass } from "@/components/ui"
+import { BadgeArt } from "@/components/BadgeArt"
 import { resolveBadgeImage, transparentBadgeUrl } from "@/lib/badge-view"
 import { cn } from "@/lib/cn"
 import { titleCase } from "@/lib/format"
@@ -201,12 +202,16 @@ export function BadgeModal({ selection, closing, onRequestClose, onExited }: Bad
                 earned ? "opacity-40" : "opacity-20",
               )}
             />
-            <img
-              src={src}
-              alt={def.name}
-              draggable={false}
-              className={cn("relative size-[104px] select-none", earned ? "" : "opacity-[0.42]")}
-            />
+            {earned ? (
+              <BadgeArt
+                src={src}
+                silhouette={resolveBadgeImage(def, tier, "silhouette")}
+                alt={def.name}
+                className="block size-[104px] select-none"
+              />
+            ) : (
+              <img src={src} alt={def.name} draggable={false} className="relative size-[104px] select-none opacity-[0.42]" />
+            )}
           </div>
           <h2 className="mb-2.5 text-[22px] font-bold tracking-[-0.01em] text-unison-text">{def.name}</h2>
           <div className="flex flex-wrap justify-center gap-2">

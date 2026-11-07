@@ -71,7 +71,7 @@ function FeaturedTile({ entry, onUnfeature, onMove }: FeaturedTileProps) {
       animate={{ opacity: 1, scale: 1 }}
       exit={{ opacity: 0, scale: 0.8, transition: { duration: 0.12 } }}
       transition={{ duration: 0.2, ease: [0.2, 0, 0, 1] }}
-      className="group relative shrink-0 cursor-grab touch-none rounded-xl bg-unison-bg-elevated p-1 outline-none focus-visible:ring-2 focus-visible:ring-unison-medal-gold active:cursor-grabbing"
+      className="group relative shrink-0 cursor-grab touch-none rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-unison-medal-gold active:cursor-grabbing"
     >
       <BadgeArt
         src={resolveBadgeImage(def, badge.tier, "color")}

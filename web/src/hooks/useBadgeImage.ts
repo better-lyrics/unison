@@ -10,3 +10,16 @@ export function useBadgeImage(): (key: string, tier?: number, variant?: keyof Ba
     return def ? resolveBadgeImage(def, tier, variant) : null
   }
 }
+
+export interface BadgeArtImage {
+  src: string
+  silhouette: string | null
+}
+
+export function useBadgeArt(): (key: string, tier?: number) => BadgeArtImage | null {
+  const badgeImage = useBadgeImage()
+  return (key, tier) => {
+    const src = badgeImage(key, tier)
+    return src ? { src, silhouette: badgeImage(key, tier, "silhouette") } : null
+  }
+}

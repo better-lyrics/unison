@@ -3,7 +3,8 @@ import { MedalRank } from "@/components/MedalRank"
 import { UserAvatar } from "@/components/UserAvatar"
 import { DiscordIcon } from "@/components/icons/DiscordIcon"
 import { Bone, skeletonKeys } from "@/components/skeleton"
-import { useBadgeImage } from "@/hooks/useBadgeImage"
+import { useBadgeArt } from "@/hooks/useBadgeImage"
+import { BadgeArt } from "@/components/BadgeArt"
 import { cn } from "@/lib/cn"
 import { formatCompact, formatExact } from "@/lib/format"
 import type { CuratorLeaderboardEntry } from "@/lib/types"
@@ -19,9 +20,9 @@ interface CuratorRowProps {
 export function CuratorRow({ entry, isSelf = false, appended = false }: CuratorRowProps) {
   const href = isSelf ? "/me" : `/curator/${entry.keyId}`
 
-  const badgeImage = useBadgeImage()
+  const badgeArt = useBadgeArt()
   const podium = !entry.community && entry.rank >= 1 && entry.rank <= 3
-  const rankGem = podium && entry.tier ? badgeImage(entry.tier) : null
+  const rankGem = podium && entry.tier ? badgeArt(entry.tier) : null
 
   return (
     <li data-self={isSelf || undefined} className={cn(appended && "!mt-4")}>
@@ -39,7 +40,7 @@ export function CuratorRow({ entry, isSelf = false, appended = false }: CuratorR
           </span>
         ) : rankGem ? (
           <span className="inline-flex w-10 shrink-0 items-center justify-center" title={`Rank ${entry.rank}`}>
-            <img src={rankGem} alt="" className="size-6 object-contain" />
+            <BadgeArt src={rankGem.src} silhouette={rankGem.silhouette} className="size-6" />
             <span className="sr-only">Rank {entry.rank}</span>
           </span>
         ) : (

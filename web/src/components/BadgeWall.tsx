@@ -2,6 +2,7 @@ import { useBadgeModal } from "@/components/BadgeModalContext"
 import { OdometerNumber } from "@/components/OdometerNumber"
 import { SectionHeading } from "@/components/profile/SectionHeading"
 import { Tooltip } from "@/components/Tooltip"
+import { BadgeArt } from "@/components/BadgeArt"
 import { groupBadgesByCategory, isRareBadge, resolveBadgeImage } from "@/lib/badge-view"
 import { cn } from "@/lib/cn"
 import { titleCase } from "@/lib/format"
@@ -129,12 +130,21 @@ function BadgeTile({
         onClick={() => open({ def, userBadge, rare, isCurrentTier, tierRank })}
         className="relative flex cursor-pointer flex-col items-center gap-1.5 rounded-2xl bg-[rgba(15,14,19,0.22)] px-2 pt-3.5 pb-3 text-center backdrop-saturate-150 transition-[background-color,scale] duration-150 ease-out [text-shadow:none] active:scale-[0.96] hover:bg-white/[0.08]"
       >
-        <img
-          src={resolveBadgeImage(def, tier, earned ? "color" : "silhouette")}
-          alt={def.name}
-          draggable={false}
-          className={cn("size-[52px] select-none object-contain", !earned && "opacity-35")}
-        />
+        {earned ? (
+          <BadgeArt
+            src={resolveBadgeImage(def, tier, "color")}
+            silhouette={resolveBadgeImage(def, tier, "silhouette")}
+            alt={def.name}
+            className="block size-[52px] select-none"
+          />
+        ) : (
+          <img
+            src={resolveBadgeImage(def, tier, "silhouette")}
+            alt={def.name}
+            draggable={false}
+            className="size-[52px] select-none object-contain opacity-35"
+          />
+        )}
         <span className={cn("text-xs font-bold leading-[1.25]", earned ? "text-unison-text" : "text-(--ink-dim)")}>
           {def.name}
         </span>
