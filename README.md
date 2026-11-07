@@ -326,7 +326,7 @@ Verify `signedBody` with the same scheme as a per-request signature (see [Signed
 To talk to the extension from a new origin, open a PR against [better-lyrics/better-lyrics](https://github.com/better-lyrics/better-lyrics):
 
 1. Add the HTTPS origin to `externally_connectable.matches` in `manifest.json`.
-2. Add an `AUTH_PARTNER_METADATA` entry in `src/modules/auth/partners.ts` with an `id` and an `iconUrl` (`null` for none).
+2. Add an entry for the origin to `AUTH_PARTNER_METADATA` in `src/modules/auth/partners.ts` with a short `id` and an `iconUrl` (`null` for none).
 
 #### Browser support
 
