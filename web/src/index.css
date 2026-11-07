@@ -439,9 +439,11 @@ select {
     filter 150ms ease-in-out,
     --ft 150ms ease-out,
     --fb 150ms ease-out;
-  @starting-style {
-    opacity: 0;
-    filter: blur(var(--reveal-blur));
+  &:not([data-loading]) {
+    @starting-style {
+      opacity: 0;
+      filter: blur(var(--reveal-blur));
+    }
   }
 }
 

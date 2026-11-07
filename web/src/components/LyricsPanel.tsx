@@ -128,6 +128,7 @@ export function LyricsPanel({
       <div
         key={`${mode}:${variant ? "ready" : "loading"}`}
         ref={setPane}
+        data-loading={variant ? undefined : ""}
         className={cn(
           "lyrics-pane [text-shadow:none] [mask-clip:no-clip] [mask-image:linear-gradient(transparent,#000_var(--ft),#000_calc(100%-var(--fb)),transparent)] [mask-repeat:repeat-x]",
           edges.up && "[--ft:56px]",
