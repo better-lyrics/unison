@@ -3,6 +3,7 @@ import {
 	artworkWithoutFallback,
 	clearArtworkFallback,
 	fallbackBytesTotal,
+	isArtworkUncopyable,
 	leastServedFallbacks,
 	markArtworkUncopyable,
 	setArtworkFallback,
@@ -13,6 +14,7 @@ import { artworkCacheKey } from "@/services/artwork-cache"
 import { deleteMirroredImage, fetchImage, mirrorImage } from "@/services/artwork-store"
 import type { Env } from "@/types"
 import { isAlbumArtUrl } from "@/utils/artwork"
+import sharp from "sharp"
 
 const { fallback } = config.artwork
 const google = createCircuitBreaker(config.artwork.breaker)
@@ -20,8 +22,6 @@ const queue = new Map<string, { env: Env; artworkUrl: string }>()
 let draining = false
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
-
-const uncopyable = new Set<string>()
 
 function isTransient(error: unknown): boolean {
 	const message = (error as Error).message
@@ -31,12 +31,21 @@ function isTransient(error: unknown): boolean {
 }
 
 async function giveUp(env: Env, videoId: string, artworkUrl: string): Promise<void> {
-	if (uncopyable.size >= fallback.maxQueue) uncopyable.clear()
-	uncopyable.add(videoId)
 	await markArtworkUncopyable(env, videoId, artworkUrl)
 }
 
-async function copyCover(env: Env, videoId: string, artworkUrl: string): Promise<void> {
+async function decodes(bytes: Buffer): Promise<boolean> {
+	try {
+		await sharp(bytes).metadata()
+		return true
+	} catch {
+		return false
+	}
+}
+
+/** False when the cover was skipped without asking Google. */
+async function copyCover(env: Env, videoId: string, artworkUrl: string): Promise<boolean> {
+	if (await isArtworkUncopyable(env, videoId, artworkUrl)) return false
 	google.check()
 	let image: Awaited<ReturnType<typeof fetchImage>>
 	try {
@@ -51,13 +60,17 @@ async function copyCover(env: Env, videoId: string, artworkUrl: string): Promise
 		throw error
 	}
 	google.recordSuccess()
-	if (!image) return giveUp(env, videoId, artworkUrl)
+	if (!image || !(await decodes(image.bytes))) {
+		await giveUp(env, videoId, artworkUrl)
+		return true
+	}
 	const mirrored = await mirrorImage(env, videoId, image.bytes)
 	if (await setArtworkFallback(env, videoId, artworkUrl, mirrored.url, mirrored.bytes)) {
 		await env.CACHE.delete(artworkCacheKey(videoId))
 	} else {
 		await deleteMirroredImage(env, mirrored.url)
 	}
+	return true
 }
 
 async function drain(): Promise<void> {
@@ -67,7 +80,7 @@ async function drain(): Promise<void> {
 		for (const [videoId, job] of queue) {
 			queue.delete(videoId)
 			try {
-				await copyCover(job.env, videoId, job.artworkUrl)
+				if (!(await copyCover(job.env, videoId, job.artworkUrl))) continue
 			} catch (error) {
 				if (error instanceof UpstreamRateLimitedError) {
 					queue.clear()
@@ -83,7 +96,7 @@ async function drain(): Promise<void> {
 }
 
 export function queueArtworkFallback(env: Env, videoId: string, artworkUrl: string): void {
-	if (!env.CDN || !isAlbumArtUrl(artworkUrl) || uncopyable.has(videoId)) return
+	if (!env.CDN || !isAlbumArtUrl(artworkUrl)) return
 	if (queue.has(videoId) || queue.size >= fallback.maxQueue) return
 	queue.set(videoId, { env, artworkUrl })
 	void drain()

@@ -50,7 +50,7 @@ export async function setArtworkFallback(
 	bytes: number
 ): Promise<boolean> {
 	const row = await env.DB.prepare(
-		`UPDATE song_artwork SET fallback_url = ?, fallback_bytes = ?, served_at = COALESCE(served_at, ?)
+		`UPDATE song_artwork SET fallback_url = ?, fallback_bytes = ?, served_at = ?
 		 WHERE video_id = ? AND artwork_url = ?
 		 RETURNING video_id`
 	)
@@ -109,17 +109,33 @@ export async function leastServedFallbacks(
 	}))
 }
 
-/** Zero bytes with no copy means "do not backfill": evicted, or the original cannot be copied. A new cover resets it. */
+export const EVICTED_BYTES = 0
+export const UNCOPYABLE_BYTES = -1
+
+/** Evicted copies come back when served again; uncopyable ones wait until the cover changes. */
 export async function clearArtworkFallback(
 	env: Env,
 	videoId: string,
 	fallbackUrl: string
 ): Promise<void> {
 	await env.DB.prepare(
-		"UPDATE song_artwork SET fallback_url = NULL, fallback_bytes = 0 WHERE video_id = ? AND fallback_url = ?"
+		"UPDATE song_artwork SET fallback_url = NULL, fallback_bytes = ? WHERE video_id = ? AND fallback_url = ?"
 	)
-		.bind(videoId, fallbackUrl)
+		.bind(EVICTED_BYTES, videoId, fallbackUrl)
 		.run()
+}
+
+export async function isArtworkUncopyable(
+	env: Env,
+	videoId: string,
+	artworkUrl: string
+): Promise<boolean> {
+	const row = await env.DB.prepare(
+		"SELECT 1 AS hit FROM song_artwork WHERE video_id = ? AND artwork_url = ? AND fallback_bytes = ?"
+	)
+		.bind(videoId, artworkUrl, UNCOPYABLE_BYTES)
+		.first<{ hit: number }>()
+	return row !== null
 }
 
 export async function markArtworkUncopyable(
@@ -128,10 +144,10 @@ export async function markArtworkUncopyable(
 	artworkUrl: string
 ): Promise<void> {
 	await env.DB.prepare(
-		`UPDATE song_artwork SET fallback_bytes = 0
+		`UPDATE song_artwork SET fallback_bytes = ?
 		 WHERE video_id = ? AND artwork_url = ? AND fallback_url IS NULL`
 	)
-		.bind(videoId, artworkUrl)
+		.bind(UNCOPYABLE_BYTES, videoId, artworkUrl)
 		.run()
 }
 
