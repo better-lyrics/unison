@@ -17,11 +17,13 @@ interface ArtBackgroundProps {
 }
 
 const reducedMotion = () => matchMedia("(prefers-reduced-motion: reduce)").matches
+const touchScreen = () => matchMedia("(pointer: coarse)").matches
+const animates = (moving: boolean) => moving && !touchScreen()
 
 export function ArtBackground({ src, contained = false, moving = false, dithering, onReady, onShow }: ArtBackgroundProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const warpRef = useRef<Kawarp | null>(null)
-  const movingRef = useRef(moving)
+  const movingRef = useRef(animates(moving))
   const settleRef = useRef<number | undefined>(undefined)
   const [shown, setShown] = useState(false)
   const [failed, setFailed] = useState(false)
@@ -83,7 +85,7 @@ export function ArtBackground({ src, contained = false, moving = false, ditherin
   }, [contained])
 
   useEffect(() => {
-    movingRef.current = moving
+    movingRef.current = animates(moving)
     const warp = warpRef.current
     if (warp) update(warp)
   }, [moving, update])
