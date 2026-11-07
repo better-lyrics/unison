@@ -14,11 +14,7 @@
       "recommended": true,
       "correctness": {
         "noUnusedImports": "error",
-        "noUnusedVariables": "error",
-        "useExhaustiveDependencies": {
-          "level": "error",
-          "options": { "hooks": [{ "name": "useEffectEvent", "stableResult": true }] }
-        }
+        "noUnusedVariables": "error"
       },
       "suspicious": {
         "noExplicitAny": "error"

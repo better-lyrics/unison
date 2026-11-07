@@ -43,7 +43,6 @@ interface LyricsPanelProps {
   variant: VariantFull | undefined
   getCurrentTime: () => number
   getPlaying: () => boolean
-  playing?: boolean
   toolsOpen?: boolean
   onLineClick: (seconds: number) => void
   lyricsClassName?: string
@@ -53,8 +52,7 @@ export function LyricsPanel({
   variant,
   getCurrentTime,
   getPlaying,
-  playing = false,
-  toolsOpen = !playing,
+  toolsOpen = true,
   onLineClick,
   lyricsClassName,
 }: LyricsPanelProps) {
@@ -131,11 +129,14 @@ export function LyricsPanel({
           inert={!resumeAutoscroll}
           onClick={() => {
             resumeAutoscroll?.()
-            modesRef.current?.querySelector<HTMLButtonElement>("[aria-pressed=true]")?.focus()
+            const focusTarget = toolsOpen
+              ? modesRef.current?.querySelector<HTMLButtonElement>("[aria-pressed=true]")
+              : pane
+            focusTarget?.focus()
           }}
           className={cn(
             TOOL_CLASS,
-            "absolute top-0 left-1/2 z-10 -translate-x-1/2",
+            "absolute top-0 left-1/2 z-10 -translate-x-1/2 max-sm:right-0 max-sm:left-auto max-sm:translate-x-0",
             !resumeAutoscroll && "pointer-events-none opacity-0",
           )}
         >
@@ -145,9 +146,10 @@ export function LyricsPanel({
         <div
           key={`${mode}:${variant ? "ready" : "loading"}`}
           ref={setPane}
+          tabIndex={-1}
           data-loading={variant ? undefined : ""}
           className={cn(
-            "lyrics-pane [text-shadow:none] [mask-clip:no-clip] [mask-image:linear-gradient(transparent,#000_var(--ft),#000_calc(100%-var(--fb)),transparent)] [mask-repeat:repeat-x]",
+            "lyrics-pane outline-none [text-shadow:none] [mask-clip:no-clip] [mask-image:linear-gradient(transparent,#000_var(--ft),#000_calc(100%-var(--fb)),transparent)] [mask-repeat:repeat-x]",
             edges.up && "[--ft:56px]",
             edges.down && "[--fb:72px]",
           )}

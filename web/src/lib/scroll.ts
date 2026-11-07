@@ -1,4 +1,5 @@
+import { prefersReducedMotion } from "@/lib/reduced-motion"
+
 export function scrollToStart(element: Element | null) {
-  const still = matchMedia("(prefers-reduced-motion: reduce)").matches
-  element?.scrollIntoView({ behavior: still ? "auto" : "smooth", block: "start" })
+  element?.scrollIntoView({ behavior: prefersReducedMotion() ? "auto" : "smooth", block: "start" })
 }

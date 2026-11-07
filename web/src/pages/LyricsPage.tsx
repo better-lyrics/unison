@@ -41,9 +41,14 @@ export function LyricsPage() {
     else play()
   }, [playerActive, getPlaying, pause, play])
 
-  const [toolsOverride, setToolsOverride] = useState<{ playing: boolean; open: boolean } | null>(null)
-  const toolsOpen = toolsOverride?.playing === playing ? toolsOverride.open : !playing
-  const toggleTools = useCallback(() => setToolsOverride({ playing, open: !toolsOpen }), [playing, toolsOpen])
+  const [toolsOverride, setToolsOverride] = useState<boolean | null>(null)
+  const [toolsPlaying, setToolsPlaying] = useState(playing)
+  if (toolsPlaying !== playing) {
+    setToolsPlaying(playing)
+    setToolsOverride(null)
+  }
+  const toolsOpen = toolsOverride ?? !playing
+  const toggleTools = useCallback(() => setToolsOverride(!toolsOpen), [toolsOpen])
 
   const variantsQuery = useLyricsVariants(safeVideoId)
 
@@ -117,7 +122,6 @@ export function LyricsPage() {
             variant={variantQuery.isLoading ? undefined : variant}
             getCurrentTime={getCurrentTime}
             getPlaying={getPlaying}
-            playing={playing}
             toolsOpen={toolsOpen}
             onLineClick={handleLineClick}
             lyricsClassName={LYRICS_SIZE}
