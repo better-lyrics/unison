@@ -53,7 +53,7 @@ const syncLine = (kind: SyncKind) =>
 
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`
 
-const CARD_DESIGN = 2
+const CARD_DESIGN = 3
 
 const hash = (inputs: unknown[]) =>
 	createHash("sha1")
