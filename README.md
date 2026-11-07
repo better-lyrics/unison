@@ -181,7 +181,7 @@ Environment variables are listed under [Configuration](#configuration).
 | `song` + `artist` | `Explorer`, `Justice` | `artist` matches any one credited name. Add `album` or `duration` (seconds, ±2 s) to narrow it. |
 | `spotify`, `apple_music`, `tidal` | track id | A track id, not a link. Resolved to an ISRC through [BiniLink](https://link.binimum.org). If several are sent, the first that resolves wins, in that order. |
 
-When a request names the song more than one way, Unison tries `v`, then `isrc`, then the ISRC behind a Spotify, Apple Music or Tidal id, then `song` + `artist`, and returns the first match.
+A `v` lookup only checks that video. Without `v`, Unison tries `isrc`, then the ISRC behind a Spotify, Apple Music or Tidal id, then `song` + `artist`, and returns the first match.
 
 Besides the lyric, the response can carry:
 
@@ -326,7 +326,7 @@ Verify `signedBody` with the same scheme as a per-request signature (see [Signed
 To talk to the extension from a new origin, open a PR against [better-lyrics/better-lyrics](https://github.com/better-lyrics/better-lyrics):
 
 1. Add the HTTPS origin to `externally_connectable.matches` in `manifest.json`.
-2. Add an `AUTH_PARTNER_METADATA` entry in `src/core/constants.ts` with an `id` and optional `iconUrl`.
+2. Add an `AUTH_PARTNER_METADATA` entry in `src/modules/auth/partners.ts` with an `id` and an `iconUrl` (`null` for none).
 
 #### Browser support
 
@@ -372,23 +372,23 @@ Your app's name and a link to it, like `MyPlayer/2.1 (https://github.com/you/myp
 
 ### Will the response format change?
 
-New fields can show up, but existing ones are never renamed or removed. A lot of apps read these responses, so the current shape stays as it is. Ignore any field you don't use.
+New fields can show up, but existing ones are never renamed or removed.
 
 ### How do I submit or fix lyrics?
 
-Most people do it from Better Lyrics. The "Submit to Unison" button under a song's lyrics opens a form filled in with the song's details, and the Unison card under the lyrics has upvote, downvote and report buttons. Other apps can do the same through the API, and third-party clients such as [unison.prjktla.my.id](https://unison.prjktla.my.id/) support it too.
+Most people do it from Better Lyrics. The "Submit lyrics with Unison" button under a song's lyrics opens a form filled in with the song's details, and the Unison card under the lyrics has upvote, downvote and report buttons. Other apps can do the same through the API, and third-party clients such as [unison.prjktla.my.id](https://unison.prjktla.my.id/) support it too.
 
 ### Why isn't my version the one shown?
 
-Unison serves the top-ranked version of each song. Ranking is mostly votes, each weighted by the voter's reputation, plus a boost for tighter sync: syllable timing beats line timing, and both beat unsynced text. A new version needs some votes before it can pass one people have already upvoted. Every version is listed on the song's page on the website, where people can vote on it.
+Unison shows the top-ranked version. Votes decide it, weighted by each voter's reputation, and tighter sync gets a boost. A new version needs votes before it can pass one people already like.
 
 ### Why did my lyric disappear?
 
-Lookups hide a lyric that has been heavily downvoted. They also hide one that trusted users reported, while the Better Lyrics Council reviews it: if the Council keeps it, it comes back, and if they remove it, it's deleted. A hidden lyric still shows on its song page.
+Lookups hide a lyric that has been heavily downvoted or reported by the community.
 
 ### Why does a title and artist lookup miss a song Unison has?
 
-Titles are compared with case, accents, punctuation and anything in brackets ignored, and the artist only has to share one credited name. A title written another way, like `Song - 2011 Remaster`, still misses. If you have a video id or an ISRC, look up by that instead. With a title and artist, also send `duration`, so Unison picks the right recording when a song has more than one.
+Titles are compared with case, accents, punctuation and anything in brackets ignored, and the artist only has to share one credited name. A title written another way, like `Song - 2011 Remaster`, still misses. Prefer a video id or ISRC when you have one.
 
 ### Why are the lyrics timed for a different version of the song?
 
