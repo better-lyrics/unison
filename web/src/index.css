@@ -43,6 +43,7 @@ body,
 html {
   scrollbar-gutter: stable;
   color-scheme: dark;
+  -webkit-tap-highlight-color: transparent;
 }
 
 :root {
