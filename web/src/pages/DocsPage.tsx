@@ -274,6 +274,7 @@ export function DocsPage() {
             need to render are <Code>lyrics</Code>, <Code>format</Code>, and <Code>syncType</Code>;{" "}
             <Code>confidence</Code> tells you how much the community has vetted it. A miss returns <Code>404</Code>.
           </p>
+          <CodeTabs tabs={fetchTabs(VIDEO_URL)} />
           <CodeBlock code={VIDEO_RESPONSE} language="json" label="JSON response" />
         </section>
 
