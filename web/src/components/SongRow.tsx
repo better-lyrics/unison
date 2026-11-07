@@ -1,18 +1,19 @@
 import { cn } from "@/lib/cn"
 import { Bone, skeletonKeys } from "@/components/skeleton"
 import { RANK_ROW, RankCell, RankNumber } from "@/components/MedalRank"
-import { formatCompact, formatExact } from "@/lib/format"
+import { formatCompact, formatDecimal, formatExact } from "@/lib/format"
 import type { SongLeaderboardEntry } from "@/lib/types"
 import { youTubeMusicUrl } from "@/lib/youtube-music"
 import { CoverImage } from "@/components/AlbumArt"
+import { Tooltip } from "@/components/Tooltip"
 
 interface SongRowProps {
   entry: SongLeaderboardEntry
 }
 
 export function SongRow({ entry }: SongRowProps) {
-  const metric = entry.section === "most_wanted" ? entry.demand : entry.requestCount
-  const metricLabel = entry.section === "most_wanted" ? "demand" : "reports"
+  const mostWanted = entry.section === "most_wanted"
+  const metricLabel = mostWanted ? "demand" : "reports"
 
   return (
     <li>
@@ -32,9 +33,17 @@ export function SongRow({ entry }: SongRowProps) {
           <p className="truncate text-xs text-unison-text-secondary">{entry.artist}</p>
         </div>
         <div className="max-sm:w-14 max-sm:shrink-0 text-right">
-          <p title={formatExact(metric)} className="font-mono text-sm text-unison-text">
-            {formatCompact(metric)}
-          </p>
+          {mostWanted ? (
+            <Tooltip label={`Requests from the last 30 days, weighted by reputation: ${formatDecimal(entry.demand)}`}>
+              <p className="font-mono text-sm text-unison-text">
+                {formatCompact(Math.max(1, Math.round(entry.demand)))}
+              </p>
+            </Tooltip>
+          ) : (
+            <p title={formatExact(entry.requestCount)} className="font-mono text-sm text-unison-text">
+              {formatCompact(entry.requestCount)}
+            </p>
+          )}
           <p className="text-[10px] uppercase tracking-wider text-unison-text-muted">{metricLabel}</p>
         </div>
       </a>
