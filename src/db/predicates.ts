@@ -84,7 +84,8 @@ export const RIVAL_DOWNVOTE_EXPR = `(v.vote = -1 AND EXISTS (
 		AND rv_own.id <> rv_t.id
 	WHERE rv_t.id = v.lyrics_id AND rv_t.submitter_id IS DISTINCT FROM v.user_id
 		AND (
-			(rv_own.artist_norm = rv_t.artist_norm AND ${titleKey("rv_own")} = ${titleKey("rv_t")})
+			(rv_own.artist_norm = rv_t.artist_norm AND ${titleKey("rv_own")} <> ''
+				AND ${titleKey("rv_own")} = ${titleKey("rv_t")})
 			OR ${bridgedExpr("rv_own", "rv_t")}
 		)
 ))`

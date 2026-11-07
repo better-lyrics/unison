@@ -1,7 +1,12 @@
+import { COUNTED_VOTE_PREDICATE } from "@/db/predicates"
 import { Logger } from "@/infra/logger"
 import type { Env } from "@/types"
 
 const log = new Logger("backfill")
+
+const counted = (vote: 1 | -1) =>
+	`(SELECT COUNT(*) FROM votes v JOIN users u ON u.id = v.user_id
+		WHERE v.lyrics_id = lyrics.id AND v.vote = ${vote} AND ${COUNTED_VOTE_PREDICATE})`
 
 // upvotes/downvotes were only ever maintained incrementally, while vote_count
 // gets resynced from the votes table by recalculateScore. The two could drift,
@@ -11,8 +16,8 @@ const log = new Logger("backfill")
 export async function backfillVoteCounts(env: Env): Promise<{ repaired: number }> {
 	const drifted = await env.DB.prepare(
 		`SELECT COUNT(*) AS n FROM lyrics
-		 WHERE upvotes <> (SELECT COUNT(*) FROM votes v WHERE v.lyrics_id = lyrics.id AND v.vote = 1)
-		    OR downvotes <> (SELECT COUNT(*) FROM votes v WHERE v.lyrics_id = lyrics.id AND v.vote = -1)`
+		 WHERE upvotes <> ${counted(1)}
+		    OR downvotes <> ${counted(-1)}`
 	).first<{ n: number }>()
 
 	const repaired = Number(drifted?.n ?? 0)
@@ -20,11 +25,11 @@ export async function backfillVoteCounts(env: Env): Promise<{ repaired: number }
 
 	await env.DB.prepare(
 		`UPDATE lyrics SET
-			upvotes = (SELECT COUNT(*) FROM votes v WHERE v.lyrics_id = lyrics.id AND v.vote = 1),
-			downvotes = (SELECT COUNT(*) FROM votes v WHERE v.lyrics_id = lyrics.id AND v.vote = -1),
+			upvotes = ${counted(1)},
+			downvotes = ${counted(-1)},
 			updated_at = EXTRACT(EPOCH FROM NOW())::INTEGER
-		 WHERE upvotes <> (SELECT COUNT(*) FROM votes v WHERE v.lyrics_id = lyrics.id AND v.vote = 1)
-		    OR downvotes <> (SELECT COUNT(*) FROM votes v WHERE v.lyrics_id = lyrics.id AND v.vote = -1)`
+		 WHERE upvotes <> ${counted(1)}
+		    OR downvotes <> ${counted(-1)}`
 	).run()
 
 	log.info("vote count repair complete", { repaired })

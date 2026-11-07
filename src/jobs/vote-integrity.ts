@@ -43,13 +43,17 @@ export async function runVoteIntegrity(
 ): Promise<{ strikes: number; keys: number }> {
 	const suspects = await findSuspectKeys(env, { now, all: opts.all })
 	const recorded = suspects.length > 0 ? await recordStrikes(env, suspects, now) : []
-	const rivals = await findRivalVoters(env, { now, all: opts.all })
-	const rivalStrikes = rivals.length > 0 ? await recordRivalStrikes(env, rivals, now) : []
+	const rivalStrikes = await strikeRivals(env, now, opts.all)
 	const result = {
 		strikes: recorded.length + rivalStrikes.length,
 		keys: recorded.reduce((sum, s) => sum + s.keyIds.length, 0),
 	}
-	const resynced = await resyncLyrics(env, await staleRivalLyrics(env))
+	const resynced = await staleRivalLyrics(env)
+		.then((ids) => resyncLyrics(env, ids))
+		.catch((err) => {
+			log.error("rival downvote sweep failed", { error: String(err) })
+			return 0
+		})
 
 	let settled = 0
 	for (const strike of await unsettledStrikes(env)) {
@@ -67,6 +71,16 @@ export async function runVoteIntegrity(
 	await invalidateCuratorLeaderboardCache(env)
 	log.info("vote integrity", { ...result, settled, swept, resynced })
 	return result
+}
+
+async function strikeRivals(env: Env, now: number, all?: boolean) {
+	try {
+		const rivals = await findRivalVoters(env, { now, all })
+		return rivals.length > 0 ? await recordRivalStrikes(env, rivals, now) : []
+	} catch (err) {
+		log.error("rival detection failed", { error: String(err) })
+		return []
+	}
 }
 
 export async function backfillRivalStrikes(

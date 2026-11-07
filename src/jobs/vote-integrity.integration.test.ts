@@ -5,6 +5,7 @@ import { CURATOR_LEADERBOARD_CACHE_KEY } from "@/db/leaderboard"
 import { deboost } from "@/db/predicates"
 import { updateReputations } from "@/db/reputation"
 import { lyricsVotedByKeys } from "@/db/vote-strikes"
+import { backfillVoteCounts } from "@/jobs/backfill-vote-counts"
 import { recalculateScore } from "@/jobs/score-updater"
 import {
 	backfillRivalStrikes,
@@ -989,6 +990,33 @@ describeIntegration("rival downvotes", () => {
 		await runVoteIntegrity(db.env, RIVAL_NOW)
 
 		expect(await downvotesOf(target)).toBe(0)
+	})
+
+	it("regression: the startup vote count repair keeps rival downvotes out", async () => {
+		const voter = await seedKey(RIVAL_NOW - 30 * DAY)
+		await versionOn("rvAvid00004", voter)
+		const target = await versionOn("rvAvid00004", await seedKey(RIVAL_NOW - 30 * DAY))
+		await downvote(voter, target)
+		await recalculateScore(db.env, target)
+
+		await backfillVoteCounts(db.env)
+
+		expect(await downvotesOf(target)).toBe(0)
+	})
+
+	it("an empty title is never a rival match", async () => {
+		const [own, other] = ["rvAvid00005", "rvAvid00006"]
+		const voter = await seedKey(RIVAL_NOW - 30 * DAY)
+		await versionOn(own, voter)
+		const target = await versionOn(other, await seedKey(RIVAL_NOW - 30 * DAY))
+		await db.pool.query("UPDATE lyrics SET song_norm = '' WHERE id IN ($1, $2)", [
+			target,
+			(await db.pool.query("SELECT id FROM lyrics WHERE submitter_id = $1", [voter])).rows[0].id,
+		])
+		await downvote(voter, target)
+		await recalculateScore(db.env, target)
+
+		expect(await downvotesOf(target)).toBe(1)
 	})
 
 	it("strikes a rival downvoter and settles the strike", async () => {
