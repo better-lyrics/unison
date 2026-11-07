@@ -1,5 +1,5 @@
 import { getProfileExtras, setProfileSettings } from "@/db/profile-settings"
-import { artworkCacheKey } from "@/services/artwork"
+import { artworkCacheKey } from "@/services/artwork-cache"
 import {
 	type IntegrationDb,
 	describeIntegration,

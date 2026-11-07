@@ -1,4 +1,4 @@
-import { artworkCacheKey } from "@/services/artwork"
+import { artworkCacheKey, writeCachedCover } from "@/services/artwork-cache"
 import type { Env } from "@/types"
 import { describe, expect, it } from "vitest"
 import { artworkRoutes } from "./artwork"
@@ -39,6 +39,25 @@ describe("GET /artwork", () => {
 		expect(await res.json()).toEqual({
 			success: true,
 			data: { artworkUrl: "https://art/x=w544-h544" },
+		})
+	})
+
+	it("adds our CDN copy as fallbackUrl when one exists, leaving artworkUrl as the original", async () => {
+		const env = makeEnv()
+		const cover = {
+			url: "https://yt3.googleusercontent.com/abc=w544-h544-l90-rj",
+			fallbackUrl: "https://cdn.betterlyrics.org/artwork/dQw4w9WgXcQ-0123456789abcdef.jpg",
+		}
+		await writeCachedCover(env, "dQw4w9WgXcQ", cover)
+		const res = await artworkRoutes(env).handle(
+			new Request("http://localhost/artwork?v=dQw4w9WgXcQ&size=256")
+		)
+		expect(await res.json()).toEqual({
+			success: true,
+			data: {
+				artworkUrl: "https://yt3.googleusercontent.com/abc=w256-h256-l90-rj",
+				fallbackUrl: cover.fallbackUrl,
+			},
 		})
 	})
 

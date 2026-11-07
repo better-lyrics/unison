@@ -1,5 +1,5 @@
 import { config } from "@/config"
-import { artworkCacheKey } from "@/services/artwork"
+import { artworkCacheKey } from "@/services/artwork-cache"
 import type { Env } from "@/types"
 import { describe, expect, it, vi } from "vitest"
 import { userRoutes } from "./users"

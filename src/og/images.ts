@@ -1,7 +1,8 @@
 import { readFile } from "node:fs/promises"
 import { fileURLToPath } from "node:url"
 import { log } from "@/infra/logger"
-import { fetchArtworkImage, resolveArtwork } from "@/services/artwork"
+import { fetchArtworkImage, resolveArtworkCover } from "@/services/artwork"
+import type { ArtworkCover } from "@/services/artwork-cache"
 import type { Env } from "@/types"
 import { type Accent, accentFromPixels } from "@/utils/accent"
 import { normalizeArtworkUrl } from "@/utils/artwork"
@@ -37,8 +38,8 @@ async function fetchBytes(url: string): Promise<Buffer | null> {
 	}
 }
 
-export async function coverFromUrl(url: string, size = COVER_SIZE): Promise<Buffer | null> {
-	return (await fetchArtworkImage(url, size))?.bytes ?? null
+export async function coverImage(cover: ArtworkCover, size = COVER_SIZE): Promise<Buffer | null> {
+	return (await fetchArtworkImage(cover, size))?.bytes ?? null
 }
 
 export async function coverBytes(
@@ -46,8 +47,8 @@ export async function coverBytes(
 	videoId: string,
 	size = COVER_SIZE
 ): Promise<Buffer | null> {
-	const url = await resolveArtwork(env, videoId)
-	return url ? coverFromUrl(url, size) : null
+	const cover = await resolveArtworkCover(env, videoId)
+	return cover ? coverImage(cover, size) : null
 }
 
 export function generatedAvatarSvg(seed: string): string {

@@ -481,6 +481,12 @@ CREATE TABLE IF NOT EXISTS song_artwork (
     artwork_url TEXT,
     checked_at BIGINT NOT NULL DEFAULT 0
 );
+-- Our CDN copy of YouTube Music art, served when Google rate-limits the original.
+ALTER TABLE song_artwork ADD COLUMN IF NOT EXISTS fallback_url TEXT;
+ALTER TABLE song_artwork ADD COLUMN IF NOT EXISTS fallback_bytes INTEGER;
+ALTER TABLE song_artwork ADD COLUMN IF NOT EXISTS served_at BIGINT;
+CREATE INDEX IF NOT EXISTS idx_song_artwork_fallback_served
+    ON song_artwork (served_at NULLS FIRST) WHERE fallback_url IS NOT NULL;
 
 CREATE TABLE IF NOT EXISTS avatar_presets (
     id TEXT PRIMARY KEY,

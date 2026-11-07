@@ -3,12 +3,8 @@ import { config } from "@/config"
 import { getVideoArtwork, upsertVideoArtwork } from "@/db/artwork"
 import { D1Compat } from "@/infra/database"
 import type { Storage } from "@/infra/storage"
-import {
-	type ArtworkHit,
-	type ArtworkSource,
-	artworkCacheKey,
-	resolveArtwork,
-} from "@/services/artwork"
+import { type ArtworkHit, type ArtworkSource, resolveArtwork } from "@/services/artwork"
+import { artworkCacheKey } from "@/services/artwork-cache"
 import type { Env } from "@/types"
 import pg from "pg"
 import sharp from "sharp"

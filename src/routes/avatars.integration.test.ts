@@ -7,7 +7,7 @@ import {
 	refreshCatalogue,
 } from "@/db/avatar-presets"
 import { resolveAvatarUrl } from "@/db/users"
-import { artworkCacheKey } from "@/services/artwork"
+import { artworkCacheKey } from "@/services/artwork-cache"
 import {
 	BOT_SECRET,
 	type IntegrationDb,

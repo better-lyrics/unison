@@ -38,6 +38,14 @@ export const config = {
 			timeoutMs: 3000,
 			country: "US",
 		},
+		fallback: {
+			gapMs: 1000,
+			maxQueue: 1000,
+			backfillBatch: 200,
+			capBytes: 5 * 1024 ** 3,
+			evictBatch: 500,
+			evictSchedule: "30 4 * * *",
+		},
 		breaker: {
 			threshold: 3,
 			baseOpenMs: 60_000,
