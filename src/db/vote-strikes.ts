@@ -155,17 +155,16 @@ export async function findRivalVoters(
 			SELECT submitter_id FROM lyrics WHERE submitter_id IS NOT NULL AND created_at >= ?::int
 		),
 		marks AS (
-			SELECT submitter_id, MAX(detected_at) AS at FROM vote_strikes
+			SELECT submitter_id, MAX(evidence_until) AS at FROM vote_strikes
 			WHERE kind = 'rival' GROUP BY submitter_id
 		),
 		cast_votes AS (
-			SELECT v.user_id, v.created_at,
-				v.vote = -1 AND v.created_at > COALESCE(m.at, -1) AND ${RIVAL_DOWNVOTE_EXPR} AS rival
+			SELECT v.user_id, v.created_at, v.vote = -1 AND ${RIVAL_DOWNVOTE_EXPR} AS rival
 			FROM candidates c
 			JOIN votes v ON v.user_id = c.user_id AND v.is_self_vote = 0
 			JOIN users u ON u.id = v.user_id
 			LEFT JOIN marks m ON m.submitter_id = v.user_id
-			WHERE u.banned_at IS NULL AND u.key_id <> ?
+			WHERE u.banned_at IS NULL AND u.key_id <> ? AND v.created_at > COALESCE(m.at, -1)
 		),
 		tallies AS (
 			SELECT user_id, COUNT(*) AS cast_count,
@@ -204,6 +203,7 @@ export async function recordRivalStrikes(
 						keyCount: 0,
 						voteCount: voter.votes,
 						backfill: voter.lastVoteAt < config.voteIntegrity.rival.launchedAt,
+						evidenceUntil: voter.lastVoteAt,
 						now,
 					}
 				)
@@ -266,6 +266,7 @@ interface StrikeWrite {
 	keyCount: number
 	voteCount: number
 	backfill: boolean
+	evidenceUntil: number | null
 	now: number
 }
 
@@ -287,10 +288,16 @@ async function writeStrike(txEnv: Env, w: StrikeWrite): Promise<WrittenStrike> {
 		await tx
 			.prepare(
 				`UPDATE vote_strikes SET key_count = key_count + ?, vote_count = vote_count + ?, kind = ?,
-					settled_at = NULL
+					evidence_until = GREATEST(evidence_until, ?::int), settled_at = NULL
 				WHERE id = ?`
 			)
-			.bind(w.keyCount, w.voteCount, mergeKinds(mergeable.kind, w.kind), mergeable.id)
+			.bind(
+				w.keyCount,
+				w.voteCount,
+				mergeKinds(mergeable.kind, w.kind),
+				w.evidenceUntil,
+				mergeable.id
+			)
 			.run()
 		return { strikeId: mergeable.id, created: false, repeat: mergeable.repeat }
 	}
@@ -304,10 +311,20 @@ async function writeStrike(txEnv: Env, w: StrikeWrite): Promise<WrittenStrike> {
 	const repeat = !w.backfill && earlier !== null
 	const inserted = await tx
 		.prepare(
-			`INSERT INTO vote_strikes (submitter_id, kind, detected_at, key_count, vote_count, repeat, backfill)
-			VALUES (?, ?, ?, ?, ?, ?, ?) RETURNING id`
+			`INSERT INTO vote_strikes (submitter_id, kind, detected_at, key_count, vote_count, repeat, backfill,
+				evidence_until)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?::int) RETURNING id`
 		)
-		.bind(w.submitterId, w.kind, w.now, w.keyCount, w.voteCount, repeat, w.backfill)
+		.bind(
+			w.submitterId,
+			w.kind,
+			w.now,
+			w.keyCount,
+			w.voteCount,
+			repeat,
+			w.backfill,
+			w.evidenceUntil
+		)
 		.first<{ id: number }>()
 	if (!inserted) throw new Error(`vote strike insert returned no row for ${w.submitterId}`)
 	if (repeat) await awardStrikePenaltyXp(txEnv, w.submitterId, inserted.id)
@@ -349,6 +366,7 @@ async function recordSubmitterStrike(
 		keyCount: keys.length,
 		voteCount: keys.reduce((sum, k) => sum + k.votes, 0),
 		backfill: lastVoteAt < config.voteIntegrity.launchedAt,
+		evidenceUntil: null,
 		now,
 	})
 

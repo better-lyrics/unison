@@ -2212,6 +2212,56 @@ describeIntegration("rival downvotes", () => {
 			expect(await detect()).toEqual([])
 		})
 
+		async function rivalVotesAt(user: number, count: number, at: number): Promise<void> {
+			const { rows } = await db.pool.query<{ video_id: string }>(
+				"SELECT video_id FROM lyrics WHERE submitter_id = $1 LIMIT 1",
+				[user]
+			)
+			for (let i = 0; i < count; i++) {
+				const rival = await song(await seedKey(NOW - 30 * DAY), { video: rows[0].video_id })
+				await downvote(user, rival, at)
+			}
+		}
+
+		const strikesOf = async (user: number) =>
+			(
+				await db.pool.query(
+					"SELECT vote_count, repeat FROM vote_strikes WHERE submitter_id = $1 ORDER BY id",
+					[user]
+				)
+			).rows
+
+		it("regression: votes merged into a rival strike are never counted again", async () => {
+			const offender = await rivalDownvoter(2)
+			await recordRivalStrikes(db.env, await detect(), NOW)
+			await rivalVotesAt(offender, 2, NOW + HOUR)
+
+			for (const later of [6 * HOUR, 12 * HOUR, 30 * HOUR]) {
+				const at = NOW + later
+				await recordRivalStrikes(db.env, await findRivalVoters(db.env, { now: at, all: true }), at)
+			}
+
+			expect(await strikesOf(offender)).toEqual([{ vote_count: 4, repeat: false }])
+		})
+
+		it("after a strike, the share counts only votes since that strike", async () => {
+			const offender = await rivalDownvoter(3)
+			await recordRivalStrikes(db.env, await detect(), NOW)
+			await rivalVotesAt(offender, 2, NOW + 2 * DAY)
+
+			const later = NOW + 3 * DAY
+			await recordRivalStrikes(
+				db.env,
+				await findRivalVoters(db.env, { now: later, all: true }),
+				later
+			)
+
+			expect(await strikesOf(offender)).toEqual([
+				{ vote_count: 3, repeat: false },
+				{ vote_count: 2, repeat: true },
+			])
+		})
+
 		it("a rival strike never merges into a ring strike and counts as a repeat", async () => {
 			const offender = await rivalDownvoter(3)
 			await db.pool.query(
