@@ -356,7 +356,8 @@ export function DocsPage() {
         <section className="space-y-3">
           <h2 className="text-lg font-semibold text-unison-text">Caching</h2>
           <p className="text-sm leading-relaxed text-unison-text-secondary">
-            Keep the lyrics you fetch, and check whether they changed before you download them again. Every{" "}
+            Keep the lyrics you fetch and check them before you download them again. A check is cheaper than a full
+            download for both Unison and your app, and your copy stays in sync with edits and new versions. Every{" "}
             <Code>/lyrics</Code> lookup sends an <Code>ETag</Code>. Save it with the lyric and send it back as{" "}
             <Code>If-None-Match</Code>. If the lyric is the same, you get <Code>304</Code> with no body and use the copy
             you have.
@@ -364,9 +365,8 @@ export function DocsPage() {
           <CodeBlock code={CACHE_CODE} language="javascript" label="JavaScript" />
           <p className="text-sm leading-relaxed text-unison-text-secondary">
             The tag changes when someone edits the lyric or its song details, or when another version moves to the top.
-            Votes and confidence can change under the same tag. A <Code>304</Code> still counts toward the rate limit.
-            In a browser, <Code>fetch</Code> already checks the <Code>ETag</Code> on its own, so you only need this when
-            you store lyrics yourself.
+            Votes and confidence can change under the same tag. In a browser, <Code>fetch</Code> already checks the{" "}
+            <Code>ETag</Code> on its own, so you only need this when you store lyrics yourself.
           </p>
         </section>
 

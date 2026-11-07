@@ -90,7 +90,7 @@ Every response is `{ "success": true, "data": ... }`, or `{ "success": false, "e
 
 ## Caching
 
-Keep the lyrics you fetch, and check whether they changed before you download them again. Unison is [self-funded](#funding), and a check on a lyric that hasn't changed sends back an empty response instead of the whole file.
+Keep the lyrics you fetch and check them before you download them again. A check is cheaper than a full download for both Unison and your app, and your copy stays in sync with edits and new versions.
 
 Every `GET /lyrics` lookup sends an `ETag`. Save it with the lyric and send it back as `If-None-Match`. If the lyric is the same, Unison answers `304 Not Modified` with no body, and you use the copy you have:
 
@@ -99,7 +99,7 @@ curl -i "https://unison.betterlyrics.org/lyrics?v=Ugr4KKK_SqY" \
   -H 'If-None-Match: <the ETag you saved>'
 ```
 
-The tag changes when someone edits the lyric or its song details, or when another version moves to the top. Votes, confidence and the submitter's stats can change under the same tag, so a saved copy may show old numbers. A `304` still counts toward the rate limit.
+The tag changes when someone edits the lyric or its song details, or when another version moves to the top. Votes, confidence and the submitter's stats can change under the same tag, so a saved copy may show old numbers.
 
 In a browser you don't have to do anything: `fetch` keeps the response and checks the `ETag` on its own.
 
