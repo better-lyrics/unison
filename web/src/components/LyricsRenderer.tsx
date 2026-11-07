@@ -74,6 +74,7 @@ export function LyricsRenderer({
     el.host = {
       setResumeAffordanceVisible: (visible) => onAutoscrollPauseRef.current?.(visible ? resume : null),
     }
+    el.tickOptions = { countEveryUserScroll: true }
     el.theme = braccatoTheme
     return () => onAutoscrollPauseRef.current?.(null)
   }, [])
