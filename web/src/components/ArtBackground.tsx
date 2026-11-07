@@ -1,6 +1,9 @@
 import { Kawarp } from "@kawarp/core"
 import { useCallback, useEffect, useRef, useState } from "react"
 import { cn } from "@/lib/cn"
+import { tokenMs } from "@/lib/motion-tokens"
+import { isPhone } from "@/lib/phone"
+import { prefersReducedMotion } from "@/lib/reduced-motion"
 
 const WARP = { warpIntensity: 0.9, blurPasses: 8, saturation: 1.5, animationSpeed: 0.8 }
 const SETTLE_MS = 1500
@@ -15,13 +18,12 @@ interface ArtBackgroundProps {
   onShow?: (src: string) => void
 }
 
-const reducedMotion = () => matchMedia("(prefers-reduced-motion: reduce)").matches
-const artFadeMs = () => Number.parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--art-fade"))
+const animates = (moving: boolean) => moving && !isPhone()
 
 export function ArtBackground({ src, contained = false, moving = false, dithering, onReady, onShow }: ArtBackgroundProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const warpRef = useRef<Kawarp | null>(null)
-  const movingRef = useRef(moving)
+  const movingRef = useRef(animates(moving))
   const settleRef = useRef<number | undefined>(undefined)
   const [shown, setShown] = useState(false)
   const [failed, setFailed] = useState(false)
@@ -41,7 +43,7 @@ export function ArtBackground({ src, contained = false, moving = false, ditherin
 
   const update = useCallback(
     (warp: Kawarp) => {
-      if (reducedMotion()) warp.renderFrame()
+      if (prefersReducedMotion()) warp.renderFrame()
       else if (movingRef.current) play(warp)
       else pause(warp)
     },
@@ -55,7 +57,7 @@ export function ArtBackground({ src, contained = false, moving = false, ditherin
     try {
       warp = new Kawarp(canvas, {
         ...WARP,
-        transitionDuration: artFadeMs() || undefined,
+        transitionDuration: tokenMs("--art-fade", 1000),
         animationSpeed: movingRef.current ? WARP.animationSpeed : 0,
       })
     } catch (error: unknown) {
@@ -63,7 +65,7 @@ export function ArtBackground({ src, contained = false, moving = false, ditherin
       setFailed(true)
       return
     }
-    if (reducedMotion()) warp.transitionDuration = 0
+    if (prefersReducedMotion()) warp.transitionDuration = 0
     warpRef.current = warp
     const observer = new ResizeObserver(() => {
       const box = contained ? canvas.getBoundingClientRect() : { width: innerWidth, height: innerHeight }
@@ -83,7 +85,7 @@ export function ArtBackground({ src, contained = false, moving = false, ditherin
   }, [contained])
 
   useEffect(() => {
-    movingRef.current = moving
+    movingRef.current = animates(moving)
     const warp = warpRef.current
     if (warp) update(warp)
   }, [moving, update])

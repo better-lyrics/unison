@@ -9,7 +9,7 @@ import { IconSwap } from "@/components/icons/IconSwap"
 import { PlayPauseIcon } from "@/components/icons/PlaybackIcons"
 import { YouTubeMusicIcon } from "@/components/icons/YouTubeMusicIcon"
 import { Bone } from "@/components/skeleton"
-import { chipClass, chipIconClass, glassClass, raisedChipClass } from "@/components/ui"
+import { artClippedTextShadowClass, chipClass, chipIconClass, glassClass, raisedChipClass } from "@/components/ui"
 import { useCopied } from "@/hooks/useCopied"
 import { cn } from "@/lib/cn"
 import { titleCase } from "@/lib/format"
@@ -18,7 +18,7 @@ import { languageName } from "@/lib/language"
 import { type SyncKind, syncTypeFor } from "@/lib/sync-type"
 import type { Mark, VariantFull } from "@/lib/types"
 import { youTubeMusicUrl } from "@/lib/youtube-music"
-import { IconCheck, IconShare } from "@tabler/icons-react"
+import { IconAdjustmentsHorizontal, IconCheck, IconShare } from "@tabler/icons-react"
 import { motion } from "motion/react"
 
 const SYNC_TIP: Record<SyncKind, string> = {
@@ -73,9 +73,10 @@ interface SongHeroProps {
   versions: number
   art: string | null | undefined
   player: HeroPlayer
+  lyricsTools: { open: boolean; onToggle: () => void }
 }
 
-function Cover({ variant, art, player }: Omit<SongHeroProps, "versions">) {
+function Cover({ variant, art, player }: Pick<SongHeroProps, "variant" | "art" | "player">) {
   const label = player.playing ? "Pause" : "Play"
   const covered = !(player.active && (player.playing || player.failed))
   return (
@@ -163,7 +164,26 @@ function ShareButton({ videoId }: { videoId: string }) {
   )
 }
 
-export function SongHero({ variant, versions, art, player }: SongHeroProps) {
+function LyricsToolsButton({ open, onToggle }: SongHeroProps["lyricsTools"]) {
+  return (
+    <Tooltip label={open ? "Hide lyrics tools" : "Show lyrics tools"}>
+      <button
+        type="button"
+        aria-label="Lyrics tools"
+        aria-pressed={open}
+        onClick={onToggle}
+        className={cn(
+          chipClass,
+          "w-[30px] justify-center px-0 aria-pressed:bg-white/[0.14] aria-pressed:text-unison-text",
+        )}
+      >
+        <IconAdjustmentsHorizontal className={chipIconClass} stroke={1.75} />
+      </button>
+    </Tooltip>
+  )
+}
+
+export function SongHero({ variant, versions, art, player, lyricsTools }: SongHeroProps) {
   const sync = syncTypeFor(variant.syncType, variant.format)
   const seal = variant.marks?.find((mark) => mark.type === "seal")
   return (
@@ -175,7 +195,10 @@ export function SongHero({ variant, versions, art, player }: SongHeroProps) {
         <div className={cn(TITLE_SIZE[titleSize(variant.song)], "max-sm:self-end")}>
           <h1
             title={variant.song}
-            className="-mr-[0.08em] -mb-[0.08em] line-clamp-2 pr-[0.08em] pb-[0.08em] font-black leading-[1.08] tracking-[-0.035em] text-balance [text-box:trim-start_cap_alphabetic]"
+            className={cn(
+              "-mr-[0.08em] -mb-[0.08em] line-clamp-2 pr-[0.08em] pb-[0.08em] font-black leading-[1.08] tracking-[-0.035em] text-balance [text-box:trim-start_cap_alphabetic]",
+              artClippedTextShadowClass,
+            )}
           >
             {variant.song}
             {seal ? <SealStamp seal={seal} /> : null}
@@ -183,7 +206,10 @@ export function SongHero({ variant, versions, art, player }: SongHeroProps) {
         </div>
         <p
           title={variant.album ? `${variant.artist} · ${variant.album}` : variant.artist}
-          className="mt-1.5 -mb-[0.16em] flex min-w-0 whitespace-nowrap max-sm:self-start pr-[0.08em] pb-[0.16em] text-[17px] font-medium max-[1000px]:text-[15px]"
+          className={cn(
+            "mt-1.5 -mb-[0.16em] flex min-w-0 whitespace-nowrap max-sm:self-start pr-[0.08em] pb-[0.16em] text-[17px] font-medium max-[1000px]:text-[15px]",
+            artClippedTextShadowClass,
+          )}
         >
           <span className="max-w-full shrink-0 truncate text-(--ink-2)">{variant.artist}</span>
           {variant.album ? <span className="min-w-[3ch] truncate text-(--ink-3)">{` · ${variant.album}`}</span> : null}
@@ -236,6 +262,7 @@ export function SongHero({ variant, versions, art, player }: SongHeroProps) {
             variant={{ score: variant.score, userVote: variant.userVote ?? null }}
             beforeReport={<ShareButton videoId={variant.videoId} />}
           />
+          <LyricsToolsButton {...lyricsTools} />
           <div className="flex items-center gap-2 before:mr-1 before:h-5 before:w-px before:bg-white/[0.14] empty:hidden">
             <EditMetadataButton
               videoId={variant.videoId}
@@ -255,17 +282,17 @@ export function SongHero({ variant, versions, art, player }: SongHeroProps) {
   )
 }
 
-export function SongHeroSkeleton() {
+export function SongHeroSkeleton({ title }: { title?: string }) {
   return (
     <section data-testid="song-hero-skeleton" className={HERO_GRID}>
       <div className={HERO_ART}>
         <Bone className="aspect-square w-full rounded-2xl" />
       </div>
       <div className="min-w-0 max-sm:contents">
-        <div className={cn(TITLE_SIZE.l, "flex h-[0.98em] items-center max-sm:self-end")}>
+        <div className={cn(TITLE_SIZE[title ? titleSize(title) : "l"], "-mb-[0.08em] flex h-[0.98em] items-center max-sm:self-end")}>
           <Bone className="h-[0.72em] w-1/2 rounded-lg" />
         </div>
-        <div className="mt-1.5 flex h-[26px] items-center max-[1000px]:h-[23px] max-sm:self-start">
+        <div className="mt-1.5 -mb-[0.16em] flex h-[28px] items-center text-[17px] max-[1000px]:h-[25px] max-[1000px]:text-[15px] max-sm:self-start">
           <Bone className="h-3.5 w-1/4" />
         </div>
         <div className="mt-3 flex gap-2 max-sm:col-span-2 max-sm:mt-4">
@@ -277,6 +304,7 @@ export function SongHeroSkeleton() {
           <Bone className="h-[30px] w-[69px] rounded-[10px]" />
           <Bone className="h-[30px] w-[131px] rounded-[10px] max-sm:w-[30px]" />
           <Bone className="h-[30px] w-[86px] rounded-[10px]" />
+          <Bone className="size-[30px] rounded-[10px]" />
           <Bone className="size-[30px] rounded-[10px]" />
           <Bone className="size-[30px] rounded-[10px]" />
         </div>

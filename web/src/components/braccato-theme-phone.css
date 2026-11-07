@@ -1,0 +1,7 @@
+/*
+blyrics-letter-wave = false;
+*/
+
+.blyrics-word-highlight[data-long-word] {
+	--blyrics-glow-color: color(display-p3 1 1 1 / 0.0001);
+}

@@ -317,7 +317,8 @@ describe("LyricsPage", () => {
     fetchVariants.mockResolvedValue({ variants: [makeSummary({ id: 1 })] })
     fetchVariant.mockReturnValue(new Promise(() => {}))
     renderAt(["/song/v1"])
-    await waitFor(() => expect(screen.getByRole("button", { name: /raw/i })).toBeTruthy())
+    await waitFor(() => expect(fetchVariant).toHaveBeenCalled())
+    expect(screen.queryByRole("button", { name: /raw/i })).toBeNull()
     expect(screen.queryByRole("button", { name: /download/i })).toBeNull()
     expect(screen.queryByRole("button", { name: /copy lyrics body to clipboard/i })).toBeNull()
   })
@@ -326,7 +327,7 @@ describe("LyricsPage", () => {
     fetchVariants.mockResolvedValue({ variants: [makeSummary({ id: 1 })] })
     fetchVariant.mockReturnValue(new Promise(() => {}))
     renderAt(["/song/v1"])
-    await waitFor(() => expect(screen.getByRole("button", { name: /raw/i })).toBeTruthy())
+    await waitFor(() => expect(fetchVariant).toHaveBeenCalled())
     expect(screen.getByTestId("song-hero-skeleton")).toBeTruthy()
   })
 

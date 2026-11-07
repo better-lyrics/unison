@@ -26,6 +26,11 @@ export function useDiscordLink({ enabled = true }: { enabled?: boolean } = {}): 
   const [connecting, setConnecting] = useState(false)
   const [working, setWorking] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [statusFor, setStatusFor] = useState(enabled)
+  if (statusFor !== enabled) {
+    setStatusFor(enabled)
+    setStatus(enabled ? "loading" : "unlinked")
+  }
 
   useEffect(() => {
     if (!enabled) return

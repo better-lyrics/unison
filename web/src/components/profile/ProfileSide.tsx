@@ -1,4 +1,4 @@
-import { IconCheck, IconDownload, IconPencil, IconShare } from "@tabler/icons-react"
+import { IconBrandDiscordFilled, IconCheck, IconDownload, IconPencil, IconShare } from "@tabler/icons-react"
 import { motion } from "motion/react"
 import { IconSwap } from "@/components/icons/IconSwap"
 import { SwapLabel } from "@/components/SwapLabel"
@@ -17,6 +17,7 @@ interface ProfileSideProps {
   gamification: UserGamification | null
   owner: boolean
   onEditProfile: () => void
+  onConnectDiscord?: () => void
 }
 
 function profileUrl(handle: string | null | undefined, keyId: string): string {
@@ -58,7 +59,7 @@ function LevelLine({ gamification }: { gamification: UserGamification }) {
   )
 }
 
-export function ProfileSide({ keyId, rank, gamification, owner, onEditProfile }: ProfileSideProps) {
+export function ProfileSide({ keyId, rank, gamification, owner, onEditProfile, onConnectDiscord }: ProfileSideProps) {
   const [copied, copy] = useCopied()
   const share = (
     <motion.button
@@ -102,6 +103,12 @@ export function ProfileSide({ keyId, rank, gamification, owner, onEditProfile }:
               <IconPencil className={chipIconClass} stroke={1.75} />
               Edit profile
             </button>
+            {onConnectDiscord ? (
+              <button type="button" onClick={onConnectDiscord} className={chipClass}>
+                <IconBrandDiscordFilled className={chipIconClass} />
+                Connect Discord
+              </button>
+            ) : null}
           </>
         ) : null}
         {share}
