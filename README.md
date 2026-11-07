@@ -101,8 +101,6 @@ curl -i "https://unison.betterlyrics.org/lyrics?v=Ugr4KKK_SqY" \
 
 The tag changes when someone edits the lyric or its song details, or when another version moves to the top. Votes, confidence and the submitter's stats can change under the same tag, so a saved copy may show old numbers.
 
-In a browser you don't have to do anything: `fetch` keeps the response and checks the `ETag` on its own.
-
 ## Signed requests
 
 All write operations require signed requests using ECDSA P-256:

@@ -365,8 +365,7 @@ export function DocsPage() {
           <CodeBlock code={CACHE_CODE} language="javascript" label="JavaScript" />
           <p className="text-sm leading-relaxed text-unison-text-secondary">
             The tag changes when someone edits the lyric or its song details, or when another version moves to the top.
-            Votes and confidence can change under the same tag. In a browser, <Code>fetch</Code> already checks the{" "}
-            <Code>ETag</Code> on its own, so you only need this when you store lyrics yourself.
+            Votes and confidence can change under the same tag.
           </p>
         </section>
 
