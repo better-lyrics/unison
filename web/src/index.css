@@ -102,9 +102,13 @@ braccato-lyrics .blyrics-container {
   padding-top: var(--blyrics-padding-top, 2rem);
 }
 
+.lyrics-view .lyrics-pane {
+  margin-right: -12px;
+}
+
 .lyrics-view braccato-lyrics {
   width: auto;
-  margin-inline: -38px -12px;
+  margin-inline: -38px 0;
   padding-inline: 28px 12px;
   box-sizing: border-box;
 }
@@ -122,6 +126,10 @@ braccato-lyrics .blyrics-container {
 }
 
 @media (max-width: 1000px) {
+  .lyrics-view .lyrics-pane {
+    margin-right: 0;
+  }
+
   .lyrics-view braccato-lyrics {
     margin-inline: -20px;
     padding-inline: 20px;

@@ -10,7 +10,7 @@ import { pickTranslationLanguage, translationLanguages } from "@/lib/lyric-trans
 import { MIME_BY_FORMAT, lyricsFilename } from "@/lib/lyrics-download"
 import type { VariantFull } from "@/lib/types"
 import { motion } from "motion/react"
-import { useMemo, useState } from "react"
+import { useMemo, useRef, useState } from "react"
 import { LAYOUT_TRANSITION } from "@/lib/motion-variants"
 import { languageName } from "@/lib/language"
 import { useScrollEdges } from "@/hooks/useScrollEdges"
@@ -56,6 +56,7 @@ export function LyricsPanel({
   const lang = pickTranslationLanguage(languages, pickedLang)
   const [pane, setPane] = useState<HTMLDivElement | null>(null)
   const edges = useScrollEdges(pane)
+  const modesRef = useRef<HTMLFieldSetElement>(null)
   const [resumeAutoscroll, setResumeAutoscroll] = useState<(() => void) | null>(null)
   const segment = (group: string, active: boolean, label: string, onClick: () => void) => (
     <button
@@ -83,7 +84,7 @@ export function LyricsPanel({
   return (
     <div data-idle={playing ? undefined : ""} className="group/lyrics relative">
       <div className="pointer-events-none absolute inset-x-0 top-0 z-10 flex flex-wrap items-center gap-1.5 group-focus-within/lyrics:pointer-events-auto group-hover/lyrics:pointer-events-auto [@media(hover:none)]:group-data-idle/lyrics:pointer-events-auto">
-        <fieldset className={SEGMENTS_CLASS}>
+        <fieldset ref={modesRef} className={SEGMENTS_CLASS}>
           <legend className="sr-only">Lyrics display mode</legend>
           {tab("synced", "Synced")}
           {tab("raw", "Raw")}
@@ -99,7 +100,10 @@ export function LyricsPanel({
         <button
           type="button"
           inert={!resumeAutoscroll}
-          onClick={() => resumeAutoscroll?.()}
+          onClick={() => {
+            resumeAutoscroll?.()
+            modesRef.current?.querySelector<HTMLButtonElement>("[aria-pressed=true]")?.focus()
+          }}
           className={cn(
             TOOL_BASE,
             "pointer-events-auto absolute top-0 left-1/2 -translate-x-1/2 max-sm:right-0 max-sm:left-auto max-sm:translate-x-0",
