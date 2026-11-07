@@ -131,8 +131,9 @@ There's a daily snapshot of the public lyrics corpus at
 the rest of the metadata are at `dumps/manifest.json` on the same host.
 
 It's a `pg_dump -Fc` against Postgres 18, scoped to a `public_dump` schema
-with `lyrics`, `requested_songs`, and `lyrics_requests`. No user IDs, no
-votes, no reports, no auth.
+with `lyrics`, `requested_songs`, and `lyrics_requests`. It leaves out
+accounts, submitter and requester ids, individual votes and reports. Each
+lyric keeps its score and vote totals.
 
 To restore a copy:
 
