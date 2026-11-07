@@ -1,3 +1,4 @@
+import type { ReactNode } from "react"
 import { TrophyIcon } from "@/components/icons/TrophyIcon"
 import { cn } from "@/lib/cn"
 import { formatRank } from "@/lib/format"
@@ -29,18 +30,31 @@ export function MedalRank({ rank, size = "sm" }: MedalRankProps) {
     return <span>{formatRank(rank)}</span>
   }
 
-  const wrapper = "inline-flex w-10 shrink-0 items-center justify-center"
   if (medal) {
     return (
-      <span className={wrapper} title={medal.label}>
+      <RankCell title={medal.label}>
         <TrophyIcon className={cn("size-4", medal.color)} />
         <span className="sr-only">{medal.label}</span>
-      </span>
+      </RankCell>
     )
   }
+  return <RankNumber rank={rank} />
+}
+
+/** A ranked list row; on phones it bleeds by its own padding so the rank starts on the page text edge. */
+export const RANK_ROW = "flex items-center gap-3 rounded-lg px-4 py-3 max-sm:-mx-4 sm:gap-4"
+
+/** Fixed width so ranks line up; start-aligned on phones so every rank starts on the page text edge. */
+export function RankCell({ title, className, children }: { title?: string; className?: string; children: ReactNode }) {
   return (
-    <span className={cn(wrapper, "font-mono tabular-nums text-xs text-unison-text-muted")}>
-      {formatRank(rank)}
+    <span title={title} className={cn("inline-flex w-8 shrink-0 items-center sm:w-6 sm:justify-center", className)}>
+      {children}
     </span>
+  )
+}
+
+export function RankNumber({ rank }: { rank: number }) {
+  return (
+    <RankCell className="font-mono text-xs tabular-nums text-unison-text-muted">{formatRank(rank)}</RankCell>
   )
 }

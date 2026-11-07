@@ -1,5 +1,5 @@
 import { BadgeStrip } from "@/components/AuthorBadges"
-import { MedalRank } from "@/components/MedalRank"
+import { MedalRank, RANK_ROW, RankCell } from "@/components/MedalRank"
 import { UserAvatar } from "@/components/UserAvatar"
 import { DiscordIcon } from "@/components/icons/DiscordIcon"
 import { Bone, skeletonKeys } from "@/components/skeleton"
@@ -29,20 +29,21 @@ export function CuratorRow({ entry, isSelf = false, appended = false }: CuratorR
       <Link
         to={href}
         className={cn(
-          "flex items-center gap-4 rounded-lg px-4 py-3 transition-colors hover:bg-unison-bg-hover",
+          RANK_ROW,
+          "transition-colors hover:bg-unison-bg-hover",
           isSelf ? "bg-white/[0.06]" : "bg-white/[0.02]",
         )}
       >
         {entry.community ? (
-          <span className="inline-flex w-10 shrink-0 items-center justify-center" title="Community account">
+          <RankCell title="Community account">
             <IconStarFilled className="size-4 text-unison-medal-gold" />
             <span className="sr-only">Community account</span>
-          </span>
+          </RankCell>
         ) : rankGem ? (
-          <span className="inline-flex w-10 shrink-0 items-center justify-center" title={`Rank ${entry.rank}`}>
+          <RankCell title={`Rank ${entry.rank}`}>
             <BadgeArt src={rankGem.src} silhouette={rankGem.silhouette} className="size-6" />
             <span className="sr-only">Rank {entry.rank}</span>
-          </span>
+          </RankCell>
         ) : (
           <MedalRank rank={entry.rank} size="sm" />
         )}
@@ -64,22 +65,22 @@ export function CuratorRow({ entry, isSelf = false, appended = false }: CuratorR
           ) : null}
         </span>
         <div className="min-w-0 flex-1">
-          <p className="flex items-center gap-2 truncate text-sm font-medium text-unison-text">
-            <span className="truncate">{entry.displayName}</span>
+          <p className="flex flex-wrap items-center gap-x-2 text-sm font-medium text-unison-text sm:flex-nowrap">
+            <span className="min-w-0 truncate">{entry.displayName}</span>
+            {isSelf ? (
+              <span className="shrink-0 rounded bg-unison-text px-1.5 py-0.5 text-[10px] font-semibold tracking-wider text-unison-bg sm:order-last">
+                You
+              </span>
+            ) : null}
             <BadgeStrip
               size="sm"
               featured={entry.featured ?? []}
               topBadge={entry.topBadge ?? null}
               badgeCount={entry.badgeCount ?? 0}
-              className="shrink-0"
+              className="mt-1 w-full shrink-0 sm:mt-0 sm:w-auto"
             />
-            {isSelf ? (
-              <span className="shrink-0 rounded bg-unison-text px-1.5 py-0.5 text-[10px] font-semibold tracking-wider text-unison-bg">
-                You
-              </span>
-            ) : null}
           </p>
-          <p title={entry.keyId} className="truncate font-mono text-[11px] text-unison-text-muted">
+          <p title={entry.keyId} className="hidden truncate font-mono text-[11px] text-unison-text-muted sm:block">
             {`${entry.keyId.slice(0, 6)}…${entry.keyId.slice(-6)}`}
           </p>
         </div>
@@ -95,7 +96,7 @@ export function CuratorRow({ entry, isSelf = false, appended = false }: CuratorR
           </p>
           <p className="text-[10px] tracking-wider text-unison-text-muted">upvotes</p>
         </div>
-        <div className="text-right">
+        <div className="max-sm:w-12 max-sm:shrink-0 text-right">
           <p title={formatExact(entry.score)} className="font-mono text-sm text-unison-text">
             {formatCompact(entry.score)}
           </p>
@@ -108,7 +109,7 @@ export function CuratorRow({ entry, isSelf = false, appended = false }: CuratorR
 
 function CuratorStatSkeleton({ className }: { className?: string }) {
   return (
-    <div className={cn("flex flex-col items-end gap-1.5 text-right", className)}>
+    <div className={cn("max-sm:w-12 max-sm:shrink-0 flex-col items-end gap-1.5 text-right", className)}>
       <Bone className="h-3.5 w-8" />
       <Bone className="h-2.5 w-10" />
     </div>
@@ -118,10 +119,10 @@ function CuratorStatSkeleton({ className }: { className?: string }) {
 function CuratorRowSkeleton() {
   return (
     <li>
-      <div className="flex items-center gap-4 rounded-lg bg-white/[0.02] px-4 py-3">
-        <div className="flex w-10 shrink-0 justify-center">
+      <div className={cn(RANK_ROW, "bg-white/[0.02]")}>
+        <RankCell>
           <Bone className="size-6 rounded-full" />
-        </div>
+        </RankCell>
         <Bone className="size-12 shrink-0 rounded-full" />
         <div className="min-w-0 flex-1 space-y-2">
           <Bone className="h-3.5 w-1/3" />
@@ -129,7 +130,7 @@ function CuratorRowSkeleton() {
         </div>
         <CuratorStatSkeleton className="hidden sm:flex" />
         <CuratorStatSkeleton className="hidden sm:flex" />
-        <CuratorStatSkeleton />
+        <CuratorStatSkeleton className="flex" />
       </div>
     </li>
   )
