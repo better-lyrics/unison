@@ -14,6 +14,7 @@ import {
 } from "@/db/lyrics"
 import { getUserVote, getUserVotesForIds } from "@/db/votes"
 import { Logger } from "@/infra/logger"
+import { refreshRivalTargets } from "@/jobs/vote-integrity"
 import { toFeedResponse } from "@/routes/feed"
 import { toResponse, toSearchResponse } from "@/routes/lyrics.transformers"
 import { buildSealMarks, resolveActors } from "@/routes/marks"
@@ -32,6 +33,11 @@ import { VIDEO_ID_HINT, videoIdFromInput } from "@/utils/video-id"
 import { Elysia, t } from "elysia"
 
 const log = new Logger("app")
+
+const refreshRivalTargetsLater = (env: Env, userId: number) =>
+	refreshRivalTargets(env, userId).catch((err) =>
+		log.error("rival downvote refresh failed", { userId, error: String(err) })
+	)
 
 function parseDuration(raw: string | undefined): number | undefined {
 	if (!raw) return undefined
@@ -484,6 +490,7 @@ export const lyricsRoutes = (env: Env) =>
 			if (!result.created) {
 				return status(409, buildError(ErrorCode.VARIANT_CAP_REACHED))
 			}
+			refreshRivalTargetsLater(env, userId)
 
 			return status(201, {
 				success: true,
@@ -501,6 +508,7 @@ export const lyricsRoutes = (env: Env) =>
 				const result = await softDeleteLyrics(env, id, userId, "submitter")
 
 				if (result.deleted) {
+					refreshRivalTargetsLater(env, userId)
 					return { success: true }
 				}
 				if (result.reason === "forbidden") {
