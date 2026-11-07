@@ -992,16 +992,24 @@ describeIntegration("rival downvotes", () => {
 		expect(await downvotesOf(target)).toBe(0)
 	})
 
-	it("regression: the startup vote count repair keeps rival downvotes out", async () => {
+	it("regression: the startup vote count repair keeps rival downvotes out of the score", async () => {
 		const voter = await seedKey(RIVAL_NOW - 30 * DAY)
 		await versionOn("rvAvid00004", voter)
 		const target = await versionOn("rvAvid00004", await seedKey(RIVAL_NOW - 30 * DAY))
 		await downvote(voter, target)
-		await recalculateScore(db.env, target)
+		await vote(await seedKey(RIVAL_NOW - 30 * DAY), target, RIVAL_NOW - HOUR)
+		await db.pool.query(
+			"UPDATE lyrics SET upvotes = 1, downvotes = 1, vote_count = 2, effective_score = 0 WHERE id = $1",
+			[target]
+		)
 
 		await backfillVoteCounts(db.env)
 
-		expect(await downvotesOf(target)).toBe(0)
+		const { rows } = await db.pool.query(
+			"SELECT downvotes, vote_count, effective_score > 0 AS positive FROM lyrics WHERE id = $1",
+			[target]
+		)
+		expect(rows[0]).toEqual({ downvotes: 0, vote_count: 1, positive: true })
 	})
 
 	it("an empty title is never a rival match", async () => {

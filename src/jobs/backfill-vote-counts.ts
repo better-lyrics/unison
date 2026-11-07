@@ -1,5 +1,6 @@
 import { COUNTED_VOTE_PREDICATE } from "@/db/predicates"
 import { Logger } from "@/infra/logger"
+import { recalculateScore } from "@/jobs/score-updater"
 import type { Env } from "@/types"
 
 const log = new Logger("backfill")
@@ -11,27 +12,26 @@ const counted = (vote: 1 | -1) =>
 // upvotes/downvotes were only ever maintained incrementally, while vote_count
 // gets resynced from the votes table by recalculateScore. The two could drift,
 // and a drifted row can be a cold challenger by vote_count while carrying a huge
-// upvotes/downvotes. Recompute both from the authoritative votes rows.
+// upvotes/downvotes. recalculateScore rewrites them together with the score.
 // Idempotent: after the first run the WHERE guard matches nothing.
 export async function backfillVoteCounts(env: Env): Promise<{ repaired: number }> {
 	const drifted = await env.DB.prepare(
-		`SELECT COUNT(*) AS n FROM lyrics
-		 WHERE upvotes <> ${counted(1)}
-		    OR downvotes <> ${counted(-1)}`
-	).first<{ n: number }>()
+		`SELECT id FROM lyrics
+		 WHERE deleted_at IS NULL
+		   AND (upvotes <> ${counted(1)} OR downvotes <> ${counted(-1)})
+		 ORDER BY id`
+	).all<{ id: number }>()
 
-	const repaired = Number(drifted?.n ?? 0)
-	if (repaired === 0) return { repaired: 0 }
+	let repaired = 0
+	for (const { id } of drifted.results ?? []) {
+		try {
+			await recalculateScore(env, id)
+			repaired++
+		} catch (err) {
+			log.error("vote count repair failed", { lyricsId: id, error: String(err) })
+		}
+	}
 
-	await env.DB.prepare(
-		`UPDATE lyrics SET
-			upvotes = ${counted(1)},
-			downvotes = ${counted(-1)},
-			updated_at = EXTRACT(EPOCH FROM NOW())::INTEGER
-		 WHERE upvotes <> ${counted(1)}
-		    OR downvotes <> ${counted(-1)}`
-	).run()
-
-	log.info("vote count repair complete", { repaired })
+	if (repaired > 0) log.info("vote count repair complete", { repaired })
 	return { repaired }
 }

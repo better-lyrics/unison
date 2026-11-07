@@ -2,7 +2,7 @@ import type { Env } from "@/types"
 import { describe, expect, it } from "vitest"
 import { backfillVoteCounts } from "./backfill-vote-counts"
 
-function createMockDB(queue: unknown[]) {
+function createMockDB(drifted: { id: number }[]) {
 	const calls: { sql: string; params: unknown[] }[] = []
 	const db = {
 		prepare(sql: string) {
@@ -12,9 +12,13 @@ function createMockDB(queue: unknown[]) {
 					params = args
 					return this
 				},
+				async all<T>(): Promise<{ results: T[] }> {
+					calls.push({ sql, params })
+					return { results: (calls.length === 1 ? drifted : []) as T[] }
+				},
 				async first<T>(): Promise<T | null> {
 					calls.push({ sql, params })
-					return (queue.shift() as T) ?? null
+					return null
 				},
 				async run(): Promise<void> {
 					calls.push({ sql, params })
@@ -26,44 +30,22 @@ function createMockDB(queue: unknown[]) {
 }
 
 describe("backfillVoteCounts", () => {
-	it("does nothing and issues no UPDATE when no rows have drifted", async () => {
-		const { db, calls } = createMockDB([{ n: 0 }])
+	it("does nothing when no live rows have drifted", async () => {
+		const { db, calls } = createMockDB([])
 
 		const result = await backfillVoteCounts({ DB: db } as unknown as Env)
 
 		expect(result.repaired).toBe(0)
-		expect(calls.some((c) => c.sql.includes("UPDATE lyrics"))).toBe(false)
+		expect(calls).toHaveLength(1)
 	})
 
-	it("recomputes upvotes and downvotes from the votes table when rows have drifted", async () => {
-		const { db, calls } = createMockDB([{ n: 7 }])
+	it("recalculates every drifted live row through recalculateScore", async () => {
+		const { db, calls } = createMockDB([{ id: 3 }, { id: 9 }])
 
 		const result = await backfillVoteCounts({ DB: db } as unknown as Env)
 
-		expect(result.repaired).toBe(7)
-		const update = calls.find((c) => c.sql.includes("UPDATE lyrics"))
-		expect(update).toBeDefined()
-		expect(update?.sql).toMatch(/upvotes\s*=\s*\(SELECT COUNT/i)
-		expect(update?.sql).toMatch(/v\.vote\s*=\s*1/)
-		expect(update?.sql).toMatch(/v\.vote\s*=\s*-1/)
-	})
-
-	describe("edge cases", () => {
-		it("coerces a bigint-style count string to a number", async () => {
-			const { db } = createMockDB([{ n: "42" }])
-
-			const result = await backfillVoteCounts({ DB: db } as unknown as Env)
-
-			expect(result.repaired).toBe(42)
-		})
-
-		it("treats a missing count row as zero drift", async () => {
-			const { db, calls } = createMockDB([null])
-
-			const result = await backfillVoteCounts({ DB: db } as unknown as Env)
-
-			expect(result.repaired).toBe(0)
-			expect(calls.some((c) => c.sql.includes("UPDATE lyrics"))).toBe(false)
-		})
+		expect(result.repaired).toBe(2)
+		const recalculated = calls.filter((c) => c.sql.includes("FROM lyrics l WHERE l.id = ?"))
+		expect(recalculated.map((c) => c.params[0])).toEqual([3, 9])
 	})
 })
