@@ -148,7 +148,6 @@ export async function findRivalVoters(
 	const { lookbackSec, rival } = config.voteIntegrity
 	const now = opts.now ?? Math.floor(Date.now() / 1000)
 	const since = opts.all ? 0 : now - lookbackSec
-	const fresh = `v.created_at > COALESCE(m.at, -1) AND ${RIVAL_DOWNVOTE_EXPR}`
 	const res = await env.DB.prepare(`
 		WITH candidates AS (
 			SELECT user_id FROM votes WHERE vote = -1 AND created_at >= ?::int
@@ -159,19 +158,23 @@ export async function findRivalVoters(
 			SELECT submitter_id, MAX(detected_at) AS at FROM vote_strikes
 			WHERE kind = 'rival' GROUP BY submitter_id
 		),
-		tallies AS (
-			SELECT v.user_id, COUNT(*) AS cast_votes,
-				COUNT(*) FILTER (WHERE ${fresh}) AS rival_votes,
-				MAX(v.created_at) FILTER (WHERE ${fresh}) AS last_vote
+		cast_votes AS (
+			SELECT v.user_id, v.created_at,
+				v.vote = -1 AND v.created_at > COALESCE(m.at, -1) AND ${RIVAL_DOWNVOTE_EXPR} AS rival
 			FROM candidates c
 			JOIN votes v ON v.user_id = c.user_id AND v.is_self_vote = 0
 			JOIN users u ON u.id = v.user_id
 			LEFT JOIN marks m ON m.submitter_id = v.user_id
 			WHERE u.banned_at IS NULL AND u.key_id <> ?
-			GROUP BY v.user_id
+		),
+		tallies AS (
+			SELECT user_id, COUNT(*) AS cast_count,
+				COUNT(*) FILTER (WHERE rival) AS rival_votes,
+				MAX(created_at) FILTER (WHERE rival) AS last_vote
+			FROM cast_votes GROUP BY user_id
 		)
 		SELECT user_id, rival_votes, last_vote FROM tallies
-		WHERE rival_votes >= ?::int AND rival_votes >= ?::float8 * cast_votes
+		WHERE rival_votes >= ?::int AND rival_votes >= ?::float8 * cast_count
 		ORDER BY user_id
 	`)
 		.bind(since, since, COMMUNITY_KEY_ID, rival.minVotes, rival.share)
