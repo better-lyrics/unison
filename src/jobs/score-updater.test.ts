@@ -1,4 +1,5 @@
 import { config } from "@/config"
+import { RIVAL_DOWNVOTE_EXPR } from "@/db/predicates"
 import { updateReputations } from "@/db/reputation"
 import {
 	calculateScore,
@@ -411,7 +412,7 @@ describe("soft-delete handling", () => {
 
 		await updateReputations(env)
 
-		expect(calls[0].sql).not.toMatch(/deleted_at/i)
+		expect(calls[0].sql.replace(RIVAL_DOWNVOTE_EXPR, "")).not.toMatch(/deleted_at/i)
 	})
 })
 

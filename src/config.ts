@@ -187,6 +187,7 @@ export const config = {
 		serialWindowSec: 300,
 		loyalMinVotes: 5,
 		mergeWindowSec: 24 * 3600,
+		rival: { launchedAt: 1794096000, minVotes: 2, share: 0.5 },
 		repeatPenalty: { reputation: 0.2, xp: -30 },
 		multiplier: { windowSec: 30 * 86400, one: 0.8, many: 0.6 },
 	},

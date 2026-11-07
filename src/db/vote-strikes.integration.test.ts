@@ -2077,3 +2077,93 @@ describeIntegration("undoStrike", () => {
 		})
 	})
 })
+
+describeIntegration("rival downvotes", () => {
+	beforeAll(async () => {
+		db = await openIntegrationDb()
+	})
+
+	afterAll(async () => {
+		await db.pool.end()
+	})
+
+	beforeEach(async () => {
+		await wipeRevisionData(db)
+	})
+
+	const videoId = () => `rIvAl${String(++seq).padStart(6, "0")}`
+
+	async function song(
+		submitterId: number,
+		opts: { video: string; songNorm?: string; artistNorm?: string; links?: string[] }
+	): Promise<number> {
+		const { rows } = await db.pool.query<{ id: number }>(
+			`INSERT INTO lyrics (video_id, song, artist, duration, song_norm, artist_norm, lyrics, format,
+				sync_type, submitter_id)
+			 VALUES ($1, 'Song', 'Artist', 180, $2, $3, 'gz', 'lrc', 'linesync', $4)
+			 RETURNING id`,
+			[opts.video, opts.songNorm ?? "song", opts.artistNorm ?? "artist", submitterId]
+		)
+		const id = rows[0].id
+		for (const video of [opts.video, ...(opts.links ?? [])]) {
+			await db.pool.query("INSERT INTO lyrics_video_ids (lyrics_id, video_id) VALUES ($1, $2)", [
+				id,
+				video,
+			])
+		}
+		return id
+	}
+
+	const downvote = (userId: number, lyricsId: number, at = T0) =>
+		db.pool.query(
+			"INSERT INTO votes (lyrics_id, user_id, vote, is_self_vote, created_at) VALUES ($1, $2, -1, 0, $3)",
+			[lyricsId, userId, at]
+		)
+
+	async function countedDownvotes(lyricsId: number): Promise<number> {
+		await recalculateScore(db.env, lyricsId)
+		const { rows } = await db.pool.query<{ downvotes: number }>(
+			"SELECT downvotes FROM lyrics WHERE id = $1",
+			[lyricsId]
+		)
+		return rows[0].downvotes
+	}
+
+	describe("counting", () => {
+		it("a downvote on another version of the voter's own song does not count", async () => {
+			const video = videoId()
+			const voter = await seedKey(T0 - DAY)
+			await song(voter, { video })
+			const target = await song(await seedKey(T0 - DAY), { video })
+			await downvote(voter, target)
+
+			expect(await countedDownvotes(target)).toBe(0)
+		})
+
+		it("matches a title that repeats the artist across videos", async () => {
+			const voter = await seedKey(T0 - DAY)
+			await song(voter, { video: videoId(), songNorm: "ayo senyumlah", artistNorm: "jkt48" })
+			const target = await song(await seedKey(T0 - DAY), {
+				video: videoId(),
+				songNorm: "ayo senyumlah jkt48",
+				artistNorm: "jkt48",
+			})
+			await downvote(voter, target)
+
+			expect(await countedDownvotes(target)).toBe(0)
+		})
+
+		it("a lyric linked to both videos bridges them, and nothing else does", async () => {
+			const [a, b] = [videoId(), videoId()]
+			const voter = await seedKey(T0 - DAY)
+			await song(voter, { video: a, songNorm: "first" })
+			const target = await song(await seedKey(T0 - DAY), { video: b, songNorm: "second" })
+			await downvote(voter, target)
+
+			expect(await countedDownvotes(target)).toBe(1)
+
+			await song(await seedKey(T0 - DAY), { video: a, songNorm: "third", links: [b] })
+			expect(await countedDownvotes(target)).toBe(0)
+		})
+	})
+})

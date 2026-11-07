@@ -9,7 +9,7 @@ import {
 import { invalidateCacheForLyric } from "@/db/lyrics"
 import { updateReputations } from "@/db/reputation"
 import {
-	COUNTED_VOTER_PREDICATE,
+	COUNTED_VOTE_PREDICATE,
 	LOYAL_ONLY_EXPR_JOINED,
 	VOTE_HIDE_PREDICATE,
 } from "@/db/predicates"
@@ -52,7 +52,7 @@ export async function recalculateScore(env: Env, lyricsId: number): Promise<void
 		SELECT v.vote, u.reputation, u.avg_vote, v.is_self_vote
 		FROM votes v
 		JOIN users u ON v.user_id = u.id
-		WHERE v.lyrics_id = ? AND ${COUNTED_VOTER_PREDICATE}
+		WHERE v.lyrics_id = ? AND ${COUNTED_VOTE_PREDICATE}
 	`)
 		.bind(lyricsId)
 		.all<VoteWithUser>()
