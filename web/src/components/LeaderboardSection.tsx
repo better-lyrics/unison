@@ -1,5 +1,6 @@
 import type { ReactNode } from "react"
 import { Link } from "react-router-dom"
+import { Tooltip } from "@/components/Tooltip"
 
 interface LeaderboardSectionProps {
   title: ReactNode
@@ -8,14 +9,22 @@ interface LeaderboardSectionProps {
   children: ReactNode
 }
 
+const TITLE_CLASS = "text-xl font-semibold tracking-tight text-balance text-unison-text"
+
 export function LeaderboardSection({ title, subtitle, action, children }: LeaderboardSectionProps) {
   return (
-    <section className="space-y-3">
+    <section className="space-y-4">
       <header className="flex items-baseline justify-between gap-3">
-        <div>
-          <h2 className="text-base font-semibold text-unison-text">{title}</h2>
-          {subtitle ? <p className="text-xs text-unison-text-muted">{subtitle}</p> : null}
-        </div>
+        {subtitle ? (
+          <div>
+            <Tooltip label={subtitle}>
+              <h2 className={TITLE_CLASS}>{title}</h2>
+            </Tooltip>
+            <p className="sr-only">{subtitle}</p>
+          </div>
+        ) : (
+          <h2 className={TITLE_CLASS}>{title}</h2>
+        )}
         {action ? <div className="shrink-0">{action}</div> : null}
       </header>
       {children}
