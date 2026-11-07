@@ -8,7 +8,9 @@ import {
 } from "@/db/contribution-events"
 import {
 	type SuspectKey,
+	findRivalVoters,
 	findSuspectKeys,
+	recordRivalStrikes,
 	recordStrikes,
 	revokeStrikeXp,
 	undoStrike,
@@ -434,7 +436,7 @@ describeIntegration("findSuspectKeys", () => {
 			const full = await findSuspectKeys(db.env, { now: NOW, all: true })
 			expect(userIds(full)).toEqual(sorted([...ringKeys, serial]))
 			expect(full.find((r) => r.userId === serial)).toMatchObject({ serial: true, ring: false })
-			expect(full.filter((r) => r.ring).map((r) => r.userId)).toEqual(sorted(ringKeys))
+			expect(sorted(full.filter((r) => r.ring).map((r) => r.userId))).toEqual(sorted(ringKeys))
 		})
 
 		it("finds ring mates that started up to ringWindowSec before the lookback start", async () => {
@@ -2074,6 +2076,215 @@ describeIntegration("undoStrike", () => {
 				result: "not_found",
 				repeatChanged: false,
 			})
+		})
+	})
+})
+
+describeIntegration("rival downvotes", () => {
+	beforeAll(async () => {
+		db = await openIntegrationDb()
+	})
+
+	afterAll(async () => {
+		await db.pool.end()
+	})
+
+	beforeEach(async () => {
+		await wipeRevisionData(db)
+	})
+
+	const videoId = () => `rIvAl${String(++seq).padStart(6, "0")}`
+
+	async function song(
+		submitterId: number,
+		opts: { video: string; songNorm?: string; artistNorm?: string; links?: string[] }
+	): Promise<number> {
+		const { rows } = await db.pool.query<{ id: number }>(
+			`INSERT INTO lyrics (video_id, song, artist, duration, song_norm, artist_norm, lyrics, format,
+				sync_type, submitter_id)
+			 VALUES ($1, 'Song', 'Artist', 180, $2, $3, 'gz', 'lrc', 'linesync', $4)
+			 RETURNING id`,
+			[opts.video, opts.songNorm ?? "song", opts.artistNorm ?? "artist", submitterId]
+		)
+		const id = rows[0].id
+		for (const video of [opts.video, ...(opts.links ?? [])]) {
+			await db.pool.query("INSERT INTO lyrics_video_ids (lyrics_id, video_id) VALUES ($1, $2)", [
+				id,
+				video,
+			])
+		}
+		return id
+	}
+
+	const downvote = (userId: number, lyricsId: number, at = T0) =>
+		db.pool.query(
+			"INSERT INTO votes (lyrics_id, user_id, vote, is_self_vote, created_at) VALUES ($1, $2, -1, 0, $3)",
+			[lyricsId, userId, at]
+		)
+
+	async function countedDownvotes(lyricsId: number): Promise<number> {
+		await recalculateScore(db.env, lyricsId)
+		const { rows } = await db.pool.query<{ downvotes: number }>(
+			"SELECT downvotes FROM lyrics WHERE id = $1",
+			[lyricsId]
+		)
+		return rows[0].downvotes
+	}
+
+	describe("counting", () => {
+		it("a downvote on another version of the voter's own song does not count", async () => {
+			const video = videoId()
+			const voter = await seedKey(T0 - DAY)
+			await song(voter, { video })
+			const target = await song(await seedKey(T0 - DAY), { video })
+			await downvote(voter, target)
+
+			expect(await countedDownvotes(target)).toBe(0)
+		})
+
+		it("matches a title that repeats the artist across videos", async () => {
+			const voter = await seedKey(T0 - DAY)
+			await song(voter, { video: videoId(), songNorm: "ayo senyumlah", artistNorm: "jkt48" })
+			const target = await song(await seedKey(T0 - DAY), {
+				video: videoId(),
+				songNorm: "ayo senyumlah jkt48",
+				artistNorm: "jkt48",
+			})
+			await downvote(voter, target)
+
+			expect(await countedDownvotes(target)).toBe(0)
+		})
+
+		it("a lyric linked to both videos bridges them, and nothing else does", async () => {
+			const [a, b] = [videoId(), videoId()]
+			const voter = await seedKey(T0 - DAY)
+			await song(voter, { video: a, songNorm: "first" })
+			const target = await song(await seedKey(T0 - DAY), { video: b, songNorm: "second" })
+			await downvote(voter, target)
+
+			expect(await countedDownvotes(target)).toBe(1)
+
+			await song(await seedKey(T0 - DAY), { video: a, songNorm: "third", links: [b] })
+			expect(await countedDownvotes(target)).toBe(0)
+		})
+	})
+
+	describe("strikes", () => {
+		const NOW = config.voteIntegrity.rival.launchedAt + 10 * DAY
+
+		async function rivalDownvoter(rivals: number, unrelatedUpvotes = 0): Promise<number> {
+			const video = videoId()
+			const user = await seedKey(NOW - 30 * DAY)
+			await song(user, { video })
+			for (let i = 0; i < rivals; i++) {
+				await downvote(user, await song(await seedKey(NOW - 30 * DAY), { video }), NOW - HOUR)
+			}
+			for (let i = 0; i < unrelatedUpvotes; i++) {
+				const other = await song(await seedKey(NOW - 30 * DAY), {
+					video: videoId(),
+					songNorm: `other ${i}`,
+				})
+				await vote(user, other, NOW - HOUR)
+			}
+			return user
+		}
+
+		const detect = () => findRivalVoters(db.env, { now: NOW, all: true })
+
+		it("strikes an account whose votes are mostly rival downvotes, never a trusted one", async () => {
+			const offender = await rivalDownvoter(3)
+			await rivalDownvoter(5, 8)
+
+			const found = await detect()
+			expect(found.map((r) => [r.userId, r.votes])).toEqual([[offender, 3]])
+
+			await recordRivalStrikes(db.env, found, NOW)
+			const { rows } = await db.pool.query(
+				"SELECT kind, key_count, vote_count, repeat FROM vote_strikes WHERE submitter_id = $1",
+				[offender]
+			)
+			expect(rows).toEqual([{ kind: "rival", key_count: 0, vote_count: 3, repeat: false }])
+			const events = await db.pool.query(
+				"SELECT note FROM council_events WHERE kind = 'vote_strike' AND subject_user_id = $1",
+				[offender]
+			)
+			expect(events.rows).toEqual([{ note: "rival: 3 votes" }])
+			expect(await detect()).toEqual([])
+		})
+
+		async function rivalVotesAt(user: number, count: number, at: number): Promise<void> {
+			const { rows } = await db.pool.query<{ video_id: string }>(
+				"SELECT video_id FROM lyrics WHERE submitter_id = $1 LIMIT 1",
+				[user]
+			)
+			for (let i = 0; i < count; i++) {
+				const rival = await song(await seedKey(NOW - 30 * DAY), { video: rows[0].video_id })
+				await downvote(user, rival, at)
+			}
+		}
+
+		const strikesOf = async (user: number) =>
+			(
+				await db.pool.query(
+					"SELECT vote_count, repeat FROM vote_strikes WHERE submitter_id = $1 ORDER BY id",
+					[user]
+				)
+			).rows
+
+		it("regression: votes merged into a rival strike are never counted again", async () => {
+			const offender = await rivalDownvoter(2)
+			await recordRivalStrikes(db.env, await detect(), NOW)
+			await rivalVotesAt(offender, 2, NOW + HOUR)
+
+			for (const later of [6 * HOUR, 12 * HOUR, 30 * HOUR]) {
+				const at = NOW + later
+				await recordRivalStrikes(db.env, await findRivalVoters(db.env, { now: at, all: true }), at)
+			}
+
+			expect(await strikesOf(offender)).toEqual([{ vote_count: 4, repeat: false }])
+		})
+
+		it("after a strike, the share counts only votes since that strike", async () => {
+			const offender = await rivalDownvoter(3)
+			await recordRivalStrikes(db.env, await detect(), NOW)
+			await rivalVotesAt(offender, 2, NOW + 2 * DAY)
+
+			const later = NOW + 3 * DAY
+			await recordRivalStrikes(
+				db.env,
+				await findRivalVoters(db.env, { now: later, all: true }),
+				later
+			)
+
+			expect(await strikesOf(offender)).toEqual([
+				{ vote_count: 3, repeat: false },
+				{ vote_count: 2, repeat: true },
+			])
+		})
+
+		it("a rival strike never merges into a ring strike and counts as a repeat", async () => {
+			const offender = await rivalDownvoter(3)
+			await db.pool.query(
+				`INSERT INTO vote_strikes (submitter_id, kind, detected_at, key_count, vote_count, repeat, backfill)
+				 VALUES ($1, 'ring', $2, 5, 10, FALSE, FALSE)`,
+				[offender, NOW - HOUR]
+			)
+
+			await recordRivalStrikes(db.env, await detect(), NOW)
+
+			const { rows } = await db.pool.query<{ id: number; kind: string; repeat: boolean }>(
+				"SELECT id, kind, repeat FROM vote_strikes WHERE submitter_id = $1 ORDER BY id",
+				[offender]
+			)
+			expect(rows.map((r) => [r.kind, r.repeat])).toEqual([
+				["ring", false],
+				["rival", true],
+			])
+			const penalty = await db.pool.query(
+				"SELECT 1 FROM contribution_events WHERE kind = 'vote-manipulation' AND ref_id = $1",
+				[rows[1].id]
+			)
+			expect(penalty.rowCount).toBe(1)
 		})
 	})
 })

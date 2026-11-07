@@ -1,5 +1,5 @@
 import { config } from "@/config"
-import { COUNTED_VOTER_PREDICATE } from "@/db/predicates"
+import { COUNTED_VOTER_PREDICATE, RIVAL_DOWNVOTE_EXPR } from "@/db/predicates"
 import { updateReputations } from "@/db/reputation"
 import { isReputationRefresh, refreshParams } from "@/test/reputation-refresh"
 import type { Env } from "@/types"
@@ -95,7 +95,7 @@ describe("updateReputations", () => {
 		it("regression: does not filter deleted lyrics", async () => {
 			const { env, calls } = createMockEnv()
 			await updateReputations(env)
-			expect(calls[0].sql).not.toMatch(/deleted_at/i)
+			expect(calls[0].sql.replace(RIVAL_DOWNVOTE_EXPR, "")).not.toMatch(/deleted_at/i)
 		})
 	})
 

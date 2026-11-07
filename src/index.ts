@@ -21,13 +21,17 @@ import { backfillSyncType } from "@/jobs/backfill-synctype"
 import { backfillTextSearch } from "@/jobs/backfill-text-search"
 import { backfillVideoIds } from "@/jobs/backfill-video-ids"
 import { backfillVideoLinks } from "@/jobs/backfill-video-links"
-import { backfillVoteCounts } from "@/jobs/backfill-vote-counts"
 import { backfillXp } from "@/jobs/backfill-xp"
 import { cleanupFulfilledRequests } from "@/jobs/cleanup-fulfilled-requests"
 import { runDumpJob } from "@/jobs/dump"
+import { resyncVoteCounts } from "@/jobs/resync-vote-counts"
 import { updateScores } from "@/jobs/score-updater"
 import { auditThresholds } from "@/jobs/threshold-audit"
-import { backfillVoteIntegrity, runVoteIntegrity } from "@/jobs/vote-integrity"
+import {
+	backfillRivalStrikes,
+	backfillVoteIntegrity,
+	runVoteIntegrity,
+} from "@/jobs/vote-integrity"
 import { adminRoutes } from "@/routes/admin"
 import { artworkRoutes } from "@/routes/artwork"
 import { authRoutes } from "@/routes/auth"
@@ -273,6 +277,12 @@ backfillVoteIntegrity(env)
 	})
 	.catch((err) => log.error("vote integrity backfill failed", { error: (err as Error).message }))
 
+backfillRivalStrikes(env)
+	.then((strikes) => {
+		if (strikes) log.info("rival strike backfill complete", { strikes })
+	})
+	.catch((err) => log.error("rival strike backfill failed", { error: (err as Error).message }))
+
 backfillAvatarPresets(env)
 	.then(({ seeded }) => {
 		if (seeded > 0) log.info("avatar preset backfill complete", { seeded })
@@ -338,11 +348,11 @@ cleanupFulfilledRequests(env)
 	})
 	.catch((err) => log.error("cleanup fulfilled requests failed", { error: (err as Error).message }))
 
-backfillVoteCounts(env)
+resyncVoteCounts(env)
 	.then(({ repaired }) => {
-		if (repaired > 0) log.info("vote count backfill complete", { repaired })
+		if (repaired > 0) log.info("vote count resync complete", { repaired })
 	})
-	.catch((err) => log.error("vote count backfill failed", { error: (err as Error).message }))
+	.catch((err) => log.error("vote count resync failed", { error: (err as Error).message }))
 
 process.on("unhandledRejection", (reason) => {
 	const err = reason instanceof Error ? reason : new Error(String(reason))

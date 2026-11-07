@@ -712,7 +712,7 @@ CREATE TABLE IF NOT EXISTS report_case_votes (
 CREATE TABLE IF NOT EXISTS vote_strikes (
     id SERIAL PRIMARY KEY,
     submitter_id INTEGER NOT NULL REFERENCES users(id),
-    kind TEXT NOT NULL CHECK (kind IN ('ring', 'serial', 'both')),
+    kind TEXT NOT NULL CHECK (kind IN ('ring', 'serial', 'both', 'rival')),
     detected_at INTEGER NOT NULL DEFAULT (EXTRACT(EPOCH FROM NOW())::INTEGER),
     key_count INTEGER NOT NULL,
     vote_count INTEGER NOT NULL,
@@ -725,11 +725,25 @@ CREATE TABLE IF NOT EXISTS vote_strikes (
 );
 CREATE INDEX IF NOT EXISTS idx_vote_strikes_submitter ON vote_strikes(submitter_id, detected_at DESC);
 ALTER TABLE vote_strikes ADD COLUMN IF NOT EXISTS settled_at INTEGER;
+ALTER TABLE vote_strikes ADD COLUMN IF NOT EXISTS evidence_until INTEGER;
 CREATE INDEX IF NOT EXISTS idx_vote_strikes_unsettled ON vote_strikes(id)
     WHERE settled_at IS NULL AND undone_at IS NULL;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS vote_strike_id INTEGER REFERENCES vote_strikes(id);
 CREATE INDEX IF NOT EXISTS idx_users_vote_strike ON users(vote_strike_id) WHERE vote_strike_id IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_votes_created ON votes(created_at);
+
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint
+        WHERE conname = 'vote_strikes_kind_check'
+            AND pg_get_constraintdef(oid) LIKE '%rival%'
+    ) THEN
+        ALTER TABLE vote_strikes DROP CONSTRAINT IF EXISTS vote_strikes_kind_check;
+        ALTER TABLE vote_strikes ADD CONSTRAINT vote_strikes_kind_check
+            CHECK (kind IN ('ring', 'serial', 'both', 'rival'));
+    END IF;
+END $$;
 
 DO $$
 BEGIN

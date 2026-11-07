@@ -62,6 +62,36 @@ const buildBannedSubmitterPredicate = (prefix: string) =>
 
 export const COUNTED_VOTER_PREDICATE = "(u.banned_at IS NULL AND u.votes_discounted_at IS NULL)"
 
+const titleKey = (l: string) => `CASE
+	WHEN ${l}.artist_norm <> '' AND right(${l}.song_norm, length(${l}.artist_norm) + 1) = ' ' || ${l}.artist_norm
+		THEN left(${l}.song_norm, length(${l}.song_norm) - length(${l}.artist_norm) - 1)
+	ELSE ${l}.song_norm
+END`
+
+// Every lyric serves its home video through lyrics_video_ids, so a bridge of one also covers a shared video.
+const bridgedExpr = (own: string, target: string) => `EXISTS (
+	SELECT 1 FROM lyrics_video_ids ov
+	JOIN lyrics_video_ids b1 ON b1.video_id = ov.video_id
+	JOIN lyrics b ON b.id = b1.lyrics_id AND b.deleted_at IS NULL
+	JOIN lyrics_video_ids b2 ON b2.lyrics_id = b.id
+	JOIN lyrics_video_ids tv ON tv.lyrics_id = ${target}.id AND tv.video_id = b2.video_id
+	WHERE ov.lyrics_id = ${own}.id
+)`
+
+export const RIVAL_DOWNVOTE_EXPR = `(v.vote = -1 AND EXISTS (
+	SELECT 1 FROM lyrics rv_t
+	JOIN lyrics rv_own ON rv_own.submitter_id = v.user_id AND rv_own.deleted_at IS NULL
+		AND rv_own.id <> rv_t.id
+	WHERE rv_t.id = v.lyrics_id AND rv_t.submitter_id IS DISTINCT FROM v.user_id
+		AND (
+			(rv_own.artist_norm = rv_t.artist_norm AND ${titleKey("rv_own")} <> ''
+				AND ${titleKey("rv_own")} = ${titleKey("rv_t")})
+			OR ${bridgedExpr("rv_own", "rv_t")}
+		)
+))`
+
+export const COUNTED_VOTE_PREDICATE = `(${COUNTED_VOTER_PREDICATE} AND NOT ${RIVAL_DOWNVOTE_EXPR})`
+
 const { loyalMinVotes, devotedShare } = config.voteIntegrity
 const loyalVoterExpr = `(
 	SELECT COUNT(*) FILTER (WHERE ol.submitter_id = l.submitter_id) >= ${loyalMinVotes}
