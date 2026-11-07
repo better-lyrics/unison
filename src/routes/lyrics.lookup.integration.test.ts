@@ -75,6 +75,7 @@ describeIntegration("GET /lyrics lookups (integration)", () => {
 				)
 				expect(repeat.status).toBe(304)
 				expect(repeat.headers.get("etag")).toBe(etag)
+				expect(repeat.headers.get("vary")).toBe("Origin, Accept-Encoding")
 				expect(await repeat.text()).toBe("")
 			}
 		})

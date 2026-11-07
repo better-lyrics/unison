@@ -95,6 +95,8 @@ export const lyricsRoutes = (env: Env) =>
 					const etag = lyricEtag(data)
 					set.headers.etag = etag
 					if (matchesEtag(headers["if-none-match"], etag)) {
+						// A 304 carries the Vary of the 200 it stands for, and the compressor skips empty bodies.
+						set.headers.vary = "Origin, Accept-Encoding"
 						return new Response(null, { status: 304, headers: { etag } })
 					}
 					return { success: true, data }
