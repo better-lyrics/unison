@@ -31,7 +31,7 @@ export function CuratorRow({ entry, isSelf = false, appended = false }: CuratorR
         className={cn(
           RANK_ROW,
           "transition-colors hover:bg-unison-bg-hover",
-          isSelf ? "bg-white/[0.06]" : "bg-white/[0.02]",
+          isSelf ? "bg-white/[0.06]" : "sm:bg-white/[0.02]",
         )}
       >
         {entry.community ? (
@@ -119,7 +119,7 @@ function CuratorStatSkeleton({ className }: { className?: string }) {
 function CuratorRowSkeleton() {
   return (
     <li>
-      <div className={cn(RANK_ROW, "bg-white/[0.02]")}>
+      <div className={cn(RANK_ROW, "sm:bg-white/[0.02]")}>
         <RankCell>
           <Bone className="size-6 rounded-full" />
         </RankCell>
