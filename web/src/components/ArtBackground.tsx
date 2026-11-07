@@ -1,5 +1,6 @@
 import { Kawarp } from "@kawarp/core"
 import { useCallback, useEffect, useRef, useState } from "react"
+import { type Accent, accentFromImage, decodeArt } from "@/lib/accent"
 import { cn } from "@/lib/cn"
 import { tokenMs } from "@/lib/motion-tokens"
 import { isPhone } from "@/lib/phone"
@@ -15,10 +16,19 @@ interface ArtBackgroundProps {
   moving?: boolean
   dithering?: number
   onReady?: () => void
-  onShow?: (src: string) => void
+  onShow?: (src: string, accent: Accent | null) => void
 }
 
 const animates = (moving: boolean) => moving && !isPhone()
+
+function readAccent(img: HTMLImageElement): Accent | null {
+  try {
+    return accentFromImage(img)
+  } catch (error: unknown) {
+    console.warn("Could not sample the art palette", error)
+    return null
+  }
+}
 
 export function ArtBackground({ src, contained = false, moving = false, dithering, onReady, onShow }: ArtBackgroundProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
@@ -108,11 +118,13 @@ export function ArtBackground({ src, contained = false, moving = false, ditherin
       while (warpRef.current === warp && targetRef.current && targetRef.current !== applied) {
         applied = targetRef.current
         try {
-          await warp.loadImage(applied)
+          const img = await decodeArt(applied)
           if (warpRef.current !== warp) break
+          const accent = readAccent(img)
+          warp.loadImageElement(img)
           const crossfaded = loadedRef.current === warp
           loadedRef.current = warp
-          onShowRef.current?.(applied)
+          onShowRef.current?.(applied, accent)
           setShown(true)
           setFailed(false)
           update(warp)

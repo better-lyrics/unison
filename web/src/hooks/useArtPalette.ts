@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react"
+import { useEffect, useLayoutEffect, useState } from "react"
 import { type Accent, FALLBACK_HUE, inks, sampleAccent, scrimFor } from "@/lib/accent"
 
 const DEFAULT_SCRIM = 0.45
@@ -32,10 +32,9 @@ export function paletteVars(accent: Accent | null, scrimFloor = 0): Record<strin
   }
 }
 
-export function useArtPalette(src: string | null | undefined, scrimFloor = 0): Accent | null {
-  const accent = useAccent(src)
-
-  useEffect(() => {
+/** Applies an accent that the caller already sampled, so the text colours change in the same frame as the art. */
+export function useArtPalette(accent: Accent | null, scrimFloor = 0): void {
+  useLayoutEffect(() => {
     const root = document.documentElement.style
     const vars = paletteVars(accent, scrimFloor)
     for (const [name, value] of Object.entries(vars)) root.setProperty(name, value)
@@ -43,6 +42,4 @@ export function useArtPalette(src: string | null | undefined, scrimFloor = 0): A
       for (const name of Object.keys(vars)) root.removeProperty(name)
     }
   }, [accent, scrimFloor])
-
-  return accent
 }
