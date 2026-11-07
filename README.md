@@ -379,13 +379,25 @@ New fields can show up, but existing ones are never renamed or removed.
 
 Most people do it from Better Lyrics. The "Submit lyrics with Unison" button under a song's lyrics opens a form filled in with the song's details, and the Unison card under the lyrics has upvote, downvote and report buttons. Other apps can do the same through the API, and third-party clients such as [unison.prjktla.my.id](https://unison.prjktla.my.id/) support it too.
 
+### Can I edit my lyric?
+
+Yes. Open the Unison page in Better Lyrics options. Only the submitter can edit a lyric. Most fixes go live at once. An edit to a sealed lyric, or one that changes a lot of the text or timing, waits for a Council member to approve it.
+
 ### Why isn't my version the one shown?
 
 Unison shows the top-ranked version. Votes decide it, weighted by each voter's reputation, and tighter sync gets a boost. A new version needs votes before it can pass one people already like.
 
+### Why didn't my lyric's score go up when I upvoted it?
+
+Take a wild guess.
+
 ### Why did my lyric disappear?
 
 Lookups hide a lyric that has been heavily downvoted or reported by the community.
+
+### What happens when I report a lyric?
+
+Reports from established accounts count toward hiding it. Once a lyric has enough of them, Unison hides it right away and the Council reviews it. They either remove it or put it back.
 
 ### Why does a title and artist lookup miss a song Unison has?
 
@@ -398,6 +410,14 @@ Check `matchedBy`. A `linked_video` match means no lyric had the ISRC or matched
 ### What does the seal mean?
 
 A Better Lyrics Council member approved the lyric. Sealed lyrics get a small ranking boost, but community votes can still overtake them.
+
+### How do my lyrics get sealed?
+
+Council members review lyrics that have a positive score and aren't hidden, starting with the top-ranked version of each song, and seal the ones they approve. You can't request a seal. Upvotes are what put your lyric in front of them. Lyrics by Council members can't be sealed.
+
+### How do I earn XP?
+
+You earn XP when something you did holds up: one of your lyrics reaches medium confidence, your vote agrees with where the community lands, or you fill someone's request. Submitting or voting alone earns nothing.
 
 ### Is there a rate limit?
 
