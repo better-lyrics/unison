@@ -28,6 +28,9 @@ describe("lyricEtag", () => {
 		)
 		expect(lyricEtag({ ...lyric, song: "Night Drive (Live)" })).not.toBe(etag)
 		expect(lyricEtag({ ...lyric, id: 13530 })).not.toBe(etag)
+		expect(lyricEtag({ ...lyric, variant: "own" })).not.toBe(
+			lyricEtag({ ...lyric, variant: "primary" })
+		)
 	})
 })
 

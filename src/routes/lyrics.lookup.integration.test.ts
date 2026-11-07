@@ -63,17 +63,16 @@ describeIntegration("GET /lyrics lookups (integration)", () => {
 
 	describe("etag", () => {
 		it("answers a repeat lookup with 304 and no body while the lyric is unchanged", async () => {
-			const first = await app.handle(new Request("http://localhost/lyrics?v=lkW3jsz0Gnc"))
-			const etag = first.headers.get("etag")
-			expect(etag).toMatch(/^W\//)
-			// Browsers must not revalidate on their own and hand back old votes; apps opt in with If-None-Match.
-			expect(first.headers.get("cache-control")).toBe("no-store")
-
 			for (const query of ["v=lkW3jsz0Gnc", "isrc=US2S70465012"]) {
+				const url = `http://localhost/lyrics?${query}`
+				const first = await app.handle(new Request(url))
+				const etag = first.headers.get("etag")
+				expect(etag).toMatch(/^W\//)
+				// Browsers must not revalidate on their own and hand back old votes; apps opt in with If-None-Match.
+				expect(first.headers.get("cache-control")).toBe("no-store")
+
 				const repeat = await app.handle(
-					new Request(`http://localhost/lyrics?${query}`, {
-						headers: { "if-none-match": etag ?? "" },
-					})
+					new Request(url, { headers: { "if-none-match": etag ?? "" } })
 				)
 				expect(repeat.status).toBe(304)
 				expect(repeat.headers.get("etag")).toBe(etag)

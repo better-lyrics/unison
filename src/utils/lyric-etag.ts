@@ -4,13 +4,26 @@ import type { LyricsResponse } from "@/types"
 type LyricIdentity = Pick<
 	LyricsResponse,
 	"id" | "videoId" | "song" | "artist" | "album" | "isrc" | "language" | "format" | "lyrics"
->
+> & { variant?: string; matchedBy?: string }
 
 /** Weak, because votes, confidence and submitter stats can change under the same tag. */
 export function lyricEtag(lyric: LyricIdentity): string {
-	const { videoId, song, artist, album, isrc, language, format, lyrics } = lyric
+	const { videoId, song, artist, album, isrc, language, format, lyrics, variant, matchedBy } = lyric
 	const hash = createHash("sha1")
-		.update(JSON.stringify([videoId, song, artist, album, isrc, language, format, lyrics]))
+		.update(
+			JSON.stringify([
+				videoId,
+				song,
+				artist,
+				album,
+				isrc,
+				language,
+				format,
+				lyrics,
+				variant,
+				matchedBy,
+			])
+		)
 		.digest("base64url")
 	return `W/"${lyric.id}-${hash}"`
 }
