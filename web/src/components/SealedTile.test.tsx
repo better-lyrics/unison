@@ -163,7 +163,7 @@ describe("SealedTile", () => {
 
     it("the shelf tile and its skeleton share the same fixed width", () => {
       const tile = renderUi(<SealedTile entry={entry()} variant="shelf" />)
-      const tileWidth = tile.container.querySelector("a")?.className.match(/w-\[\d+px\]/)?.[0]
+      const tileWidth = tile.container.firstElementChild?.className.match(/w-\[\d+px\]/)?.[0]
       tile.unmount()
       const bone = renderUi(<SealedTileSkeleton variant="shelf" />)
       expect(tileWidth).toBeDefined()

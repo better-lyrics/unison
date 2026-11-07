@@ -3,7 +3,7 @@ import { useSongArtPreview } from "@/components/PageArt"
 import { Bone, skeletonKeys } from "@/components/skeleton"
 import { SongThumbnail } from "@/components/SongThumbnail"
 import { SyncTag } from "@/components/SyncTag"
-import { SubmitterLine } from "@/components/SubmitterLine"
+import { CARD_LINK_OVERLAY, SubmitterLine } from "@/components/SubmitterLine"
 import { cn } from "@/lib/cn"
 import { formatCompact, formatExact, formatRelativeTime } from "@/lib/format"
 import { syncTypeFor } from "@/lib/sync-type"
@@ -27,58 +27,62 @@ export interface CoverTileSong {
 export function SongCoverTile({ song: s }: { song: CoverTileSong }) {
   const preview = useSongArtPreview(s)
   return (
-    <li className="min-w-0">
-      <Link to={`/song/${s.videoId}`} {...preview} className="flex min-w-0 flex-col gap-2.5 rounded-xl">
-        <SongThumbnail
-          videoId={s.videoId}
-          song={s.song}
-          artist={s.artist}
-          className="relative aspect-square w-full rounded-xl bg-white/[0.08] shadow-[0_12px_30px_rgba(0,0,0,0.3)] after:pointer-events-none after:absolute after:inset-0 after:rounded-[inherit] after:outline after:outline-1 after:-outline-offset-1 after:outline-white/10"
-        />
-        <div className="min-w-0">
-          <p className="flex min-w-0 items-center gap-2 text-sm font-bold">
-            <span title={s.song} className={cn("truncate", OVERHANG)}>
-              {s.song}
+    <li className="relative flex min-w-0 flex-col gap-2.5 rounded-xl">
+      <Link
+        to={`/song/${s.videoId}`}
+        aria-label={`${s.song} by ${s.artist}`}
+        {...preview}
+        className={CARD_LINK_OVERLAY}
+      />
+      <SongThumbnail
+        videoId={s.videoId}
+        song={s.song}
+        artist={s.artist}
+        className="relative aspect-square w-full rounded-xl bg-white/[0.08] shadow-[0_12px_30px_rgba(0,0,0,0.3)] after:pointer-events-none after:absolute after:inset-0 after:rounded-[inherit] after:outline after:outline-1 after:-outline-offset-1 after:outline-white/10"
+      />
+      <div className="min-w-0">
+        <p className="flex min-w-0 items-center gap-2 text-sm font-bold">
+          <span title={s.song} className={cn("truncate", OVERHANG)}>
+            {s.song}
+          </span>
+          {s.hidden ? (
+            <span className="shrink-0 rounded bg-white/[0.08] px-1.5 py-0.5 text-[10px] uppercase tracking-wider text-(--ink-2) [text-shadow:none]">
+              hidden
             </span>
-            {s.hidden ? (
-              <span className="shrink-0 rounded bg-white/[0.08] px-1.5 py-0.5 text-[10px] uppercase tracking-wider text-(--ink-2) [text-shadow:none]">
-                hidden
-              </span>
-            ) : null}
-          </p>
-          <p title={s.artist} className={cn("mt-0.5 truncate text-xs text-(--ink-3)", OVERHANG)}>
-            {s.artist}
-          </p>
-          <div className="mt-3 flex min-w-0 items-center gap-2 text-xs text-(--ink-dim) [text-shadow:none]">
-            {s.submitter ? (
-              <>
-                <SubmitterLine
-                  submitter={s.submitter}
-                  nameClassName="text-(--ink-2)"
-                  title={`${s.submitter.displayName} · ${formatRelativeTime(s.createdAt)}`}
+          ) : null}
+        </p>
+        <p title={s.artist} className={cn("mt-0.5 truncate text-xs text-(--ink-3)", OVERHANG)}>
+          {s.artist}
+        </p>
+        <div className="mt-3 flex min-w-0 items-center gap-2 text-xs text-(--ink-dim) [text-shadow:none]">
+          {s.submitter ? (
+            <>
+              <SubmitterLine
+                submitter={s.submitter}
+                nameClassName="text-(--ink-2)"
+                title={`${s.submitter.displayName} · ${formatRelativeTime(s.createdAt)}`}
+              >
+                {" · "}
+                {formatRelativeTime(s.createdAt)}
+              </SubmitterLine>
+              <SyncTag kind={syncTypeFor(s.syncType, s.format)} className="ml-auto" />
+            </>
+          ) : (
+            <>
+              <SyncTag kind={syncTypeFor(s.syncType, s.format)} />
+              <span className="truncate">{formatRelativeTime(s.createdAt)}</span>
+              {s.voteCount === undefined ? null : (
+                <span
+                  title={`${formatExact(s.voteCount)} votes`}
+                  className="ml-auto whitespace-nowrap font-mono text-[11px]"
                 >
-                  {" · "}
-                  {formatRelativeTime(s.createdAt)}
-                </SubmitterLine>
-                <SyncTag kind={syncTypeFor(s.syncType, s.format)} className="ml-auto" />
-              </>
-            ) : (
-              <>
-                <SyncTag kind={syncTypeFor(s.syncType, s.format)} />
-                <span className="truncate">{formatRelativeTime(s.createdAt)}</span>
-                {s.voteCount === undefined ? null : (
-                  <span
-                    title={`${formatExact(s.voteCount)} votes`}
-                    className="ml-auto whitespace-nowrap font-mono text-[11px]"
-                  >
-                    {formatCompact(s.voteCount)} {s.voteCount === 1 ? "vote" : "votes"}
-                  </span>
-                )}
-              </>
-            )}
-          </div>
+                  {formatCompact(s.voteCount)} {s.voteCount === 1 ? "vote" : "votes"}
+                </span>
+              )}
+            </>
+          )}
         </div>
-      </Link>
+      </div>
     </li>
   )
 }

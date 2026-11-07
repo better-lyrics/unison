@@ -3,7 +3,7 @@ import { Link } from "react-router-dom"
 import { useSongArtPreview } from "@/components/PageArt"
 import { Bone } from "@/components/skeleton"
 import { SongThumbnail } from "@/components/SongThumbnail"
-import { SubmitterLine } from "@/components/SubmitterLine"
+import { CARD_LINK_OVERLAY, SubmitterLine } from "@/components/SubmitterLine"
 import { cn } from "@/lib/cn"
 import { formatElapsed } from "@/lib/format"
 import { EASE_OUT, sealStamp, staggerDelay, thudFrom, thudTransition } from "@/lib/motion-variants"
@@ -13,7 +13,6 @@ import { SyncTag } from "@/components/SyncTag"
 
 type SealedTileVariant = "shelf" | "card"
 
-const MotionLink = motion.create(Link)
 const cardThud = thudFrom(1.08, 0.03)
 const SEAL_AFTER_LANDING = 0.22
 
@@ -52,11 +51,8 @@ export function SealedTile({
   ) : null
 
   return (
-    <MotionLink
-      to={`/song/${entry.videoId}`}
-      aria-label={`${entry.song} by ${entry.artist}`}
-      {...preview}
-      className={cn(FRAME[variant], "group transition-opacity hover:opacity-90")}
+    <motion.div
+      className={cn(FRAME[variant], "group relative transition-opacity hover:opacity-90")}
       {...(landAt === null
         ? {}
         : {
@@ -65,6 +61,12 @@ export function SealedTile({
             whileHover: { y: -2, transition: { duration: 0.15, ease: EASE_OUT } },
           })}
     >
+      <Link
+        to={`/song/${entry.videoId}`}
+        aria-label={`${entry.song} by ${entry.artist}`}
+        {...preview}
+        className={CARD_LINK_OVERLAY}
+      />
       <div className="relative">
         <SongThumbnail
           videoId={entry.videoId}
@@ -99,7 +101,7 @@ export function SealedTile({
           submitter
         )}
       </div>
-    </MotionLink>
+    </motion.div>
   )
 }
 
