@@ -166,6 +166,16 @@ export function pageShare(source: PageSource, themeColor: string): Share {
 	}
 }
 
+const inFlight = new Map<string, Promise<unknown>>()
+
+function once<T>(key: string, load: () => Promise<T>): Promise<T> {
+	const pending = inFlight.get(key) as Promise<T> | undefined
+	if (pending) return pending
+	const next = load().finally(() => inFlight.delete(key))
+	inFlight.set(key, next)
+	return next
+}
+
 async function cached<T>(env: Env, key: string, ttl: number, load: () => Promise<T>): Promise<T> {
 	const hit = await env.CACHE.get(key)
 	if (hit !== null) return JSON.parse(hit)
@@ -203,16 +213,18 @@ export const shareLoaders = {
 			return accent ? profileShare(card, accent) : null
 		}),
 	page: (env: Env, page: Page): Promise<Share> =>
-		cached(env, `share:page:${page}`, SHARE_TTL_SECONDS, async () => {
-			const source = await loadPageCard(env, page)
-			const accent = await cached(
-				env,
-				`share:accent:page:${pageVersion(source)}`,
-				ACCENT_TTL_SECONDS,
-				() => pageAccent(env, source)
-			)
-			return pageShare(source, accent)
-		}),
+		once(`share:page:${page}`, () =>
+			cached(env, `share:page:${page}`, SHARE_TTL_SECONDS, async () => {
+				const source = await loadPageCard(env, page)
+				const accent = await cached(
+					env,
+					`share:accent:page:${pageVersion(source)}`,
+					ACCENT_TTL_SECONDS,
+					() => pageAccent(env, source)
+				)
+				return pageShare(source, accent)
+			})
+		),
 }
 
 export function requestOrigin(request: Request): string {
@@ -222,9 +234,11 @@ export function requestOrigin(request: Request): string {
 	return `${proto ?? url.protocol.replace(":", "")}://${host}`
 }
 
+const pagePath = (pathname: string) =>
+	(pathname.length > 1 ? pathname.replace(/\/+$/, "") : pathname).toLowerCase()
+
 export function pageFor(pathname: string): Page | null {
-	const trimmed = pathname.length > 1 ? pathname.replace(/\/+$/, "") : pathname
-	return PAGE_PATHS[trimmed.toLowerCase()] ?? null
+	return PAGE_PATHS[pagePath(pathname)] ?? null
 }
 
 async function findShare(env: Env, pathname: string): Promise<Share> {
@@ -277,7 +291,7 @@ const WEBSITE_LD = JSON.stringify({
 
 export function shareTags(share: Share, origin: string, pathname: string): string {
 	const page = `${origin}${pathname}`
-	const canonical = `${config.og.siteOrigin}${pathname}`
+	const canonical = `${config.og.siteOrigin}${pageFor(pathname) ? pagePath(pathname) : pathname}`
 	const image = `${origin}${share.image}`
 	const oembed = `${origin}/oembed?url=${encodeURIComponent(page)}&format=json`
 	const meta = (attr: "name" | "property", key: string, value: string) =>

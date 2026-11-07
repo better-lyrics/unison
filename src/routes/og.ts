@@ -87,7 +87,7 @@ export const ogRoutes = (env: Env) => {
 	const isKeyId = (id: string) => KEY_ID.test(id)
 	const isPage = (id: string): id is Page => (PAGES as readonly string[]).includes(id)
 	const renderPage = async (env: Env, page: string) =>
-		isPage(page) ? renderPageOg(env, await loadPageCard(env, page)) : null
+		renderPageOg(env, await loadPageCard(env, page as Page))
 
 	return new Elysia()
 		.decorate("env", env)

@@ -1,3 +1,4 @@
+import type { DumpStats } from "@/services/dump-manifest"
 import type { CSSProperties, ReactNode } from "react"
 import { Frame, OgBrand, fill } from "./components"
 import { MONO_STACK } from "./fonts"
@@ -191,7 +192,7 @@ export type PageCardData =
 	| {
 			page: "downloads"
 			wash: string
-			stats: { lyrics: number; requested: number; bytes: number } | null
+			stats: DumpStats | null
 	  }
 
 function HomeCard({ wash, lyrics }: { wash: string; lyrics: number | null }) {
@@ -430,10 +431,7 @@ function DocsCard({ wash }: { wash: string }) {
 	)
 }
 
-function DownloadsCard({
-	wash,
-	stats,
-}: { wash: string; stats: { lyrics: number; requested: number; bytes: number } | null }) {
+function DownloadsCard({ wash, stats }: { wash: string; stats: DumpStats | null }) {
 	const rows: [string, string][] = stats
 		? [
 				[formatCount(stats.lyrics), "lyrics"],
