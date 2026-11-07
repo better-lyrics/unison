@@ -18,7 +18,6 @@ async function darkEdge(image: Buffer, side: number): Promise<boolean> {
 	return false
 }
 
-/** A centre square from a video thumbnail with its black borders cut away, or null when no clean square exists. */
 export async function squareFromThumbnail(thumbnail: Buffer): Promise<Buffer | null> {
 	const trimmed = await sharp(thumbnail)
 		.trim({ background: "#000000", threshold: crop.trimThreshold })
@@ -27,7 +26,7 @@ export async function squareFromThumbnail(thumbnail: Buffer): Promise<Buffer | n
 	const dy = Math.round(trimmed.info.height * crop.inset)
 	const width = trimmed.info.width - 2 * dx
 	const height = trimmed.info.height - 2 * dy
-	const side = Math.min(width, height, crop.maxSide)
+	const side = Math.min(width, height, config.artwork.size)
 	if (Math.min(width, height) < crop.minSide) return null
 
 	const square = await sharp(trimmed.data)

@@ -5,7 +5,7 @@ import { deezerCoverForIsrc } from "@/infra/deezer"
 import { itunesCoverFor } from "@/infra/itunes"
 import { log } from "@/infra/logger"
 import type { Env } from "@/types"
-import { isServableArtworkUrl, normalizeArtworkUrl } from "@/utils/artwork"
+import { isMirroredArtworkUrl, isServableArtworkUrl, normalizeArtworkUrl } from "@/utils/artwork"
 import { squareFromThumbnail } from "@/utils/artwork-crop"
 import { sharedInFlight } from "@/utils/in-flight"
 import { videoArtwork } from "@/utils/innertube"
@@ -21,8 +21,8 @@ export type ArtworkHit = { url: string } | { mirror: string } | { bytes: Buffer 
 export interface ArtworkSource {
 	name: string
 	onRefresh: boolean
-	/** Null is a miss; a throw means the source was unavailable, so the result is not final. */
-	find: (videoId: string, song: VideoSong) => Promise<ArtworkHit | null>
+	/** Null is a miss; a throw means the source was unavailable, so a miss is not final. */
+	find: (env: Env, videoId: string, song: VideoSong) => Promise<ArtworkHit | null>
 }
 
 export interface Resolution {
@@ -34,15 +34,15 @@ export const ARTWORK_SOURCES: ArtworkSource[] = [
 	{
 		name: "youtube-music",
 		onRefresh: true,
-		find: async (videoId) => {
-			const url = await videoArtwork(videoId)
+		find: async (env, videoId) => {
+			const url = await cachedVideoArtwork(env, videoId)
 			return url ? { url } : null
 		},
 	},
 	{
 		name: "deezer",
 		onRefresh: false,
-		find: async (_, { isrc, artist }) => {
+		find: async (_env, _videoId, { isrc, artist }) => {
 			const cover = isrc ? await deezerCoverForIsrc(isrc, artist) : null
 			return cover ? { mirror: cover } : null
 		},
@@ -50,7 +50,7 @@ export const ARTWORK_SOURCES: ArtworkSource[] = [
 	{
 		name: "itunes",
 		onRefresh: false,
-		find: async (_, { song, artist }) => {
+		find: async (_env, _videoId, { song, artist }) => {
 			const cover = await itunesCoverFor(song, artist)
 			return cover ? { mirror: cover } : null
 		},
@@ -58,9 +58,9 @@ export const ARTWORK_SOURCES: ArtworkSource[] = [
 	{
 		name: "video-thumbnail",
 		onRefresh: false,
-		find: async (videoId) => {
+		find: async (_env, videoId) => {
 			for (const name of THUMBNAILS) {
-				const bytes = await download(`https://i.ytimg.com/vi/${videoId}/${name}.jpg`)
+				const bytes = (await fetchImage(`https://i.ytimg.com/vi/${videoId}/${name}.jpg`))?.bytes
 				if (!bytes) continue
 				const { width = 0 } = await sharp(bytes).metadata()
 				if (width < MIN_THUMBNAIL_WIDTH) continue
@@ -77,16 +77,35 @@ interface Deps {
 	random?: () => number
 }
 
-async function download(url: string): Promise<Buffer | null> {
+const youTubeMusicKey = (videoId: string) => `ytmart:v1:${videoId}`
+
+async function cachedVideoArtwork(env: Env, videoId: string): Promise<string | null> {
+	const cached = await env.CACHE.get(youTubeMusicKey(videoId))
+	if (cached !== null) return cached === NEGATIVE ? null : cached
+	const url = await videoArtwork(videoId)
+	await env.CACHE.put(youTubeMusicKey(videoId), url ?? NEGATIVE, {
+		expirationTtl: config.videoLinking.suggestionCacheTtlSeconds,
+	})
+	return url
+}
+
+async function fetchImage(url: string): Promise<{ bytes: Buffer; type: string } | null> {
 	const res = await fetch(url, { signal: AbortSignal.timeout(config.artwork.fetchTimeoutMs) })
 	if (res.status === 404) return null
 	if (!res.ok) throw new Error(`image ${url} answered ${res.status}`)
-	return Buffer.from(await res.arrayBuffer())
+	const type = res.headers.get("content-type") ?? ""
+	if (!type.startsWith("image/")) throw new Error(`image ${url} is ${type || "untyped"}`)
+	if (Number(res.headers.get("content-length")) > config.artwork.maxImageBytes) {
+		throw new Error(`image ${url} is too large`)
+	}
+	const bytes = Buffer.from(await res.arrayBuffer())
+	if (bytes.length > config.artwork.maxImageBytes) throw new Error(`image ${url} is too large`)
+	return { bytes, type }
 }
 
 async function mirror(env: Env, videoId: string, image: Buffer): Promise<string> {
 	if (!env.CDN) throw new Error("artwork CDN is not configured")
-	const side = config.artwork.mirrorMaxSide
+	const side = config.artwork.size
 	const jpeg = await sharp(image)
 		.resize(side, side, { fit: "cover", withoutEnlargement: true })
 		.jpeg({ quality: 85 })
@@ -105,7 +124,7 @@ async function mirror(env: Env, videoId: string, image: Buffer): Promise<string>
 
 async function hitUrl(env: Env, videoId: string, hit: ArtworkHit): Promise<string | null> {
 	if ("url" in hit) return hit.url
-	const image = "bytes" in hit ? hit.bytes : await download(hit.mirror)
+	const image = "bytes" in hit ? hit.bytes : (await fetchImage(hit.mirror))?.bytes
 	return image ? mirror(env, videoId, image) : null
 }
 
@@ -119,7 +138,7 @@ async function runSources(
 	let final = true
 	for (const source of sources) {
 		try {
-			const hit = await source.find(videoId, song)
+			const hit = await source.find(env, videoId, song)
 			const url = hit ? await hitUrl(env, videoId, hit) : null
 			if (url) return { url, final }
 		} catch (error) {
@@ -162,11 +181,11 @@ function maybeRefresh(env: Env, videoId: string, sources: ArtworkSource[], rando
 
 async function resolveCold(env: Env, videoId: string, sources: ArtworkSource[]) {
 	const resolved = await runSources(env, videoId, sources)
-	if (resolved.final) {
+	if (resolved.url || resolved.final) {
 		await upsertVideoArtwork(env, videoId, resolved.url)
 		await writeCache(env, videoId, resolved.url)
 	} else {
-		await writeCache(env, videoId, resolved.url, config.artwork.incompleteTtlSeconds)
+		await writeCache(env, videoId, null, config.artwork.incompleteTtlSeconds)
 	}
 	return resolved
 }
@@ -204,13 +223,14 @@ export async function fetchArtworkImage(url: string, size: number): Promise<Artw
 	if (!isServableArtworkUrl(url)) return null
 	const sized = normalizeArtworkUrl(url, size)
 	try {
-		const res = await fetch(sized, { signal: AbortSignal.timeout(config.artwork.fetchTimeoutMs) })
-		if (!res.ok) {
-			log.warn("artwork image rejected", { url: sized, status: res.status })
+		const image = await fetchImage(sized)
+		if (!image) {
+			log.warn("artwork image missing", { url: sized })
 			return null
 		}
-		const type = res.headers.get("content-type") ?? "image/jpeg"
-		return { bytes: Buffer.from(await res.arrayBuffer()), type }
+		if (!isMirroredArtworkUrl(url) || size >= config.artwork.size) return image
+		const bytes = await sharp(image.bytes).resize(size, size).jpeg({ quality: 85 }).toBuffer()
+		return { bytes, type: "image/jpeg" }
 	} catch (error) {
 		log.warn("artwork image failed", { url: sized, error: (error as Error).message })
 		return null

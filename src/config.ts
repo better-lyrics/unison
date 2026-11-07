@@ -19,10 +19,9 @@ export const config = {
 		cdnBase: "https://cdn.betterlyrics.org/artwork/",
 		cdnKeyPrefix: "artwork/",
 		cdnCacheControl: "public, max-age=31536000, immutable",
-		mirrorMaxSide: 1024,
+		maxImageBytes: 5 * 1024 * 1024,
 		crop: {
 			minSide: 256,
-			maxSide: 720,
 			trimThreshold: 40,
 			inset: 0.02,
 			darkEdge: 22,

@@ -1,5 +1,4 @@
 import { config } from "@/config"
-import { artworkCacheKey } from "@/services/artwork"
 import {
 	AVATAR_PRESETS,
 	findPreset,
@@ -8,6 +7,7 @@ import {
 	refreshCatalogue,
 } from "@/db/avatar-presets"
 import { resolveAvatarUrl } from "@/db/users"
+import { artworkCacheKey } from "@/services/artwork"
 import {
 	BOT_SECRET,
 	type IntegrationDb,

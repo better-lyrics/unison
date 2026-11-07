@@ -1,15 +1,15 @@
-import sharp from "sharp"
-import { artworkCacheKey } from "@/services/artwork"
-import { afterAll, beforeAll, expect, it, vi } from "vitest"
 import { setProfileSettings } from "@/db/profile-settings"
+import { artworkCacheKey } from "@/services/artwork"
 import {
-	describeIntegration,
 	type IntegrationDb,
+	describeIntegration,
 	openIntegrationDb,
 	seedLyric,
 	seedUser,
 	wipeRevisionData,
 } from "@/test/integration-harness"
+import sharp from "sharp"
+import { afterAll, beforeAll, expect, it, vi } from "vitest"
 import { renderProfileDownload, renderProfileOg, renderSongOg } from "./render"
 
 const MAX_OG_BYTES = 600 * 1024

@@ -22,38 +22,41 @@ function validSeconds(value: unknown): number | null {
 	return typeof value === "number" && Number.isFinite(value) && value > 0 ? value : null
 }
 
-async function upNextDurationSeconds(yt: Innertube, videoId: string): Promise<number | null> {
-	const panel = await yt.music.getUpNext(videoId, false)
-	for (const entry of panel.contents) {
-		const videos = "primary" in entry ? [entry.primary, ...(entry.counterpart ?? [])] : [entry]
-		for (const video of videos) {
-			if (video && "video_id" in video && video.video_id === videoId) {
-				return validSeconds(video.duration?.seconds)
-			}
-		}
-	}
-	return null
+type UpNextVideo = {
+	video_id?: string
+	duration?: { seconds?: number }
+	thumbnail?: { url: string; width: number; height: number }[]
 }
 
 const EMPTY_QUEUE = "Music queue was empty"
 
-/** Square album art for the video or its song counterpart; null when YouTube Music has none or no longer has the video. */
+async function upNextEntry(yt: Innertube, videoId: string): Promise<UpNextVideo[] | null> {
+	const panel = await yt.music.getUpNext(videoId, false)
+	for (const entry of panel.contents) {
+		const videos = "primary" in entry ? [entry.primary, ...(entry.counterpart ?? [])] : [entry]
+		const known = videos.filter((v): v is NonNullable<typeof v> => !!v) as UpNextVideo[]
+		if (known.some((v) => v.video_id === videoId)) return known
+	}
+	return null
+}
+
+async function upNextDurationSeconds(yt: Innertube, videoId: string): Promise<number | null> {
+	const video = (await upNextEntry(yt, videoId))?.find((v) => v.video_id === videoId)
+	return validSeconds(video?.duration?.seconds)
+}
+
 export async function videoArtwork(videoId: string): Promise<string | null> {
 	const yt = await getInnertube()
-	let panel: Awaited<ReturnType<typeof yt.music.getUpNext>>
+	let entry: UpNextVideo[] | null
 	try {
-		panel = await yt.music.getUpNext(videoId, false)
+		entry = await upNextEntry(yt, videoId)
 	} catch (err) {
 		if ((err as Error).message.startsWith(EMPTY_QUEUE)) return null
 		throw err
 	}
-	for (const entry of panel.contents) {
-		const videos = "primary" in entry ? [entry.primary, ...(entry.counterpart ?? [])] : [entry]
-		for (const video of videos) {
-			if (!video || !("thumbnail" in video)) continue
-			const art = pickSquareArtwork(video.thumbnail ?? [], config.artwork.size)
-			if (art && isAlbumArtUrl(art)) return art
-		}
+	for (const video of entry ?? []) {
+		const art = pickSquareArtwork(video.thumbnail ?? [], config.artwork.size)
+		if (art && isAlbumArtUrl(art)) return art
 	}
 	return null
 }

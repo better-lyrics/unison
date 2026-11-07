@@ -145,7 +145,7 @@ describeIntegration("resolveArtwork (integration)", () => {
 			await seedLyric(ATV, "USUG11904206")
 			const art = finds(ALBUM_ART)
 			await resolveArtwork(env, ATV, { sources: [art], random: NEVER })
-			expect(art.find).toHaveBeenCalledWith(ATV, {
+			expect(art.find).toHaveBeenCalledWith(expect.anything(), ATV, {
 				song: "Blinding Lights",
 				artist: "The Weeknd",
 				isrc: "USUG11904206",
@@ -258,7 +258,7 @@ describeIntegration("resolveArtwork (integration)", () => {
 			expect(art.find).not.toHaveBeenCalled()
 		})
 
-		it("keeps a result found while a better source was down out of the DB and caches it briefly", async () => {
+		it("saves a cover found after an earlier source failed, so avatars and banners can read it", async () => {
 			await seedLyric(ATV)
 			const down = source(async () => {
 				throw new Error("rate limited")
@@ -266,6 +266,18 @@ describeIntegration("resolveArtwork (integration)", () => {
 			expect(
 				await resolveArtwork(env, ATV, { sources: [down, finds(ALBUM_ART)], random: NEVER })
 			).toBe(ALBUM_ART)
+			expect((await getVideoArtwork(env, ATV))?.artworkUrl).toBe(ALBUM_ART)
+			expect(cache.ttls.get(artworkCacheKey(ATV))).toBe(config.artwork.positiveTtlSeconds)
+		})
+
+		it("retries soon, without saving, when nothing was found while a source was down", async () => {
+			await seedLyric(ATV)
+			const down = source(async () => {
+				throw new Error("rate limited")
+			})
+			expect(
+				await resolveArtwork(env, ATV, { sources: [down, finds(null)], random: NEVER })
+			).toBeNull()
 			expect(await getVideoArtwork(env, ATV)).toBeNull()
 			expect(cache.ttls.get(artworkCacheKey(ATV))).toBe(config.artwork.incompleteTtlSeconds)
 		})

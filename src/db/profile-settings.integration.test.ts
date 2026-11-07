@@ -1,14 +1,14 @@
-import { afterAll, beforeAll, beforeEach, expect, it } from "vitest"
-import { artworkCacheKey } from "@/services/artwork"
 import { getProfileExtras, setProfileSettings } from "@/db/profile-settings"
+import { artworkCacheKey } from "@/services/artwork"
 import {
-	describeIntegration,
 	type IntegrationDb,
+	describeIntegration,
 	openIntegrationDb,
 	seedLyric,
 	seedUser,
 	wipeRevisionData,
 } from "@/test/integration-harness"
+import { afterAll, beforeAll, beforeEach, expect, it } from "vitest"
 
 const KEY = "d".repeat(64)
 const VIDEO = "HsBfV2A5dUY"
