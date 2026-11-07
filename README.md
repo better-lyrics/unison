@@ -192,7 +192,7 @@ Errors:
 
 - `404` when no lyric matches.
 - `503 LOOKUP_PENDING` with `Retry-After` while BiniLink matches a new id, or while BiniLink is down. Retry a few times, then give up. An `isrc`-only lookup never returns it.
-- `400 INVALID_ID` for a malformed provider id when there is nothing else to look up. Next to `isrc` or `song` + `artist` it is ignored.
+- `400 INVALID_ID` when every provider id is malformed and there is nothing else to look up. Next to a valid id, `isrc` or `song` + `artist`, a malformed id is ignored.
 
 ### Search ranking
 
