@@ -1,8 +1,94 @@
 # Unison
 
-Crowdsourced lyrics API for [Better Lyrics](https://github.com/better-lyrics/better-lyrics).
+[![Unison](https://github.com/user-attachments/assets/c7617317-f4cf-44e6-8b2d-096fd6a42318)](https://unison.betterlyrics.org)
 
-## Authentication
+Crowdsourced lyrics API for [Better Lyrics](https://github.com/better-lyrics/better-lyrics). People submit synced lyrics and vote on each other's versions, and the API serves the top-ranked one for a song.
+
+[Website](https://unison.betterlyrics.org) · [API guide](https://docs.betterlyrics.org/unison) · [Database dump](#database-dump)
+
+> [!IMPORTANT]
+> Showing Unison lyrics in an app? You must credit Unison and the submitter. See [Attribution](#attribution); apps have until 7 February 2027.
+
+## Quick start
+
+Reading needs no key or signature.
+
+```bash
+curl "https://unison.betterlyrics.org/lyrics?v=Ugr4KKK_SqY"
+```
+
+```json
+{
+  "success": true,
+  "data": {
+    "id": 13529,
+    "videoId": "Ugr4KKK_SqY",
+    "song": "Explorer",
+    "artist": "Justice, Connan Mockasin",
+    "album": "Hyperdrama",
+    "isrc": "FR8EU2300090",
+    "lyrics": "<tt xmlns=\"http://www.w3.org/ns/ttml\" ...",
+    "format": "ttml",
+    "syncType": "richsync",
+    "confidence": "low"
+  }
+}
+```
+
+## Attribution
+
+Any app that shows Unison lyrics must credit Unison and the person who submitted them. The credit can sit at the end of the lyrics; it does not have to stay on screen. Apps integrating Unison have until **7 February 2027** to add it.
+
+### If you use the API
+
+Show `Lyrics from Unison`, linked to `https://unison.betterlyrics.org/song/<videoId>`, and the submitter's `submitter.displayName`, linked to `https://unison.betterlyrics.org/curator/<submitter.keyId>`. Every lyric response carries both.
+
+After the deadline, apps that don't show the credit may lose access to the API.
+
+### If you use the database dump
+
+The [dump](#database-dump) license (ODbL) requires the Unison credit. The dump has no submitter column, so the submitter credit is our request rather than a license term. Get the submitter with `GET /lyrics/<id>`, or link the lyric instead: `https://unison.betterlyrics.org/song/<video_id>?variantId=<id>` shows who submitted it.
+
+### Good examples
+
+- Under the last line: **Lyrics from Unison · submitted by boidu**, with both parts linked.
+- In an always visible spot next to the lyrics, or in a footer or credits row that opens with them.
+
+### Bad examples
+
+- No credit at all.
+- "Unison" with no link.
+- Unison credited, but the submitter left out.
+- The credit only on an About or settings page.
+- Unison lyrics labelled as another provider's.
+
+### Why?
+
+Every lyric on Unison was submitted by someone in the community, for free. Seeing their name next to their work is how they get thanked, and it helps bring in the next contributor. The link matters as much as the name: a listener who spots a wrong line follows it to the song page to vote, report or submit a fix, so the lyrics in your app get better over time. Unison is also [self-funded](#funding), and the credit helps people find it.
+
+## Endpoints
+
+| Method | Path | What it does | Signed |
+| --- | --- | --- | --- |
+| `GET` | `/lyrics` | Top-ranked lyric for a video id, ISRC, Spotify / Apple Music / Tidal track id, or song and artist | No |
+| `GET` | `/lyrics/search` | Every match for a query, best first | No |
+| `GET` | `/lyrics/:id` | One lyric by id | No |
+| `POST` | `/lyrics/submit` | Submit lyrics | Yes |
+| `POST` / `DELETE` | `/lyrics/:id/vote` | Upvote, downvote or remove your vote | Yes |
+| `POST` | `/lyrics/:id/report` | Report a lyric | Yes |
+
+Lookup examples:
+
+```
+GET /lyrics?v=Ugr4KKK_SqY
+GET /lyrics?isrc=FR8EU2300090
+GET /lyrics?song=Explorer&artist=Justice
+GET /lyrics/search?q=explorer+justice
+```
+
+Every response is `{ "success": true, "data": ... }`, or `{ "success": false, "error": ..., "code": ... }` with an HTTP error status. The full rules for each endpoint are in the [Reference](#reference).
+
+## Signed requests
 
 All write operations require signed requests using ECDSA P-256:
 
@@ -25,11 +111,135 @@ All write operations require signed requests using ECDSA P-256:
 - `signature`: ECDSA signature over the canonical JSON payload
 - `publicKey`: Required on first request to register the key
 
-## Sign in with Better Lyrics
+## Database dump
+
+There's a daily snapshot of the public lyrics corpus at
+`https://unison-dumps.boidu.dev/dumps/latest.dump`. Sha256, row counts, and
+the rest of the metadata are at `dumps/manifest.json` on the same host.
+
+It's a `pg_dump -Fc` against Postgres 18, scoped to a `public_dump` schema
+with `lyrics`, `requested_songs`, and `lyrics_requests`. No user IDs, no
+votes, no reports, no auth.
+
+To restore a copy:
+
+```bash
+# 1. Download and verify
+curl -O https://unison-dumps.boidu.dev/dumps/latest.dump
+curl -O https://unison-dumps.boidu.dev/dumps/latest.dump.sha256
+sha256sum -c latest.dump.sha256
+
+# 2. Create a fresh database
+createdb unison_mirror
+
+# 3. Restore
+pg_restore -d unison_mirror --no-owner --no-privileges latest.dump
+```
+
+The `lyrics` column is stored gzip-compressed, same as in the live DB. Full-text
+search is omitted from the dump. If you need search on a mirror, decompress the
+column and run the project's `backfill-text-search` job against your restored
+DB (see `src/jobs/backfill-text-search.ts`).
+
+The dump has its own license, separate from the code. See [License](#license).
+
+## Running locally
+
+```
+pnpm install
+pnpm run dev        # local server
+pnpm run test       # tests
+pnpm run typecheck  # types
+pnpm run check      # lint and format
+```
+
+Environment variables are listed under [Configuration](#configuration).
+
+## Reference
+
+### Looking up lyrics
+
+`GET /lyrics` needs one way to name the song:
+
+| Parameter | Example | Notes |
+| --- | --- | --- |
+| `v` | `Ugr4KKK_SqY` | YouTube video id. |
+| `isrc` | `FR8EU2300090` | Any case, hyphens optional. |
+| `song` + `artist` | `Explorer`, `Justice` | `artist` matches any one credited name. Add `album` or `duration` (seconds, ±2 s) to narrow it. |
+| `spotify`, `apple_music`, `tidal` | track id | A track id, not a link. Resolved to an ISRC through [BiniLink](https://link.binimum.org). If several are sent, the first that resolves wins, in that order. |
+
+When a request names the song more than one way, Unison tries `v`, then `isrc`, then `song` + `artist`, and returns the first match.
+
+Besides the lyric, the response can carry:
+
+- `matchedBy` on every lookup except `v`: `isrc`, `song_artist` or `linked_video`. A `linked_video` match is the YouTube video BiniLink links to the ISRC, which can be a different release, so its timing may drift.
+- `variant` on `v` lookups: `primary` is the lyric every caller gets. `own` (your submission) and `explore` (an exploration pick) were chosen for you, so only `primary` results and 404s are safe to share between callers.
+
+Errors:
+
+- `404` when no lyric matches.
+- `503 LOOKUP_PENDING` with `Retry-After` while BiniLink matches a new id, or while BiniLink is down. Retry a few times, then give up. An `isrc`-only lookup never returns it.
+- `400 INVALID_ID` for a malformed provider id when there is nothing else to look up. Next to `isrc` or `song` + `artist` it is ignored.
+
+### Search ranking
+
+The `q` parameter searches across video ID, ISRC, metadata (song/artist/album via trigram similarity), and lyrics content (full-text search). Results are ranked as: exact identifier match > strong metadata match > lyrics content match > weak metadata match. Relevance decides the order within each group; the community score only breaks ties, so a new or unvoted lyric that matches the query exactly still comes first. `song` + `artist` uses the same artist credit matching as `GET /lyrics`.
+
+### Response fields
+
+`format` is `ttml`, `lrc` or `plain`. `syncType` is `richsync` (word or syllable timing), `linesync` or `plain`. `confidence` says how far the community agrees on the lyric:
+
+- `low`: fewer than 3 votes, an effective score under 0.5, or upvotes only from accounts loyal to the submitter.
+- `medium`: at least 3 votes and an effective score of 0.5 or more.
+- `high`: the same as `medium`, and the upvotes come from both harsh and generous raters.
+
+### Submitting
+
+```
+POST /lyrics/submit
+{
+  "videoId": "Ugr4KKK_SqY",
+  "song": "Explorer",
+  "artist": "Justice, Connan Mockasin",
+  "album": "Hyperdrama",
+  "isrc": "FR8EU2300090",
+  "duration": 249,
+  "lyrics": "[00:15.00]First line...",
+  "format": "lrc",
+  "syncType": "linesync",
+  "language": "en"
+}
+```
+
+`album`, `isrc`, `language` and `syncType` are optional. `videoId` takes a bare id or a YouTube / YouTube Music link. A bad video id or ISRC answers `400 INVALID_PAYLOAD` with a `hint` to show the user.
+
+### Voting
+
+```
+POST /lyrics/:id/vote
+{ "vote": 1 }   // upvote
+{ "vote": -1 }  // downvote
+
+DELETE /lyrics/:id/vote  // remove vote
+```
+
+### Reporting
+
+```
+POST /lyrics/:id/report
+{
+  "reason": "wrong_song",
+  "details": "optional"
+}
+```
+
+Reasons: `wrong_song`, `bad_sync`, `offensive`, `spam`, `other`
+
+### Sign in with Better Lyrics
 
 The Better Lyrics extension owns the user's ECDSA keypair. To prove identity to a web client, open a long-lived port to the extension and exchange one signed challenge for one signed response.
 
-### Wire protocol
+#### Wire protocol
 
 Open a port named `bl-auth-site` against the extension's Chrome Web Store id. Send one request, await one response.
 
@@ -56,7 +266,7 @@ Success:
 
 Failure: `{ ok: false, reason }`, with `reason` one of `ORIGIN_MISMATCH`, `INVALID_REQUEST`, `USER_CANCELLED`, `USER_DISMISSED`, `SIGN_FAILED`.
 
-### Client
+#### Client
 
 ```ts
 const BL_EXTENSION_ID = "effdbpeggelllpfkjppbokhmmiinhlmg"
@@ -94,231 +304,29 @@ async function signInWithBetterLyrics(): Promise<SignedBody> {
 
 Listeners must attach before `postMessage`, and the calling button should disable itself until the promise settles so a second click doesn't open a second popup.
 
-### Server
+#### Server
 
-Verify `signedBody` with the same scheme as a per-request signature (see [Authentication](#authentication)): nonce is unused, `origin` matches, `timestamp` within ±5 minutes, ECDSA P-256 over canonical-JSON `payload` against `publicKey`, `keyId === sha256(normalized publicKey)`. If all five pass, treat `keyId` as the stable user id.
+Verify `signedBody` with the same scheme as a per-request signature (see [Signed requests](#signed-requests)): nonce is unused, `origin` matches, `timestamp` within ±5 minutes, ECDSA P-256 over canonical-JSON `payload` against `publicKey`, `keyId === sha256(normalized publicKey)`. If all five pass, treat `keyId` as the stable user id.
 
-### Adding a new origin
+#### Adding a new origin
 
 To talk to the extension from a new origin, open a PR against [better-lyrics/better-lyrics](https://github.com/better-lyrics/better-lyrics):
 
 1. Add the HTTPS origin to `externally_connectable.matches` in `manifest.json`.
 2. Add an `AUTH_PARTNER_METADATA` entry in `src/core/constants.ts` with an `id` and optional `iconUrl`.
 
-### Browser support
+#### Browser support
 
-Chrome and Chromium-based browsers only. Firefox does not implement `externally_connectable` for web pages ([Bugzilla 1319168](https://bugzilla.mozilla.org/show_bug.cgi?id=1319168)).
+The extension connection works in Chrome and Chromium-based browsers only, because Firefox does not implement `externally_connectable` for web pages ([Bugzilla 1319168](https://bugzilla.mozilla.org/show_bug.cgi?id=1319168)). In other browsers, the website accepts an identity file instead (see the [FAQ](#i-cant-sign-in-on-the-website-what-do-i-do)).
 
-## API
+### Configuration
 
-[docs.betterlyrics.org/unison](https://docs.betterlyrics.org/unison) has a guide to reading lyrics and translating them, with examples in several languages. Submitting, voting and reporting are only documented below.
+- `BINILINK_LOOKUP_ENABLED=true` turns on `spotify`, `apple_music` and `tidal` lookups. Without it, those ids never find anything.
+- When `BLYRICS_API_INVALIDATE_URL` and `BLYRICS_API_INVALIDATE_SECRET` are set, every lyrics cache invalidation also POSTs `{ "videoIds": [...] }` to that URL with the secret as a Bearer token, so the Better Lyrics API can drop its shared copy.
+- Requests carrying `BLYRICS_API_KEY` in the `x-blyrics-api-key` header skip the per-IP read rate limit, since the Better Lyrics API relays many users from a few Cloudflare IPs.
+- `DUMP_DATABASE_URL` points the dump pipeline at a restricted role (see [Dump safety](#dump-safety)). If it's unset, the pipeline uses `DATABASE_URL`.
 
-### Get lyrics
-
-```
-GET /lyrics?v=<videoId>
-GET /lyrics?isrc=<isrc>
-GET /lyrics?spotify=<trackId>
-GET /lyrics?apple_music=<trackId>
-GET /lyrics?tidal=<trackId>
-GET /lyrics?song=<song>&artist=<artist>
-GET /lyrics?song=<song>&artist=<artist>&album=<album>&duration=<seconds>
-```
-
-Returns the highest-scored match. Lookups run in order `v`, then `isrc`, then `song` + `artist`, so an unknown ISRC falls back to song and artist when both are given. ISRCs match in any case, with or without hyphens.
-
-`spotify`, `apple_music` and `tidal` take a track id, not a link. Unison asks [BiniLink](https://link.binimum.org) for that track's ISRC and looks it up. When no lyric has the ISRC and `song` + `artist` find nothing either, Unison tries the YouTube video BiniLink links to the ISRC, and that applies to `isrc` lookups too. When several ids are sent, the first one that resolves wins, in the order `spotify`, `apple_music`, `tidal`.
-
-Lookups other than `v` return `matchedBy`: `isrc`, `linked_video` or `song_artist`. A `linked_video` match can come from a different release, so its timing may drift.
-
-A new id can answer `503 LOOKUP_PENDING` with `Retry-After` while BiniLink matches it, and so can an id Unison has not looked up before while BiniLink is down. Retry a few times, then give up. An `isrc`-only lookup never answers 503. A malformed id answers `400 INVALID_ID` when the request has nothing else to look up; next to `isrc` or `song` + `artist` it is ignored, so those lookups keep working. Provider ids only match when `BINILINK_LOOKUP_ENABLED=true`; without it they never find anything.
-
-`artist` matches when it shares a whole credited name with the stored credit, so `Madvillain`, `Madvillain Madlib` and `Madlib & Madvillain` all find a song credited to `Madvillain, Madlib, MF Doom`. An exact credit wins when several variants match.
-Optional `album` and `duration` narrow results. Duration matching uses ±2s tolerance (configurable in `src/config.ts`).
-
-A `v` lookup also returns `variant`: `primary` when this is the lyric every caller gets, or `own` / `explore` when it was picked for the caller (their own submission, or an exploration arm). Only `primary` results and 404s are safe to share between callers.
-
-When `BLYRICS_API_INVALIDATE_URL` and `BLYRICS_API_INVALIDATE_SECRET` are set, every lyrics cache invalidation also POSTs `{ "videoIds": [...] }` to that URL with the secret as a Bearer token, so the Better Lyrics API can drop its shared copy.
-
-Requests carrying `BLYRICS_API_KEY` in the `x-blyrics-api-key` header skip the per-IP read rate limit, since the Better Lyrics API relays many users from a few Cloudflare IPs.
-
-### Search lyrics
-
-Returns all matching entries, best match first.
-
-```
-GET /lyrics/search?q=<query>
-GET /lyrics/search?song=<song>&artist=<artist>
-GET /lyrics/search?song=<song>&artist=<artist>&album=<album>
-GET /lyrics/search?song=<song>&artist=<artist>&duration=<seconds>
-```
-
-The `q` parameter searches across video ID, ISRC, metadata (song/artist/album via trigram similarity), and lyrics content (full-text search). Results are ranked as: exact identifier match > strong metadata match > lyrics content match > weak metadata match. Relevance decides the order within each group; the community score only breaks ties, so a new or unvoted lyric that matches the query exactly still comes first. `song` + `artist` uses the same artist credit matching as `GET /lyrics`.
-
-### Get by ID
-
-```
-GET /lyrics/:id
-```
-
-### Translate lyrics
-
-Translates and romanizes a block of lyric lines. Unison fetches and parses Google's `lyrics_translate` server-side and returns clean per-line results, so clients do not parse Google output and do not each hit the rate-limited endpoint. No signature required. This endpoint is on by default. Set `TRANSLATION_PROXY_DISABLED` to a truthy value (`true`, `1`, or `yes`) to turn it off, which unmounts the route so any call returns the generic `404`.
-
-```
-POST /translate
-{
-  "lines": ["안녕하세요", "", "반갑습니다"],
-  "to": "en",
-  "from": "ko",
-  "videoId": "dQw4w9WgXcQ"
-}
-```
-
-- `lines`: lyric lines in display order. Blank lines and lone `♪` markers are allowed and preserved by position in the response. Up to 200 lines, each up to 500 characters.
-- `to`: target language, ISO 639-1. Up to 35 characters.
-- `from`: source language, ISO 639-1. Optional; omit it to detect the source in-process. Do not send `"auto"`, omit the field instead. Up to 35 characters.
-- `videoId`: optional, stored on the cache row for provenance.
-
-The response is a bare object, not the `{ success, data }` envelope the read endpoints use:
-
-```json
-{
-  "lines": [
-    { "translation": "Hello", "romanization": "annyeonghaseyo", "needsTranslation": true },
-    { "translation": null, "romanization": null, "needsTranslation": false },
-    { "translation": "Nice to meet you", "romanization": "bangapseumnida", "needsTranslation": true }
-  ],
-  "detectedLang": "ko",
-  "provider": "google-lyrics-translate",
-  "cached": false
-}
-```
-
-- `lines` is positionally aligned with the request: same length, blanks preserved. Map `lines[i]` onto displayed line `i`.
-- `translation`: translated text, or `null` for blank and no-op lines.
-- `romanization`: romanized source, or `null` when the source is already Latin-script or Google returned none.
-- `needsTranslation`: `false` when the line was already in the target language or is blank, `true` when it was actually translated. Gate any overlay on this flag.
-- `detectedLang`: the source language used, whether it was given or detected.
-- `cached`: `true` when served from Unison's cache. Results are keyed on source and target language, the exact lines, provider, and parser version.
-
-When `from` (given or detected) equals `to` there is nothing to translate, so every line returns `{ "translation": null, "romanization": null, "needsTranslation": false }` with a `200`. Errors are `{ "success": false, "error": "..." }`: `400` when no line is translatable or the source language cannot be detected, `422` when the request exceeds the line or length limits above, `502` when the upstream fails, and `503` when the outbound throttle is rate limited. When the same lines fail to parse repeatedly (three times), the result is cached as a negative and further requests short-circuit to `502` for about a month instead of hammering the upstream.
-
-### Submit lyrics
-
-Accepts TTML, LRC, or plain text via the `format` field.
-
-```
-POST /lyrics/submit
-{
-  "videoId": "dQw4w9WgXcQ",
-  "song": "Song Title",
-  "artist": "Artist Name",
-  "duration": 180,
-  "lyrics": "[00:15.00]First line...",
-  "format": "lrc",
-  "album": "Album Name",
-  "isrc": "USRC17607839",
-  "language": "en",
-  "syncType": "linesync"
-}
-```
-
-Formats: `ttml`, `lrc`, `plain`
-Sync Types: `richsync`, `linesync`, `plain`
-
-`videoId` takes a bare video id or a pasted YouTube / YouTube Music link, and the id is read out of the link. Anything else is rejected with `400 INVALID_PAYLOAD` ("Invalid video ID"). `isrc` is optional; when present it must be a real ISRC (case and hyphens do not matter) or the request is rejected with "Invalid ISRC". Both errors carry a `hint` to show the user.
-
-### Vote
-
-```
-POST /lyrics/:id/vote
-{ "vote": 1 }   // upvote
-{ "vote": -1 }  // downvote
-
-DELETE /lyrics/:id/vote  // remove vote
-```
-
-### Report
-
-```
-POST /lyrics/:id/report
-{
-  "reason": "wrong_song",
-  "details": "optional"
-}
-```
-
-Reasons: `wrong_song`, `bad_sync`, `offensive`, `spam`, `other`
-
-## Response format
-
-```json
-{
-  "success": true,
-  "data": {
-    "id": 123,
-    "videoId": "dQw4w9WgXcQ",
-    "song": "Never Gonna Give You Up",
-    "artist": "Rick Astley",
-    "lyrics": "...",
-    "format": "lrc",
-    "language": "en",
-    "syncType": "linesync",
-    "score": 5,
-    "effectiveScore": 4.2,
-    "voteCount": 12,
-    "confidence": "high"
-  }
-}
-```
-
-### Confidence levels
-
-- `low`: Fewer than 5 votes
-- `medium`: 5+ votes from similar users
-- `high`: 5+ votes with diversity bonus (both harsh and generous raters agree)
-
-## Development
-
-```
-pnpm install
-pnpm run dev      # local server
-pnpm run test     # tests
-pnpm run check    # lint
-```
-
-## Database dump
-
-There's a daily snapshot of the public lyrics corpus at
-`https://unison-dumps.boidu.dev/dumps/latest.dump`. Sha256, row counts, and
-the rest of the metadata are at `dumps/manifest.json` on the same host.
-
-It's a `pg_dump -Fc` against Postgres 18, scoped to a `public_dump` schema
-with `lyrics`, `requested_songs`, and `lyrics_requests`. No user IDs, no
-votes, no reports, no auth.
-
-### Restore
-
-```bash
-# 1. Download and verify
-curl -O https://unison-dumps.boidu.dev/dumps/latest.dump
-curl -O https://unison-dumps.boidu.dev/dumps/latest.dump.sha256
-sha256sum -c latest.dump.sha256
-
-# 2. Create a fresh database
-createdb unison_mirror
-
-# 3. Restore
-pg_restore -d unison_mirror --no-owner --no-privileges latest.dump
-```
-
-The `lyrics` column is stored gzip-compressed, same as in the live DB. Full-text
-search is omitted from the dump. If you need search on a mirror, decompress the
-column and run the project's `backfill-text-search` job against your restored
-DB (see `src/jobs/backfill-text-search.ts`).
-
-### Production-DB safety
+### Dump safety
 
 The dump pipeline only writes to the `public_dump` schema. There's no
 `INSERT`, `UPDATE`, `DELETE`, or `ALTER` against `public.*` anywhere in the
@@ -338,6 +346,36 @@ CREATE SCHEMA IF NOT EXISTS public_dump AUTHORIZATION unison_dump;
 
 Set `DUMP_DATABASE_URL` to a connection string that authenticates as that
 role. If it's unset, the pipeline uses `DATABASE_URL` as before.
+
+## FAQ
+
+### Do I need an API key?
+
+Not to read lyrics. Submitting, voting and reporting need a [signed request](#signed-requests) from a Better Lyrics key.
+
+### How do I submit or fix lyrics?
+
+Most people do it from Better Lyrics. The "Submit to Unison" button under a song's lyrics opens a form filled in with the song's details, and the Unison card under the lyrics has upvote, downvote and report buttons. Other apps can do the same through the API, and third-party clients such as [unison.prjktla.my.id](https://unison.prjktla.my.id/) support it too.
+
+### Why are the lyrics timed for a different version of the song?
+
+Check `matchedBy`. A `linked_video` match means no lyric had the ISRC or matched the title and artist, so Unison used the YouTube video BiniLink links to the ISRC, which can be another release. Submitting lyrics for the song with its ISRC fixes it.
+
+### What does the seal mean?
+
+A Better Lyrics Council member approved the lyric. Sealed lyrics get a small ranking boost, but community votes can still overtake them.
+
+### Is there a rate limit?
+
+Yes. Reads are limited per IP, and submissions have their own limit. Over the limit, Unison answers `429 RATE_LIMITED`.
+
+### Can I use the lyrics in my own app?
+
+Yes. The API is free for any app that reads from it, as long as the app credits Unison and the submitter. See [Attribution](#attribution).
+
+### I can't sign in on the website. What do I do?
+
+Signing in with the extension needs Chrome or a Chromium-based browser. In any other browser, export your identity file from Better Lyrics options under Identity and upload it with "Upload identity file". It is the key to your account, so only upload it on unison.betterlyrics.org.
 
 ## Thanks
 
@@ -364,9 +402,9 @@ The dump itself is dual-licensed.
 - Open: [ODbL-1.0](https://opendatacommons.org/licenses/odbl/1-0/). Attribution
   and share-alike on derivative databases. If you're building a FOSS player
   that displays the lyrics, you only need to attribute (the "Produced Works"
-  clause).
+  clause), as described in [Attribution](#attribution).
 - Commercial: anyone selling a product on top of the corpus (streaming
   services, labels, distributors) needs a commercial license. Email
   `enterprise@boidu.dev` with "Unison" in the subject.
 
-Required attribution: `Lyrics from Unison (https://unison.betterlyrics.org)`.
+Required attribution: see [Attribution](#attribution).
