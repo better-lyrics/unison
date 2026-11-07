@@ -88,9 +88,12 @@ describe("share card routes", () => {
 		expect(cardMemoKey(`${url}?x=1`, "p2")).not.toBe(cardMemoKey(`${url}?x=1`, "p1"))
 	})
 
-	it("answers oEmbed only for our own song and profile links", async () => {
+	it("answers oEmbed only for our own links", async () => {
 		expect((await oembed(`https://evil.example/song/${VIDEO}`)).status).toBe(404)
-		expect((await oembed("http://unison.test/sealed")).status).toBe(404)
+		expect(await (await oembed("http://unison.test/sealed")).json()).toMatchObject({
+			title: "Sealed lyrics · Unison",
+			author_name: "Unison",
+		})
 		const res = await oembed(`http://unison.test/song/${VIDEO}`)
 		expect(await res.json()).toMatchObject({
 			provider_name: "Unison",

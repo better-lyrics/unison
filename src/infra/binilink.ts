@@ -1,5 +1,6 @@
 import { config } from "@/config"
 import { Logger } from "@/infra/logger"
+import { sharedInFlight } from "@/utils/in-flight"
 import { normalizeIsrc } from "@/utils/isrc"
 import { type ProviderId, isProviderService } from "@/utils/provider-id"
 import { isVideoId } from "@/utils/video-id"
@@ -37,16 +38,11 @@ function pause(retryAfter: string | null): void {
 	pausedUntil = Math.max(pausedUntil, Date.now() + seconds * 1000)
 }
 
-const inflight = new Map<string, Promise<Fields | null>>()
+const inflight = sharedInFlight<Fields | null>()
 
 /** Concurrent callers asking the same thing share one request. */
 function post(path: string, body: unknown): Promise<Fields | null> {
-	const key = `${path} ${JSON.stringify(body)}`
-	const running = inflight.get(key)
-	if (running) return running
-	const request = send(path, body).finally(() => inflight.delete(key))
-	inflight.set(key, request)
-	return request
+	return inflight(`${path} ${JSON.stringify(body)}`, () => send(path, body))
 }
 
 /** After a pause ends, one request probes BiniLink and the rest skip it until that one answers. */
