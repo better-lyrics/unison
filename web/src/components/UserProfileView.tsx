@@ -18,11 +18,13 @@ import { ProfileSkeleton } from "@/components/ProfileSkeleton"
 import { SubmissionsList } from "@/components/SubmissionsList"
 import { glassActionClass, glassClass } from "@/components/ui"
 import { setAsyncData, useAsyncData } from "@/hooks/useAsyncData"
+import { type DiscordLink, useDiscordLink } from "@/hooks/useDiscordLink"
 import { useProfileArt } from "@/hooks/useProfileArt"
 import { fetchUserBadges, fetchUserRank } from "@/lib/api"
 import { cn } from "@/lib/cn"
 import { formatRank, titleCase } from "@/lib/format"
 import { languageName } from "@/lib/language"
+import { scrollToStart } from "@/lib/scroll"
 import type { BadgeCatalogue, ExpertiseEntry, UserGamification, UserRankResponse } from "@/lib/types"
 
 interface UserProfileViewProps {
@@ -76,6 +78,8 @@ function OwnerBlock({
   catalogue,
   onGamificationChange,
   onPreview,
+  discord,
+  discordRevealRequest,
   showDiscord,
   onProfileChange,
 }: {
@@ -84,6 +88,8 @@ function OwnerBlock({
   catalogue: BadgeCatalogue | null
   onGamificationChange: (updated: UserGamification) => void
   onPreview: () => void
+  discord: DiscordLink
+  discordRevealRequest: number
   showDiscord: boolean
   onProfileChange: () => Promise<void>
 }) {
@@ -100,7 +106,12 @@ function OwnerBlock({
         {gamification && catalogue ? (
           <FeaturedBadgeEditor gamification={gamification} catalogue={catalogue} onSaved={onGamificationChange} />
         ) : null}
-        <OwnerControls showDiscord={showDiscord} onProfileChange={onProfileChange} />
+        <OwnerControls
+          discord={discord}
+          discordRevealRequest={discordRevealRequest}
+          showDiscord={showDiscord}
+          onProfileChange={onProfileChange}
+        />
       </div>
     </section>
   )
@@ -130,11 +141,8 @@ function ProfileBody({
   const pickerRef = useRef<HTMLDivElement>(null)
   const [bannerAnchor, setBannerAnchor] = useState<HTMLElement | null>(null)
   const owner = isOwner && !preview
-
-  const editProfile = () => {
-    const still = matchMedia("(prefers-reduced-motion: reduce)").matches
-    editRef.current?.scrollIntoView({ behavior: still ? "auto" : "smooth", block: "start" })
-  }
+  const discord = useDiscordLink({ enabled: isOwner })
+  const [discordRevealRequest, setDiscordRevealRequest] = useState(0)
 
   return (
     <div>
@@ -166,7 +174,16 @@ function ProfileBody({
             }
           />
         </div>
-        <ProfileSide keyId={keyId} rank={rank} gamification={gamification} owner={owner} onEditProfile={editProfile} />
+        <ProfileSide
+          keyId={keyId}
+          rank={rank}
+          gamification={gamification}
+          owner={owner}
+          onEditProfile={() => scrollToStart(editRef.current)}
+          onConnectDiscord={
+            discord.status === "unlinked" ? () => setDiscordRevealRequest((request) => request + 1) : undefined
+          }
+        />
       </section>
 
       <div className="flex flex-col gap-14 pb-[108px]">
@@ -189,6 +206,8 @@ function ProfileBody({
               setBannerAnchor(null)
               setPreview(true)
             }}
+            discord={discord}
+            discordRevealRequest={discordRevealRequest}
             showDiscord={rank.discord !== undefined}
             onProfileChange={onProfileChange}
           />

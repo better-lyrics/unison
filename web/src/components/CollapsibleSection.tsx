@@ -1,6 +1,7 @@
 import { IconChevronDown } from "@tabler/icons-react"
-import { type ReactNode, useEffect, useId, useRef, useState } from "react"
+import { type ReactNode, useEffect, useEffectEvent, useId, useRef, useState } from "react"
 import { cn } from "@/lib/cn"
+import { scrollToStart } from "@/lib/scroll"
 import "./profile.css"
 
 const COLLAPSE_MS = 300
@@ -11,6 +12,7 @@ interface CollapsibleSectionProps {
   defaultOpen?: boolean
   className?: string
   testId?: string
+  revealRequest?: number
   children: ReactNode
 }
 
@@ -20,10 +22,12 @@ export function CollapsibleSection({
   defaultOpen = true,
   className,
   testId,
+  revealRequest,
   children,
 }: CollapsibleSectionProps) {
   const [open, setOpen] = useState(defaultOpen)
   const [height, setHeight] = useState<number | "auto">(defaultOpen ? "auto" : 0)
+  const sectionRef = useRef<HTMLElement>(null)
   const wrapRef = useRef<HTMLDivElement>(null)
   const rafRef = useRef<number | null>(null)
   const timerRef = useRef<number | null>(null)
@@ -63,8 +67,17 @@ export function CollapsibleSection({
     }
   }
 
+  const reveal = useEffectEvent(() => {
+    if (!open) toggle()
+    scrollToStart(sectionRef.current)
+  })
+
+  useEffect(() => {
+    if (revealRequest) reveal()
+  }, [revealRequest])
+
   return (
-    <section className={className} data-testid={testId}>
+    <section ref={sectionRef} className={className} data-testid={testId}>
       <div className="flex items-center gap-3">
         <h2 className="m-0 min-w-0 flex-1">
           <button
