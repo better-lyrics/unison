@@ -3,11 +3,15 @@ import { config } from "@/config"
 import { CATALOGUE } from "@/db/badges/definitions"
 import { resolveKeyIdByHandle } from "@/db/users"
 import { log } from "@/infra/logger"
+import { PAGE_COPY, PAGE_PATHS, type Page } from "@/og/page-cards"
 import {
+	type PageSource,
 	type ProfileCard,
 	type SongCard,
+	loadPageCard,
 	loadProfileCard,
 	loadSongCard,
+	pageAccent,
 	profileAccent,
 	songAccent,
 } from "@/og/render"
@@ -27,6 +31,7 @@ export interface Share {
 	description: string
 	themeColor: string
 	image: string
+	imageAlt: string
 	version: string
 	author: { name: string; path: string }
 }
@@ -53,7 +58,7 @@ const syncLine = (kind: SyncKind) =>
 
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`
 
-const CARD_DESIGN = 3
+const CARD_DESIGN = 4
 
 const hash = (inputs: unknown[]) =>
 	createHash("sha1")
@@ -109,6 +114,7 @@ export function songShare(card: SongShareInput, themeColor: string): Share {
 		description: details.filter(Boolean).join(" · "),
 		themeColor,
 		image: `/og/song/${card.videoId}.jpg?v=${version}`,
+		imageAlt: `${top.song} by ${top.artist}`,
 		version,
 		author: person
 			? { name: `Synced by ${person.displayName}`, path: `/curator/${person.keyId}` }
@@ -131,11 +137,32 @@ export function profileShare(card: ProfileShareInput, themeColor: string): Share
 			: "New curator on Unison",
 		themeColor,
 		image: `/og/user/${card.keyId}.jpg?v=${version}`,
+		imageAlt: `${identity.displayName} on Unison`,
 		version,
 		author: {
 			name: rank && tierName ? `${tierName} curator · Rank #${rank.rank}` : "New curator",
 			path: `/curator/${card.keyId}`,
 		},
+	}
+}
+
+export const pageVersion = (source: PageSource) => hash([source])
+
+export function pageShare(source: PageSource, themeColor: string): Share {
+	const copy = PAGE_COPY[source.page]
+	const description =
+		source.page === "home"
+			? PAGE_COPY.home.subtitle(source.lyrics)
+			: PAGE_COPY[source.page].subtitle
+	const version = pageVersion(source)
+	return {
+		title: copy.title,
+		description,
+		themeColor,
+		image: `/og/page/${source.page}.jpg?v=${version}`,
+		imageAlt: `${copy.headline.join(" ")} ${description}`,
+		version,
+		author: { name: "Unison", path: "/" },
 	}
 }
 
@@ -175,6 +202,17 @@ export const shareLoaders = {
 			)
 			return accent ? profileShare(card, accent) : null
 		}),
+	page: (env: Env, page: Page): Promise<Share> =>
+		cached(env, `share:page:${page}`, SHARE_TTL_SECONDS, async () => {
+			const source = await loadPageCard(env, page)
+			const accent = await cached(
+				env,
+				`share:accent:page:${pageVersion(source)}`,
+				ACCENT_TTL_SECONDS,
+				() => pageAccent(env, source)
+			)
+			return pageShare(source, accent)
+		}),
 }
 
 export function requestOrigin(request: Request): string {
@@ -184,7 +222,18 @@ export function requestOrigin(request: Request): string {
 	return `${proto ?? url.protocol.replace(":", "")}://${host}`
 }
 
-async function findShare(env: Env, pathname: string): Promise<Share | null> {
+export function pageFor(pathname: string): Page | null {
+	const trimmed = pathname.length > 1 ? pathname.replace(/\/+$/, "") : pathname
+	return PAGE_PATHS[trimmed.toLowerCase()] ?? null
+}
+
+async function findShare(env: Env, pathname: string): Promise<Share> {
+	const page = pageFor(pathname)
+	if (page) return shareLoaders.page(env, page)
+	return (await findItemShare(env, pathname)) ?? shareLoaders.page(env, "home")
+}
+
+async function findItemShare(env: Env, pathname: string): Promise<Share | null> {
 	const [, rawSection, id] = pathname.split("/")
 	const section = rawSection?.toLowerCase()
 	if (!id || pathname.split("/").length !== 3) return null
@@ -214,8 +263,21 @@ const escapeHtml = (value: string) =>
 		(c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c] ?? c
 	)
 
+const WEBSITE_LD = JSON.stringify({
+	"@context": "https://schema.org",
+	"@type": "WebSite",
+	name: "Unison",
+	url: config.og.siteOrigin,
+	potentialAction: {
+		"@type": "SearchAction",
+		target: `${config.og.siteOrigin}/search?q={search_term_string}`,
+		"query-input": "required name=search_term_string",
+	},
+}).replace(/</g, "\\u003c")
+
 export function shareTags(share: Share, origin: string, pathname: string): string {
 	const page = `${origin}${pathname}`
+	const canonical = `${config.og.siteOrigin}${pathname}`
 	const image = `${origin}${share.image}`
 	const oembed = `${origin}/oembed?url=${encodeURIComponent(page)}&format=json`
 	const meta = (attr: "name" | "property", key: string, value: string) =>
@@ -224,18 +286,24 @@ export function shareTags(share: Share, origin: string, pathname: string): strin
 		`<title>${escapeHtml(share.title)}</title>`,
 		meta("name", "description", share.description),
 		meta("name", "theme-color", share.themeColor),
+		`<link rel="canonical" href="${escapeHtml(canonical)}" />`,
 		meta("property", "og:site_name", "Unison"),
 		meta("property", "og:type", "website"),
+		meta("property", "og:locale", "en_US"),
 		meta("property", "og:url", page),
 		meta("property", "og:title", share.title),
 		meta("property", "og:description", share.description),
 		meta("property", "og:image", image),
 		meta("property", "og:image:width", "1200"),
 		meta("property", "og:image:height", "630"),
+		meta("property", "og:image:type", "image/jpeg"),
+		meta("property", "og:image:alt", share.imageAlt),
 		meta("name", "twitter:card", "summary_large_image"),
 		meta("name", "twitter:title", share.title),
 		meta("name", "twitter:description", share.description),
 		meta("name", "twitter:image", image),
+		meta("name", "twitter:image:alt", share.imageAlt),
+		pathname === "/" ? `<script type="application/ld+json">${WEBSITE_LD}</script>` : "",
 		`<link rel="alternate" type="application/json+oembed" href="${escapeHtml(oembed)}" />`,
 	].join("")
 }
@@ -251,9 +319,7 @@ export async function sharePage(env: Env, request: Request, indexHtml: string): 
 	const { pathname } = new URL(request.url)
 	try {
 		const share = await findShare(env, pathname)
-		return share
-			? injectShare(indexHtml, shareTags(share, requestOrigin(request), pathname))
-			: indexHtml
+		return injectShare(indexHtml, shareTags(share, requestOrigin(request), pathname))
 	} catch (error) {
 		log.warn("share meta failed", { pathname, error: (error as Error).message })
 		return indexHtml
@@ -270,7 +336,6 @@ export async function oembedFor(env: Env, request: Request, target: string) {
 	}
 	if (url.origin !== origin) return null
 	const share = await findShare(env, url.pathname)
-	if (!share) return null
 	return {
 		version: "1.0",
 		type: "link",

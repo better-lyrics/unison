@@ -1,7 +1,7 @@
 import { makeMemoryCache } from "@/test/integration-harness"
 import type { Env } from "@/types"
 import { describe, expect, it } from "vitest"
-import { type SongShareInput, sharePage, songShare } from "./share-meta"
+import { type SongShareInput, pageShare, sharePage, songShare } from "./share-meta"
 
 const INDEX = `<!doctype html><html><head><meta name="theme-color" content="#28292c" /><title>Unison: Better Lyrics Leaderboards</title><meta name="description" content="Most-wanted songs and top curators for Better Lyrics." /></head><body><div id="root"></div></body></html>`
 
@@ -33,6 +33,10 @@ const page = (path: string, share: SongShareInput | null) => {
 		"share:song:BI9HQCzpDgQ",
 		JSON.stringify(share ? songShare(share, "#d92626") : null)
 	)
+	cache.store.set(
+		"share:page:home",
+		JSON.stringify(pageShare({ page: "home", lyrics: 15885, top: [] }, "#28292c"))
+	)
 	return sharePage({ CACHE: cache } as unknown as Env, request(path), INDEX)
 }
 
@@ -43,8 +47,9 @@ describe("share meta", () => {
 		expect(html).toContain("&lt;/title&gt;&lt;script&gt;")
 	})
 
-	it("serves the plain app page when the song is missing or the lookup fails", async () => {
-		expect(await page("/song/BI9HQCzpDgQ", null)).toBe(INDEX)
+	it("falls back to the home card when the song is missing, and to the plain page on failure", async () => {
+		const missing = await page("/song/BI9HQCzpDgQ", null)
+		expect(missing).toMatch(/<meta property="og:image" content="[^"]+\/og\/page\/home\.jpg\?v=/)
 		const down = {
 			CACHE: {
 				get: async () => {

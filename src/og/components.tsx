@@ -137,12 +137,12 @@ export function QrCode({
 	)
 }
 
-export function OgBrand({ left }: { left?: boolean }) {
+export function OgBrand({ left, top = 40, page }: { left?: boolean; top?: number; page?: string }) {
 	return (
 		<div
 			style={{
 				position: "absolute",
-				top: 40,
+				top,
 				...(left ? { left: 64 } : { right: 40 }),
 				display: "flex",
 				alignItems: "center",
@@ -171,6 +171,20 @@ export function OgBrand({ left }: { left?: boolean }) {
 				<Logo size={36} />
 			</div>
 			Unison
+			{page ? (
+				<div
+					style={{
+						display: "flex",
+						alignItems: "center",
+						gap: 12,
+						color: "rgba(245, 245, 247, 0.72)",
+						fontWeight: 500,
+					}}
+				>
+					<div style={{ width: 1, height: 24, background: "rgba(255, 255, 255, 0.18)" }} />
+					{page}
+				</div>
+			) : null}
 		</div>
 	)
 }

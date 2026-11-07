@@ -1,6 +1,9 @@
 import { config } from "@/config"
+import { PAGES, type Page } from "@/og/page-cards"
 import {
 	type RenderedCard,
+	loadPageCard,
+	renderPageOg,
 	renderProfileDownload,
 	renderProfileOg,
 	renderSongOg,
@@ -82,6 +85,9 @@ export const ogRoutes = (env: Env) => {
 		})
 	}
 	const isKeyId = (id: string) => KEY_ID.test(id)
+	const isPage = (id: string): id is Page => (PAGES as readonly string[]).includes(id)
+	const renderPage = async (env: Env, page: string) =>
+		isPage(page) ? renderPageOg(env, await loadPageCard(env, page)) : null
 
 	return new Elysia()
 		.decorate("env", env)
@@ -91,6 +97,16 @@ export const ogRoutes = (env: Env) => {
 		)
 		.get("/og/user/:file", (ctx) =>
 			serve(ctx, "jpg", isKeyId, shareLoaders.profile, renderProfileOg, config.og.cacheControl)
+		)
+		.get("/og/page/:file", (ctx) =>
+			serve(
+				ctx,
+				"jpg",
+				isPage,
+				(env, page) => shareLoaders.page(env, page as Page),
+				renderPage,
+				config.og.cacheControl
+			)
 		)
 		.get("/card/user/:file", (ctx) =>
 			serve(

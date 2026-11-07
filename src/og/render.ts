@@ -1,13 +1,15 @@
 import { config } from "@/config"
 import { getUserBadges } from "@/db/badges"
 import { CATALOGUE, badgeImageFile } from "@/db/badges/definitions"
-import { getCuratorRank } from "@/db/leaderboard"
+import { getGlobalFeed } from "@/db/feed"
+import { getCuratorLeaderboard, getCuratorRank } from "@/db/leaderboard"
 import { countVariantsByVideoId, findByVideoId } from "@/db/lyrics"
 import { getSubmissionsByUser } from "@/db/profile"
 import { getProfileExtras } from "@/db/profile-settings"
-import { getUserByKeyId, resolveIdentity, resolvePeople } from "@/db/users"
+import { getUserByKeyId, resolveIdentity, resolvePeople, resolvePeopleByKeyIds } from "@/db/users"
 import { buildSealMarks } from "@/routes/marks"
 import { resolveArtwork } from "@/services/artwork"
+import { type DumpStats, readDumpStats } from "@/services/dump-manifest"
 import type { Env } from "@/types"
 import { type Accent, accentHex, inks, scrimFor } from "@/utils/accent"
 import { syncTypeFor } from "@/utils/sync-type"
@@ -23,10 +25,12 @@ import {
 	coverBytes,
 	coverFromUrl,
 	fingerprint,
+	mosaic,
 	sampleAccent,
 	sleeveBytes,
 	washFrom,
 } from "./images"
+import { type Page, pageCardNode } from "./page-cards"
 import {
 	CARD_SIZE,
 	type Gem,
@@ -312,4 +316,151 @@ export async function renderProfileDownload(env: Env, keyId: string): Promise<Re
 		],
 	})
 	return { bytes: await encode(node, images, { format: "png" }, CARD_SIZE, CARD_SCALE), accent }
+}
+
+const HOME_MOSAIC = 9
+const SHELF = 4
+const SEALED_FEED = 12
+const PODIUM = 3
+const PAGE_COVER_SIZE = 400
+
+async function topVideoIds(env: Env): Promise<string[]> {
+	const feed = await getGlobalFeed(env, HOME_MOSAIC, undefined, undefined, { sort: "top-rated" })
+	return [...new Set(feed.map((item) => item.video_id))]
+}
+
+async function sealedVideoIds(env: Env): Promise<string[]> {
+	const feed = await getGlobalFeed(env, SEALED_FEED, undefined, undefined, {
+		sealed: true,
+		sort: "recently-sealed",
+	})
+	return [...new Set(feed.map((item) => item.video_id))].slice(0, SHELF)
+}
+
+async function podium(env: Env) {
+	const board = await getCuratorLeaderboard(env, config.requests.leaderboard.topN)
+	const top = board.filter((row) => !row.community).slice(0, PODIUM)
+	const people = await resolvePeopleByKeyIds(
+		env,
+		top.map((row) => row.keyId)
+	)
+	return top.map((row) => ({
+		keyId: row.keyId,
+		name: people.get(row.keyId)?.displayName ?? row.keyId.slice(0, 8),
+		avatarUrl: row.avatarUrl,
+		tier: row.tier,
+		lyrics: row.submissionCount,
+		upvotes: row.totalUpvotes,
+	}))
+}
+
+export type PageSource =
+	| { page: "home"; lyrics: number | null; top: string[] }
+	| { page: "leaderboard"; curators: Awaited<ReturnType<typeof podium>> }
+	| { page: "sealed" | "docs"; sealed: string[] }
+	| { page: "downloads"; stats: DumpStats | null; top: string[] }
+
+export async function loadPageCard(env: Env, page: Page): Promise<PageSource> {
+	switch (page) {
+		case "home": {
+			const [stats, top] = await Promise.all([readDumpStats(env), topVideoIds(env)])
+			return { page, lyrics: stats?.lyrics ?? null, top }
+		}
+		case "leaderboard":
+			return { page, curators: await podium(env) }
+		case "sealed":
+		case "docs":
+			return { page, sealed: await sealedVideoIds(env) }
+		case "downloads": {
+			const [stats, top] = await Promise.all([readDumpStats(env), topVideoIds(env)])
+			return { page, stats, top: top.slice(3, 3 + SHELF) }
+		}
+	}
+}
+
+async function pageCovers(env: Env, videoIds: string[]): Promise<Buffer[]> {
+	const covers = await Promise.all(videoIds.map((id) => coverBytes(env, id, PAGE_COVER_SIZE)))
+	return covers.filter((cover): cover is Buffer => cover !== null)
+}
+
+async function mosaicOf(env: Env, videoIds: string[], cols: number): Promise<Buffer | null> {
+	const covers = await pageCovers(env, videoIds)
+	return covers.length ? mosaic(covers, covers.length < cols ? covers.length : cols) : null
+}
+
+async function pageWashSource(env: Env, source: PageSource): Promise<Buffer> {
+	let bytes: Buffer | null = null
+	switch (source.page) {
+		case "home":
+			bytes = await mosaicOf(env, source.top, 3)
+			break
+		case "leaderboard": {
+			const first = source.curators[0]
+			bytes = first ? await avatarBytes(first.avatarUrl, first.keyId) : null
+			break
+		}
+		case "sealed":
+			bytes = source.sealed[0] ? await coverBytes(env, source.sealed[0], PAGE_COVER_SIZE) : null
+			break
+		case "docs":
+			bytes = await mosaicOf(env, source.sealed, 2)
+			break
+		case "downloads":
+			bytes = await mosaicOf(env, source.top, 2)
+			break
+	}
+	return bytes ?? sleeveBytes("Unison", source.page)
+}
+
+export async function pageAccent(env: Env, source: PageSource): Promise<string> {
+	return accentHex((await sampleAccent(await pageWashSource(env, source))).hue)
+}
+
+export async function renderPageOg(env: Env, source: PageSource): Promise<RenderedCard> {
+	const art = await pageWashSource(env, source)
+	const [wash, accent] = await Promise.all([washFrom(art, OG.width, OG.height), sampleAccent(art)])
+	const images = new Images()
+	const washSrc = images.add("wash", wash)
+	const node = await (async () => {
+		switch (source.page) {
+			case "home":
+				return pageCardNode({ page: "home", wash: washSrc, lyrics: source.lyrics })
+			case "leaderboard": {
+				const rows = await Promise.all(
+					source.curators.map(async (curator, i) => {
+						const gemFile = curator.tier ? badgeFile(curator.tier) : null
+						const [avatar, gem] = await Promise.all([
+							avatarBytes(curator.avatarUrl, curator.keyId),
+							gemFile ? badgeArt(gemFile) : null,
+						])
+						return {
+							name: curator.name,
+							avatar: images.add(`avatar-${i}`, avatar),
+							gem: gem && gemFile ? images.asset(`badge:${gemFile}`, gem) : null,
+							lyrics: curator.lyrics,
+							upvotes: curator.upvotes,
+						}
+					})
+				)
+				return pageCardNode({ page: "leaderboard", wash: washSrc, curators: rows })
+			}
+			case "sealed": {
+				const [covers, seal] = await Promise.all([
+					pageCovers(env, source.sealed),
+					badgeArt("committee.svg"),
+				])
+				return pageCardNode({
+					page: "sealed",
+					wash: washSrc,
+					seal: seal ? images.asset("seal", seal) : null,
+					covers: covers.map((bytes, i) => images.add(`cover-${i}`, bytes)),
+				})
+			}
+			case "docs":
+				return pageCardNode({ page: "docs", wash: washSrc })
+			case "downloads":
+				return pageCardNode({ page: "downloads", wash: washSrc, stats: source.stats })
+		}
+	})()
+	return { bytes: await encode(node, images, OG_JPEG, OG), accent: accentHex(accent.hue) }
 }

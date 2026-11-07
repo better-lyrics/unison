@@ -11,19 +11,27 @@ const FONT_DIR = fileURLToPath(new URL("../../assets/fonts/", import.meta.url))
 const CJK_TIMEOUT_MS = 5000
 
 export const FONT_STACK = "Satoshi, Noto Sans JP, Noto Sans KR"
+export const MONO_STACK = "JetBrains Mono"
 
-let satoshi: Promise<Fonts> | null = null
+let bundled: Promise<Fonts> | null = null
 let cjk: Promise<FontSubset[]> | null = null
 
-function loadSatoshi(): Promise<Fonts> {
-	satoshi ??= Promise.all(
-		[500, 700, 900].map(async (weight) => ({
-			name: "Satoshi",
-			weight,
-			data: await readFile(`${FONT_DIR}satoshi-${weight}.woff2`),
-		}))
+const BUNDLED = [
+	{ name: "Satoshi", file: "satoshi", weights: [500, 700, 900] },
+	{ name: MONO_STACK, file: "jetbrains-mono", weights: [500, 700] },
+]
+
+function loadBundled(): Promise<Fonts> {
+	bundled ??= Promise.all(
+		BUNDLED.flatMap(({ name, file, weights }) =>
+			weights.map(async (weight) => ({
+				name,
+				weight,
+				data: await readFile(`${FONT_DIR}${file}-${weight}.woff2`),
+			}))
+		)
 	)
-	return satoshi
+	return bundled
 }
 
 function loadCjk(): Promise<FontSubset[]> {
@@ -42,6 +50,6 @@ function loadCjk(): Promise<FontSubset[]> {
 }
 
 export async function ogFonts(): Promise<Fonts> {
-	const [latin, rest] = await Promise.all([loadSatoshi(), loadCjk()])
+	const [latin, rest] = await Promise.all([loadBundled(), loadCjk()])
 	return [...latin, ...rest]
 }

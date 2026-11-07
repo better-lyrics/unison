@@ -108,6 +108,32 @@ export async function washFrom(bytes: Buffer, width: number, height: number): Pr
 		.toBuffer()
 }
 
+const MOSAIC_TILE = 200
+
+export async function mosaic(tiles: Buffer[], cols: number): Promise<Buffer> {
+	const rows = Math.ceil(tiles.length / cols)
+	const resized = await Promise.all(
+		tiles.map((tile) => sharp(tile).resize(MOSAIC_TILE, MOSAIC_TILE, { fit: "cover" }).toBuffer())
+	)
+	return sharp({
+		create: {
+			width: cols * MOSAIC_TILE,
+			height: rows * MOSAIC_TILE,
+			channels: 3,
+			background: "#000",
+		},
+	})
+		.composite(
+			resized.map((input, i) => ({
+				input,
+				left: (i % cols) * MOSAIC_TILE,
+				top: Math.floor(i / cols) * MOSAIC_TILE,
+			}))
+		)
+		.png()
+		.toBuffer()
+}
+
 export async function sleeveBytes(song: string, artist: string): Promise<Buffer> {
 	const node = container({
 		style: { width: "100%", height: "100%", backgroundImage: sleeveCss(song, artist) },
