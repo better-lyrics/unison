@@ -4,12 +4,12 @@ import type { ReactNode } from "react"
 
 const BASE_URL = "https://unison.betterlyrics.org"
 
-const VIDEO_URL = `${BASE_URL}/lyrics?v=dQw4w9WgXcQ`
-const SONG_ARTIST_URL = `${BASE_URL}/lyrics?song=Never+Gonna+Give+You+Up&artist=Rick+Astley`
-const ISRC_URL = `${BASE_URL}/lyrics?isrc=US2S70465012`
-const PROVIDER_ID_URL = `${BASE_URL}/lyrics?apple_music=1438556832`
-const SEARCH_URL = `${BASE_URL}/lyrics/search?q=never+gonna+give`
-const VARIANTS_URL = `${BASE_URL}/lyrics/variants/dQw4w9WgXcQ?limit=5`
+const VIDEO_URL = `${BASE_URL}/lyrics?v=Ugr4KKK_SqY`
+const SONG_ARTIST_URL = `${BASE_URL}/lyrics?song=Explorer&artist=Justice`
+const ISRC_URL = `${BASE_URL}/lyrics?isrc=FR8EU2300090`
+const PROVIDER_ID_URL = `${BASE_URL}/lyrics?apple_music=1724935872`
+const SEARCH_URL = `${BASE_URL}/lyrics/search?q=explorer+justice`
+const VARIANTS_URL = `${BASE_URL}/lyrics/variants/Ugr4KKK_SqY?limit=5`
 
 const CACHE_CODE = `const saved = store.get(videoId) // { etag, data } from an earlier call
 const res = await fetch("${VIDEO_URL}", {
@@ -73,7 +73,7 @@ if (success) {
     language: "python",
     code: `import requests
 
-res = requests.get("${BASE_URL}/lyrics", params={"v": "dQw4w9WgXcQ"})
+res = requests.get("${BASE_URL}/lyrics", params={"v": "Ugr4KKK_SqY"})
 body = res.json()
 
 if body["success"]:
@@ -111,12 +111,12 @@ println!("{body}");`,
 const VIDEO_RESPONSE = `{
   "success": true,
   "data": {
-    "id": 4821,
-    "videoId": "dQw4w9WgXcQ",
-    "song": "Never Gonna Give You Up",
-    "artist": "Rick Astley",
-    "album": "Whenever You Need Somebody",
-    "duration": 213,
+    "id": 13529,
+    "videoId": "Ugr4KKK_SqY",
+    "song": "Explorer",
+    "artist": "Justice, Connan Mockasin",
+    "album": "Hyperdrama",
+    "isrc": "FR8EU2300090",
     "format": "ttml",
     "syncType": "richsync",
     "language": "en",
@@ -130,11 +130,11 @@ const VIDEO_RESPONSE = `{
 const PROVIDER_ID_RESPONSE = `{
   "success": true,
   "data": {
-    "id": 4821,
-    "videoId": "dQw4w9WgXcQ",
-    "song": "Never Gonna Give You Up",
-    "artist": "Rick Astley",
-    "isrc": "GBARL9300135",
+    "id": 13529,
+    "videoId": "Ugr4KKK_SqY",
+    "song": "Explorer",
+    "artist": "Justice, Connan Mockasin",
+    "isrc": "FR8EU2300090",
     "format": "ttml",
     "syncType": "richsync",
     "language": "en",
@@ -157,10 +157,10 @@ const SEARCH_RESPONSE = `{
   "success": true,
   "data": [
     {
-      "id": 4821,
-      "videoId": "dQw4w9WgXcQ",
-      "song": "Never Gonna Give You Up",
-      "artist": "Rick Astley",
+      "id": 13529,
+      "videoId": "Ugr4KKK_SqY",
+      "song": "Explorer",
+      "artist": "Justice, Connan Mockasin",
       "format": "ttml",
       "syncType": "richsync",
       "confidence": "high",
@@ -369,7 +369,7 @@ export function DocsPage() {
           <ul className="space-y-1.5 text-sm leading-relaxed text-unison-text-secondary">
             <li>
               <Code>ttml</Code> is timed XML, the richest format. Pair it with <Code>syncType</Code>{" "}
-              <Code>richsync</Code> for word-by-word timing or <Code>linesync</Code> for per-line timing.
+              <Code>richsync</Code> for syllable-level timing or <Code>linesync</Code> for per-line timing.
             </li>
             <li>
               <Code>lrc</Code> is timestamped lines, the classic karaoke format.
