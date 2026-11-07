@@ -3,7 +3,6 @@ import { DownloadButton } from "@/components/DownloadButton"
 import { LyricsContentSkeleton, LyricsRenderer, parseVariantLyrics } from "@/components/LyricsRenderer"
 import { RawLyricsView } from "@/components/RawLyricsView"
 import { glassClass } from "@/components/ui"
-import { IconArrowDown } from "@tabler/icons-react"
 import { cn } from "@/lib/cn"
 import { downloadTextFile } from "@/lib/download"
 import { pickTranslationLanguage, translationLanguages } from "@/lib/lyric-translations"
@@ -96,16 +95,18 @@ export function LyricsPanel({
             )}
           </fieldset>
         ) : null}
-        {resumeAutoscroll ? (
-          <button
-            type="button"
-            onClick={resumeAutoscroll}
-            className={cn(TOOL_BASE, "t-reveal pointer-events-auto absolute top-0 left-1/2 -translate-x-1/2 max-sm:right-0 max-sm:left-auto max-sm:translate-x-0")}
-          >
-            <IconArrowDown className="size-4" />
-            Resume autoscroll
-          </button>
-        ) : null}
+        <button
+          type="button"
+          inert={!resumeAutoscroll}
+          onClick={() => resumeAutoscroll?.()}
+          className={cn(
+            TOOL_BASE,
+            "pointer-events-auto absolute top-0 left-1/2 -translate-x-1/2 max-sm:right-0 max-sm:left-auto max-sm:translate-x-0",
+            !resumeAutoscroll && "pointer-events-none opacity-0",
+          )}
+        >
+          Resume autoscroll
+        </button>
         {variant ? (
           <div className={cn("ml-auto flex items-center gap-1.5", resumeAutoscroll && "max-sm:hidden")}>
             <CopyButton text={variant.lyrics} className={TOOL_CLASS} iconClassName="size-4" radius={10} withText />
