@@ -21,7 +21,7 @@ export function SongRow({ entry }: SongRowProps) {
         target="_blank"
         rel="noopener noreferrer"
         aria-label={`Open ${entry.song} by ${entry.artist} in YouTube Music`}
-        className={cn(RANK_ROW, "transition-colors sm:bg-white/[0.02] hover:bg-unison-bg-hover")}
+        className={cn(RANK_ROW, "bg-white/[0.02] transition-colors hover:bg-unison-bg-hover")}
       >
         <RankNumber rank={entry.rank} />
         <div className="flex size-12 shrink-0 items-center justify-center overflow-hidden rounded-md bg-unison-bg-hover">
@@ -45,7 +45,7 @@ export function SongRow({ entry }: SongRowProps) {
 function SongRowSkeleton() {
   return (
     <li>
-      <div className={cn(RANK_ROW, "sm:bg-white/[0.02]")}>
+      <div className={cn(RANK_ROW, "bg-white/[0.02]")}>
         <RankCell>
           <Bone className="h-4 w-4" />
         </RankCell>
