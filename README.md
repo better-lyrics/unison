@@ -64,7 +64,7 @@ The [dump](#database-dump) license (ODbL) requires the Unison credit. The dump h
 
 ### Why?
 
-Every lyric on Unison was submitted by someone in the community, for free. Seeing their name next to their work is how they get thanked, and it helps bring in the next contributor. The link matters as much as the name: a listener who spots a wrong line follows it to the song page to vote, report or submit a fix, so the lyrics in your app get better over time. Unison is also [self-funded](#funding), and the credit helps people find it.
+Every lyric on Unison was submitted by someone in the community, for free. Seeing their name next to their work is how they get thanked, and it helps bring in the next contributor. The link matters as much as the name: a listener who spots a wrong line follows it to the song page to vote, report or submit a fix, so the lyrics in your app get better over time.
 
 ## Endpoints
 

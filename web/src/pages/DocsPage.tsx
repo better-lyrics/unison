@@ -263,16 +263,7 @@ export function DocsPage() {
             Every lyric on Unison was submitted by someone in the community, for free. Seeing their name next to their
             work is how they get thanked, and it helps bring in the next contributor. The link matters as much as the
             name: a listener who spots a wrong line follows it to the song page to vote, report or submit a fix, so the
-            lyrics in your app get better over time. Unison is also{" "}
-            <a
-              href="https://github.com/better-lyrics/unison#funding"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-unison-text transition-colors hover:text-unison-text-secondary"
-            >
-              self-funded
-            </a>
-            , and the credit helps people find it.
+            lyrics in your app get better over time.
           </p>
         </section>
 
