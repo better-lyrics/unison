@@ -73,6 +73,10 @@ describe("toResponse", () => {
 		})
 	})
 
+	it("carries the creation time in unix seconds when the row has it", () => {
+		expect(toResponse({ ...baseRow, created_at: 1700000000 }).createdAt).toBe(1700000000)
+	})
+
 	it("includes submitter when both keyId and reputation are present", () => {
 		const keyId = "deadbeef".repeat(8)
 		const result = toResponse({

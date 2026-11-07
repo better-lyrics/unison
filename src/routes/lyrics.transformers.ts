@@ -53,6 +53,7 @@ export interface LyricsRowForResponse {
 	committee_approved_at?: number | null
 	committee_approved_by?: number | null
 	hidden?: boolean
+	created_at?: number
 }
 
 export function toResponse(
@@ -80,6 +81,7 @@ export function toResponse(
 		submitter: buildSubmitter(row, submitterActor),
 		fulfilled: fulfilled ?? undefined,
 		marks: marks && marks.length > 0 ? marks : undefined,
+		...(row.created_at === undefined ? {} : { createdAt: row.created_at }),
 	}
 }
 

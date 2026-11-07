@@ -3,7 +3,7 @@ import { makeMemoryCache, makeOpenLimiter } from "@/test/integration-harness"
 import type { Env } from "@/types"
 import type { SongCandidate } from "@/utils/innertube"
 import { describe, expect, it, vi } from "vitest"
-import { buildSuggestions, suggestVideosForSong } from "./video-suggestions"
+import { buildSuggestions, linkedVideoDetails, suggestVideosForSong } from "./video-suggestions"
 
 const META = {
 	song: "Blinding Lights",
@@ -477,6 +477,42 @@ describe("buildSuggestions", () => {
 			const lastSong = out.map((s) => s.videoType).lastIndexOf("song")
 			expect(lastSong).toBeLessThan(firstVideo)
 		})
+	})
+})
+
+describe("linkedVideoDetails", () => {
+	it("describes the linked videos that the search found", () => {
+		const out = linkedVideoDetails(
+			[candidate({ videoId: "linked00001" }), candidate({ videoId: "open0000001" })],
+			META,
+			new Set(["linked00001"])
+		)
+		expect(out.map((s) => s.videoId)).toEqual(["linked00001"])
+		expect(out[0].title).toBe("Blinding Lights")
+	})
+
+	it("regression: describes a linked video from another artist's channel", () => {
+		const out = linkedVideoDetails(
+			[
+				candidate({ videoId: META.videoId, artistChannelIds: ["UCweeknd"] }),
+				candidate({
+					videoId: "fanupload01",
+					artist: "Lyric Vault",
+					artists: ["Lyric Vault"],
+					artistChannelIds: ["UCfans"],
+					durationSeconds: null,
+				}),
+			],
+			META,
+			new Set(["fanupload01"])
+		)
+		expect(out.map((s) => s.videoId)).toEqual(["fanupload01"])
+	})
+
+	it("never describes the main video", () => {
+		expect(
+			linkedVideoDetails([candidate({ videoId: META.videoId })], META, new Set([META.videoId]))
+		).toEqual([])
 	})
 })
 

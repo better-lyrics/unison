@@ -177,6 +177,7 @@ export interface LyricsResponse {
 	fulfilled?: LyricsFulfillmentBadge | null
 	userVote?: 1 | -1 | null
 	marks?: Mark[]
+	createdAt?: number
 	/** Set on `GET /lyrics?v=`: whether this is the lyric every caller gets, or one personalized for this caller. */
 	variant?: "primary" | "own" | "explore"
 }
