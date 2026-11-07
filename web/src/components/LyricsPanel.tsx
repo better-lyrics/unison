@@ -15,7 +15,7 @@ import { languageName } from "@/lib/language"
 import { useScrollEdges } from "@/hooks/useScrollEdges"
 
 const TOOL_REVEAL =
-  "opacity-0 group-focus-within/lyrics:opacity-100 group-hover/lyrics:opacity-100 [@media(hover:none)]:opacity-100"
+  "opacity-0 group-focus-within/lyrics:opacity-100 group-hover/lyrics:opacity-100 [@media(hover:none)]:group-data-idle/lyrics:opacity-100"
 
 const TOOL_CLASS = cn(
   glassClass,
@@ -35,11 +35,19 @@ interface LyricsPanelProps {
   variant: VariantFull | undefined
   getCurrentTime: () => number
   getPlaying: () => boolean
+  playing?: boolean
   onLineClick: (seconds: number) => void
   lyricsClassName?: string
 }
 
-export function LyricsPanel({ variant, getCurrentTime, getPlaying, onLineClick, lyricsClassName }: LyricsPanelProps) {
+export function LyricsPanel({
+  variant,
+  getCurrentTime,
+  getPlaying,
+  playing = false,
+  onLineClick,
+  lyricsClassName,
+}: LyricsPanelProps) {
   const [mode, setMode] = useState<Mode>("synced")
   const [pickedLang, setPickedLang] = useState<string>()
   const languages = useMemo(() => (variant ? translationLanguages(parseVariantLyrics(variant)) : []), [variant])
@@ -70,8 +78,8 @@ export function LyricsPanel({ variant, getCurrentTime, getPlaying, onLineClick, 
   )
   const tab = (value: Mode, label: string) => segment("lyrics-mode", mode === value, label, () => setMode(value))
   return (
-    <div className="group/lyrics relative">
-      <div className="pointer-events-none absolute inset-x-0 top-0 z-10 flex flex-wrap items-center gap-1.5 group-focus-within/lyrics:pointer-events-auto group-hover/lyrics:pointer-events-auto [@media(hover:none)]:pointer-events-auto">
+    <div data-idle={playing ? undefined : ""} className="group/lyrics relative">
+      <div className="pointer-events-none absolute inset-x-0 top-0 z-10 flex flex-wrap items-center gap-1.5 group-focus-within/lyrics:pointer-events-auto group-hover/lyrics:pointer-events-auto [@media(hover:none)]:group-data-idle/lyrics:pointer-events-auto">
         <fieldset className={SEGMENTS_CLASS}>
           <legend className="sr-only">Lyrics display mode</legend>
           {tab("synced", "Synced")}
@@ -101,7 +109,7 @@ export function LyricsPanel({ variant, getCurrentTime, getPlaying, onLineClick, 
         key={`${mode}:${variant ? "ready" : "loading"}`}
         ref={setPane}
         className={cn(
-          "lyrics-pane [text-shadow:none] [mask-image:linear-gradient(transparent,#000_var(--ft),#000_calc(100%-var(--fb)),transparent)]",
+          "lyrics-pane [text-shadow:none] [mask-clip:no-clip] [mask-image:linear-gradient(transparent,#000_var(--ft),#000_calc(100%-var(--fb)),transparent)] [mask-repeat:repeat-x]",
           edges.up && "[--ft:56px]",
           edges.down && "[--fb:72px]",
         )}

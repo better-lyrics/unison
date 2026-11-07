@@ -140,10 +140,10 @@ const LYRIC_SKELETON_LINES = [
 
 export function LyricsContentSkeleton({ className }: { className?: string }) {
   return (
-    <div className={cn("mx-auto flex h-[576px] w-full max-w-3xl flex-col gap-1 overflow-hidden pt-0.5", className)}>
+    <div className={cn("mx-auto flex h-[576px] w-full max-w-3xl flex-col gap-1 overflow-hidden pt-0.5 max-[1000px]:gap-[3px]", className)}>
       {LYRIC_SKELETON_LINES.map(({ id, w }) => (
-        <div key={id} className="flex h-[74px] shrink-0 items-center">
-          <Bone className={cn("h-[22px]", w)} />
+        <div key={id} className="flex h-[74px] shrink-0 items-center max-[1000px]:h-[62px]">
+          <Bone className={cn("h-7 max-[1000px]:h-[21px]", w)} />
         </div>
       ))}
     </div>

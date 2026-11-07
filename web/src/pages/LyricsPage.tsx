@@ -112,6 +112,7 @@ export function LyricsPage() {
             variant={variantQuery.isLoading ? undefined : variant}
             getCurrentTime={getCurrentTime}
             getPlaying={getPlaying}
+            playing={playing}
             onLineClick={handleLineClick}
             lyricsClassName={LYRICS_SIZE}
           />
