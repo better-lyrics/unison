@@ -23,7 +23,7 @@ const TOOL_CLASS = cn(
 
 const SEGMENTS_CLASS = cn(glassClass, "inline-flex rounded-[10px] p-[3px] [corner-shape:superellipse(1.6)]")
 
-const TOOLS_ROW = "flex flex-wrap items-center gap-1.5 p-px pb-3"
+const TOOLS_ROW = "flex flex-wrap items-center gap-1.5 pb-3"
 
 export function LyricsToolsSkeleton() {
   return (
@@ -132,7 +132,7 @@ export function LyricsPanel({
             const focusTarget = toolsOpen
               ? modesRef.current?.querySelector<HTMLButtonElement>("[aria-pressed=true]")
               : pane
-            focusTarget?.focus()
+            focusTarget?.focus({ preventScroll: true })
           }}
           className={cn(
             TOOL_CLASS,

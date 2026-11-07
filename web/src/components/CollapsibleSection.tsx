@@ -61,7 +61,7 @@ export function CollapsibleSection({
       </div>
       <div className="t-acc" data-open={open}>
         <div id={bodyId} inert={!open} className="t-acc-panel">
-          <div className="t-acc-panel-inner -m-1 p-1">
+          <div className="t-acc-panel-inner">
             {/* cs-reveal is applied once on mount so the entrance plays on load, not on every toggle. */}
             <div className="cs-reveal pt-5">{children}</div>
           </div>
