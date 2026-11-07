@@ -358,7 +358,7 @@ export function DocsPage() {
           <p className="text-sm leading-relaxed text-unison-text-secondary">
             Keep the lyrics you fetch and check them before you download them again. A check is cheaper than a full
             download for both Unison and your app, and your copy stays in sync with edits and new versions. Every{" "}
-            <Code>/lyrics</Code> lookup sends an <Code>ETag</Code>. Save it with the lyric and send it back as{" "}
+            <Code>GET /lyrics</Code> lookup sends an <Code>ETag</Code>. Save it with the lyric and send it back as{" "}
             <Code>If-None-Match</Code>. If the lyric is the same, you get <Code>304</Code> with no body and use the copy
             you have.
           </p>
