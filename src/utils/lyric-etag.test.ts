@@ -3,6 +3,7 @@ import { lyricEtag, matchesEtag } from "./lyric-etag"
 
 const lyric = {
 	id: 13529,
+	videoId: "Ugr4KKK_SqY",
 	song: "Night Drive",
 	artist: "Example Artist",
 	album: "Example Album",
