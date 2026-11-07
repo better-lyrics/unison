@@ -30,6 +30,8 @@ export interface Resolution {
 	final: boolean
 }
 
+const OUT_OF_TIME: Resolution = { url: null, final: false }
+
 export const ARTWORK_SOURCES: ArtworkSource[] = [
 	{
 		name: "youtube-music",
@@ -138,7 +140,7 @@ async function runSources(
 	let final = true
 	const deadline = Date.now() + config.artwork.resolveBudgetMs
 	for (const source of sources) {
-		if (Date.now() > deadline) return { url: null, final: false }
+		if (Date.now() > deadline) return OUT_OF_TIME
 		try {
 			const hit = await source.find(env, videoId, song)
 			const url = hit ? await hitUrl(env, videoId, hit) : null
@@ -181,8 +183,16 @@ function maybeRefresh(env: Env, videoId: string, sources: ArtworkSource[], rando
 	)
 }
 
+function withinBudget(work: Promise<Resolution>): Promise<Resolution> {
+	let timer: NodeJS.Timeout | undefined
+	const timeout = new Promise<Resolution>((resolve) => {
+		timer = setTimeout(() => resolve(OUT_OF_TIME), config.artwork.resolveBudgetMs)
+	})
+	return Promise.race([work, timeout]).finally(() => clearTimeout(timer))
+}
+
 async function resolveCold(env: Env, videoId: string, sources: ArtworkSource[]) {
-	const resolved = await runSources(env, videoId, sources)
+	const resolved = await withinBudget(runSources(env, videoId, sources))
 	if (resolved.url || resolved.final) {
 		await upsertVideoArtwork(env, videoId, resolved.url)
 		await writeCache(env, videoId, resolved.url)

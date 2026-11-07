@@ -62,7 +62,7 @@ export async function deezerCoverForIsrc(isrc: string, artist: string): Promise<
 	const albumId = field(album, "id")
 	if (!isDeezerCover(cover) || typeof albumId !== "number") return null
 
-	const release = await get(`/album/${albumId}`)
+	const release = await get(`/album/${albumId}`).catch(() => null)
 	if (release && text(field(release.artist, "name")) === VARIOUS_ARTISTS) return null
 	return cover
 }
