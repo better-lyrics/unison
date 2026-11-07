@@ -72,7 +72,8 @@ export async function artworkWithoutFallback(
 ): Promise<{ videoId: string; artworkUrl: string }[]> {
 	const { results } = await env.DB.prepare(
 		`SELECT video_id, artwork_url FROM song_artwork
-		 WHERE fallback_url IS NULL AND artwork_url LIKE 'https://%.googleusercontent.com/%'
+		 WHERE fallback_url IS NULL AND fallback_bytes IS NULL
+		   AND artwork_url LIKE 'https://%.googleusercontent.com/%'
 		   AND video_id > ?
 		 ORDER BY video_id
 		 LIMIT ?`
@@ -108,15 +109,29 @@ export async function leastServedFallbacks(
 	}))
 }
 
+/** Zero bytes with no copy means "do not backfill": evicted, or the original cannot be copied. A new cover resets it. */
 export async function clearArtworkFallback(
 	env: Env,
 	videoId: string,
 	fallbackUrl: string
 ): Promise<void> {
 	await env.DB.prepare(
-		"UPDATE song_artwork SET fallback_url = NULL, fallback_bytes = NULL WHERE video_id = ? AND fallback_url = ?"
+		"UPDATE song_artwork SET fallback_url = NULL, fallback_bytes = 0 WHERE video_id = ? AND fallback_url = ?"
 	)
 		.bind(videoId, fallbackUrl)
+		.run()
+}
+
+export async function markArtworkUncopyable(
+	env: Env,
+	videoId: string,
+	artworkUrl: string
+): Promise<void> {
+	await env.DB.prepare(
+		`UPDATE song_artwork SET fallback_bytes = 0
+		 WHERE video_id = ? AND artwork_url = ? AND fallback_url IS NULL`
+	)
+		.bind(videoId, artworkUrl)
 		.run()
 }
 

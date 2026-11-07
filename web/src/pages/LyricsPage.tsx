@@ -1,13 +1,13 @@
-import { usePageArt } from "@/components/PageArt"
 import { EmptyState } from "@/components/EmptyState"
-import { LyricsContentSkeleton } from "@/components/LyricsRenderer"
 import { LyricsPanel, LyricsToolsSkeleton } from "@/components/LyricsPanel"
+import { LyricsContentSkeleton } from "@/components/LyricsRenderer"
+import { usePageArt } from "@/components/PageArt"
 import { SongHero, SongHeroSkeleton } from "@/components/song/SongHero"
 import { SongRail, SongRailSkeleton } from "@/components/song/SongRail"
 import { useFillHeight } from "@/hooks/useFillHeight"
 import { useLyricsVariant, useLyricsVariants } from "@/hooks/useLyricsData"
 import { useYouTubePlayer } from "@/hooks/useYouTubePlayer"
-import { songBackdrop, useArtwork } from "@/lib/artwork"
+import { songBackdrop, useArtworkCover } from "@/lib/artwork"
 import { useCallback, useMemo, useState } from "react"
 import { useParams, useSearchParams } from "react-router-dom"
 
@@ -61,7 +61,7 @@ export function LyricsPage() {
 
   const variantQuery = useLyricsVariant(selectedId)
 
-  const { data: art, isPending: artPending } = useArtwork(safeVideoId)
+  const { data: art, isPending: artPending } = useArtworkCover(safeVideoId)
   const lead = variants[0]
   const backdrop = useMemo(
     () => (artPending || !lead ? null : songBackdrop(safeVideoId, Boolean(art), lead.song, lead.artist)),

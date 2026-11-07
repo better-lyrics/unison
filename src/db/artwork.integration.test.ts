@@ -1,5 +1,7 @@
 import { readFileSync } from "node:fs"
 import {
+	artworkWithoutFallback,
+	clearArtworkFallback,
 	fallbackBytesTotal,
 	getVideoArtwork,
 	insertVideoArtworkIfAbsent,
@@ -78,6 +80,19 @@ describeIntegration("song_artwork db (integration)", () => {
 			await upsertVideoArtwork(env, "v", "https://yt3.googleusercontent.com/b=w544-h544-l90-rj")
 			expect(await setArtworkFallback(env, "v", COVER, COPY, 50_000)).toBe(false)
 			expect((await getVideoArtwork(env, "v"))?.fallbackUrl).toBeNull()
+		})
+
+		it("keeps evicted covers out of the backfill until the cover changes", async () => {
+			await upsertVideoArtwork(env, "v", COVER)
+			await setArtworkFallback(env, "v", COVER, COPY, 50_000)
+			await clearArtworkFallback(env, "v", COPY)
+			expect(await artworkWithoutFallback(env, "", 10)).toEqual([])
+
+			const next = "https://yt3.googleusercontent.com/b=w544-h544-l90-rj"
+			await upsertVideoArtwork(env, "v", next)
+			expect(await artworkWithoutFallback(env, "", 10)).toEqual([
+				{ videoId: "v", artworkUrl: next },
+			])
 		})
 
 		it("lists copies least recently served first", async () => {

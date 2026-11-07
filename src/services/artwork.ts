@@ -9,7 +9,12 @@ import {
 import { deezerCoverForIsrc } from "@/infra/deezer"
 import { itunesCoverFor } from "@/infra/itunes"
 import { log } from "@/infra/logger"
-import { type ArtworkCover, readCachedCover, writeCachedCover } from "@/services/artwork-cache"
+import {
+	type ArtworkCover,
+	NEGATIVE_CACHE_VALUE,
+	readCachedCover,
+	writeCachedCover,
+} from "@/services/artwork-cache"
 import { queueArtworkFallback } from "@/services/artwork-fallback"
 import { type ArtworkImage, fetchImage, mirrorImage } from "@/services/artwork-store"
 import type { Env } from "@/types"
@@ -19,7 +24,6 @@ import { sharedInFlight } from "@/utils/in-flight"
 import { videoArtwork } from "@/utils/innertube"
 import sharp from "sharp"
 
-const NEGATIVE = "__none__"
 const THUMBNAILS = ["maxresdefault", "hq720", "sddefault", "hqdefault"]
 const MIN_THUMBNAIL_WIDTH = 480
 
@@ -90,9 +94,9 @@ const youTubeMusicKey = (videoId: string) => `ytmart:v1:${videoId}`
 
 async function cachedVideoArtwork(env: Env, videoId: string): Promise<string | null> {
 	const cached = await env.CACHE.get(youTubeMusicKey(videoId))
-	if (cached !== null) return cached === NEGATIVE ? null : cached
+	if (cached !== null) return cached === NEGATIVE_CACHE_VALUE ? null : cached
 	const url = await videoArtwork(videoId)
-	await env.CACHE.put(youTubeMusicKey(videoId), url ?? NEGATIVE, {
+	await env.CACHE.put(youTubeMusicKey(videoId), url ?? NEGATIVE_CACHE_VALUE, {
 		expirationTtl: config.artwork.youTubeMusicTtlSeconds,
 	})
 	return url

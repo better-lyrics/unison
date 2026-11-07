@@ -6,7 +6,7 @@ export interface ArtworkCover {
 	fallbackUrl: string | null
 }
 
-const NEGATIVE = "__none__"
+export const NEGATIVE_CACHE_VALUE = "__none__"
 
 export const artworkCacheKey = (videoId: string) => `artwork:v3:${videoId}`
 
@@ -17,7 +17,7 @@ export async function readCachedCover(
 ): Promise<ArtworkCover | null | undefined> {
 	const raw = await env.CACHE.get(artworkCacheKey(videoId))
 	if (raw === null) return undefined
-	if (raw === NEGATIVE) return null
+	if (raw === NEGATIVE_CACHE_VALUE) return null
 	if (!raw.startsWith("{")) return { url: raw, fallbackUrl: null }
 	try {
 		const parsed = JSON.parse(raw) as Partial<ArtworkCover>
@@ -35,6 +35,10 @@ export async function writeCachedCover(
 	cover: ArtworkCover | null,
 	seconds = cover ? config.artwork.positiveTtlSeconds : config.artwork.negativeTtlSeconds
 ): Promise<void> {
-	const value = cover ? (cover.fallbackUrl ? JSON.stringify(cover) : cover.url) : NEGATIVE
+	const value = cover
+		? cover.fallbackUrl
+			? JSON.stringify(cover)
+			: cover.url
+		: NEGATIVE_CACHE_VALUE
 	await env.CACHE.put(artworkCacheKey(videoId), value, { expirationTtl: seconds })
 }

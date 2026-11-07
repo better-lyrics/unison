@@ -4,6 +4,7 @@ import {
 	clearArtworkFallback,
 	fallbackBytesTotal,
 	leastServedFallbacks,
+	markArtworkUncopyable,
 	setArtworkFallback,
 } from "@/db/artwork"
 import { log } from "@/infra/logger"
@@ -20,18 +21,37 @@ let draining = false
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
 
+const uncopyable = new Set<string>()
+
+function isTransient(error: unknown): boolean {
+	const message = (error as Error).message
+	if (!message.startsWith("image ")) return true
+	const status = Number(message.match(/answered (\d+)$/)?.[1])
+	return status === 429 || status >= 500
+}
+
+async function giveUp(env: Env, videoId: string, artworkUrl: string): Promise<void> {
+	if (uncopyable.size >= fallback.maxQueue) uncopyable.clear()
+	uncopyable.add(videoId)
+	await markArtworkUncopyable(env, videoId, artworkUrl)
+}
+
 async function copyCover(env: Env, videoId: string, artworkUrl: string): Promise<void> {
 	google.check()
 	let image: Awaited<ReturnType<typeof fetchImage>>
 	try {
 		image = await fetchImage(artworkUrl)
 	} catch (error) {
-		google.recordFailure()
-		if ((error as Error).message.endsWith("answered 429")) throw new UpstreamRateLimitedError()
+		if (isTransient(error)) {
+			google.recordFailure()
+			if ((error as Error).message.endsWith("answered 429")) throw new UpstreamRateLimitedError()
+			throw error
+		}
+		await giveUp(env, videoId, artworkUrl)
 		throw error
 	}
 	google.recordSuccess()
-	if (!image) return
+	if (!image) return giveUp(env, videoId, artworkUrl)
 	const mirrored = await mirrorImage(env, videoId, image.bytes)
 	if (await setArtworkFallback(env, videoId, artworkUrl, mirrored.url, mirrored.bytes)) {
 		await env.CACHE.delete(artworkCacheKey(videoId))
@@ -63,7 +83,7 @@ async function drain(): Promise<void> {
 }
 
 export function queueArtworkFallback(env: Env, videoId: string, artworkUrl: string): void {
-	if (!env.CDN || !isAlbumArtUrl(artworkUrl)) return
+	if (!env.CDN || !isAlbumArtUrl(artworkUrl) || uncopyable.has(videoId)) return
 	if (queue.has(videoId) || queue.size >= fallback.maxQueue) return
 	queue.set(videoId, { env, artworkUrl })
 	void drain()
@@ -111,8 +131,8 @@ export async function evictArtworkFallbacks(env: Env): Promise<{ evicted: number
 		for (const row of rows) {
 			if (total <= fallback.capBytes) break
 			await clearArtworkFallback(env, row.videoId, row.fallbackUrl)
-			await env.CACHE.delete(artworkCacheKey(row.videoId))
 			await deleteMirroredImage(env, row.fallbackUrl)
+			await env.CACHE.delete(artworkCacheKey(row.videoId))
 			total -= row.bytes
 			evicted++
 		}
