@@ -1,6 +1,6 @@
 import { config } from "@/config"
 import { Logger } from "@/infra/logger"
-import { pickSquareArtwork } from "@/utils/artwork"
+import { isAlbumArtUrl, pickSquareArtwork } from "@/utils/artwork"
 import { Innertube } from "youtubei.js"
 
 const log = new Logger("innertube")
@@ -30,6 +30,29 @@ async function upNextDurationSeconds(yt: Innertube, videoId: string): Promise<nu
 			if (video && "video_id" in video && video.video_id === videoId) {
 				return validSeconds(video.duration?.seconds)
 			}
+		}
+	}
+	return null
+}
+
+const EMPTY_QUEUE = "Music queue was empty"
+
+/** Square album art for the video or its song counterpart; null when YouTube Music has none or no longer has the video. */
+export async function videoArtwork(videoId: string): Promise<string | null> {
+	const yt = await getInnertube()
+	let panel: Awaited<ReturnType<typeof yt.music.getUpNext>>
+	try {
+		panel = await yt.music.getUpNext(videoId, false)
+	} catch (err) {
+		if ((err as Error).message.startsWith(EMPTY_QUEUE)) return null
+		throw err
+	}
+	for (const entry of panel.contents) {
+		const videos = "primary" in entry ? [entry.primary, ...(entry.counterpart ?? [])] : [entry]
+		for (const video of videos) {
+			if (!video || !("thumbnail" in video)) continue
+			const art = pickSquareArtwork(video.thumbnail ?? [], config.artwork.size)
+			if (art && isAlbumArtUrl(art)) return art
 		}
 	}
 	return null

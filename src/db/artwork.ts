@@ -43,23 +43,26 @@ export async function insertVideoArtworkIfAbsent(
 		.run()
 }
 
-export async function findSongForVideo(
-	env: Env,
-	videoId: string
-): Promise<{ song: string; artist: string } | null> {
+export interface VideoSong {
+	song: string
+	artist: string
+	isrc: string | null
+}
+
+export async function findSongForVideo(env: Env, videoId: string): Promise<VideoSong | null> {
 	return env.DB.prepare(
-		`SELECT song, artist FROM (
-		   SELECT l.song, l.artist, 0 AS source, (l.video_id = ?) AS is_primary, l.id
+		`SELECT song, artist, isrc FROM (
+		   SELECT l.song, l.artist, l.isrc, 0 AS source, (l.video_id = ?) AS is_primary, l.id
 		   FROM lyrics l
 		   WHERE l.deleted_at IS NULL
 		     AND (l.video_id = ? OR l.id IN (SELECT lyrics_id FROM lyrics_video_ids WHERE video_id = ?))
 		   UNION ALL
-		   SELECT song, artist, 1 AS source, FALSE AS is_primary, 0 AS id
+		   SELECT song, artist, NULL AS isrc, 1 AS source, FALSE AS is_primary, 0 AS id
 		   FROM requested_songs WHERE video_id = ?
 		 ) known
-		 ORDER BY source, is_primary DESC, id
+		 ORDER BY source, is_primary DESC, (isrc IS NOT NULL) DESC, id
 		 LIMIT 1`
 	)
 		.bind(videoId, videoId, videoId, videoId)
-		.first<{ song: string; artist: string }>()
+		.first<VideoSong>()
 }

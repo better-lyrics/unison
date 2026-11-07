@@ -1,10 +1,17 @@
 import { readFileSync } from "node:fs"
+import { config } from "@/config"
 import { getVideoArtwork, upsertVideoArtwork } from "@/db/artwork"
 import { D1Compat } from "@/infra/database"
-import { resolveArtwork } from "@/services/artwork"
+import type { Storage } from "@/infra/storage"
+import {
+	type ArtworkHit,
+	type ArtworkSource,
+	artworkCacheKey,
+	resolveArtwork,
+} from "@/services/artwork"
 import type { Env } from "@/types"
-import type { SongCandidate } from "@/utils/innertube"
 import pg from "pg"
+import sharp from "sharp"
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest"
 
 const { Pool } = pg
@@ -13,33 +20,29 @@ const shouldRun = process.env.RUN_INTEGRATION === "1"
 const describeIntegration = shouldRun ? describe : describe.skip
 
 const NEVER = () => 1
+const ALWAYS = () => 0
 const ATV = "fHI8X4OXluQ"
 const OMV = "4NRXx6U8ABQ"
 const ALBUM_ART = "https://lh3.googleusercontent.com/after=w544-h544-l90-rj"
 
-function hit(over: Partial<SongCandidate> & Pick<SongCandidate, "videoId">): SongCandidate {
-	return {
-		title: "Blinding Lights",
-		artist: "The Weeknd",
-		artists: ["The Weeknd"],
-		artistChannelIds: ["UCweeknd"],
-		album: "After Hours",
-		durationSeconds: 200,
-		videoType: "song",
-		artworkUrl: ALBUM_ART,
-		...over,
-	}
+function source(find: ArtworkSource["find"], over: Partial<ArtworkSource> = {}): ArtworkSource {
+	return { name: "test", onRefresh: true, find: vi.fn(find), ...over }
 }
+
+const finds = (url: string | null) => source(async () => (url ? { url } : null))
 
 function makeMapCache() {
 	const store = new Map<string, string>()
+	const ttls = new Map<string, number>()
 	return {
 		store,
+		ttls,
 		async get(k: string): Promise<string | null> {
 			return store.has(k) ? (store.get(k) as string) : null
 		},
-		async put(k: string, v: string): Promise<void> {
+		async put(k: string, v: string, opts?: { expirationTtl?: number }): Promise<void> {
 			store.set(k, v)
+			if (opts?.expirationTtl) ttls.set(k, opts.expirationTtl)
 		},
 		async delete(k: string): Promise<void> {
 			store.delete(k)
@@ -47,11 +50,30 @@ function makeMapCache() {
 	}
 }
 
+function makeCdn() {
+	const puts: { key: string; cacheControl?: string }[] = []
+	const cdn = {
+		async putObject(key: string, _b: Buffer, _t: string, _l?: number, cacheControl?: string) {
+			puts.push({ key, cacheControl })
+		},
+	} as unknown as Storage
+	return { cdn, puts }
+}
+
 describeIntegration("resolveArtwork (integration)", () => {
 	const url = process.env.INTEGRATION_DATABASE_URL ?? process.env.DATABASE_URL
 	let pool: pg.Pool
 	let cache: ReturnType<typeof makeMapCache>
 	let env: Env
+
+	async function seedLyric(videoId: string, isrc: string | null = null): Promise<number> {
+		const r = await pool.query(
+			`INSERT INTO lyrics (video_id, song, artist, duration, song_norm, artist_norm, lyrics, format, sync_type, isrc)
+			 VALUES ($1,'Blinding Lights','The Weeknd',200,'blinding lights','the weeknd','x','plain','plain',$2) RETURNING id`,
+			[videoId, isrc]
+		)
+		return r.rows[0].id
+	}
 
 	beforeAll(async () => {
 		if (!url) throw new Error("INTEGRATION_DATABASE_URL or DATABASE_URL is required")
@@ -84,133 +106,50 @@ describeIntegration("resolveArtwork (integration)", () => {
 			await pool.query(`DELETE FROM ${table}`)
 		}
 		cache = makeMapCache()
-		env = { DB: new D1Compat(pool), CACHE: cache } as unknown as Env
+		env = { DB: new D1Compat(pool), CACHE: cache, CDN: null } as unknown as Env
 	})
 
-	it("resolves via the resolver on a cold miss and caches to DB + Redis", async () => {
-		const resolver = vi.fn(async () => "https://art/x=w544-h544")
-		const url = await resolveArtwork(env, "v1", { resolver, random: NEVER })
-		expect(url).toBe("https://art/x=w544-h544")
-		expect(resolver).toHaveBeenCalledTimes(1)
-		expect(cache.store.get("artwork:v2:v1")).toBe("https://art/x=w544-h544")
+	it("resolves through the sources on a cold miss and caches to DB + Redis", async () => {
+		await seedLyric(ATV)
+		const art = finds(ALBUM_ART)
+		expect(await resolveArtwork(env, ATV, { sources: [art], random: NEVER })).toBe(ALBUM_ART)
+		expect(cache.store.get(artworkCacheKey(ATV))).toBe(ALBUM_ART)
+		expect((await getVideoArtwork(env, ATV))?.artworkUrl).toBe(ALBUM_ART)
 
-		const again = await resolveArtwork(env, "v1", { resolver, random: NEVER })
-		expect(again).toBe("https://art/x=w544-h544")
-		expect(resolver).toHaveBeenCalledTimes(1)
+		expect(await resolveArtwork(env, ATV, { sources: [art], random: NEVER })).toBe(ALBUM_ART)
+		expect(art.find).toHaveBeenCalledTimes(1)
 	})
 
-	it("serves a DB hit without the resolver and warms Redis", async () => {
-		await upsertVideoArtwork(env, "v2", "https://art/db=w544-h544")
-		const resolver = vi.fn(async () => "https://should-not-be-called")
-		expect(await resolveArtwork(env, "v2", { resolver, random: NEVER })).toBe(
-			"https://art/db=w544-h544"
-		)
-		expect(resolver).not.toHaveBeenCalled()
-		expect(cache.store.get("artwork:v2:v2")).toBe("https://art/db=w544-h544")
+	it("serves a DB hit without the sources and warms Redis", async () => {
+		await upsertVideoArtwork(env, ATV, ALBUM_ART)
+		const art = finds("https://should-not-be-called")
+		expect(await resolveArtwork(env, ATV, { sources: [art], random: NEVER })).toBe(ALBUM_ART)
+		expect(art.find).not.toHaveBeenCalled()
+		expect(cache.store.get(artworkCacheKey(ATV))).toBe(ALBUM_ART)
 	})
 
-	describe("edge cases", () => {
-		it("negative-caches a null result", async () => {
-			const resolver = vi.fn(async () => null)
-			expect(await resolveArtwork(env, "v3", { resolver, random: NEVER })).toBeNull()
-			expect(await resolveArtwork(env, "v3", { resolver, random: NEVER })).toBeNull()
-			expect(resolver).toHaveBeenCalledTimes(1)
-			expect(cache.store.get("artwork:v2:v3")).toBe("__none__")
-		})
-
-		it("regression: re-resolves a stored empty result instead of serving it", async () => {
-			await upsertVideoArtwork(env, "v7", null)
-			const resolver = vi.fn(async () => "https://art/retry=w544-h544")
-			expect(await resolveArtwork(env, "v7", { resolver, random: NEVER })).toBe(
-				"https://art/retry=w544-h544"
-			)
-			expect(resolver).toHaveBeenCalledTimes(1)
-			expect((await getVideoArtwork(env, "v7"))?.artworkUrl).toBe("https://art/retry=w544-h544")
-			expect(cache.store.get("artwork:v2:v7")).toBe("https://art/retry=w544-h544")
-		})
-
-		it("keeps a stored empty result negative-cached when the retry also finds nothing", async () => {
-			await upsertVideoArtwork(env, "v8", null)
-			const resolver = vi.fn(async () => null)
-			expect(await resolveArtwork(env, "v8", { resolver, random: NEVER })).toBeNull()
-			expect(await resolveArtwork(env, "v8", { resolver, random: NEVER })).toBeNull()
-			expect(resolver).toHaveBeenCalledTimes(1)
-			expect(cache.store.get("artwork:v2:v8")).toBe("__none__")
-		})
-
-		it("regression: ignores negative entries cached under the previous key", async () => {
-			cache.store.set("artwork:v9", "__none__")
-			const resolver = vi.fn(async () => "https://art/fresh=w544-h544")
-			expect(await resolveArtwork(env, "v9", { resolver, random: NEVER })).toBe(
-				"https://art/fresh=w544-h544"
-			)
-		})
-
-		it("serves a negative Redis hit as null", async () => {
-			cache.store.set("artwork:v2:v4", "__none__")
-			const resolver = vi.fn(async () => "https://should-not-be-called")
-			expect(await resolveArtwork(env, "v4", { resolver, random: NEVER })).toBeNull()
-			expect(resolver).not.toHaveBeenCalled()
-		})
-	})
-
-	describe("probabilistic refresh", () => {
-		it("re-resolves and updates cache + DB when random triggers", async () => {
-			await upsertVideoArtwork(env, "v5", "https://old=w544-h544")
-			cache.store.set("artwork:v2:v5", "https://old=w544-h544")
-			const resolver = vi.fn(async () => "https://new=w544-h544")
-			const ALWAYS = () => 0
-
-			const served = await resolveArtwork(env, "v5", { resolver, random: ALWAYS })
-			expect(served).toBe("https://old=w544-h544")
-			await vi.waitFor(() => expect(resolver).toHaveBeenCalledTimes(1))
-			await vi.waitFor(() => expect(cache.store.get("artwork:v2:v5")).toBe("https://new=w544-h544"))
-		})
-
-		it("regression: does not clobber existing artwork when the refresh resolves null", async () => {
-			await upsertVideoArtwork(env, "v6", "https://good=w544-h544")
-			cache.store.set("artwork:v2:v6", "https://good=w544-h544")
-			const resolver = vi.fn(async () => null)
-			const ALWAYS = () => 0
-
-			const served = await resolveArtwork(env, "v6", { resolver, random: ALWAYS })
-			expect(served).toBe("https://good=w544-h544")
-			await vi.waitFor(() => expect(resolver).toHaveBeenCalledTimes(1))
-			expect(cache.store.get("artwork:v2:v6")).toBe("https://good=w544-h544")
-			const row = await getVideoArtwork(env, "v6")
-			expect(row?.artworkUrl).toBe("https://good=w544-h544")
-		})
-	})
-
-	describe("search resolver", () => {
-		async function seedLyric(videoId: string): Promise<number> {
-			const r = await pool.query(
-				`INSERT INTO lyrics (video_id, song, artist, duration, song_norm, artist_norm, lyrics, format, sync_type)
-				 VALUES ($1,'Blinding Lights','The Weeknd',200,'blinding lights','the weeknd','x','plain','plain') RETURNING id`,
-				[videoId]
-			)
-			return r.rows[0].id
-		}
-
-		async function seedRequest(videoId: string) {
-			await pool.query(
-				"INSERT INTO requested_songs (video_id, song, artist) VALUES ($1,'Blinding Lights','The Weeknd')",
-				[videoId]
-			)
-		}
-
-		it("resolves album art from a search by the lyric's song and artist", async () => {
+	describe("source order", () => {
+		it("takes the first source that finds a cover and asks no later one", async () => {
 			await seedLyric(ATV)
-			const search = vi.fn(async () => [hit({ videoId: ATV })])
-			expect(await resolveArtwork(env, ATV, { search, random: NEVER })).toBe(ALBUM_ART)
-			expect(search).toHaveBeenCalledWith("Blinding Lights The Weeknd")
-			expect((await getVideoArtwork(env, ATV))?.artworkUrl).toBe(ALBUM_ART)
+			const miss = finds(null)
+			const first = finds(ALBUM_ART)
+			const later = finds("https://later")
+			expect(await resolveArtwork(env, ATV, { sources: [miss, first, later], random: NEVER })).toBe(
+				ALBUM_ART
+			)
+			expect(miss.find).toHaveBeenCalledTimes(1)
+			expect(later.find).not.toHaveBeenCalled()
 		})
 
-		it("resolves a requested song that has no lyric yet", async () => {
-			await seedRequest(ATV)
-			const search = async () => [hit({ videoId: ATV })]
-			expect(await resolveArtwork(env, ATV, { search, random: NEVER })).toBe(ALBUM_ART)
+		it("hands every source the lyric's song, artist and ISRC", async () => {
+			await seedLyric(ATV, "USUG11904206")
+			const art = finds(ALBUM_ART)
+			await resolveArtwork(env, ATV, { sources: [art], random: NEVER })
+			expect(art.find).toHaveBeenCalledWith(ATV, {
+				song: "Blinding Lights",
+				artist: "The Weeknd",
+				isrc: "USUG11904206",
+			})
 		})
 
 		it("resolves a linked video through its lyric", async () => {
@@ -219,48 +158,143 @@ describeIntegration("resolveArtwork (integration)", () => {
 				"INSERT INTO lyrics_video_ids (lyrics_id, video_id) VALUES ($1,$2),($1,$3)",
 				[id, OMV, ATV]
 			)
-			const search = async () => [hit({ videoId: ATV })]
-			expect(await resolveArtwork(env, ATV, { search, random: NEVER })).toBe(ALBUM_ART)
+			expect(await resolveArtwork(env, ATV, { sources: [finds(ALBUM_ART)], random: NEVER })).toBe(
+				ALBUM_ART
+			)
 		})
 
-		describe("edge cases", () => {
-			it("returns null for a video with no known song, without searching", async () => {
-				const search = vi.fn(async () => [hit({ videoId: ATV })])
-				expect(await resolveArtwork(env, ATV, { search, random: NEVER })).toBeNull()
-				expect(search).not.toHaveBeenCalled()
-			})
+		it("resolves a requested song that has no lyric yet", async () => {
+			await pool.query(
+				"INSERT INTO requested_songs (video_id, song, artist) VALUES ($1,'Blinding Lights','The Weeknd')",
+				[ATV]
+			)
+			expect(await resolveArtwork(env, ATV, { sources: [finds(ALBUM_ART)], random: NEVER })).toBe(
+				ALBUM_ART
+			)
+		})
+	})
 
-			it("ignores a deleted lyric", async () => {
-				const id = await seedLyric(ATV)
-				const user = await pool.query("INSERT INTO users (key_id) VALUES ('k') RETURNING id")
-				await pool.query(
-					"UPDATE lyrics SET deleted_at = 1, deleted_by_user_id = $2, deleted_by_role = 'admin' WHERE id = $1",
-					[id, user.rows[0].id]
-				)
-				const search = vi.fn(async () => [hit({ videoId: ATV })])
-				expect(await resolveArtwork(env, ATV, { search, random: NEVER })).toBeNull()
-				expect(search).not.toHaveBeenCalled()
-			})
+	describe("mirrored covers", () => {
+		async function jpeg(): Promise<Buffer> {
+			return sharp({ create: { width: 600, height: 600, channels: 3, background: "#c33" } })
+				.jpeg()
+				.toBuffer()
+		}
 
-			it("returns null when the video is not among the search results", async () => {
-				await seedLyric(ATV)
-				const search = async () => [hit({ videoId: "dQw4w9WgXcQ" })]
-				expect(await resolveArtwork(env, ATV, { search, random: NEVER })).toBeNull()
-			})
-
-			it("returns null for a music video, whose search thumbnail is not square album art", async () => {
-				await seedLyric(OMV)
-				const search = async () => [hit({ videoId: OMV, videoType: "video", artworkUrl: null })]
-				expect(await resolveArtwork(env, OMV, { search, random: NEVER })).toBeNull()
-			})
+		it("uploads a cover that is not YouTube Music art under the artwork folder and serves the CDN url", async () => {
+			await seedLyric(ATV)
+			const { cdn, puts } = makeCdn()
+			env = { ...env, CDN: cdn } as Env
+			const bytes = await jpeg()
+			const crop = source(async (): Promise<ArtworkHit> => ({ bytes }))
+			const url = await resolveArtwork(env, ATV, { sources: [crop], random: NEVER })
+			expect(url?.startsWith(`${config.artwork.cdnBase}${ATV}-`)).toBe(true)
+			expect(puts).toEqual([
+				{
+					key: url?.replace(config.artwork.cdnBase, config.artwork.cdnKeyPrefix),
+					cacheControl: config.artwork.cdnCacheControl,
+				},
+			])
 		})
 
-		describe("regressions", () => {
-			it("regression: resolves artwork without the player endpoint, which is LOGIN_REQUIRED from datacenter IPs", async () => {
-				await seedLyric(ATV)
-				const search = async () => [hit({ videoId: ATV })]
-				expect(await resolveArtwork(env, ATV, { search, random: NEVER })).toBe(ALBUM_ART)
+		it("falls through to the next source when there is no CDN to mirror into", async () => {
+			await seedLyric(ATV)
+			const bytes = await jpeg()
+			const crop = source(async (): Promise<ArtworkHit> => ({ bytes }))
+			expect(await resolveArtwork(env, ATV, { sources: [crop], random: NEVER })).toBeNull()
+			expect(await getVideoArtwork(env, ATV)).toBeNull()
+		})
+	})
+
+	describe("edge cases", () => {
+		it("returns null for a video with no known song, without asking any source", async () => {
+			const art = finds(ALBUM_ART)
+			expect(await resolveArtwork(env, ATV, { sources: [art], random: NEVER })).toBeNull()
+			expect(art.find).not.toHaveBeenCalled()
+		})
+
+		it("ignores a deleted lyric", async () => {
+			const id = await seedLyric(ATV)
+			const user = await pool.query("INSERT INTO users (key_id) VALUES ('k') RETURNING id")
+			await pool.query(
+				"UPDATE lyrics SET deleted_at = 1, deleted_by_user_id = $2, deleted_by_role = 'admin' WHERE id = $1",
+				[id, user.rows[0].id]
+			)
+			const art = finds(ALBUM_ART)
+			expect(await resolveArtwork(env, ATV, { sources: [art], random: NEVER })).toBeNull()
+			expect(art.find).not.toHaveBeenCalled()
+		})
+
+		it("negative-caches a null result", async () => {
+			await seedLyric(ATV)
+			const art = finds(null)
+			expect(await resolveArtwork(env, ATV, { sources: [art], random: NEVER })).toBeNull()
+			expect(await resolveArtwork(env, ATV, { sources: [art], random: NEVER })).toBeNull()
+			expect(art.find).toHaveBeenCalledTimes(1)
+			expect(cache.store.get(artworkCacheKey(ATV))).toBe("__none__")
+		})
+
+		it("regression: re-resolves a stored empty result instead of serving it", async () => {
+			await seedLyric(ATV)
+			await upsertVideoArtwork(env, ATV, null)
+			expect(await resolveArtwork(env, ATV, { sources: [finds(ALBUM_ART)], random: NEVER })).toBe(
+				ALBUM_ART
+			)
+			expect((await getVideoArtwork(env, ATV))?.artworkUrl).toBe(ALBUM_ART)
+		})
+
+		it("regression: ignores entries cached under the previous key", async () => {
+			await seedLyric(ATV)
+			cache.store.set(`artwork:v2:${ATV}`, "__none__")
+			expect(await resolveArtwork(env, ATV, { sources: [finds(ALBUM_ART)], random: NEVER })).toBe(
+				ALBUM_ART
+			)
+		})
+
+		it("serves a negative Redis hit as null", async () => {
+			cache.store.set(artworkCacheKey(ATV), "__none__")
+			const art = finds(ALBUM_ART)
+			expect(await resolveArtwork(env, ATV, { sources: [art], random: NEVER })).toBeNull()
+			expect(art.find).not.toHaveBeenCalled()
+		})
+
+		it("keeps a result found while a better source was down out of the DB and caches it briefly", async () => {
+			await seedLyric(ATV)
+			const down = source(async () => {
+				throw new Error("rate limited")
 			})
+			expect(
+				await resolveArtwork(env, ATV, { sources: [down, finds(ALBUM_ART)], random: NEVER })
+			).toBe(ALBUM_ART)
+			expect(await getVideoArtwork(env, ATV)).toBeNull()
+			expect(cache.ttls.get(artworkCacheKey(ATV))).toBe(config.artwork.incompleteTtlSeconds)
+		})
+	})
+
+	describe("probabilistic refresh", () => {
+		it("re-asks only the refresh sources and updates cache + DB", async () => {
+			await seedLyric(ATV)
+			await upsertVideoArtwork(env, ATV, "https://old=w544-h544")
+			cache.store.set(artworkCacheKey(ATV), "https://old=w544-h544")
+			const fresh = finds(ALBUM_ART)
+			const costly = source(async () => ({ url: "https://costly" }), { onRefresh: false })
+
+			const served = await resolveArtwork(env, ATV, { sources: [costly, fresh], random: ALWAYS })
+			expect(served).toBe("https://old=w544-h544")
+			await vi.waitFor(() => expect(cache.store.get(artworkCacheKey(ATV))).toBe(ALBUM_ART))
+			expect(costly.find).not.toHaveBeenCalled()
+		})
+
+		it("regression: does not clobber existing artwork when the refresh finds nothing", async () => {
+			await seedLyric(ATV)
+			await upsertVideoArtwork(env, ATV, ALBUM_ART)
+			cache.store.set(artworkCacheKey(ATV), ALBUM_ART)
+			const nothing = finds(null)
+
+			expect(await resolveArtwork(env, ATV, { sources: [nothing], random: ALWAYS })).toBe(ALBUM_ART)
+			await vi.waitFor(() => expect(nothing.find).toHaveBeenCalledTimes(1))
+			expect(cache.store.get(artworkCacheKey(ATV))).toBe(ALBUM_ART)
+			expect((await getVideoArtwork(env, ATV))?.artworkUrl).toBe(ALBUM_ART)
 		})
 	})
 })

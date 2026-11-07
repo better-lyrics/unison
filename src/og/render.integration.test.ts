@@ -1,4 +1,5 @@
 import sharp from "sharp"
+import { artworkCacheKey } from "@/services/artwork"
 import { afterAll, beforeAll, expect, it, vi } from "vitest"
 import { setProfileSettings } from "@/db/profile-settings"
 import {
@@ -44,7 +45,7 @@ describeIntegration("share card renderer (integration)", () => {
 				videoId,
 				album: "Low Tide Letters",
 			})
-			db.cache.store.set(`artwork:v2:${videoId}`, ART_URL(videoId))
+			db.cache.store.set(artworkCacheKey(videoId), ART_URL(videoId))
 		}
 		await setProfileSettings(db.env, KEY_ID, { banner: VIDEOS[0] })
 	})

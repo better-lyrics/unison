@@ -1,4 +1,5 @@
 import { config } from "@/config"
+import { artworkCacheKey } from "@/services/artwork"
 import type { Env } from "@/types"
 import { describe, expect, it, vi } from "vitest"
 import { userRoutes } from "./users"
@@ -519,7 +520,7 @@ describe("PUT /users/me/profile", () => {
 
 	it("saves a banner from the caller's own synced song", async () => {
 		const { db, env } = signedIn([{ found: 1 }, { banner_video_id: VIDEO, show_discord: true }], {
-			[`artwork:v2:${VIDEO}`]: "https://lh3.googleusercontent.com/cover=w544-h544",
+			[artworkCacheKey(VIDEO)]: "https://lh3.googleusercontent.com/cover=w544-h544",
 		})
 		const res = await put(env, { banner: VIDEO, showDiscord: true })
 		expect(res.status).toBe(200)
