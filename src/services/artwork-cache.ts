@@ -4,6 +4,8 @@ import type { Env } from "@/types"
 export interface ArtworkCover {
 	url: string
 	fallbackUrl: string | null
+	/** Set once the original cannot be copied, so serving it never queues another copy. */
+	uncopyable?: boolean
 }
 
 export const NEGATIVE_CACHE_VALUE = "__none__"
@@ -21,9 +23,12 @@ export async function readCachedCover(
 	if (!raw.startsWith("{")) return { url: raw, fallbackUrl: null }
 	try {
 		const parsed = JSON.parse(raw) as Partial<ArtworkCover>
-		return typeof parsed.url === "string"
-			? { url: parsed.url, fallbackUrl: parsed.fallbackUrl ?? null }
-			: undefined
+		if (typeof parsed.url !== "string") return undefined
+		return {
+			url: parsed.url,
+			fallbackUrl: parsed.fallbackUrl ?? null,
+			...(parsed.uncopyable ? { uncopyable: true } : {}),
+		}
 	} catch {
 		return undefined
 	}
@@ -36,7 +41,7 @@ export async function writeCachedCover(
 	seconds = cover ? config.artwork.positiveTtlSeconds : config.artwork.negativeTtlSeconds
 ): Promise<void> {
 	const value = cover
-		? cover.fallbackUrl
+		? cover.fallbackUrl || cover.uncopyable
 			? JSON.stringify(cover)
 			: cover.url
 		: NEGATIVE_CACHE_VALUE

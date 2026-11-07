@@ -189,16 +189,22 @@ export async function resolveArtworkCover(
 	const cached = await readCachedCover(env, videoId)
 	if (cached !== undefined) {
 		maybeRefresh(env, videoId, sources, random)
-		if (cached && !cached.fallbackUrl) queueArtworkFallback(env, videoId, cached.url)
+		if (cached && !cached.fallbackUrl && !cached.uncopyable) {
+			queueArtworkFallback(env, videoId, cached.url)
+		}
 		return cached
 	}
 
 	const dbRow = await getVideoArtwork(env, videoId)
 	if (dbRow?.artworkUrl) {
-		const cover = { url: dbRow.artworkUrl, fallbackUrl: dbRow.fallbackUrl }
+		const cover = {
+			url: dbRow.artworkUrl,
+			fallbackUrl: dbRow.fallbackUrl,
+			...(dbRow.uncopyable ? { uncopyable: true } : {}),
+		}
 		await writeCachedCover(env, videoId, cover)
 		maybeRefresh(env, videoId, sources, random)
-		if (!cover.fallbackUrl) queueArtworkFallback(env, videoId, cover.url)
+		if (!cover.fallbackUrl && !dbRow.uncopyable) queueArtworkFallback(env, videoId, cover.url)
 		return cover
 	}
 

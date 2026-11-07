@@ -3,19 +3,26 @@ import type { Env } from "@/types"
 export interface StoredArtwork {
 	artworkUrl: string | null
 	fallbackUrl: string | null
+	uncopyable: boolean
 	checkedAt: number
 }
 
 export async function getVideoArtwork(env: Env, videoId: string): Promise<StoredArtwork | null> {
 	const row = await env.DB.prepare(
-		"SELECT artwork_url, fallback_url, checked_at FROM song_artwork WHERE video_id = ?"
+		"SELECT artwork_url, fallback_url, fallback_bytes, checked_at FROM song_artwork WHERE video_id = ?"
 	)
 		.bind(videoId)
-		.first<{ artwork_url: string | null; fallback_url: string | null; checked_at: number }>()
+		.first<{
+			artwork_url: string | null
+			fallback_url: string | null
+			fallback_bytes: number | null
+			checked_at: number
+		}>()
 	if (!row) return null
 	return {
 		artworkUrl: row.artwork_url,
 		fallbackUrl: row.fallback_url,
+		uncopyable: row.fallback_bytes === UNCOPYABLE_BYTES,
 		checkedAt: Number(row.checked_at),
 	}
 }
