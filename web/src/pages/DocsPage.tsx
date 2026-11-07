@@ -211,12 +211,68 @@ export function DocsPage() {
         <section className="space-y-3">
           <h2 className="text-lg font-semibold text-unison-text">Attribution</h2>
           <p className="text-sm leading-relaxed text-unison-text-secondary">
-            Any app that shows Unison lyrics must credit Unison and the person who submitted them. Show{" "}
-            <Code>Lyrics from Unison</Code>, linked to <Code>https://unison.betterlyrics.org/song/&lt;videoId&gt;</Code>
-            , and the submitter's <Code>submitter.displayName</Code>, linked to{" "}
+            Any app that shows Unison lyrics must credit Unison and the person who submitted them. The credit can sit at
+            the end of the lyrics; it does not have to stay on screen. Apps integrating Unison have until{" "}
+            <strong className="text-unison-text">7 February 2027</strong> to add it.
+          </p>
+          <h3 className="text-sm font-semibold text-unison-text">If you use the API</h3>
+          <p className="text-sm leading-relaxed text-unison-text-secondary">
+            Show <Code>Lyrics from Unison</Code>, linked to{" "}
+            <Code>https://unison.betterlyrics.org/song/&lt;videoId&gt;</Code>, and the submitter's{" "}
+            <Code>submitter.displayName</Code>, linked to{" "}
             <Code>https://unison.betterlyrics.org/curator/&lt;submitter.keyId&gt;</Code>. Every lyric response carries
-            both. The credit can sit at the end of the lyrics. Apps have until 7 February 2027 to add it, and after
-            that, apps that don't show it may lose access to the API.
+            both.
+          </p>
+          <p className="text-sm leading-relaxed text-unison-text-secondary">
+            After the deadline, apps that don't show the credit may lose access to the API.
+          </p>
+          <h3 className="text-sm font-semibold text-unison-text">If you use the database dump</h3>
+          <p className="text-sm leading-relaxed text-unison-text-secondary">
+            The{" "}
+            <a
+              href="https://github.com/better-lyrics/unison#database-dump"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-unison-text transition-colors hover:text-unison-text-secondary"
+            >
+              dump
+            </a>{" "}
+            license (ODbL) requires the Unison credit. The dump has no submitter column, so the submitter credit is our
+            request rather than a license term. Get the submitter with <Code>GET /lyrics/&lt;id&gt;</Code>, or link the
+            lyric instead: <Code>https://unison.betterlyrics.org/song/&lt;video_id&gt;?variantId=&lt;id&gt;</Code> shows
+            who submitted it.
+          </p>
+          <h3 className="text-sm font-semibold text-unison-text">Good examples</h3>
+          <ul className="space-y-1.5 text-sm leading-relaxed text-unison-text-secondary">
+            <li>
+              Under the last line: <strong className="text-unison-text">Lyrics from Unison · submitted by boidu</strong>
+              , with both parts linked.
+            </li>
+            <li>In an always visible spot next to the lyrics, or in a footer or credits row that opens with them.</li>
+          </ul>
+          <h3 className="text-sm font-semibold text-unison-text">Bad examples</h3>
+          <ul className="space-y-1.5 text-sm leading-relaxed text-unison-text-secondary">
+            <li>No credit at all.</li>
+            <li>"Unison" with no link.</li>
+            <li>Unison credited, but the submitter left out.</li>
+            <li>The credit only on an About or settings page.</li>
+            <li>Unison lyrics labelled as another provider's.</li>
+          </ul>
+          <h3 className="text-sm font-semibold text-unison-text">Why?</h3>
+          <p className="text-sm leading-relaxed text-unison-text-secondary">
+            Every lyric on Unison was submitted by someone in the community, for free. Seeing their name next to their
+            work is how they get thanked, and it helps bring in the next contributor. The link matters as much as the
+            name: a listener who spots a wrong line follows it to the song page to vote, report or submit a fix, so the
+            lyrics in your app get better over time. Unison is also{" "}
+            <a
+              href="https://github.com/better-lyrics/unison#funding"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-unison-text transition-colors hover:text-unison-text-secondary"
+            >
+              self-funded
+            </a>
+            , and the credit helps people find it.
           </p>
         </section>
 
