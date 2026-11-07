@@ -118,7 +118,7 @@ export function AppHeader({ width }: { width: PageWidth }) {
 				</div>
 				<div className="flex items-center gap-2 lg:justify-self-end">
 					<div className="lg:hidden">
-						<SearchBar compact />
+						<SearchBar compact glass />
 					</div>
 					<div className="hidden lg:block">
 						<SignInControl glass />
@@ -129,7 +129,7 @@ export function AppHeader({ width }: { width: PageWidth }) {
 						aria-label={menuOpen ? "Close menu" : "Open menu"}
 						aria-expanded={menuOpen}
 						aria-haspopup="menu"
-						className="group cursor-pointer rounded-md p-1.5 text-unison-text transition-colors hover:bg-unison-bg-hover lg:hidden"
+						className="group flex cursor-pointer rounded-md p-1.5 text-unison-text transition-colors hover:bg-unison-bg-hover lg:hidden"
 					>
 						<IconSwap
 							swapped={menuOpen}

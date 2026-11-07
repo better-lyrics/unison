@@ -224,14 +224,17 @@ export function SearchBar({ compact = false, glass = false }: SearchBarProps) {
           aria-label="Search lyrics"
           value={value}
           placeholder="Search lyrics"
-          className="searchbar-input min-w-0 flex-1 bg-transparent text-sm text-unison-text placeholder:text-unison-text-muted focus:outline-none"
+          className={cn(
+            "searchbar-input min-w-0 flex-1 bg-transparent text-sm text-unison-text placeholder:text-unison-text-muted focus:outline-none",
+            compact && "[&::-webkit-search-cancel-button]:hidden",
+          )}
           {...getReferenceProps({
             onChange: (e) => onInputChange((e.target as HTMLInputElement).value),
             onFocus: () => setOpen(value.trim().length >= 1),
             onKeyDown: onInputKeyDown,
           })}
         />
-        {value.length === 0 ? <Kbd keys={["Mod", "/"]} className="shrink-0 text-unison-text-muted" /> : null}
+        {value.length === 0 && !compact ? <Kbd keys={["Mod", "/"]} className="shrink-0 text-unison-text-muted" /> : null}
         {compact ? (
           <button
             type="button"
@@ -250,7 +253,7 @@ export function SearchBar({ compact = false, glass = false }: SearchBarProps) {
       {isMounted ? (
         <FloatingPortal>
           <div ref={refs.setFloating} style={floatingStyles} {...getFloatingProps()} className="z-50">
-            <div style={styles} className={cn(popoverSurfaceClass, "w-96 overflow-hidden rounded-2xl")}>
+            <div style={styles} className={cn(popoverSurfaceClass, "w-96 max-w-[calc(100vw-2rem)] overflow-hidden rounded-2xl")}>
               <SearchDropdown status={status} results={results} activeIndex={activeIndex} getRowProps={getRowProps} />
             </div>
           </div>
