@@ -84,7 +84,7 @@ async function cachedVideoArtwork(env: Env, videoId: string): Promise<string | n
 	if (cached !== null) return cached === NEGATIVE ? null : cached
 	const url = await videoArtwork(videoId)
 	await env.CACHE.put(youTubeMusicKey(videoId), url ?? NEGATIVE, {
-		expirationTtl: config.videoLinking.suggestionCacheTtlSeconds,
+		expirationTtl: config.artwork.youTubeMusicTtlSeconds,
 	})
 	return url
 }
@@ -136,7 +136,9 @@ async function runSources(
 	const song = await findSongForVideo(env, videoId)
 	if (!song) return { url: null, final: true }
 	let final = true
+	const deadline = Date.now() + config.artwork.resolveBudgetMs
 	for (const source of sources) {
+		if (Date.now() > deadline) return { url: null, final: false }
 		try {
 			const hit = await source.find(env, videoId, song)
 			const url = hit ? await hitUrl(env, videoId, hit) : null

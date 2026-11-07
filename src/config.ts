@@ -15,6 +15,8 @@ export const config = {
 		positiveTtlSeconds: 60 * 60 * 24 * 30,
 		negativeTtlSeconds: 60 * 60 * 24 * 7,
 		incompleteTtlSeconds: 60 * 10,
+		youTubeMusicTtlSeconds: 60 * 60 * 6,
+		resolveBudgetMs: 8000,
 		refreshProbability: 0.03,
 		cdnBase: "https://cdn.betterlyrics.org/artwork/",
 		cdnKeyPrefix: "artwork/",
