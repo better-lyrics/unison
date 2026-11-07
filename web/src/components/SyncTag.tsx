@@ -10,8 +10,8 @@ interface SyncTagProps {
 
 function tagSurface(color: string, chroma: number) {
   return {
-    background: `linear-gradient(180deg, oklch(from ${color} 0.46 ${0.08 * chroma} h / 0.55), oklch(from ${color} 0.4 ${0.06 * chroma} h / 0.5)), rgba(15, 14, 19, 0.2)`,
-    boxShadow: `inset 0 1px 0 oklch(from ${color} 0.65 ${0.1 * chroma} h / 0.45)`,
+    background: `linear-gradient(180deg, oklch(from ${color} 0.53 ${0.08 * chroma} h / 0.55), oklch(from ${color} 0.47 ${0.06 * chroma} h / 0.5)), rgba(15, 14, 19, 0.2)`,
+    boxShadow: `inset 0 1px 0 oklch(from ${color} 0.73 ${0.12 * chroma} h / 0.5)`,
   }
 }
 
