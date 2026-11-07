@@ -75,7 +75,8 @@ const app = new Elysia({ adapter: node() })
 		cors({
 			origin: true,
 			methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-			allowedHeaders: ["Content-Type", "Authorization", "X-Device-ID", "X-Key-ID"],
+			allowedHeaders: ["Content-Type", "Authorization", "X-Device-ID", "X-Key-ID", "If-None-Match"],
+			exposeHeaders: ["ETag", "Retry-After"],
 			maxAge: 86400,
 		})
 	)
