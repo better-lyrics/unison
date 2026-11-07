@@ -366,9 +366,29 @@ role. If it's unset, the pipeline uses `DATABASE_URL` as before.
 
 Not to read lyrics. Submitting, voting and reporting need a [signed request](#signed-requests) from a Better Lyrics key.
 
+### What should my app send as its User-Agent?
+
+Your app's name and a link to it, like `MyPlayer/2.1 (https://github.com/you/myplayer)`. Then we can tell your traffic apart from everyone else's, and if something goes wrong we can find you and get in touch.
+
+### Will the response format change?
+
+New fields can show up, but existing ones are never renamed or removed. A lot of apps read these responses, so the current shape stays as it is. Ignore any field you don't use.
+
 ### How do I submit or fix lyrics?
 
 Most people do it from Better Lyrics. The "Submit to Unison" button under a song's lyrics opens a form filled in with the song's details, and the Unison card under the lyrics has upvote, downvote and report buttons. Other apps can do the same through the API, and third-party clients such as [unison.prjktla.my.id](https://unison.prjktla.my.id/) support it too.
+
+### Why isn't my version the one shown?
+
+Unison serves the top-ranked version of each song. Ranking is mostly votes, each weighted by the voter's reputation, plus a boost for tighter sync: syllable timing beats line timing, and both beat unsynced text. A new version needs some votes before it can pass one people have already upvoted. Every version is listed on the song's page on the website, where people can vote on it.
+
+### Why did my lyric disappear?
+
+Lookups hide a lyric that has been heavily downvoted. They also hide one that trusted users reported, while the Better Lyrics Council reviews it: if the Council keeps it, it comes back, and if they remove it, it's deleted. A hidden lyric still shows on its song page.
+
+### Why does a title and artist lookup miss a song Unison has?
+
+Titles are compared with case, accents, punctuation and anything in brackets ignored, and the artist only has to share one credited name. A title written another way, like `Song - 2011 Remaster`, still misses. If you have a video id or an ISRC, look up by that instead. With a title and artist, also send `duration`, so Unison picks the right recording when a song has more than one.
 
 ### Why are the lyrics timed for a different version of the song?
 
@@ -389,6 +409,15 @@ Yes. Save each lyric with its `ETag` and check it with `If-None-Match` before yo
 ### Can I use the lyrics in my own app?
 
 Yes. The API is free for any app that reads from it, as long as the app credits Unison and the submitter. See [Attribution](#attribution).
+
+### I reinstalled Better Lyrics or lost my key. Is my account gone?
+
+Not if you exported your identity file or linked Discord.
+
+- With the file, open Better Lyrics options, go to Identity and use Import key.
+- With Discord, join the [Better Lyrics Discord](https://discord.gg/UsHE3d5fWF) and run `/migrate`. Butler, our bot, moves your history from the old key to the new one.
+
+Done neither yet? Export your identity file and link Discord from your profile on the website now, while your key still works. The Discord is also the place to ask for help and try Butler's other commands.
 
 ### I can't sign in on the website. What do I do?
 
