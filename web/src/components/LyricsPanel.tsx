@@ -3,6 +3,7 @@ import { DownloadButton } from "@/components/DownloadButton"
 import { LyricsContentSkeleton, LyricsRenderer, parseVariantLyrics } from "@/components/LyricsRenderer"
 import { RawLyricsView } from "@/components/RawLyricsView"
 import { glassClass } from "@/components/ui"
+import { IconFocusCentered } from "@tabler/icons-react"
 import { cn } from "@/lib/cn"
 import { downloadTextFile } from "@/lib/download"
 import { pickTranslationLanguage, translationLanguages } from "@/lib/lyric-translations"
@@ -105,6 +106,7 @@ export function LyricsPanel({
             !resumeAutoscroll && "pointer-events-none opacity-0",
           )}
         >
+          <IconFocusCentered className="size-4" />
           Resume autoscroll
         </button>
         {variant ? (
