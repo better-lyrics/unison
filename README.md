@@ -4,7 +4,7 @@
 
 Crowdsourced lyrics API for [Better Lyrics](https://github.com/better-lyrics/better-lyrics). People submit synced lyrics and vote on each other's versions, and the API serves the top-ranked one for a song.
 
-[Website](https://unison.betterlyrics.org) · [API guide](https://docs.betterlyrics.org/unison) · [Database dump](#database-dump)
+[Website](https://unison.betterlyrics.org) · [API guide](https://docs.betterlyrics.org/unison) · [Discord](https://discord.gg/UsHE3d5fWF)
 
 > [!IMPORTANT]
 > Showing Unison lyrics in an app? You must credit Unison and the submitter. See [Attribution](#attribution); apps have until 7 February 2027.
