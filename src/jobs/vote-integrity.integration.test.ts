@@ -1012,6 +1012,21 @@ describeIntegration("rival downvotes", () => {
 		expect(rows[0]).toEqual({ downvotes: 0, vote_count: 1, positive: true })
 	})
 
+	it("a submit refreshes only the submitter's drifted downvotes", async () => {
+		const voter = await seedKey(RIVAL_NOW - 30 * DAY)
+		const target = await versionOn("rvAvid00007", await seedKey(RIVAL_NOW - 30 * DAY))
+		await downvote(voter, target)
+		await recalculateScore(db.env, target)
+		const unrelated = await versionOn("rvAvid00008", await seedKey(RIVAL_NOW - 30 * DAY))
+		await downvote(await seedKey(RIVAL_NOW - 30 * DAY), unrelated)
+
+		await versionOn("rvAvid00007", voter)
+		expect(await resyncVoteCounts(db.env, { downvotedBy: voter })).toEqual({ repaired: 1 })
+
+		expect(await downvotesOf(target)).toBe(0)
+		expect(await downvotesOf(unrelated)).toBe(0)
+	})
+
 	it("an empty title is never a rival match", async () => {
 		const [own, other] = ["rvAvid00005", "rvAvid00006"]
 		const voter = await seedKey(RIVAL_NOW - 30 * DAY)

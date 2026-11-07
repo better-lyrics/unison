@@ -628,15 +628,3 @@ export async function hasRivalStrike(env: Env): Promise<boolean> {
 		null
 	)
 }
-
-export async function lyricsDownvotedBy(env: Env, userId: number): Promise<number[]> {
-	const res = await env.DB.prepare(
-		`SELECT l.id FROM votes v
-		JOIN lyrics l ON l.id = v.lyrics_id
-		WHERE v.user_id = ? AND v.vote = -1 AND v.is_self_vote = 0 AND l.deleted_at IS NULL
-		ORDER BY l.id`
-	)
-		.bind(userId)
-		.all<{ id: number }>()
-	return res.results.map((r) => r.id)
-}

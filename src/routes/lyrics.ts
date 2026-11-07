@@ -14,7 +14,7 @@ import {
 } from "@/db/lyrics"
 import { getUserVote, getUserVotesForIds } from "@/db/votes"
 import { Logger } from "@/infra/logger"
-import { refreshRivalTargets } from "@/jobs/vote-integrity"
+import { resyncVoteCounts } from "@/jobs/resync-vote-counts"
 import { toFeedResponse } from "@/routes/feed"
 import { toResponse, toSearchResponse } from "@/routes/lyrics.transformers"
 import { buildSealMarks, resolveActors } from "@/routes/marks"
@@ -34,8 +34,8 @@ import { Elysia, t } from "elysia"
 
 const log = new Logger("app")
 
-const refreshRivalTargetsLater = (env: Env, userId: number) =>
-	refreshRivalTargets(env, userId).catch((err) =>
+const resyncDownvotedLater = (env: Env, userId: number) =>
+	resyncVoteCounts(env, { downvotedBy: userId }).catch((err) =>
 		log.error("rival downvote refresh failed", { userId, error: String(err) })
 	)
 
@@ -490,7 +490,7 @@ export const lyricsRoutes = (env: Env) =>
 			if (!result.created) {
 				return status(409, buildError(ErrorCode.VARIANT_CAP_REACHED))
 			}
-			refreshRivalTargetsLater(env, userId)
+			resyncDownvotedLater(env, userId)
 
 			return status(201, {
 				success: true,
@@ -508,7 +508,7 @@ export const lyricsRoutes = (env: Env) =>
 				const result = await softDeleteLyrics(env, id, userId, "submitter")
 
 				if (result.deleted) {
-					refreshRivalTargetsLater(env, userId)
+					resyncDownvotedLater(env, userId)
 					return { success: true }
 				}
 				if (result.reason === "forbidden") {

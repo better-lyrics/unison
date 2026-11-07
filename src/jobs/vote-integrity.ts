@@ -10,7 +10,6 @@ import {
 	findSuspectKeys,
 	hasAnyStrike,
 	hasRivalStrike,
-	lyricsDownvotedBy,
 	lyricsVotedByKeys,
 	markStrikeSettled,
 	recordRivalStrikes,
@@ -90,23 +89,6 @@ export async function backfillRivalStrikes(
 	if (await hasRivalStrike(env)) return null
 	const voters = await findRivalVoters(env, { now, all: true })
 	return voters.length > 0 ? (await recordRivalStrikes(env, voters, now)).length : 0
-}
-
-export async function refreshRivalTargets(env: Env, userId: number): Promise<void> {
-	await resyncLyrics(env, await lyricsDownvotedBy(env, userId))
-}
-
-async function resyncLyrics(env: Env, lyricsIds: number[]): Promise<number> {
-	let resynced = 0
-	for (const id of lyricsIds) {
-		try {
-			await recalculateScore(env, id)
-			resynced++
-		} catch (err) {
-			log.error("rival downvote recalculation failed", { lyricsId: id, error: String(err) })
-		}
-	}
-	return resynced
 }
 
 async function sweepLoyalLyrics(env: Env): Promise<number> {

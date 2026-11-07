@@ -9,13 +9,20 @@ const counted = (vote: 1 | -1) =>
 	`(SELECT COUNT(*) FROM votes v JOIN users u ON u.id = v.user_id
 		WHERE v.lyrics_id = lyrics.id AND v.vote = ${vote} AND ${COUNTED_VOTE_PREDICATE})`
 
-export async function resyncVoteCounts(env: Env): Promise<{ repaired: number }> {
+export async function resyncVoteCounts(
+	env: Env,
+	scope: { downvotedBy?: number } = {}
+): Promise<{ repaired: number }> {
+	const scoped = scope.downvotedBy !== undefined
 	const drifted = await env.DB.prepare(
 		`SELECT id FROM lyrics
 		 WHERE deleted_at IS NULL
+		   ${scoped ? "AND id IN (SELECT lyrics_id FROM votes WHERE user_id = ? AND vote = -1)" : ""}
 		   AND (upvotes <> ${counted(1)} OR downvotes <> ${counted(-1)})
 		 ORDER BY id`
-	).all<{ id: number }>()
+	)
+		.bind(...(scoped ? [scope.downvotedBy] : []))
+		.all<{ id: number }>()
 
 	let repaired = 0
 	for (const { id } of drifted.results ?? []) {
