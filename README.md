@@ -99,7 +99,7 @@ curl -i "https://unison.betterlyrics.org/lyrics?v=Ugr4KKK_SqY" \
   -H 'If-None-Match: <the ETag you saved>'
 ```
 
-The tag changes when someone edits the lyric or its song details, or when another version moves to the top. Votes, confidence and the submitter's stats can change under the same tag, so a saved copy may show old numbers.
+The tag changes when someone edits the lyric or its song details, when the submitter changes their name, or when another version moves to the top. Votes, confidence and the submitter's stats can change under the same tag, so a saved copy may show old numbers.
 
 ## Signed requests
 
@@ -181,7 +181,7 @@ Environment variables are listed under [Configuration](#configuration).
 | `song` + `artist` | `Explorer`, `Justice` | `artist` matches any one credited name. Add `album` or `duration` (seconds, ±2 s) to narrow it. |
 | `spotify`, `apple_music`, `tidal` | track id | A track id, not a link. Resolved to an ISRC through [BiniLink](https://link.binimum.org). If several are sent, the first that resolves wins, in that order. |
 
-When a request names the song more than one way, Unison tries `v`, then `isrc`, then `song` + `artist`, and returns the first match.
+When a request names the song more than one way, Unison tries `v`, then `isrc`, then the ISRC behind a Spotify, Apple Music or Tidal id, then `song` + `artist`, and returns the first match.
 
 Besides the lyric, the response can carry:
 
@@ -368,7 +368,7 @@ Not to read lyrics. Submitting, voting and reporting need a [signed request](#si
 
 ### What should my app send as its User-Agent?
 
-Your app's name and a link to it, like `MyPlayer/2.1 (https://github.com/you/myplayer)`. Then we can tell your traffic apart from everyone else's, and if something goes wrong we can find you and get in touch.
+Your app's name and a link to it, like `MyPlayer/2.1 (https://github.com/you/myplayer)`, so we can get in touch if something goes wrong.
 
 ### Will the response format change?
 
@@ -416,8 +416,6 @@ Not if you exported your identity file or linked Discord.
 
 - With the file, open Better Lyrics options, go to Identity and use Import key.
 - With Discord, join the [Better Lyrics Discord](https://discord.gg/UsHE3d5fWF) and run `/migrate`. Butler, our bot, moves your history from the old key to the new one.
-
-Done neither yet? Export your identity file and link Discord from your profile on the website now, while your key still works. The Discord is also the place to ask for help and try Butler's other commands.
 
 ### I can't sign in on the website. What do I do?
 

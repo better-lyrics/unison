@@ -364,8 +364,8 @@ export function DocsPage() {
           </p>
           <CodeBlock code={CACHE_CODE} language="javascript" label="JavaScript" />
           <p className="text-sm leading-relaxed text-unison-text-secondary">
-            The tag changes when someone edits the lyric or its song details, or when another version moves to the top.
-            Votes and confidence can change under the same tag.
+            The tag changes when someone edits the lyric or its song details, when the submitter changes their name, or
+            when another version moves to the top. Votes and confidence can change under the same tag.
           </p>
         </section>
 
