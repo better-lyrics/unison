@@ -1,8 +1,9 @@
 import "@braccato/core/element"
 import braccatoTheme from "@/components/braccato-theme.css?raw"
+import braccatoPhoneTheme from "@/components/braccato-theme-phone.css?raw"
 import { Bone } from "@/components/skeleton"
 import { cn } from "@/lib/cn"
-import { isTouchScreen } from "@/lib/touch-screen"
+import { isPhone } from "@/lib/phone"
 import { pickTranslationLanguage, translationLanguages } from "@/lib/lyric-translations"
 import type { LyricsFormat, VariantFull } from "@/lib/types"
 import { injectRomanization, injectTranslation } from "@braccato/core"
@@ -20,7 +21,7 @@ interface LyricsRendererProps {
   className?: string
 }
 
-const TOUCH_THEME = `${braccatoTheme}\n/*\nblyrics-letter-wave = false;\n*/\n`
+const PHONE_THEME = `${braccatoTheme}\n${braccatoPhoneTheme}`
 
 const PARSER_BY_FORMAT: Record<LyricsFormat, LyricParser> = {
   ttml: TTMLParser,
@@ -78,7 +79,7 @@ export function LyricsRenderer({
       setResumeAffordanceVisible: (visible) => onAutoscrollPauseRef.current?.(visible ? resume : null),
     }
     el.tickOptions = { countEveryUserScroll: true }
-    el.theme = isTouchScreen() ? TOUCH_THEME : braccatoTheme
+    el.theme = isPhone() ? PHONE_THEME : braccatoTheme
     return () => onAutoscrollPauseRef.current?.(null)
   }, [])
 
