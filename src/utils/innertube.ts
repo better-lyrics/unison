@@ -1,6 +1,6 @@
 import { config } from "@/config"
 import { Logger } from "@/infra/logger"
-import { pickSquareArtwork } from "@/utils/artwork"
+import { isAlbumArtUrl, pickSquareArtwork } from "@/utils/artwork"
 import { Innertube } from "youtubei.js"
 
 const log = new Logger("innertube")
@@ -22,15 +22,41 @@ function validSeconds(value: unknown): number | null {
 	return typeof value === "number" && Number.isFinite(value) && value > 0 ? value : null
 }
 
-async function upNextDurationSeconds(yt: Innertube, videoId: string): Promise<number | null> {
+type UpNextVideo = {
+	video_id?: string
+	duration?: { seconds?: number }
+	thumbnail?: { url: string; width: number; height: number }[]
+}
+
+const EMPTY_QUEUE = "Music queue was empty"
+
+async function upNextEntry(yt: Innertube, videoId: string): Promise<UpNextVideo[] | null> {
 	const panel = await yt.music.getUpNext(videoId, false)
 	for (const entry of panel.contents) {
 		const videos = "primary" in entry ? [entry.primary, ...(entry.counterpart ?? [])] : [entry]
-		for (const video of videos) {
-			if (video && "video_id" in video && video.video_id === videoId) {
-				return validSeconds(video.duration?.seconds)
-			}
-		}
+		const known = videos.filter((v): v is NonNullable<typeof v> => !!v) as UpNextVideo[]
+		if (known.some((v) => v.video_id === videoId)) return known
+	}
+	return null
+}
+
+async function upNextDurationSeconds(yt: Innertube, videoId: string): Promise<number | null> {
+	const video = (await upNextEntry(yt, videoId))?.find((v) => v.video_id === videoId)
+	return validSeconds(video?.duration?.seconds)
+}
+
+export async function videoArtwork(videoId: string): Promise<string | null> {
+	const yt = await getInnertube()
+	let entry: UpNextVideo[] | null
+	try {
+		entry = await upNextEntry(yt, videoId)
+	} catch (err) {
+		if ((err as Error).message.startsWith(EMPTY_QUEUE)) return null
+		throw err
+	}
+	for (const video of entry ?? []) {
+		const art = pickSquareArtwork(video.thumbnail ?? [], config.artwork.size)
+		if (art && isAlbumArtUrl(art)) return art
 	}
 	return null
 }

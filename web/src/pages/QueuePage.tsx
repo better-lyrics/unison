@@ -1,3 +1,4 @@
+import { LeaderboardSection } from "@/components/LeaderboardSection"
 import { useInfiniteQuery } from "@tanstack/react-query"
 import { useEffect, useMemo, useRef } from "react"
 import { EmptyState } from "@/components/EmptyState"
@@ -47,14 +48,7 @@ export function QueuePage() {
   }, [hasNextPage, isFetchingNextPage, fetchNextPage])
 
   return (
-    <section className="space-y-3">
-      <header className="space-y-1">
-        <h1 className="text-base font-semibold text-unison-text">Queue</h1>
-        <p className="text-xs text-unison-text-muted">
-          All songs missing synced lyrics, ranked by reputation-weighted demand.
-        </p>
-      </header>
-
+    <LeaderboardSection title="Queue" subtitle="All songs missing synced lyrics, ranked by reputation-weighted demand.">
       {isLoading ? (
         <SongRowSkeletonList rows={20} />
       ) : error ? (
@@ -84,6 +78,6 @@ export function QueuePage() {
           )}
         </>
       )}
-    </section>
+    </LeaderboardSection>
   )
 }

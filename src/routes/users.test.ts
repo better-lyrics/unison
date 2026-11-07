@@ -1,6 +1,7 @@
 import { config } from "@/config"
+import { artworkCacheKey } from "@/services/artwork-cache"
 import type { Env } from "@/types"
-import { describe, expect, it, vi } from "vitest"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { userRoutes } from "./users"
 
 vi.mock("@/db/users", async () => {
@@ -491,6 +492,14 @@ describe("PUT /users/me/featured-badges", () => {
 })
 
 describe("PUT /users/me/profile", () => {
+	// Pins the 3% artwork refresh off, so its background DB write never takes a queued row.
+	beforeEach(() => {
+		vi.spyOn(Math, "random").mockReturnValue(0.5)
+	})
+	afterEach(() => {
+		vi.restoreAllMocks()
+	})
+
 	const VIDEO = "dQw4w9WgXcQ"
 
 	function put(env: Env, body: unknown) {
@@ -519,7 +528,7 @@ describe("PUT /users/me/profile", () => {
 
 	it("saves a banner from the caller's own synced song", async () => {
 		const { db, env } = signedIn([{ found: 1 }, { banner_video_id: VIDEO, show_discord: true }], {
-			[`artwork:v2:${VIDEO}`]: "https://lh3.googleusercontent.com/cover=w544-h544",
+			[artworkCacheKey(VIDEO)]: "https://lh3.googleusercontent.com/cover=w544-h544",
 		})
 		const res = await put(env, { banner: VIDEO, showDiscord: true })
 		expect(res.status).toBe(200)

@@ -54,6 +54,7 @@ import { translateRoutes } from "@/routes/translate"
 import { userRoutes } from "@/routes/users"
 import { videoLinkRoutes } from "@/routes/video-links"
 import { voteBotRoutes, voteRoutes } from "@/routes/votes"
+import { backfillArtworkFallbacks, evictArtworkFallbacks } from "@/services/artwork-fallback"
 import { sharePage } from "@/share-meta"
 import { htmlDocument, loadSpa, serveSpa } from "@/spa"
 import { cors } from "@elysiajs/cors"
@@ -114,6 +115,21 @@ const app = new Elysia({ adapter: node() })
 					cronLog.warn("daily dump skipped", result)
 				} else {
 					cronLog.info("daily dump complete", result)
+				}
+			},
+		})
+	)
+	.use(
+		cron({
+			name: "artwork-fallback-eviction",
+			pattern: config.artwork.fallback.evictSchedule,
+			timezone: "UTC",
+			async run() {
+				try {
+					const result = await evictArtworkFallbacks(env)
+					if (result.evicted > 0) cronLog.info("artwork fallback eviction complete", result)
+				} catch (err) {
+					cronLog.error("artwork fallback eviction failed", { error: (err as Error).message })
 				}
 			},
 		})
@@ -270,6 +286,12 @@ backfillArtwork(env)
 		if (seeded > 0) log.info("artwork backfill complete", { seeded })
 	})
 	.catch((err) => log.error("artwork backfill failed", { error: (err as Error).message }))
+
+backfillArtworkFallbacks(env)
+	.then(({ copied }) => {
+		if (copied > 0) log.info("artwork fallback backfill complete", { copied })
+	})
+	.catch((err) => log.error("artwork fallback backfill failed", { error: (err as Error).message }))
 
 backfillVoteIntegrity(env)
 	.then((result) => {

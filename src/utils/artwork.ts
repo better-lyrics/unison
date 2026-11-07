@@ -1,3 +1,4 @@
+import { config } from "@/config"
 const SIZE_SUFFIX = /=w(\d+)-h(\d+)/
 
 export function isAlbumArtUrl(url: string | null | undefined): boolean {
@@ -14,6 +15,14 @@ export function isAlbumArtUrl(url: string | null | undefined): boolean {
 	const m = url.match(SIZE_SUFFIX)
 	if (!m) return false
 	return m[1] === m[2]
+}
+
+export function isMirroredArtworkUrl(url: string | null | undefined): boolean {
+	return typeof url === "string" && url.startsWith(config.artwork.cdnBase)
+}
+
+export function isServableArtworkUrl(url: string | null | undefined): boolean {
+	return isAlbumArtUrl(url) || isMirroredArtworkUrl(url)
 }
 
 export function normalizeArtworkUrl(url: string, size: number): string {

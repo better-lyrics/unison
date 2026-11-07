@@ -8,7 +8,7 @@ import { glassActionClass, glassClass } from "@/components/ui"
 import { XpAvatar } from "@/components/XpAvatar"
 import { Bone } from "@/components/skeleton"
 import { paletteVars, useAccent } from "@/hooks/useArtPalette"
-import { useBadgeImage } from "@/hooks/useBadgeImage"
+import { useBadgeArt } from "@/hooks/useBadgeImage"
 import type { ProfileArt } from "@/hooks/useProfileArt"
 import { isRareBadge, resolveBadgeImage } from "@/lib/badge-view"
 import { SwapLabel } from "@/components/SwapLabel"
@@ -49,16 +49,14 @@ interface ProfileCardProps {
 }
 
 function Standing({ tier, rank }: { tier: string; rank: number | null }) {
-  const badgeImage = useBadgeImage()
-  const gem = badgeImage(tier)
-  const silhouette = badgeImage(tier, undefined, "silhouette")
+  const gem = useBadgeArt()(tier)
   const name = titleCase(tier)
   return (
     <span
       title={rank === null ? name : `${name}, rank #${rank}`}
       className={cn(PILL, "gap-1.5 pr-3 pl-[9px] text-[13px]")}
     >
-      <BadgeArt src={gem} silhouette={silhouette} className="size-5" />
+      <BadgeArt src={gem?.src ?? null} silhouette={gem?.silhouette ?? null} className="size-5" />
       {name}
       {rank === null ? null : <b className="ml-0.5 text-unison-medal-gold">#{rank}</b>}
     </span>

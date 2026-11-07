@@ -1,4 +1,4 @@
-import { useArtwork, youtubeThumbnailFallbackUrl, youtubeThumbnailUrl } from "@/lib/artwork"
+import { useArtworkCover, youtubeThumbnailFallbackUrl, youtubeThumbnailUrl } from "@/lib/artwork"
 import type { VariantFull } from "@/lib/types"
 import { IconPlayerPlayFilled } from "@tabler/icons-react"
 
@@ -29,7 +29,7 @@ interface CoverProps {
 }
 
 export function VariantCover({ variant, playerRef, playerActive, onActivatePlayer }: CoverProps) {
-  const { data: art } = useArtwork(variant.videoId)
+  const { data: art } = useArtworkCover(variant.videoId)
 
   if (playerActive) {
     return (
@@ -39,14 +39,17 @@ export function VariantCover({ variant, playerRef, playerActive, onActivatePlaye
     )
   }
 
-  const src = art ?? youtubeThumbnailUrl(variant.videoId)
+  const sources = art
+    ? [art.url, art.fallbackUrl]
+    : [youtubeThumbnailUrl(variant.videoId), youtubeThumbnailFallbackUrl(variant.videoId)]
   const poster = (
     <>
       <img
-        src={src}
+        src={sources[0] ?? undefined}
         alt=""
         onError={(e) => {
-          if (!art) e.currentTarget.src = youtubeThumbnailFallbackUrl(variant.videoId)
+          const next = sources[1]
+          if (next && e.currentTarget.src !== next) e.currentTarget.src = next
         }}
         className="block size-full object-cover"
       />

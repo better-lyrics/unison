@@ -1,7 +1,9 @@
+import { cn } from "@/lib/cn"
 import { Link } from "react-router-dom"
 import { Bone, skeletonKeys } from "@/components/skeleton"
 import { SongThumbnail } from "@/components/SongThumbnail"
-import { formatDuration, formatRank } from "@/lib/format"
+import { RANK_ROW, RankCell, RankNumber } from "@/components/MedalRank"
+import { formatDuration } from "@/lib/format"
 import type { LyricsSearchHit } from "@/lib/types"
 
 interface SearchResultRowProps {
@@ -19,9 +21,9 @@ export function SearchResultRow({ entry, rank }: SearchResultRowProps) {
       <Link
         to={`/song/${entry.videoId}?variantId=${entry.id}`}
         aria-label={`Open lyrics for ${entry.song} by ${entry.artist}`}
-        className="flex items-center gap-4 rounded-lg bg-white/[0.02] px-4 py-3 transition-colors hover:bg-unison-bg-hover"
+        className={cn(RANK_ROW, "bg-white/[0.02] transition-colors hover:bg-unison-bg-hover")}
       >
-        <span className="shrink-0 font-mono text-xs tabular-nums text-unison-text-muted">{formatRank(rank)}</span>
+        <RankNumber rank={rank} />
         <SongThumbnail videoId={entry.videoId} song={entry.song} artist={entry.artist} className="size-12" />
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-medium text-unison-text">{entry.song}</p>
@@ -48,8 +50,10 @@ export function SearchResultRow({ entry, rank }: SearchResultRowProps) {
 function SearchResultRowSkeleton() {
   return (
     <li>
-      <div className="flex items-center gap-4 rounded-lg bg-white/[0.02] px-4 py-3">
-        <Bone className="h-4 w-4 shrink-0" />
+      <div className={cn(RANK_ROW, "bg-white/[0.02]")}>
+        <RankCell>
+          <Bone className="h-4 w-4" />
+        </RankCell>
         <Bone className="size-12 shrink-0" />
         <div className="min-w-0 flex-1 space-y-1.5">
           <Bone className="h-3.5 w-2/5" />

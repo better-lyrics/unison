@@ -1,6 +1,7 @@
 import { createContext, type FocusEvent, type PointerEvent, type ReactNode, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react"
 import { useLocation } from "react-router-dom"
 import { useArtPalette } from "@/hooks/useArtPalette"
+import type { Accent } from "@/lib/accent"
 import { songBackdrop, useArtwork } from "@/lib/artwork"
 import { ArtBackground } from "./ArtBackground"
 
@@ -49,9 +50,9 @@ export function PageArtProvider({ children }: { children: ReactNode }) {
   const { pathname } = useLocation()
   const fallback = useMemo(defaultArt, [])
   const src = art?.src ?? fallback
-  const [onScreen, setOnScreen] = useState<string | null>(null)
-  const paletteSrc = onScreen ?? src
-  useArtPalette(paletteSrc, paletteSrc === fallback ? DEFAULT_SCRIM_FLOOR : 0)
+  const [onScreen, setOnScreen] = useState<{ src: string; accent: Accent | null } | null>(null)
+  const showArt = useCallback((shown: string, accent: Accent | null) => setOnScreen({ src: shown, accent }), [])
+  useArtPalette(onScreen?.accent ?? null, !onScreen || onScreen.src === fallback ? DEFAULT_SCRIM_FLOOR : 0)
 
   const previewSrc = preview?.pathname === pathname ? preview.src : null
 
@@ -69,7 +70,7 @@ export function PageArtProvider({ children }: { children: ReactNode }) {
   return (
     <SetPageArt value={setArt}>
       <PreviewPageArt value={previewArt}>
-        <ArtBackground src={previewSrc ?? src} moving={art?.moving ?? false} onShow={setOnScreen} />
+        <ArtBackground src={previewSrc ?? src} moving={art?.moving ?? false} onShow={showArt} />
         {children}
       </PreviewPageArt>
     </SetPageArt>

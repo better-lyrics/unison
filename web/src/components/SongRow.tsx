@@ -1,5 +1,7 @@
+import { cn } from "@/lib/cn"
 import { Bone, skeletonKeys } from "@/components/skeleton"
-import { formatCompact, formatExact, formatRank } from "@/lib/format"
+import { RANK_ROW, RankCell, RankNumber } from "@/components/MedalRank"
+import { formatCompact, formatExact } from "@/lib/format"
 import type { SongLeaderboardEntry } from "@/lib/types"
 import { youTubeMusicUrl } from "@/lib/youtube-music"
 import { CoverImage } from "@/components/AlbumArt"
@@ -19,9 +21,9 @@ export function SongRow({ entry }: SongRowProps) {
         target="_blank"
         rel="noopener noreferrer"
         aria-label={`Open ${entry.song} by ${entry.artist} in YouTube Music`}
-        className="flex items-center gap-4 rounded-lg bg-white/[0.02] px-4 py-3 transition-colors hover:bg-unison-bg-hover"
+        className={cn(RANK_ROW, "transition-colors sm:bg-white/[0.02] hover:bg-unison-bg-hover")}
       >
-        <span className="shrink-0 font-mono text-xs tabular-nums text-unison-text-muted">{formatRank(entry.rank)}</span>
+        <RankNumber rank={entry.rank} />
         <div className="flex size-12 shrink-0 items-center justify-center overflow-hidden rounded-md bg-unison-bg-hover">
           <CoverImage src={entry.thumbnailUrl} song={entry.song} artist={entry.artist} />
         </div>
@@ -29,7 +31,7 @@ export function SongRow({ entry }: SongRowProps) {
           <p className="truncate text-sm font-medium text-unison-text">{entry.song}</p>
           <p className="truncate text-xs text-unison-text-secondary">{entry.artist}</p>
         </div>
-        <div className="text-right">
+        <div className="max-sm:w-14 max-sm:shrink-0 text-right">
           <p title={formatExact(metric)} className="font-mono text-sm text-unison-text">
             {formatCompact(metric)}
           </p>
@@ -43,14 +45,16 @@ export function SongRow({ entry }: SongRowProps) {
 function SongRowSkeleton() {
   return (
     <li>
-      <div className="flex items-center gap-4 rounded-lg bg-white/[0.02] px-4 py-3">
-        <Bone className="h-4 w-4 shrink-0" />
+      <div className={cn(RANK_ROW, "sm:bg-white/[0.02]")}>
+        <RankCell>
+          <Bone className="h-4 w-4" />
+        </RankCell>
         <Bone className="size-12 shrink-0" />
         <div className="min-w-0 flex-1 space-y-2">
           <Bone className="h-3.5 w-2/5" />
           <Bone className="h-3 w-1/4" />
         </div>
-        <div className="flex flex-col items-end gap-2">
+        <div className="flex max-sm:w-14 max-sm:shrink-0 flex-col items-end gap-2">
           <Bone className="h-3.5 w-10" />
           <Bone className="h-2.5 w-12" />
         </div>

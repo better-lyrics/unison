@@ -1,13 +1,14 @@
-import { afterAll, beforeAll, beforeEach, expect, it } from "vitest"
 import { getProfileExtras, setProfileSettings } from "@/db/profile-settings"
+import { artworkCacheKey } from "@/services/artwork-cache"
 import {
-	describeIntegration,
 	type IntegrationDb,
+	describeIntegration,
 	openIntegrationDb,
 	seedLyric,
 	seedUser,
 	wipeRevisionData,
 } from "@/test/integration-harness"
+import { afterAll, beforeAll, beforeEach, expect, it } from "vitest"
 
 const KEY = "d".repeat(64)
 const VIDEO = "HsBfV2A5dUY"
@@ -32,7 +33,7 @@ describeIntegration("profile settings (integration)", () => {
 	it("serves a banner only while the curator still has a live lyric for it", async () => {
 		const userId = await seedUser(db, KEY)
 		const lyricId = await seedLyric(db, userId, { lyrics: "[00:01.00]Morning comes in grey", format: "lrc" })
-		db.cache.store.set(`artwork:v2:${VIDEO}`, "https://lh3.googleusercontent.com/cover=w544-h544")
+		db.cache.store.set(artworkCacheKey(VIDEO), "https://lh3.googleusercontent.com/cover=w544-h544")
 
 		expect(await setProfileSettings(db.env, KEY, { banner: VIDEO })).toEqual({
 			banner: VIDEO,

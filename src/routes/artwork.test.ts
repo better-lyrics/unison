@@ -1,5 +1,6 @@
-import { describe, expect, it } from "vitest"
+import { artworkCacheKey, writeCachedCover } from "@/services/artwork-cache"
 import type { Env } from "@/types"
+import { describe, expect, it } from "vitest"
 import { artworkRoutes } from "./artwork"
 
 function makeEnv(): Env {
@@ -31,7 +32,7 @@ function makeEnv(): Env {
 describe("GET /artwork", () => {
 	it("returns the resolved artwork url from cache", async () => {
 		const env = makeEnv()
-		await env.CACHE.put("artwork:v2:dQw4w9WgXcQ", "https://art/x=w544-h544")
+		await env.CACHE.put(artworkCacheKey("dQw4w9WgXcQ"), "https://art/x=w544-h544")
 		const app = artworkRoutes(env)
 		const res = await app.handle(new Request("http://localhost/artwork?v=dQw4w9WgXcQ"))
 		expect(res.status).toBe(200)
@@ -41,9 +42,28 @@ describe("GET /artwork", () => {
 		})
 	})
 
+	it("adds our CDN copy as fallbackUrl when one exists, leaving artworkUrl as the original", async () => {
+		const env = makeEnv()
+		const cover = {
+			url: "https://yt3.googleusercontent.com/abc=w544-h544-l90-rj",
+			fallbackUrl: "https://cdn.betterlyrics.org/artwork/dQw4w9WgXcQ-0123456789abcdef.jpg",
+		}
+		await writeCachedCover(env, "dQw4w9WgXcQ", cover)
+		const res = await artworkRoutes(env).handle(
+			new Request("http://localhost/artwork?v=dQw4w9WgXcQ&size=256")
+		)
+		expect(await res.json()).toEqual({
+			success: true,
+			data: {
+				artworkUrl: "https://yt3.googleusercontent.com/abc=w256-h256-l90-rj",
+				fallbackUrl: cover.fallbackUrl,
+			},
+		})
+	})
+
 	it("returns a null artworkUrl on a negative cache hit", async () => {
 		const env = makeEnv()
-		await env.CACHE.put("artwork:v2:dQw4w9WgXcQ", "__none__")
+		await env.CACHE.put(artworkCacheKey("dQw4w9WgXcQ"), "__none__")
 		const app = artworkRoutes(env)
 		const res = await app.handle(new Request("http://localhost/artwork?v=dQw4w9WgXcQ"))
 		expect(res.status).toBe(200)
@@ -55,7 +75,7 @@ describe("GET /artwork", () => {
 
 		async function get(query: string) {
 			const env = makeEnv()
-			await env.CACHE.put("artwork:v2:dQw4w9WgXcQ", STORED)
+			await env.CACHE.put(artworkCacheKey("dQw4w9WgXcQ"), STORED)
 			const res = await artworkRoutes(env).handle(
 				new Request(`http://localhost/artwork?v=dQw4w9WgXcQ${query}`)
 			)
@@ -83,7 +103,7 @@ describe("GET /artwork", () => {
 
 		it("keeps a missing cover null when a size is given", async () => {
 			const env = makeEnv()
-			await env.CACHE.put("artwork:v2:dQw4w9WgXcQ", "__none__")
+			await env.CACHE.put(artworkCacheKey("dQw4w9WgXcQ"), "__none__")
 			const res = await artworkRoutes(env).handle(
 				new Request("http://localhost/artwork?v=dQw4w9WgXcQ&size=256")
 			)

@@ -196,13 +196,18 @@ export async function fetchRevisions(lyricsId: number, signal?: AbortSignal): Pr
   return revisions
 }
 
-export async function fetchArtwork(videoId: string, size?: number): Promise<string | null> {
+export interface ArtworkCover {
+  url: string
+  fallbackUrl: string | null
+}
+
+export async function fetchArtwork(videoId: string, size?: number): Promise<ArtworkCover | null> {
   if (IS_SPA_EXPANSION_SEED) return null
   const sized = size !== undefined ? `&size=${size}` : ""
-  const { artworkUrl } = await getJson<{ artworkUrl: string | null }>(
+  const { artworkUrl, fallbackUrl } = await getJson<{ artworkUrl: string | null; fallbackUrl?: string }>(
     `/artwork?v=${encodeURIComponent(videoId)}${sized}`,
   )
-  return artworkUrl
+  return artworkUrl ? { url: artworkUrl, fallbackUrl: fallbackUrl ?? null } : null
 }
 
 async function unwrapMutationError(res: Response): Promise<never> {
@@ -232,11 +237,7 @@ export async function unvoteVariant(id: number): Promise<void> {
   await authedFetch<unknown>(`/lyrics/${id}/vote`, { method: "DELETE" })
 }
 
-export async function reportVariant(
-  id: number,
-  reason: ReportReason,
-  details?: string,
-): Promise<void> {
+export async function reportVariant(id: number, reason: ReportReason, details?: string): Promise<void> {
   if (IS_SPA_EXPANSION_SEED) return (await import("./dev-seed-spa-expansion")).seedReport(id, reason, details)
   const body = details !== undefined ? { reason, details } : { reason }
   await authedFetch<unknown>(`/lyrics/${id}/report`, {

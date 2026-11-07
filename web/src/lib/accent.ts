@@ -40,7 +40,7 @@ export const inks = (hue: number) => ({
   "--ink-4": `hsl(${hue} 10% 48%)`,
 })
 
-async function decode(src: string): Promise<HTMLImageElement> {
+export async function decodeArt(src: string): Promise<HTMLImageElement> {
   const img = new Image()
   img.crossOrigin = "anonymous"
   img.src = src
@@ -49,7 +49,10 @@ async function decode(src: string): Promise<HTMLImageElement> {
 }
 
 export async function sampleAccent(src: string): Promise<Accent> {
-  const img = await decode(src)
+  return accentFromImage(await decodeArt(src))
+}
+
+export function accentFromImage(img: HTMLImageElement): Accent {
   const canvas = Object.assign(document.createElement("canvas"), { width: SAMPLE, height: SAMPLE })
   const ctx = canvas.getContext("2d", { willReadFrequently: true })
   if (!ctx) throw new Error("2d canvas unavailable")
@@ -59,7 +62,7 @@ export async function sampleAccent(src: string): Promise<Accent> {
 
 export async function backedImage(src: string, accent: Accent): Promise<string> {
   if (accent.clear < 0.15) return src
-  const img = await decode(src)
+  const img = await decodeArt(src)
   const canvas = Object.assign(document.createElement("canvas"), { width: BACKED_SIZE, height: BACKED_SIZE })
   const ctx = canvas.getContext("2d")
   if (!ctx) throw new Error("2d canvas unavailable")

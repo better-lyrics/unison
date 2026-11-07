@@ -8,7 +8,7 @@ import { getSubmissionsByUser } from "@/db/profile"
 import { getProfileExtras } from "@/db/profile-settings"
 import { getUserByKeyId, resolveIdentity, resolvePeople, resolvePeopleByKeyIds } from "@/db/users"
 import { buildSealMarks } from "@/routes/marks"
-import { resolveArtwork } from "@/services/artwork"
+import { resolveArtworkCover } from "@/services/artwork"
 import { type DumpStats, readDumpStats } from "@/services/dump-manifest"
 import type { Env } from "@/types"
 import { type Accent, accentHex, inks, scrimFor } from "@/utils/accent"
@@ -23,7 +23,7 @@ import {
 	badgeArt,
 	badgeSilhouette,
 	coverBytes,
-	coverFromUrl,
+	coverImage,
 	fingerprint,
 	mosaic,
 	sampleAccent,
@@ -125,9 +125,9 @@ function palette(accent: Accent) {
 export async function loadSongCard(env: Env, videoId: string) {
 	const top = await findByVideoId(env, videoId)
 	if (!top) return null
-	const [versions, artwork, marks, people] = await Promise.all([
+	const [versions, cover, marks, people] = await Promise.all([
 		countVariantsByVideoId(env, videoId),
-		resolveArtwork(env, videoId),
+		resolveArtworkCover(env, videoId),
 		buildSealMarks(env, [top]),
 		top.submitter_id == null ? null : resolvePeople(env, [top.submitter_id]),
 	])
@@ -136,14 +136,15 @@ export async function loadSongCard(env: Env, videoId: string) {
 		versions,
 		sealed: marks.has(Number(top.id)),
 		person: top.submitter_id == null ? null : (people?.get(top.submitter_id) ?? null),
-		artwork,
+		artwork: cover?.url ?? null,
+		cover,
 	}
 }
 
 export type SongCard = NonNullable<Awaited<ReturnType<typeof loadSongCard>>>
 
 async function songArt(card: SongCard): Promise<Buffer> {
-	const cover = card.artwork ? await coverFromUrl(card.artwork) : null
+	const cover = card.cover ? await coverImage(card.cover) : null
 	return cover ?? sleeveBytes(card.top.song, card.top.artist)
 }
 
@@ -204,7 +205,7 @@ async function loadProfile(env: Env, keyId: string) {
 	if (!card) return null
 	const [avatar, banner] = await Promise.all([
 		avatarBytes(card.identity.avatarUrl, keyId),
-		card.banner ? coverFromUrl(card.banner.artworkUrl) : null,
+		card.banner ? coverBytes(env, card.banner.videoId) : null,
 	])
 	const backed = await backedImage(avatar, await sampleAccent(avatar))
 	return { ...card, avatar: backed, banner }

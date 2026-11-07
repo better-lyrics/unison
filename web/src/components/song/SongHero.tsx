@@ -11,10 +11,11 @@ import { YouTubeMusicIcon } from "@/components/icons/YouTubeMusicIcon"
 import { Bone } from "@/components/skeleton"
 import { artClippedTextShadowClass, chipClass, chipIconClass, glassClass, raisedChipClass } from "@/components/ui"
 import { useCopied } from "@/hooks/useCopied"
+import type { ArtworkCover } from "@/lib/api"
 import { cn } from "@/lib/cn"
 import { titleCase } from "@/lib/format"
-import { LAYOUT_TRANSITION } from "@/lib/motion-variants"
 import { languageName } from "@/lib/language"
+import { LAYOUT_TRANSITION } from "@/lib/motion-variants"
 import { type SyncKind, syncTypeFor } from "@/lib/sync-type"
 import type { Mark, VariantFull } from "@/lib/types"
 import { youTubeMusicUrl } from "@/lib/youtube-music"
@@ -71,7 +72,7 @@ export interface HeroPlayer {
 interface SongHeroProps {
   variant: VariantFull
   versions: number
-  art: string | null | undefined
+  art: ArtworkCover | null | undefined
   player: HeroPlayer
   lyricsTools: { open: boolean; onToggle: () => void }
 }
@@ -93,7 +94,7 @@ function Cover({ variant, art, player }: Pick<SongHeroProps, "variant" | "art" |
           !covered && "pointer-events-none opacity-0 blur-(--reveal-blur)",
         )}
       >
-        <CoverImage src={art} song={variant.song} artist={variant.artist} />
+        <CoverImage src={art?.url} fallbackSrc={art?.fallbackUrl} song={variant.song} artist={variant.artist} />
       </div>
       {player.active ? (
         <div className="pointer-events-none absolute inset-0 grid place-items-center">
@@ -237,10 +238,7 @@ export function SongHero({ variant, versions, art, player, lyricsTools }: SongHe
             onClick={player.onToggle}
             transition={{ layout: LAYOUT_TRANSITION }}
             style={{ borderRadius: 10 }}
-            className={cn(
-              raisedChipClass,
-              "shadow-[inset_0_1px_0_#fff,inset_0_-1px_0_rgba(18,17,22,0.14)]",
-            )}
+            className={cn(raisedChipClass, "shadow-[inset_0_1px_0_#fff,inset_0_-1px_0_rgba(18,17,22,0.14)]")}
           >
             <motion.span layout className="inline-flex">
               <PlayPauseIcon playing={player.playing} className={chipIconClass} />
@@ -289,7 +287,12 @@ export function SongHeroSkeleton({ title }: { title?: string }) {
         <Bone className="aspect-square w-full rounded-2xl" />
       </div>
       <div className="min-w-0 max-sm:contents">
-        <div className={cn(TITLE_SIZE[title ? titleSize(title) : "l"], "-mb-[0.08em] flex h-[0.98em] items-center max-sm:self-end")}>
+        <div
+          className={cn(
+            TITLE_SIZE[title ? titleSize(title) : "l"],
+            "-mb-[0.08em] flex h-[0.98em] items-center max-sm:self-end",
+          )}
+        >
           <Bone className="h-[0.72em] w-1/2 rounded-lg" />
         </div>
         <div className="mt-1.5 -mb-[0.16em] flex h-[28px] items-center text-[17px] max-[1000px]:h-[25px] max-[1000px]:text-[15px] max-sm:self-start">

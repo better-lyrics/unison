@@ -1,5 +1,5 @@
 import { type UseQueryResult, useQuery } from "@tanstack/react-query"
-import { fetchArtwork } from "@/lib/api"
+import { type ArtworkCover, fetchArtwork } from "@/lib/api"
 import { sleeveDataUrl } from "@/lib/sleeve"
 
 export function youtubeThumbnailUrl(videoId: string): string {
@@ -26,13 +26,17 @@ export function sizedArtworkUrl(url: string, size: number): string {
   return url.replace(ARTWORK_SIZE, `=w${size}-h${size}`)
 }
 
-export function artworkQuery(videoId: string, size?: number) {
+function artworkCoverQuery(videoId: string, size?: number) {
   return {
     queryKey: ["artwork", videoId, size ?? null],
     queryFn: () => fetchArtwork(videoId, size),
     staleTime: 1000 * 60 * 60,
     gcTime: 1000 * 60 * 60,
   }
+}
+
+export function artworkQuery(videoId: string, size?: number) {
+  return { ...artworkCoverQuery(videoId, size), select: (cover: ArtworkCover | null) => cover?.url ?? null }
 }
 
 export function useArtwork(
@@ -43,4 +47,8 @@ export function useArtwork(
     ...artworkQuery(videoId, opts.size),
     enabled: (opts.enabled ?? true) && videoId.length > 0,
   })
+}
+
+export function useArtworkCover(videoId: string): UseQueryResult<ArtworkCover | null> {
+  return useQuery({ ...artworkCoverQuery(videoId), enabled: videoId.length > 0 })
 }

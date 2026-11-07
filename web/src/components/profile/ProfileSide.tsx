@@ -1,15 +1,16 @@
-import { IconBrandDiscordFilled, IconCheck, IconDownload, IconPencil, IconShare } from "@tabler/icons-react"
-import { motion } from "motion/react"
-import { IconSwap } from "@/components/icons/IconSwap"
-import { SwapLabel } from "@/components/SwapLabel"
 import { OdometerNumber } from "@/components/OdometerNumber"
+import { SwapLabel } from "@/components/SwapLabel"
+import { DiscordIcon } from "@/components/icons/DiscordIcon"
+import { IconSwap } from "@/components/icons/IconSwap"
 import { DiscordChip } from "@/components/profile/DiscordChip"
 import { chipClass, chipIconClass, raisedChipClass } from "@/components/ui"
 import { useCopied } from "@/hooks/useCopied"
-import { LAYOUT_TRANSITION } from "@/lib/motion-variants"
 import { plural } from "@/lib/format"
 import { levelProgress } from "@/lib/level"
+import { LAYOUT_TRANSITION } from "@/lib/motion-variants"
 import type { UserGamification, UserRankResponse } from "@/lib/types"
+import { IconCheck, IconDownload, IconPencil, IconShare } from "@tabler/icons-react"
+import { motion } from "motion/react"
 
 interface ProfileSideProps {
   keyId: string
@@ -105,7 +106,7 @@ export function ProfileSide({ keyId, rank, gamification, owner, onEditProfile, o
             </button>
             {onConnectDiscord ? (
               <button type="button" onClick={onConnectDiscord} className={chipClass}>
-                <IconBrandDiscordFilled className={chipIconClass} />
+                <DiscordIcon className={chipIconClass} />
                 Connect Discord
               </button>
             ) : null}

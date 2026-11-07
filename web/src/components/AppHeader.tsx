@@ -129,7 +129,7 @@ export function AppHeader({ width }: { width: PageWidth }) {
 						aria-label={menuOpen ? "Close menu" : "Open menu"}
 						aria-expanded={menuOpen}
 						aria-haspopup="menu"
-						className="group flex cursor-pointer rounded-md p-1.5 text-unison-text transition-colors hover:bg-unison-bg-hover lg:hidden"
+						className="group flex cursor-pointer max-sm:-mr-2 rounded-md p-1.5 text-unison-text transition-colors hover:bg-unison-bg-hover lg:hidden"
 					>
 						<IconSwap
 							swapped={menuOpen}
