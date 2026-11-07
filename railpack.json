@@ -9,7 +9,7 @@
 			"commands": [
 				"apt-get update && apt-get install -y --no-install-recommends curl ca-certificates gnupg",
 				"install -d /usr/share/postgresql-common/pgdg",
-				"curl -fsSL -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc https://www.postgresql.org/media/keys/ACCC4CF8.asc",
+				"curl -fsSL --retry 5 --retry-all-errors --retry-delay 3 -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc https://www.postgresql.org/media/keys/ACCC4CF8.asc",
 				{ "path": "/etc/apt/sources.list.d/pgdg.list", "name": "pgdg-source" },
 				"cat /etc/apt/sources.list.d/pgdg.list",
 				"apt-get update",
