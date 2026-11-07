@@ -46,7 +46,6 @@ type RenderInput = Parameters<typeof render>[0]
 type ImageSource = { src: string; data: Uint8Array; cache?: "auto" | "none" }
 
 const OG = { width: 1200, height: 630 }
-const OG_WASH = { width: 600, height: 315 }
 const CARD_SCALE = 3
 const JPEG_QUALITY = 88
 const WALL_SUBMISSIONS = 24
@@ -154,7 +153,7 @@ export async function renderSongOg(env: Env, videoId: string): Promise<RenderedC
 	const { top, person, sealed } = card
 	const art = await songArt(card)
 	const [wash, accent, avatar, seal] = await Promise.all([
-		washFrom(art, OG_WASH.width, OG_WASH.height),
+		washFrom(art, OG.width, OG.height),
 		sampleAccent(art),
 		person ? avatarBytes(person.avatarUrl, person.keyId) : null,
 		sealed ? badgeArt("committee.svg") : null,
@@ -265,7 +264,7 @@ export async function renderProfileOg(env: Env, keyId: string): Promise<Rendered
 	if (!profile) return null
 	const images = new Images()
 	const [{ base, accent }, covers] = await Promise.all([
-		profileBase(images, profile, profile.banner ?? profile.avatar, OG_WASH),
+		profileBase(images, profile, profile.banner ?? profile.avatar, OG),
 		profile.rank ? wallCovers(env, keyId) : [],
 	])
 	const { rank, gamification } = profile
@@ -291,7 +290,10 @@ export async function renderProfileDownload(env: Env, keyId: string): Promise<Re
 		profile.banner ??
 		(identity.avatarUrl ? profile.avatar : await sleeveBytes(identity.displayName, keyId))
 	const images = new Images()
-	const { base, accent } = await profileBase(images, profile, washSource, CARD_SIZE)
+	const { base, accent } = await profileBase(images, profile, washSource, {
+		width: CARD_SIZE.width * CARD_SCALE,
+		height: CARD_SIZE.height * CARD_SCALE,
+	})
 	const featured = await Promise.all(
 		gamification.featured
 			.slice(0, config.gamification.featured.maxSlots)

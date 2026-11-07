@@ -1,12 +1,10 @@
-@import url("https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,500..700&display=swap");
-
 /*
 blyrics-hide-instrumental-only = true;
 blyrics-letter-wave = true;
 */
 
 .blyrics-container {
-	--blyrics-font-family: "DM Sans", var(--noto-sans-universal), system-ui, sans-serif;
+	--blyrics-font-family: var(--font-sans);
 	--blyrics-font-weight: 600;
 	--blyrics-hover-scale: 1.01;
 	--blyrics-glow-color: color(display-p3 1 1 1 / 0.0001);

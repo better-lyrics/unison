@@ -53,8 +53,13 @@ const syncLine = (kind: SyncKind) =>
 
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`
 
-const hash = (inputs: unknown) =>
-	createHash("sha1").update(JSON.stringify(inputs)).digest("base64url").slice(0, 10)
+const CARD_DESIGN = 2
+
+const hash = (inputs: unknown[]) =>
+	createHash("sha1")
+		.update(JSON.stringify([CARD_DESIGN, ...inputs]))
+		.digest("base64url")
+		.slice(0, 10)
 
 export function songVersion(card: SongShareInput): string {
 	const { top, person } = card

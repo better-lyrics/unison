@@ -9,7 +9,7 @@ import { IconSwap } from "@/components/icons/IconSwap"
 import { PlayPauseIcon } from "@/components/icons/PlaybackIcons"
 import { YouTubeMusicIcon } from "@/components/icons/YouTubeMusicIcon"
 import { Bone } from "@/components/skeleton"
-import { glassActionClass, glassClass } from "@/components/ui"
+import { chipClass, chipIconClass, glassClass, raisedChipClass } from "@/components/ui"
 import { useCopied } from "@/hooks/useCopied"
 import { cn } from "@/lib/cn"
 import { titleCase } from "@/lib/format"
@@ -20,7 +20,6 @@ import type { Mark, VariantFull } from "@/lib/types"
 import { youTubeMusicUrl } from "@/lib/youtube-music"
 import { IconCheck, IconShare } from "@tabler/icons-react"
 import { motion } from "motion/react"
-import { useEffect, useState } from "react"
 
 const SYNC_TIP: Record<SyncKind, string> = {
   syllable: "Syllable synced: each syllable highlights as it is sung.",
@@ -32,27 +31,25 @@ const SYNC_TIP: Record<SyncKind, string> = {
 const CONFIDENCE_TIP = "How sure we are this is the best version, from vote volume and rater agreement."
 
 const TITLE_SIZE = {
-  l: "text-[72px] max-[1000px]:text-[46px]",
-  m: "text-[62px] max-[1000px]:text-[40px]",
-  s: "text-[50px] max-[1000px]:text-[34px]",
+  l: "text-[44px] max-[1000px]:text-[34px] max-sm:text-[28px]",
+  m: "text-[40px] max-[1000px]:text-[30px] max-sm:text-[25px]",
+  s: "text-[34px] max-[1000px]:text-[26px] max-sm:text-[22px]",
 }
 
 const TAG_PILL = cn(
   glassClass,
-  "inline-flex h-8 cursor-default items-center gap-1.5 whitespace-nowrap rounded-[10px] px-3 text-[13px] font-medium text-(--ink-2) [corner-shape:superellipse(1.6)]",
+  "inline-flex h-[30px] cursor-default select-none items-center gap-1.5 whitespace-nowrap rounded-[10px] px-3 text-[13px] font-medium text-(--ink-2) [corner-shape:superellipse(1.6)]",
 )
 
 const PLAY_CIRCLE = cn(
   glassClass,
-  "grid size-16 cursor-pointer place-items-center rounded-full bg-[rgba(15,14,19,0.45)] text-unison-text backdrop-blur-[12px] transition-[opacity,scale] duration-200 ease-[cubic-bezier(0.2,0,0,1)] active:scale-[0.96]",
+  "grid size-12 cursor-pointer place-items-center rounded-full bg-[rgba(15,14,19,0.45)] text-unison-text backdrop-blur-[12px] transition-[opacity,scale] duration-200 ease-[cubic-bezier(0.2,0,0,1)] active:scale-[0.96]",
 )
 
 export const HERO_GRID =
-  "grid grid-cols-[320px_minmax(0,1fr)] items-end gap-12 pt-2 pb-10 max-[1000px]:grid-cols-1 max-[1000px]:gap-7 max-[1000px]:pt-0 max-[1000px]:pb-7"
+  "grid grid-cols-[168px_minmax(0,1fr)] items-center gap-7 pb-8 max-[1000px]:grid-cols-[128px_minmax(0,1fr)] max-[1000px]:gap-5 max-sm:grid-cols-[88px_minmax(0,1fr)] max-sm:gap-x-4 max-sm:gap-y-0 max-sm:pb-6"
 
-export const HERO_ART = "w-full max-[1000px]:w-[min(260px,70vw)] max-sm:w-full"
-
-const AUTOPLAY_GRACE_MS = 1500
+export const HERO_ART = "w-full max-sm:row-span-2 max-sm:self-center"
 
 const COVER_FRAME =
   "group relative aspect-square w-full overflow-hidden rounded-2xl shadow-[0_24px_60px_rgba(0,0,0,0.35),0_6px_18px_rgba(0,0,0,0.25)] after:pointer-events-none after:absolute after:inset-0 after:rounded-[inherit] after:outline after:outline-1 after:-outline-offset-1 after:outline-white/10"
@@ -80,23 +77,11 @@ interface SongHeroProps {
 
 function Cover({ variant, art, player }: Omit<SongHeroProps, "versions">) {
   const label = player.playing ? "Pause" : "Play"
-  const [started, setStarted] = useState(false)
-  const [stalled, setStalled] = useState(false)
-  if (player.active && player.playing && !started) setStarted(true)
-  if (!player.active && (started || stalled)) {
-    setStarted(false)
-    setStalled(false)
-  }
-  useEffect(() => {
-    if (!player.active || !player.ready || player.playing) return
-    const timer = window.setTimeout(() => setStalled(true), AUTOPLAY_GRACE_MS)
-    return () => window.clearTimeout(timer)
-  }, [player.active, player.ready, player.playing])
-  const covered = !(player.active && (started || stalled || player.failed))
+  const covered = !(player.active && (player.playing || player.failed))
   return (
     <div className={COVER_FRAME}>
       {player.active ? (
-        <div inert={covered} className="absolute inset-0 bg-black">
+        <div inert className="pointer-events-none absolute inset-0 bg-black">
           <div ref={player.ref} className="size-full" />
         </div>
       ) : null}
@@ -120,7 +105,7 @@ function Cover({ variant, art, player }: Omit<SongHeroProps, "versions">) {
               "opacity-0 group-hover:pointer-events-auto group-hover:opacity-100 focus-visible:pointer-events-auto focus-visible:opacity-100",
             )}
           >
-            <PlayPauseIcon playing={player.playing} className="size-[26px]" />
+            <PlayPauseIcon playing={player.playing} className="size-5" />
           </button>
         </div>
       ) : (
@@ -136,7 +121,7 @@ function Cover({ variant, art, player }: Omit<SongHeroProps, "versions">) {
               "opacity-0 group-hover:opacity-100 group-focus-visible/play:opacity-100 group-active/play:scale-[0.96]",
             )}
           >
-            <PlayPauseIcon playing={false} className="size-[26px]" />
+            <PlayPauseIcon playing={false} className="size-5" />
           </span>
         </button>
       )}
@@ -165,13 +150,13 @@ function ShareButton({ videoId }: { videoId: string }) {
         type="button"
         aria-label={copied ? "Link copied" : "Share"}
         onClick={() => copy(`${window.location.origin}/song/${videoId}`)}
-        className={cn(glassActionClass, "w-11 px-0")}
+        className={cn(chipClass, "w-[30px] justify-center px-0")}
       >
         <IconSwap
           swapped={copied}
           from={<IconShare className="size-full" stroke={1.75} />}
           to={<IconCheck className="size-full" stroke={1.75} />}
-          className="size-[18px]"
+          className={chipIconClass}
         />
       </button>
     </Tooltip>
@@ -186,11 +171,11 @@ export function SongHero({ variant, versions, art, player }: SongHeroProps) {
       <div className={HERO_ART}>
         <Cover variant={variant} art={art} player={player} />
       </div>
-      <div className="min-w-0">
-        <div className={TITLE_SIZE[titleSize(variant.song)]}>
+      <div className="min-w-0 max-sm:contents">
+        <div className={cn(TITLE_SIZE[titleSize(variant.song)], "max-sm:self-end")}>
           <h1
             title={variant.song}
-            className="-mr-[0.08em] -mb-[0.08em] line-clamp-2 pr-[0.08em] pb-[0.08em] font-black leading-[1.08] tracking-[-0.035em] text-balance"
+            className="-mr-[0.08em] -mb-[0.08em] line-clamp-2 pr-[0.08em] pb-[0.08em] font-black leading-[1.08] tracking-[-0.035em] text-balance [text-box:trim-start_cap_alphabetic]"
           >
             {variant.song}
             {seal ? <SealStamp seal={seal} /> : null}
@@ -198,12 +183,12 @@ export function SongHero({ variant, versions, art, player }: SongHeroProps) {
         </div>
         <p
           title={variant.album ? `${variant.artist} · ${variant.album}` : variant.artist}
-          className="mt-3 -mb-[0.16em] flex min-w-0 whitespace-nowrap pr-[0.08em] pb-[0.16em] text-xl font-medium max-[1000px]:text-[17px]"
+          className="mt-1.5 -mb-[0.16em] flex min-w-0 whitespace-nowrap max-sm:self-start pr-[0.08em] pb-[0.16em] text-[17px] font-medium max-[1000px]:text-[15px]"
         >
           <span className="max-w-full shrink-0 truncate text-(--ink-2)">{variant.artist}</span>
           {variant.album ? <span className="min-w-[3ch] truncate text-(--ink-3)">{` · ${variant.album}`}</span> : null}
         </p>
-        <div className="mt-[22px] flex flex-wrap gap-2 [text-shadow:none]">
+        <div className="mt-3 flex flex-wrap gap-2 [text-shadow:none] max-sm:col-span-2 max-sm:mt-4">
           <Tooltip label={SYNC_TIP[sync]}>
             <span className="inline-flex">
               <SyncTag kind={sync} size="tag" />
@@ -219,17 +204,20 @@ export function SongHero({ variant, versions, art, player }: SongHeroProps) {
             <span className={TAG_PILL}>{`${titleCase(variant.confidence)} confidence`}</span>
           </Tooltip>
         </div>
-        <div className="mt-[26px] flex flex-wrap items-center gap-2 [text-shadow:none]">
+        <div className="mt-4 flex flex-wrap items-center gap-2 [text-shadow:none] max-sm:col-span-2 max-sm:mt-3">
           <motion.button
             layout
             type="button"
             onClick={player.onToggle}
             transition={{ layout: LAYOUT_TRANSITION }}
-            style={{ borderRadius: 9999 }}
-            className="inline-flex h-11 cursor-pointer items-center justify-center gap-2 whitespace-nowrap rounded-full bg-unison-text pr-[18px] pl-4 max-sm:flex-1 text-sm font-bold text-[#121116] transition-[background-color,scale] duration-150 ease-out hover:bg-white active:scale-[0.96]"
+            style={{ borderRadius: 10 }}
+            className={cn(
+              raisedChipClass,
+              "shadow-[inset_0_1px_0_#fff,inset_0_-1px_0_rgba(18,17,22,0.14)]",
+            )}
           >
             <motion.span layout className="inline-flex">
-              <PlayPauseIcon playing={player.playing} />
+              <PlayPauseIcon playing={player.playing} className={chipIconClass} />
             </motion.span>
             <SwapLabel text={player.playing ? "Pause" : "Play"} />
           </motion.button>
@@ -237,29 +225,28 @@ export function SongHero({ variant, versions, art, player }: SongHeroProps) {
             href={youTubeMusicUrl(variant.videoId)}
             target="_blank"
             rel="noopener noreferrer"
-            className={cn(glassActionClass, "pl-4 max-sm:flex-1 max-sm:justify-center")}
+            className={cn(chipClass, "max-sm:w-[30px] max-sm:justify-center max-sm:px-0")}
           >
-            <YouTubeMusicIcon className="size-[18px]" />
-            YouTube Music
+            <YouTubeMusicIcon className={chipIconClass} />
+            <span className="max-sm:sr-only">YouTube Music</span>
           </a>
-          <span aria-hidden="true" className="hidden basis-full max-sm:block" />
           <VoteControls
             variantId={variant.id}
             videoId={variant.videoId}
             variant={{ score: variant.score, userVote: variant.userVote ?? null }}
             beforeReport={<ShareButton videoId={variant.videoId} />}
           />
-        </div>
-        <div className="mt-3 flex flex-wrap items-center gap-2 [text-shadow:none] empty:hidden">
-          <EditMetadataButton
-            videoId={variant.videoId}
-            lyricsId={variant.id}
-            current={{ song: variant.song, artist: variant.artist, album: variant.album ?? null }}
-          />
-          <SealLyricButton videoId={variant.videoId} lyricsId={variant.id} />
+          <div className="flex items-center gap-2 before:mr-1 before:h-5 before:w-px before:bg-white/[0.14] empty:hidden">
+            <EditMetadataButton
+              videoId={variant.videoId}
+              lyricsId={variant.id}
+              current={{ song: variant.song, artist: variant.artist, album: variant.album ?? null }}
+            />
+            <SealLyricButton videoId={variant.videoId} lyricsId={variant.id} />
+          </div>
         </div>
         {variant.hidden ? (
-          <p className="mt-4 text-[13px] font-medium text-unison-warn">
+          <p className="mt-4 text-[13px] font-medium text-unison-warn max-sm:col-span-2">
             This variant has been auto-hidden by community downvotes.
           </p>
         ) : null}
@@ -274,18 +261,24 @@ export function SongHeroSkeleton() {
       <div className={HERO_ART}>
         <Bone className="aspect-square w-full rounded-2xl" />
       </div>
-      <div className="min-w-0">
-        <Bone className="h-16 w-3/4 rounded-xl max-[1000px]:h-11" />
-        <Bone className="mt-4 h-6 w-1/3" />
-        <div className="mt-[22px] flex gap-2">
-          <Bone className="h-8 w-24 rounded-[10px]" />
-          <Bone className="h-8 w-20 rounded-[10px]" />
-          <Bone className="h-8 w-32 rounded-[10px]" />
+      <div className="min-w-0 max-sm:contents">
+        <div className={cn(TITLE_SIZE.l, "flex h-[0.98em] items-center max-sm:self-end")}>
+          <Bone className="h-[0.72em] w-1/2 rounded-lg" />
         </div>
-        <div className="mt-[26px] flex gap-2">
-          <Bone className="h-11 w-24 rounded-full" />
-          <Bone className="h-11 w-40 rounded-full" />
-          <Bone className="h-11 w-28 rounded-full" />
+        <div className="mt-1.5 flex h-[26px] items-center max-[1000px]:h-[23px] max-sm:self-start">
+          <Bone className="h-3.5 w-1/4" />
+        </div>
+        <div className="mt-3 flex gap-2 max-sm:col-span-2 max-sm:mt-4">
+          <Bone className="h-[30px] w-[93px] rounded-[10px]" />
+          <Bone className="h-[30px] w-[66px] rounded-[10px]" />
+          <Bone className="h-[30px] w-[117px] rounded-[10px]" />
+        </div>
+        <div className="mt-4 flex flex-wrap gap-2 max-sm:col-span-2 max-sm:mt-3">
+          <Bone className="h-[30px] w-[69px] rounded-[10px]" />
+          <Bone className="h-[30px] w-[131px] rounded-[10px] max-sm:w-[30px]" />
+          <Bone className="h-[30px] w-[86px] rounded-[10px]" />
+          <Bone className="size-[30px] rounded-[10px]" />
+          <Bone className="size-[30px] rounded-[10px]" />
         </div>
       </div>
     </section>

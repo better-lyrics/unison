@@ -1,5 +1,6 @@
 import { motion } from "motion/react"
 import { Link } from "react-router-dom"
+import { useSongArtPreview } from "@/components/PageArt"
 import { Bone } from "@/components/skeleton"
 import { SongThumbnail } from "@/components/SongThumbnail"
 import { SubmitterLine } from "@/components/SubmitterLine"
@@ -37,6 +38,7 @@ export function SealedTile({
   enterDelay = 0,
 }: SealedTileProps) {
   const seal = entry.marks?.find((mark) => mark.type === "seal")
+  const preview = useSongArtPreview(entry)
   const isCard = variant === "card"
   const landAt = enterIndex === undefined ? null : enterDelay + staggerDelay(enterIndex)
   const sealClass = cn(
@@ -53,6 +55,7 @@ export function SealedTile({
     <MotionLink
       to={`/song/${entry.videoId}`}
       aria-label={`${entry.song} by ${entry.artist}`}
+      {...preview}
       className={cn(FRAME[variant], "group transition-opacity hover:opacity-90")}
       {...(landAt === null
         ? {}

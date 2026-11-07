@@ -62,6 +62,7 @@ export function LyricPreview({ lyricId, videoId }: { lyricId: number; videoId: s
           variant={variant}
           getCurrentTime={player.getCurrentTime}
           getPlaying={player.getPlaying}
+          playing={player.playing}
           onLineClick={playFrom}
           lyricsClassName="h-[440px] [--blyrics-font-size:1.5rem]"
         />

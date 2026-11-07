@@ -2,19 +2,23 @@ import { Kawarp } from "@kawarp/core"
 import { useCallback, useEffect, useRef, useState } from "react"
 import { cn } from "@/lib/cn"
 
-const WARP = { warpIntensity: 0.9, blurPasses: 8, saturation: 1.4, animationSpeed: 0.8 }
+const WARP = { warpIntensity: 0.9, blurPasses: 8, saturation: 1.5, animationSpeed: 0.8 }
 const SETTLE_MS = 1500
+const PAGE_SCALE = 0.5
 
 interface ArtBackgroundProps {
   src: string | null | undefined
   contained?: boolean
   moving?: boolean
+  dithering?: number
   onReady?: () => void
+  onShow?: (src: string) => void
 }
 
 const reducedMotion = () => matchMedia("(prefers-reduced-motion: reduce)").matches
+const artFadeMs = () => Number.parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--art-fade"))
 
-export function ArtBackground({ src, contained = false, moving = false, onReady }: ArtBackgroundProps) {
+export function ArtBackground({ src, contained = false, moving = false, dithering, onReady, onShow }: ArtBackgroundProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const warpRef = useRef<Kawarp | null>(null)
   const movingRef = useRef(moving)
@@ -49,7 +53,11 @@ export function ArtBackground({ src, contained = false, moving = false, onReady 
     if (!canvas) return
     let warp: Kawarp
     try {
-      warp = new Kawarp(canvas, { ...WARP, animationSpeed: movingRef.current ? WARP.animationSpeed : 0 })
+      warp = new Kawarp(canvas, {
+        ...WARP,
+        transitionDuration: artFadeMs() || undefined,
+        animationSpeed: movingRef.current ? WARP.animationSpeed : 0,
+      })
     } catch (error: unknown) {
       console.warn("Could not start the background art", error)
       setFailed(true)
@@ -59,8 +67,9 @@ export function ArtBackground({ src, contained = false, moving = false, onReady 
     warpRef.current = warp
     const observer = new ResizeObserver(() => {
       const box = contained ? canvas.getBoundingClientRect() : { width: innerWidth, height: innerHeight }
-      canvas.width = Math.max(1, Math.round(box.width * 0.5))
-      canvas.height = Math.max(1, Math.round(box.height * 0.5))
+      const scale = contained ? devicePixelRatio : PAGE_SCALE
+      canvas.width = Math.max(1, Math.round(box.width * scale))
+      canvas.height = Math.max(1, Math.round(box.height * scale))
       warp.resize()
       warp.renderFrame()
     })
@@ -80,21 +89,47 @@ export function ArtBackground({ src, contained = false, moving = false, onReady 
   }, [moving, update])
 
   useEffect(() => {
+    if (warpRef.current && dithering !== undefined) warpRef.current.dithering = dithering
+  }, [dithering])
+
+  const targetRef = useRef(src)
+  const loadedRef = useRef<Kawarp | null>(null)
+  const onShowRef = useRef(onShow)
+  onShowRef.current = onShow
+  const drainingRef = useRef<Kawarp | null>(null)
+
+  const drain = useCallback(
+    async (warp: Kawarp) => {
+      if (drainingRef.current === warp) return
+      drainingRef.current = warp
+      let applied: string | null | undefined
+      while (warpRef.current === warp && targetRef.current && targetRef.current !== applied) {
+        applied = targetRef.current
+        try {
+          await warp.loadImage(applied)
+          if (warpRef.current !== warp) break
+          const crossfaded = loadedRef.current === warp
+          loadedRef.current = warp
+          onShowRef.current?.(applied)
+          setShown(true)
+          setFailed(false)
+          update(warp)
+          if (crossfaded) await new Promise((resolve) => window.setTimeout(resolve, warp.transitionDuration))
+        } catch (error: unknown) {
+          console.warn("Could not load the background art", error)
+          setFailed(true)
+        }
+      }
+      if (drainingRef.current === warp) drainingRef.current = null
+    },
+    [update],
+  )
+
+  useEffect(() => {
+    targetRef.current = src
     const warp = warpRef.current
-    if (!src || !warp) return
-    warp
-      .loadImage(src)
-      .then(() => {
-        setShown(true)
-        setFailed(false)
-        update(warp)
-      })
-      .catch((error: unknown) => {
-        console.warn("Could not load the background art", error)
-        setShown(false)
-        setFailed(true)
-      })
-  }, [src, update])
+    if (warp) void drain(warp)
+  }, [src, drain])
 
   const fade = cn("transition-opacity duration-700 ease-out motion-reduce:duration-150", shown ? "opacity-100" : "opacity-0")
 

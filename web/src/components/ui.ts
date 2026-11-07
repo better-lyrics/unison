@@ -15,7 +15,7 @@ export const glassClass =
 export const glassActionClass = `${glassClass} inline-flex h-11 cursor-pointer items-center justify-center gap-2 whitespace-nowrap rounded-full px-[18px] text-sm font-bold text-unison-text transition-[background-color,scale] duration-150 ease-out hover:bg-white/[0.14] active:not-disabled:scale-[0.96] disabled:cursor-not-allowed disabled:opacity-60`
 
 const CHIP_BASE =
-  "relative inline-flex h-[30px] cursor-pointer items-center whitespace-nowrap rounded-[10px] text-[13px] [corner-shape:superellipse(1.6)] [text-shadow:none] transition-[background-color,color,scale] duration-150 ease-out after:absolute after:-inset-x-1 after:-inset-y-[5px] active:not-disabled:scale-[0.96]"
+  "relative inline-flex h-[30px] cursor-pointer select-none items-center whitespace-nowrap rounded-[10px] text-[13px] [corner-shape:superellipse(1.6)] [text-shadow:none] transition-[background-color,color,scale] duration-150 ease-out after:absolute after:-inset-x-1 after:-inset-y-[5px] active:not-disabled:scale-[0.96]"
 
 export const chipClass = `${glassClass} ${CHIP_BASE} gap-[7px] pr-3 pl-2.5 font-medium text-(--ink-2) hover:bg-white/[0.14] hover:text-unison-text`
 
@@ -42,8 +42,8 @@ const BUTTON_VARIANTS = {
 }
 
 const BUTTON_SIZES = {
-  md: "px-3.5 py-2 text-sm",
-  sm: "px-2.5 py-1.5 text-[13px]",
+  md: "px-3.5 py-2 text-sm has-[>svg:first-child]:pl-3",
+  sm: "px-2.5 py-1.5 text-[13px] has-[>svg:first-child]:gap-[7px] has-[>svg:first-child]:pl-2",
 }
 
 export type ButtonVariant = keyof typeof BUTTON_VARIANTS

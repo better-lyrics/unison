@@ -56,7 +56,7 @@ export function QueuePage() {
       </header>
 
       {isLoading ? (
-        <SongRowSkeletonList rows={6} />
+        <SongRowSkeletonList rows={20} />
       ) : error ? (
         <EmptyState title="Could not load the queue" hint={error.message} />
       ) : entries.length === 0 ? (

@@ -1,5 +1,5 @@
 import { IconPhoto } from "@tabler/icons-react"
-import { useCallback, useEffect, useState } from "react"
+import { type CSSProperties, useCallback, useEffect, useState } from "react"
 import { ArtBackground } from "@/components/ArtBackground"
 import { BadgeArt } from "@/components/BadgeArt"
 import { BetterLyricsLogo } from "@/components/BetterLyricsLogo"
@@ -7,6 +7,7 @@ import { useBadgeModal } from "@/components/BadgeModalContext"
 import { glassActionClass, glassClass } from "@/components/ui"
 import { XpAvatar } from "@/components/XpAvatar"
 import { Bone } from "@/components/skeleton"
+import { paletteVars, useAccent } from "@/hooks/useArtPalette"
 import { useBadgeImage } from "@/hooks/useBadgeImage"
 import type { ProfileArt } from "@/hooks/useProfileArt"
 import { isRareBadge, resolveBadgeImage } from "@/lib/badge-view"
@@ -27,6 +28,7 @@ const PILL = cn(
   "inline-flex h-9 items-center whitespace-nowrap rounded-full text-sm font-bold backdrop-blur-[24px] [text-shadow:none]",
 )
 
+const CARD_DITHERING = 0.03
 const CARD_ART_WAIT_MS = 3000
 
 const RIM =
@@ -123,6 +125,7 @@ export function ProfileCard({ keyId, rank, gamification, catalogue, art, onChang
   const [ready, setReady] = useState(false)
   const [brokenBanner, setBrokenBanner] = useState<string | null>(null)
   const markReady = useCallback(() => setReady(true), [])
+  const palette = paletteVars(useAccent(art.wash)) as CSSProperties
   useEffect(() => {
     const timer = window.setTimeout(markReady, CARD_ART_WAIT_MS)
     return () => window.clearTimeout(timer)
@@ -133,13 +136,14 @@ export function ProfileCard({ keyId, rank, gamification, catalogue, art, onChang
       {ready ? null : <Bone className="absolute inset-0 rounded-[28px]" />}
       <div
         className={cn(
-          "relative isolate aspect-[5/7] w-full overflow-hidden rounded-[28px] shadow-[0_40px_100px_rgba(0,0,0,0.55)] transition-opacity duration-(--reveal-dur) ease-in-out motion-reduce:transition-none",
+          "art-palette relative isolate aspect-[5/7] w-full overflow-hidden rounded-[28px] shadow-[0_40px_100px_rgba(0,0,0,0.55)] transition-opacity duration-(--reveal-dur) ease-in-out motion-reduce:transition-none",
           RIM,
           !ready && "opacity-0",
         )}
+        style={palette}
         inert={!ready}
       >
-        <ArtBackground src={art.wash} contained onReady={markReady} />
+        <ArtBackground src={art.wash} contained dithering={CARD_DITHERING} onReady={markReady} />
         {art.banner && art.banner !== brokenBanner ? (
           <div key={art.banner} aria-hidden="true" className="t-reveal absolute inset-x-0 top-0 isolate h-[64%] overflow-hidden">
             <img src={art.banner} alt="" onError={() => setBrokenBanner(art.banner)} className="pf-banner-soft" />

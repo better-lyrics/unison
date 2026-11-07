@@ -138,7 +138,7 @@ export function SealedPage() {
 
         {isPending ? (
           <div data-testid="sealed-grid" className={GRID}>
-            {skeletonKeys("sealed-card", 10).map((key) => (
+            {skeletonKeys("sealed-card", PAGE_LIMIT).map((key) => (
               <SealedTileSkeleton key={key} variant="card" />
             ))}
           </div>

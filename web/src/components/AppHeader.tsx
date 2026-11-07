@@ -21,8 +21,8 @@ const tabClass = ({ isActive }: { isActive: boolean }) =>
 
 const deskTabClass = ({ isActive }: { isActive: boolean }) =>
 	cn(
-		"relative inline-flex h-[30px] items-center rounded-[9px] px-2.5 text-sm font-medium transition-colors duration-150 after:absolute after:inset-x-0 after:-inset-y-[5px]",
-		isActive ? "text-unison-text" : "text-(--ink-2) hover:bg-white/[0.08] hover:text-unison-text",
+		"relative inline-flex h-[30px] items-center rounded-[9px] px-2.5 text-sm font-medium transition-colors duration-150 after:absolute after:inset-x-0 after:-inset-y-[5px] hover:bg-white/[0.04]",
+		isActive ? "text-unison-text" : "text-(--ink-2) hover:text-unison-text",
 	)
 
 const navPill = (active: boolean) =>
@@ -118,7 +118,7 @@ export function AppHeader({ width }: { width: PageWidth }) {
 				</div>
 				<div className="flex items-center gap-2 lg:justify-self-end">
 					<div className="lg:hidden">
-						<SearchBar compact />
+						<SearchBar compact glass />
 					</div>
 					<div className="hidden lg:block">
 						<SignInControl glass />
@@ -129,7 +129,7 @@ export function AppHeader({ width }: { width: PageWidth }) {
 						aria-label={menuOpen ? "Close menu" : "Open menu"}
 						aria-expanded={menuOpen}
 						aria-haspopup="menu"
-						className="group cursor-pointer rounded-md p-1.5 text-unison-text transition-colors hover:bg-unison-bg-hover lg:hidden"
+						className="group flex cursor-pointer rounded-md p-1.5 text-unison-text transition-colors hover:bg-unison-bg-hover lg:hidden"
 					>
 						<IconSwap
 							swapped={menuOpen}

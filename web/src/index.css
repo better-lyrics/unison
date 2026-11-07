@@ -43,6 +43,7 @@ body,
 html {
   scrollbar-gutter: stable;
   color-scheme: dark;
+  -webkit-tap-highlight-color: transparent;
 }
 
 :root {
@@ -101,9 +102,14 @@ braccato-lyrics .blyrics-container {
   padding-top: var(--blyrics-padding-top, 2rem);
 }
 
+.lyrics-view .lyrics-pane {
+  margin-right: -12px;
+}
+
 .lyrics-view braccato-lyrics {
-  margin-inline: -28px;
-  padding-inline: 28px;
+  width: auto;
+  margin-inline: -38px 0;
+  padding-inline: 28px 12px;
   box-sizing: border-box;
 }
 
@@ -120,6 +126,10 @@ braccato-lyrics .blyrics-container {
 }
 
 @media (max-width: 1000px) {
+  .lyrics-view .lyrics-pane {
+    margin-right: 0;
+  }
+
   .lyrics-view braccato-lyrics {
     margin-inline: -20px;
     padding-inline: 20px;
@@ -132,7 +142,7 @@ braccato-lyrics .blyrics-container {
 
 .raw-lyrics {
   margin: 0;
-  padding: 4px 0 24px;
+  padding: 44px 0 24px;
   font-family: var(--font-mono);
   font-size: 12.5px;
   line-height: 1.7;
@@ -384,23 +394,61 @@ select {
   initial-value: 0px;
 }
 
+@property --ink-2 {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: rgba(245, 245, 247, 0.72);
+}
+
+@property --ink-3 {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: rgba(245, 245, 247, 0.72);
+}
+
+@property --ink-dim {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: rgba(245, 245, 247, 0.48);
+}
+
+@property --ink-4 {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: rgba(245, 245, 247, 0.48);
+}
+
 :root {
-  transition: --scrim 700ms ease-out;
+  --art-fade: 1000ms;
+  --art-ease: cubic-bezier(0.37, 0, 0.63, 1);
+}
+
+:root,
+.art-palette {
+  transition:
+    --scrim var(--art-fade) var(--art-ease),
+    --ink-2 var(--art-fade) var(--art-ease),
+    --ink-3 var(--art-fade) var(--art-ease),
+    --ink-dim var(--art-fade) var(--art-ease),
+    --ink-4 var(--art-fade) var(--art-ease);
 }
 
 .lyrics-pane {
   transition:
-    opacity var(--reveal-dur) ease-in-out,
-    filter var(--reveal-dur) ease-in-out,
+    opacity 150ms ease-in-out,
+    filter 150ms ease-in-out,
     --ft 150ms ease-out,
     --fb 150ms ease-out;
-  @starting-style {
-    opacity: 0;
-    filter: blur(var(--reveal-blur));
+  &:not([data-loading]) {
+    @starting-style {
+      opacity: 0;
+      filter: blur(var(--reveal-blur));
+    }
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
   :root,
+  .art-palette,
   .lyrics-pane { transition: none !important; }
 }

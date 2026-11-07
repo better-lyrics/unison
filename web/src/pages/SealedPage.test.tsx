@@ -164,7 +164,7 @@ describe("SealedPage", () => {
       expect(screen.getByRole("heading", { name: "Sealed lyrics" })).toBeTruthy()
       expect(screen.getByRole("button", { name: "All" })).toBeTruthy()
       const grid = container.querySelector('[data-testid="sealed-grid"]')
-      expect(grid?.children).toHaveLength(10)
+      expect(grid?.children).toHaveLength(24)
       expect(grid?.querySelector("a")).toBeNull()
     })
 

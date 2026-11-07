@@ -1,4 +1,4 @@
-import { buttonClass } from "@/components/ui"
+import { buttonClass, chipClass, chipIconClass } from "@/components/ui"
 import { useCouncilMetadata, useCouncilRole } from "@/hooks/useCouncilData"
 import { useProposeMetadata } from "@/hooks/useCouncilMutations"
 import type { SongMetadata } from "@/lib/council-types"
@@ -30,8 +30,8 @@ export function EditMetadataButton({
   const openProposal = metadata.items.find((item) => item.videoId === videoId)
   if (openProposal) {
     return (
-      <Link to={`/council/metadata?item=${openProposal.id}`} className={buttonClass("ghost", "sm")}>
-        <IconTags aria-hidden className="size-3.5" stroke={1.75} />
+      <Link to={`/council/metadata?item=${openProposal.id}`} className={chipClass}>
+        <IconTags aria-hidden className={chipIconClass} stroke={1.75} />
         Details proposal open
       </Link>
     )
@@ -39,8 +39,8 @@ export function EditMetadataButton({
 
   return (
     <>
-      <button type="button" className={buttonClass("fill", "sm")} onClick={() => setOpen(true)}>
-        <IconTags aria-hidden className="size-3.5" stroke={1.75} />
+      <button type="button" className={chipClass} onClick={() => setOpen(true)}>
+        <IconTags aria-hidden className={chipIconClass} stroke={1.75} />
         Edit details
       </button>
       {open ? (

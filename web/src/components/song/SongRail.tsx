@@ -43,11 +43,11 @@ function MetaRow({ label, children }: { label: ReactNode; children: ReactNode })
   )
 }
 
-function StatsCard({ variant, versions }: { variant: VariantFull; versions: number }) {
+function Stats({ variant, versions }: { variant: VariantFull; versions: number }) {
   const seal = variant.marks?.find((mark) => mark.type === "seal")
   const revision = variant.revision
   return (
-    <div className={cn(CARD, "t-reveal")}>
+    <>
       <div className="grid grid-cols-[repeat(3,auto)] justify-between">
         <Stat
           tip={SCORE_TIP}
@@ -63,7 +63,7 @@ function StatsCard({ variant, versions }: { variant: VariantFull; versions: numb
         <Stat label={versions === 1 ? "Version" : "Versions"} value={versions} />
       </div>
       {seal || variant.isrc || revision ? (
-        <div className="mt-[18px] flex flex-col gap-2.5 pt-3.5 text-[13px] shadow-[inset_0_1px_0_rgba(255,255,255,0.07)]">
+        <div className="mt-[18px] flex flex-col gap-2.5 pt-3.5 text-[13px] shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
           {seal ? (
             <MetaRow
               label={
@@ -105,13 +105,13 @@ function StatsCard({ variant, versions }: { variant: VariantFull; versions: numb
           ) : null}
         </div>
       ) : null}
-    </div>
+    </>
   )
 }
 
-function SyncedByCard({ submitter }: { submitter: NonNullable<VariantFull["submitter"]> }) {
+function SyncedBy({ submitter }: { submitter: NonNullable<VariantFull["submitter"]> }) {
   return (
-    <div className={cn(CARD, "t-reveal")}>
+    <>
       <p className={LABEL}>Synced by</p>
       <Link to={`/curator/${submitter.keyId}`} className="flex items-center gap-3">
         <XpAvatar
@@ -143,7 +143,7 @@ function SyncedByCard({ submitter }: { submitter: NonNullable<VariantFull["submi
           />
         </div>
       ) : null}
-    </div>
+    </>
   )
 }
 
@@ -154,16 +154,28 @@ interface SongRailProps {
   onSelect: (id: number) => void
 }
 
+const DETAILS_BONE = "h-[329px] rounded-[22px]"
+
+export function SongRailSkeleton() {
+  return <Bone className={DETAILS_BONE} />
+}
+
 export function SongRail({ variant, variants, selectedId, onSelect }: SongRailProps) {
   return (
     <aside className="flex flex-col gap-4 [text-shadow:none]">
       {variant ? (
-        <StatsCard variant={variant} versions={variants.length} />
+        <div className={cn(CARD, "t-reveal")}>
+          {variant.submitter ? (
+            <>
+              <SyncedBy submitter={variant.submitter} />
+              <div aria-hidden="true" className="my-[18px] h-px bg-white/[0.03]" />
+            </>
+          ) : null}
+          <Stats variant={variant} versions={variants.length} />
+        </div>
       ) : (
-        <Bone className="h-[150px] rounded-[22px]" />
+        <Bone className={DETAILS_BONE} />
       )}
-      {variant?.submitter ? <SyncedByCard submitter={variant.submitter} /> : null}
-      {!variant ? <Bone className="h-[130px] rounded-[22px]" /> : null}
       {variants.length > 1 ? (
         <div className={CARD}>
           <p className={LABEL}>{`${variants.length} versions`}</p>

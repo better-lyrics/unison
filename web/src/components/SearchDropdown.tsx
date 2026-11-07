@@ -89,7 +89,7 @@ function SkeletonRows() {
 
 function Footer() {
   return (
-    <div className="flex items-center gap-3 border-t border-unison-border px-3 py-2 text-[11px] text-unison-text-muted">
+    <div className="flex items-center gap-3 border-t border-unison-border px-3 py-2 text-[11px] text-unison-text-muted [@media(hover:none)]:hidden">
       <span className="inline-flex items-center gap-1.5">
         <Kbd keys={["ArrowUp"]} />
         <Kbd keys={["ArrowDown"]} /> navigate
