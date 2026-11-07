@@ -195,7 +195,7 @@ export function DocsPage() {
             Each entry is keyed on a <Code>videoId</Code>. Reading from it needs no key and no sign-in. The base URL is{" "}
             <Code>{BASE_URL}</Code>. Every <Code>/lyrics</Code> response is wrapped as{" "}
             <Code>{"{ success, data }"}</Code>, so check <Code>success</Code> before you touch <Code>data</Code>. Reads
-            are rate limited to 120 requests per minute per IP.
+            are rate limited to 600 requests per minute per IP.
           </p>
         </section>
 
@@ -206,6 +206,18 @@ export function DocsPage() {
             <Code>data.lyrics</Code> and its format is in <Code>data.format</Code>.
           </p>
           <CodeTabs tabs={QUICKSTART_TABS} />
+        </section>
+
+        <section className="space-y-3">
+          <h2 className="text-lg font-semibold text-unison-text">Attribution</h2>
+          <p className="text-sm leading-relaxed text-unison-text-secondary">
+            Any app that shows Unison lyrics must credit Unison and the person who submitted them. Show{" "}
+            <Code>Lyrics from Unison</Code>, linked to <Code>https://unison.betterlyrics.org/song/&lt;videoId&gt;</Code>
+            , and the submitter's <Code>submitter.displayName</Code>, linked to{" "}
+            <Code>https://unison.betterlyrics.org/curator/&lt;submitter.keyId&gt;</Code>. Every lyric response carries
+            both. The credit can sit at the end of the lyrics. Apps have until 7 February 2027 to add it, and after
+            that, apps that don't show it may lose access to the API.
+          </p>
         </section>
 
         <section className="space-y-3">
@@ -327,7 +339,7 @@ export function DocsPage() {
             Failed <Code>/lyrics</Code> calls keep the envelope with <Code>success: false</Code> plus a{" "}
             <Code>code</Code> and a human-readable <Code>error</Code> and <Code>hint</Code>. Common ones are{" "}
             <Code>404</Code> when nothing matches and <Code>400</Code> when the query is missing a required param. Stay
-            under 120 requests per minute per IP or you get <Code>429</Code>.
+            under 600 requests per minute per IP or you get <Code>429</Code>.
           </p>
           <CodeBlock code={ERROR_RESPONSE} language="json" label="JSON response" />
         </section>
