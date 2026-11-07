@@ -15,6 +15,7 @@ interface LyricsRendererProps {
   getPlaying: () => boolean
   onLineClick?: (timeSeconds: number) => void
   translationLang?: string
+  onAutoscrollPause?: (resume: (() => void) | null) => void
   className?: string
 }
 
@@ -39,6 +40,7 @@ export function LyricsRenderer({
   getPlaying,
   onLineClick,
   translationLang,
+  onAutoscrollPause,
   className,
 }: LyricsRendererProps) {
   const elementRef = useRef<BraccatoLyricsElement>(null)
@@ -50,9 +52,30 @@ export function LyricsRenderer({
 
   // Ahead of the lyrics write: the theme carries the settings the lines are built against, and
   // writing it rebuilds the view.
+  const onAutoscrollPauseRef = useRef(onAutoscrollPause)
+  const ownScrollRef = useRef(false)
+  useEffect(() => {
+    onAutoscrollPauseRef.current = onAutoscrollPause
+  })
+
   useEffect(() => {
     const el = elementRef.current
-    if (el) el.theme = braccatoTheme
+    if (!el) return
+    const resume = () => {
+      el.renderer?.resumeAutoscroll()
+      onAutoscrollPauseRef.current?.(null)
+      if (el.currentTime !== 0 || el.playing) return
+      ownScrollRef.current = true
+      el.scrollTop = 0
+      requestAnimationFrame(() => {
+        ownScrollRef.current = false
+      })
+    }
+    el.host = {
+      setResumeAffordanceVisible: (visible) => onAutoscrollPauseRef.current?.(visible ? resume : null),
+    }
+    el.theme = braccatoTheme
+    return () => onAutoscrollPauseRef.current?.(null)
   }, [])
 
   const lang = useMemo(
@@ -111,10 +134,13 @@ export function LyricsRenderer({
       const detail = (e as CustomEvent<LineClickDetail>).detail
       if (detail?.timeS == null) return
       onLineClickRef.current?.(detail.timeS)
+      el.renderer?.resumeAutoscroll()
     }
     // The element stopped watching its own scroller, since the scroller may be one it does not own.
     // Without this, scrolling away never pauses autoscroll and the next frame yanks the view back.
-    const noteUserScroll = () => el.renderer?.noteUserScroll()
+    const noteUserScroll = () => {
+      if (!ownScrollRef.current) el.renderer?.noteUserScroll()
+    }
     el.addEventListener("braccato:line-click", seek)
     el.addEventListener("scroll", noteUserScroll, { passive: true })
     return () => {

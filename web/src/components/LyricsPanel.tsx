@@ -3,6 +3,7 @@ import { DownloadButton } from "@/components/DownloadButton"
 import { LyricsContentSkeleton, LyricsRenderer, parseVariantLyrics } from "@/components/LyricsRenderer"
 import { RawLyricsView } from "@/components/RawLyricsView"
 import { glassClass } from "@/components/ui"
+import { IconArrowDown } from "@tabler/icons-react"
 import { cn } from "@/lib/cn"
 import { downloadTextFile } from "@/lib/download"
 import { pickTranslationLanguage, translationLanguages } from "@/lib/lyric-translations"
@@ -17,11 +18,12 @@ import { useScrollEdges } from "@/hooks/useScrollEdges"
 const TOOL_REVEAL =
   "opacity-0 group-focus-within/lyrics:opacity-100 group-hover/lyrics:opacity-100 [@media(hover:none)]:group-data-idle/lyrics:opacity-100"
 
-const TOOL_CLASS = cn(
+const TOOL_BASE = cn(
   glassClass,
   "relative inline-flex h-[30px] cursor-pointer items-center gap-1.5 rounded-[10px] px-3 [corner-shape:superellipse(1.6)] text-xs font-medium text-(--ink-2,var(--color-unison-text-secondary)) transition-[color,background-color,scale,opacity] duration-150 ease-[cubic-bezier(0.2,0,0,1)] hover:bg-white/[0.08] hover:text-unison-text after:absolute after:inset-x-0 after:-inset-y-0.5 active:not-disabled:scale-[0.96]",
-  TOOL_REVEAL,
 )
+
+const TOOL_CLASS = cn(TOOL_BASE, TOOL_REVEAL)
 
 const SEGMENTS_CLASS = cn(
   glassClass,
@@ -54,6 +56,7 @@ export function LyricsPanel({
   const lang = pickTranslationLanguage(languages, pickedLang)
   const [pane, setPane] = useState<HTMLDivElement | null>(null)
   const edges = useScrollEdges(pane)
+  const [resumeAutoscroll, setResumeAutoscroll] = useState<(() => void) | null>(null)
   const segment = (group: string, active: boolean, label: string, onClick: () => void) => (
     <button
       key={label}
@@ -93,8 +96,18 @@ export function LyricsPanel({
             )}
           </fieldset>
         ) : null}
+        {resumeAutoscroll ? (
+          <button
+            type="button"
+            onClick={resumeAutoscroll}
+            className={cn(TOOL_BASE, "t-reveal pointer-events-auto absolute top-0 left-1/2 -translate-x-1/2 max-sm:right-0 max-sm:left-auto max-sm:translate-x-0")}
+          >
+            <IconArrowDown className="size-4" />
+            Resume autoscroll
+          </button>
+        ) : null}
         {variant ? (
-          <div className="ml-auto flex items-center gap-1.5">
+          <div className={cn("ml-auto flex items-center gap-1.5", resumeAutoscroll && "max-sm:hidden")}>
             <CopyButton text={variant.lyrics} className={TOOL_CLASS} iconClassName="size-4" radius={10} withText />
             <DownloadButton
               onClick={() => downloadTextFile(lyricsFilename(variant), variant.lyrics, MIME_BY_FORMAT[variant.format])}
@@ -123,6 +136,7 @@ export function LyricsPanel({
             getPlaying={getPlaying}
             onLineClick={onLineClick}
             translationLang={lang}
+            onAutoscrollPause={(resume) => setResumeAutoscroll(() => resume)}
             className={lyricsClassName}
           />
         ) : (
