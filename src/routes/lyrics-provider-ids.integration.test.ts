@@ -221,6 +221,24 @@ describeIntegration("GET /lyrics provider id lookups (integration)", () => {
 		expect(fetchMock).not.toHaveBeenCalled()
 	})
 
+	it("regression: a malformed provider id does not drop a valid one", async () => {
+		stubBiniLink({
+			resolve: {
+				status: 200,
+				body: {
+					results: [
+						{ service: "spotify", id: SPOTIFY_ID, isrc: SEALED_ISRC, youtube: SEALED_VIDEO },
+					],
+				},
+			},
+		})
+
+		const { status, body } = await get(`spotify=${SPOTIFY_ID}&tidal=not-a-track`)
+
+		expect(status).toBe(200)
+		expect(body.data?.videoId).toBe(SEALED_VIDEO)
+	})
+
 	it("ignores provider ids while the lookup flag is off", async () => {
 		const fetchMock = stubBiniLink({})
 

@@ -10,7 +10,21 @@ const ISRC_URL = `${BASE_URL}/lyrics?isrc=US2S70465012`
 const PROVIDER_ID_URL = `${BASE_URL}/lyrics?apple_music=1438556832`
 const SEARCH_URL = `${BASE_URL}/lyrics/search?q=never+gonna+give`
 const VARIANTS_URL = `${BASE_URL}/lyrics/variants/dQw4w9WgXcQ?limit=5`
-const TRANSLATE_URL = `${BASE_URL}/translate`
+
+const CACHE_CODE = `const saved = store.get(videoId) // { etag, data } from an earlier call
+const res = await fetch("${VIDEO_URL}", {
+  headers: saved ? { "If-None-Match": saved.etag } : {},
+})
+
+if (res.status === 304) {
+  render(saved.data.lyrics, saved.data.format)
+} else {
+  const { success, data } = await res.json()
+  if (success) {
+    store.set(videoId, { etag: res.headers.get("ETag"), data })
+    render(data.lyrics, data.format)
+  }
+}`
 
 // A GET in each language, generated from the URL so every reference section stays in lockstep.
 function fetchTabs(url: string): CodeTab[] {
@@ -93,73 +107,6 @@ let body = reqwest::blocking::get(
 println!("{body}");`,
   },
 ]
-
-// The translate endpoint is a POST, so its snippets send a body instead of a bare GET.
-const TRANSLATE_TABS: CodeTab[] = [
-  {
-    label: "cURL",
-    language: "bash",
-    code: `curl -X POST "${TRANSLATE_URL}" \\
-  -H "content-type: application/json" \\
-  -d '{"lines":["안녕하세요","반갑습니다"],"to":"en","from":"ko"}'`,
-  },
-  {
-    label: "JavaScript",
-    language: "javascript",
-    code: `const res = await fetch("${TRANSLATE_URL}", {
-  method: "POST",
-  headers: { "content-type": "application/json" },
-  body: JSON.stringify({ lines: ["안녕하세요", "반갑습니다"], to: "en", from: "ko" }),
-})
-const { lines, detectedLang } = await res.json()`,
-  },
-  {
-    label: "Python",
-    language: "python",
-    code: `import requests
-
-body = requests.post("${TRANSLATE_URL}", json={
-    "lines": ["안녕하세요", "반갑습니다"],
-    "to": "en",
-    "from": "ko",
-}).json()`,
-  },
-  {
-    label: "Go",
-    language: "go",
-    code: `payload := strings.NewReader(\`{"lines":["안녕하세요","반갑습니다"],"to":"en","from":"ko"}\`)
-res, err := http.Post("${TRANSLATE_URL}", "application/json", payload)
-if err != nil {
-    log.Fatal(err)
-}
-defer res.Body.Close()
-body, _ := io.ReadAll(res.Body)`,
-  },
-  {
-    label: "Rust",
-    language: "rust",
-    code: `// reqwest = { version = "0.12", features = ["blocking", "json"] }
-let body = reqwest::blocking::Client::new()
-    .post("${TRANSLATE_URL}")
-    .json(&serde_json::json!({
-        "lines": ["안녕하세요", "반갑습니다"],
-        "to": "en",
-        "from": "ko",
-    }))
-    .send()?
-    .text()?;`,
-  },
-]
-
-const TRANSLATE_RESPONSE = `{
-  "lines": [
-    { "translation": "Hello", "romanization": "annyeonghaseyo", "needsTranslation": true },
-    { "translation": "Nice to meet you", "romanization": "bangapseumnida", "needsTranslation": true }
-  ],
-  "detectedLang": "ko",
-  "provider": "google-lyrics-translate",
-  "cached": false
-}`
 
 const VIDEO_RESPONSE = `{
   "success": true,
@@ -339,30 +286,18 @@ export function DocsPage() {
         </section>
 
         <section className="space-y-3">
-          <h2 className="text-lg font-semibold text-unison-text">Translating lyrics</h2>
+          <h2 className="text-lg font-semibold text-unison-text">Caching</h2>
           <p className="text-sm leading-relaxed text-unison-text-secondary">
-            <Code>POST /translate</Code> turns a block of lyrics into another language and romanizes it in one call, so
-            every client isn't hitting Google's rate-limited endpoint on its own. Send the <Code>lines</Code> you want,
-            the target language in <Code>to</Code>, and the source language in <Code>from</Code>. Leave{" "}
-            <Code>from</Code> out and Unison detects it, then echoes what it picked back as <Code>detectedLang</Code>.
+            Keep the lyrics you fetch and check them before you download them again. A check is cheaper than a full
+            download for both Unison and your app, and your copy stays in sync with edits and new versions. Every{" "}
+            <Code>GET /lyrics</Code> lookup sends an <Code>ETag</Code>. Save it with the lyric and send it back as{" "}
+            <Code>If-None-Match</Code>. If the lyric is the same, you get <Code>304</Code> with no body and use the copy
+            you have.
           </p>
-          <CodeTabs tabs={TRANSLATE_TABS} />
+          <CodeBlock code={CACHE_CODE} language="javascript" label="JavaScript" />
           <p className="text-sm leading-relaxed text-unison-text-secondary">
-            Each line comes back with a <Code>translation</Code>, a <Code>romanization</Code> when the source isn't
-            already in the Latin alphabet, and a <Code>needsTranslation</Code> flag so you can leave lines that were
-            already in the target language alone. Answers are cached per lyrics-and-language pair, so the same request
-            only reaches Google once; a cache hit sets <Code>cached</Code> to <Code>true</Code>. Blank lines and lone ♪
-            markers keep their place and come back empty.
-          </p>
-          <CodeBlock code={TRANSLATE_RESPONSE} language="json" label="JSON response" />
-          <p className="text-sm leading-relaxed text-unison-text-secondary">
-            When <Code>from</Code> and <Code>to</Code> are the same language there's nothing to do, so every line comes
-            back with a null <Code>translation</Code> and <Code>needsTranslation</Code> false instead of a copy of the
-            original. A request with no real lyric lines, or one where the source language can't be worked out, returns{" "}
-            <Code>400</Code>; more than 200 lines or an overlong line or language code returns <Code>422</Code>; if
-            Google is unreachable or rate limited you get <Code>502</Code> or <Code>503</Code>. A transient failure
-            isn't cached, but the same lines failing to parse three times over is remembered as a negative and
-            short-circuits to <Code>502</Code> for about a month so the upstream isn't hammered.
+            The tag changes when someone edits the lyric or its song details, when the submitter changes their name, or
+            when another version moves to the top. Votes and confidence can change under the same tag.
           </p>
         </section>
 

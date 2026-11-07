@@ -15,16 +15,18 @@ export function isProviderService(value: unknown): value is ProviderService {
 	return PROVIDER_SERVICES.some((service) => service === value)
 }
 
-/** Ids in priority order, or null when any given id is malformed. */
-export function readProviderIds(
-	query: Partial<Record<ProviderService, string>>
-): ProviderId[] | null {
+/** Well-formed ids in priority order, and whether any given id was malformed. */
+export function readProviderIds(query: Partial<Record<ProviderService, string>>): {
+	ids: ProviderId[]
+	malformed: boolean
+} {
 	const ids: ProviderId[] = []
+	let malformed = false
 	for (const service of PROVIDER_SERVICES) {
 		const id = query[service]?.trim()
 		if (!id) continue
-		if (!FORMAT[service].test(id)) return null
-		ids.push({ service, id })
+		if (FORMAT[service].test(id)) ids.push({ service, id })
+		else malformed = true
 	}
-	return ids
+	return { ids, malformed }
 }

@@ -19,12 +19,13 @@ import { toFeedResponse } from "@/routes/feed"
 import { toResponse, toSearchResponse } from "@/routes/lyrics.transformers"
 import { buildSealMarks, resolveActors } from "@/routes/marks"
 import { findLyricsByTrack } from "@/services/track-lookup"
-import type { Env, LyricsSubmission } from "@/types"
+import type { Env, LyricsResponse, LyricsSubmission } from "@/types"
 import { ALBUM_HINT, isValidAlbum } from "@/utils/album"
 import { signedRequest } from "@/utils/auth"
 import { ErrorCode, buildError } from "@/utils/errors"
 import { ISRC_HINT, normalizeIsrc } from "@/utils/isrc"
 import { normalizeLanguage } from "@/utils/language-code"
+import { lyricEtag, matchesEtag } from "@/utils/lyric-etag"
 import { PROVIDER_ID_HINT, readProviderIds } from "@/utils/provider-id"
 import { readRateLimit } from "@/utils/read-rate-limit"
 import { getSession } from "@/utils/session"
@@ -87,9 +88,20 @@ export const lyricsRoutes = (env: Env) =>
 		})
 		.get(
 			"/",
-			async ({ query, env, lyricsUserId, lyricsKeyId, set, status }) => {
+			async ({ query, headers, env, lyricsUserId, lyricsKeyId, set, status }) => {
 				// CORS sends `vary: *`, which Cloudflare never caches; the allowed origin still varies.
 				set.headers.vary = "Origin"
+				const withEtag = <T extends LyricsResponse>(data: T) => {
+					const etag = lyricEtag(data)
+					set.headers.etag = etag
+					set.headers["cache-control"] = "no-store"
+					if (matchesEtag(headers["if-none-match"], etag)) {
+						// A 304 carries the Vary of the 200 it stands for, and the compressor skips empty bodies.
+						set.headers.vary = "Origin, Accept-Encoding"
+						return new Response(null, { status: 304, headers: { etag } })
+					}
+					return { success: true, data }
+				}
 				if (query.v) {
 					const served = await findServedByVideoId(env, query.v, lyricsKeyId)
 					if (!served) {
@@ -105,27 +117,23 @@ export const lyricsRoutes = (env: Env) =>
 						env,
 						result.submitter_id != null ? [result.submitter_id] : []
 					)
-					return {
-						success: true,
-						data: {
-							...toResponse(
-								result,
-								fulfilled,
-								marks.get(result.id),
-								result.submitter_id != null ? actors.get(result.submitter_id) : undefined
-							),
-							userVote,
-							variant: served.variant,
-						},
-					}
+					return withEtag({
+						...toResponse(
+							result,
+							fulfilled,
+							marks.get(result.id),
+							result.submitter_id != null ? actors.get(result.submitter_id) : undefined
+						),
+						userVote,
+						variant: served.variant,
+					})
 				}
 
 				const hasOtherLookup = query.isrc !== undefined || Boolean(query.song && query.artist)
-				const parsedIds = readProviderIds(query)
-				if (parsedIds === null && !hasOtherLookup) {
+				const { ids: providerIds, malformed } = readProviderIds(query)
+				if (malformed && providerIds.length === 0 && !hasOtherLookup) {
 					return status(400, buildError(ErrorCode.INVALID_ID, { hint: PROVIDER_ID_HINT }))
 				}
-				const providerIds = parsedIds ?? []
 
 				if (hasOtherLookup || providerIds.length > 0) {
 					const match = await findLyricsByTrack(env, {
@@ -153,19 +161,16 @@ export const lyricsRoutes = (env: Env) =>
 						env,
 						result.submitter_id != null ? [result.submitter_id] : []
 					)
-					return {
-						success: true,
-						data: {
-							...toResponse(
-								result,
-								fulfilled,
-								marks.get(result.id),
-								result.submitter_id != null ? actors.get(result.submitter_id) : undefined
-							),
-							userVote,
-							matchedBy: match.matchedBy,
-						},
-					}
+					return withEtag({
+						...toResponse(
+							result,
+							fulfilled,
+							marks.get(result.id),
+							result.submitter_id != null ? actors.get(result.submitter_id) : undefined
+						),
+						userVote,
+						matchedBy: match.matchedBy,
+					})
 				}
 
 				return status(400, buildError(ErrorCode.MISSING_QUERY))
