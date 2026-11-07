@@ -94,6 +94,7 @@ export const lyricsRoutes = (env: Env) =>
 				const withEtag = <T extends LyricsResponse>(data: T) => {
 					const etag = lyricEtag(data)
 					set.headers.etag = etag
+					set.headers["cache-control"] = "no-store"
 					if (matchesEtag(headers["if-none-match"], etag)) {
 						// A 304 carries the Vary of the 200 it stands for, and the compressor skips empty bodies.
 						set.headers.vary = "Origin, Accept-Encoding"

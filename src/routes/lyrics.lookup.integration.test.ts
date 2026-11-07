@@ -66,6 +66,8 @@ describeIntegration("GET /lyrics lookups (integration)", () => {
 			const first = await app.handle(new Request("http://localhost/lyrics?v=lkW3jsz0Gnc"))
 			const etag = first.headers.get("etag")
 			expect(etag).toMatch(/^W\//)
+			// Browsers must not revalidate on their own and hand back old votes; apps opt in with If-None-Match.
+			expect(first.headers.get("cache-control")).toBe("no-store")
 
 			for (const query of ["v=lkW3jsz0Gnc", "isrc=US2S70465012"]) {
 				const repeat = await app.handle(
