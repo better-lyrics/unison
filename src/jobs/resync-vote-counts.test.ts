@@ -1,6 +1,6 @@
 import type { Env } from "@/types"
 import { describe, expect, it } from "vitest"
-import { backfillVoteCounts } from "./backfill-vote-counts"
+import { resyncVoteCounts } from "./resync-vote-counts"
 
 function createMockDB(drifted: { id: number }[]) {
 	const calls: { sql: string; params: unknown[] }[] = []
@@ -29,11 +29,11 @@ function createMockDB(drifted: { id: number }[]) {
 	return { db: db as unknown as Env["DB"], calls }
 }
 
-describe("backfillVoteCounts", () => {
+describe("resyncVoteCounts", () => {
 	it("does nothing when no live rows have drifted", async () => {
 		const { db, calls } = createMockDB([])
 
-		const result = await backfillVoteCounts({ DB: db } as unknown as Env)
+		const result = await resyncVoteCounts({ DB: db } as unknown as Env)
 
 		expect(result.repaired).toBe(0)
 		expect(calls).toHaveLength(1)
@@ -42,7 +42,7 @@ describe("backfillVoteCounts", () => {
 	it("recalculates every drifted live row through recalculateScore", async () => {
 		const { db, calls } = createMockDB([{ id: 3 }, { id: 9 }])
 
-		const result = await backfillVoteCounts({ DB: db } as unknown as Env)
+		const result = await resyncVoteCounts({ DB: db } as unknown as Env)
 
 		expect(result.repaired).toBe(2)
 		const recalculated = calls.filter((c) => c.sql.includes("FROM lyrics l WHERE l.id = ?"))

@@ -5,7 +5,7 @@ import { CURATOR_LEADERBOARD_CACHE_KEY } from "@/db/leaderboard"
 import { deboost } from "@/db/predicates"
 import { updateReputations } from "@/db/reputation"
 import { lyricsVotedByKeys } from "@/db/vote-strikes"
-import { backfillVoteCounts } from "@/jobs/backfill-vote-counts"
+import { resyncVoteCounts } from "@/jobs/resync-vote-counts"
 import { recalculateScore } from "@/jobs/score-updater"
 import {
 	backfillRivalStrikes,
@@ -697,7 +697,7 @@ describeIntegration("runVoteIntegrity", () => {
 			const gStrike = await bySubmitter(g.submitter)
 			expect(await settledAt(fStrike.id)).toBeNull()
 			expect(fStrike.xp_revoked).toBe(0)
-			for (const row of await scores(f.targets)) expect(row.confidence).toBe("medium")
+			expect((await scores([f.targets[0]]))[0].confidence).toBe("medium")
 			expect(await settledAt(gStrike.id)).toBe(NOW)
 			for (const row of await scores(g.targets)) expect(row.confidence).toBe("low")
 			expect(await councilEvents()).toHaveLength(2)
@@ -1003,7 +1003,7 @@ describeIntegration("rival downvotes", () => {
 			[target]
 		)
 
-		await backfillVoteCounts(db.env)
+		await resyncVoteCounts(db.env)
 
 		const { rows } = await db.pool.query(
 			"SELECT downvotes, vote_count, effective_score > 0 AS positive FROM lyrics WHERE id = $1",

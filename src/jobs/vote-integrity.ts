@@ -17,12 +17,12 @@ import {
 	recordStrikes,
 	revokeStrikeXp,
 	staleLoyalLyrics,
-	staleRivalLyrics,
 	undoStrike,
 	unsettledStrikes,
 	votersOn,
 } from "@/db/vote-strikes"
 import { Logger } from "@/infra/logger"
+import { resyncVoteCounts } from "@/jobs/resync-vote-counts"
 import { recalculateScore } from "@/jobs/score-updater"
 import type { Env } from "@/types"
 
@@ -48,10 +48,10 @@ export async function runVoteIntegrity(
 		strikes: recorded.length + rivalStrikes.length,
 		keys: recorded.reduce((sum, s) => sum + s.keyIds.length, 0),
 	}
-	const resynced = await staleRivalLyrics(env)
-		.then((ids) => resyncLyrics(env, ids))
+	const resynced = await resyncVoteCounts(env)
+		.then((r) => r.repaired)
 		.catch((err) => {
-			log.error("rival downvote sweep failed", { error: String(err) })
+			log.error("vote count resync failed", { error: String(err) })
 			return 0
 		})
 
