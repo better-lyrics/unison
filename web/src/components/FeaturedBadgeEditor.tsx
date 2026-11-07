@@ -1,6 +1,4 @@
-import { IconX } from "@tabler/icons-react"
-import { AnimatePresence, MotionConfig, Reorder } from "motion/react"
-import { useEffect, useRef, useState } from "react"
+import { BadgeArt } from "@/components/BadgeArt"
 import { CollapsibleSection } from "@/components/CollapsibleSection"
 import { editableCardClass } from "@/components/ui"
 import { putFeaturedBadges } from "@/lib/api"
@@ -8,6 +6,9 @@ import { AUTHED_FETCH_ERRORS } from "@/lib/authedFetch"
 import { resolveBadgeImage } from "@/lib/badge-view"
 import { cn } from "@/lib/cn"
 import type { BadgeCatalogue, BadgeDef, UserBadge, UserGamification } from "@/lib/types"
+import { IconX } from "@tabler/icons-react"
+import { AnimatePresence, MotionConfig, Reorder } from "motion/react"
+import { useEffect, useRef, useState } from "react"
 
 const SAVED_FLASH_MS = 1500
 
@@ -72,11 +73,10 @@ function FeaturedTile({ entry, onUnfeature, onMove }: FeaturedTileProps) {
       transition={{ duration: 0.2, ease: [0.2, 0, 0, 1] }}
       className="group relative shrink-0 cursor-grab touch-none rounded-xl bg-unison-bg-elevated p-1 outline-none focus-visible:ring-2 focus-visible:ring-unison-medal-gold active:cursor-grabbing"
     >
-      <img
+      <BadgeArt
         src={resolveBadgeImage(def, badge.tier, "color")}
-        alt=""
-        draggable={false}
-        className="size-12 select-none object-contain"
+        silhouette={resolveBadgeImage(def, badge.tier, "silhouette")}
+        className="block size-12 select-none"
       />
       <button
         type="button"
@@ -102,9 +102,7 @@ export function FeaturedBadgeEditor({ gamification, catalogue, onSaved }: Featur
   const earnedKeys = new Set(earned.map((entry) => entry.def.key))
   const earnedByKey = new Map(earned.map((entry) => [entry.def.key, entry]))
 
-  const [selection, setSelection] = useState<string[]>(() =>
-    gamification.featured.filter((key) => earnedKeys.has(key)),
-  )
+  const [selection, setSelection] = useState<string[]>(() => gamification.featured.filter((key) => earnedKeys.has(key)))
   const [status, setStatus] = useState<Status>({ kind: "idle" })
   const flashTimer = useRef<number | null>(null)
 
@@ -210,11 +208,10 @@ export function FeaturedBadgeEditor({ gamification, catalogue, onSaved }: Featur
                       atCap && "cursor-not-allowed opacity-40 hover:bg-transparent",
                     )}
                   >
-                    <img
+                    <BadgeArt
                       src={resolveBadgeImage(def, badge.tier, "color")}
-                      alt=""
-                      draggable={false}
-                      className="size-7 object-contain"
+                      silhouette={resolveBadgeImage(def, badge.tier, "silhouette")}
+                      className="block size-7"
                     />
                     <span className="text-xs text-unison-text-secondary">{def.name}</span>
                   </button>
