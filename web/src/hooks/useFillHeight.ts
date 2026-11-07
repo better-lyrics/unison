@@ -18,6 +18,7 @@ export function useFillHeight(target: string) {
       measure()
       const observer = new ResizeObserver(measure)
       observer.observe(document.body)
+      observer.observe(container)
       window.addEventListener("resize", measure)
       return () => {
         observer.disconnect()

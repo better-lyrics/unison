@@ -1,7 +1,7 @@
 import { usePageArt } from "@/components/PageArt"
 import { EmptyState } from "@/components/EmptyState"
 import { LyricsContentSkeleton } from "@/components/LyricsRenderer"
-import { LyricsPanel } from "@/components/LyricsPanel"
+import { LyricsPanel, LyricsToolsSkeleton } from "@/components/LyricsPanel"
 import { SongHero, SongHeroSkeleton } from "@/components/song/SongHero"
 import { SongRail, SongRailSkeleton } from "@/components/song/SongRail"
 import { useFillHeight } from "@/hooks/useFillHeight"
@@ -40,6 +40,10 @@ export function LyricsPage() {
     else if (getPlaying()) pause()
     else play()
   }, [playerActive, getPlaying, pause, play])
+
+  const [toolsOverride, setToolsOverride] = useState<{ playing: boolean; open: boolean } | null>(null)
+  const toolsOpen = toolsOverride?.playing === playing ? toolsOverride.open : !playing
+  const toggleTools = useCallback(() => setToolsOverride({ playing, open: !toolsOpen }), [playing, toolsOpen])
 
   const variantsQuery = useLyricsVariants(safeVideoId)
 
@@ -103,9 +107,10 @@ export function LyricsPage() {
             versions={variants.length}
             art={art}
             player={{ ref, active: playerActive, playing, ready, failed, onToggle: togglePlay }}
+            lyricsTools={{ open: toolsOpen, onToggle: toggleTools }}
           />
         ) : (
-          <SongHeroSkeleton />
+          <SongHeroSkeleton title={lead?.song} />
         )}
         <div ref={lyricsRef} className="lyrics-view">
           <LyricsPanel
@@ -113,6 +118,7 @@ export function LyricsPage() {
             getCurrentTime={getCurrentTime}
             getPlaying={getPlaying}
             playing={playing}
+            toolsOpen={toolsOpen}
             onLineClick={handleLineClick}
             lyricsClassName={LYRICS_SIZE}
           />
@@ -129,6 +135,7 @@ function LyricsPageSkeleton({ lyricsRef }: { lyricsRef: (node: HTMLElement | nul
       <div className="min-w-0">
         <SongHeroSkeleton />
         <div ref={lyricsRef} className="lyrics-view">
+          <LyricsToolsSkeleton />
           <LyricsContentSkeleton className={LYRICS_SIZE} />
         </div>
       </div>
