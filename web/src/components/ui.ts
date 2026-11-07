@@ -42,8 +42,8 @@ const BUTTON_VARIANTS = {
 }
 
 const BUTTON_SIZES = {
-  md: "px-3.5 py-2 text-sm",
-  sm: "px-2.5 py-1.5 text-[13px]",
+  md: "px-3.5 py-2 text-sm has-[>svg:first-child]:pl-3",
+  sm: "px-2.5 py-1.5 text-[13px] has-[>svg:first-child]:gap-[7px] has-[>svg:first-child]:pl-2",
 }
 
 export type ButtonVariant = keyof typeof BUTTON_VARIANTS
