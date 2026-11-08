@@ -19,6 +19,7 @@ import {
 	recordReview,
 	retireLiveRevision,
 	revisionAuthor,
+	revisionFingerprint,
 	revisionLines,
 	setAnchorRevision,
 	setCurrentRevision,
@@ -47,6 +48,7 @@ import { detectLanguage } from "@/utils/detect-language"
 import { ErrorCode, buildError } from "@/utils/errors"
 import { type LyricLine, extractComparableLines, isBodyLine } from "@/utils/extract-text"
 import { sha256Hex } from "@/utils/hash"
+import { lyricFingerprint } from "@/utils/lyric-fingerprint"
 import { ISRC_HINT, normalizeIsrc } from "@/utils/isrc"
 import { LANGUAGE_HINT, isCuratedLanguage, isLanguageCode } from "@/utils/language-code"
 import {
@@ -159,6 +161,26 @@ function acceptIsrc(value: string): ResolvedField {
 }
 
 const acceptAlbum = (value: string): ResolvedField => ({ value, valid: isValidAlbum(value) })
+
+type LiveDetails = Pick<Candidate, "language" | "isrc" | "album">
+
+// Same as live means the same lyrics in every player: a file laid out differently is not an edit.
+async function matchesLive(
+	candidate: Candidate,
+	live: RevisionRow,
+	current: LiveDetails
+): Promise<boolean> {
+	if (
+		candidate.language !== current.language ||
+		candidate.isrc !== current.isrc ||
+		candidate.album !== current.album
+	) {
+		return false
+	}
+	if (sha256Hex(candidate.content) === live.content_hash) return true
+	const liveFingerprint = await revisionFingerprint(live.lyrics, live.format)
+	return liveFingerprint === lyricFingerprint(candidate.content, candidate.format)
+}
 
 async function languageCheck(
 	language: ResolvedField,
@@ -339,11 +361,7 @@ async function assess(
 		isrc: isrc.value,
 		album: album.value,
 	}
-	const noChanges =
-		sha256Hex(candidate.content) === live.content_hash &&
-		candidate.language === current.language &&
-		candidate.isrc === current.isrc &&
-		candidate.album === current.album
+	const noChanges = await matchesLive(candidate, live, current)
 
 	const drift = measureDrift(anchorLines, comparable)
 	const outcome = decideOutcome({
@@ -373,6 +391,43 @@ async function assess(
 			fieldChanges,
 		},
 	}
+}
+
+/** The cheap check before a preview: whether the edit would change anything on Unison at all. */
+export async function compareWithLive(
+	env: Env,
+	lyricsId: number,
+	userId: number,
+	input: RevisionInput
+): Promise<{ ok: true; same: boolean } | AccessFailure> {
+	const initial = await loadLyricState(env.DB, lyricsId, false)
+	if (!initial || initial.deleted_at !== null) return { ok: false, reason: "not_found" }
+	if (initial.submitter_id !== userId) return { ok: false, reason: "not_owner" }
+	if (initial.current_revision_id === null) await ensureBaseRevision(env.DB, lyricsId)
+	const lyric =
+		initial.current_revision_id === null ? await loadLyricState(env.DB, lyricsId, false) : initial
+	const live = lyric?.current_revision_id
+		? await getRevisionRow(env.DB, lyricsId, lyric.current_revision_id)
+		: null
+	if (!lyric || !live) return { ok: false, reason: "not_found" }
+
+	const validated = validateLyricContent(input.lyrics, input.format)
+	const current = { language: live.language, isrc: live.isrc, album: lyric.album }
+	const language = resolveField(input.language, current.language, undefined, acceptLanguage)
+	const isrc = resolveField(input.isrc, current.isrc, undefined, acceptIsrc)
+	const album = resolveField(input.album, current.album, undefined, acceptAlbum)
+	if (!validated.ok || !language.valid || !isrc.valid || !album.valid)
+		return { ok: true, same: false }
+
+	const candidate: Candidate = {
+		content: validated.lyrics,
+		format: validated.format,
+		syncType: validated.syncType,
+		language: language.value,
+		isrc: isrc.value,
+		album: album.value,
+	}
+	return { ok: true, same: await matchesLive(candidate, live, current) }
 }
 
 export async function previewRevision(

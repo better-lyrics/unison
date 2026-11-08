@@ -595,5 +595,33 @@ describeIntegration("revision routes (integration)", () => {
 			const { status } = await call("GET", "/lyrics/queue/bot", { token: BOT_SECRET })
 			expect(status).toBe(200)
 		})
+
+		it("regression: a resend laid out differently is no change, a small nudge still is", async () => {
+			const ttml = readRevisionFixture("amazing-grace.ttml")
+			lyricId = await seedLyric(db, owner, { lyrics: ttml, format: "ttml", language: "en" })
+			const reformatted = ttml
+				.replace('itunes:timing="Word"', 'itunes:timing="Word" composer:build="1a2b3c4d"')
+				.replace('begin="12.000" end="12.600"', 'end="00:12.600" begin="00:12.000"')
+				.replaceAll('itunes:key="L1" ttm:agent="v1"', 'ttm:agent="v1" itunes:key="L1"')
+			const nudged = ttml.replace('begin="12.600" end="13.200"', 'begin="12.630" end="13.200"')
+			const compare = (lyrics: string) =>
+				call<{ same: boolean }>("POST", `/lyrics/${lyricId}/revisions/compare`, {
+					token: "owner-token",
+					body: { lyrics, format: "ttml" },
+				})
+
+			expect((await compare(reformatted)).json.data.same).toBe(true)
+			expect((await compare(nudged)).json.data.same).toBe(false)
+			const preview = await call<PreviewResult>("POST", `/lyrics/${lyricId}/revisions/preview`, {
+				token: "owner-token",
+				body: { lyrics: reformatted, format: "ttml" },
+			})
+			expect(preview.json.data.noChanges).toBe(true)
+			const saved = await call("POST", `/lyrics/${lyricId}/revisions`, {
+				token: "owner-token",
+				body: { lyrics: reformatted, format: "ttml" },
+			})
+			expect(saved.json.code).toBe("NO_CHANGES")
+		})
 	})
 })

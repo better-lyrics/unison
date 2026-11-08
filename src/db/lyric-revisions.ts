@@ -13,6 +13,7 @@ import type {
 import { compress, decompressIfNeeded, isCompressed } from "@/utils/compression"
 import { type LyricLine, extractComparableLines, extractPlainText } from "@/utils/extract-text"
 import { sha256Hex } from "@/utils/hash"
+import { lyricFingerprint } from "@/utils/lyric-fingerprint"
 import { showsChanges } from "@/utils/lyric-diff"
 import { normalizeAlbum } from "@/utils/normalize"
 import { generatePetName } from "@/utils/petname"
@@ -285,6 +286,20 @@ export async function revisionLines(stored: string, format: LyricsFormat): Promi
 	} catch (err) {
 		log.warn("stored revision content could not be parsed", { error: (err as Error).message })
 		return []
+	}
+}
+
+export async function revisionFingerprint(
+	stored: string,
+	format: LyricsFormat
+): Promise<string | null> {
+	try {
+		return lyricFingerprint(await decompressIfNeeded(stored), format)
+	} catch (err) {
+		log.warn("stored revision content could not be fingerprinted", {
+			error: (err as Error).message,
+		})
+		return null
 	}
 }
 

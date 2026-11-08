@@ -481,13 +481,13 @@ describeIntegration("lyric revisions pipeline (integration)", () => {
 		})
 
 		describe("edge cases", () => {
-			it("counts a whitespace-only head change as 0 drift and skips Jev", async () => {
+			it("treats a whitespace-only head change as no change and skips Jev", async () => {
 				const { calls, env } = recordingGate(true)
-				const revision = await saveTtml(
-					retranslated((line) => `  ${line}\n`),
-					env
-				)
-				expect(revision).toMatchObject({ status: "live", textDrift: 0, timingDrift: 0 })
+				const result = await saveRevision(env, ttmlLyric, owner, {
+					lyrics: retranslated((line) => `  ${line}\n`),
+					format: "ttml",
+				})
+				expect(result).toEqual({ ok: false, reason: "no_changes" })
 				expect(calls).toHaveLength(0)
 			})
 		})
