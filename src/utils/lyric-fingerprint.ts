@@ -56,16 +56,25 @@ const isBackground = (node: CanonicalNode | undefined): boolean =>
 	typeof node === "object" &&
 	node.attributes.some(([key, value]) => key === "role" && value === "x-bg")
 
-function lastText(node: CanonicalElement): { owner: CanonicalNode[]; index: number } | null {
-	const last = node.children.length - 1
-	if (last < 0) return null
-	const child = node.children[last]
-	return typeof child === "string" ? { owner: node.children, index: last } : lastText(child)
+type Edge = "first" | "last"
+
+function edgeText(
+	node: CanonicalElement,
+	edge: Edge
+): { owner: CanonicalNode[]; index: number } | null {
+	const index = edge === "first" ? 0 : node.children.length - 1
+	if (index < 0 || index >= node.children.length) return null
+	const child = node.children[index]
+	return typeof child === "string" ? { owner: node.children, index } : edgeText(child, edge)
 }
 
-function editLastText(node: CanonicalNode, edit: (text: string) => string): CanonicalNode {
+function editEdgeText(
+	node: CanonicalNode,
+	edge: Edge,
+	edit: (text: string) => string
+): CanonicalNode {
 	if (typeof node === "string") return edit(node)
-	const found = lastText(node)
+	const found = edgeText(node, edge)
 	if (found) found.owner[found.index] = edit(found.owner[found.index] as string)
 	return node
 }
@@ -88,7 +97,7 @@ function foldInlineSpacing(nodes: CanonicalNode[], isLine: boolean): CanonicalNo
 				return
 			}
 			if (isBackground(previous) || isBackground(nodes[index + 1])) return
-			folded[folded.length - 1] = editLastText(previous, (last) =>
+			folded[folded.length - 1] = editEdgeText(previous, "last", (last) =>
 				last.endsWith(" ") ? last : `${last} `
 			)
 			return
@@ -97,9 +106,12 @@ function foldInlineSpacing(nodes: CanonicalNode[], isLine: boolean): CanonicalNo
 		if (typeof previous === "string") folded[folded.length - 1] = previous + trimmed
 		else folded.push(trimmed)
 	})
-	const last = folded.at(-1)
-	if (isLine && last !== undefined)
-		folded[folded.length - 1] = editLastText(last, (text) => text.trimEnd())
+	if (isLine && folded.length > 0) {
+		folded[0] = editEdgeText(folded[0], "first", (text) => text.trimStart())
+		folded[folded.length - 1] = editEdgeText(folded[folded.length - 1], "last", (text) =>
+			text.trimEnd()
+		)
+	}
 	return folded
 }
 

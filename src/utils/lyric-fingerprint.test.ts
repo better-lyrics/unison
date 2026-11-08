@@ -51,6 +51,11 @@ describe("lyricFingerprint", () => {
 		expect(lyricFingerprint(units, "ttml")).toBe(lyricFingerprint(COMPACT, "ttml"))
 	})
 
+	it("ignores a space at the start of a line", () => {
+		const padded = COMPACT.replace('end="1.400">Paper </span>', 'end="1.400"> Paper </span>')
+		expect(lyricFingerprint(padded, "ttml")).toBe(lyricFingerprint(COMPACT, "ttml"))
+	})
+
 	it("keeps the space of a spacer span between words", () => {
 		const spaced = COMPACT.replace("Paper </span>", "Paper</span><span> </span>")
 		const joined = COMPACT.replace("Paper </span>", "Paper</span><span></span>")
