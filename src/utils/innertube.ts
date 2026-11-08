@@ -30,6 +30,29 @@ export async function getVideoDurationSeconds(videoId: string): Promise<number |
 	}
 }
 
+export async function getVideoCandidate(videoId: string): Promise<SongCandidate | null> {
+	try {
+		const yt = await getInnertube()
+		const info = (await yt.getBasicInfo(videoId, { client: BASIC_INFO_CLIENT })).basic_info
+		if (!info?.title) return null
+		const artist = info.author ?? ""
+		return {
+			videoId,
+			title: info.title,
+			artist,
+			artists: artist ? [artist] : [],
+			artistChannelIds: info.channel_id ? [info.channel_id] : [],
+			album: null,
+			durationSeconds: typeof info.duration === "number" ? info.duration : null,
+			videoType: "video",
+			artworkUrl: pickSquareArtwork(info.thumbnail ?? [], config.artwork.size),
+		}
+	} catch (err) {
+		log.warn("innertube video details failed", { videoId, error: (err as Error).message })
+		return null
+	}
+}
+
 export type SongCandidate = {
 	videoId: string
 	title: string

@@ -81,6 +81,7 @@ export const config = {
 		durationDeltaSeconds: 2,
 		suggestionCacheTtlSeconds: 60 * 60 * 6,
 		emptySuggestionCacheTtlSeconds: 60 * 30,
+		videoDetailsCacheTtlSeconds: 60 * 60 * 24 * 30,
 		recordingMatch: {
 			timeoutMs: 1500,
 			maxCandidates: 10,

@@ -481,18 +481,36 @@ describe("buildSuggestions", () => {
 })
 
 describe("linkedVideoDetails", () => {
-	it("describes the linked videos that the search found", () => {
-		const out = linkedVideoDetails(
+	const noLookup = async () => null
+
+	it("describes the linked videos that the search found", async () => {
+		const out = await linkedVideoDetails(
 			[candidate({ videoId: "linked00001" }), candidate({ videoId: "open0000001" })],
 			META,
-			new Set(["linked00001"])
+			new Set(["linked00001"]),
+			noLookup
 		)
 		expect(out.map((s) => s.videoId)).toEqual(["linked00001"])
 		expect(out[0].title).toBe("Blinding Lights")
 	})
 
-	it("regression: describes a linked video from another artist's channel", () => {
-		const out = linkedVideoDetails(
+	it("regression: describes a pasted linked video the search never found", async () => {
+		const lookup = vi.fn(async (videoId: string) =>
+			candidate({ videoId, title: "Blinding Lights (Live)", videoType: "video", album: null })
+		)
+		const out = await linkedVideoDetails(
+			[candidate({ videoId: "linked00001" })],
+			META,
+			new Set(["linked00001", "pasted00001"]),
+			lookup
+		)
+		expect(out.map((s) => s.videoId)).toEqual(["linked00001", "pasted00001"])
+		expect(out[1].title).toBe("Blinding Lights (Live)")
+		expect(lookup).toHaveBeenCalledTimes(1)
+	})
+
+	it("regression: describes a linked video from another artist's channel", async () => {
+		const out = await linkedVideoDetails(
 			[
 				candidate({ videoId: META.videoId, artistChannelIds: ["UCweeknd"] }),
 				candidate({
@@ -504,14 +522,20 @@ describe("linkedVideoDetails", () => {
 				}),
 			],
 			META,
-			new Set(["fanupload01"])
+			new Set(["fanupload01"]),
+			noLookup
 		)
 		expect(out.map((s) => s.videoId)).toEqual(["fanupload01"])
 	})
 
-	it("never describes the main video", () => {
+	it("never describes the main video", async () => {
 		expect(
-			linkedVideoDetails([candidate({ videoId: META.videoId })], META, new Set([META.videoId]))
+			await linkedVideoDetails(
+				[candidate({ videoId: META.videoId })],
+				META,
+				new Set([META.videoId]),
+				noLookup
+			)
 		).toEqual([])
 	})
 })
