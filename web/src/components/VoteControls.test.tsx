@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react"
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 const upvote = vi.fn()
@@ -83,12 +83,12 @@ describe("VoteControls", () => {
     expect(items).toHaveLength(5)
   })
 
-  it("clicking a menuitem calls report with the reason and closes the menu", () => {
+  it("clicking a menuitem calls report with the reason and closes the menu", async () => {
     render(<VoteControls variantId={1} videoId="v1" variant={{ score: 0, userVote: null }} />)
     fireEvent.click(screen.getByRole("button", { name: /report/i }))
     fireEvent.click(screen.getByRole("menuitem", { name: /spam/i }))
     expect(report).toHaveBeenCalledWith("spam")
-    expect(screen.queryByRole("menuitem")).toBeNull()
+    await waitFor(() => expect(screen.queryByRole("menuitem")).toBeNull())
   })
 
   it("each menuitem maps to the correct report reason", () => {
@@ -110,16 +110,16 @@ describe("VoteControls", () => {
     expect(report).toHaveBeenCalledWith("other")
   })
 
-  it("Escape closes the menu without firing a report", () => {
+  it("Escape closes the menu without firing a report", async () => {
     render(<VoteControls variantId={1} videoId="v1" variant={{ score: 0, userVote: null }} />)
     fireEvent.click(screen.getByRole("button", { name: /report/i }))
     expect(screen.getAllByRole("menuitem")).toHaveLength(5)
     fireEvent.keyDown(window, { key: "Escape" })
-    expect(screen.queryByRole("menuitem")).toBeNull()
+    await waitFor(() => expect(screen.queryByRole("menuitem")).toBeNull())
     expect(report).not.toHaveBeenCalled()
   })
 
-  it("outside click closes the menu without firing a report", () => {
+  it("outside click closes the menu without firing a report", async () => {
     render(
       <div>
         <button type="button" data-testid="outside">
@@ -131,7 +131,7 @@ describe("VoteControls", () => {
     fireEvent.click(screen.getByRole("button", { name: /report/i }))
     expect(screen.getAllByRole("menuitem")).toHaveLength(5)
     fireEvent.mouseDown(screen.getByTestId("outside"))
-    expect(screen.queryByRole("menuitem")).toBeNull()
+    await waitFor(() => expect(screen.queryByRole("menuitem")).toBeNull())
     expect(report).not.toHaveBeenCalled()
   })
 })

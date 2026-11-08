@@ -20,6 +20,7 @@ function entry(overrides: Partial<FeedEntry> = {}): FeedEntry {
     videoId: "HsBfV2A5dUY",
     song: "Espresso",
     artist: "Sabrina Carpenter",
+    format: "ttml",
     syncType: "richsync",
     createdAt: NOW - 30 * 86400,
     marks: [SEAL],
@@ -79,20 +80,20 @@ describe("SealedTile", () => {
 
     it("shows the sync type and how long ago it was sealed on the card", () => {
       renderUi(<SealedTile entry={entry()} variant="card" now={NOW} />)
-      expect(screen.getByText("Richsynced")).toBeTruthy()
+      expect(screen.getByText("Syllable")).toBeTruthy()
       expect(screen.getByText("2d ago")).toBeTruthy()
     })
 
     it("labels line-synced lyrics on the card", () => {
       renderUi(<SealedTile entry={entry({ syncType: "linesync" })} variant="card" now={NOW} />)
-      expect(screen.getByText("Line synced")).toBeTruthy()
+      expect(screen.getByText("Line")).toBeTruthy()
     })
   })
 
   describe("edge cases", () => {
     it("leaves out the sync type and elapsed time on the shelf", () => {
       renderUi(<SealedTile entry={entry()} variant="shelf" now={NOW} />)
-      expect(screen.queryByText("Richsynced")).toBeNull()
+      expect(screen.queryByText("Syllable")).toBeNull()
       expect(screen.queryByText("2d ago")).toBeNull()
     })
 
@@ -162,7 +163,7 @@ describe("SealedTile", () => {
 
     it("the shelf tile and its skeleton share the same fixed width", () => {
       const tile = renderUi(<SealedTile entry={entry()} variant="shelf" />)
-      const tileWidth = tile.container.querySelector("a")?.className.match(/w-\[\d+px\]/)?.[0]
+      const tileWidth = tile.container.firstElementChild?.className.match(/w-\[\d+px\]/)?.[0]
       tile.unmount()
       const bone = renderUi(<SealedTileSkeleton variant="shelf" />)
       expect(tileWidth).toBeDefined()

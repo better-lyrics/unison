@@ -73,7 +73,7 @@ function makeMockCache(seed: Record<string, string> = {}) {
 const OAUTH = {
 	clientId: "c",
 	clientSecret: "s",
-	redirectUri: "https://unison.boidu.dev/links/discord/callback",
+	redirectUri: "https://unison.betterlyrics.org/links/discord/callback",
 }
 
 function makeEnv(
@@ -165,7 +165,7 @@ describe("POST /migrations/bot/start", () => {
 		expect(data.status).toBe("awaiting_new_key")
 		expect(data.oldKeyId).toBe("oldkey")
 		expect(typeof data.sessionId).toBe("string")
-		expect(data.signUrl).toContain("https://unison.boidu.dev/migrate?session=")
+		expect(data.signUrl).toContain("https://unison.betterlyrics.org/migrate?session=")
 		expect(cache.store.get("migration:by-discord:disc-1")).toBe(data.sessionId)
 	})
 

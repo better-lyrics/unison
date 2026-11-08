@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest"
-import { clientIp } from "./read-rate-limit"
+import { config } from "@/config"
+import { clientIp, readBucket } from "./read-rate-limit"
 
 describe("clientIp", () => {
 	it("uses first hop of X-Forwarded-For", () => {
@@ -24,5 +25,23 @@ describe("clientIp", () => {
 
 	it("returns 'unknown' for explicitly undefined values", () => {
 		expect(clientIp({ "x-forwarded-for": undefined, "x-real-ip": undefined })).toBe("unknown")
+	})
+})
+
+describe("readBucket", () => {
+	it("gives same-origin SPA requests their own larger bucket", () => {
+		expect(readBucket({ "x-forwarded-for": "1.2.3.4", "sec-fetch-site": "same-origin" })).toEqual({
+			key: "spa:ip:1.2.3.4",
+			scale: config.rateLimit.spaReadScale,
+		})
+	})
+
+	it("keeps every other client on the shared per-IP bucket", () => {
+		for (const site of ["cross-site", "same-site", "none", undefined]) {
+			expect(readBucket({ "x-forwarded-for": "1.2.3.4", "sec-fetch-site": site })).toEqual({
+				key: "ip:1.2.3.4",
+				scale: 1,
+			})
+		}
 	})
 })

@@ -24,14 +24,14 @@ describe("SongThumbnail", () => {
       "fetch",
       vi.fn().mockResolvedValue(jsonResponse({ success: true, data: { artworkUrl: "https://art/x=w544-h544" } })),
     )
-    const { container } = render(wrap(<SongThumbnail videoId="dQw4w9WgXcQ" />))
+    const { container } = render(wrap(<SongThumbnail videoId="dQw4w9WgXcQ" song="Paper Lanterns" artist="Halden" />))
     await waitFor(() => expect(container.querySelector("img")).not.toBeNull())
     expect(container.querySelector("img")?.getAttribute("src")).toBe("https://art/x=w544-h544")
   })
 
   it("applies the passed className to the frame", () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse({ success: true, data: { artworkUrl: null } })))
-    const { container } = render(wrap(<SongThumbnail videoId="v" className="size-11" />))
+    const { container } = render(wrap(<SongThumbnail videoId="v" song="Paper Lanterns" artist="Halden" className="size-11" />))
     expect(container.firstElementChild?.className).toContain("size-11")
     expect(container.firstElementChild?.className).toContain("rounded-md")
   })

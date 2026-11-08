@@ -12,7 +12,8 @@ export interface Storage {
 		key: string,
 		body: Buffer | NodeJS.ReadableStream,
 		contentType: string,
-		contentLength?: number
+		contentLength?: number,
+		cacheControl?: string
 	): Promise<void>
 	listObjects(prefix: string): Promise<{ key: string; lastModified: Date }[]>
 	deleteObject(key: string): Promise<void>
@@ -34,7 +35,7 @@ export function createStorage(cfg: B2Config | null): Storage | null {
 
 	return {
 		__client: client,
-		async putObject(key, body, contentType, contentLength) {
+		async putObject(key, body, contentType, contentLength, cacheControl) {
 			await client.send(
 				new PutObjectCommand({
 					Bucket: cfg.bucket,
@@ -42,6 +43,7 @@ export function createStorage(cfg: B2Config | null): Storage | null {
 					Body: body as PutObjectCommandInput["Body"],
 					ContentType: contentType,
 					ContentLength: contentLength,
+					CacheControl: cacheControl,
 				})
 			)
 		},

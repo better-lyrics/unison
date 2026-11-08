@@ -4,8 +4,6 @@ import { parseFeedFilters } from "@/db/feed-filters"
 import { getFulfillmentByLyricsId } from "@/db/fulfillments"
 import { getRevisionBar, getRevisionBars } from "@/db/lyric-revisions"
 import {
-	findByIsrc,
-	findBySongArtist,
 	findServedByVideoId,
 	findVariantsByVideoId,
 	getLyricsById,
@@ -16,15 +14,19 @@ import {
 } from "@/db/lyrics"
 import { getUserVote, getUserVotesForIds } from "@/db/votes"
 import { Logger } from "@/infra/logger"
+import { resyncVoteCounts } from "@/jobs/resync-vote-counts"
 import { toFeedResponse } from "@/routes/feed"
 import { toResponse, toSearchResponse } from "@/routes/lyrics.transformers"
 import { buildSealMarks, resolveActors } from "@/routes/marks"
-import type { Env, LyricsSubmission } from "@/types"
+import { findLyricsByTrack } from "@/services/track-lookup"
+import type { Env, LyricsResponse, LyricsSubmission } from "@/types"
 import { ALBUM_HINT, isValidAlbum } from "@/utils/album"
 import { eitherAuth } from "@/utils/either-auth"
 import { ErrorCode, buildError } from "@/utils/errors"
 import { ISRC_HINT, normalizeIsrc } from "@/utils/isrc"
 import { normalizeLanguage } from "@/utils/language-code"
+import { lyricEtag, matchesEtag } from "@/utils/lyric-etag"
+import { PROVIDER_ID_HINT, readProviderIds } from "@/utils/provider-id"
 import { readRateLimit } from "@/utils/read-rate-limit"
 import { getSession } from "@/utils/session"
 import { validateLyricContent } from "@/utils/validate-lyrics"
@@ -32,6 +34,11 @@ import { VIDEO_ID_HINT, videoIdFromInput } from "@/utils/video-id"
 import { Elysia, t } from "elysia"
 
 const log = new Logger("app")
+
+const resyncDownvotedLater = (env: Env, userId: number) =>
+	resyncVoteCounts(env, { downvotedBy: userId }).catch((err) =>
+		log.error("rival downvote refresh failed", { userId, error: String(err) })
+	)
 
 function parseDuration(raw: string | undefined): number | undefined {
 	if (!raw) return undefined
@@ -81,7 +88,20 @@ export const lyricsRoutes = (env: Env) =>
 		})
 		.get(
 			"/",
-			async ({ query, env, lyricsUserId, lyricsKeyId, status }) => {
+			async ({ query, headers, env, lyricsUserId, lyricsKeyId, set, status }) => {
+				// CORS sends `vary: *`, which Cloudflare never caches; the allowed origin still varies.
+				set.headers.vary = "Origin"
+				const withEtag = <T extends LyricsResponse>(data: T) => {
+					const etag = lyricEtag(data)
+					set.headers.etag = etag
+					set.headers["cache-control"] = "no-store"
+					if (matchesEtag(headers["if-none-match"], etag)) {
+						// A 304 carries the Vary of the 200 it stands for, and the compressor skips empty bodies.
+						set.headers.vary = "Origin, Accept-Encoding"
+						return new Response(null, { status: 304, headers: { etag } })
+					}
+					return { success: true, data }
+				}
 				if (query.v) {
 					const served = await findServedByVideoId(env, query.v, lyricsKeyId)
 					if (!served) {
@@ -97,36 +117,41 @@ export const lyricsRoutes = (env: Env) =>
 						env,
 						result.submitter_id != null ? [result.submitter_id] : []
 					)
-					return {
-						success: true,
-						data: {
-							...toResponse(
-								result,
-								fulfilled,
-								marks.get(result.id),
-								result.submitter_id != null ? actors.get(result.submitter_id) : undefined
-							),
-							userVote,
-							variant: served.variant,
-						},
-					}
+					return withEtag({
+						...toResponse(
+							result,
+							fulfilled,
+							marks.get(result.id),
+							result.submitter_id != null ? actors.get(result.submitter_id) : undefined
+						),
+						userVote,
+						variant: served.variant,
+					})
 				}
 
-				if (query.isrc !== undefined || (query.song && query.artist)) {
-					const result =
-						(query.isrc !== undefined ? await findByIsrc(env, query.isrc) : null) ??
-						(query.song && query.artist
-							? await findBySongArtist(
-									env,
-									query.song,
-									query.artist,
-									parseDuration(query.duration),
-									query.album
-								)
-							: null)
-					if (!result) {
+				const hasOtherLookup = query.isrc !== undefined || Boolean(query.song && query.artist)
+				const { ids: providerIds, malformed } = readProviderIds(query)
+				if (malformed && providerIds.length === 0 && !hasOtherLookup) {
+					return status(400, buildError(ErrorCode.INVALID_ID, { hint: PROVIDER_ID_HINT }))
+				}
+
+				if (hasOtherLookup || providerIds.length > 0) {
+					const match = await findLyricsByTrack(env, {
+						isrc: query.isrc,
+						providerIds,
+						song: query.song,
+						artist: query.artist,
+						album: query.album,
+						duration: parseDuration(query.duration),
+					})
+					if (match.kind === "pending") {
+						set.headers["retry-after"] = String(match.retryAfterSec)
+						return status(503, buildError(ErrorCode.LOOKUP_PENDING))
+					}
+					if (match.kind === "none") {
 						return status(404, buildError(ErrorCode.NOT_FOUND))
 					}
+					const result = match.row
 					const [userVote, fulfilled] = await Promise.all([
 						lyricsUserId ? getUserVote(env, result.id, lyricsUserId) : Promise.resolve(null),
 						getFulfillmentByLyricsId(env, result.id),
@@ -136,18 +161,16 @@ export const lyricsRoutes = (env: Env) =>
 						env,
 						result.submitter_id != null ? [result.submitter_id] : []
 					)
-					return {
-						success: true,
-						data: {
-							...toResponse(
-								result,
-								fulfilled,
-								marks.get(result.id),
-								result.submitter_id != null ? actors.get(result.submitter_id) : undefined
-							),
-							userVote,
-						},
-					}
+					return withEtag({
+						...toResponse(
+							result,
+							fulfilled,
+							marks.get(result.id),
+							result.submitter_id != null ? actors.get(result.submitter_id) : undefined
+						),
+						userVote,
+						matchedBy: match.matchedBy,
+					})
 				}
 
 				return status(400, buildError(ErrorCode.MISSING_QUERY))
@@ -156,6 +179,9 @@ export const lyricsRoutes = (env: Env) =>
 				query: t.Object({
 					v: t.Optional(t.String()),
 					isrc: t.Optional(t.String()),
+					spotify: t.Optional(t.String()),
+					apple_music: t.Optional(t.String()),
+					tidal: t.Optional(t.String()),
 					song: t.Optional(t.String()),
 					artist: t.Optional(t.String()),
 					album: t.Optional(t.String()),
@@ -471,6 +497,7 @@ export const lyricsRoutes = (env: Env) =>
 			if (!result.created) {
 				return status(409, buildError(ErrorCode.VARIANT_CAP_REACHED))
 			}
+			resyncDownvotedLater(env, userId)
 
 			return status(201, {
 				success: true,
@@ -488,6 +515,7 @@ export const lyricsRoutes = (env: Env) =>
 				const result = await softDeleteLyrics(env, id, userId, "submitter")
 
 				if (result.deleted) {
+					resyncDownvotedLater(env, userId)
 					return { success: true }
 				}
 				if (result.reason === "forbidden") {

@@ -24,6 +24,7 @@ function buildSubmitter(
 		displayName: row.submitter_nickname ?? generatePetName(row.submitter_key_id),
 		tier: actor?.tier ?? null,
 		level: actor?.level ?? 1,
+		levelProgress: actor?.levelProgress ?? 0,
 		badgeCount: actor?.badgeCount ?? 0,
 		topBadge: actor?.topBadge ?? null,
 		featured: actor?.featured ?? [],

@@ -55,6 +55,13 @@ export interface UserStats {
   lastVoteAt: number | null
   discordLinked: boolean
   avatarUrl?: string | null
+  banner?: { videoId: string; artworkUrl: string }
+  discord?: { id: string; username: string }
+}
+
+export interface ProfileSettings {
+  banner: string | null
+  showDiscord: boolean
 }
 
 export interface RankedUserStats extends UserStats {
@@ -121,6 +128,7 @@ export interface VariantSubmitter {
   displayName: string
   tier: TierName | null
   level: number
+  levelProgress?: number
   badgeCount: number
   topBadge: LeaderboardBadge | null
   featured: LeaderboardBadge[]
@@ -150,8 +158,10 @@ export interface FeedEntry {
   videoId: string
   song: string
   artist: string
+  format: LyricsFormat
   syncType: SyncType
   createdAt: number
+  voteCount?: number
   marks?: Mark[]
   submitter?: MarkActor
 }
@@ -184,8 +194,14 @@ export interface VariantSummary {
   userVote?: 1 | -1 | null
 }
 
+export interface VariantRevision {
+  revNo: number
+  updatedAt: number
+}
+
 export interface VariantFull extends VariantSummary {
   lyrics: string
+  revision?: VariantRevision
 }
 
 export interface QueueEntry {

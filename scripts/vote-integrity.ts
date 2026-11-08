@@ -1,5 +1,10 @@
 import { config } from "@/config"
-import { type SuspectKey, findSuspectKeys } from "@/db/vote-strikes"
+import {
+	type RivalVoter,
+	type SuspectKey,
+	findRivalVoters,
+	findSuspectKeys,
+} from "@/db/vote-strikes"
 import { closeRedis } from "@/infra/cache"
 import { closePool } from "@/infra/database"
 import { createEnv } from "@/infra/env"
@@ -8,7 +13,8 @@ import type { Env } from "@/types"
 
 const USAGE = `usage:
   pnpm vote-integrity                  dry run over recent voters, prints the keys that would be discounted
-  pnpm vote-integrity --apply          discounts them and records strikes
+                                       and the rival downvoters that would be struck
+  pnpm vote-integrity --apply          discounts them, records strikes and recalculates rival downvotes
   pnpm vote-integrity --all            dry run over every voter
   pnpm vote-integrity --apply --all    full scan for the launch backfill`
 
@@ -40,6 +46,14 @@ async function printPlan(env: Env, suspects: SuspectKey[]): Promise<void> {
 	)
 }
 
+function printRivals(voters: RivalVoter[]): void {
+	for (const v of voters) {
+		console.log(`rival ${v.userId}: ${v.votes} rival downvotes, last vote ${day(v.lastVoteAt)}`)
+	}
+	const launch = day(config.voteIntegrity.rival.launchedAt)
+	console.log(`${voters.length} rival downvoters; launch ${launch} (no rows written)`)
+}
+
 async function main() {
 	const flags = process.argv.slice(2)
 	if (flags.some((f) => f !== "--apply" && f !== "--all") || new Set(flags).size !== flags.length) {
@@ -55,6 +69,7 @@ async function main() {
 			console.log(`recorded ${result.strikes} strikes over ${result.keys} keys`)
 		} else {
 			await printPlan(env, await findSuspectKeys(env, { all }))
+			printRivals(await findRivalVoters(env, { all }))
 		}
 	} finally {
 		await closePool()

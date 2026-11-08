@@ -214,6 +214,8 @@ export async function findServedByVideoId(
 	return { row: arm, variant: "explore" }
 }
 
+const VARIANTS_FOR_VIDEO = `${videoServesExpr("l.")} AND l.deleted_at IS NULL AND NOT ${BANNED_SUBMITTER_PREDICATE_JOINED}`
+
 export async function findVariantsByVideoId(
 	env: Env,
 	videoId: string,
@@ -222,7 +224,7 @@ export async function findVariantsByVideoId(
 	const results = await env.DB.prepare(
 		`
 		${LYRICS_WITH_SUBMITTER}
-		WHERE ${videoServesExpr("l.")} AND l.deleted_at IS NULL AND NOT ${BANNED_SUBMITTER_PREDICATE_JOINED}
+		WHERE ${VARIANTS_FOR_VIDEO}
 		ORDER BY ${RANKING_EXPR_VARIANT} DESC
 		LIMIT ?
 		`
@@ -237,6 +239,17 @@ export async function findVariantsByVideoId(
 	}
 
 	return results.results
+}
+
+export async function countVariantsByVideoId(env: Env, videoId: string): Promise<number> {
+	const row = await env.DB.prepare(
+		`SELECT COUNT(*) AS n FROM lyrics l
+		LEFT JOIN users u ON l.submitter_id = u.id
+		WHERE ${VARIANTS_FOR_VIDEO}`
+	)
+		.bind(videoId, videoId)
+		.first<{ n: number | string }>()
+	return Number(row?.n ?? 0)
 }
 
 // SQL cannot split credit names the way normalize.ts does, so the artist check runs on the candidates.

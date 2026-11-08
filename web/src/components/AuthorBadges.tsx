@@ -1,6 +1,7 @@
+import { BadgeArt } from "@/components/BadgeArt"
 import { TierChip } from "@/components/TierChip"
 import { Tooltip } from "@/components/Tooltip"
-import { useBadgeImage } from "@/hooks/useBadgeImage"
+import { useBadgeArt } from "@/hooks/useBadgeImage"
 import { cn } from "@/lib/cn"
 import type { LeaderboardBadge, TierName } from "@/lib/types"
 
@@ -18,11 +19,11 @@ const STRIP_SIZES = {
 }
 
 function useStripImages(featured: LeaderboardBadge[], topBadge: LeaderboardBadge | null) {
-  const badgeImage = useBadgeImage()
+  const badgeArt = useBadgeArt()
   const shown = featured.length > 0 ? featured : topBadge ? [topBadge] : []
   return shown.flatMap((b) => {
-    const src = badgeImage(b.key, b.tier)
-    return src ? [{ badge: b, src }] : []
+    const art = badgeArt(b.key, b.tier)
+    return art ? [{ badge: b, ...art }] : []
   })
 }
 
@@ -33,9 +34,9 @@ export function BadgeStrip({ featured, topBadge, badgeCount, size = "md", classN
   const extra = featured.length > 0 ? 0 : badgeCount - 1
   return (
     <span className={cn("inline-flex items-center", sizes.gap, className)}>
-      {images.map(({ badge, src }) => (
+      {images.map(({ badge, src, silhouette }) => (
         <Tooltip key={badge.key} label={badge.name}>
-          <img src={src} alt={badge.name} className={cn(sizes.icon, "object-contain")} />
+          <BadgeArt src={src} silhouette={silhouette} alt={badge.name} className={sizes.icon} />
         </Tooltip>
       ))}
       {extra > 0 ? <span className={cn(sizes.count, "text-unison-text-muted")}>+{extra}</span> : null}
@@ -51,12 +52,12 @@ interface AuthorBadgesProps {
 }
 
 export function AuthorBadges({ tier, featured, topBadge, badgeCount }: AuthorBadgesProps) {
-  const badgeImage = useBadgeImage()
+  const badgeArt = useBadgeArt()
   const hasStrip = useStripImages(featured, topBadge).length > 0
   if (!tier && !hasStrip) return null
   return (
     <span className="inline-flex flex-wrap items-center gap-2">
-      {tier ? <TierChip tier={tier} gemSrc={badgeImage(tier) ?? undefined} /> : null}
+      {tier ? <TierChip tier={tier} gem={badgeArt(tier)} /> : null}
       {hasStrip ? <BadgeStrip featured={featured} topBadge={topBadge} badgeCount={badgeCount} /> : null}
     </span>
   )

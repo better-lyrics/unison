@@ -12,10 +12,11 @@ import { formatElapsed, formatRemaining, plural } from "@/lib/format"
 import { IconAlertTriangle, IconBookmark, IconBookmarkFilled } from "@tabler/icons-react"
 import type { ReactNode } from "react"
 import { Link } from "react-router-dom"
+import { languageName } from "@/lib/language"
 
 const SOON_SEC = 12 * 3600
 
-interface TriageRowProps<T extends Bookmarkable & { videoId: string; song: string }> {
+interface TriageRowProps<T extends Bookmarkable & { videoId: string; song: string; artist: string }> {
   triage: Triage<T>
   itemKey: string
   item: T
@@ -26,7 +27,7 @@ interface TriageRowProps<T extends Bookmarkable & { videoId: string; song: strin
   bookmarkable?: boolean
 }
 
-export function TriageRow<T extends Bookmarkable & { videoId: string; song: string }>({
+export function TriageRow<T extends Bookmarkable & { videoId: string; song: string; artist: string }>({
   triage,
   itemKey,
   item,
@@ -53,7 +54,7 @@ export function TriageRow<T extends Bookmarkable & { videoId: string; song: stri
           heldByOther && !selected && "opacity-60 hover:opacity-100",
         )}
       >
-        <SongThumbnail videoId={item.videoId} className="size-11" />
+        <SongThumbnail videoId={item.videoId} song={item.song} artist={item.artist} className="size-11" />
         <div className="min-w-0 flex-1">
           <div className="truncate text-sm leading-tight font-medium">{title}</div>
           <div className="mt-px truncate text-xs leading-tight text-unison-text-secondary">{sub}</div>
@@ -146,7 +147,7 @@ export function queueRowParts(item: QueueItem, heldByOther: boolean, now: number
           </>
         ) : null}
         <VariantBadge format={item.format} />
-        {item.language ? <span>{item.language.toUpperCase()}</span> : null}
+        {item.language ? <span>{languageName(item.language)}</span> : null}
         <Sep />
         <span>{formatElapsed(now - item.createdAt)} waiting</span>
         {item.flags.length > 0 ? (

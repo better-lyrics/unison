@@ -2,8 +2,9 @@ import { useInfiniteQuery } from "@tanstack/react-query"
 import { MotionConfig, motion } from "motion/react"
 import { useMemo, useRef } from "react"
 import { useSearchParams } from "react-router-dom"
+import { CouncilSeal } from "@/components/CouncilSeal"
 import { EmptyState } from "@/components/EmptyState"
-import { SYNC_LABEL, SealedTile, SealedTileSkeleton } from "@/components/SealedTile"
+import { SealedTile, SealedTileSkeleton } from "@/components/SealedTile"
 import { Segmented } from "@/components/council/Segmented"
 import { Bone, skeletonKeys } from "@/components/skeleton"
 import { buttonClass } from "@/components/ui"
@@ -27,8 +28,8 @@ type SyncChoice = SealedSyncFilter | "all"
 
 const SYNC_OPTIONS: { value: SyncChoice; label: string }[] = [
   { value: "all", label: "All" },
-  { value: "richsync", label: SYNC_LABEL.richsync },
-  { value: "linesync", label: SYNC_LABEL.linesync },
+  { value: "richsync", label: "Syllable or word" },
+  { value: "linesync", label: "Line" },
 ]
 
 const SORT_OPTIONS: { value: SealedSort; label: string }[] = [
@@ -86,14 +87,14 @@ export function SealedPage() {
           className="flex flex-col gap-5 rounded-xl p-6 sm:flex-row sm:items-center"
           style={{ background: "linear-gradient(135deg, rgba(217,217,217,0.1), rgba(255,255,255,0.02) 55%)" }}
         >
-          <motion.img
-            src="/badges/committee/image.svg"
-            alt=""
-            className="size-16 shrink-0"
+          <motion.span
+            className="block size-16 shrink-0"
             style={{ rotate: -6 }}
             {...heroSeal}
             transition={thudTransition(HERO_SEAL_AT)}
-          />
+          >
+            <CouncilSeal className="block size-full" />
+          </motion.span>
           <motion.div
             className="min-w-0 flex-1"
             initial={{ opacity: 0, x: -8, filter: "blur(6px)" }}
@@ -138,7 +139,7 @@ export function SealedPage() {
 
         {isPending ? (
           <div data-testid="sealed-grid" className={GRID}>
-            {skeletonKeys("sealed-card", 10).map((key) => (
+            {skeletonKeys("sealed-card", PAGE_LIMIT).map((key) => (
               <SealedTileSkeleton key={key} variant="card" />
             ))}
           </div>

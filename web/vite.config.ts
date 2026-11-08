@@ -49,6 +49,9 @@ export default defineConfig({
       "/exam/": "http://localhost:3000",
       "/committee": "http://localhost:3000",
       "/health": "http://localhost:3000",
+      "/og/": "http://localhost:3000",
+      "/card/": "http://localhost:3000",
+      "/oembed": "http://localhost:3000",
     },
   },
   test: {

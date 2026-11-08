@@ -50,7 +50,7 @@ function readSpaFile(dist: string, pathname: string): { body: Buffer; ext: strin
 	return { body: readFileSync(fullPath), ext: extname(fullPath).toLowerCase() }
 }
 
-function htmlDocument(body: string | Buffer): Response {
+export function htmlDocument(body: string | Buffer): Response {
 	return new Response(body, {
 		status: 200,
 		headers: {

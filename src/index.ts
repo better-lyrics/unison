@@ -21,13 +21,17 @@ import { backfillSyncType } from "@/jobs/backfill-synctype"
 import { backfillTextSearch } from "@/jobs/backfill-text-search"
 import { backfillVideoIds } from "@/jobs/backfill-video-ids"
 import { backfillVideoLinks } from "@/jobs/backfill-video-links"
-import { backfillVoteCounts } from "@/jobs/backfill-vote-counts"
 import { backfillXp } from "@/jobs/backfill-xp"
 import { cleanupFulfilledRequests } from "@/jobs/cleanup-fulfilled-requests"
 import { runDumpJob } from "@/jobs/dump"
+import { resyncVoteCounts } from "@/jobs/resync-vote-counts"
 import { updateScores } from "@/jobs/score-updater"
 import { auditThresholds } from "@/jobs/threshold-audit"
-import { backfillVoteIntegrity, runVoteIntegrity } from "@/jobs/vote-integrity"
+import {
+	backfillRivalStrikes,
+	backfillVoteIntegrity,
+	runVoteIntegrity,
+} from "@/jobs/vote-integrity"
 import { adminRoutes } from "@/routes/admin"
 import { artworkRoutes } from "@/routes/artwork"
 import { authRoutes } from "@/routes/auth"
@@ -42,6 +46,7 @@ import { leaderboardRoutes } from "@/routes/leaderboard"
 import { linkRoutes, linkStartRoutes } from "@/routes/links"
 import { lyricsRoutes } from "@/routes/lyrics"
 import { migrationRoutes } from "@/routes/migrations"
+import { ogRoutes } from "@/routes/og"
 import { requestRoutes } from "@/routes/requests"
 import { reviewQueueBotRoutes, reviewQueueRoutes } from "@/routes/review-queue"
 import { revisionBotRoutes, revisionRoutes } from "@/routes/revisions"
@@ -49,7 +54,9 @@ import { translateRoutes } from "@/routes/translate"
 import { userRoutes } from "@/routes/users"
 import { videoLinkRoutes } from "@/routes/video-links"
 import { voteBotRoutes, voteRoutes } from "@/routes/votes"
-import { loadSpa, serveSpa } from "@/spa"
+import { backfillArtworkFallbacks, evictArtworkFallbacks } from "@/services/artwork-fallback"
+import { sharePage } from "@/share-meta"
+import { htmlDocument, loadSpa, serveSpa } from "@/spa"
 import { cors } from "@elysiajs/cors"
 import { cron } from "@elysiajs/cron"
 import { node } from "@elysiajs/node"
@@ -59,6 +66,7 @@ const env = createEnv()
 const log = new Logger("app")
 const httpLog = new Logger("http")
 const cronLog = new Logger("cron")
+const erroredRequests = new WeakSet<Request>()
 
 const SPA = loadSpa(resolve(process.cwd(), "web/dist"))
 
@@ -67,7 +75,8 @@ const app = new Elysia({ adapter: node() })
 		cors({
 			origin: true,
 			methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-			allowedHeaders: ["Content-Type", "Authorization", "X-Device-ID", "X-Key-ID"],
+			allowedHeaders: ["Content-Type", "Authorization", "X-Device-ID", "X-Key-ID", "If-None-Match"],
+			exposeHeaders: ["ETag", "Retry-After"],
 			maxAge: 86400,
 		})
 	)
@@ -113,6 +122,21 @@ const app = new Elysia({ adapter: node() })
 	)
 	.use(
 		cron({
+			name: "artwork-fallback-eviction",
+			pattern: config.artwork.fallback.evictSchedule,
+			timezone: "UTC",
+			async run() {
+				try {
+					const result = await evictArtworkFallbacks(env)
+					if (result.evicted > 0) cronLog.info("artwork fallback eviction complete", result)
+				} catch (err) {
+					cronLog.error("artwork fallback eviction failed", { error: (err as Error).message })
+				}
+			},
+		})
+	)
+	.use(
+		cron({
 			name: "threshold-audit",
 			pattern: config.thresholdAudit.schedule,
 			timezone: "UTC",
@@ -134,20 +158,24 @@ const app = new Elysia({ adapter: node() })
 		s.__method = request.method
 		s.__url = new URL(request.url).pathname
 	})
-	.onAfterResponse(({ store, set }) => {
+	.onAfterResponse(({ request, store, set }) => {
 		const s = store as Record<string, unknown>
-		if (!s.__startTime) return
+		if (!s.__startTime || erroredRequests.has(request)) return
 		const duration = (performance.now() - (s.__startTime as number)).toFixed(1)
 		const status = typeof set.status === "number" ? set.status : 200
-		if (status >= 400) return // already logged by onError
-		httpLog.info(`${s.__method} ${s.__url} ${status} ${duration}ms`, {
+		if (status === 404) return // lyric misses are the normal result on the hottest routes
+		const fields = {
 			method: s.__method as string,
 			path: s.__url as string,
 			status,
 			latency_ms: Number(duration),
-		})
+		}
+		const line = `${s.__method} ${s.__url} ${status} ${duration}ms`
+		if (status >= 400) httpLog.warn(line, fields)
+		else httpLog.info(line, fields)
 	})
 	.onError(({ code, error, request, store, set }) => {
+		erroredRequests.add(request)
 		const s = store as Record<string, unknown>
 		const method = s.__method || request.method
 		const url = s.__url || new URL(request.url).pathname
@@ -202,8 +230,13 @@ const app = new Elysia({ adapter: node() })
 	.use(linkRoutes(env))
 	.use(migrationRoutes(env))
 	.use(adminRoutes(env))
-	.get("/*", ({ request }) => {
-		const response = serveSpa(new URL(request.url).pathname, SPA)
+	.use(ogRoutes(env))
+	.get("/*", async ({ request }) => {
+		const { pathname } = new URL(request.url)
+		if (SPA.indexHtml && !pathname.includes(".")) {
+			return htmlDocument(await sharePage(env, request, SPA.indexHtml))
+		}
+		const response = serveSpa(pathname, SPA)
 		if (!response) throw new NotFoundError()
 		return response
 	})
@@ -255,11 +288,23 @@ backfillArtwork(env)
 	})
 	.catch((err) => log.error("artwork backfill failed", { error: (err as Error).message }))
 
+backfillArtworkFallbacks(env)
+	.then(({ copied }) => {
+		if (copied > 0) log.info("artwork fallback backfill complete", { copied })
+	})
+	.catch((err) => log.error("artwork fallback backfill failed", { error: (err as Error).message }))
+
 backfillVoteIntegrity(env)
 	.then((result) => {
 		if (result && result.strikes > 0) log.info("vote integrity backfill complete", result)
 	})
 	.catch((err) => log.error("vote integrity backfill failed", { error: (err as Error).message }))
+
+backfillRivalStrikes(env)
+	.then((strikes) => {
+		if (strikes) log.info("rival strike backfill complete", { strikes })
+	})
+	.catch((err) => log.error("rival strike backfill failed", { error: (err as Error).message }))
 
 backfillAvatarPresets(env)
 	.then(({ seeded }) => {
@@ -326,11 +371,11 @@ cleanupFulfilledRequests(env)
 	})
 	.catch((err) => log.error("cleanup fulfilled requests failed", { error: (err as Error).message }))
 
-backfillVoteCounts(env)
+resyncVoteCounts(env)
 	.then(({ repaired }) => {
-		if (repaired > 0) log.info("vote count backfill complete", { repaired })
+		if (repaired > 0) log.info("vote count resync complete", { repaired })
 	})
-	.catch((err) => log.error("vote count backfill failed", { error: (err as Error).message }))
+	.catch((err) => log.error("vote count resync failed", { error: (err as Error).message }))
 
 process.on("unhandledRejection", (reason) => {
 	const err = reason instanceof Error ? reason : new Error(String(reason))

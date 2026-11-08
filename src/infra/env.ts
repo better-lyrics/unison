@@ -12,13 +12,13 @@ const log = new Logger("env")
 const BOOL_ENV_TRUTHY = new Set(["true", "1", "yes"])
 const BOOL_ENV_FALSY = new Set(["false", "0", "no"])
 
-function readDumpsEnabled(): boolean {
-	const raw = process.env.DUMPS_ENABLED?.trim().toLowerCase() ?? ""
+function readFlag(name: string): boolean {
+	const raw = process.env[name]?.trim().toLowerCase() ?? ""
 	if (raw === "") return false
 	const enabled = BOOL_ENV_TRUTHY.has(raw)
 	if (!enabled) {
-		log.warn("DUMPS_ENABLED is set but did not normalize to a truthy value", {
-			raw: process.env.DUMPS_ENABLED,
+		log.warn(`${name} is set but did not normalize to a truthy value`, {
+			raw: process.env[name],
 		})
 	}
 	return enabled
@@ -34,18 +34,6 @@ export function readTranslationProxyEnabled(): boolean {
 		})
 	}
 	return !disabled
-}
-
-function readExamDevEnabled(): boolean {
-	const raw = process.env.EXAM_DEV_ENABLED?.trim().toLowerCase() ?? ""
-	if (raw === "") return false
-	const enabled = BOOL_ENV_TRUTHY.has(raw)
-	if (!enabled) {
-		log.warn("EXAM_DEV_ENABLED is set but did not normalize to a truthy value", {
-			raw: process.env.EXAM_DEV_ENABLED,
-		})
-	}
-	return enabled
 }
 
 function readB2Config(): B2Config | null {
@@ -120,22 +108,17 @@ export function createEnv(): Env {
 
 	const pool = getPool(databaseUrl)
 	const redis = getRedis(redisUrl)
+	const unlimited = readFlag("RATE_LIMITS_DISABLED")
+	const limiter = ({ maxRequests, windowSeconds }: { maxRequests: number; windowSeconds: number }) =>
+		new RedisRateLimiter(redis, unlimited ? Number.MAX_SAFE_INTEGER : maxRequests, windowSeconds)
 
 	return {
 		DB: new D1Compat(pool),
 		CACHE: new KVCompat(redis),
-		RATE_LIMITER: new RedisRateLimiter(
-			redis,
-			config.rateLimit.write.maxRequests,
-			config.rateLimit.write.windowSeconds
-		),
-		READ_RATE_LIMITER: new RedisRateLimiter(
-			redis,
-			config.rateLimit.read.maxRequests,
-			config.rateLimit.read.windowSeconds
-		),
+		RATE_LIMITER: limiter(config.rateLimit.write),
+		READ_RATE_LIMITER: limiter(config.rateLimit.read),
 		CACHE_TTL_SECONDS: process.env.CACHE_TTL_SECONDS || "604800",
-		DUMPS_ENABLED: readDumpsEnabled(),
+		DUMPS_ENABLED: readFlag("DUMPS_ENABLED"),
 		DUMP_PUBLIC_BASE_URL: process.env.DUMP_PUBLIC_BASE_URL || "",
 		DUMP_DATABASE_URL: process.env.DUMP_DATABASE_URL || null,
 		B2: readB2Config(),
@@ -143,7 +126,7 @@ export function createEnv(): Env {
 		BUTLER_BOT_SECRET: process.env.BUTLER_BOT_SECRET || null,
 		ADMIN_SECRET: process.env.ADMIN_SECRET || null,
 		DISCORD_OAUTH: readDiscordOAuthConfig(),
-		EXAM_DEV_ENABLED: readExamDevEnabled(),
+		EXAM_DEV_ENABLED: readFlag("EXAM_DEV_ENABLED"),
 		EXAM_BASE_URL: process.env.EXAM_BASE_URL || "",
 		RAILWAY_PUBLIC_DOMAIN: process.env.RAILWAY_PUBLIC_DOMAIN || "",
 		JEV: readJevGate(),
@@ -151,5 +134,6 @@ export function createEnv(): Env {
 		RECORDING_MATCH_ENABLED: readRecordingMatchEnabled(),
 		BLYRICS_API_INVALIDATE: readBlyricsApiInvalidate(),
 		BLYRICS_API_KEY: process.env.BLYRICS_API_KEY?.trim() || null,
+		BINILINK_LOOKUP_ENABLED: readFlag("BINILINK_LOOKUP_ENABLED"),
 	}
 }

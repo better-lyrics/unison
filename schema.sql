@@ -33,6 +33,10 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_type TEXT;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_ref TEXT;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_updated_at INTEGER;
 
+-- Profile card: banner from a synced song's cover, opt-in Discord name
+ALTER TABLE users ADD COLUMN IF NOT EXISTS banner_video_id TEXT;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS show_discord BOOLEAN NOT NULL DEFAULT FALSE;
+
 -- Discord account links (Discord user <-> Better Lyrics key)
 CREATE TABLE IF NOT EXISTS discord_links (
     discord_id TEXT PRIMARY KEY,
@@ -477,6 +481,12 @@ CREATE TABLE IF NOT EXISTS song_artwork (
     artwork_url TEXT,
     checked_at BIGINT NOT NULL DEFAULT 0
 );
+-- Our CDN copy of YouTube Music art, served when Google rate-limits the original.
+ALTER TABLE song_artwork ADD COLUMN IF NOT EXISTS fallback_url TEXT;
+ALTER TABLE song_artwork ADD COLUMN IF NOT EXISTS fallback_bytes INTEGER;
+ALTER TABLE song_artwork ADD COLUMN IF NOT EXISTS served_at BIGINT;
+CREATE INDEX IF NOT EXISTS idx_song_artwork_fallback_served
+    ON song_artwork (served_at NULLS FIRST) WHERE fallback_url IS NOT NULL;
 
 CREATE TABLE IF NOT EXISTS avatar_presets (
     id TEXT PRIMARY KEY,
@@ -708,7 +718,7 @@ CREATE TABLE IF NOT EXISTS report_case_votes (
 CREATE TABLE IF NOT EXISTS vote_strikes (
     id SERIAL PRIMARY KEY,
     submitter_id INTEGER NOT NULL REFERENCES users(id),
-    kind TEXT NOT NULL CHECK (kind IN ('ring', 'serial', 'both')),
+    kind TEXT NOT NULL CHECK (kind IN ('ring', 'serial', 'both', 'rival')),
     detected_at INTEGER NOT NULL DEFAULT (EXTRACT(EPOCH FROM NOW())::INTEGER),
     key_count INTEGER NOT NULL,
     vote_count INTEGER NOT NULL,
@@ -721,11 +731,25 @@ CREATE TABLE IF NOT EXISTS vote_strikes (
 );
 CREATE INDEX IF NOT EXISTS idx_vote_strikes_submitter ON vote_strikes(submitter_id, detected_at DESC);
 ALTER TABLE vote_strikes ADD COLUMN IF NOT EXISTS settled_at INTEGER;
+ALTER TABLE vote_strikes ADD COLUMN IF NOT EXISTS evidence_until INTEGER;
 CREATE INDEX IF NOT EXISTS idx_vote_strikes_unsettled ON vote_strikes(id)
     WHERE settled_at IS NULL AND undone_at IS NULL;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS vote_strike_id INTEGER REFERENCES vote_strikes(id);
 CREATE INDEX IF NOT EXISTS idx_users_vote_strike ON users(vote_strike_id) WHERE vote_strike_id IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_votes_created ON votes(created_at);
+
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint
+        WHERE conname = 'vote_strikes_kind_check'
+            AND pg_get_constraintdef(oid) LIKE '%rival%'
+    ) THEN
+        ALTER TABLE vote_strikes DROP CONSTRAINT IF EXISTS vote_strikes_kind_check;
+        ALTER TABLE vote_strikes ADD CONSTRAINT vote_strikes_kind_check
+            CHECK (kind IN ('ring', 'serial', 'both', 'rival'));
+    END IF;
+END $$;
 
 DO $$
 BEGIN

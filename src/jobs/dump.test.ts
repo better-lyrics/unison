@@ -463,7 +463,7 @@ const sampleManifest: DumpManifest = {
 	row_counts: { lyrics: 100, requested_songs: 10, lyrics_requests: 5 },
 	format: "pg_dump custom (-Fc), Postgres 18",
 	license: "ODbL-1.0",
-	attribution_text: "Lyrics from Unison (https://unison.boidu.dev)",
+	attribution_text: "Lyrics from Unison (https://unison.betterlyrics.org)",
 	enterprise_contact: "enterprise@boidu.dev",
 }
 

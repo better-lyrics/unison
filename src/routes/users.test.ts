@@ -1,6 +1,7 @@
 import { config } from "@/config"
+import { artworkCacheKey } from "@/services/artwork-cache"
 import type { Env } from "@/types"
-import { describe, expect, it, vi } from "vitest"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { userRoutes } from "./users"
 
 vi.mock("@/db/users", async () => {
@@ -487,5 +488,52 @@ describe("PUT /users/me/featured-badges", () => {
 			})
 		)
 		expect(res.status).toBe(400)
+	})
+})
+
+describe("PUT /users/me/profile", () => {
+	// Pins the 3% artwork refresh off, so its background DB write never takes a queued row.
+	beforeEach(() => {
+		vi.spyOn(Math, "random").mockReturnValue(0.5)
+	})
+	afterEach(() => {
+		vi.restoreAllMocks()
+	})
+
+	const VIDEO = "dQw4w9WgXcQ"
+
+	function put(env: Env, body: unknown) {
+		return userRoutes(env).handle(
+			new Request("http://localhost/users/me/profile", {
+				method: "PUT",
+				headers: { authorization: "Bearer tok", "content-type": "application/json" },
+				body: JSON.stringify(body),
+			})
+		)
+	}
+
+	function signedIn(queue: unknown[], seed: Record<string, string> = {}) {
+		const cache = makeMockCache(seed)
+		seedSession(cache, "tok", KEY)
+		const db = makeMockDB(queue)
+		return { db, env: makeEnv(db, cache) }
+	}
+
+	it("refuses a banner from a song the caller never submitted", async () => {
+		const { db, env } = signedIn([null])
+		const res = await put(env, { banner: VIDEO })
+		expect(res.status).toBe(403)
+		expect(db.calls.some((c) => c.sql.includes("UPDATE users"))).toBe(false)
+	})
+
+	it("saves a banner from the caller's own synced song", async () => {
+		const { db, env } = signedIn([{ found: 1 }, { banner_video_id: VIDEO, show_discord: true }], {
+			[artworkCacheKey(VIDEO)]: "https://lh3.googleusercontent.com/cover=w544-h544",
+		})
+		const res = await put(env, { banner: VIDEO, showDiscord: true })
+		expect(res.status).toBe(200)
+		expect(await res.json()).toEqual({ success: true, data: { banner: VIDEO, showDiscord: true } })
+		const update = db.calls.find((c) => c.sql.includes("UPDATE users"))
+		expect(update?.params.at(-1)).toBe(KEY)
 	})
 })

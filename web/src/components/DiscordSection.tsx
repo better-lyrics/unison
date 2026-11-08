@@ -1,7 +1,9 @@
-import { IconBrandDiscordFilled, IconLoader2 } from "@tabler/icons-react"
+import { Switch } from "@/components/council/Switch"
 import { DiscordConnectLock, discordButtonClass, secondaryButtonClass } from "@/components/discord-ui"
+import { DiscordIcon } from "@/components/icons/DiscordIcon"
 import { editableCardClass } from "@/components/ui"
 import type { DiscordLink } from "@/hooks/useDiscordLink"
+import { IconLoader2 } from "@tabler/icons-react"
 
 export interface DiscordSectionModel {
   status: "loading" | "linked" | "unlinked"
@@ -12,6 +14,7 @@ export interface DiscordSectionModel {
   error: string | null
   onConnect: () => void
   onDisconnect: () => void
+  showOnProfile?: { checked: boolean; onChange: (checked: boolean) => void }
 }
 
 export function DiscordSectionView({ model }: { model: DiscordSectionModel }) {
@@ -29,6 +32,11 @@ export function DiscordSectionView({ model }: { model: DiscordSectionModel }) {
         <p className="text-sm text-unison-text">
           Connected{model.username ? ` as ${model.username}` : ""}. Your roles update on their own.
         </p>
+        {model.showOnProfile ? (
+          <Switch checked={model.showOnProfile.checked} onChange={model.showOnProfile.onChange}>
+            Show Discord on my profile
+          </Switch>
+        ) : null}
         <button type="button" onClick={model.onDisconnect} disabled={model.working} className={secondaryButtonClass}>
           {model.working ? "Disconnecting..." : "Disconnect"}
         </button>
@@ -53,7 +61,7 @@ export function DiscordSectionView({ model }: { model: DiscordSectionModel }) {
           {model.connecting ? (
             <IconLoader2 className="size-5 animate-spin" stroke={1.5} />
           ) : (
-            <IconBrandDiscordFilled className="size-5" />
+            <DiscordIcon className="size-5" />
           )}
           {model.connecting ? "Connecting..." : "Connect with Discord"}
         </button>
@@ -63,7 +71,13 @@ export function DiscordSectionView({ model }: { model: DiscordSectionModel }) {
   )
 }
 
-export function DiscordSection({ link }: { link: DiscordLink }) {
+export function DiscordSection({
+  link,
+  showOnProfile,
+}: {
+  link: DiscordLink
+  showOnProfile?: DiscordSectionModel["showOnProfile"]
+}) {
   return (
     <DiscordSectionView
       model={{
@@ -75,6 +89,7 @@ export function DiscordSection({ link }: { link: DiscordLink }) {
         error: link.error,
         onConnect: link.connect,
         onDisconnect: link.disconnect,
+        showOnProfile,
       }}
     />
   )

@@ -1,9 +1,18 @@
 import { readFileSync } from "node:fs"
-import pg from "pg"
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest"
-import { getVideoArtwork, insertVideoArtworkIfAbsent, upsertVideoArtwork } from "@/db/artwork"
+import {
+	artworkWithoutFallback,
+	clearArtworkFallback,
+	fallbackBytesTotal,
+	getVideoArtwork,
+	insertVideoArtworkIfAbsent,
+	leastServedFallbacks,
+	setArtworkFallback,
+	upsertVideoArtwork,
+} from "@/db/artwork"
 import { D1Compat } from "@/infra/database"
 import type { Env } from "@/types"
+import pg from "pg"
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest"
 
 const { Pool } = pg
 
@@ -50,6 +59,61 @@ describeIntegration("song_artwork db (integration)", () => {
 		expect((await getVideoArtwork(env, "v"))?.artworkUrl).toBe("https://art/a=w544-h544")
 		await upsertVideoArtwork(env, "v", "https://art/c=w544-h544")
 		expect((await getVideoArtwork(env, "v"))?.artworkUrl).toBe("https://art/c=w544-h544")
+	})
+
+	describe("fallback copies", () => {
+		const COVER = "https://yt3.googleusercontent.com/a=w544-h544-l90-rj"
+		const COPY = "https://cdn.betterlyrics.org/artwork/v-0123456789abcdef.jpg"
+
+		it("keeps the copy while the cover stays the same and drops it when the cover changes", async () => {
+			await upsertVideoArtwork(env, "v", COVER)
+			expect(await setArtworkFallback(env, "v", COVER, COPY, 50_000)).toBe(true)
+			await upsertVideoArtwork(env, "v", COVER)
+			expect((await getVideoArtwork(env, "v"))?.fallbackUrl).toBe(COPY)
+
+			await upsertVideoArtwork(env, "v", "https://yt3.googleusercontent.com/b=w544-h544-l90-rj")
+			expect((await getVideoArtwork(env, "v"))?.fallbackUrl).toBeNull()
+			expect(await fallbackBytesTotal(env)).toBe(0)
+		})
+
+		it("refuses a copy of a cover that changed while it was being made", async () => {
+			await upsertVideoArtwork(env, "v", "https://yt3.googleusercontent.com/b=w544-h544-l90-rj")
+			expect(await setArtworkFallback(env, "v", COVER, COPY, 50_000)).toBe(false)
+			expect((await getVideoArtwork(env, "v"))?.fallbackUrl).toBeNull()
+		})
+
+		it("keeps evicted covers out of the backfill until the cover changes", async () => {
+			await upsertVideoArtwork(env, "v", COVER)
+			await setArtworkFallback(env, "v", COVER, COPY, 50_000)
+			await clearArtworkFallback(env, "v", COPY)
+			expect(await artworkWithoutFallback(env, "", 10)).toEqual([])
+
+			const next = "https://yt3.googleusercontent.com/b=w544-h544-l90-rj"
+			await upsertVideoArtwork(env, "v", next)
+			expect(await artworkWithoutFallback(env, "", 10)).toEqual([
+				{ videoId: "v", artworkUrl: next },
+			])
+		})
+
+		it("lists copies least recently served first", async () => {
+			for (const [id, servedAt] of [
+				["old", 100],
+				["new", 300],
+				["mid", 200],
+			] as const) {
+				await upsertVideoArtwork(env, id, COVER)
+				await setArtworkFallback(env, id, COVER, `${COPY}?${id}`, 10)
+				await pool.query("UPDATE song_artwork SET served_at = $1 WHERE video_id = $2", [
+					servedAt,
+					id,
+				])
+			}
+			expect((await leastServedFallbacks(env, 3)).map((r) => r.videoId)).toEqual([
+				"old",
+				"mid",
+				"new",
+			])
+		})
 	})
 
 	describe("edge cases", () => {

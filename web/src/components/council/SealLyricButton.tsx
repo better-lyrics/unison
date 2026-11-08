@@ -1,4 +1,5 @@
-import { buttonClass } from "@/components/ui"
+import { chipClass, chipIconClass, raisedChipClass } from "@/components/ui"
+import { cn } from "@/lib/cn"
 import { useSealableVariants } from "@/hooks/useCouncilData"
 import { useCouncilDecision } from "@/hooks/useCouncilMutations"
 import { IconRosetteDiscountCheck } from "@tabler/icons-react"
@@ -12,22 +13,22 @@ export function SealLyricButton({ videoId, lyricsId }: { videoId: string; lyrics
 
   if (!confirming) {
     return (
-      <button type="button" className={buttonClass("fill", "sm")} onClick={() => setConfirming(true)}>
-        <IconRosetteDiscountCheck aria-hidden className="size-3.5 text-unison-medal-gold" stroke={1.75} />
+      <button type="button" className={chipClass} onClick={() => setConfirming(true)}>
+        <IconRosetteDiscountCheck aria-hidden className={cn(chipIconClass, "text-unison-medal-gold")} stroke={1.75} />
         Seal
       </button>
     )
   }
   return (
     <span className="flex items-center gap-2">
-      <span className="text-xs text-unison-text-muted">Uses one of your seals this month.</span>
-      <button type="button" className={buttonClass("ghost", "sm")} onClick={() => setConfirming(false)}>
+      <span className="text-xs text-(--ink-3)">Uses one of your seals this month.</span>
+      <button type="button" className={chipClass} onClick={() => setConfirming(false)}>
         Cancel
       </button>
       <button
         type="button"
         disabled={decision.isPending}
-        className={buttonClass("primary", "sm")}
+        className={raisedChipClass}
         onClick={() => {
           setConfirming(false)
           decision.mutate({ kind: "seal", item })

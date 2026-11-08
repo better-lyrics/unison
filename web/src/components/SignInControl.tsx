@@ -1,21 +1,27 @@
 import { useSession } from "@/auth/useSession";
 import { UserAvatar } from "@/components/UserAvatar";
 import { IconCheck, IconCopy, IconFileUpload, IconLogout, IconUser } from "@tabler/icons-react";
+import { IconSwap } from "@/components/icons/IconSwap";
+import { useCopied } from "@/hooks/useCopied";
 import { type ChangeEvent, useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
+import { glassClass, popoverSurfaceClass } from "@/components/ui";
+import { cn } from "@/lib/cn";
+import { usePresence } from "@/hooks/usePresence";
 
-export function SignInControl() {
+export function SignInControl({ glass = false }: { glass?: boolean }) {
   const session = useSession();
   const menu = session.status === "signed-in" ? "account" : "sign-in";
   const [openMenu, setOpenMenu] = useState<"account" | "sign-in" | null>(null);
   const open = openMenu === menu;
+  const presence = usePresence(open);
   const setOpen = (next: boolean | ((current: boolean) => boolean)) =>
     setOpenMenu((current) => {
       const value = typeof next === "function" ? next(current === menu) : next;
       return value ? menu : null;
     });
   const fileInputRef = useRef<HTMLInputElement | null>(null);
-  const [copied, setCopied] = useState(false);
+  const [copied, copy] = useCopied();
   const wrapperRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -45,11 +51,7 @@ export function SignInControl() {
 
   if (session.status === "signed-in") {
     const { identity } = session;
-    const copyKey = async () => {
-      await navigator.clipboard.writeText(identity.keyId);
-      setCopied(true);
-      window.setTimeout(() => setCopied(false), 1500);
-    };
+    const copyKey = () => copy(identity.keyId);
     const signOut = () => {
       setOpen(false);
       session.signOut();
@@ -62,7 +64,7 @@ export function SignInControl() {
           aria-haspopup="menu"
           aria-expanded={open}
           aria-label={identity.displayName}
-          className="flex cursor-pointer items-center gap-2 rounded-full p-1 pr-3 transition-colors hover:bg-unison-bg-hover"
+          className={cn("flex cursor-pointer items-center gap-2 rounded-full p-1 pr-3 transition-colors", glass ? cn(glassClass, "hover:bg-white/[0.14]") : "hover:bg-unison-bg-hover")}
         >
           <UserAvatar
             avatarUrl={identity.avatarUrl}
@@ -73,14 +75,15 @@ export function SignInControl() {
             {identity.displayName}
           </span>
         </button>
-        {open ? (
+        {presence.mounted ? (
           <div
             role="menu"
+            data-origin="top-right"
             data-state="open"
-            className="absolute right-0 z-20 mt-2 w-56 rounded-lg border border-unison-border bg-unison-bg-elevated p-3 shadow-lg"
+            className={cn(popoverSurfaceClass, "t-dropdown absolute right-0 z-20 mt-2 w-56 rounded-2xl p-3", presence.closing && "is-closing")}
           >
             <div className="space-y-2 pb-3">
-              <p className="text-[10px] uppercase tracking-wider text-unison-text-muted">
+              <p className="text-xs text-unison-text-muted">
                 Key ID
               </p>
               <div className="flex items-center gap-2">
@@ -96,11 +99,12 @@ export function SignInControl() {
                   aria-label={copied ? "Copied" : "Copy key id"}
                   className="group cursor-pointer shrink-0 rounded-md p-1 text-unison-text transition-colors hover:bg-unison-bg-hover"
                 >
-                  {copied ? (
-                    <IconCheck className="size-4 opacity-50 transition-opacity group-hover:opacity-100" stroke={1.5} />
-                  ) : (
-                    <IconCopy className="size-4 opacity-50 transition-opacity group-hover:opacity-100" stroke={1.5} />
-                  )}
+                  <IconSwap
+                    swapped={copied}
+                    from={<IconCopy className="size-full" stroke={1.5} />}
+                    to={<IconCheck className="size-full" stroke={1.5} />}
+                    className="size-4 opacity-50 transition-opacity group-hover:opacity-100"
+                  />
                 </button>
               </div>
             </div>
@@ -143,15 +147,16 @@ export function SignInControl() {
           onClick={() => setOpen((o) => !o)}
           aria-haspopup="menu"
           aria-expanded={open}
-          className="cursor-pointer rounded-md bg-unison-bg-elevated px-3 py-1.5 text-sm font-medium text-unison-text transition-colors hover:bg-unison-bg-hover"
+          className={cn("cursor-pointer px-3 py-1.5 text-sm font-medium text-unison-text transition-colors hover:bg-unison-bg-hover", glass ? cn(glassClass, "h-9 rounded-[10px]") : "rounded-md bg-unison-bg-elevated")}
         >
           Sign in
         </button>
-        {open ? (
+        {presence.mounted ? (
           <div
             role="menu"
+            data-origin="top-right"
             data-state="open"
-            className="absolute right-0 z-20 mt-2 w-64 rounded-lg border border-unison-border bg-unison-bg-elevated p-3 shadow-lg"
+            className={cn(popoverSurfaceClass, "t-dropdown absolute right-0 z-20 mt-2 w-64 rounded-2xl p-3", presence.closing && "is-closing")}
           >
             <div className="space-y-2 pb-3">
               <button

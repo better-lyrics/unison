@@ -279,3 +279,11 @@ export const TIER_BADGES: BadgeDef[] = [
 ]
 
 export const CATALOGUE: BadgeDef[] = [...BADGES, ...TIER_BADGES]
+
+export function badgeImageFile(def: BadgeDef, variant?: string, tier?: number | null): string {
+	if (variant === "silhouette") return `${def.key}_silhouette.svg`
+	if (variant === "mono") return `${def.key}_mono.svg`
+	if (!def.tiers) return `${def.key}.svg`
+	const level = tier && Number.isInteger(tier) && tier >= 1 && tier <= def.tiers.length ? tier : 1
+	return `${def.key}_${level}.svg`
+}

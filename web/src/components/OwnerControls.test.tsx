@@ -1,6 +1,7 @@
 import { AuthProvider } from "@/auth/AuthProvider"
 import { useSession } from "@/auth/useSession"
 import { clearAsyncDataCache } from "@/hooks/useAsyncData"
+import { useDiscordLink } from "@/hooks/useDiscordLink"
 import { saveStoredSession } from "@/lib/auth"
 import { act, cleanup, render, screen, waitFor } from "@testing-library/react"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
@@ -59,11 +60,18 @@ function HeaderProbe() {
   )
 }
 
+function Controls() {
+  const discord = useDiscordLink()
+  return (
+    <OwnerControls discord={discord} discordRevealRequest={0} showDiscord={false} onProfileChange={async () => {}} />
+  )
+}
+
 function renderControls() {
   return render(
     <AuthProvider>
       <HeaderProbe />
-      <OwnerControls />
+      <Controls />
     </AuthProvider>,
   )
 }

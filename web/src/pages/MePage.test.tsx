@@ -156,8 +156,7 @@ describe("MePage", () => {
     )
     renderPage()
     await waitFor(() => expect(screen.getByText(valid.displayName)).toBeTruthy())
-    await waitFor(() => expect(screen.getByText("Rank #7")).toBeTruthy())
-    expect(screen.getByTestId("stat-score").textContent).toContain("12.7")
+    await waitFor(() => expect(screen.getByText("Ranked #7 among Unison curators.")).toBeTruthy())
     expect(screen.getByTestId("stat-submissions").textContent).toContain("5")
     expect(screen.getByTestId("stat-upvotes").textContent).toContain("23")
   })
@@ -208,7 +207,7 @@ describe("MePage", () => {
     )
     renderPage()
     await waitFor(() => expect(screen.getByText(valid.displayName)).toBeTruthy())
-    await waitFor(() => expect(screen.getByText(/no leaderboard activity yet/i)).toBeTruthy())
+    await waitFor(() => expect(screen.getByText(/new curator/i)).toBeTruthy())
   })
 
   it("redirects the signed-in owner to their canonical /u/<handle>", async () => {

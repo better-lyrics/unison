@@ -22,6 +22,7 @@ export const ErrorCode = {
 	CANNOT_UNLINK_PRIMARY: "CANNOT_UNLINK_PRIMARY",
 	NOT_FOUND: "NOT_FOUND",
 	MISSING_QUERY: "MISSING_QUERY",
+	LOOKUP_PENDING: "LOOKUP_PENDING",
 	INVALID_SIGNED_BODY: "INVALID_SIGNED_BODY",
 	TIMESTAMP_EXPIRED: "TIMESTAMP_EXPIRED",
 	NONCE_REPLAY: "NONCE_REPLAY",
@@ -38,6 +39,7 @@ export const ErrorCode = {
 	DISCORD_AVATAR_UNAVAILABLE: "DISCORD_AVATAR_UNAVAILABLE",
 	SONG_NOT_SUBMITTED: "SONG_NOT_SUBMITTED",
 	SONG_ARTWORK_UNAVAILABLE: "SONG_ARTWORK_UNAVAILABLE",
+	INVALID_PROFILE_SETTINGS: "INVALID_PROFILE_SETTINGS",
 	AVATAR_PRESET_EXISTS: "AVATAR_PRESET_EXISTS",
 	AVATAR_IMAGE_INVALID: "AVATAR_IMAGE_INVALID",
 	CDN_UNAVAILABLE: "CDN_UNAVAILABLE",
@@ -167,6 +169,10 @@ const TEMPLATES: Record<ErrorCode, Template> = {
 		error: "Provide either 'v' (videoId) or 'song' + 'artist'",
 		hint: "To search, add either a video link or both the song and artist names.",
 	},
+	LOOKUP_PENDING: {
+		error: "Lookup pending",
+		hint: "We're still matching this track. Try again in a few seconds.",
+	},
 	INVALID_SIGNED_BODY: {
 		error: "INVALID_SIGNED_BODY",
 		hint: "Something looks off with this request. Try again. If it keeps happening, the extension may need an update.",
@@ -230,6 +236,10 @@ const TEMPLATES: Record<ErrorCode, Template> = {
 	SONG_ARTWORK_UNAVAILABLE: {
 		error: "Song cover unavailable",
 		hint: "This song has no cover art yet. Pick another song or picture.",
+	},
+	INVALID_PROFILE_SETTINGS: {
+		error: "Invalid profile settings",
+		hint: "Send banner as a YouTube video id or null, and showDiscord as true or false.",
 	},
 	AVATAR_PRESET_EXISTS: {
 		error: "Avatar already exists",

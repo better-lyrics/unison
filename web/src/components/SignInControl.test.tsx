@@ -173,7 +173,7 @@ describe("SignInControl", () => {
       await openSignInMenu()
       await uploadIdentity(identityFile(exported))
       expect(await screen.findByRole("button", { name: valid.displayName })).toBeTruthy()
-      expect(screen.queryByRole("menu")).toBeNull()
+      await waitFor(() => expect(screen.queryByRole("menu")).toBeNull())
     })
 
     it("keeps the menu open and shows the error for a bad file", async () => {

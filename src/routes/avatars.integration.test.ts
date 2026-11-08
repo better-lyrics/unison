@@ -7,6 +7,7 @@ import {
 	refreshCatalogue,
 } from "@/db/avatar-presets"
 import { resolveAvatarUrl } from "@/db/users"
+import { artworkCacheKey } from "@/services/artwork-cache"
 import {
 	BOT_SECRET,
 	type IntegrationDb,
@@ -246,7 +247,7 @@ describeIntegration("PUT /avatars/me (integration)", () => {
 
 			it("rejects a submitted song without a cover with 409", async () => {
 				await submitSong(userId)
-				db.cache.store.set(`artwork:v2:${SONG}`, "__none__")
+				db.cache.store.set(artworkCacheKey(SONG), "__none__")
 				const { status, body } = await put({ type: "song", ref: SONG })
 				expect(status).toBe(409)
 				expect(body.code).toBe("SONG_ARTWORK_UNAVAILABLE")

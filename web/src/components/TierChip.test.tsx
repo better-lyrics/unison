@@ -25,9 +25,10 @@ describe("TierChip", () => {
     expect(container.querySelector('[data-tier="master"]')?.getAttribute("title")).toContain("#3")
   })
 
-  it("renders the gem artwork when a source is given", () => {
-    const { container } = render(<TierChip tier="legendary" gemSrc="/badge-art/legendary.svg" />)
-    expect(container.querySelector('img[src="/badge-art/legendary.svg"]')).not.toBeNull()
+  it("renders the gem artwork when one is given", () => {
+    const gem = { src: "/badges/legendary/image.svg?variant=color", silhouette: null }
+    const { container } = render(<TierChip tier="legendary" gem={gem} />)
+    expect(container.querySelector('img[src="/badges/legendary/image.svg?variant=color&bg=none"]')).not.toBeNull()
   })
 
   it("falls back to the award icon without a gem source", () => {

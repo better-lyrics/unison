@@ -1,4 +1,5 @@
 import { toHandle } from "./handle"
+import { sleeveDataUrl } from "./sleeve"
 import type {
   AvatarCatalogue,
   AvatarChoice,
@@ -10,11 +11,13 @@ import type {
   CuratorsLeaderboardResponse,
   ExpertiseEntry,
   LeaderboardBadge,
+  ProfileSettings,
   SongsLeaderboardResponse,
   TierName,
   UserBadge,
   UserGamification,
   UserRankResponse,
+  UserStats,
   UserSubmission,
   UserSubmissionsResponse,
 } from "./types"
@@ -171,6 +174,26 @@ export async function seedSongs(): Promise<SongsLeaderboardResponse> {
   return { mostWanted: [], needsFixing: [] }
 }
 
+const seedSettings: ProfileSettings = { banner: "60ItHLz5WEA", showDiscord: true }
+
+function seedProfileExtras(keyId: string): Partial<UserStats> {
+  if (keyId === "a".repeat(64)) return { avatarUrl: "/pfp/butler.svg" }
+  if (keyId !== "f".repeat(64)) return {}
+  const song = SEED_SUBMISSIONS.find((s) => s.videoId === seedSettings.banner)
+  const artworkUrl = song ? sleeveDataUrl(song.song, song.artist, 640) : null
+  return {
+    banner: song && artworkUrl ? { videoId: song.videoId, artworkUrl } : undefined,
+    discord: seedSettings.showDiscord ? { id: "80351110224678912", username: "farouk.stein" } : undefined,
+  }
+}
+
+export async function seedSetProfileSettings(change: Partial<ProfileSettings>): Promise<ProfileSettings> {
+  await delay()
+  if (change.banner !== undefined) seedSettings.banner = change.banner
+  if (change.showDiscord !== undefined) seedSettings.showDiscord = change.showDiscord
+  return { ...seedSettings }
+}
+
 export async function seedUserRank(keyId: string): Promise<UserRankResponse> {
   await delay()
   const entry = SEED_CURATORS.find((c) => c.keyId === keyId)
@@ -197,6 +220,7 @@ export async function seedUserRank(keyId: string): Promise<UserRankResponse> {
     rank: entry.rank,
     lastVoteAt: SEEDED_NOW - 3600,
     discordLinked: true,
+    ...seedProfileExtras(entry.keyId),
   }
 }
 
@@ -600,7 +624,7 @@ export async function seedBadgeCatalogue(): Promise<BadgeCatalogue> {
 const BADGE_TOTAL = SEED_CATALOGUE.badges.filter((b) => !b.secret).length
 const DAY = 86400
 const EXPERTISE_ARTISTS = ["Radiohead", "The Weeknd", "Tame Impala", "Daft Punk", "Björk", "Arca", "Fishmans"]
-const EXPERTISE_LANGS = ["Japanese", "Korean", "Spanish", "French", "Portuguese", "German", "Icelandic"]
+const EXPERTISE_LANGS = ["ja", "ko", "es", "fr", "pt", "de", "is"]
 
 function tierForRank(rank: number): { tier: TierName; tierRank: number | null } {
   if (rank === 1) return { tier: "legendary", tierRank: 1 }
@@ -629,7 +653,7 @@ function auroraShowcase(keyId: string): UserGamification {
     counts: { earned: 13, total: BADGE_TOTAL },
     topExpertise: [
       { scope: "artist", name: "Radiohead", rank: 2 },
-      { scope: "language", name: "Japanese", rank: 5 },
+      { scope: "language", name: "ja", rank: 5 },
     ],
     badges: [
       { key: "verified-contributor", earned: true, tier: 3, earnedAt: SEEDED_NOW - 30 * DAY, featured: true },

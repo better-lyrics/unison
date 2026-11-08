@@ -2,15 +2,40 @@ import { CopyButton } from "@/components/CopyButton"
 import { DownloadButton } from "@/components/DownloadButton"
 import { LyricsContentSkeleton, LyricsRenderer, parseVariantLyrics } from "@/components/LyricsRenderer"
 import { RawLyricsView } from "@/components/RawLyricsView"
+import { Bone } from "@/components/skeleton"
+import { glassClass } from "@/components/ui"
+import { IconFocusCentered } from "@tabler/icons-react"
 import { cn } from "@/lib/cn"
 import { downloadTextFile } from "@/lib/download"
 import { pickTranslationLanguage, translationLanguages } from "@/lib/lyric-translations"
 import { MIME_BY_FORMAT, lyricsFilename } from "@/lib/lyrics-download"
 import type { VariantFull } from "@/lib/types"
-import { useMemo, useState } from "react"
+import { motion } from "motion/react"
+import { useMemo, useRef, useState } from "react"
+import { LAYOUT_TRANSITION } from "@/lib/motion-variants"
+import { languageName } from "@/lib/language"
+import { useScrollEdges } from "@/hooks/useScrollEdges"
 
-const HEADER_ACTION_CLASS =
-  "inline-flex cursor-pointer items-center gap-1.5 rounded-md border border-unison-border bg-unison-bg-elevated px-2 py-1 text-xs text-unison-text-secondary transition-colors hover:border-unison-border-strong hover:bg-unison-bg-hover hover:text-unison-text"
+const TOOL_CLASS = cn(
+  glassClass,
+  "relative inline-flex h-[30px] cursor-pointer items-center gap-[7px] rounded-[10px] pr-3 pl-2.5 [corner-shape:superellipse(1.6)] text-xs font-medium text-(--ink-2,var(--color-unison-text-secondary)) transition-[color,background-color,scale,opacity] duration-150 ease-[cubic-bezier(0.2,0,0,1)] hover:bg-white/[0.08] hover:text-unison-text after:absolute after:inset-x-0 after:-inset-y-0.5 active:not-disabled:scale-[0.96]",
+)
+
+const SEGMENTS_CLASS = cn(glassClass, "inline-flex rounded-[10px] p-[3px] [corner-shape:superellipse(1.6)]")
+
+const TOOLS_ROW = "flex flex-wrap items-center gap-1.5 pb-3"
+
+export function LyricsToolsSkeleton() {
+  return (
+    <div className={TOOLS_ROW}>
+      <Bone className="h-[30px] w-[117px] rounded-[10px]" />
+      <div className="ml-auto flex items-center gap-1.5">
+        <Bone className="h-[30px] w-[74px] rounded-[10px]" />
+        <Bone className="h-[30px] w-[100px] rounded-[10px]" />
+      </div>
+    </div>
+  )
+}
 
 type Mode = "synced" | "raw"
 
@@ -18,71 +43,133 @@ interface LyricsPanelProps {
   variant: VariantFull | undefined
   getCurrentTime: () => number
   getPlaying: () => boolean
+  toolsOpen?: boolean
   onLineClick: (seconds: number) => void
   lyricsClassName?: string
 }
 
-export function LyricsPanel({ variant, getCurrentTime, getPlaying, onLineClick, lyricsClassName }: LyricsPanelProps) {
+export function LyricsPanel({
+  variant,
+  getCurrentTime,
+  getPlaying,
+  toolsOpen = true,
+  onLineClick,
+  lyricsClassName,
+}: LyricsPanelProps) {
   const [mode, setMode] = useState<Mode>("synced")
   const [pickedLang, setPickedLang] = useState<string>()
   const languages = useMemo(() => (variant ? translationLanguages(parseVariantLyrics(variant)) : []), [variant])
   const lang = pickTranslationLanguage(languages, pickedLang)
-  const segment = (active: boolean, label: string, onClick: () => void) => (
+  const [pane, setPane] = useState<HTMLDivElement | null>(null)
+  const edges = useScrollEdges(pane)
+  const modesRef = useRef<HTMLFieldSetElement>(null)
+  const [resumeAutoscroll, setResumeAutoscroll] = useState<(() => void) | null>(null)
+  const segment = (group: string, active: boolean, label: string, onClick: () => void) => (
     <button
       key={label}
       type="button"
       aria-pressed={active}
       onClick={onClick}
       className={cn(
-        "cursor-pointer rounded px-3 py-1 text-xs font-medium transition-colors",
-        active ? "bg-unison-bg-hover text-unison-text" : "text-unison-text-muted hover:text-unison-text",
+        "relative h-6 cursor-pointer rounded-[7px] px-3 text-xs [corner-shape:superellipse(1.6)] after:absolute after:inset-x-0 after:-inset-y-[5px] font-medium transition-colors duration-150 ease-[cubic-bezier(0.2,0,0,1)]",
+        active ? "text-unison-text" : "text-(--ink-3,var(--color-unison-text-muted)) hover:text-unison-text",
       )}
     >
-      {label}
+      {active ? (
+        <motion.span
+          layoutId={group}
+          transition={LAYOUT_TRANSITION}
+          style={{ borderRadius: 7 }}
+          className="absolute inset-0 bg-white/[0.14] [corner-shape:superellipse(1.6)]"
+        />
+      ) : null}
+      <span className="relative">{label}</span>
     </button>
   )
-  const tab = (value: Mode, label: string) => segment(mode === value, label, () => setMode(value))
+  const tab = (value: Mode, label: string) => segment("lyrics-mode", mode === value, label, () => setMode(value))
   return (
-    <div className="overflow-hidden rounded-lg border border-unison-border bg-unison-bg-elevated">
-      <div className="flex items-center justify-between border-b border-unison-border/60 px-3 py-2">
-        <fieldset className="inline-flex rounded-md border border-unison-border bg-unison-bg p-0.5">
-          <legend className="sr-only">Lyrics display mode</legend>
-          {tab("synced", "Synced")}
-          {tab("raw", "Raw")}
-        </fieldset>
-        {mode === "synced" && languages.length > 1 ? (
-          <fieldset className="mr-auto ml-2 inline-flex rounded-md border border-unison-border bg-unison-bg p-0.5">
-            <legend className="sr-only">Translation language</legend>
-            {languages.map((code) => segment(code === lang, code.toUpperCase(), () => setPickedLang(code)))}
-          </fieldset>
-        ) : null}
-        {variant ? (
-          <div className="flex items-center gap-2">
-            <DownloadButton
-              onClick={() => downloadTextFile(lyricsFilename(variant), variant.lyrics, MIME_BY_FORMAT[variant.format])}
-              className={HEADER_ACTION_CLASS}
-              iconClassName="size-3.5"
-              withText
-            />
-            <CopyButton text={variant.lyrics} className={HEADER_ACTION_CLASS} iconClassName="size-3.5" withText />
-          </div>
-        ) : null}
+    <div className="t-acc" data-open={toolsOpen}>
+      <div inert={!toolsOpen} className="t-acc-panel">
+        <div className="t-acc-panel-inner">
+          {variant ? (
+            <div className={TOOLS_ROW}>
+              <fieldset ref={modesRef} className={SEGMENTS_CLASS}>
+                <legend className="sr-only">Lyrics display mode</legend>
+                {tab("synced", "Synced")}
+                {tab("raw", "Raw")}
+              </fieldset>
+              {mode === "synced" && languages.length > 1 ? (
+                <fieldset className={cn(SEGMENTS_CLASS, "t-reveal")}>
+                  <legend className="sr-only">Translation language</legend>
+                  {languages.map((code) =>
+                    segment("lyrics-language", code === lang, languageName(code), () => setPickedLang(code)),
+                  )}
+                </fieldset>
+              ) : null}
+              <div className="ml-auto flex items-center gap-1.5">
+                <CopyButton text={variant.lyrics} className={TOOL_CLASS} iconClassName="size-4" radius={10} withText />
+                <DownloadButton
+                  onClick={() =>
+                    downloadTextFile(lyricsFilename(variant), variant.lyrics, MIME_BY_FORMAT[variant.format])
+                  }
+                  className={TOOL_CLASS}
+                  iconClassName="size-4"
+                  withText
+                />
+              </div>
+            </div>
+          ) : (
+            <LyricsToolsSkeleton />
+          )}
+        </div>
       </div>
-      <div className="p-4">
-        {!variant ? (
-          <LyricsContentSkeleton />
-        ) : mode === "synced" ? (
-          <LyricsRenderer
-            variant={variant}
-            getCurrentTime={getCurrentTime}
-            getPlaying={getPlaying}
-            onLineClick={onLineClick}
-            translationLang={lang}
-            className={lyricsClassName}
-          />
-        ) : (
-          <RawLyricsView body={variant.lyrics} format={variant.format} />
-        )}
+      <div className="relative">
+        <button
+          type="button"
+          inert={!resumeAutoscroll}
+          onClick={() => {
+            resumeAutoscroll?.()
+            const focusTarget = toolsOpen
+              ? modesRef.current?.querySelector<HTMLButtonElement>("[aria-pressed=true]")
+              : pane
+            focusTarget?.focus({ preventScroll: true })
+          }}
+          className={cn(
+            TOOL_CLASS,
+            "absolute top-0 left-1/2 z-10 -translate-x-1/2 max-sm:right-0 max-sm:left-auto max-sm:translate-x-0",
+            !resumeAutoscroll && "pointer-events-none opacity-0",
+          )}
+        >
+          <IconFocusCentered className="size-4" />
+          Resume autoscroll
+        </button>
+        <div
+          key={`${mode}:${variant ? "ready" : "loading"}`}
+          ref={setPane}
+          tabIndex={-1}
+          data-loading={variant ? undefined : ""}
+          className={cn(
+            "lyrics-pane outline-none [text-shadow:none] [mask-clip:no-clip] [mask-image:linear-gradient(transparent,#000_var(--ft),#000_calc(100%-var(--fb)),transparent)] [mask-repeat:repeat-x]",
+            edges.up && "[--ft:56px]",
+            edges.down && "[--fb:72px]",
+          )}
+        >
+          {!variant ? (
+            <LyricsContentSkeleton className={lyricsClassName} />
+          ) : mode === "synced" ? (
+            <LyricsRenderer
+              variant={variant}
+              getCurrentTime={getCurrentTime}
+              getPlaying={getPlaying}
+              onLineClick={onLineClick}
+              translationLang={lang}
+              onAutoscrollPause={(resume) => setResumeAutoscroll(() => resume)}
+              className={lyricsClassName}
+            />
+          ) : (
+            <RawLyricsView body={variant.lyrics} format={variant.format} className={lyricsClassName} />
+          )}
+        </div>
       </div>
     </div>
   )

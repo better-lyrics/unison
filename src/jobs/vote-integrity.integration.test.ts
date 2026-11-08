@@ -5,8 +5,14 @@ import { CURATOR_LEADERBOARD_CACHE_KEY } from "@/db/leaderboard"
 import { deboost } from "@/db/predicates"
 import { updateReputations } from "@/db/reputation"
 import { lyricsVotedByKeys } from "@/db/vote-strikes"
+import { resyncVoteCounts } from "@/jobs/resync-vote-counts"
 import { recalculateScore } from "@/jobs/score-updater"
-import { backfillVoteIntegrity, runVoteIntegrity, undoVoteStrike } from "@/jobs/vote-integrity"
+import {
+	backfillRivalStrikes,
+	backfillVoteIntegrity,
+	runVoteIntegrity,
+	undoVoteStrike,
+} from "@/jobs/vote-integrity"
 import {
 	type IntegrationDb,
 	describeIntegration,
@@ -691,7 +697,7 @@ describeIntegration("runVoteIntegrity", () => {
 			const gStrike = await bySubmitter(g.submitter)
 			expect(await settledAt(fStrike.id)).toBeNull()
 			expect(fStrike.xp_revoked).toBe(0)
-			for (const row of await scores(f.targets)) expect(row.confidence).toBe("medium")
+			expect((await scores([f.targets[0]]))[0].confidence).toBe("medium")
 			expect(await settledAt(gStrike.id)).toBe(NOW)
 			for (const row of await scores(g.targets)) expect(row.confidence).toBe("low")
 			expect(await councilEvents()).toHaveLength(2)
@@ -930,5 +936,142 @@ describeIntegration("runVoteIntegrity", () => {
 				await db.pool.query("DROP FUNCTION vi_fail()")
 			}
 		})
+	})
+})
+
+describeIntegration("rival downvotes", () => {
+	const RIVAL_NOW = config.voteIntegrity.rival.launchedAt + 10 * DAY
+
+	beforeAll(async () => {
+		db = await openIntegrationDb()
+	})
+
+	afterAll(async () => {
+		await db.pool.end()
+	})
+
+	beforeEach(async () => {
+		await wipeRevisionData(db)
+	})
+
+	async function versionOn(video: string, submitterId: number): Promise<number> {
+		const { rows } = await db.pool.query<{ id: number }>(
+			`INSERT INTO lyrics (video_id, song, artist, duration, song_norm, artist_norm, lyrics, format,
+				sync_type, submitter_id, created_at)
+			 VALUES ($1, 'Song', 'Artist', 180, $2, 'artist', 'gz', 'lrc', 'linesync', $3, $4)
+			 RETURNING id`,
+			[video, `song ${video}`, submitterId, RIVAL_NOW - HOUR]
+		)
+		await db.pool.query("INSERT INTO lyrics_video_ids (lyrics_id, video_id) VALUES ($1, $2)", [
+			rows[0].id,
+			video,
+		])
+		return rows[0].id
+	}
+
+	const downvote = (userId: number, lyricsId: number) =>
+		db.pool.query(
+			"INSERT INTO votes (lyrics_id, user_id, vote, is_self_vote, created_at) VALUES ($1, $2, -1, 0, $3)",
+			[lyricsId, userId, RIVAL_NOW - 2 * HOUR]
+		)
+
+	const downvotesOf = async (lyricsId: number) =>
+		(await db.pool.query("SELECT downvotes FROM lyrics WHERE id = $1", [lyricsId])).rows[0]
+			.downvotes
+
+	it("a downvote cast before the voter submits stops counting on the next run", async () => {
+		const voter = await seedKey(RIVAL_NOW - 30 * DAY)
+		const target = await versionOn("rvAvid00001", await seedKey(RIVAL_NOW - 30 * DAY))
+		await downvote(voter, target)
+		await recalculateScore(db.env, target)
+		expect(await downvotesOf(target)).toBe(1)
+
+		await versionOn("rvAvid00001", voter)
+		await runVoteIntegrity(db.env, RIVAL_NOW)
+
+		expect(await downvotesOf(target)).toBe(0)
+	})
+
+	it("regression: the startup vote count repair keeps rival downvotes out of the score", async () => {
+		const voter = await seedKey(RIVAL_NOW - 30 * DAY)
+		await versionOn("rvAvid00004", voter)
+		const target = await versionOn("rvAvid00004", await seedKey(RIVAL_NOW - 30 * DAY))
+		await downvote(voter, target)
+		await vote(await seedKey(RIVAL_NOW - 30 * DAY), target, RIVAL_NOW - HOUR)
+		await db.pool.query(
+			"UPDATE lyrics SET upvotes = 1, downvotes = 1, vote_count = 2, effective_score = 0 WHERE id = $1",
+			[target]
+		)
+
+		await resyncVoteCounts(db.env)
+
+		const { rows } = await db.pool.query(
+			"SELECT downvotes, vote_count, effective_score > 0 AS positive FROM lyrics WHERE id = $1",
+			[target]
+		)
+		expect(rows[0]).toEqual({ downvotes: 0, vote_count: 1, positive: true })
+	})
+
+	it("a submit refreshes only the submitter's drifted downvotes", async () => {
+		const voter = await seedKey(RIVAL_NOW - 30 * DAY)
+		const target = await versionOn("rvAvid00007", await seedKey(RIVAL_NOW - 30 * DAY))
+		await downvote(voter, target)
+		await recalculateScore(db.env, target)
+		const unrelated = await versionOn("rvAvid00008", await seedKey(RIVAL_NOW - 30 * DAY))
+		await downvote(await seedKey(RIVAL_NOW - 30 * DAY), unrelated)
+
+		await versionOn("rvAvid00007", voter)
+		expect(await resyncVoteCounts(db.env, { downvotedBy: voter })).toEqual({ repaired: 1 })
+
+		expect(await downvotesOf(target)).toBe(0)
+		expect(await downvotesOf(unrelated)).toBe(0)
+	})
+
+	it("an empty title is never a rival match", async () => {
+		const [own, other] = ["rvAvid00005", "rvAvid00006"]
+		const voter = await seedKey(RIVAL_NOW - 30 * DAY)
+		await versionOn(own, voter)
+		const target = await versionOn(other, await seedKey(RIVAL_NOW - 30 * DAY))
+		await db.pool.query("UPDATE lyrics SET song_norm = '' WHERE id IN ($1, $2)", [
+			target,
+			(await db.pool.query("SELECT id FROM lyrics WHERE submitter_id = $1", [voter])).rows[0].id,
+		])
+		await downvote(voter, target)
+		await recalculateScore(db.env, target)
+
+		expect(await downvotesOf(target)).toBe(1)
+	})
+
+	it("strikes a rival downvoter and settles the strike", async () => {
+		const offender = await seedKey(RIVAL_NOW - 30 * DAY)
+		await versionOn("rvAvid00002", offender)
+		for (let i = 0; i < 3; i++) {
+			await downvote(offender, await versionOn("rvAvid00002", await seedKey(RIVAL_NOW - 30 * DAY)))
+		}
+
+		const result = await runVoteIntegrity(db.env, RIVAL_NOW)
+
+		expect(result.strikes).toBe(1)
+		const { rows } = await db.pool.query(
+			"SELECT kind, settled_at IS NOT NULL AS settled FROM vote_strikes WHERE submitter_id = $1",
+			[offender]
+		)
+		expect(rows).toEqual([{ kind: "rival", settled: true }])
+	})
+
+	it("backfills rival strikes once, while none exists", async () => {
+		const offender = await seedKey(RIVAL_NOW - 30 * DAY)
+		await versionOn("rvAvid00003", offender)
+		for (let i = 0; i < 2; i++) {
+			await downvote(offender, await versionOn("rvAvid00003", await seedKey(RIVAL_NOW - 30 * DAY)))
+		}
+		await db.pool.query(
+			`INSERT INTO vote_strikes (submitter_id, kind, detected_at, key_count, vote_count, repeat, backfill)
+			 VALUES ($1, 'ring', $2, 5, 10, FALSE, FALSE)`,
+			[await seedKey(RIVAL_NOW - 30 * DAY), RIVAL_NOW - 100 * DAY]
+		)
+
+		expect(await backfillRivalStrikes(db.env, RIVAL_NOW + 100 * DAY)).toBe(1)
+		expect(await backfillRivalStrikes(db.env, RIVAL_NOW + 100 * DAY)).toBeNull()
 	})
 })

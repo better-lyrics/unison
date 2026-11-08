@@ -30,8 +30,10 @@ vi.mock("@/hooks/useYouTubePlayer", () => ({
     ref: () => {},
     getCurrentTime: () => 0,
     getPlaying: () => false,
+    playing: false,
     seekTo,
     play,
+    pause: () => {},
   }),
 }))
 
@@ -315,7 +317,8 @@ describe("LyricsPage", () => {
     fetchVariants.mockResolvedValue({ variants: [makeSummary({ id: 1 })] })
     fetchVariant.mockReturnValue(new Promise(() => {}))
     renderAt(["/song/v1"])
-    await waitFor(() => expect(screen.getByRole("button", { name: /raw/i })).toBeTruthy())
+    await waitFor(() => expect(fetchVariant).toHaveBeenCalled())
+    expect(screen.queryByRole("button", { name: /raw/i })).toBeNull()
     expect(screen.queryByRole("button", { name: /download/i })).toBeNull()
     expect(screen.queryByRole("button", { name: /copy lyrics body to clipboard/i })).toBeNull()
   })
@@ -324,8 +327,8 @@ describe("LyricsPage", () => {
     fetchVariants.mockResolvedValue({ variants: [makeSummary({ id: 1 })] })
     fetchVariant.mockReturnValue(new Promise(() => {}))
     renderAt(["/song/v1"])
-    await waitFor(() => expect(screen.getByRole("button", { name: /raw/i })).toBeTruthy())
-    expect(screen.getByTestId("variant-metadata-skeleton")).toBeTruthy()
+    await waitFor(() => expect(fetchVariant).toHaveBeenCalled())
+    expect(screen.getByTestId("song-hero-skeleton")).toBeTruthy()
   })
 
   it("copies from the header while still in synced mode", async () => {
@@ -366,9 +369,9 @@ describe("LyricsPage", () => {
     fetchVariants.mockResolvedValue({ variants: [makeSummary({ id: 1 })] })
     fetchVariant.mockResolvedValue({ variant: makeFull({ id: 1 }) })
     renderAt(["/song/v1"])
-    const play = await screen.findByRole("button", { name: /play/i })
-    fireEvent.click(play)
-    await waitFor(() => expect(screen.queryByRole("button", { name: /play/i })).toBeNull())
+    const poster = await screen.findByRole("button", { name: "Play Song" })
+    fireEvent.click(poster)
+    await waitFor(() => expect(screen.queryByRole("button", { name: "Play Song" })).toBeNull())
   })
 
   it("seeks and starts the player when the renderer fires an onLineClick", async () => {

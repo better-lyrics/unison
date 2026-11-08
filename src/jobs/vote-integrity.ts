@@ -6,10 +6,13 @@ import { updateReputations } from "@/db/reputation"
 import {
 	type UndoStrikeResult,
 	type UnsettledStrike,
+	findRivalVoters,
 	findSuspectKeys,
 	hasAnyStrike,
+	hasRivalStrike,
 	lyricsVotedByKeys,
 	markStrikeSettled,
+	recordRivalStrikes,
 	recordStrikes,
 	revokeStrikeXp,
 	staleLoyalLyrics,
@@ -18,6 +21,7 @@ import {
 	votersOn,
 } from "@/db/vote-strikes"
 import { Logger } from "@/infra/logger"
+import { resyncVoteCounts } from "@/jobs/resync-vote-counts"
 import { recalculateScore } from "@/jobs/score-updater"
 import type { Env } from "@/types"
 
@@ -38,10 +42,17 @@ export async function runVoteIntegrity(
 ): Promise<{ strikes: number; keys: number }> {
 	const suspects = await findSuspectKeys(env, { now, all: opts.all })
 	const recorded = suspects.length > 0 ? await recordStrikes(env, suspects, now) : []
+	const rivalStrikes = await strikeRivals(env, now, opts.all)
 	const result = {
-		strikes: recorded.length,
+		strikes: recorded.length + rivalStrikes.length,
 		keys: recorded.reduce((sum, s) => sum + s.keyIds.length, 0),
 	}
+	const resynced = await resyncVoteCounts(env)
+		.then((r) => r.repaired)
+		.catch((err) => {
+			log.error("vote count resync failed", { error: String(err) })
+			return 0
+		})
 
 	let settled = 0
 	for (const strike of await unsettledStrikes(env)) {
@@ -53,12 +64,31 @@ export async function runVoteIntegrity(
 		}
 	}
 	const swept = await sweepLoyalLyrics(env)
-	if (settled === 0 && swept === 0) return result
+	if (settled === 0 && swept === 0 && resynced === 0) return result
 
 	await evictFeedCaches(env)
 	await invalidateCuratorLeaderboardCache(env)
-	log.info("vote integrity", { ...result, settled, swept })
+	log.info("vote integrity", { ...result, settled, swept, resynced })
 	return result
+}
+
+async function strikeRivals(env: Env, now: number, all?: boolean) {
+	try {
+		const rivals = await findRivalVoters(env, { now, all })
+		return rivals.length > 0 ? await recordRivalStrikes(env, rivals, now) : []
+	} catch (err) {
+		log.error("rival detection failed", { error: String(err) })
+		return []
+	}
+}
+
+export async function backfillRivalStrikes(
+	env: Env,
+	now = Math.floor(Date.now() / 1000)
+): Promise<number | null> {
+	if (await hasRivalStrike(env)) return null
+	const voters = await findRivalVoters(env, { now, all: true })
+	return voters.length > 0 ? (await recordRivalStrikes(env, voters, now)).length : 0
 }
 
 async function sweepLoyalLyrics(env: Env): Promise<number> {

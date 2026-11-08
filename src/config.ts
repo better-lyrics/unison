@@ -1,11 +1,57 @@
 export const COMMUNITY_KEY_ID = "cea10b57de8e060ed1a180a00c2bc717a2ab4f231d88fd33ffa6a50a04f23b6e"
 
 export const config = {
+	og: {
+		cacheControl: "public, max-age=3600, s-maxage=86400, stale-while-revalidate=604800",
+		downloadCacheControl: "public, max-age=300",
+		siteOrigin: "https://unison.betterlyrics.org",
+		memoryEntries: 100,
+	},
 	artwork: {
 		size: 544,
+		washSize: 256,
+		fetchTimeoutMs: 3000,
+		imageCacheControl: "public, max-age=86400, s-maxage=2592000, stale-while-revalidate=604800",
 		positiveTtlSeconds: 60 * 60 * 24 * 30,
 		negativeTtlSeconds: 60 * 60 * 24 * 7,
+		incompleteTtlSeconds: 60 * 10,
+		youTubeMusicTtlSeconds: 60 * 60 * 6,
+		resolveBudgetMs: 8000,
 		refreshProbability: 0.03,
+		cdnBase: "https://cdn.betterlyrics.org/artwork/",
+		cdnKeyPrefix: "artwork/",
+		cdnCacheControl: "public, max-age=31536000, immutable",
+		maxImageBytes: 5 * 1024 * 1024,
+		crop: {
+			minSide: 256,
+			trimThreshold: 40,
+			inset: 0.02,
+			darkEdge: 22,
+			flatStdev: 8,
+		},
+		deezer: {
+			baseUrl: "https://api.deezer.com",
+			timeoutMs: 3000,
+		},
+		itunes: {
+			baseUrl: "https://itunes.apple.com",
+			timeoutMs: 3000,
+			country: "US",
+		},
+		fallback: {
+			gapMs: 1000,
+			maxQueue: 1000,
+			backfillBatch: 200,
+			capBytes: 5 * 1024 ** 3,
+			evictBatch: 500,
+			evictSchedule: "30 4 * * *",
+		},
+		breaker: {
+			threshold: 3,
+			baseOpenMs: 60_000,
+			maxOpenMs: 60 * 60_000,
+			multiplier: 4,
+		},
 	},
 	submission: {
 		maxVariantsPerUserPerVideo: 3,
@@ -149,6 +195,10 @@ export const config = {
 		write: { maxRequests: 20, windowSeconds: 3600 },
 	},
 
+	profile: {
+		write: { maxRequests: 20, windowSeconds: 3600 },
+	},
+
 	migration: {
 		sessionTtlSeconds: 900, // time to open the new extension and finish the OAuth prove
 		commitLockSeconds: 60,
@@ -175,6 +225,7 @@ export const config = {
 		serialWindowSec: 300,
 		loyalMinVotes: 5,
 		mergeWindowSec: 24 * 3600,
+		rival: { launchedAt: 1794096000, minVotes: 2, share: 0.5 },
 		repeatPenalty: { reputation: 0.2, xp: -30 },
 		multiplier: { windowSec: 30 * 86400, one: 0.8, many: 0.6 },
 	},
@@ -304,6 +355,8 @@ export const config = {
 			maxRequests: 600,
 			windowSeconds: 60,
 		},
+		// One SPA page fans out into many cover reads; a forged header only earns this bounded budget
+		spaReadScale: 5,
 		write: {
 			maxRequests: 10,
 			windowSeconds: 60,
@@ -405,6 +458,18 @@ export const config = {
 		maxLangLength: 35,
 		userAgent:
 			"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
+	},
+
+	binilink: {
+		baseUrl: "https://link.binimum.org",
+		userAgent: "Unison (+https://unison.betterlyrics.org)",
+		timeoutMs: 1500,
+		pauseSec: 30,
+		maxPauseSec: 300,
+		pendingRetryAfterSec: 2,
+		trackTtlSec: 30 * 24 * 60 * 60,
+		missTtlSec: 24 * 60 * 60,
+		videoTtlSec: 24 * 60 * 60,
 	},
 
 	council: {

@@ -1,6 +1,6 @@
 import { config } from "@/config"
 import { Logger } from "@/infra/logger"
-import { pickSquareArtwork } from "@/utils/artwork"
+import { isAlbumArtUrl, pickSquareArtwork } from "@/utils/artwork"
 import { Innertube } from "youtubei.js"
 
 const log = new Logger("innertube")
@@ -18,39 +18,97 @@ function getInnertube(): Promise<Innertube> {
 
 export const BASIC_INFO_CLIENT = "ANDROID_VR"
 
-export async function getVideoDurationSeconds(videoId: string): Promise<number | null> {
+function validSeconds(value: unknown): number | null {
+	return typeof value === "number" && Number.isFinite(value) && value > 0 ? value : null
+}
+
+type UpNextVideo = {
+	video_id?: string
+	title?: { text?: string }
+	author?: string
+	artists?: { name?: string; channel_id?: string }[]
+	album?: { name?: string }
+	duration?: { seconds?: number }
+	thumbnail?: { url: string; width: number; height: number }[]
+}
+
+const EMPTY_QUEUE = "Music queue was empty"
+
+async function upNextEntry(yt: Innertube, videoId: string): Promise<UpNextVideo[] | null> {
+	const panel = await yt.music.getUpNext(videoId, false)
+	for (const entry of panel.contents) {
+		const videos = "primary" in entry ? [entry.primary, ...(entry.counterpart ?? [])] : [entry]
+		const known = videos.filter((v): v is NonNullable<typeof v> => !!v) as UpNextVideo[]
+		if (known.some((v) => v.video_id === videoId)) return known
+	}
+	return null
+}
+
+async function upNextDurationSeconds(yt: Innertube, videoId: string): Promise<number | null> {
+	const video = (await upNextEntry(yt, videoId))?.find((v) => v.video_id === videoId)
+	return validSeconds(video?.duration?.seconds)
+}
+
+export async function videoArtwork(videoId: string): Promise<string | null> {
+	const yt = await getInnertube()
+	let entry: UpNextVideo[] | null
 	try {
-		const yt = await getInnertube()
-		const info = await yt.getBasicInfo(videoId, { client: BASIC_INFO_CLIENT })
-		const duration = info.basic_info?.duration
-		return typeof duration === "number" ? duration : null
+		entry = await upNextEntry(yt, videoId)
 	} catch (err) {
-		log.warn("innertube duration resolve failed", { videoId, error: (err as Error).message })
+		if ((err as Error).message.startsWith(EMPTY_QUEUE)) return null
+		throw err
+	}
+	for (const video of entry ?? []) {
+		const art = pickSquareArtwork(video.thumbnail ?? [], config.artwork.size)
+		if (art && isAlbumArtUrl(art)) return art
+	}
+	return null
+}
+
+async function playerDurationSeconds(yt: Innertube, videoId: string): Promise<number | null> {
+	const info = await yt.getBasicInfo(videoId, { client: BASIC_INFO_CLIENT })
+	const duration = validSeconds(info.basic_info?.duration)
+	if (duration === null) {
+		log.warn("innertube player gave no duration", {
+			videoId,
+			status: info.playability_status?.status,
+		})
+	}
+	return duration
+}
+
+type DurationLookup = (yt: Innertube, videoId: string) => Promise<number | null>
+
+async function tryLookup(
+	source: string,
+	lookup: DurationLookup,
+	yt: Innertube,
+	videoId: string
+): Promise<number | null> {
+	try {
+		return await lookup(yt, videoId)
+	} catch (err) {
+		log.warn("innertube duration resolve failed", {
+			source,
+			videoId,
+			error: (err as Error).message,
+		})
 		return null
 	}
 }
 
-export async function getVideoCandidate(videoId: string): Promise<SongCandidate | null> {
+export async function getVideoDurationSeconds(videoId: string): Promise<number | null> {
+	let yt: Innertube
 	try {
-		const yt = await getInnertube()
-		const info = (await yt.getBasicInfo(videoId, { client: BASIC_INFO_CLIENT })).basic_info
-		if (!info?.title) return null
-		const artist = info.author ?? ""
-		return {
-			videoId,
-			title: info.title,
-			artist,
-			artists: artist ? [artist] : [],
-			artistChannelIds: info.channel_id ? [info.channel_id] : [],
-			album: null,
-			durationSeconds: typeof info.duration === "number" ? info.duration : null,
-			videoType: "video",
-			artworkUrl: pickSquareArtwork(info.thumbnail ?? [], config.artwork.size),
-		}
+		yt = await getInnertube()
 	} catch (err) {
-		log.warn("innertube video details failed", { videoId, error: (err as Error).message })
+		log.warn("innertube client init failed", { videoId, error: (err as Error).message })
 		return null
 	}
+	return (
+		(await tryLookup("up-next", upNextDurationSeconds, yt, videoId)) ??
+		(await tryLookup("player", playerDurationSeconds, yt, videoId))
+	)
 }
 
 export type SongCandidate = {
@@ -63,6 +121,35 @@ export type SongCandidate = {
 	durationSeconds: number | null
 	videoType: "song" | "video"
 	artworkUrl: string | null
+}
+
+// The player endpoint is bot-checked from servers, so a video's details come from its up-next entry.
+export async function getVideoCandidate(videoId: string): Promise<SongCandidate | null> {
+	try {
+		const yt = await getInnertube()
+		const video = (await upNextEntry(yt, videoId))?.find((v) => v.video_id === videoId)
+		const title = video?.title?.text
+		if (!video || !title) return null
+		const credits = video.artists ?? []
+		const artists = credits.flatMap((a) => (a.name ? [a.name] : []))
+		const artist = artists[0] ?? video.author ?? ""
+		return {
+			videoId,
+			title,
+			artist,
+			artists: artists.length > 0 ? artists : artist ? [artist] : [],
+			artistChannelIds: credits.flatMap((a) => (a.channel_id ? [a.channel_id] : [])),
+			album: video.album?.name ?? null,
+			durationSeconds: validSeconds(video.duration?.seconds),
+			videoType: video.album ? "song" : "video",
+			artworkUrl: pickSquareArtwork(video.thumbnail ?? [], config.artwork.size),
+		}
+	} catch (err) {
+		if (!(err as Error).message.startsWith(EMPTY_QUEUE)) {
+			log.warn("innertube video details failed", { videoId, error: (err as Error).message })
+		}
+		return null
+	}
 }
 
 type MusicSearchItem = {

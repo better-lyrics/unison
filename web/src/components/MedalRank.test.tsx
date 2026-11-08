@@ -35,7 +35,7 @@ describe("MedalRank", () => {
 
   it("applies the small wrapper width for the sm size", () => {
     const { container } = render(<MedalRank rank={1} />)
-    expect((container.firstChild as HTMLElement).className).toContain("w-10")
+    expect((container.firstChild as HTMLElement).className).toContain("sm:w-6")
   })
 
   it("renders trophy alongside the rank number when size is lg for top three", () => {

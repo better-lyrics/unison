@@ -5,7 +5,7 @@ import { Sparkline } from "@/components/charts/Sparkline"
 import { PageHead } from "@/components/council/headings"
 import { Bone, skeletonKeys } from "@/components/skeleton"
 import { buttonClass, tagClass } from "@/components/ui"
-import { useBadgeImage } from "@/hooks/useBadgeImage"
+import { useBadgeArt } from "@/hooks/useBadgeImage"
 import { useCouncilMembers, useCouncilRole } from "@/hooks/useCouncilData"
 import { useAddMember, useRemoveMember } from "@/hooks/useCouncilMutations"
 import { cn } from "@/lib/cn"
@@ -131,7 +131,7 @@ function MemberRow({
   onRemove: () => void
 }) {
   const decisions = member.weekly.reduce((a, b) => a + b, 0)
-  const badgeImage = useBadgeImage()
+  const badgeArt = useBadgeArt()
   return (
     <tr>
       <td>
@@ -153,7 +153,7 @@ function MemberRow({
       </td>
       <td>
         {member.tier ? (
-          <TierChip tier={member.tier} gemSrc={badgeImage(member.tier) ?? undefined} />
+          <TierChip tier={member.tier} gem={badgeArt(member.tier)} />
         ) : (
           <span className="text-unison-text-muted">Unranked</span>
         )}

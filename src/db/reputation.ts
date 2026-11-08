@@ -1,5 +1,5 @@
 import { config } from "@/config"
-import { CONSENSUS_LYRICS_CTE, COUNTED_VOTER_PREDICATE } from "@/db/predicates"
+import { CONSENSUS_LYRICS_CTE, COUNTED_VOTE_PREDICATE } from "@/db/predicates"
 import type { Env } from "@/types"
 
 export async function updateReputations(env: Env, userIds?: number[]): Promise<void> {
@@ -14,7 +14,7 @@ export async function updateReputations(env: Env, userIds?: number[]): Promise<v
 			FROM votes v
 			JOIN consensus_lyrics cl ON v.lyrics_id = cl.id
 			JOIN users u ON u.id = v.user_id
-			WHERE v.is_self_vote = 0 AND ${COUNTED_VOTER_PREDICATE} ${scoped("v.user_id")}
+			WHERE v.is_self_vote = 0 AND ${COUNTED_VOTE_PREDICATE} ${scoped("v.user_id")}
 			GROUP BY v.user_id
 		),
 		penalties AS (

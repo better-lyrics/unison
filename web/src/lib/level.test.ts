@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest"
+import * as server from "../../../src/utils/xp"
 import { levelProgress } from "./level"
 
 describe("levelProgress", () => {
@@ -57,5 +58,11 @@ describe("levelProgress", () => {
         expect(pct).toBeLessThanOrEqual(1)
       }
     })
+  })
+
+  it("fills the ring the same on the web and the server card", () => {
+    for (const [xp, next, floor] of [[3200, 4000, 2800], [4000, null, 2800], [120, 100, 0]] as const) {
+      expect(server.levelProgress(xp, next, floor)).toBe(levelProgress(xp, next, floor).pct)
+    }
   })
 })

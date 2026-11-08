@@ -108,7 +108,7 @@ describe("UserPage", () => {
 
     renderAt(`/curator/${keyId}`)
     await waitFor(() => expect(screen.getByText("UnrankedUser")).toBeTruthy())
-    expect(screen.getByText(/no leaderboard activity yet/i)).toBeTruthy()
+    expect(screen.getByText(/new curator/i)).toBeTruthy()
   })
 
   it("redirects to the canonical /u/<handle> when the curator has a handle", async () => {

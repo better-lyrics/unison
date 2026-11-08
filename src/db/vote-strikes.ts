@@ -5,7 +5,7 @@ import {
 	revokeStrikePenaltyXp,
 } from "@/db/contribution-events"
 import { recordCouncilEvent } from "@/db/council-events"
-import { LOYAL_ONLY_EXPR_JOINED } from "@/db/predicates"
+import { LOYAL_ONLY_EXPR_JOINED, RIVAL_DOWNVOTE_EXPR } from "@/db/predicates"
 import { Logger } from "@/infra/logger"
 import type { Env } from "@/types"
 
@@ -131,7 +131,88 @@ export async function findSuspectKeys(
 	}))
 }
 
-type StrikeKind = "ring" | "serial" | "both"
+export interface RivalVoter {
+	userId: number
+	votes: number
+	lastVoteAt: number
+}
+
+export async function findRivalVoters(
+	env: Env,
+	opts: { now?: number; all?: boolean } = {}
+): Promise<RivalVoter[]> {
+	const { lookbackSec, rival } = config.voteIntegrity
+	const now = opts.now ?? Math.floor(Date.now() / 1000)
+	const since = opts.all ? 0 : now - lookbackSec
+	const res = await env.DB.prepare(`
+		WITH candidates AS (
+			SELECT user_id FROM votes WHERE vote = -1 AND created_at >= ?::int
+			UNION
+			SELECT submitter_id FROM lyrics WHERE submitter_id IS NOT NULL AND created_at >= ?::int
+		),
+		marks AS (
+			SELECT submitter_id, MAX(evidence_until) AS at FROM vote_strikes
+			WHERE kind = 'rival' GROUP BY submitter_id
+		),
+		cast_votes AS (
+			SELECT v.user_id, v.created_at, v.vote = -1 AND ${RIVAL_DOWNVOTE_EXPR} AS rival
+			FROM candidates c
+			JOIN votes v ON v.user_id = c.user_id AND v.is_self_vote = 0
+			JOIN users u ON u.id = v.user_id
+			LEFT JOIN marks m ON m.submitter_id = v.user_id
+			WHERE u.banned_at IS NULL AND u.key_id <> ? AND v.created_at > COALESCE(m.at, -1)
+		),
+		tallies AS (
+			SELECT user_id, COUNT(*) AS cast_count,
+				COUNT(*) FILTER (WHERE rival) AS rival_votes,
+				MAX(created_at) FILTER (WHERE rival) AS last_vote
+			FROM cast_votes GROUP BY user_id
+		)
+		SELECT user_id, rival_votes, last_vote FROM tallies
+		WHERE rival_votes >= ?::int AND rival_votes >= ?::float8 * cast_count
+		ORDER BY user_id
+	`)
+		.bind(since, since, COMMUNITY_KEY_ID, rival.minVotes, rival.share)
+		.all<{ user_id: number; rival_votes: number | string; last_vote: number }>()
+	return res.results.map((r) => ({
+		userId: r.user_id,
+		votes: Number(r.rival_votes),
+		lastVoteAt: r.last_vote,
+	}))
+}
+
+export async function recordRivalStrikes(
+	env: Env,
+	voters: RivalVoter[],
+	now = Math.floor(Date.now() / 1000)
+): Promise<RecordedStrike[]> {
+	const recorded: RecordedStrike[] = []
+	for (const voter of voters) {
+		try {
+			const strike = await env.DB.transaction(async (tx) => {
+				await tx.prepare("SELECT id FROM users WHERE id = ? FOR UPDATE").bind(voter.userId).run()
+				return writeStrike(
+					{ ...env, DB: tx },
+					{
+						submitterId: voter.userId,
+						kind: "rival",
+						keyCount: 0,
+						voteCount: voter.votes,
+						backfill: voter.lastVoteAt < config.voteIntegrity.rival.launchedAt,
+						evidenceUntil: voter.lastVoteAt,
+						now,
+					}
+				)
+			})
+			recorded.push({ ...strike, submitterId: voter.userId, keyIds: [] })
+		} catch (err) {
+			log.error("failed to record rival strike", { userId: voter.userId, error: String(err) })
+		}
+	}
+	return recorded
+}
+
+type StrikeKind = "ring" | "serial" | "both" | "rival"
 
 export interface RecordedStrike {
 	strikeId: number
@@ -175,13 +256,92 @@ export async function recordStrikes(
 	return recorded
 }
 
+interface StrikeWrite {
+	submitterId: number
+	kind: StrikeKind
+	keyCount: number
+	voteCount: number
+	backfill: boolean
+	evidenceUntil: number | null
+	now: number
+}
+
+type WrittenStrike = Omit<RecordedStrike, "submitterId" | "keyIds">
+
+async function writeStrike(txEnv: Env, w: StrikeWrite): Promise<WrittenStrike> {
+	const tx = txEnv.DB
+	const rival = w.kind === "rival"
+	const mergeable = await tx
+		.prepare(
+			`SELECT id, kind, repeat FROM vote_strikes
+			WHERE submitter_id = ? AND undone_at IS NULL AND NOT backfill AND (kind = 'rival') = ?
+				AND detected_at >= ?::int
+			ORDER BY detected_at DESC, id DESC LIMIT 1`
+		)
+		.bind(w.submitterId, rival, w.now - config.voteIntegrity.mergeWindowSec)
+		.first<{ id: number; kind: StrikeKind; repeat: boolean }>()
+	if (mergeable) {
+		await tx
+			.prepare(
+				`UPDATE vote_strikes SET key_count = key_count + ?, vote_count = vote_count + ?, kind = ?,
+					evidence_until = GREATEST(evidence_until, ?::int), settled_at = NULL
+				WHERE id = ?`
+			)
+			.bind(
+				w.keyCount,
+				w.voteCount,
+				mergeKinds(mergeable.kind, w.kind),
+				w.evidenceUntil,
+				mergeable.id
+			)
+			.run()
+		return { strikeId: mergeable.id, created: false, repeat: mergeable.repeat }
+	}
+
+	const earlier = await tx
+		.prepare(
+			"SELECT 1 FROM vote_strikes WHERE submitter_id = ? AND undone_at IS NULL AND NOT backfill LIMIT 1"
+		)
+		.bind(w.submitterId)
+		.first()
+	const repeat = !w.backfill && earlier !== null
+	const inserted = await tx
+		.prepare(
+			`INSERT INTO vote_strikes (submitter_id, kind, detected_at, key_count, vote_count, repeat, backfill,
+				evidence_until)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?::int) RETURNING id`
+		)
+		.bind(
+			w.submitterId,
+			w.kind,
+			w.now,
+			w.keyCount,
+			w.voteCount,
+			repeat,
+			w.backfill,
+			w.evidenceUntil
+		)
+		.first<{ id: number }>()
+	if (!inserted) throw new Error(`vote strike insert returned no row for ${w.submitterId}`)
+	if (repeat) await awardStrikePenaltyXp(txEnv, w.submitterId, inserted.id)
+	await recordCouncilEvent(tx, {
+		actorId: null,
+		kind: "vote_strike",
+		source: "system",
+		subjectUserId: w.submitterId,
+		refId: inserted.id,
+		note: strikeNote({ ...w, repeat }),
+		at: w.now,
+	})
+	return { strikeId: inserted.id, created: true, repeat }
+}
+
 async function recordSubmitterStrike(
 	txEnv: Env,
 	submitterId: number,
 	suspects: SuspectKey[],
 	now: number
 ): Promise<RecordedStrike | null> {
-	const { mergeWindowSec, launchedAt } = config.voteIntegrity
 	const tx = txEnv.DB
 	await tx.prepare("SELECT id FROM users WHERE id = ? FOR UPDATE").bind(submitterId).run()
 	const undiscounted = await tx
@@ -195,52 +355,16 @@ async function recordSubmitterStrike(
 	if (keys.length === 0) return null
 
 	const keyIds = keys.map((k) => k.userId)
-	const votes = keys.reduce((sum, k) => sum + k.votes, 0)
-	const kind = kindOf(keys)
-	const latest = await tx
-		.prepare(
-			`SELECT id, kind, detected_at, repeat FROM vote_strikes
-			WHERE submitter_id = ? AND undone_at IS NULL AND NOT backfill
-			ORDER BY detected_at DESC, id DESC LIMIT 1`
-		)
-		.bind(submitterId)
-		.first<{ id: number; kind: StrikeKind; detected_at: number; repeat: boolean }>()
-
-	let strike: Omit<RecordedStrike, "submitterId" | "keyIds">
-	if (latest && now - latest.detected_at <= mergeWindowSec) {
-		await tx
-			.prepare(
-				`UPDATE vote_strikes SET key_count = key_count + ?, vote_count = vote_count + ?, kind = ?,
-					settled_at = NULL
-				WHERE id = ?`
-			)
-			.bind(keys.length, votes, mergeKinds(latest.kind, kind), latest.id)
-			.run()
-		strike = { strikeId: latest.id, created: false, repeat: latest.repeat }
-	} else {
-		const lastVoteAt = keys.reduce((max, k) => Math.max(max, k.lastVoteAt), 0)
-		const backfill = lastVoteAt < launchedAt
-		const repeat = !backfill && latest !== null
-		const inserted = await tx
-			.prepare(
-				`INSERT INTO vote_strikes (submitter_id, kind, detected_at, key_count, vote_count, repeat, backfill)
-				VALUES (?, ?, ?, ?, ?, ?, ?) RETURNING id`
-			)
-			.bind(submitterId, kind, now, keys.length, votes, repeat, backfill)
-			.first<{ id: number }>()
-		if (!inserted) throw new Error(`vote strike insert returned no row for ${submitterId}`)
-		strike = { strikeId: inserted.id, created: true, repeat }
-		if (repeat) await awardStrikePenaltyXp(txEnv, submitterId, inserted.id)
-		await recordCouncilEvent(tx, {
-			actorId: null,
-			kind: "vote_strike",
-			source: "system",
-			subjectUserId: submitterId,
-			refId: inserted.id,
-			note: strikeNote({ kind, keyCount: keys.length, voteCount: votes, repeat, backfill }),
-			at: now,
-		})
-	}
+	const lastVoteAt = keys.reduce((max, k) => Math.max(max, k.lastVoteAt), 0)
+	const strike = await writeStrike(txEnv, {
+		submitterId,
+		kind: kindOf(keys),
+		keyCount: keys.length,
+		voteCount: keys.reduce((sum, k) => sum + k.votes, 0),
+		backfill: lastVoteAt < config.voteIntegrity.launchedAt,
+		evidenceUntil: null,
+		now,
+	})
 
 	await tx
 		.prepare(
@@ -486,11 +610,21 @@ export interface StrikeSummary {
 const count = (n: number, noun: string) => `${n} ${noun}${n === 1 ? "" : "s"}`
 
 export function strikeNote(s: StrikeSummary): string {
-	const base = `${s.kind}: ${count(s.keyCount, "key")}, ${count(s.voteCount, "vote")}`
+	const base =
+		s.kind === "rival"
+			? `rival: ${count(s.voteCount, "vote")}`
+			: `${s.kind}: ${count(s.keyCount, "key")}, ${count(s.voteCount, "vote")}`
 	if (s.repeat) return `${base} (repeat)`
 	return s.backfill ? `${base} (history before launch)` : base
 }
 
 export async function hasAnyStrike(env: Env): Promise<boolean> {
 	return (await env.DB.prepare("SELECT 1 FROM vote_strikes LIMIT 1").first()) !== null
+}
+
+export async function hasRivalStrike(env: Env): Promise<boolean> {
+	return (
+		(await env.DB.prepare("SELECT 1 FROM vote_strikes WHERE kind = 'rival' LIMIT 1").first()) !==
+		null
+	)
 }
