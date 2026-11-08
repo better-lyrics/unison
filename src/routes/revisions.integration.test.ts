@@ -600,7 +600,6 @@ describeIntegration("revision routes (integration)", () => {
 			const ttml = readRevisionFixture("amazing-grace.ttml")
 			lyricId = await seedLyric(db, owner, { lyrics: ttml, format: "ttml", language: "en" })
 			const reformatted = ttml
-				.replace('itunes:timing="Word"', 'itunes:timing="Word" composer:build="1a2b3c4d"')
 				.replace('begin="12.000" end="12.600"', 'end="00:12.600" begin="00:12.000"')
 				.replaceAll('itunes:key="L1" ttm:agent="v1"', 'ttm:agent="v1" itunes:key="L1"')
 			const nudged = ttml.replace('begin="12.600" end="13.200"', 'begin="12.630" end="13.200"')

@@ -1,6 +1,7 @@
 import type { LyricsFormat } from "@/types"
 import { sha256Hex } from "@/utils/hash"
-import { parseTtmlTime } from "@/utils/ttml-timing"
+import { parseTtmlTime as parseBareTime } from "@/utils/ttml-timing"
+import { parseTtmlTime } from "@/utils/validation"
 import { XMLParser } from "fast-xml-parser"
 
 type ParsedNode = Record<string, unknown>
@@ -24,7 +25,7 @@ const parser = new XMLParser({
 })
 
 const TIME_ATTRIBUTES = new Set(["begin", "end", "dur"])
-// Not lyrics: the export build tag changes with every export, and the body length and video id
+// Not lyrics: the root build value describes the export, and the body length and video id
 // describe whichever audio the lyrics were synced to (video links are stored on their own).
 const IGNORED_ATTRIBUTES: Record<string, ReadonlySet<string>> = {
 	tt: new Set(["build"]),
@@ -36,7 +37,7 @@ const INLINE_ELEMENTS = new Set(["p", "span"])
 const isWhitespace = (text: string): boolean => text.trim() === ""
 
 function canonicalTime(value: string): string {
-	const seconds = parseTtmlTime(value.replace(/s$/, ""))
+	const seconds = parseTtmlTime(value) ?? parseBareTime(value)
 	return Number.isNaN(seconds) ? value : String(Math.round(seconds * 1000))
 }
 
@@ -82,13 +83,17 @@ function foldInlineSpacing(nodes: CanonicalNode[], isLine: boolean): CanonicalNo
 		}
 		const text = node.replace(/\s+/g, " ")
 		if (isWhitespace(text)) {
-			if (previous === undefined || isBackground(previous) || isBackground(nodes[index + 1])) return
+			if (previous === undefined) {
+				if (!isLine && !node.includes("\n")) folded.push(" ")
+				return
+			}
+			if (isBackground(previous) || isBackground(nodes[index + 1])) return
 			folded[folded.length - 1] = editLastText(previous, (last) =>
 				last.endsWith(" ") ? last : `${last} `
 			)
 			return
 		}
-		const trimmed = previous === undefined ? text.trimStart() : text
+		const trimmed = previous === undefined && isLine ? text.trimStart() : text
 		if (typeof previous === "string") folded[folded.length - 1] = previous + trimmed
 		else folded.push(trimmed)
 	})
