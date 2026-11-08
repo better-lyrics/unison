@@ -8,6 +8,7 @@ import {
 	diffRevisions,
 	getRevisionDetail,
 	listPendingCards,
+	compareWithLive,
 	listRevisions,
 	previewRevision,
 	rejectRevision,
@@ -113,6 +114,26 @@ export const revisionRoutes = (env: Env) =>
 			{ query: t.Object({ against: t.Optional(t.String()) }) }
 		)
 		.use(eitherAuth)
+		.post("/:id/revisions/compare", async ({ params, env, userId, keyId, body, status }) => {
+			const id = parseId(params.id)
+			if (id === null) return status(400, buildError(ErrorCode.INVALID_ID))
+			const { success } = await env.RATE_LIMITER.limit({
+				key: `revision-compare:${keyId}`,
+				maxRequests: config.revisions.preview.maxRequests,
+				windowSeconds: config.revisions.preview.windowSeconds,
+			})
+			if (!success) {
+				return status(429, buildError(ErrorCode.RATE_LIMITED, { hint: PREVIEW_THROTTLE_HINT }))
+			}
+			const input = parseRevisionBody(body)
+			if (!input) return status(400, buildError(ErrorCode.INVALID_PAYLOAD))
+			const result = await compareWithLive(env, id, userId, input)
+			if (!result.ok) {
+				const failure = saveFailure(result)
+				return status(failure.status, failure.body)
+			}
+			return { success: true, data: { same: result.same } }
+		})
 		.post("/:id/revisions/preview", async ({ params, env, userId, keyId, body, status }) => {
 			const id = parseId(params.id)
 			if (id === null) return status(400, buildError(ErrorCode.INVALID_ID))
