@@ -24,6 +24,10 @@ function validSeconds(value: unknown): number | null {
 
 type UpNextVideo = {
 	video_id?: string
+	title?: { text?: string }
+	author?: string
+	artists?: { name?: string; channel_id?: string }[]
+	album?: { name?: string }
 	duration?: { seconds?: number }
 	thumbnail?: { url: string; width: number; height: number }[]
 }
@@ -117,6 +121,35 @@ export type SongCandidate = {
 	durationSeconds: number | null
 	videoType: "song" | "video"
 	artworkUrl: string | null
+}
+
+// The player endpoint is bot-checked from servers, so a video's details come from its up-next entry.
+export async function getVideoCandidate(videoId: string): Promise<SongCandidate | null> {
+	try {
+		const yt = await getInnertube()
+		const video = (await upNextEntry(yt, videoId))?.find((v) => v.video_id === videoId)
+		const title = video?.title?.text
+		if (!video || !title) return null
+		const credits = video.artists ?? []
+		const artists = credits.flatMap((a) => (a.name ? [a.name] : []))
+		const artist = artists[0] ?? video.author ?? ""
+		return {
+			videoId,
+			title,
+			artist,
+			artists: artists.length > 0 ? artists : artist ? [artist] : [],
+			artistChannelIds: credits.flatMap((a) => (a.channel_id ? [a.channel_id] : [])),
+			album: video.album?.name ?? null,
+			durationSeconds: validSeconds(video.duration?.seconds),
+			videoType: video.album ? "song" : "video",
+			artworkUrl: pickSquareArtwork(video.thumbnail ?? [], config.artwork.size),
+		}
+	} catch (err) {
+		if (!(err as Error).message.startsWith(EMPTY_QUEUE)) {
+			log.warn("innertube video details failed", { videoId, error: (err as Error).message })
+		}
+		return null
+	}
 }
 
 type MusicSearchItem = {

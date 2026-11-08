@@ -75,6 +75,8 @@ const candidates: SongCandidate[] = [
 	},
 ]
 const search = async () => candidates
+// Linked videos the search misses are looked up on their own; tests never reach YouTube.
+const lookup = async () => null
 
 describeIntegration("video suggestions (integration)", () => {
 	const url = process.env.INTEGRATION_DATABASE_URL ?? process.env.DATABASE_URL
@@ -237,9 +239,10 @@ describeIntegration("video suggestions (integration)", () => {
 				return candidates
 			}
 
-			await suggestVideosForVariant(cacheEnv, lyricId, owner, { search: countingSearch })
+			await suggestVideosForVariant(cacheEnv, lyricId, owner, { search: countingSearch, lookup })
 			const second = await suggestVideosForVariant(cacheEnv, lyricId, owner, {
 				search: countingSearch,
+				lookup,
 			})
 
 			expect(calls).toBe(1)
@@ -262,6 +265,7 @@ describeIntegration("video suggestions (integration)", () => {
 
 			const res = await suggestVideosForVariant(corruptEnv, lyricId, owner, {
 				search: countingSearch,
+				lookup,
 			})
 
 			expect(calls).toBe(1)
@@ -290,13 +294,17 @@ describeIntegration("video suggestions (integration)", () => {
 				return []
 			}
 
-			const first = await suggestVideosForVariant(cacheEnv, lyricId, owner, { search: emptySearch })
+			const first = await suggestVideosForVariant(cacheEnv, lyricId, owner, {
+				search: emptySearch,
+				lookup,
+			})
 			const second = await suggestVideosForVariant(cacheEnv, lyricId, owner, {
 				search: emptySearch,
+				lookup,
 			})
 
 			expect(calls).toBe(1)
-			expect(store.size).toBe(1)
+			expect([...store.keys()].filter((k) => k.startsWith("songsearch:"))).toHaveLength(1)
 			expect(puts[0].ttl).toBe(config.videoLinking.emptySuggestionCacheTtlSeconds)
 			expect(first.ok).toBe(true)
 			if (first.ok) expect(first.suggestions).toEqual([])

@@ -2,7 +2,7 @@ import { config } from "@/config"
 import { getMySubmissions } from "@/db/feed"
 import { parseFeedFilters } from "@/db/feed-filters"
 import { getFulfillmentByLyricsId } from "@/db/fulfillments"
-import { getRevisionBar } from "@/db/lyric-revisions"
+import { getRevisionBar, getRevisionBars } from "@/db/lyric-revisions"
 import {
 	findServedByVideoId,
 	findVariantsByVideoId,
@@ -21,7 +21,7 @@ import { buildSealMarks, resolveActors } from "@/routes/marks"
 import { findLyricsByTrack } from "@/services/track-lookup"
 import type { Env, LyricsResponse, LyricsSubmission } from "@/types"
 import { ALBUM_HINT, isValidAlbum } from "@/utils/album"
-import { signedRequest } from "@/utils/auth"
+import { eitherAuth } from "@/utils/either-auth"
 import { ErrorCode, buildError } from "@/utils/errors"
 import { ISRC_HINT, normalizeIsrc } from "@/utils/isrc"
 import { normalizeLanguage } from "@/utils/language-code"
@@ -337,6 +337,7 @@ export const lyricsRoutes = (env: Env) =>
 					lyricsUserId
 				)
 				const marks = await buildSealMarks(env, items)
+				const revisions = await getRevisionBars(env.DB, items)
 
 				const nextCursor = items.length === limit ? offset + items.length : undefined
 
@@ -345,6 +346,7 @@ export const lyricsRoutes = (env: Env) =>
 					data: items.map((item) => ({
 						...toFeedResponse(item, marks.get(item.id)),
 						userVote: votesMap.get(item.id) ?? null,
+						revision: revisions.get(item.id),
 					})),
 					nextCursor,
 				}
@@ -403,14 +405,14 @@ export const lyricsRoutes = (env: Env) =>
 				params: t.Object({ id: t.String() }),
 			}
 		)
-		.use(signedRequest)
-		.post("/submit", async ({ env, keyId, userId, signedPayload, status }) => {
+		.use(eitherAuth)
+		.post("/submit", async ({ env, keyId, userId, body, status }) => {
 			const { success } = await env.RATE_LIMITER.limit({ key: keyId })
 			if (!success) {
 				return status(429, buildError(ErrorCode.RATE_LIMITED))
 			}
 
-			const p = signedPayload
+			const p = body
 			if (
 				typeof p.videoId !== "string" ||
 				!p.videoId ||

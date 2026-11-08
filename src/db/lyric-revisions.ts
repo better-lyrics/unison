@@ -503,41 +503,36 @@ export async function getRevisionSummary(
 	return row ? toSummary(row) : null
 }
 
-export async function getRevisionBar(
-	db: D1Compat,
-	lyric: { id: number; created_at: number }
-): Promise<RevisionBar> {
-	const row = await db
-		.prepare(
-			`SELECT live.rev_no, live.created_at AS updated_at,
-				(SELECT COUNT(*)::INTEGER FROM lyric_revisions WHERE lyrics_id = l.id) AS count,
-				pending.rev_no AS pending_rev_no, pending.pending_reason,
-				pending.text_drift AS pending_text_drift, pending.timing_drift AS pending_timing_drift,
-				rejected.rev_no AS rejected_rev_no, rejected.review_note
-			FROM lyrics l
-			JOIN lyric_revisions live ON live.id = l.current_revision_id
-			LEFT JOIN lyric_revisions pending ON pending.lyrics_id = l.id AND pending.status = 'pending'
-			LEFT JOIN LATERAL (
-				SELECT rev_no, review_note FROM lyric_revisions
-				WHERE lyrics_id = l.id AND status = 'rejected' AND rev_no > live.rev_no
-				ORDER BY rev_no DESC LIMIT 1
-			) rejected ON TRUE
-			WHERE l.id = ?`
-		)
-		.bind(lyric.id)
-		.first<{
-			rev_no: number
-			updated_at: number
-			count: number
-			pending_rev_no: number | null
-			pending_reason: PendingReason | null
-			pending_text_drift: number | null
-			pending_timing_drift: number | null
-			rejected_rev_no: number | null
-			review_note: string | null
-		}>()
+const REVISION_BAR_SELECT = `SELECT l.id AS lyrics_id, live.rev_no, live.created_at AS updated_at,
+		(SELECT COUNT(*)::INTEGER FROM lyric_revisions WHERE lyrics_id = l.id) AS count,
+		pending.rev_no AS pending_rev_no, pending.pending_reason,
+		pending.text_drift AS pending_text_drift, pending.timing_drift AS pending_timing_drift,
+		rejected.rev_no AS rejected_rev_no, rejected.review_note
+	FROM lyrics l
+	JOIN lyric_revisions live ON live.id = l.current_revision_id
+	LEFT JOIN lyric_revisions pending ON pending.lyrics_id = l.id AND pending.status = 'pending'
+	LEFT JOIN LATERAL (
+		SELECT rev_no, review_note FROM lyric_revisions
+		WHERE lyrics_id = l.id AND status = 'rejected' AND rev_no > live.rev_no
+		ORDER BY rev_no DESC LIMIT 1
+	) rejected ON TRUE`
+
+interface RevisionBarRow {
+	lyrics_id: number
+	rev_no: number
+	updated_at: number
+	count: number
+	pending_rev_no: number | null
+	pending_reason: PendingReason | null
+	pending_text_drift: number | null
+	pending_timing_drift: number | null
+	rejected_rev_no: number | null
+	review_note: string | null
+}
+
+function toRevisionBar(row: RevisionBarRow | null | undefined, createdAt: number): RevisionBar {
 	if (!row) {
-		return { revNo: 1, count: 1, pending: null, lastRejected: null, updatedAt: lyric.created_at }
+		return { revNo: 1, count: 1, pending: null, lastRejected: null, updatedAt: createdAt }
 	}
 	return {
 		revNo: row.rev_no,
@@ -557,6 +552,32 @@ export async function getRevisionBar(
 				: null,
 		updatedAt: row.updated_at,
 	}
+}
+
+export async function getRevisionBar(
+	db: D1Compat,
+	lyric: { id: number; created_at: number }
+): Promise<RevisionBar> {
+	const row = await db
+		.prepare(`${REVISION_BAR_SELECT} WHERE l.id = ?`)
+		.bind(lyric.id)
+		.first<RevisionBarRow>()
+	return toRevisionBar(row, lyric.created_at)
+}
+
+export async function getRevisionBars(
+	db: D1Compat,
+	lyrics: { id: number; created_at: number }[]
+): Promise<Map<number, RevisionBar>> {
+	if (lyrics.length === 0) return new Map()
+	const { results } = await db
+		.prepare(`${REVISION_BAR_SELECT} WHERE l.id = ANY(?)`)
+		.bind(lyrics.map((lyric) => lyric.id))
+		.all<RevisionBarRow>()
+	const rowsById = new Map(results.map((row) => [Number(row.lyrics_id), row]))
+	return new Map(
+		lyrics.map((lyric) => [lyric.id, toRevisionBar(rowsById.get(lyric.id), lyric.created_at)])
+	)
 }
 
 export async function listPendingRevisionRows(

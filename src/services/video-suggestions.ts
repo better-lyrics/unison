@@ -1,6 +1,11 @@
 import { isWithinDurationDelta, listVideoLinks } from "@/db/video-links"
 import { type Matched, matchSuggestions } from "@/services/recording-match"
-import { type SongSearch, cachedSongSearch } from "@/services/song-search"
+import {
+	type SongSearch,
+	type VideoLookup,
+	cachedSongSearch,
+	cachedVideoCandidate,
+} from "@/services/song-search"
 import type { Env } from "@/types"
 import type { SongCandidate } from "@/utils/innertube"
 import { creditIncludesArtist, normalize, normalizeArtist, normalizeSong } from "@/utils/normalize"
@@ -19,14 +24,29 @@ function sharesCreditedArtist(c: SongCandidate, credit: string): boolean {
 	return names.some((name) => creditIncludesArtist(credit, stripTopicSuffix(name)))
 }
 
+type SuggestionMeta = {
+	song: string
+	artist: string
+	album: string | null
+	duration: number
+	videoId: string
+}
+
+function scored(c: SongCandidate, meta: SuggestionMeta): Suggestion {
+	const titleEq = normalizeSong(c.title) === normalizeSong(meta.song) ? 1 : 0
+	const artistEq = creditIncludesArtist(meta.artist, stripTopicSuffix(c.artist)) ? 1 : 0
+	const albumEq =
+		meta.album !== null && c.album !== null && normalize(c.album) === normalize(meta.album) ? 1 : 0
+	return { ...c, matchScore: 0.5 * titleEq + 0.3 * artistEq + 0.2 * albumEq }
+}
+
 export function buildSuggestions(
 	candidates: SongCandidate[],
-	meta: { song: string; artist: string; album: string | null; duration: number; videoId: string },
+	meta: SuggestionMeta,
 	linked: Set<string>
 ): Suggestion[] {
 	const normSong = normalizeSong(meta.song)
 	const hasArtist = normalizeArtist(meta.artist).length > 0
-	const normAlbum = meta.album ? normalize(meta.album) : null
 
 	const anchor =
 		candidates.find((c) => c.videoId === meta.videoId) ??
@@ -46,14 +66,7 @@ export function buildSuggestions(
 		.filter(
 			(c) => c.durationSeconds !== null && isWithinDurationDelta(c.durationSeconds, meta.duration)
 		)
-		.map((c) => {
-			const titleEq = normalizeSong(c.title) === normSong ? 1 : 0
-			const artistEq = creditIncludesArtist(meta.artist, stripTopicSuffix(c.artist)) ? 1 : 0
-			const albumEq =
-				normAlbum !== null && c.album !== null && normalize(c.album) === normAlbum ? 1 : 0
-			const matchScore = 0.5 * titleEq + 0.3 * artistEq + 0.2 * albumEq
-			return { ...c, matchScore }
-		})
+		.map((c) => scored(c, meta))
 		.sort(
 			(a, b) =>
 				VIDEO_TYPE_RANK[a.videoType] - VIDEO_TYPE_RANK[b.videoType] || b.matchScore - a.matchScore
@@ -61,10 +74,10 @@ export function buildSuggestions(
 }
 
 export type SuggestResult =
-	| { ok: true; suggestions: SuggestedVideo[] }
+	| { ok: true; suggestions: SuggestedVideo[]; linked: SuggestedVideo[] }
 	| { ok: false; reason: "not_found" | "not_owner" }
 
-type Deps = { search?: SongSearch }
+type Deps = { search?: SongSearch; lookup?: VideoLookup }
 
 export type SongForSuggestions = {
 	song: string
@@ -104,6 +117,23 @@ type VariantRow = {
 	deleted_at: number | null
 }
 
+// Linking checks only the length, so linked videos skip the artist and duration filters.
+// A pasted link the search never returned is looked up on its own.
+export async function linkedVideoDetails(
+	candidates: SongCandidate[],
+	meta: SuggestionMeta,
+	linked: Set<string>,
+	lookup: (videoId: string) => Promise<SongCandidate | null>
+): Promise<Suggestion[]> {
+	const found = candidates.filter((c) => c.videoId !== meta.videoId && linked.has(c.videoId))
+	const foundIds = new Set(found.map((c) => c.videoId))
+	const missing = [...linked].filter((id) => id !== meta.videoId && !foundIds.has(id))
+	const looked = await Promise.all(missing.map(lookup))
+	return [...found, ...looked.filter((c): c is SongCandidate => c !== null)].map((c) =>
+		scored(c, meta)
+	)
+}
+
 export async function suggestVideosForVariant(
 	env: Env,
 	lyricsId: number,
@@ -122,24 +152,22 @@ export async function suggestVideosForVariant(
 	const candidates = await cachedSongSearch(env, row, deps.search)
 	const linked = new Set((await listVideoLinks(env, lyricsId)).map((v) => v.videoId))
 
-	const suggestions = buildSuggestions(
-		candidates,
-		{
-			song: row.song,
-			artist: row.artist,
-			album: row.album,
-			duration: row.duration,
-			videoId: row.video_id,
-		},
-		linked
-	)
+	const meta = {
+		song: row.song,
+		artist: row.artist,
+		album: row.album,
+		duration: row.duration,
+		videoId: row.video_id,
+	}
+	const target = { title: row.song, artist: row.artist, lyricsId }
 
 	return {
 		ok: true,
-		suggestions: await matchSuggestions(
-			env,
-			{ title: row.song, artist: row.artist, lyricsId },
-			suggestions
-		),
+		suggestions: await matchSuggestions(env, target, buildSuggestions(candidates, meta, linked)),
+		linked: (
+			await linkedVideoDetails(candidates, meta, linked, (videoId) =>
+				cachedVideoCandidate(env, videoId, deps.lookup)
+			)
+		).map((s) => ({ ...s, match: null })),
 	}
 }
