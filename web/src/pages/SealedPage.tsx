@@ -28,7 +28,7 @@ type SyncChoice = SealedSyncFilter | "all"
 
 const SYNC_OPTIONS: { value: SyncChoice; label: string }[] = [
   { value: "all", label: "All" },
-  { value: "richsync", label: "Syllable or word" },
+  { value: "richsync", label: "Richsync or word" },
   { value: "linesync", label: "Line" },
 ]
 

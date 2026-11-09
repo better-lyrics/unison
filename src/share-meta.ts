@@ -55,12 +55,15 @@ export type ProfileShareInput = Pick<
 	"keyId" | "rank" | "identity" | "gamification" | "tier" | "banner"
 >
 
-const syncLine = (kind: SyncKind) =>
-	kind === "unsynced" ? SYNC_KINDS.unsynced.label : `${SYNC_KINDS[kind].label} synced`
+const syncLine = (kind: SyncKind) => {
+	if (kind === "unsynced") return SYNC_KINDS.unsynced.label
+	if (kind === "syllable") return "Richsynced"
+	return `${SYNC_KINDS[kind].label} synced`
+}
 
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`
 
-const CARD_DESIGN = 4
+const CARD_DESIGN = 5
 
 const hash = (inputs: unknown[]) =>
 	createHash("sha1")
