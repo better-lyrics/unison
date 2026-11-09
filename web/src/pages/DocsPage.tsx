@@ -238,7 +238,7 @@ export function DocsPage() {
               dump
             </a>{" "}
             license (ODbL) requires the Unison credit. The submitter credit is our request rather than a license term.
-            Each lyric's <Code>submitter_key_id</Code> matches a row in <Code>contributors</Code>, which has the
+            A lyric's <Code>submitter_key_id</Code>, when set, matches a row in <Code>contributors</Code>, which has the
             submitter's <Code>display_name</Code> and <Code>profile_url</Code>. The lyric's <Code>url</Code> column
             links to its page on Unison.
           </p>

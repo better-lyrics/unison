@@ -29,6 +29,7 @@ interface FakeStatement {
 	sql: string
 	bind(...args: unknown[]): FakeStatement
 	all(): Promise<{ results: [] }>
+	run(): Promise<void>
 }
 
 function createMockEnv(): {
@@ -44,12 +45,16 @@ function createMockEnv(): {
 				sql,
 				bind: () => stmt,
 				all: async () => ({ results: [] }),
+				run: async () => {},
 			}
 			prepared.push(stmt)
 			return stmt
 		},
 		async batch(statements: FakeStatement[]): Promise<void> {
 			batches.push(statements)
+		},
+		async transaction(fn: (tx: unknown) => Promise<void>): Promise<void> {
+			await fn(db)
 		},
 	}
 	const env = { DB: db } as unknown as Env

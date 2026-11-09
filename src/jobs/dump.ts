@@ -87,46 +87,54 @@ export const REQUEST_KEEP_COLUMNS = [
 const SITE = config.og.siteOrigin
 
 export async function materializeDumpSchema(env: Env): Promise<void> {
-	await env.DB.batch([
-		env.DB.prepare("DROP SCHEMA IF EXISTS public_dump CASCADE"),
-		env.DB.prepare("CREATE SCHEMA public_dump"),
-		env.DB.prepare(
-			`CREATE TABLE public_dump.lyrics AS SELECT ${LYRICS_KEEP_COLUMNS},
-				(SELECT u.key_id FROM public.users u WHERE u.id = lyrics.submitter_id) AS submitter_key_id,
-				? || video_id || ? || id AS url
-			FROM public.lyrics`
-		).bind(`${SITE}/song/`, "?variantId="),
-		env.DB.prepare(
-			"CREATE TABLE public_dump.requested_songs AS SELECT * FROM public.requested_songs"
-		),
-		env.DB.prepare(
-			`CREATE TABLE public_dump.lyrics_requests AS SELECT ${REQUEST_KEEP_COLUMNS} FROM public.lyrics_requests`
-		),
-		env.DB.prepare("CREATE INDEX ON public_dump.lyrics (video_id)"),
-		env.DB.prepare("CREATE INDEX ON public_dump.lyrics (effective_score DESC)"),
-		env.DB.prepare("CREATE INDEX ON public_dump.lyrics USING GIN (song_norm gin_trgm_ops)"),
-		env.DB.prepare("CREATE INDEX ON public_dump.lyrics USING GIN (artist_norm gin_trgm_ops)"),
-		env.DB.prepare("CREATE INDEX ON public_dump.lyrics USING GIN (album_norm gin_trgm_ops)"),
-		env.DB.prepare(
-			"CREATE TABLE public_dump.contributors (key_id TEXT PRIMARY KEY, display_name TEXT NOT NULL, profile_url TEXT NOT NULL)"
-		),
-		env.DB.prepare("CREATE INDEX ON public_dump.lyrics (submitter_key_id)"),
-	])
-	await writeContributors(env)
+	await env.DB.transaction(async (tx) => {
+		await tx.prepare("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ").run()
+		await tx.batch([
+			tx.prepare("DROP SCHEMA IF EXISTS public_dump CASCADE"),
+			tx.prepare("CREATE SCHEMA public_dump"),
+			tx
+				.prepare(
+					`CREATE TABLE public_dump.lyrics AS SELECT ${LYRICS_KEEP_COLUMNS},
+					(SELECT u.key_id FROM public.users u WHERE u.id = lyrics.submitter_id) AS submitter_key_id,
+					? || video_id || ? || id AS url
+				FROM public.lyrics`
+				)
+				.bind(`${SITE}/song/`, "?variantId="),
+			tx.prepare(
+				"CREATE TABLE public_dump.requested_songs AS SELECT * FROM public.requested_songs"
+			),
+			tx.prepare(
+				`CREATE TABLE public_dump.lyrics_requests AS SELECT ${REQUEST_KEEP_COLUMNS} FROM public.lyrics_requests`
+			),
+			tx.prepare("CREATE INDEX ON public_dump.lyrics (video_id)"),
+			tx.prepare("CREATE INDEX ON public_dump.lyrics (effective_score DESC)"),
+			tx.prepare("CREATE INDEX ON public_dump.lyrics USING GIN (song_norm gin_trgm_ops)"),
+			tx.prepare("CREATE INDEX ON public_dump.lyrics USING GIN (artist_norm gin_trgm_ops)"),
+			tx.prepare("CREATE INDEX ON public_dump.lyrics USING GIN (album_norm gin_trgm_ops)"),
+			tx.prepare(
+				"CREATE TABLE public_dump.contributors (key_id TEXT PRIMARY KEY, display_name TEXT NOT NULL, profile_url TEXT NOT NULL)"
+			),
+			tx.prepare("CREATE INDEX ON public_dump.lyrics (submitter_key_id)"),
+		])
+		await writeContributors(tx)
+	})
 
 	log.info("materialized public_dump schema")
 }
 
-async function writeContributors(env: Env): Promise<void> {
-	const { results } = await env.DB.prepare(
-		`SELECT u.key_id, u.nickname FROM public.users u
+async function writeContributors(tx: D1Compat): Promise<void> {
+	const { results } = await tx
+		.prepare(
+			`SELECT u.key_id, u.nickname FROM public.users u
 		WHERE u.key_id IN (SELECT submitter_key_id FROM public_dump.lyrics)`
-	).all<{ key_id: string; nickname: string | null }>()
+		)
+		.all<{ key_id: string; nickname: string | null }>()
 	if (results.length === 0) return
 
-	await env.DB.prepare(
-		"INSERT INTO public_dump.contributors SELECT * FROM unnest(?::text[], ?::text[], ?::text[])"
-	)
+	await tx
+		.prepare(
+			"INSERT INTO public_dump.contributors SELECT * FROM unnest(?::text[], ?::text[], ?::text[])"
+		)
 		.bind(
 			results.map((r) => r.key_id),
 			results.map((r) => r.nickname ?? generatePetName(r.key_id)),

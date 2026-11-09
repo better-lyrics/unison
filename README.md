@@ -47,7 +47,7 @@ After the deadline, apps that don't show the credit may lose access to the API.
 
 ### If you use the database dump
 
-The [dump](#database-dump) license (ODbL) requires the Unison credit. The submitter credit is our request rather than a license term. Each lyric's `submitter_key_id` matches a row in `contributors`, which has the submitter's `display_name` and `profile_url`. The lyric's `url` column links to its page on Unison.
+The [dump](#database-dump) license (ODbL) requires the Unison credit. The submitter credit is our request rather than a license term. A lyric's `submitter_key_id`, when set, matches a row in `contributors`, which has the submitter's `display_name` and `profile_url`. The lyric's `url` column links to its page on Unison.
 
 ### Good examples
 
