@@ -9,14 +9,14 @@ importers:
   .:
     dependencies:
       '@braccato/core':
-        specifier: ^1.19.0
-        version: 1.19.0
+        specifier: ^1.20.1
+        version: 1.20.1
       '@braccato/highlight':
         specifier: ^0.3.2
         version: 0.3.2
       '@braccato/parsers':
-        specifier: ^0.4.0
-        version: 0.4.0
+        specifier: ^0.4.1
+        version: 0.4.1
       '@dicebear/collection':
         specifier: ^9.2.2
         version: 9.4.2(@dicebear/core@9.4.2)
@@ -239,17 +239,17 @@ packages:
     cpu: [x64]
     os: [win32]
 
-  '@braccato/core@1.19.0':
-    resolution: {integrity: sha512-xHLzmzk/l4z8CRTqHrTBBe++IN9iKbRFpuPsADfQrHaKQgkm5gbvxurmatYMhaPdbX7uu5yw1Sx410MotJp4FA==}
+  '@braccato/core@1.20.1':
+    resolution: {integrity: sha512-3K3CE0o6+HNTC4rF48fQjqZSK5m/Yu6tMQulDWqYmgBhlLWMkOk0Cfsi838+9+npu4ylDXgSWQZK0rSCxJ/tEQ==}
 
   '@braccato/highlight@0.3.2':
     resolution: {integrity: sha512-1ZbgvqOhp3jsNnFbduyZdJRGMy78qv8JJyu64Zq//vld7aE4pk9HssAhitrh9eK8ByItM1U0RGOAroN+AxWIjg==}
 
-  '@braccato/parsers@0.4.0':
-    resolution: {integrity: sha512-SXOMgPRPEHGQJ7fA1gZQVxE2ZZ9VEXMX0w5CskeQgGLZRzDF7/b/kU9znR9fo2qXfe7DgoPzqPgV6858JDSTZA==}
+  '@braccato/parsers@0.4.1':
+    resolution: {integrity: sha512-mhXAPEPrn5jlE4bZWS45hXkglIeUkMQ0MMxnmtffAuP2IGY3Ildh3WDRZFcxZ1PtLT4Qr06eyVhrm8epCumDjw==}
 
-  '@braccato/types@1.0.0':
-    resolution: {integrity: sha512-BHrCdJ5Uuc8IYJJqKT/4ULHkkbL8lk6KtAhfrx8bh3gC/huYwLDTBtOQAQSMriu3yMhV7TSvDd8L0loB5b1oeA==}
+  '@braccato/types@1.1.0':
+    resolution: {integrity: sha512-HqGnKB/nb0usTGfh7xQMRAV/sOrU4wPRHXONDGgDDmoBBJjl4vgedkvZ7QYERVhzYdarOSleLjXJf8Jir4qCdA==}
 
   '@dicebear/adventurer-neutral@9.4.2':
     resolution: {integrity: sha512-5xgkG/mNL4j3Q4SJGQLBU/KnU90tng8Ze5ofThD+55wi0oeY/nSAUowg6UFCmHrktjifj/MEx3CQqbpcPWtfIA==}
@@ -1666,20 +1666,20 @@ snapshots:
   '@biomejs/cli-win32-x64@1.9.4':
     optional: true
 
-  '@braccato/core@1.19.0':
+  '@braccato/core@1.20.1':
     dependencies:
-      '@braccato/types': 1.0.0
+      '@braccato/types': 1.1.0
 
   '@braccato/highlight@0.3.2':
     dependencies:
-      '@braccato/parsers': 0.4.0
+      '@braccato/parsers': 0.4.1
 
-  '@braccato/parsers@0.4.0':
+  '@braccato/parsers@0.4.1':
     dependencies:
-      '@braccato/types': 1.0.0
+      '@braccato/types': 1.1.0
       fast-xml-parser: 5.10.1
 
-  '@braccato/types@1.0.0': {}
+  '@braccato/types@1.1.0': {}
 
   '@dicebear/adventurer-neutral@9.4.2(@dicebear/core@9.4.2)':
     dependencies:
