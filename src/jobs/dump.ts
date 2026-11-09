@@ -9,6 +9,7 @@ import { D1Compat } from "@/infra/database"
 import { Logger } from "@/infra/logger"
 import { createStorage, type Storage } from "@/infra/storage"
 import type { Env } from "@/types"
+import { generatePetName } from "@/utils/petname"
 import * as self from "./dump"
 
 const log = new Logger("dump")
@@ -83,27 +84,63 @@ export const REQUEST_KEEP_COLUMNS = [
 	"created_at",
 ].join(", ")
 
+const SITE = config.og.siteOrigin
+
 export async function materializeDumpSchema(env: Env): Promise<void> {
-	await env.DB.batch([
-		env.DB.prepare("DROP SCHEMA IF EXISTS public_dump CASCADE"),
-		env.DB.prepare("CREATE SCHEMA public_dump"),
-		env.DB.prepare(
-			`CREATE TABLE public_dump.lyrics AS SELECT ${LYRICS_KEEP_COLUMNS} FROM public.lyrics`
-		),
-		env.DB.prepare(
-			"CREATE TABLE public_dump.requested_songs AS SELECT * FROM public.requested_songs"
-		),
-		env.DB.prepare(
-			`CREATE TABLE public_dump.lyrics_requests AS SELECT ${REQUEST_KEEP_COLUMNS} FROM public.lyrics_requests`
-		),
-		env.DB.prepare("CREATE INDEX ON public_dump.lyrics (video_id)"),
-		env.DB.prepare("CREATE INDEX ON public_dump.lyrics (effective_score DESC)"),
-		env.DB.prepare("CREATE INDEX ON public_dump.lyrics USING GIN (song_norm gin_trgm_ops)"),
-		env.DB.prepare("CREATE INDEX ON public_dump.lyrics USING GIN (artist_norm gin_trgm_ops)"),
-		env.DB.prepare("CREATE INDEX ON public_dump.lyrics USING GIN (album_norm gin_trgm_ops)"),
-	])
+	await env.DB.transaction(async (tx) => {
+		await tx.prepare("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ").run()
+		await tx.batch([
+			tx.prepare("DROP SCHEMA IF EXISTS public_dump CASCADE"),
+			tx.prepare("CREATE SCHEMA public_dump"),
+			tx
+				.prepare(
+					`CREATE TABLE public_dump.lyrics AS SELECT ${LYRICS_KEEP_COLUMNS},
+					(SELECT u.key_id FROM public.users u WHERE u.id = lyrics.submitter_id) AS submitter_key_id,
+					? || video_id || ? || id AS url
+				FROM public.lyrics`
+				)
+				.bind(`${SITE}/song/`, "?variantId="),
+			tx.prepare(
+				"CREATE TABLE public_dump.requested_songs AS SELECT * FROM public.requested_songs"
+			),
+			tx.prepare(
+				`CREATE TABLE public_dump.lyrics_requests AS SELECT ${REQUEST_KEEP_COLUMNS} FROM public.lyrics_requests`
+			),
+			tx.prepare("CREATE INDEX ON public_dump.lyrics (video_id)"),
+			tx.prepare("CREATE INDEX ON public_dump.lyrics (effective_score DESC)"),
+			tx.prepare("CREATE INDEX ON public_dump.lyrics USING GIN (song_norm gin_trgm_ops)"),
+			tx.prepare("CREATE INDEX ON public_dump.lyrics USING GIN (artist_norm gin_trgm_ops)"),
+			tx.prepare("CREATE INDEX ON public_dump.lyrics USING GIN (album_norm gin_trgm_ops)"),
+			tx.prepare(
+				"CREATE TABLE public_dump.contributors (key_id TEXT PRIMARY KEY, display_name TEXT NOT NULL, profile_url TEXT NOT NULL)"
+			),
+			tx.prepare("CREATE INDEX ON public_dump.lyrics (submitter_key_id)"),
+		])
+		await writeContributors(tx)
+	})
 
 	log.info("materialized public_dump schema")
+}
+
+async function writeContributors(tx: D1Compat): Promise<void> {
+	const { results } = await tx
+		.prepare(
+			`SELECT u.key_id, u.nickname FROM public.users u
+		WHERE u.key_id IN (SELECT submitter_key_id FROM public_dump.lyrics)`
+		)
+		.all<{ key_id: string; nickname: string | null }>()
+	if (results.length === 0) return
+
+	await tx
+		.prepare(
+			"INSERT INTO public_dump.contributors SELECT * FROM unnest(?::text[], ?::text[], ?::text[])"
+		)
+		.bind(
+			results.map((r) => r.key_id),
+			results.map((r) => r.nickname ?? generatePetName(r.key_id)),
+			results.map((r) => `${SITE}/curator/${r.key_id}`)
+		)
+		.run()
 }
 
 export interface VerifyDumpResult {
@@ -144,6 +181,7 @@ export interface DumpManifest {
 		lyrics: number
 		requested_songs: number
 		lyrics_requests: number
+		contributors: number
 	}
 	format: "pg_dump custom (-Fc), Postgres 18"
 	license: "ODbL-1.0"
@@ -159,7 +197,7 @@ export interface BuildManifestInput {
 	now?: Date
 }
 
-type DumpTable = "lyrics" | "requested_songs" | "lyrics_requests"
+type DumpTable = "lyrics" | "requested_songs" | "lyrics_requests" | "contributors"
 
 async function countRows(env: Env, table: DumpTable): Promise<number> {
 	const row = await env.DB.prepare(
@@ -172,10 +210,11 @@ export async function buildManifest(
 	env: Env,
 	input: BuildManifestInput
 ): Promise<DumpManifest> {
-	const [lyrics, requested_songs, lyrics_requests] = await Promise.all([
+	const [lyrics, requested_songs, lyrics_requests, contributors] = await Promise.all([
 		countRows(env, "lyrics"),
 		countRows(env, "requested_songs"),
 		countRows(env, "lyrics_requests"),
+		countRows(env, "contributors"),
 	])
 
 	const generatedAt = (input.now ?? new Date()).toISOString()
@@ -187,7 +226,7 @@ export async function buildManifest(
 		bytes: input.bytes,
 		dump_url: `${input.publicBaseUrl}/${input.datedKey}`,
 		latest_url: `${input.publicBaseUrl}/dumps/latest.dump`,
-		row_counts: { lyrics, requested_songs, lyrics_requests },
+		row_counts: { lyrics, requested_songs, lyrics_requests, contributors },
 		format: "pg_dump custom (-Fc), Postgres 18",
 		license: "ODbL-1.0",
 		attribution_text: "Lyrics from Unison (https://unison.betterlyrics.org)",

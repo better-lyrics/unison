@@ -47,7 +47,7 @@ After the deadline, apps that don't show the credit may lose access to the API.
 
 ### If you use the database dump
 
-The [dump](#database-dump) license (ODbL) requires the Unison credit. The dump has no submitter column, so the submitter credit is our request rather than a license term. Get the submitter with `GET /lyrics/<id>`, or link the lyric instead: `https://unison.betterlyrics.org/song/<video_id>?variantId=<id>` shows who submitted it.
+The [dump](#database-dump) license (ODbL) requires the Unison credit. The submitter credit is our request rather than a license term. A lyric's `submitter_key_id`, when set, matches a row in `contributors`, which has the submitter's `display_name` and `profile_url`. The lyric's `url` column links to its page on Unison.
 
 ### Good examples
 
@@ -131,9 +131,10 @@ There's a daily snapshot of the public lyrics corpus at
 the rest of the metadata are at `dumps/manifest.json` on the same host.
 
 It's a `pg_dump -Fc` against Postgres 18, scoped to a `public_dump` schema
-with `lyrics`, `requested_songs`, and `lyrics_requests`. It leaves out
-accounts, submitter and requester ids, individual votes and reports. Each
-lyric keeps its score and vote totals.
+with `lyrics`, `contributors`, `requested_songs`, and `lyrics_requests`. It
+leaves out accounts, requester ids, individual votes and reports. Each lyric
+keeps its score, vote totals, submitter key id and Unison link. `contributors`
+has each submitter's display name and profile link.
 
 To restore a copy:
 

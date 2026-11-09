@@ -237,10 +237,10 @@ export function DocsPage() {
             >
               dump
             </a>{" "}
-            license (ODbL) requires the Unison credit. The dump has no submitter column, so the submitter credit is our
-            request rather than a license term. Get the submitter with <Code>GET /lyrics/&lt;id&gt;</Code>, or link the
-            lyric instead: <Code>https://unison.betterlyrics.org/song/&lt;video_id&gt;?variantId=&lt;id&gt;</Code> shows
-            who submitted it.
+            license (ODbL) requires the Unison credit. The submitter credit is our request rather than a license term.
+            A lyric's <Code>submitter_key_id</Code>, when set, matches a row in <Code>contributors</Code>, which has the
+            submitter's <Code>display_name</Code> and <Code>profile_url</Code>. The lyric's <Code>url</Code> column
+            links to its page on Unison.
           </p>
           <h3 className="text-sm font-semibold text-unison-text">Good examples</h3>
           <ul className="space-y-1.5 text-sm leading-relaxed text-unison-text-secondary">

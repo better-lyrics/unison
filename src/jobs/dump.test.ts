@@ -27,6 +27,9 @@ vi.mock("node:child_process", () => ({ spawn: vi.fn() }))
 
 interface FakeStatement {
 	sql: string
+	bind(...args: unknown[]): FakeStatement
+	all(): Promise<{ results: [] }>
+	run(): Promise<void>
 }
 
 function createMockEnv(): {
@@ -38,12 +41,20 @@ function createMockEnv(): {
 	const batches: FakeStatement[][] = []
 	const db = {
 		prepare(sql: string): FakeStatement {
-			const stmt = { sql }
+			const stmt: FakeStatement = {
+				sql,
+				bind: () => stmt,
+				all: async () => ({ results: [] }),
+				run: async () => {},
+			}
 			prepared.push(stmt)
 			return stmt
 		},
 		async batch(statements: FakeStatement[]): Promise<void> {
 			batches.push(statements)
+		},
+		async transaction(fn: (tx: unknown) => Promise<void>): Promise<void> {
+			await fn(db)
 		},
 	}
 	const env = { DB: db } as unknown as Env
@@ -95,14 +106,13 @@ describe("materializeDumpSchema", () => {
 		expect(found?.sql).toMatch(/FROM\s+public\.lyrics_requests/i)
 	})
 
-	it("lyrics dump does not leak submitter_id, tsvector, or moderation columns", async () => {
+	it("lyrics dump does not leak tsvector or moderation columns", async () => {
 		const { env, batches } = createMockEnv()
 		await materializeDumpSchema(env)
 		const lyricsCreate = batches[0].find(
 			(s) => /CREATE\s+TABLE\s+public_dump\.lyrics\s+AS/i.test(s.sql)
 		)
 		const sql = lyricsCreate?.sql ?? ""
-		expect(sql).not.toMatch(/submitter_id/i)
 		expect(sql).not.toMatch(/lyrics_text_search/i)
 		expect(sql).not.toMatch(/deleted_by_user_id/i)
 		expect(sql).not.toMatch(/deleted_by_role/i)
@@ -173,7 +183,7 @@ describe("materializeDumpSchema", () => {
 		const { env, batches } = createMockEnv()
 		await materializeDumpSchema(env)
 		const allSql = batches[0].map((s) => s.sql).join("\n")
-		for (const table of ["users", "votes", "reports", "public_keys"]) {
+		for (const table of ["votes", "reports", "public_keys"]) {
 			expect(allSql).not.toMatch(new RegExp(`\\b${table}\\b`))
 		}
 	})
@@ -382,7 +392,7 @@ describe("buildManifest", () => {
 	}
 
 	it("returns the documented static fields plus inputs", async () => {
-		const { env } = createManifestMockEnv([100, 10, 5])
+		const { env } = createManifestMockEnv([100, 10, 5, 2])
 		const manifest = await buildManifest(env, baseInput)
 		expect(manifest.schema_version).toBe(1)
 		expect(manifest.sha256).toBe(baseInput.sha256)
@@ -394,21 +404,23 @@ describe("buildManifest", () => {
 		expect(manifest.format).toBe("pg_dump custom (-Fc), Postgres 18")
 	})
 
-	it("populates row_counts from the three COUNT(*) queries against public_dump", async () => {
-		const { env, prepared } = createManifestMockEnv([100, 10, 5])
+	it("populates row_counts from the COUNT(*) queries against public_dump", async () => {
+		const { env, prepared } = createManifestMockEnv([100, 10, 5, 2])
 		const manifest = await buildManifest(env, baseInput)
 		expect(manifest.row_counts.lyrics).toBe(100)
 		expect(manifest.row_counts.requested_songs).toBe(10)
 		expect(manifest.row_counts.lyrics_requests).toBe(5)
-		expect(prepared).toHaveLength(3)
+		expect(manifest.row_counts.contributors).toBe(2)
+		expect(prepared).toHaveLength(4)
 		expect(prepared[0]).toMatch(/COUNT\(\*\)/i)
 		expect(prepared[0]).toMatch(/public_dump\.lyrics\b/i)
 		expect(prepared[1]).toMatch(/public_dump\.requested_songs\b/i)
 		expect(prepared[2]).toMatch(/public_dump\.lyrics_requests\b/i)
+		expect(prepared[3]).toMatch(/public_dump\.contributors\b/i)
 	})
 
 	it("constructs dump_url and latest_url with the dumps/ prefix carried through", async () => {
-		const { env } = createManifestMockEnv([1, 2, 3])
+		const { env } = createManifestMockEnv([1, 2, 3, 4])
 		const manifest = await buildManifest(env, baseInput)
 		expect(manifest.dump_url).toBe(
 			"https://unison-dumps.boidu.dev/dumps/unison-2026-05-29.dump"
@@ -417,7 +429,7 @@ describe("buildManifest", () => {
 	})
 
 	it("generated_at is a UTC ISO 8601 string derived from input.now", async () => {
-		const { env } = createManifestMockEnv([0, 0, 0])
+		const { env } = createManifestMockEnv([0, 0, 0, 0])
 		const now = new Date("2030-01-02T03:04:05.678Z")
 		const manifest = await buildManifest(env, { ...baseInput, now })
 		expect(manifest.generated_at).toBe(now.toISOString())
@@ -460,7 +472,7 @@ const sampleManifest: DumpManifest = {
 	bytes: 4096,
 	dump_url: "https://unison-dumps.boidu.dev/dumps/unison-2026-05-29.dump",
 	latest_url: "https://unison-dumps.boidu.dev/dumps/latest.dump",
-	row_counts: { lyrics: 100, requested_songs: 10, lyrics_requests: 5 },
+	row_counts: { lyrics: 100, requested_songs: 10, lyrics_requests: 5, contributors: 2 },
 	format: "pg_dump custom (-Fc), Postgres 18",
 	license: "ODbL-1.0",
 	attribution_text: "Lyrics from Unison (https://unison.betterlyrics.org)",
