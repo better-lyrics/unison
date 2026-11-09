@@ -23,7 +23,7 @@ import { IconAdjustmentsHorizontal, IconCheck, IconShare } from "@tabler/icons-r
 import { motion } from "motion/react"
 
 const SYNC_TIP: Record<SyncKind, string> = {
-  syllable: "Syllable synced: each syllable highlights as it is sung.",
+  syllable: "Richsynced: each syllable or word highlights as it is sung.",
   word: "Word synced: each word highlights as it is sung.",
   line: "Line synced: each line highlights as it is sung.",
   unsynced: "Plain text with no timing.",
