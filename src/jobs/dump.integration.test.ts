@@ -6,10 +6,15 @@ import { D1Compat } from "@/infra/database"
 import { materializeDumpSchema, runPgDump } from "@/jobs/dump"
 import { wipeCouncilTables } from "@/test/integration-harness"
 import type { Env } from "@/types"
+import { generatePetName } from "@/utils/petname"
 import pg from "pg"
 import { afterAll, beforeAll, describe, expect, it } from "vitest"
 
 const { Pool } = pg
+
+const NAMED_KEY = "a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f90"
+const UNNAMED_KEY = "5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d"
+const IDLE_KEY = "0f1e2d3c4b5a69788796a5b4c3d2e1f00f1e2d3c4b5a69788796a5b4c3d2e1f0"
 
 const shouldRun = process.env.RUN_INTEGRATION === "1"
 const describeIntegration = shouldRun ? describe : describe.skip
@@ -45,16 +50,19 @@ describeIntegration("dump pipeline (integration)", () => {
 		await sourcePool.query("DELETE FROM public_keys")
 
 		await sourcePool.query(`
-			INSERT INTO public_keys (key_id, public_key) VALUES ('test-key', 'test-pubkey')
+			INSERT INTO public_keys (key_id, public_key) VALUES
+				('${NAMED_KEY}', 'pubkey-a'), ('${UNNAMED_KEY}', 'pubkey-b'), ('${IDLE_KEY}', 'pubkey-c')
 		`)
 		await sourcePool.query(`
-			INSERT INTO users (id, key_id) VALUES (1, 'test-key')
+			INSERT INTO users (id, key_id, nickname) VALUES
+				(1, '${NAMED_KEY}', 'Moonlit'), (2, '${UNNAMED_KEY}', NULL), (3, '${IDLE_KEY}', 'Lurker')
 		`)
 		await sourcePool.query(`
 			INSERT INTO lyrics (id, video_id, song, artist, duration, song_norm, artist_norm, lyrics, format, submitter_id)
 			VALUES
 				(1, 'abc123', 'Song A', 'Artist A', 180, 'song a', 'artist a', 'gzipped-base64', 'lrc', 1),
-				(2, 'def456', 'Song B', 'Artist B', 200, 'song b', 'artist b', 'gzipped-base64', 'plain', 1)
+				(2, 'def456', 'Song B', 'Artist B', 200, 'song b', 'artist b', 'gzipped-base64', 'plain', 1),
+				(3, 'ghi789', 'Song C', 'Artist C', 210, 'song c', 'artist c', 'gzipped-base64', 'plain', 2)
 		`)
 		await sourcePool.query(`
 			INSERT INTO requested_songs (video_id, song, artist) VALUES ('xyz789', 'Wanted', 'Someone')
@@ -99,7 +107,44 @@ describeIntegration("dump pipeline (integration)", () => {
 		const lyricsCount = await restorePool.query<{ count: string }>(
 			"SELECT COUNT(*)::TEXT AS count FROM public_dump.lyrics"
 		)
-		expect(lyricsCount.rows[0].count).toBe("2")
+		expect(lyricsCount.rows[0].count).toBe("3")
+
+		const credits = await restorePool.query(
+			"SELECT id, submitter_key_id, url FROM public_dump.lyrics ORDER BY id"
+		)
+		expect(credits.rows).toEqual([
+			{
+				id: 1,
+				submitter_key_id: NAMED_KEY,
+				url: "https://unison.betterlyrics.org/song/abc123?variantId=1",
+			},
+			{
+				id: 2,
+				submitter_key_id: NAMED_KEY,
+				url: "https://unison.betterlyrics.org/song/def456?variantId=2",
+			},
+			{
+				id: 3,
+				submitter_key_id: UNNAMED_KEY,
+				url: "https://unison.betterlyrics.org/song/ghi789?variantId=3",
+			},
+		])
+
+		const contributors = await restorePool.query(
+			"SELECT key_id, display_name, profile_url FROM public_dump.contributors ORDER BY key_id"
+		)
+		expect(contributors.rows).toEqual([
+			{
+				key_id: UNNAMED_KEY,
+				display_name: generatePetName(UNNAMED_KEY),
+				profile_url: `https://unison.betterlyrics.org/curator/${UNNAMED_KEY}`,
+			},
+			{
+				key_id: NAMED_KEY,
+				display_name: "Moonlit",
+				profile_url: `https://unison.betterlyrics.org/curator/${NAMED_KEY}`,
+			},
+		])
 
 		const requestedCount = await restorePool.query<{ count: string }>(
 			"SELECT COUNT(*)::TEXT AS count FROM public_dump.requested_songs"
