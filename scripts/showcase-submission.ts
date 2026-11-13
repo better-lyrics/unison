@@ -1,5 +1,7 @@
 import { createHash } from "node:crypto"
 import { appendFileSync, readFileSync, writeFileSync } from "node:fs"
+import { config } from "@/config"
+import { fetchImage } from "@/services/artwork-store"
 import {
 	type ShowcaseEntry,
 	type ShowcaseSubmission,
@@ -15,8 +17,6 @@ const DATA_PATH = "web/src/lib/showcase.json"
 const README_PATH = "README.md"
 const ICON_DIR = "web/public/showcase"
 const ICON_SIZE = 128
-const MAX_ICON_BYTES = 5 * 1024 * 1024
-const DOWNLOAD_TIMEOUT_MS = 15_000
 const OPAQUE_ALPHA = 200
 
 class SubmissionError extends Error {}
@@ -25,24 +25,14 @@ const UNREADABLE = "I couldn't read the icon as an image. Use a PNG or an SVG."
 const SVG_TARGET_PX = 256
 
 async function downloadIcon(url: string): Promise<Buffer> {
-	const unreachable = () =>
-		new SubmissionError("I couldn't download the icon. Try attaching it again.")
-	const tooBig = new SubmissionError("The icon must be under 5 MB.")
-	const response = await fetch(url, {
-		redirect: "follow",
-		signal: AbortSignal.timeout(DOWNLOAD_TIMEOUT_MS),
-	}).catch(() => {
-		throw unreachable()
-	})
-	if (!response.ok) throw unreachable()
-	if (Number(response.headers.get("content-length") ?? 0) > MAX_ICON_BYTES) throw tooBig
-	const bytes = Buffer.from(
-		await response.arrayBuffer().catch(() => {
-			throw unreachable()
-		})
-	)
-	if (bytes.length > MAX_ICON_BYTES) throw tooBig
-	return bytes
+	const image = await fetchImage(url).catch(() => null)
+	if (!image) {
+		const limitMb = config.artwork.maxImageBytes / 1024 / 1024
+		throw new SubmissionError(
+			`I couldn't download the icon. Check that it's an image under ${limitMb} MB and attach it again.`
+		)
+	}
+	return image.bytes
 }
 
 async function renderIcon(bytes: Buffer): Promise<{ png: Buffer; fillsTile: boolean }> {
