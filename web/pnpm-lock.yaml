@@ -15,8 +15,8 @@ importers:
         specifier: ^0.3.2
         version: 0.3.2
       '@braccato/parsers':
-        specifier: ^0.4.2
-        version: 0.4.2
+        specifier: ^0.4.3
+        version: 0.4.3
       '@dicebear/collection':
         specifier: ^9.2.2
         version: 9.4.2(@dicebear/core@9.4.2)
@@ -245,8 +245,8 @@ packages:
   '@braccato/highlight@0.3.2':
     resolution: {integrity: sha512-1ZbgvqOhp3jsNnFbduyZdJRGMy78qv8JJyu64Zq//vld7aE4pk9HssAhitrh9eK8ByItM1U0RGOAroN+AxWIjg==}
 
-  '@braccato/parsers@0.4.2':
-    resolution: {integrity: sha512-G9elpXkNEV+xEDcmtNHqg7PCwR7zQVpLITxamfJjgya8FLLC11GnHX+xAT2atUt2gYXnj/7bgwj6FPFSGb8ACg==}
+  '@braccato/parsers@0.4.3':
+    resolution: {integrity: sha512-pNyIjY5mQiIWCPeQ1EOSBCDI9Fhr90dKYVdzbb7AI16cc81OfqaQY+EtL5+wSgP+VwFpObjFZHr/gIzrTu2kVg==}
 
   '@braccato/types@1.1.0':
     resolution: {integrity: sha512-HqGnKB/nb0usTGfh7xQMRAV/sOrU4wPRHXONDGgDDmoBBJjl4vgedkvZ7QYERVhzYdarOSleLjXJf8Jir4qCdA==}
@@ -1672,9 +1672,9 @@ snapshots:
 
   '@braccato/highlight@0.3.2':
     dependencies:
-      '@braccato/parsers': 0.4.2
+      '@braccato/parsers': 0.4.3
 
-  '@braccato/parsers@0.4.2':
+  '@braccato/parsers@0.4.3':
     dependencies:
       '@braccato/types': 1.1.0
       fast-xml-parser: 5.10.1
