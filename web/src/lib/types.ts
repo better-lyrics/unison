@@ -302,7 +302,6 @@ export interface DumpManifest {
   format: string
   license: string
   attribution_text: string
-  enterprise_contact: string
 }
 
 export interface AvatarPreset {

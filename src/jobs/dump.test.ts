@@ -398,9 +398,8 @@ describe("buildManifest", () => {
 		expect(manifest.sha256).toBe(baseInput.sha256)
 		expect(manifest.bytes).toBe(baseInput.bytes)
 		expect(manifest.generated_at).toBe("2026-05-29T12:34:56.000Z")
-		expect(manifest.license).toBe("ODbL-1.0")
+		expect(manifest.license).toBe("LicenseRef-Unison-Community-1.0")
 		expect(manifest.attribution_text).toContain("Unison")
-		expect(manifest.enterprise_contact).toBe("enterprise@boidu.dev")
 		expect(manifest.format).toBe("pg_dump custom (-Fc), Postgres 18")
 	})
 
@@ -474,9 +473,8 @@ const sampleManifest: DumpManifest = {
 	latest_url: "https://unison-dumps.boidu.dev/dumps/latest.dump",
 	row_counts: { lyrics: 100, requested_songs: 10, lyrics_requests: 5, contributors: 2 },
 	format: "pg_dump custom (-Fc), Postgres 18",
-	license: "ODbL-1.0",
+	license: "LicenseRef-Unison-Community-1.0",
 	attribution_text: "Lyrics from Unison (https://unison.betterlyrics.org)",
-	enterprise_contact: "enterprise@boidu.dev",
 }
 
 describe("uploadDump", () => {

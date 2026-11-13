@@ -8,6 +8,8 @@ Crowdsourced lyrics API for [Better Lyrics](https://github.com/better-lyrics/bet
 
 > [!IMPORTANT]
 > Showing Unison lyrics in an app? You must credit Unison and the submitter. See [Attribution](#attribution); apps have until 7 February 2027.
+>
+> Unison is for people, non-profits and open-source projects only. Companies cannot use it. See [Who can use Unison](#who-can-use-unison).
 
 ## Quick start
 
@@ -35,6 +37,20 @@ curl "https://unison.betterlyrics.org/lyrics?v=Ugr4KKK_SqY"
 }
 ```
 
+## Who can use Unison
+
+You can use the Unison API and the database dump if you are:
+
+- a person, for yourself or for a project you do not sell
+- a non-profit, school, library or public body
+- an open-source project, even one with a paid tier, as long as the app's full source code is public under an OSI-approved license and Unison lyrics are free to every user of the app
+
+Companies and other businesses cannot use Unison, even if their product is free. This applies from 13 November 2026.
+
+Dumps published before 13 November 2026 stay under ODbL 1.0.
+
+The full terms are in the [Unison Community License](LICENSE-DATA.md).
+
 ## Attribution
 
 Any app that shows Unison lyrics must credit Unison and the person who submitted them. The credit can sit at the end of the lyrics; it does not have to stay on screen. Apps integrating Unison have until **7 February 2027** to add it.
@@ -47,7 +63,7 @@ After the deadline, apps that don't show the credit may lose access to the API.
 
 ### If you use the database dump
 
-The [dump](#database-dump) license (ODbL) requires the Unison credit. The submitter credit is our request rather than a license term. A lyric's `submitter_key_id`, when set, matches a row in `contributors`, which has the submitter's `display_name` and `profile_url`. The lyric's `url` column links to its page on Unison.
+The [dump](#database-dump) license requires the Unison credit. The submitter credit is our request rather than a license term. A lyric's `submitter_key_id`, when set, matches a row in `contributors`, which has the submitter's `display_name` and `profile_url`. The lyric's `url` column links to its page on Unison.
 
 ### Good examples
 
@@ -430,7 +446,7 @@ Yes. Save each lyric with its `ETag` and check it with `If-None-Match` before yo
 
 ### Can I use the lyrics in my own app?
 
-Yes. The API is free for any app that reads from it, as long as the app credits Unison and the submitter. See [Attribution](#attribution).
+Yes, if your app is a personal project, a non-profit or open source. It must also credit Unison and the submitter. See [Who can use Unison](#who-can-use-unison) and [Attribution](#attribution).
 
 ### I reinstalled Better Lyrics or lost my key. Is my account gone?
 
@@ -451,7 +467,7 @@ Track id lookups run on [BiniLink](https://link.binimum.org) by [bini](https://b
 
 > [!IMPORTANT]
 >
-> Unison is self-funded. The API is free for Better Lyrics and every other app that reads from it, and the database, cache, and servers behind it are paid for out of pocket.
+> Unison is self-funded. The API is free for Better Lyrics and every community app that reads from it, and the database, cache, and servers behind it are paid for out of pocket.
 >
 > Your support helps cover hosting costs and keeps the API free for everyone.
 
@@ -463,14 +479,24 @@ Track id lookups run on [BiniLink](https://link.binimum.org) by [bini](https://b
 
 Source code: [AGPL-3.0](LICENSE).
 
-The dump itself is dual-licensed.
-
-- Open: [ODbL-1.0](https://opendatacommons.org/licenses/odbl/1-0/). Attribution
-  and share-alike on derivative databases. If you're building a FOSS player
-  that displays the lyrics, you only need to attribute (the "Produced Works"
-  clause), as described in [Attribution](#attribution).
-- Commercial: anyone selling a product on top of the corpus (streaming
-  services, labels, distributors) needs a commercial license. Email
-  `enterprise@boidu.dev` with "Unison" in the subject.
+Data (the API and the database dump): [Unison Community License 1.0](LICENSE-DATA.md). Dumps published before 13 November 2026 stay under [ODbL-1.0](https://opendatacommons.org/licenses/odbl/1-0/).
 
 Required attribution: see [Attribution](#attribution).
+
+### Why there is no commercial license
+
+Unison no longer offers a commercial license.
+
+Until 13 November 2026, the database dump listed a paid license for companies. We never sold one, and we never talked pricing with anyone. Some inquiries came in, and we did not reply to any of them.
+
+Every lyric on Unison was synced by a community member, on their own time, for free. Some lyrics companies take that kind of work, sell API access to it and keep the money. We'd rather not be one of them, so we stopped offering it.
+
+The words belong to their songwriters and publishers. The hours spent syncing them belong to our community, and neither is ours to sell.
+
+### Takedowns
+
+Unison does not own any lyrics. Songwriters and publishers own them. Community members submit them, and each submitter is responsible for what they post.
+
+If you hold the rights to a song and want its lyrics removed, email unison-takedown@boidu.dev. Include a link to the lyrics on Unison and proof that you hold the rights. We remove the lyrics once we confirm both, and we may turn down requests that leave either out.
+
+Unison, its API and its dumps come as is, with no warranty. We are not liable for how anyone uses them.

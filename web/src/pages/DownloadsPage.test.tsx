@@ -13,9 +13,8 @@ const manifest = {
   latest_url: "https://unison-dumps.boidu.dev/dumps/latest.dump",
   row_counts: { lyrics: 184231, requested_songs: 9821, lyrics_requests: 14502 },
   format: "pg_dump custom (-Fc), Postgres 18",
-  license: "ODbL-1.0",
+  license: "LicenseRef-Unison-Community-1.0",
   attribution_text: "Lyrics from Unison (https://unison.betterlyrics.org)",
-  enterprise_contact: "enterprise@boidu.dev",
 }
 
 function jsonResponse(body: unknown, status = 200): Response {
@@ -104,21 +103,6 @@ describe("DownloadsPage", () => {
     )
     renderPage()
     await waitFor(() => expect(screen.getByText("Lyrics from Unison (https://unison.betterlyrics.org)")).toBeTruthy())
-  })
-
-  it("renders the enterprise mailto link", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn().mockImplementation((url: string) => {
-        if (url === "https://unison-dumps.boidu.dev/dumps/manifest.json") return Promise.resolve(jsonResponse(manifest))
-        return Promise.reject(new Error(`unexpected url ${url}`))
-      }),
-    )
-    renderPage()
-    const link = await waitFor(() => screen.getByRole("link", { name: /Email enterprise@boidu\.dev/i }))
-    expect(link.getAttribute("href")).toBe(
-      "mailto:enterprise@boidu.dev?subject=Unison%20commercial%20license%20inquiry",
-    )
   })
 
   it("shows an error state with the fallback URL when fetch returns a non-ok response", async () => {

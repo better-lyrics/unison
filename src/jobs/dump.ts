@@ -184,9 +184,8 @@ export interface DumpManifest {
 		contributors: number
 	}
 	format: "pg_dump custom (-Fc), Postgres 18"
-	license: "ODbL-1.0"
+	license: "LicenseRef-Unison-Community-1.0"
 	attribution_text: "Lyrics from Unison (https://unison.betterlyrics.org)"
-	enterprise_contact: "enterprise@boidu.dev"
 }
 
 export interface BuildManifestInput {
@@ -228,9 +227,8 @@ export async function buildManifest(
 		latest_url: `${input.publicBaseUrl}/dumps/latest.dump`,
 		row_counts: { lyrics, requested_songs, lyrics_requests, contributors },
 		format: "pg_dump custom (-Fc), Postgres 18",
-		license: "ODbL-1.0",
+		license: "LicenseRef-Unison-Community-1.0",
 		attribution_text: "Lyrics from Unison (https://unison.betterlyrics.org)",
-		enterprise_contact: "enterprise@boidu.dev",
 	}
 }
 

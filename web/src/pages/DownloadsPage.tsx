@@ -9,7 +9,7 @@ import { Fragment, type ReactNode, useState } from "react"
 
 const FALLBACK_LATEST_URL = "https://unison-dumps.boidu.dev/dumps/latest.dump"
 const ATTRIBUTION = "Lyrics from Unison (https://unison.betterlyrics.org)"
-const ENTERPRISE_MAILTO = "mailto:enterprise@boidu.dev?subject=Unison%20commercial%20license%20inquiry"
+const DATA_LICENSE_URL = "https://github.com/better-lyrics/unison/blob/master/LICENSE-DATA.md"
 
 const RESTORE_SNIPPET = `# 1. Download and verify
 curl -O https://unison-dumps.boidu.dev/dumps/latest.dump
@@ -216,17 +216,17 @@ function LicenseSection() {
     <section className="space-y-3">
       <h2 className="text-lg font-semibold text-unison-text">License</h2>
       <p className="text-sm leading-relaxed text-unison-text-secondary">
-        The dump is dual-licensed.{" "}
+        The dump is under the{" "}
         <a
-          href="https://opendatacommons.org/licenses/odbl/1-0/"
+          href={DATA_LICENSE_URL}
           target="_blank"
           rel="noopener noreferrer"
           className="text-unison-text transition-colors hover:text-unison-text-secondary"
         >
-          ODbL 1.0
-        </a>{" "}
-        covers FOSS use; credit Unison and you're done. For anything commercial (streaming platforms, labels,
-        distributors), reach out for a commercial license.
+          Unison Community License 1.0
+        </a>
+        . People, non-profits and open-source projects can use it. Companies cannot, even if their product is free.
+        Dumps published before 13 November 2026 stay under ODbL 1.0.
       </p>
       <div className="space-y-2">
         <p className="text-xs uppercase tracking-wider text-unison-text-muted">Required attribution</p>
@@ -235,11 +235,19 @@ function LicenseSection() {
           <CopyButton value={ATTRIBUTION} label="Copy attribution" />
         </div>
       </div>
+      <h3 className="text-sm font-semibold text-unison-text">Why there is no commercial license</h3>
       <p className="text-sm leading-relaxed text-unison-text-secondary">
-        Commercial inquiries:{" "}
-        <a href={ENTERPRISE_MAILTO} className="text-unison-text transition-colors hover:text-unison-text-secondary">
-          Email enterprise@boidu.dev
-        </a>
+        Until 13 November 2026, the database dump listed a paid license for companies. We never sold one, and we never
+        talked pricing with anyone. Some inquiries came in, and we did not reply to any of them.
+      </p>
+      <p className="text-sm leading-relaxed text-unison-text-secondary">
+        Every lyric on Unison was synced by a community member, on their own time, for free. Some lyrics companies take
+        that kind of work, sell API access to it and keep the money. We'd rather not be one of them, so we stopped
+        offering it.
+      </p>
+      <p className="text-sm leading-relaxed text-unison-text-secondary">
+        The words belong to their songwriters and publishers. The hours spent syncing them belong to our community, and
+        neither is ours to sell.
       </p>
     </section>
   )

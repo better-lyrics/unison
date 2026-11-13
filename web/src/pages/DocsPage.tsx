@@ -209,6 +209,37 @@ export function DocsPage() {
         </section>
 
         <section className="space-y-3">
+          <h2 className="text-lg font-semibold text-unison-text">Who can use Unison</h2>
+          <p className="text-sm leading-relaxed text-unison-text-secondary">
+            You can use the Unison API and the database dump if you are:
+          </p>
+          <ul className="space-y-1.5 text-sm leading-relaxed text-unison-text-secondary">
+            <li>a person, for yourself or for a project you do not sell</li>
+            <li>a non-profit, school, library or public body</li>
+            <li>
+              an open-source project, even one with a paid tier, as long as the app's full source code is public under
+              an OSI-approved license and Unison lyrics are free to every user of the app
+            </li>
+          </ul>
+          <p className="text-sm leading-relaxed text-unison-text-secondary">
+            Companies and other businesses cannot use Unison, even if their product is free. This applies from{" "}
+            <strong className="text-unison-text">13 November 2026</strong>.
+          </p>
+          <p className="text-sm leading-relaxed text-unison-text-secondary">
+            Dumps published before 13 November 2026 stay under ODbL 1.0. The full terms are in the{" "}
+            <a
+              href="https://github.com/better-lyrics/unison/blob/master/LICENSE-DATA.md"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-unison-text transition-colors hover:text-unison-text-secondary"
+            >
+              Unison Community License
+            </a>
+            .
+          </p>
+        </section>
+
+        <section className="space-y-3">
           <h2 className="text-lg font-semibold text-unison-text">Attribution</h2>
           <p className="text-sm leading-relaxed text-unison-text-secondary">
             Any app that shows Unison lyrics must credit Unison and the person who submitted them. The credit can sit at
@@ -237,8 +268,8 @@ export function DocsPage() {
             >
               dump
             </a>{" "}
-            license (ODbL) requires the Unison credit. The submitter credit is our request rather than a license term.
-            A lyric's <Code>submitter_key_id</Code>, when set, matches a row in <Code>contributors</Code>, which has the
+            license requires the Unison credit. The submitter credit is our request rather than a license term. A
+            lyric's <Code>submitter_key_id</Code>, when set, matches a row in <Code>contributors</Code>, which has the
             submitter's <Code>display_name</Code> and <Code>profile_url</Code>. The lyric's <Code>url</Code> column
             links to its page on Unison.
           </p>
@@ -390,6 +421,28 @@ export function DocsPage() {
             under 600 requests per minute per IP or you get <Code>429</Code>.
           </p>
           <CodeBlock code={ERROR_RESPONSE} language="json" label="JSON response" />
+        </section>
+
+        <section className="space-y-3">
+          <h2 className="text-lg font-semibold text-unison-text">Lyrics and takedowns</h2>
+          <p className="text-sm leading-relaxed text-unison-text-secondary">
+            Unison does not own any lyrics. Songwriters and publishers own them. Community members submit them, and each
+            submitter is responsible for what they post.
+          </p>
+          <p className="text-sm leading-relaxed text-unison-text-secondary">
+            If you hold the rights to a song and want its lyrics removed, email{" "}
+            <a
+              href="mailto:unison-takedown@boidu.dev"
+              className="text-unison-text transition-colors hover:text-unison-text-secondary"
+            >
+              unison-takedown@boidu.dev
+            </a>
+            . Include a link to the lyrics on Unison and proof that you hold the rights. We remove the lyrics once we
+            confirm both, and we may turn down requests that leave either out.
+          </p>
+          <p className="text-sm leading-relaxed text-unison-text-secondary">
+            Unison, its API and its dumps come as is, with no warranty. We are not liable for how anyone uses them.
+          </p>
         </section>
 
         <footer className="flex flex-wrap items-center justify-between gap-3 border-t border-unison-border pt-6 text-xs text-unison-text-muted">
