@@ -83,14 +83,12 @@ jobs:
           ISSUE: ${{ github.event.issue.number }}
           BRANCH: showcase/issue-${{ github.event.issue.number }}
         run: |
-          if git ls-remote --exit-code --heads origin "$BRANCH" >/dev/null; then
-            AHEAD=$(gh api "repos/$GH_REPO/compare/master...$BRANCH" --jq .ahead_by)
-            if [ "$AHEAD" -gt 1 ]; then
-              printf "The pull request for this app already has changes from a maintainer, so I left it alone.\n" \
-                | bash .github/scripts/showcase-status.sh
-              echo "kept=true" >> "$GITHUB_OUTPUT"
-              exit 1
-            fi
+          OPEN=$(gh pr list --head "$BRANCH" --state open --json number --jq length)
+          if [ "$OPEN" -gt 0 ]; then
+            printf "This app already has an open pull request, so I left it alone.\n" \
+              | bash .github/scripts/showcase-status.sh
+            echo "kept=true" >> "$GITHUB_OUTPUT"
+            exit 1
           fi
           git push origin "HEAD:refs/heads/$BRANCH" --force
           git add -A -- web/src/lib/showcase.json README.md web/public/showcase
@@ -114,13 +112,8 @@ jobs:
           ISSUE: ${{ github.event.issue.number }}
           NAME: ${{ steps.build.outputs.name }}
         run: |
-          URL=$(gh pr list --head "showcase/issue-$ISSUE" --state open --json url --jq '.[0].url // empty')
-          if [ -n "$URL" ]; then
-            gh pr edit "$URL" --title "feat(showcase): add $NAME" --body-file pr-body.md
-          else
-            URL=$(gh pr create --base master --head "showcase/issue-$ISSUE" \
-              --title "feat(showcase): add $NAME" --body-file pr-body.md)
-          fi
+          URL=$(gh pr create --base master --head "showcase/issue-$ISSUE" \
+            --title "feat(showcase): add $NAME" --body-file pr-body.md)
           echo "url=$URL" >> "$GITHUB_OUTPUT"
 
       - name: Comment and close (accepted)
