@@ -100,9 +100,15 @@ describe("findDuplicate", () => {
 	it("matches an app already listed by name or by link", () => {
 		expect(findDuplicate(listed, { name: "chora", url: "https://chora.example" })).toBe("name")
 		expect(
-			findDuplicate(listed, { name: "Other", url: "https://github.com/craftworksmc/chora/" })
+			findDuplicate(listed, { name: "Other", url: "https://GitHub.com/CraftWorksMC/Chora/" })
 		).toBe("url")
 		expect(findDuplicate(listed, { name: "Other", url: "https://other.example" })).toBeNull()
+	})
+
+	it("treats a link whose path differs only in case as a different app", () => {
+		expect(
+			findDuplicate(listed, { name: "Other", url: "https://github.com/craftworksmc/chora" })
+		).toBeNull()
 	})
 })
 

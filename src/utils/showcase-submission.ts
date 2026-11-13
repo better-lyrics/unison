@@ -92,7 +92,7 @@ export function parseSubmission(form: Record<string, unknown>): ParseResult {
 }
 
 function sameUrl(a: string, b: string): boolean {
-	const normal = (value: string) => value.toLowerCase().replace(/\/+$/, "")
+	const normal = (value: string) => new URL(value).href.replace(/\/+$/, "")
 	return normal(a) === normal(b)
 }
 

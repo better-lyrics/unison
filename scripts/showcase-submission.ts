@@ -16,6 +16,7 @@ const README_PATH = "README.md"
 const ICON_DIR = "web/public/showcase"
 const ICON_SIZE = 128
 const MAX_ICON_BYTES = 5 * 1024 * 1024
+const DOWNLOAD_TIMEOUT_MS = 15_000
 const OPAQUE_ALPHA = 200
 
 class SubmissionError extends Error {}
@@ -29,7 +30,7 @@ async function downloadIcon(url: string): Promise<Buffer> {
 	const tooBig = new SubmissionError("The icon must be under 5 MB.")
 	const response = await fetch(url, {
 		redirect: "follow",
-		signal: AbortSignal.timeout(15_000),
+		signal: AbortSignal.timeout(DOWNLOAD_TIMEOUT_MS),
 	}).catch(() => {
 		throw unreachable()
 	})

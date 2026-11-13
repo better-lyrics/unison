@@ -76,8 +76,16 @@ jobs:
 
       - name: Create submission branch
         if: steps.build.outputs.valid == 'true'
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          BRANCH: showcase/issue-${{ github.event.issue.number }}
         run: |
-          git push origin "HEAD:refs/heads/showcase/issue-${{ github.event.issue.number }}" --force
+          AHEAD=$(gh api "repos/${{ github.repository }}/compare/master...$BRANCH" --jq .ahead_by 2>/dev/null || echo 0)
+          if [ "$AHEAD" -gt 1 ]; then
+            echo "::error::$BRANCH has commits beyond the bot's, so it was left untouched."
+            exit 1
+          fi
+          git push origin "HEAD:refs/heads/$BRANCH" --force
           git add -A -- web/src/lib/showcase.json README.md web/public/showcase
 
       - name: Commit to the branch (verified)
