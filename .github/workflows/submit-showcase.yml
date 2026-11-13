@@ -75,15 +75,22 @@ jobs:
         run: pnpm exec tsx scripts/showcase-submission.ts
 
       - name: Create submission branch
+        id: branch
         if: steps.build.outputs.valid == 'true'
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          GH_REPO: ${{ github.repository }}
+          ISSUE: ${{ github.event.issue.number }}
           BRANCH: showcase/issue-${{ github.event.issue.number }}
         run: |
-          AHEAD=$(gh api "repos/${{ github.repository }}/compare/master...$BRANCH" --jq .ahead_by 2>/dev/null || echo 0)
-          if [ "$AHEAD" -gt 1 ]; then
-            echo "::error::$BRANCH has commits beyond the bot's, so it was left untouched."
-            exit 1
+          if git ls-remote --exit-code --heads origin "$BRANCH" >/dev/null; then
+            AHEAD=$(gh api "repos/$GH_REPO/compare/master...$BRANCH" --jq .ahead_by)
+            if [ "$AHEAD" -gt 1 ]; then
+              printf "The pull request for this app already has changes from a maintainer, so I left it alone.\n" \
+                | bash .github/scripts/showcase-status.sh
+              echo "kept=true" >> "$GITHUB_OUTPUT"
+              exit 1
+            fi
           fi
           git push origin "HEAD:refs/heads/$BRANCH" --force
           git add -A -- web/src/lib/showcase.json README.md web/public/showcase
@@ -140,7 +147,7 @@ jobs:
           if [ "$FIXABLE" = "false" ]; then gh issue close "$ISSUE" --reason "not planned"; fi
 
       - name: Comment on unexpected failure
-        if: failure()
+        if: failure() && steps.branch.outputs.kept != 'true'
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
           GH_REPO: ${{ github.repository }}
