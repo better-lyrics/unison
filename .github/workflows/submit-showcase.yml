@@ -1,0 +1,150 @@
+name: Submit Showcase App
+
+# Turns a showcase issue into a pull request that adds the app, so the maintainer
+# only merges (approve) or closes (reject). Every write goes through the
+# Harmonizer app token; GITHUB_TOKEN stays read only. A fixable rejection keeps the
+# issue open and an edit reruns the check, because authors cannot reopen an issue
+# someone else closed.
+
+on:
+  issues:
+    types: [opened, edited, reopened]
+
+permissions:
+  contents: read
+  issues: read
+
+concurrency:
+  group: showcase-${{ github.event.issue.number }}
+  cancel-in-progress: true
+
+jobs:
+  submit:
+    if: github.event.issue.state == 'open' && contains(github.event.issue.labels.*.name, 'showcase')
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Generate App Token
+        id: app-token
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+          permission-contents: write
+          permission-pull-requests: write
+          permission-issues: write
+
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+          ref: master
+
+      - name: Acknowledge
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          GH_REPO: ${{ github.repository }}
+          ISSUE: ${{ github.event.issue.number }}
+        run: |
+          printf "On it: checking your submission now. This usually takes a minute or two, and I'll update this comment with the result.\n" \
+            | bash .github/scripts/showcase-status.sh
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Parse submission
+        id: parser
+        uses: stefanbuck/github-issue-parser@v3
+        with:
+          template-path: .github/ISSUE_TEMPLATE/showcase.yml
+
+      - name: Validate and build
+        id: build
+        env:
+          SUBMISSION: ${{ steps.parser.outputs.jsonString }}
+          ISSUE: ${{ github.event.issue.number }}
+          AUTHOR: ${{ github.event.issue.user.login }}
+        run: pnpm exec tsx scripts/showcase-submission.ts
+
+      - name: Create submission branch
+        id: branch
+        if: steps.build.outputs.valid == 'true'
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          GH_REPO: ${{ github.repository }}
+          ISSUE: ${{ github.event.issue.number }}
+          BRANCH: showcase/issue-${{ github.event.issue.number }}
+        run: |
+          OPEN=$(gh pr list --head "$BRANCH" --state open --json number --jq length)
+          if [ "$OPEN" -gt 0 ]; then
+            printf "This app already has an open pull request, so I left it alone.\n" \
+              | bash .github/scripts/showcase-status.sh
+            echo "kept=true" >> "$GITHUB_OUTPUT"
+            exit 1
+          fi
+          git push origin "HEAD:refs/heads/$BRANCH" --force
+          git add -A -- web/src/lib/showcase.json README.md web/public/showcase
+
+      - name: Commit to the branch (verified)
+        if: steps.build.outputs.valid == 'true'
+        uses: planetscale/ghcommit-action@v0.2.19
+        with:
+          commit_message: "feat(showcase): add ${{ steps.build.outputs.name }}"
+          repo: ${{ github.repository }}
+          branch: showcase/issue-${{ github.event.issue.number }}
+          file_pattern: web/src/lib/showcase.json README.md web/public/showcase
+        env:
+          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
+
+      - name: Open PR
+        id: pr
+        if: steps.build.outputs.valid == 'true'
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          ISSUE: ${{ github.event.issue.number }}
+          NAME: ${{ steps.build.outputs.name }}
+        run: |
+          URL=$(gh pr create --base master --head "showcase/issue-$ISSUE" \
+            --title "feat(showcase): add $NAME" --body-file pr-body.md)
+          echo "url=$URL" >> "$GITHUB_OUTPUT"
+
+      - name: Comment and close (accepted)
+        if: steps.build.outputs.valid == 'true'
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          GH_REPO: ${{ github.repository }}
+          ISSUE: ${{ github.event.issue.number }}
+          PR_URL: ${{ steps.pr.outputs.url }}
+        run: |
+          printf 'Thanks! I opened %s for review. Your app shows up on the showcase once a maintainer merges it.\n' "$PR_URL" \
+            | bash .github/scripts/showcase-status.sh
+          gh issue close "$ISSUE" --reason completed
+
+      - name: Comment (rejected)
+        if: steps.build.outputs.valid == 'false'
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          GH_REPO: ${{ github.repository }}
+          ISSUE: ${{ github.event.issue.number }}
+          FIXABLE: ${{ steps.build.outputs.fixable }}
+        run: |
+          bash .github/scripts/showcase-status.sh < comment.md
+          if [ "$FIXABLE" = "false" ]; then gh issue close "$ISSUE" --reason "not planned"; fi
+
+      - name: Comment on unexpected failure
+        if: failure() && steps.branch.outputs.kept != 'true'
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          GH_REPO: ${{ github.repository }}
+          ISSUE: ${{ github.event.issue.number }}
+        run: |
+          printf 'Something went wrong handling this submission. A maintainer will take a look.\n' \
+            | bash .github/scripts/showcase-status.sh || true

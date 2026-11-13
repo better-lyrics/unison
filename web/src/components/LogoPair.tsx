@@ -1,5 +1,6 @@
-import type { ReactNode } from "react"
 import { BetterLyricsLogo } from "@/components/BetterLyricsLogo"
+import { appTileClass } from "@/components/ui"
+import type { ReactNode } from "react"
 
 function PulseDots({ pulsing }: { pulsing: boolean }) {
   return (
@@ -11,8 +12,7 @@ function PulseDots({ pulsing }: { pulsing: boolean }) {
   )
 }
 
-const tileClass =
-  "grid size-12 shrink-0 place-items-center rounded-2xl border border-unison-border bg-unison-bg-elevated"
+const tileClass = `${appTileClass} size-12`
 
 export function LogoPair({ partner, pulsing = false }: { partner: ReactNode; pulsing?: boolean }) {
   return (

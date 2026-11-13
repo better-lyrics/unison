@@ -1,6 +1,7 @@
 import { CodeBlock, CodeLangProvider, type CodeTab, CodeTabs } from "@/components/CodeBlock"
 import { COMPOSER_URL } from "@/lib/composer"
 import type { ReactNode } from "react"
+import { Link } from "react-router-dom"
 
 const BASE_URL = "https://unison.betterlyrics.org"
 
@@ -255,7 +256,12 @@ export function DocsPage() {
             both.
           </p>
           <p className="text-sm leading-relaxed text-unison-text-secondary">
-            After the deadline, apps that don't show the credit may lose access to the API.
+            After the deadline, apps that don't show the credit may lose access to the API. Apps that show it can join
+            the{" "}
+            <Link to="/showcase" className="text-unison-text transition-colors hover:text-unison-text-secondary">
+              showcase
+            </Link>
+            .
           </p>
           <h3 className="text-sm font-semibold text-unison-text">If you use the database dump</h3>
           <p className="text-sm leading-relaxed text-unison-text-secondary">

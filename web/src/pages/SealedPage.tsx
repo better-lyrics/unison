@@ -1,18 +1,18 @@
-import { useInfiniteQuery } from "@tanstack/react-query"
-import { MotionConfig, motion } from "motion/react"
-import { useMemo, useRef } from "react"
-import { useSearchParams } from "react-router-dom"
 import { CouncilSeal } from "@/components/CouncilSeal"
 import { EmptyState } from "@/components/EmptyState"
 import { SealedTile, SealedTileSkeleton } from "@/components/SealedTile"
 import { Segmented } from "@/components/council/Segmented"
 import { Bone, skeletonKeys } from "@/components/skeleton"
-import { buttonClass } from "@/components/ui"
+import { buttonClass, heroPanelClass } from "@/components/ui"
 import { fetchSealed } from "@/lib/api"
 import { cn } from "@/lib/cn"
 import { EASE_OUT, thudFrom, thudTransition } from "@/lib/motion-variants"
 import type { SealedSort, SealedSyncFilter } from "@/lib/types"
 import { uniqueById } from "@/lib/unique-by-id"
+import { useInfiniteQuery } from "@tanstack/react-query"
+import { MotionConfig, motion } from "motion/react"
+import { useMemo, useRef } from "react"
+import { useSearchParams } from "react-router-dom"
 
 const PAGE_LIMIT = 24
 const SUBMIT_TUTORIAL_URL = "https://www.youtube.com/watch?v=to138zXZ0nc"
@@ -83,10 +83,7 @@ export function SealedPage() {
   return (
     <MotionConfig reducedMotion="user">
       <div className="space-y-6">
-        <section
-          className="flex flex-col gap-5 rounded-xl p-6 sm:flex-row sm:items-center"
-          style={{ background: "linear-gradient(135deg, rgba(217,217,217,0.1), rgba(255,255,255,0.02) 55%)" }}
-        >
+        <section className={heroPanelClass}>
           <motion.span
             className="block size-16 shrink-0"
             style={{ rotate: -6 }}

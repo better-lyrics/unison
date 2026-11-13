@@ -459,6 +459,19 @@ Not if you exported your identity file or linked Discord.
 
 Signing in with the extension needs Chrome or a Chromium-based browser. In any other browser, export your identity file from Better Lyrics options under Identity and upload it with "Upload identity file". It is the key to your account, so only upload it on unison.betterlyrics.org.
 
+## Showcase
+
+<!-- showcase:start -->
+- [am-lyrics](https://lyrics.binimum.org): Word-synced lyrics as a web component you can drop into any page.
+- [Better Lyrics](https://betterlyrics.org): Synced lyrics for YouTube Music in your browser. Unison was built for it.
+- [Chora](https://github.com/CraftWorksMC/Chora): A music player for Navidrome and Subsonic servers.
+- [Metrolist](https://metrolist.cc): A YouTube Music client for Android.
+- [MixMusic](https://github.com/fzn0x/mixmusic): A desktop player for YouTube Music and Spotify, with community themes and plugins.
+- [YouLy+](https://github.com/ibratabian17/YouLyPlus): Word-by-word lyrics for YouTube Music in your browser, with experimental Apple Music support.
+<!-- showcase:end -->
+
+See them all on [unison.betterlyrics.org/showcase](https://unison.betterlyrics.org/showcase). Using Unison in your app? Credit Unison and the submitter, then [add it to the showcase](https://github.com/better-lyrics/unison/issues/new?template=showcase.yml).
+
 ## Thanks
 
 Track id lookups run on [BiniLink](https://link.binimum.org) by [bini](https://binimum.org), a public API that maps Spotify, Apple Music, Tidal and YouTube tracks to ISRCs. Thanks to bini for building it.

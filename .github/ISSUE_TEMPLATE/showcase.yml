@@ -1,0 +1,59 @@
+name: Showcase submission
+description: Add your app to the Unison showcase
+title: "Showcase: "
+labels: ["showcase"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Fill this in and a pull request gets opened for you. Your app goes live on the showcase once a maintainer merges it.
+  - type: input
+    id: name
+    attributes:
+      label: App name
+      description: Up to 40 characters.
+    validations:
+      required: true
+  - type: input
+    id: url
+    attributes:
+      label: Link
+      description: Website or source repository, starting with https://
+    validations:
+      required: true
+  - type: input
+    id: description
+    attributes:
+      label: One-line description
+      description: 10 to 140 characters.
+    validations:
+      required: true
+  - type: input
+    id: platforms
+    attributes:
+      label: Platforms
+      description: Up to 6, separated by commas.
+      placeholder: macOS, Windows, Linux
+    validations:
+      required: true
+  - type: textarea
+    id: attribution
+    attributes:
+      label: Attribution
+      description: Drag in a screenshot of your app showing "Unison" and the submitter's name next to the lyrics, both visible by default. At least one of them must link to Unison's website.
+    validations:
+      required: true
+  - type: textarea
+    id: icon
+    attributes:
+      label: Icon
+      description: Drag in a square PNG or SVG, at least 128 px.
+    validations:
+      required: true
+  - type: checkboxes
+    id: license
+    attributes:
+      label: License
+      options:
+        - label: My app fits the Unison Community License (a person, a non-profit or an open-source project)
+          required: true
