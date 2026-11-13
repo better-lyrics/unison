@@ -55,18 +55,20 @@ describe("parseSubmission", () => {
 		expect(result.errors).toHaveLength(7)
 	})
 
-	it("refuses a name that would ping people or link issues in the bot's PR", () => {
-		const result = parseSubmission({ ...validForm, name: "@everyone #1" })
-		expect(result.ok).toBe(false)
+	it("refuses a name or platform that would ping people or link issues in the bot's PR", () => {
+		expect(parseSubmission({ ...validForm, name: "@everyone #1" }).ok).toBe(false)
+		expect(parseSubmission({ ...validForm, platforms: "Android, @org/team, #1" }).ok).toBe(false)
 	})
 
-	it("accepts every name already on the showcase", () => {
+	it("accepts every name and platform already on the showcase", () => {
 		const root = resolve(__dirname, "../..")
 		const listed: ShowcaseEntry[] = JSON.parse(
 			readFileSync(resolve(root, "web/src/lib/showcase.json"), "utf8")
 		)
-		for (const { name } of listed) {
-			expect(parseSubmission({ ...validForm, name }).ok, name).toBe(true)
+		for (const { name, platforms } of listed) {
+			expect(parseSubmission({ ...validForm, name, platforms: platforms.join(", ") }).ok, name).toBe(
+				true
+			)
 		}
 	})
 })

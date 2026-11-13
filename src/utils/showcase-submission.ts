@@ -22,7 +22,7 @@ export type ParseResult = { ok: true; value: ShowcaseSubmission } | { ok: false;
 const ATTACHMENT_URL =
 	/https:\/\/(?:github\.com\/user-attachments\/assets\/[0-9a-f-]{36}|user-images\.githubusercontent\.com\/\d+\/[\w.-]+)/gi
 
-const NAME_PATTERN = /^[\p{L}\p{N} .+'&!()-]+$/u
+const PLAIN_LABEL = /^[\p{L}\p{N} .+'&!()-]+$/u
 const MARKDOWN_SYNTAX = /[\\`*_[\]<>!|~#]/g
 
 const README_START = "<!-- showcase:start -->"
@@ -50,7 +50,7 @@ export function parseSubmission(form: Record<string, unknown>): ParseResult {
 	const errors: string[] = []
 
 	const name = text(form.name)
-	if (name.length < 1 || name.length > 40 || !NAME_PATTERN.test(name)) {
+	if (name.length < 1 || name.length > 40 || !PLAIN_LABEL.test(name)) {
 		errors.push(
 			"The app name must be 1 to 40 characters of letters, numbers, spaces and `. + - ' & ! ( )`."
 		)
@@ -71,9 +71,11 @@ export function parseSubmission(form: Record<string, unknown>): ParseResult {
 	if (
 		platforms.length < 1 ||
 		platforms.length > 6 ||
-		platforms.some((p) => p.length > 24 || /[[\]<>]/.test(p))
+		platforms.some((p) => p.length > 24 || !PLAIN_LABEL.test(p))
 	) {
-		errors.push("List 1 to 6 platforms separated by commas, each under 25 characters.")
+		errors.push(
+			"List 1 to 6 platforms separated by commas. Each one must be under 25 characters of letters, numbers, spaces and `. + - ' & ! ( )`."
+		)
 	}
 
 	const [iconUrl] = attachments(form.icon)
