@@ -82,7 +82,7 @@ export function AppHeader({ width }: { width: PageWidth }) {
 		>
 			<div
 				className={cn(
-					"mx-auto flex items-center justify-between gap-4 py-4 lg:grid lg:grid-cols-[auto_auto_1fr_auto] lg:gap-6",
+					"mx-auto flex items-center justify-between gap-4 py-4 lg:grid lg:grid-cols-[auto_auto_minmax(0,1fr)_auto] lg:gap-6",
 					pageWidthClass(width),
 				)}
 			>
@@ -110,6 +110,7 @@ export function AppHeader({ width }: { width: PageWidth }) {
 					<NavTab to="/curators">Leaderboard</NavTab>
 					<CouncilNavLink className={deskTabClass} indicator={navPill} />
 					<NavTab to="/about">About</NavTab>
+					<NavTab to="/showcase">Showcase</NavTab>
 					<NavTab to="/downloads">Downloads</NavTab>
 					<NavTab to="/docs">Docs</NavTab>
 				</nav>
@@ -156,6 +157,9 @@ export function AppHeader({ width }: { width: PageWidth }) {
 						<CouncilNavLink role="menuitem" onClick={closeMenu} className={tabClass} />
 						<NavLink to="/about" role="menuitem" onClick={closeMenu} className={tabClass}>
 							About
+						</NavLink>
+						<NavLink to="/showcase" role="menuitem" onClick={closeMenu} className={tabClass}>
+							Showcase
 						</NavLink>
 						<NavLink to="/downloads" role="menuitem" onClick={closeMenu} className={tabClass}>
 							Downloads

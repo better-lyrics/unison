@@ -1,0 +1,72 @@
+[
+  {
+    "name": "am-lyrics",
+    "description": "Word-synced lyrics as a web component you can drop into any page.",
+    "url": "https://lyrics.binimum.org",
+    "icon": "/showcase/amlyrics-3a5df24c.png",
+    "iconFillsTile": true,
+    "platforms": [
+      "Web"
+    ]
+  },
+  {
+    "name": "Better Lyrics",
+    "description": "Synced lyrics for YouTube Music in your browser. Unison was built for it.",
+    "url": "https://betterlyrics.org",
+    "icon": "/logo.svg",
+    "platforms": [
+      "Chrome",
+      "Firefox",
+      "Edge"
+    ]
+  },
+  {
+    "name": "Chora",
+    "description": "A music player for Navidrome and Subsonic servers.",
+    "url": "https://github.com/CraftWorksMC/Chora",
+    "icon": "/showcase/chora-731cf7d7.png",
+    "iconFillsTile": true,
+    "featured": true,
+    "platforms": [
+      "Android",
+      "Android TV",
+      "Android Auto"
+    ]
+  },
+  {
+    "name": "Metrolist",
+    "description": "A YouTube Music client for Android.",
+    "url": "https://metrolist.cc",
+    "icon": "/showcase/metrolist-e5c50dd6.png",
+    "iconFillsTile": true,
+    "featured": true,
+    "platforms": [
+      "Android"
+    ]
+  },
+  {
+    "name": "MixMusic",
+    "description": "A desktop player for YouTube Music and Spotify, with community themes and plugins.",
+    "url": "https://github.com/fzn0x/mixmusic",
+    "icon": "/showcase/mixmusic-f2beb778.png",
+    "iconFillsTile": true,
+    "platforms": [
+      "macOS",
+      "Windows",
+      "Linux"
+    ]
+  },
+  {
+    "name": "YouLy+",
+    "description": "Word-by-word lyrics for YouTube Music in your browser, with experimental Apple Music support.",
+    "url": "https://github.com/ibratabian17/YouLyPlus",
+    "icon": "/showcase/youlyplus-2d6a1c57.png",
+    "iconFillsTile": true,
+    "featured": true,
+    "platforms": [
+      "Chrome",
+      "Firefox",
+      "Edge"
+    ]
+  }
+]

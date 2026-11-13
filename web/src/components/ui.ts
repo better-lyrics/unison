@@ -5,6 +5,12 @@ export const panelClass = "rounded-lg bg-white/[0.02]"
 // Panels that hold controls or editable content also want inner padding and vertical rhythm.
 export const editableCardClass = `${panelClass} space-y-3 p-4`
 
+export const heroPanelClass =
+  "flex flex-col gap-5 rounded-xl bg-[linear-gradient(135deg,rgba(217,217,217,0.1),rgba(255,255,255,0.02)_55%)] p-6 sm:flex-row sm:items-center"
+
+export const appTileClass =
+  "grid shrink-0 place-items-center rounded-2xl border border-unison-border bg-unison-bg-elevated"
+
 export const artTextShadowClass = "[text-shadow:0_1px_16px_rgba(0,0,0,0.3)]"
 export const artClippedTextShadowClass = "[text-shadow:none] drop-shadow-[0_1px_16px_rgba(0,0,0,0.3)]"
 

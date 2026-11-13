@@ -5,6 +5,7 @@ const previews = [
   { to: "/dev/curators", title: "Curators", desc: "Leaderboard rows with Discord icons, from fixtures." },
   { to: "/dev/me", title: "Me page", desc: "Profile, nickname, and Discord cards from fixtures." },
   { to: "/dev/migrate", title: "Migrate UI", desc: "Every state of the account migration page." },
+  { to: "/dev/showcase", title: "Showcase", desc: "Showcase page with long names, many tags and a broken icon." },
 ]
 
 export default function DevIndex() {

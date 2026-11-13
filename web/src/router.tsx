@@ -15,6 +15,7 @@ import { NicknamePage } from "./pages/NicknamePage"
 import { QueuePage } from "./pages/QueuePage"
 import { SealedPage } from "./pages/SealedPage"
 import { SearchPage } from "./pages/SearchPage"
+import { ShowcasePage } from "./pages/ShowcasePage"
 import { SongsPage } from "./pages/SongsPage"
 import { UserPage } from "./pages/UserPage"
 import { councilRoute } from "./pages/council/routes"
@@ -30,6 +31,7 @@ if (import.meta.env.DEV) {
     { path: "dev/curators", load: () => import("./pages/DevCuratorsPreview") },
     { path: "dev/me", load: () => import("./pages/DevMePreview") },
     { path: "dev/migrate", load: () => import("./pages/DevMigratePreview") },
+    { path: "dev/showcase", load: () => import("./pages/DevShowcasePreview") },
   ]
   for (const { path, load } of devPages) {
     const Page = lazy(load)
@@ -61,6 +63,7 @@ const router = createBrowserRouter([
       { path: "about", element: <AboutPage /> },
       { path: "downloads", element: <DownloadsPage /> },
       { path: "docs", element: <DocsPage /> },
+      { path: "showcase", element: <ShowcasePage /> },
       { path: "link", element: <LinkPage /> },
       { path: "migrate", element: <MigratePage /> },
       councilRoute,
