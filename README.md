@@ -465,9 +465,9 @@ Signing in with the extension needs Chrome or a Chromium-based browser. In any o
 - [am-lyrics](https://lyrics.binimum.org): Word-synced lyrics as a web component you can drop into any page.
 - [Better Lyrics](https://betterlyrics.org): Synced lyrics for YouTube Music in your browser. Unison was built for it.
 - [Chora](https://github.com/CraftWorksMC/Chora): A music player for Navidrome and Subsonic servers.
-- [Metrolist](https://metrolist.cc): A YouTube Music client for Android.
+- [Metrolist](https://metrolist.cc): A YouTube Music client for Android and desktop.
 - [MixMusic](https://github.com/fzn0x/mixmusic): A desktop player for YouTube Music and Spotify, with community themes and plugins.
-- [YouLy+](https://github.com/ibratabian17/YouLyPlus): Word-by-word lyrics for YouTube Music in your browser, with experimental Apple Music support.
+- [YouLy+](https://github.com/ibratabian17/YouLyPlus): Word-by-word lyrics in your browser for YouTube Music, Apple Music and Tidal.
 <!-- showcase:end -->
 
 See them all on [unison.betterlyrics.org/showcase](https://unison.betterlyrics.org/showcase). Using Unison in your app? Credit Unison and the submitter, then [add it to the showcase](https://github.com/better-lyrics/unison/issues/new?template=showcase.yml).

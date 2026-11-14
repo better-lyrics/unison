@@ -35,13 +35,16 @@
   },
   {
     "name": "Metrolist",
-    "description": "A YouTube Music client for Android.",
+    "description": "A YouTube Music client for Android and desktop.",
     "url": "https://metrolist.cc",
     "icon": "/showcase/metrolist-e5c50dd6.png",
     "iconFillsTile": true,
     "featured": true,
     "platforms": [
-      "Android"
+      "Android",
+      "macOS",
+      "Windows",
+      "Linux"
     ]
   },
   {
@@ -58,7 +61,7 @@
   },
   {
     "name": "YouLy+",
-    "description": "Word-by-word lyrics for YouTube Music in your browser, with experimental Apple Music support.",
+    "description": "Word-by-word lyrics in your browser for YouTube Music, Apple Music and Tidal.",
     "url": "https://github.com/ibratabian17/YouLyPlus",
     "icon": "/showcase/youlyplus-2d6a1c57.png",
     "iconFillsTile": true,
