@@ -64,16 +64,19 @@ function findElementProblem(xml: string): XmlProblem | null {
 		: null
 }
 
+function invalidCharacterAt(text: string, index: number): XmlProblem | null {
+	if (index < 0) return null
+	const code = text.codePointAt(index)!.toString(16).toUpperCase().padStart(4, "0")
+	return problemAt(text, index, `The file contains an invalid control character (U+${code})`)
+}
+
+export function findNulCharacter(text: string): XmlProblem | null {
+	return invalidCharacterAt(text, text.indexOf("\u0000"))
+}
+
 export function findXmlProblem(xml: string): XmlProblem | null {
-	const badChar = NON_XML_CHAR.exec(xml)
-	if (badChar) {
-		const code = badChar[0].codePointAt(0)!.toString(16).toUpperCase().padStart(4, "0")
-		return problemAt(
-			xml,
-			badChar.index,
-			`The file contains an invalid control character (U+${code})`
-		)
-	}
+	const badChar = invalidCharacterAt(xml, xml.search(NON_XML_CHAR))
+	if (badChar) return badChar
 
 	const result = XMLValidator.validate(xml)
 	if (result === true) return findElementProblem(xml)
