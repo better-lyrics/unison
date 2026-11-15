@@ -259,15 +259,41 @@ export async function supersedePending(tx: D1Compat, lyricsId: number): Promise<
 		.run()
 }
 
-export async function withdrawOwnSuggestions(tx: D1Compat, userId: number): Promise<void> {
-	await tx
+export async function withdrawOwnSuggestions(tx: D1Compat, userId: number): Promise<number[]> {
+	const rows = await tx
 		.prepare(
 			`UPDATE lyric_revisions r SET status = 'withdrawn' FROM lyrics l
 			 WHERE l.id = r.lyrics_id AND r.author_id = ? AND r.status = 'pending'
-				AND r.pending_reason = 'suggested' AND NOT ${patchSql("r", "l")}`
+				AND r.pending_reason = 'suggested' AND NOT ${patchSql("r", "l")}
+			 RETURNING r.id`
 		)
 		.bind(userId)
-		.run()
+		.all<{ id: number }>()
+	return rows.results.map((r) => Number(r.id))
+}
+
+export async function restoreWithdrawnSuggestion(
+	tx: D1Compat,
+	revisionId: number
+): Promise<boolean> {
+	const revision = await tx
+		.prepare("SELECT lyrics_id FROM lyric_revisions WHERE id = ?")
+		.bind(revisionId)
+		.first<{ lyrics_id: number }>()
+	if (!revision) return false
+	await tx.prepare("SELECT id FROM lyrics WHERE id = ? FOR UPDATE").bind(revision.lyrics_id).run()
+	const restored = await tx
+		.prepare(
+			`UPDATE lyric_revisions SET status = 'pending'
+			 WHERE id = ? AND status = 'withdrawn'
+				AND NOT EXISTS (
+					SELECT 1 FROM lyric_revisions p WHERE p.lyrics_id = ? AND p.status = 'pending'
+				)
+			 RETURNING id`
+		)
+		.bind(revisionId, revision.lyrics_id)
+		.first<{ id: number }>()
+	return restored !== null
 }
 
 export async function withdrawPendingSuggestionsBy(tx: D1Compat, authorId: number): Promise<void> {

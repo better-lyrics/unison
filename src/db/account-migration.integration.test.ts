@@ -776,6 +776,57 @@ describeIntegration("account migration (integration)", () => {
 			).toEqual({ author_id: oldId, status: "withdrawn" })
 		})
 
+		async function seedSuggestion(lyricsId: number, authorId: number, revNo = 2) {
+			await pool.query(
+				`INSERT INTO lyric_revisions (lyrics_id, rev_no, author_id, lyrics, format, sync_type, content_hash, status, pending_reason)
+				 VALUES ($1, $2, $3, 'gz', 'lrc', 'linesync', 'suggestion', 'pending', 'suggested')`,
+				[lyricsId, revNo, authorId]
+			)
+		}
+
+		const statusOf = (lyricsId: number, revNo: number) =>
+			one<{ author_id: number; status: string }>(
+				"SELECT author_id, status FROM lyric_revisions WHERE lyrics_id = $1 AND rev_no = $2",
+				[lyricsId, revNo]
+			)
+
+		it("regression: undo puts back a suggestion the merge withdrew", async () => {
+			const { oldId, newId } = await seedIdentities()
+			const merged = await insertLyric(oldId, "vidRevE")
+			await ensureBaseRevision(env.DB, merged)
+			await seedSuggestion(merged, newId)
+
+			const auditId = await migrate("sess-revisions-suggestion-undo")
+			expect(await restoreFromSnapshot(env, auditId)).toEqual({ restored: true })
+
+			expect(await statusOf(merged, 2)).toEqual({ author_id: newId, status: "pending" })
+		})
+
+		it("keeps a withdrawn suggestion withdrawn when another revision took the slot", async () => {
+			const { oldId, newId } = await seedIdentities()
+			const merged = await insertLyric(oldId, "vidRevF")
+			await ensureBaseRevision(env.DB, merged)
+			await seedSuggestion(merged, newId)
+
+			const auditId = await migrate("sess-revisions-suggestion-taken")
+			const stranger = await one<{ id: number }>(
+				"INSERT INTO users (key_id) VALUES ($1) RETURNING id",
+				["d".repeat(64)]
+			)
+			await seedSuggestion(merged, stranger.id, 3)
+			const withdrawn = await one<{ id: number }>(
+				"SELECT id FROM lyric_revisions WHERE lyrics_id = $1 AND rev_no = 2",
+				[merged]
+			)
+
+			expect(await restoreFromSnapshot(env, auditId)).toEqual({
+				restored: true,
+				keptWithdrawn: [withdrawn.id],
+			})
+			expect(await statusOf(merged, 2)).toEqual({ author_id: newId, status: "withdrawn" })
+			expect(await statusOf(merged, 3)).toEqual({ author_id: stranger.id, status: "pending" })
+		})
+
 		it("restores revision authorship on undo", async () => {
 			const { oldId, newId } = await seedIdentities()
 			const authored = await insertLyric(newId, "vidRevA")
