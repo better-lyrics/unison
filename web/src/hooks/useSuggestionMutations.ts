@@ -13,7 +13,7 @@ interface LyricRef {
 }
 
 function refreshLyric(client: QueryClient, { lyricsId, videoId }: LyricRef): void {
-  client.invalidateQueries({ queryKey: lyricsKeys.suggestions })
+  client.invalidateQueries({ queryKey: lyricsKeys.allSuggestions })
   client.invalidateQueries({ queryKey: lyricsKeys.variants(videoId) })
   client.invalidateQueries({ queryKey: lyricsKeys.variant(lyricsId) })
   client.invalidateQueries({ queryKey: lyricsKeys.revisions(lyricsId) })

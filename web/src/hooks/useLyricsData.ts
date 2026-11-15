@@ -14,7 +14,8 @@ export const lyricsKeys = {
   revisions: (lyricsId: number) => ["lyrics", "revisions", lyricsId] as const,
   revision: (lyricsId: number, revisionId: number) => ["lyrics", "revision", lyricsId, revisionId] as const,
   diff: (lyricsId: number, revisionId: number) => ["lyrics", "diff", lyricsId, revisionId] as const,
-  suggestions: ["lyrics", "suggestions", "mine"] as const,
+  allSuggestions: ["lyrics", "suggestions", "mine"] as const,
+  suggestions: (keyId: string | null) => ["lyrics", "suggestions", "mine", keyId] as const,
 }
 
 const STALE_MS = 30_000
@@ -49,11 +50,11 @@ export function useRevisions(lyricsId: number) {
   })
 }
 
-export function useMySuggestions(enabled: boolean) {
+export function useMySuggestions(keyId: string | null) {
   return useQuery({
-    queryKey: lyricsKeys.suggestions,
+    queryKey: lyricsKeys.suggestions(keyId),
     queryFn: ({ signal }) => fetchMySuggestions(signal),
-    enabled,
+    enabled: keyId !== null,
     staleTime: STALE_MS,
   })
 }

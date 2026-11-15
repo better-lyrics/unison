@@ -23,8 +23,8 @@ const ownerActions = (viewer: SuggestionViewer | null, item: SuggestionInboxItem
   previewActions(viewer, { submitterKeyId: viewer?.keyId ?? null, suggestion: item.suggestion, content })
 
 export function SuggestionInbox() {
-  const items = useMySuggestions(true).data
   const viewer = useSuggestionViewer()
+  const items = useMySuggestions(viewer?.keyId ?? null).data
   if (!items || items.length === 0) return null
   return <SuggestionInboxView items={items} viewer={viewer} now={Math.floor(Date.now() / 1000)} />
 }
