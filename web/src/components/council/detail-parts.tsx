@@ -7,7 +7,7 @@ import { buttonClass } from "@/components/ui"
 import { cn } from "@/lib/cn"
 import type { CouncilPerson } from "@/lib/council-types"
 import { youTubeMusicUrl } from "@/lib/youtube-music"
-import { IconExternalLink } from "@tabler/icons-react"
+import { IconExternalLink, IconEye } from "@tabler/icons-react"
 import type { ReactNode } from "react"
 import { cardClass } from "./headings"
 
@@ -25,11 +25,13 @@ export function DetailHeader({
   title,
   artist,
   chips,
+  songLink,
 }: {
   videoId: string
   title: string
   artist: string
   chips: ReactNode
+  songLink?: { href: string; label: string }
 }) {
   return (
     <div className="flex items-start gap-[22px]">
@@ -50,13 +52,17 @@ export function DetailHeader({
             <Kbd keys={["O"]} />
           </a>
           <a
-            href={`/song/${encodeURIComponent(videoId)}`}
+            href={songLink?.href ?? `/song/${encodeURIComponent(videoId)}`}
             target="_blank"
             rel="noreferrer"
             className="inline-flex items-center gap-[5px] text-xs text-unison-text-muted transition-colors hover:text-unison-text"
           >
-            <IconExternalLink aria-hidden className="size-3" stroke={1.5} />
-            Song page
+            {songLink ? (
+              <IconEye aria-hidden className="size-3" stroke={1.5} />
+            ) : (
+              <IconExternalLink aria-hidden className="size-3" stroke={1.5} />
+            )}
+            {songLink?.label ?? "Song page"}
           </a>
         </div>
       </div>
@@ -69,6 +75,7 @@ const CHIP_TONES = {
   warn: "bg-[rgba(245,166,35,0.08)] text-[#f7c46c] shadow-[inset_0_0_0_1px_rgba(245,166,35,0.2)]",
   good: "bg-[rgba(12,163,12,0.08)] text-[#86d98a] shadow-[inset_0_0_0_1px_rgba(12,163,12,0.22)]",
   gold: "bg-unison-medal-gold-wash text-unison-medal-gold",
+  edit: "bg-council-edit/10 text-council-edit-ink shadow-[inset_0_0_0_1px_rgba(111,122,240,0.24)]",
 }
 
 export function Chip({ tone = "plain", children }: { tone?: keyof typeof CHIP_TONES; children: ReactNode }) {

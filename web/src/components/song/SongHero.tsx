@@ -9,6 +9,7 @@ import { IconSwap } from "@/components/icons/IconSwap"
 import { PlayPauseIcon } from "@/components/icons/PlaybackIcons"
 import { YouTubeMusicIcon } from "@/components/icons/YouTubeMusicIcon"
 import { Bone } from "@/components/skeleton"
+import { SuggestEditButton, SuggestionWaitingLine } from "@/components/song/SuggestEditButton"
 import { artClippedTextShadowClass, chipClass, chipIconClass, glassClass, raisedChipClass } from "@/components/ui"
 import { useCopied } from "@/hooks/useCopied"
 import type { ArtworkCover } from "@/lib/api"
@@ -195,6 +196,7 @@ export function SongHero({ variant, versions, art, player, lyricsTools }: SongHe
       <div className="min-w-0 max-sm:contents">
         <div className={cn(TITLE_SIZE[titleSize(variant.song)], "max-sm:self-end")}>
           <h1
+            tabIndex={-1}
             title={variant.song}
             className={cn(
               "-mr-[0.08em] -mb-[0.08em] line-clamp-2 pr-[0.08em] pb-[0.08em] font-black leading-[1.08] tracking-[-0.035em] text-balance [text-box:trim-start_cap_alphabetic]",
@@ -261,6 +263,7 @@ export function SongHero({ variant, versions, art, player, lyricsTools }: SongHe
             beforeReport={<ShareButton videoId={variant.videoId} />}
           />
           <LyricsToolsButton {...lyricsTools} />
+          <SuggestEditButton variant={variant} />
           <div className="flex items-center gap-2 before:mr-1 before:h-5 before:w-px before:bg-white/[0.14] empty:hidden">
             <EditMetadataButton
               videoId={variant.videoId}
@@ -270,6 +273,7 @@ export function SongHero({ variant, versions, art, player, lyricsTools }: SongHe
             <SealLyricButton videoId={variant.videoId} lyricsId={variant.id} />
           </div>
         </div>
+        <SuggestionWaitingLine variant={variant} />
         {variant.hidden ? (
           <p className="mt-4 text-[13px] font-medium text-unison-warn max-sm:col-span-2">
             This variant has been auto-hidden by community downvotes.

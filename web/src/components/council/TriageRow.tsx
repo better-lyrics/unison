@@ -1,7 +1,7 @@
 import { SongThumbnail } from "@/components/SongThumbnail"
 import { UserAvatar } from "@/components/UserAvatar"
 import { VariantBadge } from "@/components/VariantBadge"
-import { tagClass } from "@/components/ui"
+import { sentenceCaseTagClass, tagClass } from "@/components/ui"
 import type { Bookmarkable, Triage } from "@/hooks/useTriage"
 import { cn } from "@/lib/cn"
 import { reportGroups } from "@/lib/council-flags"
@@ -223,10 +223,13 @@ export function editRowParts(edit: EditItem, heldByOther: boolean, now: number) 
     sub: [edit.artist, edit.author?.displayName].filter(Boolean).join(" · "),
     meta: (
       <>
-        <span className={tagClass}>Rev {edit.revNo}</span>
-        <span>{reasonLabel(edit.pendingReason)}</span>
+        <span className={cn(tagClass, sentenceCaseTagClass, "shrink-0")}>Rev {edit.revNo}</span>
+        {edit.suggestion ? (
+          <span className={cn(tagClass, sentenceCaseTagClass, "shrink-0 bg-council-edit/14 text-council-edit-ink")}>Suggestion</span>
+        ) : null}
+        <span className="truncate">{reasonLabel(edit.pendingReason, edit.ownerless)}</span>
         <Sep />
-        <span>{formatElapsed(now - edit.createdAt)}</span>
+        <span className="shrink-0">{formatElapsed(now - edit.createdAt)}</span>
       </>
     ),
     end:

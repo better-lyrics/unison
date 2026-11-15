@@ -1,5 +1,5 @@
 import type { ReportReason } from "./report-reasons"
-import type { Confidence, LeaderboardBadge, LyricsFormat, SyncType, TierName } from "./types"
+import type { Confidence, LeaderboardBadge, LyricsFormat, PendingReason, SyncType, TierName } from "./types"
 
 export interface Person {
   userId: number
@@ -63,8 +63,6 @@ export interface QueueItem {
   bookmark: BookmarkView | null
 }
 
-export type PendingReason = "sealed" | "flagged" | "large_text_drift" | "large_timing_drift"
-
 export interface EditItem {
   lyricsId: number
   revisionId: number
@@ -80,6 +78,9 @@ export interface EditItem {
   timingDrift: number
   createdAt: number
   author: CouncilPerson | null
+  suggestion?: boolean
+  ownerless?: boolean
+  authorNote?: string | null
   bookmark: BookmarkView | null
 }
 

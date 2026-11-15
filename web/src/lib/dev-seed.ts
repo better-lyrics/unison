@@ -1,3 +1,4 @@
+import { COMMUNITY_KEY_ID } from "./community"
 import { toHandle } from "./handle"
 import { sleeveDataUrl } from "./sleeve"
 import type {
@@ -107,8 +108,6 @@ interface RealSeed {
 const realSeed = Object.values(import.meta.glob<RealSeed>("./dev-seed.real.ts", { eager: true }))[0] as
   | RealSeed
   | undefined
-
-const COMMUNITY_KEY_ID = "cea10b57de8e060ed1a180a00c2bc717a2ab4f231d88fd33ffa6a50a04f23b6e"
 
 const RAW_CURATORS: CuratorLeaderboardEntry[] = realSeed?.REAL_CURATORS ?? DEFAULT_CURATORS
 

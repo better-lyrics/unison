@@ -46,6 +46,8 @@ interface LyricsPanelProps {
   toolsOpen?: boolean
   onLineClick: (seconds: number) => void
   lyricsClassName?: string
+  contentKey?: string
+  fileTools?: boolean
 }
 
 export function LyricsPanel({
@@ -55,6 +57,8 @@ export function LyricsPanel({
   toolsOpen = true,
   onLineClick,
   lyricsClassName,
+  contentKey,
+  fileTools = true,
 }: LyricsPanelProps) {
   const [mode, setMode] = useState<Mode>("synced")
   const [pickedLang, setPickedLang] = useState<string>()
@@ -106,17 +110,25 @@ export function LyricsPanel({
                   )}
                 </fieldset>
               ) : null}
-              <div className="ml-auto flex items-center gap-1.5">
-                <CopyButton text={variant.lyrics} className={TOOL_CLASS} iconClassName="size-4" radius={10} withText />
-                <DownloadButton
-                  onClick={() =>
-                    downloadTextFile(lyricsFilename(variant), variant.lyrics, MIME_BY_FORMAT[variant.format])
-                  }
-                  className={TOOL_CLASS}
-                  iconClassName="size-4"
-                  withText
-                />
-              </div>
+              {fileTools ? (
+                <div className="ml-auto flex items-center gap-1.5">
+                  <CopyButton
+                    text={variant.lyrics}
+                    className={TOOL_CLASS}
+                    iconClassName="size-4"
+                    radius={10}
+                    withText
+                  />
+                  <DownloadButton
+                    onClick={() =>
+                      downloadTextFile(lyricsFilename(variant), variant.lyrics, MIME_BY_FORMAT[variant.format])
+                    }
+                    className={TOOL_CLASS}
+                    iconClassName="size-4"
+                    withText
+                  />
+                </div>
+              ) : null}
             </div>
           ) : (
             <LyricsToolsSkeleton />
@@ -144,7 +156,7 @@ export function LyricsPanel({
           Resume autoscroll
         </button>
         <div
-          key={`${mode}:${variant ? "ready" : "loading"}`}
+          key={`${mode}:${contentKey ?? ""}:${variant ? "ready" : "loading"}`}
           ref={setPane}
           tabIndex={-1}
           data-loading={variant ? undefined : ""}

@@ -5,4 +5,5 @@ export interface StoredSession {
   expiresAt: number
   avatarUrl?: string | null
   council?: { admin: boolean } | null
+  canSuggest?: boolean
 }

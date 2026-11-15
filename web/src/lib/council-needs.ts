@@ -1,8 +1,15 @@
+import { reasonMetric } from "./council-reasons"
 import { groupByBookmark } from "./council-triage"
 import type { ApplicantView, EditItem, QueueItem } from "./council-types"
 import { formatElapsed, formatRemaining, plural } from "./format"
 
-export type NeedKind = "sealed-edit" | "flagged-edit" | "my-bookmarks" | "expiring-bookmark" | "applicants"
+export type NeedKind =
+  | "sealed-edit"
+  | "flagged-edit"
+  | "suggested-edit"
+  | "my-bookmarks"
+  | "expiring-bookmark"
+  | "applicants"
 
 export interface Need {
   kind: NeedKind
@@ -59,6 +66,20 @@ export function deriveNeeds({ queue, edits, applicants, meKeyId, now }: NeedsInp
       title: `“${flagged.song}” edit flagged by Jev${score}`,
       sub: `By ${flagged.author?.displayName ?? "an unknown author"} · ${waiting(flagged.createdAt)}`,
       to: `/council/edits?item=${flagged.revisionId}`,
+    })
+  }
+
+  const suggested = oldest(
+    edits.filter((e) => e.suggestion && e !== sealed && e !== flagged),
+    (e) => e.createdAt,
+  )
+  if (suggested) {
+    needs.push({
+      kind: "suggested-edit",
+      tone: "plain",
+      title: `Suggestion for “${suggested.song}”`,
+      sub: `By ${suggested.author?.displayName ?? "an unknown author"} · ${reasonMetric(suggested)} · ${waiting(suggested.createdAt)}`,
+      to: `/council/edits?item=${suggested.revisionId}`,
     })
   }
 

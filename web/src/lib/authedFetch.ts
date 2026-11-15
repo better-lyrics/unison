@@ -58,7 +58,9 @@ export async function authedFetch<T>(input: RequestInfo | URL, init?: RequestIni
   }
   const res = await fetch(input, { ...init, headers })
   if (res.status === 401) throw new AuthedFetchError(AUTHED_FETCH_ERRORS.AUTH_REQUIRED, 401)
-  if (res.status === 429) throw new AuthedFetchError(AUTHED_FETCH_ERRORS.RATE_LIMITED, 429)
+  if (res.status === 429) {
+    throw new AuthedFetchError(AUTHED_FETCH_ERRORS.RATE_LIMITED, 429, (await readServerError(res)).hint)
+  }
   if (!res.ok) {
     const { error, hint } = await readServerError(res)
     const fallback = res.status === 409 ? AUTHED_FETCH_ERRORS.CONFLICT : AUTHED_FETCH_ERRORS.REQUEST_FAILED

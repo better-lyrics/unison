@@ -1,16 +1,19 @@
+import { type DiffMode, DiffView } from "@/components/DiffView"
 import { Bone } from "@/components/skeleton"
+import { SuggestionNote, suggestionPreviewPath } from "@/components/song/SuggestionChanges"
 import { useOpenInYouTubeMusic } from "@/hooks/useOpenInYouTubeMusic"
 import { useRevisionDiff, useRevisions } from "@/hooks/useLyricsData"
+import { useSuggestionViewer } from "@/hooks/useSuggestionViewer"
 import { cn } from "@/lib/cn"
-import { reasonLabel, reasonWhy } from "@/lib/council-reasons"
+import { editWhy, reasonLabel } from "@/lib/council-reasons"
 import type { BookmarkState } from "@/lib/council-triage"
 import type { EditItem, EditThresholds } from "@/lib/council-types"
 import { formatElapsed } from "@/lib/format"
+import { isOwnSuggestion } from "@/lib/lyric-suggestion"
 import type { RevisionSummary } from "@/lib/revision-types"
-import { IconAlertTriangle, IconCheck, IconRosetteDiscountCheck } from "@tabler/icons-react"
+import { IconAlertTriangle, IconCheck, IconClock, IconRosetteDiscountCheck, IconUserEdit } from "@tabler/icons-react"
 import { useState } from "react"
 import { ActionBar } from "./ActionBar"
-import { type DiffMode, DiffView } from "./DiffView"
 import { Segmented } from "./Segmented"
 import { BlockHead, Callout, Chip, DetailCard, DetailHeader, PersonCard, historyItemClass } from "./detail-parts"
 
@@ -26,6 +29,8 @@ interface EditDetailProps {
   busy: boolean
 }
 
+const OWN_SUGGESTION_HINT = "The lyric's owner or the council decides it."
+
 const pct = (value: number) => `${Math.round(value * 100)}%`
 
 export function EditDetail(props: EditDetailProps) {
@@ -33,7 +38,10 @@ export function EditDetail(props: EditDetailProps) {
   const [mode, setMode] = useState<DiffMode>("unified")
   useOpenInYouTubeMusic(item.videoId)
   const sealed = item.pendingReason === "sealed"
-  const ReasonIcon = sealed ? IconRosetteDiscountCheck : IconAlertTriangle
+  const ownerSilent = item.pendingReason === "suggested"
+  const ReasonIcon = sealed ? IconRosetteDiscountCheck : ownerSilent ? IconClock : IconAlertTriangle
+  const viewer = useSuggestionViewer()
+  const ownSuggestion = Boolean(item.suggestion) && isOwnSuggestion(viewer, item.author?.keyId)
 
   return (
     <DetailCard
@@ -50,10 +58,15 @@ export function EditDetail(props: EditDetailProps) {
             confirmTitle: `Approve Rev ${item.revNo}?`,
             confirmBody: `It replaces Rev ${item.liveRevNo} for every listener right away. You cannot undo an approval, but the author or council can review a later edit.`,
             confirmLabel: `Approve Rev ${item.revNo}`,
-            unavailable: null,
+            unavailable: ownSuggestion ? "Approve" : null,
+            unavailableHint: OWN_SUGGESTION_HINT,
           }}
           onPrimary={props.onApprove}
-          reject={{ submitLabel: "Reject edit", hint: "Optional. The author sees it with the rejected edit." }}
+          reject={{
+            submitLabel: "Reject edit",
+            hint: "Optional. The author sees it with the rejected edit.",
+            unavailable: ownSuggestion ? OWN_SUGGESTION_HINT : null,
+          }}
           onReject={props.onReject}
           busy={props.busy}
         />
@@ -63,31 +76,47 @@ export function EditDetail(props: EditDetailProps) {
         videoId={item.videoId}
         title={item.song}
         artist={item.artist}
+        songLink={
+          item.suggestion
+            ? { href: suggestionPreviewPath(item, item.revisionId), label: "Preview on song page" }
+            : undefined
+        }
         chips={
           <>
             <Chip>
               Rev {item.revNo} replaces Rev {item.liveRevNo}
             </Chip>
+            {item.suggestion ? (
+              <Chip tone="edit">
+                <IconUserEdit aria-hidden className="size-3" stroke={1.5} />
+                Suggestion
+              </Chip>
+            ) : null}
             <Chip tone={sealed ? "gold" : "warn"}>
               <ReasonIcon aria-hidden className="size-3" stroke={1.5} />
-              {reasonLabel(item.pendingReason)}
+              {reasonLabel(item.pendingReason, item.ownerless)}
             </Chip>
           </>
         }
       />
       <div>
-        <BlockHead title="Author" />
+        <BlockHead title={item.suggestion ? "Suggested by" : "Author"} />
         {item.author ? (
           <PersonCard
             person={item.author}
-            sub={`Submitted Rev ${item.revNo} ${formatElapsed(now - item.createdAt)} ago`}
+            sub={`${item.suggestion ? "Suggested" : "Submitted"} Rev ${item.revNo}, ${formatElapsed(now - item.createdAt)} ago`}
           />
         ) : (
           <p className="text-[13px] text-unison-text-muted">The author account no longer exists.</p>
         )}
+        {item.authorNote ? (
+          <div className="mt-3">
+            <SuggestionNote note={item.authorNote} />
+          </div>
+        ) : null}
       </div>
       <Callout icon={<ReasonIcon aria-hidden className="mt-0.5 size-4 shrink-0" stroke={1.5} />}>
-        <b>Why this needs you.</b> {reasonWhy(item.pendingReason, thresholds)}
+        <b>Why this needs you.</b> {editWhy(item, thresholds)}
       </Callout>
       <div className="grid gap-4 min-[860px]:grid-cols-3">
         <DriftMeter label="Text drift" value={item.textDrift} threshold={thresholds.textDrift} />

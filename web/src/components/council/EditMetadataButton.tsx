@@ -1,5 +1,6 @@
 import { buttonClass, chipClass, chipIconClass } from "@/components/ui"
 import { useCouncilMetadata, useCouncilRole } from "@/hooks/useCouncilData"
+import { usePresence } from "@/hooks/usePresence"
 import { useProposeMetadata } from "@/hooks/useCouncilMutations"
 import type { SongMetadata } from "@/lib/council-types"
 import { plural } from "@/lib/format"
@@ -25,6 +26,7 @@ export function EditMetadataButton({
   const role = useCouncilRole()
   const metadata = useCouncilMetadata().data
   const [open, setOpen] = useState(false)
+  const dialog = usePresence(open, "--modal-close-dur")
   if (role === null || !metadata) return null
 
   const openProposal = metadata.items.find((item) => item.videoId === videoId)
@@ -43,8 +45,9 @@ export function EditMetadataButton({
         <IconTags aria-hidden className={chipIconClass} stroke={1.75} />
         Edit details
       </button>
-      {open ? (
+      {dialog.mounted ? (
         <MetadataDialog
+          open={open}
           videoId={videoId}
           lyricsId={lyricsId}
           current={current}
@@ -61,12 +64,14 @@ function MetadataDialog({
   lyricsId,
   current,
   needed,
+  open,
   onClose,
 }: {
   videoId: string
   lyricsId: number
   current: SongMetadata
   needed: number
+  open: boolean
   onClose: () => void
 }) {
   const id = useId()
@@ -101,7 +106,7 @@ function MetadataDialog({
 
   return (
     <CouncilOverlay
-      open
+      open={open}
       onOpenChange={(value) => (value ? null : onClose())}
       label="Edit song details"
       className="top-1/2 -translate-y-1/2 px-[22px] py-5"

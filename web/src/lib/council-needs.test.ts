@@ -52,6 +52,29 @@ describe("deriveNeeds", () => {
     })
   })
 
+  it("points at the oldest suggestion the owner left undecided", () => {
+    const [need] = deriveNeeds(
+      input({
+        edits: [
+          editItem({ revisionId: 3, pendingReason: "suggested", suggestion: true, createdAt: NOW - 8 * DAY }),
+          editItem({ revisionId: 4, pendingReason: "suggested", suggestion: true, createdAt: NOW - 7 * DAY - HOUR }),
+        ],
+      }),
+    )
+    expect(need).toMatchObject({
+      kind: "suggested-edit",
+      tone: "plain",
+      title: "Suggestion for “Isn't She Lovely”",
+      sub: "By Yes · owner silent · waiting 8d",
+      to: "/council/edits?item=3",
+    })
+  })
+
+  it("lets one sealed suggestion fill one need", () => {
+    const needs = deriveNeeds(input({ edits: [editItem({ pendingReason: "sealed", suggestion: true })] }))
+    expect(needs.map((n) => n.kind)).toEqual(["sealed-edit"])
+  })
+
   it("counts my bookmarks and names the one that expires first", () => {
     const soon = { ...bookmarkBy(ME, 2), createdAt: NOW - 44 * HOUR, expiresAt: NOW + 28 * HOUR }
     const [need] = deriveNeeds(

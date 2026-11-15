@@ -1,11 +1,20 @@
-import { fetchLyricsVariant, fetchLyricsVariants, fetchRevisionDiff, fetchRevisions } from "@/lib/api"
+import {
+  fetchLyricsVariant,
+  fetchLyricsVariants,
+  fetchMySuggestions,
+  fetchRevisionDetail,
+  fetchRevisionDiff,
+  fetchRevisions,
+} from "@/lib/api"
 import { keepPreviousData, useQuery } from "@tanstack/react-query"
 
 export const lyricsKeys = {
   variants: (videoId: string) => ["lyrics", "variants", videoId] as const,
   variant: (id: number | undefined) => ["lyrics", "variant", id] as const,
   revisions: (lyricsId: number) => ["lyrics", "revisions", lyricsId] as const,
+  revision: (lyricsId: number, revisionId: number) => ["lyrics", "revision", lyricsId, revisionId] as const,
   diff: (lyricsId: number, revisionId: number) => ["lyrics", "diff", lyricsId, revisionId] as const,
+  suggestions: ["lyrics", "suggestions", "mine"] as const,
 }
 
 const STALE_MS = 30_000
@@ -40,10 +49,29 @@ export function useRevisions(lyricsId: number) {
   })
 }
 
-export function useRevisionDiff(lyricsId: number, revisionId: number) {
+export function useMySuggestions(enabled: boolean) {
+  return useQuery({
+    queryKey: lyricsKeys.suggestions,
+    queryFn: ({ signal }) => fetchMySuggestions(signal),
+    enabled,
+    staleTime: STALE_MS,
+  })
+}
+
+export function useRevisionDiff(lyricsId: number, revisionId: number, enabled = true) {
   return useQuery({
     queryKey: lyricsKeys.diff(lyricsId, revisionId),
     queryFn: ({ signal }) => fetchRevisionDiff(lyricsId, revisionId, signal),
+    enabled,
+    staleTime: STALE_MS,
+  })
+}
+
+export function useRevisionDetail(lyricsId: number, revisionId: number, enabled: boolean) {
+  return useQuery({
+    queryKey: lyricsKeys.revision(lyricsId, revisionId),
+    queryFn: ({ signal }) => fetchRevisionDetail(lyricsId, revisionId, signal),
+    enabled,
     staleTime: STALE_MS,
   })
 }

@@ -152,6 +152,7 @@ interface SongRailProps {
   variants: VariantSummary[]
   selectedId: number
   onSelect: (id: number) => void
+  top?: ReactNode
 }
 
 const DETAILS_BONE = "h-[329px] rounded-[22px]"
@@ -160,9 +161,10 @@ export function SongRailSkeleton() {
   return <Bone className={DETAILS_BONE} />
 }
 
-export function SongRail({ variant, variants, selectedId, onSelect }: SongRailProps) {
+export function SongRail({ variant, variants, selectedId, onSelect, top }: SongRailProps) {
   return (
     <aside className="flex flex-col gap-4 [text-shadow:none]">
+      {top}
       {variant ? (
         <div className={cn(CARD, "t-reveal")}>
           {variant.submitter ? (

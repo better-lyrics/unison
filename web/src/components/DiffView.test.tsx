@@ -176,4 +176,19 @@ describe("DiffView edge cases", () => {
     )
     expect(rows(container)).toEqual(["gap|1 unchanged line", "timing|2~[00:01.00] Late1.50 s later"])
   })
+
+  it("regression: shows metadata field changes in both modes, above the line changes", () => {
+    const fields: DiffRow[] = [
+      { kind: "field", field: "isrc", before: null, after: "GBAYE0601498" },
+      { kind: "field", field: "language", before: "en", after: "es" },
+    ]
+    for (const mode of ["unified", "split"] as const) {
+      const { container } = render(<DiffView rows={[...fields, ...ROWS]} mode={mode} />)
+      expect(rows(container).slice(0, 2)).toEqual(["field|ISRCnoneGBAYE0601498", "field|LanguageEnglishSpanish"])
+      expect(container.textContent).not.toContain("NaN")
+      cleanup()
+    }
+    render(<DiffView rows={[fields[0]]} mode="unified" />)
+    expect(screen.queryByText("No line changes.")).toBeNull()
+  })
 })

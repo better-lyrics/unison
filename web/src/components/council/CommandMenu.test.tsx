@@ -59,7 +59,7 @@ describe("CommandMenu", () => {
     fireEvent.keyDown(input, { key: "ArrowDown" })
     fireEvent.keyDown(input, { key: "Enter" })
     await waitFor(() => expect(where()).toBe("/council/queue"))
-    expect(screen.queryByRole("dialog", { name: "Command menu" })).toBeNull()
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Command menu" })).toBeNull())
   })
 
   it("finds queue items, edits and members by name", async () => {
