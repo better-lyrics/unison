@@ -2,7 +2,7 @@ import { editItem } from "@/test/council-fixtures"
 import { describe, expect, it } from "vitest"
 import { editWhy, reasonLabel, reasonMetric, reasonWhy } from "./council-reasons"
 
-const thresholds = { textDrift: 0.15, timingDrift: 0.3, jevFlag: 0.7 }
+const thresholds = { textDrift: 0.15, timingDrift: 0.3, jevFlag: 0.7, ownerDecisionSec: 604_800 }
 
 describe("council reasons", () => {
   it("labels every pending reason", () => {

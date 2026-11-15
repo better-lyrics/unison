@@ -325,6 +325,8 @@ export interface PreviewResult {
 	noChanges: boolean
 	rateLimit: RevisionRateLimit
 	diff: RevisionDiff
+	noteMaxLength: number
+	ownerDecisionSec: number
 }
 
 export type DiffPart = ["=" | "+" | "-", string]

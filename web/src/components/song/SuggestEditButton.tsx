@@ -26,15 +26,14 @@ import { cn } from "@/lib/cn"
 import { composerLyricUrl } from "@/lib/composer"
 import { reasonBecause } from "@/lib/council-reasons"
 import { downloadTextFile } from "@/lib/download"
-import { formatElapsed, plural, titleCase } from "@/lib/format"
+import { formatElapsed, titleCase } from "@/lib/format"
 import { languageName } from "@/lib/language"
 import { FORMAT_LABEL, lyricsFilename, MIME_BY_FORMAT } from "@/lib/lyrics-download"
 import {
-  OWNER_DECISION_SEC,
-  SUGGESTION_NOTE_MAX,
   type SuggestAction,
   type SuggestionDecider,
   lyricsFormatOf,
+  ownerWindow,
   suggestAction,
   isOwnerless,
   suggestionDecider,
@@ -272,13 +271,11 @@ export function SuggestionWaitingLine({ variant }: { variant: VariantFull }) {
 }
 
 const COUNCIL_NOW = "The council decides this one."
-const OWNER_WINDOW = plural(OWNER_DECISION_SEC / 86_400, "day", "days")
-
-export function suggestionSentToast(owner: string, decider: SuggestionDecider) {
+export function suggestionSentToast(owner: string, decider: SuggestionDecider, ownerDecisionSec: number) {
   pushToast({
     kind: "success",
     message: "Suggestion sent",
-    detail: decider === "owner" ? `${owner} has ${OWNER_WINDOW} to decide.` : COUNCIL_NOW,
+    detail: decider === "owner" ? `${owner} has ${ownerWindow(ownerDecisionSec)} to decide.` : COUNCIL_NOW,
   })
 }
 
@@ -319,7 +316,7 @@ function SuggestDialog({
     preview.reset()
     send.reset()
   }
-  const submit = (input: RevisionInput) =>
+  const submit = (input: RevisionInput, ownerDecisionSec: number) =>
     send.mutate(
       { input, note },
       {
@@ -327,6 +324,7 @@ function SuggestDialog({
           suggestionSentToast(
             ownerName(variant),
             suggestionDecider({ pendingReason: revision.pendingReason, ownerless: ownerlessLyric(variant) }),
+            ownerDecisionSec,
           )
           onSent()
           onClose()
@@ -334,20 +332,21 @@ function SuggestDialog({
       },
     )
 
-  if (file && preview.data) {
+  const checked = preview.data
+  if (file && checked) {
     return (
       <SuggestDialogFrame open={open} step={2} phase="preview" onClose={onClose}>
         <PreviewStep
           variant={variant}
           file={file}
-          result={preview.data}
+          result={checked}
           note={note}
           onNote={setNote}
           sending={send.isPending}
           error={send.isError ? suggestionErrorMessage(send.error) : null}
           onBack={startOver}
           onReplace={check}
-          onSend={() => submit(file.input)}
+          onSend={() => submit(file.input, checked.ownerDecisionSec)}
         />
       </SuggestDialogFrame>
     )
@@ -794,7 +793,7 @@ export function PreviewStep({
               <NoteField
                 id={noteId}
                 label={`Note for ${reader} (optional)`}
-                max={SUGGESTION_NOTE_MAX}
+                max={result.noteMaxLength}
                 value={note}
                 onChange={onNote}
                 rows={2}
@@ -814,7 +813,9 @@ export function PreviewStep({
       <DialogFoot
         hint={
           blocker ??
-          (ownerDecides ? `${owner} has ${OWNER_WINDOW} to decide. After that, the council can too.` : COUNCIL_NOW)
+          (ownerDecides
+            ? `${owner} has ${ownerWindow(result.ownerDecisionSec)} to decide. After that, the council can too.`
+            : COUNCIL_NOW)
         }
       >
         <button type="button" className={cn(buttonClass("fill", "sm"), FOOT_HIT)} onClick={onBack}>

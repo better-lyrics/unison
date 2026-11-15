@@ -105,7 +105,7 @@ describe("CouncilLayout rail", () => {
         ],
         edits: {
           items: [editItem({ revisionId: 1, bookmark: bookmarkBy(ME, 3) }), editItem({ revisionId: 2 })],
-          thresholds: { textDrift: 0.15, timingDrift: 0.3, jevFlag: 0.7 },
+          thresholds: { textDrift: 0.15, timingDrift: 0.3, jevFlag: 0.7, ownerDecisionSec: 604_800 },
         },
         applicants: [applicant(), applicant({ applicantId: 70, state: "failed" })],
         members: [rosterMember(ME), rosterMember(OLA), rosterMember({ ...OLA, userId: 3, keyId: "0c".repeat(32) })],
@@ -149,7 +149,7 @@ describe("CouncilLayout rail", () => {
       councilData({
         edits: {
           items: [editItem({ pendingReason: "sealed" })],
-          thresholds: { textDrift: 0.15, timingDrift: 0.3, jevFlag: 0.7 },
+          thresholds: { textDrift: 0.15, timingDrift: 0.3, jevFlag: 0.7, ownerDecisionSec: 604_800 },
         },
       }),
     )

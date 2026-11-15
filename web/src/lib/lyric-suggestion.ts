@@ -1,11 +1,12 @@
 import { AUTHED_FETCH_ERRORS, AuthedFetchError } from "./authedFetch"
 import { COMMUNITY_KEY_ID } from "./community"
+import { plural } from "./format"
 import type { DiffRow } from "./revision-types"
 import type { LyricsFormat, PendingReason, RevisionSuggestion, VariantPendingRevision } from "./types"
 
-export const OWNER_DECISION_SEC = 7 * 24 * 60 * 60
-export const SUGGESTION_NOTE_MAX = 300
 export const REJECT_NOTE_MAX = 1000
+
+export const ownerWindow = (ownerDecisionSec: number): string => plural(ownerDecisionSec / 86_400, "day", "days")
 
 export type SuggestionDecider = "owner" | "council"
 

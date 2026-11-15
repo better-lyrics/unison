@@ -1,3 +1,4 @@
+import { config } from "@/config"
 import type { ApplicantView } from "@/db/council-applicants"
 import { createBookmark } from "@/db/council-bookmarks"
 import type { EditItem, EditThresholds } from "@/db/council-edits"
@@ -167,7 +168,12 @@ describeIntegration("council dashboard routes (integration)", () => {
 				{ token: "mira" }
 			)
 			expect(res.status).toBe(200)
-			expect(res.json.data.thresholds).toEqual({ textDrift: 0.15, timingDrift: 0.3, jevFlag: 0.8 })
+			expect(res.json.data.thresholds).toEqual({
+				textDrift: 0.15,
+				timingDrift: 0.3,
+				jevFlag: 0.8,
+				ownerDecisionSec: config.revisions.ownerDecisionSec,
+			})
 			const [item] = res.json.data.items
 			expect(item).toMatchObject({
 				revisionId,

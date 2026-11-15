@@ -33,7 +33,7 @@ function data() {
     ],
     edits: {
       items: [editItem({ revisionId: 9004, song: "Alone", bookmark: sooner })],
-      thresholds: { textDrift: 0.15, timingDrift: 0.3, jevFlag: 0.7 },
+      thresholds: { textDrift: 0.15, timingDrift: 0.3, jevFlag: 0.7, ownerDecisionSec: 604_800 },
     },
   })
 }

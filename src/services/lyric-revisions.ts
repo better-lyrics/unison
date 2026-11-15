@@ -503,6 +503,8 @@ export async function previewRevision(
 					: [...buildDiffRows(a.liveLines, a.candidateLines), ...buildFieldRows(a.fieldChanges)],
 				againstRevNo: a.liveRevNo,
 			},
+			noteMaxLength: config.revisions.maxNoteLength,
+			ownerDecisionSec: config.revisions.ownerDecisionSec,
 		},
 	}
 }

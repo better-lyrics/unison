@@ -1,4 +1,5 @@
 import type { EditItem, EditThresholds } from "./council-types"
+import { ownerWindow } from "./lyric-suggestion"
 import type { PendingReason } from "./types"
 
 const pct = (value: number) => `${Math.round(value * 100)}%`
@@ -37,7 +38,7 @@ export function reasonWhy(reason: PendingReason, thresholds: EditThresholds): st
     case "large_timing_drift":
       return `Line timings moved more than the ${pct(thresholds.timingDrift)} threshold.`
     case "suggested":
-      return "Someone other than the owner suggested this, and the owner did not decide within 7 days."
+      return `Someone other than the owner suggested this, and the owner did not decide within ${ownerWindow(thresholds.ownerDecisionSec)}.`
   }
 }
 

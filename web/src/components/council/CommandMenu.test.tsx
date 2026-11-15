@@ -29,7 +29,7 @@ function data() {
     queue: [queueItem({ id: 722, song: "Story of a Warrior" }), queueItem({ id: 1320, song: "Run Rabbit" })],
     edits: {
       items: [editItem({ revisionId: 9001, song: "Isn't She Lovely" })],
-      thresholds: { textDrift: 0.15, timingDrift: 0.3, jevFlag: 0.7 },
+      thresholds: { textDrift: 0.15, timingDrift: 0.3, jevFlag: 0.7, ownerDecisionSec: 604_800 },
     },
     members: [rosterMember(ME), rosterMember(OLA)],
   })

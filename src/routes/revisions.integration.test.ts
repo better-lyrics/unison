@@ -128,6 +128,8 @@ describeIntegration("revision routes (integration)", () => {
 				noChanges: false,
 				drift: { textLimit: 0.15, timingLimit: 0.3, anchorRevNo: 1 },
 				rateLimit: { lyricRemaining: 5, userRemaining: 20 },
+				noteMaxLength: config.revisions.maxNoteLength,
+				ownerDecisionSec: config.revisions.ownerDecisionSec,
 			})
 			expect(json.data.checks.map((c) => c.field)).toEqual(["lyrics", "language", "isrc", "album"])
 			expect((await listRevisions()).json.data.revisions).toHaveLength(1)

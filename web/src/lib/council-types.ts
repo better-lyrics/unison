@@ -88,6 +88,7 @@ export interface EditThresholds {
   textDrift: number
   timingDrift: number
   jevFlag: number
+  ownerDecisionSec: number
 }
 
 export interface SongMetadata {

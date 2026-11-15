@@ -175,6 +175,8 @@ const PASSING: PreviewResult = {
   noChanges: false,
   rateLimit: { lyricRemaining: 2, lyricLimit: 3, userRemaining: 9, userLimit: 10 },
   diff: { rows: DIFF_ROWS, againstRevNo: 3 },
+  noteMaxLength: 300,
+  ownerDecisionSec: 604_800,
 }
 
 const FAILING: PreviewResult = {
@@ -334,14 +336,14 @@ function DialogFixtures() {
       <button
         type="button"
         className={buttonClass("fill", "sm")}
-        onClick={() => suggestionSentToast("Mirelle", "owner")}
+        onClick={() => suggestionSentToast("Mirelle", "owner", PASSING.ownerDecisionSec)}
       >
         Sent toast
       </button>
       <button
         type="button"
         className={buttonClass("fill", "sm")}
-        onClick={() => suggestionSentToast("Mirelle", "council")}
+        onClick={() => suggestionSentToast("Mirelle", "council", PASSING.ownerDecisionSec)}
       >
         Sent toast, council decides
       </button>
@@ -361,7 +363,7 @@ function DialogFixtures() {
               onBack={() => setFixture("pick")}
               onReplace={() => setFixture("passing")}
               onSend={() => {
-                suggestionSentToast("Mirelle", fixture === "ownerless" ? "council" : "owner")
+                suggestionSentToast("Mirelle", fixture === "ownerless" ? "council" : "owner", PASSING.ownerDecisionSec)
                 close()
               }}
             />
@@ -560,7 +562,7 @@ export default function DevSuggestionsPreview() {
               >
                 <EditDetail
                   item={item}
-                  thresholds={{ textDrift: 0.15, timingDrift: 0.3, jevFlag: 0.7 }}
+                  thresholds={{ textDrift: 0.15, timingDrift: 0.3, jevFlag: 0.7, ownerDecisionSec: 604_800 }}
                   now={NOW}
                   bookmark={{ kind: "open", capped: false, cap: 3 }}
                   bookmarkPending={false}

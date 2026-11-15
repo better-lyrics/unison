@@ -3,9 +3,7 @@ import { COMMUNITY_KEY_ID as SERVER_COMMUNITY_KEY_ID, config } from "../../../sr
 import { COMMUNITY_KEY_ID } from "./community"
 import {
   JUMP_LEAD_IN_MS,
-  OWNER_DECISION_SEC,
   REJECT_NOTE_MAX,
-  SUGGESTION_NOTE_MAX,
   type SuggestionContent,
   isOwnSuggestion,
   isOwnerless,
@@ -206,11 +204,9 @@ describe("decision parity with the server", () => {
     { name: "stranger", as: "other", council: false },
   ] as const
   const REASONS: PendingReason[] = ["suggested", "sealed", "flagged", "large_text_drift", "large_timing_drift"]
-  const AGES = { "inside the owner window": 3600, "after the owner window": OWNER_DECISION_SEC + 3600 }
+  const AGES = { "inside the owner window": 3600, "after the owner window": config.revisions.ownerDecisionSec + 3600 }
 
-  it("holds the owner window and the note limits equal to the server's", () => {
-    expect(OWNER_DECISION_SEC).toBe(config.revisions.ownerDecisionSec)
-    expect(SUGGESTION_NOTE_MAX).toBe(config.revisions.maxNoteLength)
+  it("holds the reject note limit and the community key equal to the server's", () => {
     expect(REJECT_NOTE_MAX).toBe(config.validation.report.maxDetailsLength)
     expect(COMMUNITY_KEY_ID).toBe(SERVER_COMMUNITY_KEY_ID)
   })

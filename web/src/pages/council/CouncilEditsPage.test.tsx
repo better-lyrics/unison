@@ -117,7 +117,10 @@ function routes(log: string[]) {
 
 function data() {
   return councilData({
-    edits: { items: [sealedEdit, driftEdit], thresholds: { textDrift: 0.15, timingDrift: 0.3, jevFlag: 0.7 } },
+    edits: {
+      items: [sealedEdit, driftEdit],
+      thresholds: { textDrift: 0.15, timingDrift: 0.3, jevFlag: 0.7, ownerDecisionSec: 604_800 },
+    },
   })
 }
 

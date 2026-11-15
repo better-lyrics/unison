@@ -283,7 +283,7 @@ export interface CouncilData {
 export function councilData(overrides: Partial<CouncilData> = {}): CouncilData {
   return {
     queue: [],
-    edits: { items: [], thresholds: { textDrift: 0.15, timingDrift: 0.3, jevFlag: 0.7 } },
+    edits: { items: [], thresholds: { textDrift: 0.15, timingDrift: 0.3, jevFlag: 0.7, ownerDecisionSec: 604_800 } },
     metadata: { items: [], needed: 3 },
     flags: { items: [], needed: 3 },
     overview: overview(),
