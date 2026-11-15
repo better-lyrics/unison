@@ -259,39 +259,50 @@ export async function supersedePending(tx: D1Compat, lyricsId: number): Promise<
 		.run()
 }
 
-export async function withdrawOwnSuggestions(tx: D1Compat, userId: number): Promise<number[]> {
+export interface WithdrawnSuggestion {
+	id: number
+	albumInherited: boolean | null
+}
+
+export async function withdrawOwnSuggestions(
+	tx: D1Compat,
+	userId: number
+): Promise<WithdrawnSuggestion[]> {
 	const rows = await tx
 		.prepare(
 			`UPDATE lyric_revisions r SET status = 'withdrawn' FROM lyrics l
 			 WHERE l.id = r.lyrics_id AND r.author_id = ? AND r.status = 'pending'
 				AND r.pending_reason = 'suggested' AND NOT ${patchSql("r", "l")}
-			 RETURNING r.id`
+			 RETURNING r.id, (r.album_known AND r.album IS NOT DISTINCT FROM l.album) AS album_inherited`
 		)
 		.bind(userId)
-		.all<{ id: number }>()
-	return rows.results.map((r) => Number(r.id))
+		.all<{ id: number; album_inherited: boolean }>()
+	return rows.results.map((r) => ({ id: Number(r.id), albumInherited: r.album_inherited }))
 }
 
 export async function restoreWithdrawnSuggestion(
 	tx: D1Compat,
-	revisionId: number
+	{ id, albumInherited }: WithdrawnSuggestion
 ): Promise<boolean> {
 	const revision = await tx
 		.prepare("SELECT lyrics_id FROM lyric_revisions WHERE id = ?")
-		.bind(revisionId)
+		.bind(id)
 		.first<{ lyrics_id: number }>()
 	if (!revision) return false
 	await tx.prepare("SELECT id FROM lyrics WHERE id = ? FOR UPDATE").bind(revision.lyrics_id).run()
 	const restored = await tx
 		.prepare(
-			`UPDATE lyric_revisions SET status = 'pending'
-			 WHERE id = ? AND status = 'withdrawn'
+			`UPDATE lyric_revisions r SET status = 'pending',
+				album = CASE WHEN ?::boolean THEN l.album ELSE r.album END
+			 FROM lyrics l
+			 WHERE r.id = ? AND l.id = r.lyrics_id AND r.status = 'withdrawn'
+				AND (?::boolean IS NOT NULL OR NOT r.album_known OR r.album IS NOT DISTINCT FROM l.album)
 				AND NOT EXISTS (
-					SELECT 1 FROM lyric_revisions p WHERE p.lyrics_id = ? AND p.status = 'pending'
+					SELECT 1 FROM lyric_revisions p WHERE p.lyrics_id = l.id AND p.status = 'pending'
 				)
-			 RETURNING id`
+			 RETURNING r.id`
 		)
-		.bind(revisionId, revision.lyrics_id)
+		.bind(albumInherited, id, albumInherited)
 		.first<{ id: number }>()
 	return restored !== null
 }

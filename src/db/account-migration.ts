@@ -1,5 +1,9 @@
 import { config } from "@/config"
-import { restoreWithdrawnSuggestion, withdrawOwnSuggestions } from "@/db/lyric-revisions"
+import {
+	type WithdrawnSuggestion,
+	restoreWithdrawnSuggestion,
+	withdrawOwnSuggestions,
+} from "@/db/lyric-revisions"
 import { updateReputations } from "@/db/reputation"
 import type { D1Compat } from "@/infra/database"
 import type { Env } from "@/types"
@@ -27,7 +31,7 @@ export interface MigrationSnapshot {
 	discord_links: unknown[]
 	lyrics_requests: unknown[]
 	lyric_revisions?: unknown[]
-	withdrawn_suggestions?: number[]
+	withdrawn_suggestions?: (number | WithdrawnSuggestion)[]
 	contribution_events?: unknown[]
 	badge_awards?: unknown[]
 	committee_members?: unknown[]
@@ -1126,8 +1130,9 @@ export async function restoreFromSnapshot(
 		}
 
 		const keptWithdrawn: number[] = []
-		for (const id of snap.withdrawn_suggestions ?? []) {
-			if (!(await restoreWithdrawnSuggestion(tx, id))) keptWithdrawn.push(id)
+		for (const entry of snap.withdrawn_suggestions ?? []) {
+			const withdrawn = typeof entry === "number" ? { id: entry, albumInherited: null } : entry
+			if (!(await restoreWithdrawnSuggestion(tx, withdrawn))) keptWithdrawn.push(withdrawn.id)
 		}
 
 		for (const f of snap.request_fulfillments as SnapFulfillment[]) {

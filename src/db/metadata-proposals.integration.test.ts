@@ -15,6 +15,12 @@ import { readRevisionFixture, swapWords } from "@/test/lyric-fixtures"
 import type { MetadataInput } from "@/utils/metadata-input"
 import { normalizeAlbum, normalizeArtist, normalizeSong } from "@/utils/normalize"
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest"
+import {
+	computeMigrationPlan,
+	createPreviewAudit,
+	restoreFromSnapshot,
+	runMigration,
+} from "./account-migration"
 import { approvedMetadata } from "./approved-metadata"
 import { castVote, createProposal, listOpenProposals } from "./metadata-proposals"
 
@@ -268,6 +274,30 @@ describeIntegration("metadata proposals (integration)", () => {
 					album: PROPOSED.album,
 					album_norm: normalizeAlbum(PROPOSED.album),
 				})
+			})
+
+			it("regression: a suggestion an account merge withdrew takes the new album when undo restores it", async () => {
+				const suggestion = await suggest()
+				const plan = await computeMigrationPlan(db.env, kid(1), kid(6))
+				if ("error" in plan) throw new Error(plan.error)
+				const auditId = await createPreviewAudit(db.env, {
+					sessionId: "sess-album-carry",
+					discordId: "disc-album-carry",
+					oldKey: kid(1),
+					newKey: kid(6),
+					counts: plan.counts,
+				})
+				const merged = await runMigration(db.env, {
+					oldKey: kid(1),
+					newKey: kid(6),
+					migrationId: auditId,
+				})
+				if ("error" in merged) throw new Error(merged.error)
+				await passProposal()
+				expect(await restoreFromSnapshot(db.env, auditId)).toEqual({ restored: true })
+				expect(await pendingAlbum(suggestion)).toBe(PROPOSED.album)
+				await approveRevision(db.env, seeded, suggestion, submitter, "web")
+				expect((await rows())[0].album).toBe(PROPOSED.album)
 			})
 
 			it("regression: an album change and an approval on another variant both commit", async () => {
