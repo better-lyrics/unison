@@ -5,6 +5,7 @@ import { suggestionErrorMessage } from "@/lib/lyric-suggestion"
 import type { RevisionInput, SuggestionInboxItem } from "@/lib/revision-types"
 import { pushToast } from "@/lib/toast"
 import { type QueryClient, useMutation, useMutationState, useQueryClient } from "@tanstack/react-query"
+import { refreshCouncil } from "./useCouncilMutations"
 import { lyricsKeys } from "./useLyricsData"
 
 interface LyricRef {
@@ -12,11 +13,9 @@ interface LyricRef {
   videoId: string
 }
 
-function refreshLyric(client: QueryClient, { lyricsId, videoId }: LyricRef): void {
+function refreshLyric(client: QueryClient, lyric: LyricRef): void {
   client.invalidateQueries({ queryKey: lyricsKeys.allSuggestions })
-  client.invalidateQueries({ queryKey: lyricsKeys.variants(videoId) })
-  client.invalidateQueries({ queryKey: lyricsKeys.variant(lyricsId) })
-  client.invalidateQueries({ queryKey: lyricsKeys.revisions(lyricsId) })
+  refreshCouncil(client, lyric)
 }
 
 const actionKey = (suggestionId: number | undefined) => ["suggestion-action", suggestionId] as const
