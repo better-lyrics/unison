@@ -467,6 +467,54 @@ describe("AuthProvider signOut", () => {
     )
   })
 
+  it("regression: a focus refresh that returns after sign-out does not restore the session", async () => {
+    saveStoredSession(valid)
+    const me = () =>
+      new Response(
+        JSON.stringify({
+          success: true,
+          data: {
+            keyId: valid.keyId,
+            displayName: valid.displayName,
+            expiresAt: valid.expiresAt,
+            canSuggest: false,
+          },
+        }),
+        { status: 200 },
+      )
+    let answerRefresh: (res: Response) => void = () => {}
+    let meCalls = 0
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((url: string) => {
+        if (url !== "/auth/me") return Promise.resolve(new Response("{}", { status: 200 }))
+        meCalls++
+        if (meCalls === 1) return Promise.resolve(me())
+        return new Promise<Response>((resolve) => {
+          answerRefresh = resolve
+        })
+      }),
+    )
+    render(
+      <AuthProvider>
+        <Probe />
+      </AuthProvider>,
+    )
+    await waitFor(() => expect(screen.getByText("sign-out")).toBeTruthy())
+    act(() => {
+      window.dispatchEvent(new Event("focus"))
+    })
+    await waitFor(() => expect(meCalls).toBe(2))
+    await act(async () => {
+      screen.getByText("sign-out").click()
+    })
+    await act(async () => {
+      answerRefresh(me())
+    })
+    expect(screen.getByTestId("status").textContent).toBe("signed-out")
+    expect(localStorage.getItem(STORAGE_KEY)).toBeNull()
+  })
+
   it("updateDisplayName rewrites the rendered name and persists to storage", async () => {
     saveStoredSession(valid)
     const fetchMock = vi.fn().mockResolvedValue(

@@ -106,11 +106,13 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const awaitingFirstLyric = phase.kind === "signed-in" && phase.identity.canSuggest === false
   useEffect(() => {
     if (!awaitingFirstLyric) return
+    let cancelled = false
     const refresh = () => {
       const stored = loadStoredSession()
       if (!stored) return
       fetchMe(stored.sessionToken).then(
         (identity) => {
+          if (cancelled || loadStoredSession()?.sessionToken !== stored.sessionToken) return
           saveStoredSession({ ...identity, sessionToken: stored.sessionToken })
           setPhase((prev) =>
             prev.kind === "signed-in" && prev.identity.keyId === identity.keyId
@@ -122,7 +124,10 @@ export function AuthProvider({ children }: AuthProviderProps) {
       )
     }
     window.addEventListener("focus", refresh)
-    return () => window.removeEventListener("focus", refresh)
+    return () => {
+      cancelled = true
+      window.removeEventListener("focus", refresh)
+    }
   }, [awaitingFirstLyric])
 
   const completeSignIn = useCallback(async (sign: (nonce: string) => Promise<SignedBody>) => {
