@@ -155,6 +155,8 @@ const stamp = (ms: number) => formatDuration(ms / 1000) || "0:00"
 interface SuggestionRailProps {
   suggestion: RevisionSuggestion
   jumps: JumpTarget[] | undefined
+  jumpsFailed?: boolean
+  onRetryJumps?: () => void
   onJump: (jump: JumpTarget) => void
   unsynced?: boolean
   className?: string
@@ -193,7 +195,15 @@ export function SuggestionRailFold({ className, ...rail }: SuggestionRailProps) 
 
 const JUMPS_SHOWN = 5
 
-export function SuggestionRail({ suggestion, jumps, onJump, unsynced = false, className }: SuggestionRailProps) {
+export function SuggestionRail({
+  suggestion,
+  jumps,
+  jumpsFailed = false,
+  onRetryJumps,
+  onJump,
+  unsynced = false,
+  className,
+}: SuggestionRailProps) {
   const [jumped, setJumped] = useState<string | null>(null)
   const [expanded, setExpanded] = useState(false)
   const moreId = useId()
@@ -241,7 +251,16 @@ export function SuggestionRail({ suggestion, jumps, onJump, unsynced = false, cl
         </>
       ) : null}
       <p className={cn(RAIL_LABEL, "mb-1.5")}>Where to look</p>
-      {jumps === undefined ? (
+      {jumpsFailed ? (
+        <>
+          <p className="text-[13px] text-(--ink-3)">Could not load the changes. Try again.</p>
+          {onRetryJumps ? (
+            <button type="button" onClick={onRetryJumps} className={cn(buttonClass("ghost", "sm"), "mt-1.5 -ml-2")}>
+              Try again
+            </button>
+          ) : null}
+        </>
+      ) : jumps === undefined ? (
         <Bone className="h-[124px] w-full rounded-[10px]" />
       ) : jumps.length === 0 ? (
         <p className="text-[13px] text-(--ink-3)">

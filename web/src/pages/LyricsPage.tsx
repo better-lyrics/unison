@@ -116,6 +116,8 @@ export function LyricsPage() {
   const diff = useRevisionDiff(variant?.id ?? 0, previewing?.id ?? 0, previewing !== undefined)
   const [liveFor, setLiveFor] = useState<number | null>(null)
   const jumps = useMemo(() => (diff.data ? jumpTargets(diff.data.rows) : undefined), [diff.data])
+  const jumpsFailed = diff.isError && !diff.isFetching
+  const { refetch: refetchDiff } = diff
 
   const setSuggestionParam = useCallback(
     (id: number | null) => {
@@ -193,6 +195,8 @@ export function LyricsPage() {
       <SuggestionRail
         suggestion={previewing}
         jumps={jumps}
+        jumpsFailed={jumpsFailed}
+        onRetryJumps={() => refetchDiff()}
         onJump={(jump) => handleLineClick(jump.seekSeconds)}
         unsynced={unsynced}
         className={SIDE_BY_SIDE_ONLY}
@@ -227,6 +231,8 @@ export function LyricsPage() {
           <SuggestionRailFold
             suggestion={previewing}
             jumps={jumps}
+            jumpsFailed={jumpsFailed}
+            onRetryJumps={() => refetchDiff()}
             onJump={(jump) => handleLineClick(jump.seekSeconds)}
             unsynced={unsynced}
             className={STACKED_ONLY}
