@@ -2,7 +2,8 @@ import { SessionContext } from "@/auth/AuthProvider"
 import { saveStoredSession } from "@/lib/auth"
 import { QueryProvider, createQueryClient } from "@/lib/queryClient"
 import type { SuggestionInboxItem } from "@/lib/revision-types"
-import { cleanup, render, screen, waitFor } from "@testing-library/react"
+import { QueryClient } from "@tanstack/react-query"
+import { act, cleanup, render, screen, waitFor } from "@testing-library/react"
 import { MemoryRouter } from "react-router-dom"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { SuggestionInbox } from "./SuggestionInbox"
@@ -91,5 +92,35 @@ describe("SuggestionInbox", () => {
     expect(screen.queryByText(ITEM.song)).toBeNull()
     await waitFor(() => expect(inboxRequests).toEqual([`Bearer token-${FIRST}`, `Bearer token-${SECOND}`]))
     expect(screen.queryByText(ITEM.song)).toBeNull()
+  })
+
+  it("regression: keeps the section on screen with a retry when the inbox fails to load", async () => {
+    let failing = true
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((url: string) => {
+        if (url !== "/lyrics/mine/suggestions") return Promise.resolve(ok(null))
+        if (failing) return Promise.resolve(new Response("{}", { status: 500 }))
+        return Promise.resolve(ok([ITEM]))
+      }),
+    )
+    signIn(FIRST)
+    render(
+      <QueryProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+        <SessionContext.Provider value={sessionOf(FIRST)}>
+          <MemoryRouter>
+            <SuggestionInbox />
+          </MemoryRouter>
+        </SessionContext.Provider>
+      </QueryProvider>,
+    )
+    await waitFor(() =>
+      expect(screen.getByText("Could not load the suggestions on your lyrics. Try again.")).toBeTruthy(),
+    )
+    failing = false
+    await act(async () => {
+      screen.getByRole("button", { name: "Try again" }).click()
+    })
+    await waitFor(() => expect(screen.getByText(ITEM.song)).toBeTruthy())
   })
 })

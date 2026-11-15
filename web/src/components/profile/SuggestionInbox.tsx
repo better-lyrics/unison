@@ -1,3 +1,4 @@
+import { EmptyState } from "@/components/EmptyState"
 import { SongThumbnail } from "@/components/SongThumbnail"
 import { SectionHeading } from "@/components/profile/SectionHeading"
 import {
@@ -22,9 +23,29 @@ import { Link } from "react-router-dom"
 const ownerActions = (viewer: SuggestionViewer | null, item: SuggestionInboxItem, content: SuggestionContent) =>
   previewActions(viewer, { submitterKeyId: viewer?.keyId ?? null, suggestion: item.suggestion, content })
 
+const INBOX_TITLE = "Suggestions on your lyrics"
+
 export function SuggestionInbox() {
   const viewer = useSuggestionViewer()
-  const items = useMySuggestions(viewer?.keyId ?? null).data
+  const inbox = useMySuggestions(viewer?.keyId ?? null)
+  const items = inbox.data
+  if (!items && inbox.isError) {
+    return (
+      <section className="flex flex-col gap-4">
+        <SectionHeading title={INBOX_TITLE} />
+        <EmptyState title="Could not load the suggestions on your lyrics. Try again.">
+          <button
+            type="button"
+            disabled={inbox.isFetching}
+            onClick={() => inbox.refetch()}
+            className={buttonClass("fill", "sm")}
+          >
+            Try again
+          </button>
+        </EmptyState>
+      </section>
+    )
+  }
   if (!items || items.length === 0) return null
   return <SuggestionInboxView items={items} viewer={viewer} now={Math.floor(Date.now() / 1000)} />
 }
@@ -45,7 +66,7 @@ export function SuggestionInboxView({
 
   return (
     <section className="flex flex-col gap-4">
-      <SectionHeading title="Suggestions on your lyrics" meta={`${items.length} waiting`} />
+      <SectionHeading title={INBOX_TITLE} meta={`${items.length} waiting`} />
       <ul className="flex flex-col gap-1.5">
         {items.map((item) => (
           <InboxRow
