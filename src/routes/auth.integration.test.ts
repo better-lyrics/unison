@@ -4,10 +4,12 @@ import {
 	type IntegrationDb,
 	describeIntegration,
 	openIntegrationDb,
+	seedLyric,
 	seedSession,
 	seedUser,
 	wipeRevisionData,
 } from "@/test/integration-harness"
+import { readRevisionFixture } from "@/test/lyric-fixtures"
 import { canonicalJson, hashPublicKey } from "@/utils/crypto"
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest"
 import { authRoutes } from "./auth"
@@ -19,7 +21,7 @@ const PRESET_URL = config.avatar.cdnBase + PRESET.file
 
 interface IdentityBody {
 	success: boolean
-	data: { keyId: string; displayName: string; avatarUrl?: string | null }
+	data: { keyId: string; displayName: string; avatarUrl?: string | null; canSuggest?: boolean }
 }
 
 describeIntegration("auth identity responses carry avatarUrl (integration)", () => {
@@ -71,6 +73,19 @@ describeIntegration("auth identity responses carry avatarUrl (integration)", () 
 			await pickPreset(KEY)
 			const { data } = await call("GET", "/auth/me")
 			expect(data.avatarUrl).toBe(PRESET_URL)
+		})
+
+		it("says whether the caller may suggest edits, without revealing a ban", async () => {
+			expect((await call("GET", "/auth/me")).data.canSuggest).toBe(false)
+			await db.pool.query("UPDATE users SET banned_at = 1700000000 WHERE key_id = $1", [KEY])
+			expect((await call("GET", "/auth/me")).data.canSuggest).toBe(true)
+			await db.pool.query("UPDATE users SET banned_at = NULL WHERE key_id = $1", [KEY])
+			const { rows } = await db.pool.query("SELECT id FROM users WHERE key_id = $1", [KEY])
+			await seedLyric(db, rows[0].id, {
+				lyrics: readRevisionFixture("amazing-grace.lrc"),
+				format: "lrc",
+			})
+			expect((await call("GET", "/auth/me")).data.canSuggest).toBe(true)
 		})
 	})
 

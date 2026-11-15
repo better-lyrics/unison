@@ -1,3 +1,5 @@
+import { AVATAR_COLUMNS, AVATAR_JOINS, type AvatarRow, avatarUrlForRow } from "@/db/avatar-join"
+import { bannedUserPredicate, videoServesExpr } from "@/db/predicates"
 import { lapseRejectionForEdit } from "@/db/rejections"
 import { type D1Compat, advisoryXactLock } from "@/infra/database"
 import { Logger } from "@/infra/logger"
@@ -7,14 +9,23 @@ import type {
 	RevisionAuthor,
 	RevisionBar,
 	RevisionStatus,
+	RevisionSuggestion,
 	RevisionSummary,
+	SuggestionInboxItem,
 	SyncType,
 } from "@/types"
 import { compress, decompressIfNeeded, isCompressed } from "@/utils/compression"
 import { type LyricLine, extractComparableLines, extractPlainText } from "@/utils/extract-text"
 import { sha256Hex } from "@/utils/hash"
-import { lyricFingerprint } from "@/utils/lyric-fingerprint"
 import { showsChanges } from "@/utils/lyric-diff"
+import { lyricFingerprint } from "@/utils/lyric-fingerprint"
+import {
+	councilDecidesAt,
+	ownerWindowOpenSql,
+	ownerlessSql,
+	patchSql,
+	waitingSuggestionSql,
+} from "@/utils/lyric-patch"
 import { normalizeAlbum } from "@/utils/normalize"
 import { generatePetName } from "@/utils/petname"
 
@@ -51,6 +62,7 @@ export interface LyricRevisionState {
 	artist: string
 	album: string | null
 	submitter_id: number | null
+	ownerless: boolean
 	deleted_at: number | null
 	committee_approved_at: number | null
 	current_revision_id: number | null
@@ -72,6 +84,7 @@ export interface NewRevision {
 	timingDrift: number
 	jevProbability: number | null
 	revertsRevisionId: number | null
+	authorNote?: string | null
 }
 
 export interface PendingRevisionRow {
@@ -100,6 +113,9 @@ export interface PendingRevisionRow {
 	lyric_album: string | null
 	author_key_id: string | null
 	author_nickname: string | null
+	suggestion: boolean
+	ownerless: boolean
+	author_note: string | null
 }
 
 export async function loadLyricState(
@@ -109,9 +125,9 @@ export async function loadLyricState(
 ): Promise<LyricRevisionState | null> {
 	return db
 		.prepare(
-			`SELECT id, song, artist, album, submitter_id, deleted_at,
-				committee_approved_at, current_revision_id, anchor_revision_id
-			FROM lyrics WHERE id = ?${lock ? " FOR UPDATE" : ""}`
+			`SELECT l.id, l.song, l.artist, l.album, l.submitter_id, ${ownerlessSql("l")} AS ownerless,
+				l.deleted_at, l.committee_approved_at, l.current_revision_id, l.anchor_revision_id
+			FROM lyrics l WHERE l.id = ?${lock ? " FOR UPDATE" : ""}`
 		)
 		.bind(lyricsId)
 		.first<LyricRevisionState>()
@@ -214,17 +230,22 @@ export async function countRecentRevisions(
 	db: D1Compat,
 	lyricsId: number,
 	authorId: number,
+	patch: boolean,
 	since: number
 ): Promise<{ lyric: number; user: number }> {
 	const row = await db
 		.prepare(
 			`SELECT
-				(COUNT(*) FILTER (WHERE lyrics_id = ?))::INTEGER AS lyric_count,
-				(COUNT(*) FILTER (WHERE author_id = ?))::INTEGER AS user_count
-			FROM lyric_revisions
-			WHERE rev_no > 1 AND created_at > ? AND (lyrics_id = ? OR author_id = ?)`
+				(COUNT(*) FILTER (
+					WHERE r.lyrics_id = ? AND (${patchSql("r", "l")}) = ?
+						AND (NOT ${patchSql("r", "l")} OR r.author_id = ?)
+				))::INTEGER AS lyric_count,
+				(COUNT(*) FILTER (WHERE r.author_id = ?))::INTEGER AS user_count
+			FROM lyric_revisions r
+			JOIN lyrics l ON l.id = r.lyrics_id
+			WHERE r.rev_no > 1 AND r.created_at > ? AND (r.lyrics_id = ? OR r.author_id = ?)`
 		)
-		.bind(lyricsId, authorId, since, lyricsId, authorId)
+		.bind(lyricsId, patch, authorId, authorId, since, lyricsId, authorId)
 		.first<{ lyric_count: number; user_count: number }>()
 	return { lyric: row?.lyric_count ?? 0, user: row?.user_count ?? 0 }
 }
@@ -235,6 +256,44 @@ export async function supersedePending(tx: D1Compat, lyricsId: number): Promise<
 			"UPDATE lyric_revisions SET status = 'superseded' WHERE lyrics_id = ? AND status = 'pending'"
 		)
 		.bind(lyricsId)
+		.run()
+}
+
+export async function withdrawOwnSuggestions(tx: D1Compat, userId: number): Promise<void> {
+	await tx
+		.prepare(
+			`UPDATE lyric_revisions r SET status = 'withdrawn' FROM lyrics l
+			 WHERE l.id = r.lyrics_id AND r.author_id = ? AND r.status = 'pending'
+				AND r.pending_reason = 'suggested' AND NOT ${patchSql("r", "l")}`
+		)
+		.bind(userId)
+		.run()
+}
+
+export async function withdrawPendingSuggestionsBy(tx: D1Compat, authorId: number): Promise<void> {
+	await tx
+		.prepare(
+			`UPDATE lyric_revisions r SET status = 'withdrawn' FROM lyrics l
+			 WHERE l.id = r.lyrics_id AND r.author_id = ? AND r.status = 'pending'
+				AND ${patchSql("r", "l")}`
+		)
+		.bind(authorId)
+		.run()
+}
+
+export async function carryPendingAlbums(
+	tx: D1Compat,
+	videoId: string,
+	album: string | null
+): Promise<void> {
+	await tx
+		.prepare(
+			`UPDATE lyric_revisions r SET album = ?::text FROM lyrics l
+			 WHERE l.id = r.lyrics_id AND r.status = 'pending' AND r.album_known
+				AND r.album IS NOT DISTINCT FROM l.album AND l.album IS DISTINCT FROM ?::text
+				AND ${videoServesExpr("l.")}`
+		)
+		.bind(album, album, videoId, videoId)
 		.run()
 }
 
@@ -251,10 +310,10 @@ export async function insertRevision(tx: D1Compat, input: NewRevision): Promise<
 			`INSERT INTO lyric_revisions
 				(lyrics_id, rev_no, lyrics, format, sync_type, language, isrc, album, album_known,
 				 content_hash, author_id, status, pending_reason, text_drift, timing_drift,
-				 jev_probability, reverts_revision_id)
+				 jev_probability, reverts_revision_id, author_note)
 			VALUES (
 				?, (SELECT COALESCE(MAX(rev_no), 0) + 1 FROM lyric_revisions WHERE lyrics_id = ?),
-				?, ?, ?, ?, ?, ?, TRUE, ?, ?, ?, ?, ?, ?, ?, ?
+				?, ?, ?, ?, ?, ?, TRUE, ?, ?, ?, ?, ?, ?, ?, ?, ?
 			)
 			RETURNING *`
 		)
@@ -274,7 +333,8 @@ export async function insertRevision(tx: D1Compat, input: NewRevision): Promise<
 			input.textDrift,
 			input.timingDrift,
 			input.jevProbability,
-			input.revertsRevisionId
+			input.revertsRevisionId,
+			input.authorNote ?? null
 		)
 		.first<RevisionRow>()
 	return row!
@@ -483,7 +543,7 @@ function toSummary(row: SummaryRow): RevisionSummary {
 		id: row.id,
 		revNo: row.rev_no,
 		status: row.status,
-		pendingReason: row.pending_reason,
+		pendingReason: row.pending_reason === "suggested" ? null : row.pending_reason,
 		isAnchor: row.is_anchor === true,
 		textDrift: row.text_drift,
 		timingDrift: row.timing_drift,
@@ -500,7 +560,11 @@ export async function listRevisionSummaries(
 	lyricsId: number
 ): Promise<RevisionSummary[]> {
 	const { results } = await db
-		.prepare(`${SUMMARY_SELECT} WHERE r.lyrics_id = ? ORDER BY r.rev_no DESC`)
+		.prepare(
+			`${SUMMARY_SELECT} WHERE r.lyrics_id = ?
+				AND NOT ${waitingSuggestionSql("r", "l")}
+			ORDER BY r.rev_no DESC`
+		)
 		.bind(lyricsId)
 		.all<SummaryRow>()
 	return results.map(toSummary)
@@ -518,21 +582,80 @@ export async function getRevisionSummary(
 	return row ? toSummary(row) : null
 }
 
+const SUGGESTION_COLUMNS = `suggestion.id AS suggestion_id, suggestion.rev_no AS suggestion_rev_no,
+		suggestion.pending_reason AS suggestion_reason,
+		suggestion.created_at AS suggestion_created_at,
+		l.committee_approved_at IS NOT NULL AS suggestion_sealed,
+		${ownerlessSql("l")} AS suggestion_ownerless,
+		u.key_id AS suggestion_author_key_id, u.nickname AS suggestion_author_nickname,
+		suggestion.author_note AS suggestion_note, ${AVATAR_COLUMNS}`
+
+const SUGGESTION_JOIN = `lyric_revisions suggestion
+		ON suggestion.lyrics_id = l.id AND suggestion.status = 'pending'
+			AND ${patchSql("suggestion", "l")} AND NOT ${bannedUserPredicate("suggestion.author_id")}
+	LEFT JOIN users u ON u.id = suggestion.author_id
+	${AVATAR_JOINS}`
+
+interface SuggestionColumns extends AvatarRow {
+	suggestion_id: number | null
+	suggestion_rev_no: number | null
+	suggestion_reason: PendingReason | null
+	suggestion_created_at: number | null
+	suggestion_sealed: boolean
+	suggestion_ownerless: boolean
+	suggestion_author_key_id: string | null
+	suggestion_author_nickname: string | null
+	suggestion_note: string | null
+}
+
+function toSuggestion(row: SuggestionColumns): RevisionSuggestion | null {
+	if (
+		row.suggestion_id == null ||
+		row.suggestion_rev_no == null ||
+		row.suggestion_reason == null ||
+		row.suggestion_created_at == null
+	) {
+		return null
+	}
+	return {
+		id: row.suggestion_id,
+		revNo: row.suggestion_rev_no,
+		author: revisionAuthor(row.suggestion_author_key_id, row.suggestion_author_nickname),
+		authorKeyId: row.suggestion_author_key_id,
+		authorAvatarUrl: avatarUrlForRow(row),
+		pendingReason: row.suggestion_reason,
+		sealed: row.suggestion_sealed,
+		createdAt: row.suggestion_created_at,
+		councilDecidesAt: councilDecidesAt(
+			row.suggestion_reason,
+			row.suggestion_sealed,
+			row.suggestion_ownerless,
+			row.suggestion_created_at,
+			Math.floor(Date.now() / 1000)
+		),
+		note: row.suggestion_note,
+	}
+}
+
 const REVISION_BAR_SELECT = `SELECT l.id AS lyrics_id, live.rev_no, live.created_at AS updated_at,
-		(SELECT COUNT(*)::INTEGER FROM lyric_revisions WHERE lyrics_id = l.id) AS count,
+		(SELECT COUNT(*)::INTEGER FROM lyric_revisions c
+			WHERE c.lyrics_id = l.id AND NOT ${waitingSuggestionSql("c", "l")}) AS count,
 		pending.rev_no AS pending_rev_no, pending.pending_reason,
 		pending.text_drift AS pending_text_drift, pending.timing_drift AS pending_timing_drift,
-		rejected.rev_no AS rejected_rev_no, rejected.review_note
+		rejected.rev_no AS rejected_rev_no, rejected.review_note, ${SUGGESTION_COLUMNS}
 	FROM lyrics l
 	JOIN lyric_revisions live ON live.id = l.current_revision_id
 	LEFT JOIN lyric_revisions pending ON pending.lyrics_id = l.id AND pending.status = 'pending'
+		AND NOT (${patchSql("pending", "l")})
+	LEFT JOIN ${SUGGESTION_JOIN}
 	LEFT JOIN LATERAL (
-		SELECT rev_no, review_note FROM lyric_revisions
-		WHERE lyrics_id = l.id AND status = 'rejected' AND rev_no > live.rev_no
-		ORDER BY rev_no DESC LIMIT 1
+		SELECT r.rev_no, r.review_note FROM lyric_revisions r
+		WHERE r.lyrics_id = l.id AND r.status = 'rejected' AND r.rev_no > live.rev_no
+			AND NOT ${patchSql("r", "l")}
+		ORDER BY r.rev_no DESC LIMIT 1
 	) rejected ON TRUE`
 
-interface RevisionBarRow {
+interface RevisionBarRow extends SuggestionColumns {
 	lyrics_id: number
 	rev_no: number
 	updated_at: number
@@ -549,6 +672,7 @@ function toRevisionBar(row: RevisionBarRow | null | undefined, createdAt: number
 	if (!row) {
 		return { revNo: 1, count: 1, pending: null, lastRejected: null, updatedAt: createdAt }
 	}
+	const suggestion = toSuggestion(row)
 	return {
 		revNo: row.rev_no,
 		count: row.count,
@@ -566,6 +690,7 @@ function toRevisionBar(row: RevisionBarRow | null | undefined, createdAt: number
 				? { revNo: row.rejected_rev_no, reviewNote: row.review_note }
 				: null,
 		updatedAt: row.updated_at,
+		...(suggestion ? { suggestion } : {}),
 	}
 }
 
@@ -607,16 +732,57 @@ export async function listPendingRevisionRows(
 				l.video_id, l.song, l.artist, l.album AS lyric_album,
 				live.rev_no AS live_rev_no, live.lyrics AS live_lyrics, live.format AS live_format,
 				live.language AS live_language, live.isrc AS live_isrc,
-				u.key_id AS author_key_id, u.nickname AS author_nickname
+				u.key_id AS author_key_id, u.nickname AS author_nickname,
+				${patchSql("r", "l")} AS suggestion, ${ownerlessSql("l")} AS ownerless, r.author_note
 			FROM lyric_revisions r
 			JOIN lyrics l ON l.id = r.lyrics_id AND l.deleted_at IS NULL
 			JOIN lyric_revisions live ON live.id = l.current_revision_id
 			LEFT JOIN users u ON u.id = r.author_id
-			WHERE r.status = 'pending'
+			WHERE r.status = 'pending' AND NOT ${ownerWindowOpenSql("r", "l")}
+				AND NOT (${patchSql("r", "l")} AND ${bannedUserPredicate("r.author_id")})
 			ORDER BY r.created_at ASC, r.id ASC
 			LIMIT ?`
 		)
 		.bind(limit)
 		.all<PendingRevisionRow>()
 	return results
+}
+
+interface SuggestionInboxRow extends SuggestionColumns {
+	lyrics_id: number
+	video_id: string
+	song: string
+	artist: string
+}
+
+export async function listSuggestionsForOwner(
+	db: D1Compat,
+	ownerId: number,
+	limit: number
+): Promise<SuggestionInboxItem[]> {
+	const { results } = await db
+		.prepare(
+			`SELECT l.id AS lyrics_id, l.video_id, l.song, l.artist, ${SUGGESTION_COLUMNS}
+			FROM lyrics l
+			JOIN ${SUGGESTION_JOIN}
+			WHERE l.submitter_id = ? AND l.deleted_at IS NULL
+			ORDER BY suggestion.created_at DESC, suggestion.id DESC
+			LIMIT ?`
+		)
+		.bind(ownerId, limit)
+		.all<SuggestionInboxRow>()
+	return results.flatMap((row) => {
+		const suggestion = toSuggestion(row)
+		return suggestion
+			? [
+					{
+						lyricsId: row.lyrics_id,
+						videoId: row.video_id,
+						song: row.song,
+						artist: row.artist,
+						suggestion,
+					},
+				]
+			: []
+	})
 }

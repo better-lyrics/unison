@@ -1,4 +1,5 @@
 import { config } from "@/config"
+import { withdrawOwnSuggestions } from "@/db/lyric-revisions"
 import { updateReputations } from "@/db/reputation"
 import type { D1Compat } from "@/infra/database"
 import type { Env } from "@/types"
@@ -287,6 +288,7 @@ export async function runMigration(
 				.prepare("UPDATE lyric_revisions SET reviewed_by = ? WHERE reviewed_by = ?")
 				.bind(oldId, newId)
 				.run()
+			await withdrawOwnSuggestions(tx, oldId)
 		}
 
 		const reqCollisions = await countTx(

@@ -6,6 +6,7 @@ export interface GateInput {
 	jevFlagged: boolean
 	textDrift: number
 	timingDrift: number
+	patch: boolean
 }
 
 const pendingFor = (reason: PendingReason): GateOutcome => ({ goesLive: false, reason })
@@ -15,5 +16,6 @@ export function decideOutcome(input: GateInput): GateOutcome {
 	if (input.textDrift > config.revisions.textDriftLimit) return pendingFor("large_text_drift")
 	if (input.timingDrift > config.revisions.timingDriftLimit) return pendingFor("large_timing_drift")
 	if (input.jevFlagged) return pendingFor("flagged")
+	if (input.patch) return pendingFor("suggested")
 	return { goesLive: true, reason: null }
 }

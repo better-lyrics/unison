@@ -200,6 +200,42 @@ describeIntegration("council dashboard routes (integration)", () => {
 			await db.pool.query("DELETE FROM badge_awards WHERE user_id = ANY($1)", [[submitter, ola]])
 		})
 
+		it("marks a held patch as a suggestion whatever its reason, and an owner edit as not", async () => {
+			const ownerEditId = await pendingEdit()
+			const otherLyricId = await seedLyric(db, submitter, {
+				lyrics: LRC,
+				format: "lrc",
+				videoId: "HsBfV2A5dUY",
+			})
+			await db.pool.query("UPDATE lyrics SET committee_approved_at = 1 WHERE id = $1", [
+				otherLyricId,
+			])
+			const { rows } = await db.pool.query<{ id: number }>(
+				"SELECT id FROM users WHERE key_id = $1",
+				[STRANGER]
+			)
+			await seedLyric(db, rows[0].id, { lyrics: LRC, format: "lrc", videoId: "strangerown" })
+			const patch = await saveRevision(db.env, otherLyricId, rows[0].id, {
+				lyrics: swapWords(LRC, 2),
+				format: "lrc",
+				language: "en",
+				note: "Fixed verse two",
+			})
+			if (!patch.ok) throw new Error("setup")
+			const res = await call<{ items: EditItem[] }>("GET", "/committee/edits", { token: "mira" })
+			const byId = new Map(res.json.data.items.map((item) => [item.revisionId, item]))
+			expect(byId.get(patch.revision.id)).toMatchObject({
+				pendingReason: "sealed",
+				suggestion: true,
+				authorNote: "Fixed verse two",
+			})
+			expect(byId.get(ownerEditId)).toMatchObject({
+				pendingReason: "sealed",
+				suggestion: false,
+				authorNote: null,
+			})
+		})
+
 		it("returns no items when nothing is pending", async () => {
 			const res = await call<{ items: EditItem[] }>("GET", "/committee/edits", { token: "mira" })
 			expect(res.json.data.items).toEqual([])

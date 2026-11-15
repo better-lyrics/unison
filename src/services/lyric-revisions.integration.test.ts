@@ -1,7 +1,11 @@
-import { config } from "@/config"
+import { COMMUNITY_KEY_ID, config } from "@/config"
 import { createBookmark, listActiveBookmarks } from "@/db/council-bookmarks"
+import { listCouncilEdits } from "@/db/council-edits"
 import { listCouncilEvents } from "@/db/council-events"
+import { setBanned } from "@/db/bans"
+import { getRevisionBar, listSuggestionsForOwner } from "@/db/lyric-revisions"
 import { getSealCandidates, getSealableVariants, rejectLyric, undoRejection } from "@/db/rejections"
+import { D1Compat } from "@/infra/database"
 import type { JevCheckInput, JevGate } from "@/services/jev-gate"
 import {
 	type IntegrationDb,
@@ -31,6 +35,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vites
 import {
 	type RevisionInput,
 	approveRevision,
+	compareWithLive,
 	diffRevisions,
 	getRevisionDetail,
 	listPendingCards,
@@ -77,6 +82,12 @@ describeIntegration("lyric revisions pipeline (integration)", () => {
 		const result = await saveRevision(env, lyricId, owner, input)
 		if (!result.ok) throw new Error(`save failed: ${result.reason}`)
 		return result.revision
+	}
+
+	async function seedProposer(keyId: string): Promise<number> {
+		const id = await seedUser(db, keyId)
+		await seedLyric(db, id, { lyrics: LRC, format: "lrc", videoId: `own${keyId.slice(0, 8)}` })
+		return id
 	}
 
 	async function statuses(): Promise<Array<{ rev_no: number; status: string }>> {
@@ -1012,9 +1023,10 @@ describeIntegration("lyric revisions pipeline (integration)", () => {
 		})
 	})
 
-	it("refuses anyone but the owner", async () => {
+	it("refuses a revert by anyone but the owner", async () => {
+		await save(lrc(swapWords(LRC, 2)))
 		const stranger = await seedUser(db, "b".repeat(64))
-		expect(await saveRevision(db.env, lyricId, stranger, lrc(swapWords(LRC, 1)))).toEqual({
+		expect(await revertToRevision(db.env, lyricId, stranger, await revisionId(1))).toEqual({
 			ok: false,
 			reason: "not_owner",
 		})
@@ -1371,6 +1383,407 @@ describeIntegration("lyric revisions pipeline (integration)", () => {
 				expect(results.filter((r) => !r.ok && r.reason === "already_decided")).toHaveLength(1)
 				await expectInvariants()
 			})
+		})
+	})
+
+	describe("patches", () => {
+		let proposer: number
+
+		beforeEach(async () => {
+			proposer = await seedProposer("b".repeat(64))
+		})
+
+		async function propose(input: RevisionInput, author = proposer) {
+			const result = await saveRevision(db.env, lyricId, author, input)
+			if (!result.ok) throw new Error(`patch failed: ${result.reason}`)
+			return result.revision
+		}
+
+		async function liveLyrics(): Promise<string> {
+			const { rows } = await db.pool.query("SELECT lyrics FROM lyrics WHERE id = $1", [lyricId])
+			return decompress(rows[0].lyrics)
+		}
+
+		const backdate = (revisionId: number) =>
+			db.pool.query("UPDATE lyric_revisions SET created_at = $2 WHERE id = $1", [
+				revisionId,
+				Math.floor(Date.now() / 1000) - config.revisions.ownerDecisionSec - 1,
+			])
+
+		const councilEvents = async () =>
+			(await listCouncilEvents(db.env, { includeBookmarks: true, limit: 10 })).events
+
+		const sealLyric = (by: number) =>
+			db.pool.query(
+				"UPDATE lyrics SET committee_approved_at = 1700000000, committee_approved_by = $2 WHERE id = $1",
+				[lyricId, by]
+			)
+
+		function recordingGate(flagged: boolean) {
+			const calls: JevCheckInput[] = []
+			const gate: JevGate = {
+				check: async (input) => {
+					calls.push(input)
+					return { flagged, probability: flagged ? 0.9 : 0.1 }
+				},
+			}
+			return { calls, env: { ...db.env, JEV: gate } }
+		}
+
+		it("stores a stranger's save as a pending suggestion and leaves the live lyric alone", async () => {
+			const patch = await propose(lrc(swapWords(LRC, 1)))
+			expect(patch).toMatchObject({ status: "pending", pendingReason: null })
+			const { rows } = await db.pool.query("SELECT author_id FROM lyric_revisions WHERE id = $1", [
+				patch.id,
+			])
+			expect(rows[0].author_id).toBe(proposer)
+			expect(await liveLyrics()).toBe(LRC)
+			await expectInvariants()
+		})
+
+		it("regression: a waiting suggestion stays out of the revision count old clients read", async () => {
+			await propose(lrc(swapWords(LRC, 1)))
+			const bar = await getRevisionBar(db.env.DB, { id: lyricId, created_at: 1700000000 })
+			expect(bar.count).toBe((await listRevisions(db.env, lyricId))?.length)
+		})
+
+		it("never lets a stranger replace someone else's pending revision, only their own", async () => {
+			const other = await seedProposer("f".repeat(64))
+			const ownerEdit = await save(lrc(swapWords(LRC, 15)))
+			expect(await saveRevision(db.env, lyricId, proposer, lrc(swapWords(LRC, 1)))).toEqual({
+				ok: false,
+				reason: "pending_taken",
+			})
+			await withdrawPending(db.env, lyricId, owner)
+
+			const first = await propose(lrc(swapWords(LRC, 1)))
+			expect(await saveRevision(db.env, lyricId, other, lrc(swapWords(LRC, 2)))).toEqual({
+				ok: false,
+				reason: "pending_taken",
+			})
+			const second = await propose(lrc(swapWords(LRC, 2)))
+			expect(await statuses()).toEqual([
+				{ rev_no: 1, status: "live" },
+				{ rev_no: ownerEdit.revNo, status: "withdrawn" },
+				{ rev_no: first.revNo, status: "superseded" },
+				{ rev_no: second.revNo, status: "pending" },
+			])
+		})
+
+		it("refuses a banned stranger's suggestion as if the slot were taken, without asking Jev", async () => {
+			await db.pool.query("UPDATE users SET banned_at = 1700000000 WHERE id = $1", [proposer])
+			const { calls, env } = recordingGate(false)
+			expect(await saveRevision(env, lyricId, proposer, lrc(swapWords(LRC, 1)))).toEqual({
+				ok: false,
+				reason: "pending_taken",
+			})
+			expect(calls).toEqual([])
+			expect(await statuses()).toEqual([{ rev_no: 1, status: "live" }])
+			const other = await seedProposer("f".repeat(64))
+			const patch = await propose(lrc(swapWords(LRC, 1)), other)
+			expect(patch).toMatchObject({ status: "pending", pendingReason: null })
+		})
+
+		describe("trust floor", () => {
+			const NEWCOMER_KEY = "d".repeat(64)
+
+			const hideByVotes = (id: number) =>
+				db.pool.query(
+					"UPDATE lyrics SET vote_count = $2, downvotes = $2, effective_score = $3 WHERE id = $1",
+					[
+						id,
+						config.moderation.autoHide.minVotes,
+						config.moderation.autoHide.maxEffectiveScore - 1,
+					]
+				)
+
+			const ownLyric = (userId: number) =>
+				seedLyric(db, userId, { lyrics: LRC, format: "lrc", videoId: "newcomer001" })
+
+			async function expectRefused(userId: number) {
+				const { calls, env } = recordingGate(false)
+				const input = lrc(swapWords(LRC, 1))
+				const refused = { ok: false, reason: "needs_lyric" }
+				expect(await saveRevision(env, lyricId, userId, input)).toEqual(refused)
+				expect(await previewRevision(env, lyricId, userId, input)).toEqual(refused)
+				expect(await compareWithLive(env, lyricId, userId, input)).toEqual(refused)
+				expect(calls).toEqual([])
+				expect(await statuses()).toEqual([{ rev_no: 1, status: "live" }])
+			}
+
+			it("refuses an account with no lyric of its own on save, preview and compare", async () => {
+				await expectRefused(await seedUser(db, NEWCOMER_KEY))
+			})
+
+			it("refuses an account whose only lyric is deleted", async () => {
+				const newcomer = await seedUser(db, NEWCOMER_KEY)
+				const own = await ownLyric(newcomer)
+				await db.pool.query(
+					"UPDATE lyrics SET deleted_at = 1700000000, deleted_by_user_id = $2, deleted_by_role = 'submitter' WHERE id = $1",
+					[own, newcomer]
+				)
+				await expectRefused(newcomer)
+			})
+
+			it("refuses an account whose only lyric is hidden from public reads", async () => {
+				const newcomer = await seedUser(db, NEWCOMER_KEY)
+				await hideByVotes(await ownLyric(newcomer))
+				await expectRefused(newcomer)
+			})
+
+			it("lets an account with one live lyric suggest", async () => {
+				const newcomer = await seedUser(db, NEWCOMER_KEY)
+				await ownLyric(newcomer)
+				const preview = await previewRevision(db.env, lyricId, newcomer, lrc(swapWords(LRC, 1)))
+				expect(preview.ok).toBe(true)
+				const patch = await propose(lrc(swapWords(LRC, 1)), newcomer)
+				expect(patch.status).toBe("pending")
+			})
+
+			it("lets a council member with no lyric suggest", async () => {
+				const member = await seedCouncilMember(db, NEWCOMER_KEY)
+				const patch = await propose(lrc(swapWords(LRC, 1)), member)
+				expect(patch.status).toBe("pending")
+			})
+
+			it("never holds the owner to it, even when their only lyric is hidden", async () => {
+				await hideByVotes(lyricId)
+				const preview = await previewRevision(db.env, lyricId, owner, lrc(swapWords(LRC, 1)))
+				expect(preview.ok).toBe(true)
+				expect((await save(lrc(swapWords(LRC, 1)))).status).toBe("live")
+			})
+		})
+
+		it("sends a suggestion Jev flags to the council at once", async () => {
+			const { calls, env } = recordingGate(true)
+			const result = await saveRevision(env, lyricId, proposer, lrc(swapWords(LRC, 1)))
+			expect(calls).toHaveLength(1)
+			expect(result).toMatchObject({
+				ok: true,
+				revision: { status: "pending", pendingReason: "flagged" },
+			})
+			expect((await listPendingCards(db.env)).map((c) => c.pendingReason)).toEqual(["flagged"])
+		})
+
+		it("stores the proposer's note on a suggestion and none on an owner save", async () => {
+			const patch = await propose(lrc(swapWords(LRC, 1), { note: "Fixed the second verse" }))
+			const ownerEdit = await save(lrc(swapWords(LRC, 2), { note: "Ignored" }))
+			const { rows } = await db.pool.query(
+				"SELECT id, author_note FROM lyric_revisions WHERE id = ANY($1) ORDER BY id",
+				[[patch.id, ownerEdit.id]]
+			)
+			expect(rows).toEqual([
+				{ id: patch.id, author_note: "Fixed the second verse" },
+				{ id: ownerEdit.id, author_note: null },
+			])
+		})
+
+		it("lets an owner save supersede a pending suggestion", async () => {
+			await propose(lrc(swapWords(LRC, 1)))
+			expect((await save(lrc(swapWords(LRC, 2)))).status).toBe("live")
+			expect(await statuses()).toEqual([
+				{ rev_no: 1, status: "past" },
+				{ rev_no: 2, status: "superseded" },
+				{ rev_no: 3, status: "live" },
+			])
+		})
+
+		it("lets the owner approve a suggestion without moving the anchor or logging a council event", async () => {
+			for (const swaps of [5, 10]) {
+				const patch = await propose(lrc(swapWords(LRC, swaps)))
+				const approved = await approveRevision(db.env, lyricId, patch.id, owner, "web")
+				expect(approved).toMatchObject({
+					ok: true,
+					revision: { status: "live", isAnchor: false, reviewedAt: expect.any(Number) },
+				})
+				expect(await liveLyrics()).toBe(swapWords(LRC, swaps))
+			}
+			const { rows } = await db.pool.query(
+				`SELECT r.author_id, r.reviewed_by, l.anchor_revision_id = $2 AS anchor_kept
+				 FROM lyrics l JOIN lyric_revisions r ON r.id = l.current_revision_id WHERE l.id = $1`,
+				[lyricId, await revisionId(1)]
+			)
+			expect(rows[0]).toEqual({ author_id: proposer, reviewed_by: owner, anchor_kept: true })
+			expect(await propose(lrc(swapWords(LRC, 15)))).toMatchObject({
+				pendingReason: "large_text_drift",
+			})
+			expect(await councilEvents()).toEqual([])
+			await expectInvariants()
+		})
+
+		it("lets the owner reject but not approve a suggestion held for another reason", async () => {
+			const patch = await propose(lrc(swapWords(LRC, 15)))
+			expect(patch.pendingReason).toBe("large_text_drift")
+			expect(await approveRevision(db.env, lyricId, patch.id, owner, "web")).toEqual({
+				ok: false,
+				reason: "not_committee",
+			})
+			expect(await rejectRevision(db.env, lyricId, patch.id, owner, "no", "web")).toMatchObject({
+				ok: true,
+				revision: { status: "rejected", reviewNote: "no" },
+			})
+			expect(await councilEvents()).toEqual([])
+		})
+
+		it("refuses a decision from the suggestion's author or from someone outside the council", async () => {
+			const author = await seedCouncilMember(db, "c".repeat(64))
+			const outsider = await seedUser(db, "f".repeat(64))
+			const patch = await propose(lrc(swapWords(LRC, 15)), author)
+			expect(await approveRevision(db.env, lyricId, patch.id, author, "web")).toEqual({
+				ok: false,
+				reason: "own_patch",
+			})
+			expect(await rejectRevision(db.env, lyricId, patch.id, author, null, "web")).toEqual({
+				ok: false,
+				reason: "own_patch",
+			})
+			expect(await rejectRevision(db.env, lyricId, patch.id, outsider, null, "web")).toEqual({
+				ok: false,
+				reason: "not_committee",
+			})
+		})
+
+		it("keeps the council off a suggestion until the owner's window closes", async () => {
+			const council = await seedCouncilMember(db, "c".repeat(64))
+			const patch = await propose(lrc(swapWords(LRC, 1)))
+			expect(await approveRevision(db.env, lyricId, patch.id, council, "web")).toEqual({
+				ok: false,
+				reason: "owner_window",
+			})
+			await backdate(patch.id)
+			expect(await approveRevision(db.env, lyricId, patch.id, council, "web")).toMatchObject({
+				ok: true,
+				revision: { status: "live", isAnchor: true },
+			})
+			expect((await councilEvents()).map((e) => e.kind)).toEqual(["edit_approve"])
+		})
+
+		it("hands a suggestion to the council at once when the lyric is sealed after it was made", async () => {
+			const council = await seedCouncilMember(db, "c".repeat(64))
+			const patch = await propose(lrc(swapWords(LRC, 1)))
+			await sealLyric(council)
+			expect(await approveRevision(db.env, lyricId, patch.id, owner, "web")).toEqual({
+				ok: false,
+				reason: "not_committee",
+			})
+			expect(await approveRevision(db.env, lyricId, patch.id, council, "web")).toMatchObject({
+				ok: true,
+				revision: { status: "live", isAnchor: true },
+			})
+		})
+
+		it("hands a suggestion on a community-owned lyric to the council at once", async () => {
+			const community = await seedUser(db, COMMUNITY_KEY_ID)
+			await db.pool.query("UPDATE lyrics SET submitter_id = $2 WHERE id = $1", [lyricId, community])
+			const council = await seedCouncilMember(db, "c".repeat(64))
+			const patch = await propose(lrc(swapWords(LRC, 1)))
+			const bar = await getRevisionBar(db.env.DB, { id: lyricId, created_at: 1700000000 })
+			expect(bar.suggestion?.councilDecidesAt).toBeNull()
+			expect((await listCouncilEdits(db.env)).items).toMatchObject([
+				{ revisionId: patch.id, ownerless: true },
+			])
+			expect(await listPendingCards(db.env)).toMatchObject([{ ownerless: true }])
+			expect(await approveRevision(db.env, lyricId, patch.id, council, "web")).toMatchObject({
+				ok: true,
+				revision: { status: "live" },
+			})
+		})
+
+		it("lists a suggestion on a sealed lyric for the council inside the owner's window", async () => {
+			const patch = await propose(lrc(swapWords(LRC, 1)))
+			await sealLyric(owner)
+			expect((await listPendingCards(db.env)).map((c) => c.revisionId)).toEqual([patch.id])
+			expect((await listCouncilEdits(db.env)).items).toMatchObject([
+				{ revisionId: patch.id, ownerless: false },
+			])
+		})
+
+		it("lets only the author withdraw a suggestion", async () => {
+			await propose(lrc(swapWords(LRC, 1)))
+			expect(await withdrawPending(db.env, lyricId, owner)).toEqual({
+				ok: false,
+				reason: "not_owner",
+			})
+			expect(await withdrawPending(db.env, lyricId, proposer)).toMatchObject({
+				ok: true,
+				revision: { status: "withdrawn" },
+			})
+		})
+
+		it("hides a suggestion from the council queues while the owner's window is open", async () => {
+			const patch = await propose(lrc(swapWords(LRC, 1)))
+			expect(await listPendingCards(db.env)).toEqual([])
+			expect((await listCouncilEdits(db.env)).items).toEqual([])
+			await backdate(patch.id)
+			expect((await listPendingCards(db.env)).map((c) => c.revisionId)).toEqual([patch.id])
+			expect((await listCouncilEdits(db.env)).items.map((c) => c.revisionId)).toEqual([patch.id])
+		})
+
+		it("keeps suggestions out of the owner's per-lyric edit budget", async () => {
+			const now = Math.floor(Date.now() / 1000)
+			await insertHistory(lyricId, proposer, config.revisions.patchesPerLyricPerWindow, now)
+			expect(await saveRevision(db.env, lyricId, proposer, lrc(swapWords(LRC, 1)))).toEqual({
+				ok: false,
+				reason: "rate_limited",
+			})
+			expect((await save(lrc(swapWords(LRC, 1)))).status).toBe("live")
+		})
+
+		it("withdraws a proposer's pending suggestions when the account is banned", async () => {
+			const patch = await propose(lrc(swapWords(LRC, 1)))
+			await backdate(patch.id)
+			await setBanned(db.env, "b".repeat(64), true)
+			expect((await statuses()).at(-1)).toEqual({ rev_no: patch.revNo, status: "withdrawn" })
+			await setBanned(db.env, "b".repeat(64), false)
+			expect((await statuses()).at(-1)).toEqual({ rev_no: patch.revNo, status: "withdrawn" })
+			const another = await seedProposer("f".repeat(64))
+			expect(await propose(lrc(swapWords(LRC, 2)), another)).toMatchObject({ status: "pending" })
+		})
+
+		it("regression: a ban that lands while a suggestion is saving still withdraws it", async () => {
+			let ban: Promise<boolean> | undefined
+			const banBeforeCommit = new (class extends D1Compat {
+				override async transaction<T>(fn: (tx: D1Compat) => Promise<T>): Promise<T> {
+					return super.transaction(async (tx) => {
+						const result = await fn(tx)
+						ban ??= setBanned(db.env, "b".repeat(64), true)
+						await Promise.race([ban, new Promise((resolve) => setTimeout(resolve, 200))])
+						return result
+					})
+				}
+			})(db.pool)
+			await saveRevision(
+				{ ...db.env, DB: banBeforeCommit },
+				lyricId,
+				proposer,
+				lrc(swapWords(LRC, 1))
+			)
+			await ban
+			expect((await statuses()).at(-1)).toMatchObject({ status: "withdrawn" })
+		})
+
+		it("hides a suggestion whose author is banned from the bar, the inbox and the council", async () => {
+			const patch = await propose(lrc(swapWords(LRC, 1)))
+			await backdate(patch.id)
+			await db.pool.query("UPDATE users SET banned_at = 1700000000 WHERE id = $1", [proposer])
+			const bar = await getRevisionBar(db.env.DB, { id: lyricId, created_at: 1700000000 })
+			expect(bar.suggestion).toBeUndefined()
+			expect(await listSuggestionsForOwner(db.env.DB, owner, 10)).toEqual([])
+			expect(await listPendingCards(db.env)).toEqual([])
+			expect((await listCouncilEdits(db.env)).items).toEqual([])
+		})
+
+		it("regression: one proposer using up their suggestions on a lyric leaves others room", async () => {
+			for (let i = 1; i <= config.revisions.patchesPerLyricPerWindow; i++) {
+				await propose(lrc(swapWords(LRC, i)))
+				await withdrawPending(db.env, lyricId, proposer)
+			}
+			expect(await saveRevision(db.env, lyricId, proposer, lrc(swapWords(LRC, 9)))).toEqual({
+				ok: false,
+				reason: "rate_limited",
+			})
+			const another = await seedProposer("f".repeat(64))
+			expect(await propose(lrc(swapWords(LRC, 9)), another)).toMatchObject({ status: "pending" })
 		})
 	})
 
@@ -1854,6 +2267,14 @@ describeIntegration("lyric revisions pipeline (integration)", () => {
 				expect(fieldRows((await diffRevisions(db.env, lyricId, revision.id, null))?.rows)).toEqual([
 					{ kind: "field", field: "album", before: null, after: "Sacred Songs" },
 				])
+			})
+
+			it("regression: emits the album row for an album change after a lyrics-only edit", async () => {
+				await save(lrc(swapWords(LRC, 1)))
+				const albumEdit = await save(lrc(swapWords(LRC, 1), { album: "Sacred Songs" }))
+				expect(fieldRows((await diffRevisions(db.env, lyricId, albumEdit.id, null))?.rows)).toEqual(
+					[{ kind: "field", field: "album", before: null, after: "Sacred Songs" }]
+				)
 			})
 
 			it("emits a row for a field cleared between revisions", async () => {

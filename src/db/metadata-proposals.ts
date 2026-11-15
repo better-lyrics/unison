@@ -2,6 +2,7 @@ import { config } from "@/config"
 import type { SongMetadata } from "@/db/approved-metadata"
 import { isCommittee } from "@/db/committee"
 import { recordCouncilEvent } from "@/db/council-events"
+import { carryPendingAlbums } from "@/db/lyric-revisions"
 import { NOW_EPOCH, videoServesExpr } from "@/db/predicates"
 import { type D1Compat, isUniqueViolation } from "@/infra/database"
 import type { Env } from "@/types"
@@ -88,6 +89,7 @@ export async function createProposal(
 }
 
 async function rewriteVideo(tx: D1Compat, videoId: string, next: SongMetadata): Promise<number[]> {
+	await carryPendingAlbums(tx, videoId, next.album)
 	const rows = await tx
 		.prepare(
 			`UPDATE lyrics SET song = ?, artist = ?, album = ?,

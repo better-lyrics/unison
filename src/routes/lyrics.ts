@@ -2,7 +2,7 @@ import { config } from "@/config"
 import { getMySubmissions } from "@/db/feed"
 import { parseFeedFilters } from "@/db/feed-filters"
 import { getFulfillmentByLyricsId } from "@/db/fulfillments"
-import { getRevisionBar, getRevisionBars } from "@/db/lyric-revisions"
+import { getRevisionBar, getRevisionBars, listSuggestionsForOwner } from "@/db/lyric-revisions"
 import {
 	findServedByVideoId,
 	findVariantsByVideoId,
@@ -364,6 +364,19 @@ export const lyricsRoutes = (env: Env) =>
 				}),
 			}
 		)
+		.get("/mine/suggestions", async ({ env, lyricsBearerUserId, status }) => {
+			if (!lyricsBearerUserId) {
+				return status(401, buildError(ErrorCode.AUTH_REQUIRED))
+			}
+			return {
+				success: true,
+				data: await listSuggestionsForOwner(
+					env.DB,
+					lyricsBearerUserId,
+					config.revisions.suggestionInboxLimit
+				),
+			}
+		})
 		.get(
 			"/:id",
 			async ({ params, env, lyricsUserId, status }) => {

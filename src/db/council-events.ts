@@ -1,6 +1,7 @@
 import { type Person, resolvePeople } from "@/db/users"
 import type { D1Compat } from "@/infra/database"
 import type { Env } from "@/types"
+import { ownerDecisionSql } from "@/utils/lyric-patch"
 
 export type CouncilEventKind =
 	| "seal"
@@ -255,8 +256,10 @@ const HISTORY_BACKFILLS = [
 		CASE WHEN lr.status = 'rejected' THEN 'edit_reject' ELSE 'edit_approve' END,
 		'discord', lr.lyrics_id, lr.id, lr.review_note, lr.reviewed_at
 	 FROM lyric_revisions lr
+	 JOIN lyrics l ON l.id = lr.lyrics_id
 	 WHERE lr.reviewed_by IS NOT NULL AND lr.reviewed_at IS NOT NULL
 		AND lr.status IN ('live', 'past', 'rejected')
+		AND NOT ${ownerDecisionSql("lr", "l")}
 		AND ${unrecorded("'edit_approve', 'edit_reject'", "lr.id")}
 	 ON CONFLICT DO NOTHING RETURNING id`,
 	`INSERT INTO council_events (actor_id, kind, source, subject_user_id, ref_id, created_at)

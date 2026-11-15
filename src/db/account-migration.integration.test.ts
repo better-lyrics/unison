@@ -756,6 +756,26 @@ describeIntegration("account migration (integration)", () => {
 			expect(await num("SELECT count(*)::int n FROM users WHERE id = $1", [newId])).toBe(0)
 		})
 
+		it("withdraws a pending suggestion the merge turns into the owner's own", async () => {
+			const { oldId, newId } = await seedIdentities()
+			const merged = await insertLyric(oldId, "vidRevD")
+			await ensureBaseRevision(env.DB, merged)
+			await pool.query(
+				`INSERT INTO lyric_revisions (lyrics_id, rev_no, author_id, lyrics, format, sync_type, content_hash, status, pending_reason)
+				 VALUES ($1, 2, $2, 'gz', 'lrc', 'linesync', 'suggestion', 'pending', 'suggested')`,
+				[merged, newId]
+			)
+
+			await migrate("sess-revisions-suggestion")
+
+			expect(
+				await one(
+					"SELECT author_id, status FROM lyric_revisions WHERE lyrics_id = $1 AND rev_no = 2",
+					[merged]
+				)
+			).toEqual({ author_id: oldId, status: "withdrawn" })
+		})
+
 		it("restores revision authorship on undo", async () => {
 			const { oldId, newId } = await seedIdentities()
 			const authored = await insertLyric(newId, "vidRevA")

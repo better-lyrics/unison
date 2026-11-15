@@ -8,7 +8,8 @@ import {
 	seedUser,
 	wipeRevisionData,
 } from "@/test/integration-harness"
-import { readRevisionFixture } from "@/test/lyric-fixtures"
+import { approveRevision, saveRevision } from "@/services/lyric-revisions"
+import { readRevisionFixture, swapWords } from "@/test/lyric-fixtures"
 import type { MetadataInput } from "@/utils/metadata-input"
 import { normalizeAlbum, normalizeArtist, normalizeSong } from "@/utils/normalize"
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest"
@@ -225,6 +226,55 @@ describeIntegration("metadata proposals (integration)", () => {
 			await castVote(db.env, id, second, true, null)
 			await castVote(db.env, id, third, true, null)
 			expect((await rows())[0]).toMatchObject({ album: null, album_norm: null })
+		})
+
+		describe("pending revisions", () => {
+			beforeEach(async () => {
+				await seedLyric(db, outsider, { lyrics: LRC, format: "lrc", videoId: "outsiderown" })
+			})
+
+			const pendingAlbum = async (revisionId: number) =>
+				(await db.pool.query("SELECT album FROM lyric_revisions WHERE id = $1", [revisionId]))
+					.rows[0].album
+
+			async function suggest(album?: string) {
+				await db.pool.query(
+					"UPDATE lyrics SET album = 'Hymns of Grace', album_norm = 'hymns of grace' WHERE id = $1",
+					[seeded]
+				)
+				const result = await saveRevision(db.env, seeded, outsider, {
+					lyrics: swapWords(LRC, 1),
+					format: "lrc",
+					...(album === undefined ? {} : { album }),
+				})
+				if (!result.ok) throw new Error(result.reason)
+				return result.revision.id
+			}
+
+			async function passProposal() {
+				const id = await propose()
+				await castVote(db.env, id, second, true, null)
+				expect(await castVote(db.env, id, third, true, null)).toMatchObject({ status: "passed" })
+			}
+
+			it("regression: an older suggestion approved after an album change keeps the new album", async () => {
+				const suggestion = await suggest()
+				await passProposal()
+				expect(await pendingAlbum(suggestion)).toBe(PROPOSED.album)
+				await approveRevision(db.env, seeded, suggestion, submitter, "web")
+				expect((await rows())[0]).toMatchObject({
+					album: PROPOSED.album,
+					album_norm: normalizeAlbum(PROPOSED.album),
+				})
+			})
+
+			it("keeps the album a pending revision chose itself", async () => {
+				const suggestion = await suggest("Live at the Chapel")
+				await passProposal()
+				expect(await pendingAlbum(suggestion)).toBe("Live at the Chapel")
+				await approveRevision(db.env, seeded, suggestion, submitter, "web")
+				expect((await rows())[0].album).toBe("Live at the Chapel")
+			})
 		})
 
 		it("closes the proposal on one reject without touching rows", async () => {
