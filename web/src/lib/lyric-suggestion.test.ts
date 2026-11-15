@@ -10,6 +10,7 @@ import {
   isOwnSuggestion,
   isOwnerless,
   jumpTargets,
+  lyricsFormatOf,
   previewActions,
   suggestAction,
   suggestionDecider,
@@ -305,5 +306,39 @@ describe("jumpTargets", () => {
         text: "Long after the last car passed",
       },
     ])
+  })
+})
+
+const [{ detectFormat }] = Object.values(
+  import.meta.glob<{ detectFormat: (content: string) => string }>("../../../src/utils/validation.ts", {
+    eager: true,
+  }),
+)
+
+describe("lyricsFormatOf", () => {
+  const ENHANCED_LRC = [
+    "<00:12.40>Lanterns <00:13.10>drift <00:13.80>over <00:14.50>the <00:14.90>harbour",
+    "<00:16.20>Salt <00:16.90>on <00:17.30>the <00:17.70>window <00:18.60>glass",
+  ].join("\n")
+  const LINE_LRC = "[00:12.40]Lanterns drift over the harbour\n[00:16.20]Salt on the window glass"
+  const TTML = [
+    '<tt xmlns="http://www.w3.org/ns/ttml"><body><div>',
+    '<p begin="00:12.400" end="00:16.200">Lanterns drift over the harbour</p>',
+    "</div></body></tt>",
+  ].join("")
+  const PLAIN = "Lanterns drift over the harbour\nSalt on the window glass"
+
+  it("regression: sends a word-timed LRC that opens with a word tag as LRC", () => {
+    expect(lyricsFormatOf(ENHANCED_LRC)).toBe("lrc")
+  })
+
+  it("names every well-formed file the way the server detects it", () => {
+    for (const text of [ENHANCED_LRC, LINE_LRC, TTML, `\n  ${TTML}`, PLAIN]) {
+      expect(lyricsFormatOf(text)).toBe(detectFormat(text))
+    }
+  })
+
+  it("still sends a TTML file with a broken body as TTML so the server explains what is wrong", () => {
+    expect(lyricsFormatOf('<tt xmlns="http://www.w3.org/ns/ttml"><body><div><p>Lanterns')).toBe("ttml")
   })
 })

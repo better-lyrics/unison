@@ -137,11 +137,13 @@ export function jumpTargets(rows: DiffRow[]): JumpTarget[] {
     .sort((a, b) => a.startMs - b.startMs)
 }
 
-const LRC_TAG = /[[<]\d{1,2}:\d{2}[.:]\d{2,3}[\]>]/
+const TTML_ROOT = /<tt[\s>]/i
+const LRC_WORD_TAG = /<\d{1,2}:\d{2}[.:]\d{2,3}>/
+const LRC_LINE_TAG = /\[\d{1,2}:\d{2}[.:]\d{2,3}\]/
 
 export function lyricsFormatOf(text: string): LyricsFormat {
-  if (text.trimStart().startsWith("<")) return "ttml"
-  return LRC_TAG.test(text) ? "lrc" : "plain"
+  if (TTML_ROOT.test(text)) return "ttml"
+  return LRC_WORD_TAG.test(text) || LRC_LINE_TAG.test(text) ? "lrc" : "plain"
 }
 
 export function suggestionErrorMessage(error: unknown): string {
