@@ -2,10 +2,12 @@ import { config } from "@/config"
 import {
 	type IntegrationDb,
 	describeIntegration,
+	holdRowLock,
 	openIntegrationDb,
 	seedCouncilMember,
 	seedLyric,
 	seedUser,
+	waitForLockWaiters,
 	wipeRevisionData,
 } from "@/test/integration-harness"
 import { approveRevision, saveRevision } from "@/services/lyric-revisions"
@@ -266,6 +268,38 @@ describeIntegration("metadata proposals (integration)", () => {
 					album: PROPOSED.album,
 					album_norm: normalizeAlbum(PROPOSED.album),
 				})
+			})
+
+			it("regression: an album change and an approval on another variant both commit", async () => {
+				const variantOwner = await seedUser(db, kid(7))
+				const variant = await seedLyric(db, variantOwner, {
+					lyrics: LRC,
+					format: "lrc",
+					videoId: VIDEO,
+				})
+				const saved = await saveRevision(db.env, variant, outsider, {
+					lyrics: swapWords(LRC, 1),
+					format: "lrc",
+				})
+				if (!saved.ok) throw new Error(saved.reason)
+				const id = await propose()
+				await castVote(db.env, id, second, true, null)
+				const release = await holdRowLock(
+					db.pool,
+					"SELECT id FROM lyric_revisions WHERE lyrics_id = $1 AND status = 'live' FOR UPDATE",
+					[variant]
+				)
+				const approving = approveRevision(db.env, variant, saved.revision.id, variantOwner, "web")
+				await waitForLockWaiters(db.pool, 1)
+				const passing = castVote(db.env, id, third, true, null)
+				await waitForLockWaiters(db.pool, 2)
+				await release()
+				const results = await Promise.allSettled([approving, passing])
+				expect(results.map((r) => (r.status === "rejected" ? String(r.reason) : "ok"))).toEqual([
+					"ok",
+					"ok",
+				])
+				expect((await rows()).map((r) => r.album)).toEqual([PROPOSED.album, PROPOSED.album])
 			})
 
 			it("keeps the album a pending revision chose itself", async () => {

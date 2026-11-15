@@ -89,6 +89,10 @@ export async function createProposal(
 }
 
 async function rewriteVideo(tx: D1Compat, videoId: string, next: SongMetadata): Promise<number[]> {
+	await tx
+		.prepare(`SELECT id FROM lyrics WHERE ${videoServesExpr()} ORDER BY id FOR UPDATE`)
+		.bind(videoId, videoId)
+		.all()
 	await carryPendingAlbums(tx, videoId, next.album)
 	const rows = await tx
 		.prepare(
