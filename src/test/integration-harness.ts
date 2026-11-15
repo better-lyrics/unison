@@ -106,6 +106,32 @@ export class InterleavedDb extends D1Compat {
 	}
 }
 
+export async function holdRowLock(
+	pool: pg.Pool,
+	sql: string,
+	params: unknown[]
+): Promise<() => Promise<void>> {
+	const client = await pool.connect()
+	await client.query("BEGIN")
+	await client.query(sql, params)
+	return async () => {
+		await client.query("ROLLBACK")
+		client.release()
+	}
+}
+
+export async function waitForLockWaiters(pool: pg.Pool, count: number): Promise<void> {
+	for (let attempt = 0; attempt < 200; attempt++) {
+		const { rows } = await pool.query<{ n: number }>(
+			`SELECT COUNT(*)::INTEGER AS n FROM pg_stat_activity
+			 WHERE datname = current_database() AND wait_event_type = 'Lock'`
+		)
+		if (rows[0].n >= count) return
+		await new Promise((resolve) => setTimeout(resolve, 25))
+	}
+	throw new Error(`expected ${count} transactions waiting on a lock`)
+}
+
 export async function wipeCouncilTables(pool: pg.Pool): Promise<void> {
 	await pool.query("DELETE FROM report_case_votes")
 	await pool.query("DELETE FROM report_cases")

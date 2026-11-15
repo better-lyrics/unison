@@ -146,6 +146,8 @@ const JEV_DISABLED: JevStep = { state: "disabled" }
 const JEV_SKIPPED: JevStep = { state: "skipped" }
 
 class UncheckedLiveEdit extends Error {}
+
+class StaleDecision extends Error {}
 const NOT_SAVABLE: GateOutcome = { goesLive: false, reason: null }
 
 const joinText = (lines: LyricLine[]): string => lines.map((line) => line.text).join("\n")
@@ -765,49 +767,54 @@ async function decide(
 	revisionId: number,
 	reviewerId: number,
 	log: DecisionLog,
-	apply: (tx: D1Compat, revision: RevisionRow, role: DecisionRole) => Promise<void>
+	apply: (tx: D1Compat, revision: RevisionRow, role: DecisionRole) => Promise<boolean>
 ): Promise<DecisionResult> {
 	const isCouncil = await isCommittee(env, reviewerId)
-	return env.DB.transaction(async (tx): Promise<DecisionResult> => {
-		const lyric = await loadLyricState(tx, lyricsId, true)
-		if (!lyric || lyric.deleted_at !== null) return { ok: false, reason: "not_found" }
-		const revision = await getRevisionRow(tx, lyricsId, revisionId)
-		if (!revision) return { ok: false, reason: "not_found" }
-		const decision = decisionRole({
-			action: log.kind === "edit_approve" ? "approve" : "reject",
-			reviewerId,
-			isCouncil,
-			submitterId: lyric.submitter_id,
-			authorId: revision.author_id,
-			reason: revision.pending_reason,
-			sealed: lyric.committee_approved_at !== null,
-			ownerless: lyric.ownerless,
-			createdAt: revision.created_at,
-			now: Math.floor(Date.now() / 1000),
-		})
-		if (!decision.ok && decision.reason !== "owner_window") return decision
-		if (revision.status === "superseded" || revision.status === "withdrawn") {
-			return { ok: false, reason: "stale" }
-		}
-		if (revision.status !== "pending") return { ok: false, reason: "already_decided" }
-		if (!decision.ok) return decision
-		await apply(tx, revision, decision.role)
-		if (decision.role === "owner") {
+	try {
+		return await env.DB.transaction(async (tx): Promise<DecisionResult> => {
+			const lyric = await loadLyricState(tx, lyricsId, true)
+			if (!lyric || lyric.deleted_at !== null) return { ok: false, reason: "not_found" }
+			const revision = await getRevisionRow(tx, lyricsId, revisionId)
+			if (!revision) return { ok: false, reason: "not_found" }
+			const decision = decisionRole({
+				action: log.kind === "edit_approve" ? "approve" : "reject",
+				reviewerId,
+				isCouncil,
+				submitterId: lyric.submitter_id,
+				authorId: revision.author_id,
+				reason: revision.pending_reason,
+				sealed: lyric.committee_approved_at !== null,
+				ownerless: lyric.ownerless,
+				createdAt: revision.created_at,
+				now: Math.floor(Date.now() / 1000),
+			})
+			if (!decision.ok && decision.reason !== "owner_window") return decision
+			if (revision.status === "superseded" || revision.status === "withdrawn") {
+				return { ok: false, reason: "stale" }
+			}
+			if (revision.status !== "pending") return { ok: false, reason: "already_decided" }
+			if (!decision.ok) return decision
+			if (!(await apply(tx, revision, decision.role))) throw new StaleDecision()
+			if (decision.role === "owner") {
+				const summary = await getRevisionSummary(tx, lyricsId, revisionId)
+				return { ok: true, revision: summary! }
+			}
+			await recordCouncilEvent(tx, {
+				actorId: reviewerId,
+				kind: log.kind,
+				source: log.source,
+				lyricsId,
+				refId: revision.id,
+				note: log.note,
+			})
+			await releaseBookmarksForItem(tx, "edit", revision.id)
 			const summary = await getRevisionSummary(tx, lyricsId, revisionId)
 			return { ok: true, revision: summary! }
-		}
-		await recordCouncilEvent(tx, {
-			actorId: reviewerId,
-			kind: log.kind,
-			source: log.source,
-			lyricsId,
-			refId: revision.id,
-			note: log.note,
 		})
-		await releaseBookmarksForItem(tx, "edit", revision.id)
-		const summary = await getRevisionSummary(tx, lyricsId, revisionId)
-		return { ok: true, revision: summary! }
-	})
+	} catch (err) {
+		if (err instanceof StaleDecision) return { ok: false, reason: "stale" }
+		throw err
+	}
 }
 
 export async function approveRevision(
@@ -826,9 +833,10 @@ export async function approveRevision(
 		log,
 		async (tx, revision, role) => {
 			await retireLiveRevision(tx, lyricsId)
-			await recordReview(tx, revision.id, "live", reviewerId, null)
+			if (!(await recordReview(tx, revision.id, "live", reviewerId, null))) return false
 			await setCurrentRevision(tx, revision)
 			if (role === "council") await setAnchorRevision(tx, lyricsId, revision.id)
+			return true
 		}
 	)
 	if (result.ok) await invalidateCacheForLyric(env, lyricsId)

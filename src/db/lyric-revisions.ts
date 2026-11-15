@@ -493,16 +493,18 @@ export async function recordReview(
 	status: "live" | "rejected",
 	reviewerId: number,
 	note: string | null
-): Promise<void> {
-	await tx
+): Promise<boolean> {
+	const row = await tx
 		.prepare(
 			`UPDATE lyric_revisions
 			SET status = ?, reviewed_by = ?, review_note = ?,
 				reviewed_at = EXTRACT(EPOCH FROM NOW())::INTEGER
-			WHERE id = ?`
+			WHERE id = ? AND status = 'pending'
+			RETURNING id`
 		)
 		.bind(status, reviewerId, note, revisionId)
-		.run()
+		.first<{ id: number }>()
+	return row !== null
 }
 
 export function revisionAuthor(

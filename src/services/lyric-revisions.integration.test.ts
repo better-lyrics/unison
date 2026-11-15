@@ -11,10 +11,12 @@ import {
 	type IntegrationDb,
 	InterleavedDb,
 	describeIntegration,
+	holdRowLock,
 	openIntegrationDb,
 	seedCouncilMember,
 	seedLyric,
 	seedUser,
+	waitForLockWaiters,
 	wipeRevisionData,
 } from "@/test/integration-harness"
 import {
@@ -1760,6 +1762,21 @@ describeIntegration("lyric revisions pipeline (integration)", () => {
 			)
 			await ban
 			expect((await statuses()).at(-1)).toMatchObject({ status: "withdrawn" })
+		})
+
+		it("regression: a ban that withdraws a suggestion while it is being approved wins", async () => {
+			const patch = await propose(lrc(swapWords(LRC, 1)))
+			const release = await holdRowLock(
+				db.pool,
+				"SELECT id FROM lyric_revisions WHERE lyrics_id = $1 AND status = 'live' FOR UPDATE",
+				[lyricId]
+			)
+			const approving = approveRevision(db.env, lyricId, patch.id, owner, "web")
+			await waitForLockWaiters(db.pool, 1)
+			await setBanned(db.env, "b".repeat(64), true)
+			await release()
+			expect(await approving).toEqual({ ok: false, reason: "stale" })
+			expect((await statuses()).map((r) => r.status)).toEqual(["live", "withdrawn"])
 		})
 
 		it("hides a suggestion whose author is banned from the bar, the inbox and the council", async () => {
