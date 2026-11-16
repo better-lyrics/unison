@@ -5,6 +5,7 @@ import { lapseRejectionForEdit } from "@/db/rejections"
 import { type D1Compat, advisoryXactLock } from "@/infra/database"
 import { Logger } from "@/infra/logger"
 import type {
+	DecisionRole,
 	LyricsFormat,
 	PendingReason,
 	RevisionAuthor,
@@ -23,6 +24,7 @@ import { showsChanges } from "@/utils/lyric-diff"
 import { lyricFingerprint } from "@/utils/lyric-fingerprint"
 import {
 	councilDecidesAt,
+	ownerDecisionSql,
 	ownerWindowOpenSql,
 	ownerlessSql,
 	patchSql,
@@ -564,6 +566,9 @@ interface SummaryRow {
 	review_note: string | null
 	created_at: number
 	reviewed_at: number | null
+	reviewed_by: number | null
+	is_patch: boolean
+	owner_decided: boolean
 	is_anchor: boolean | null
 	reverts_rev_no: number | null
 	author_key_id: string | null
@@ -572,13 +577,17 @@ interface SummaryRow {
 
 const SUMMARY_SELECT = `
 	SELECT r.id, r.rev_no, r.status, r.pending_reason, r.text_drift, r.timing_drift,
-		r.review_note, r.created_at, r.reviewed_at, (r.id = l.anchor_revision_id) AS is_anchor,
+		r.review_note, r.created_at, r.reviewed_at, r.reviewed_by, (r.id = l.anchor_revision_id) AS is_anchor,
+		${patchSql("r", "l")} AS is_patch, ${ownerDecisionSql("r", "l")} AS owner_decided,
 		reverted.rev_no AS reverts_rev_no, u.key_id AS author_key_id, u.nickname AS author_nickname
 	FROM lyric_revisions r
 	JOIN lyrics l ON l.id = r.lyrics_id
 	LEFT JOIN lyric_revisions reverted ON reverted.id = r.reverts_revision_id
 	LEFT JOIN users u ON u.id = r.author_id
 `
+
+const decidedByOf = (row: SummaryRow): DecisionRole | undefined =>
+	row.is_patch && row.reviewed_by !== null ? (row.owner_decided ? "owner" : "council") : undefined
 
 function toSummary(row: SummaryRow): RevisionSummary {
 	return {
@@ -591,6 +600,8 @@ function toSummary(row: SummaryRow): RevisionSummary {
 		timingDrift: row.timing_drift,
 		revertsRevNo: row.reverts_rev_no,
 		author: revisionAuthor(row.author_key_id, row.author_nickname),
+		authorKeyId: row.author_key_id,
+		decidedBy: decidedByOf(row),
 		reviewNote: row.review_note,
 		createdAt: row.created_at,
 		reviewedAt: row.reviewed_at,

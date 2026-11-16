@@ -275,6 +275,8 @@ export interface RevisionSummary {
 	timingDrift: number
 	revertsRevNo: number | null
 	author: RevisionAuthor | null
+	authorKeyId: string | null
+	decidedBy?: DecisionRole
 	reviewNote: string | null
 	createdAt: number
 	reviewedAt: number | null

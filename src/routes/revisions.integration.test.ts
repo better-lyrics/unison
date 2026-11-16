@@ -532,6 +532,23 @@ describeIntegration("revision routes (integration)", () => {
 			expect((await propose(swapWords(LRC, 1))).json.data.decider).toBe("owner")
 			expect((await saveAsOwner(swapWords(LRC, 2))).json.data).not.toHaveProperty("decider")
 		})
+
+		it("names the author and who decided a suggestion in the history", async () => {
+			const patch = (await propose(swapWords(LRC, 1))).json.data.revision
+			await call("POST", `/lyrics/${lyricId}/revisions/${patch.id}/reject`, {
+				token: "owner-token",
+				body: { note: "Kept on purpose" },
+			})
+			const history = (await listRevisions()).json.data.revisions
+			expect(history.find((r) => r.id === patch.id)).toMatchObject({
+				authorKeyId: STRANGER_KEY,
+				status: "rejected",
+				decidedBy: "owner",
+				reviewNote: "Kept on purpose",
+			})
+			expect(history.at(-1)).toMatchObject({ authorKeyId: OWNER_KEY })
+			expect(history.at(-1)).not.toHaveProperty("decidedBy")
+		})
 	})
 
 	describe("edge cases", () => {
