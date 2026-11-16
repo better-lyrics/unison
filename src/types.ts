@@ -405,6 +405,13 @@ export interface RevisionBar {
 	lastRejected: { revNo: number; reviewNote: string | null } | null
 	updatedAt: number
 	suggestion?: RevisionSuggestion
+	editors?: RevisionEditor[]
+}
+
+export interface RevisionEditor {
+	keyId: string
+	displayName: string
+	avatarUrl: string | null
 }
 
 export interface RevisionSuggestion {

@@ -74,6 +74,7 @@ export const config = {
 		windowSeconds: 24 * 60 * 60,
 		ownerDecisionSec: 7 * 24 * 60 * 60,
 		suggestionInboxLimit: 50,
+		editorCreditLimit: 10,
 		maxNoteLength: 300,
 		maxDiffEdits: 2000,
 		diffContextLines: 2,

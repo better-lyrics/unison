@@ -9,6 +9,7 @@ import type {
 	PendingReason,
 	RevisionAuthor,
 	RevisionBar,
+	RevisionEditor,
 	RevisionStatus,
 	RevisionSuggestion,
 	RevisionSummary,
@@ -683,7 +684,8 @@ const REVISION_BAR_SELECT = `SELECT l.id AS lyrics_id, live.rev_no, live.created
 			WHERE c.lyrics_id = l.id AND NOT ${waitingSuggestionSql("c", "l")}) AS count,
 		pending.rev_no AS pending_rev_no, pending.pending_reason,
 		pending.text_drift AS pending_text_drift, pending.timing_drift AS pending_timing_drift,
-		rejected.rev_no AS rejected_rev_no, rejected.review_note, ${SUGGESTION_COLUMNS}
+		rejected.rev_no AS rejected_rev_no, rejected.review_note, editors.editors,
+		${SUGGESTION_COLUMNS}
 	FROM lyrics l
 	JOIN lyric_revisions live ON live.id = l.current_revision_id
 	LEFT JOIN lyric_revisions pending ON pending.lyrics_id = l.id AND pending.status = 'pending'
@@ -694,7 +696,34 @@ const REVISION_BAR_SELECT = `SELECT l.id AS lyrics_id, live.rev_no, live.created
 		WHERE r.lyrics_id = l.id AND r.status = 'rejected' AND r.rev_no > live.rev_no
 			AND NOT ${patchSql("r", "l")}
 		ORDER BY r.rev_no DESC LIMIT 1
-	) rejected ON TRUE`
+	) rejected ON TRUE
+	LEFT JOIN LATERAL (
+		SELECT json_agg(e ORDER BY e.last_at DESC) AS editors FROM (
+			SELECT u.key_id, u.nickname, ${AVATAR_COLUMNS}, a.last_at
+			FROM (
+				SELECT r.author_id, MAX(r.created_at) AS last_at FROM lyric_revisions r
+				WHERE r.lyrics_id = l.id AND r.status IN ('live', 'past')
+					AND r.author_id IS NOT NULL AND r.author_id IS DISTINCT FROM l.submitter_id
+					AND NOT ${bannedUserPredicate("r.author_id")}
+				GROUP BY r.author_id ORDER BY last_at DESC LIMIT ${config.revisions.editorCreditLimit}
+			) a
+			JOIN users u ON u.id = a.author_id
+			${AVATAR_JOINS}
+		) e
+	) editors ON TRUE`
+
+interface EditorRow extends AvatarRow {
+	key_id: string
+	nickname: string | null
+}
+
+function toEditor(row: EditorRow): RevisionEditor {
+	return {
+		keyId: row.key_id,
+		displayName: row.nickname ?? generatePetName(row.key_id),
+		avatarUrl: avatarUrlForRow(row),
+	}
+}
 
 interface RevisionBarRow extends SuggestionColumns {
 	lyrics_id: number
@@ -707,6 +736,7 @@ interface RevisionBarRow extends SuggestionColumns {
 	pending_timing_drift: number | null
 	rejected_rev_no: number | null
 	review_note: string | null
+	editors: EditorRow[] | null
 }
 
 function toRevisionBar(row: RevisionBarRow | null | undefined, createdAt: number): RevisionBar {
@@ -732,6 +762,7 @@ function toRevisionBar(row: RevisionBarRow | null | undefined, createdAt: number
 				: null,
 		updatedAt: row.updated_at,
 		...(suggestion ? { suggestion } : {}),
+		...(row.editors ? { editors: row.editors.map(toEditor) } : {}),
 	}
 }
 

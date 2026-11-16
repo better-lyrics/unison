@@ -1790,6 +1790,43 @@ describeIntegration("lyric revisions pipeline (integration)", () => {
 			expect((await listCouncilEdits(db.env)).items).toEqual([])
 		})
 
+		it("credits each approved suggestion's author on the bar, newest first, never the owner", async () => {
+			const other = await seedProposer("f".repeat(64))
+			await db.pool.query("UPDATE users SET nickname = 'Wren' WHERE id = $1", [other])
+			for (const [author, swaps] of [
+				[proposer, 5],
+				[other, 10],
+			] as const) {
+				const patch = await propose(lrc(swapWords(LRC, swaps)), author)
+				await approveRevision(db.env, lyricId, patch.id, owner, "web")
+			}
+			await db.pool.query(
+				"UPDATE lyric_revisions SET created_at = 1700000000 WHERE author_id = $1 AND lyrics_id = $2",
+				[proposer, lyricId]
+			)
+			await save(lrc(swapWords(LRC, 2)))
+			await propose(lrc(swapWords(LRC, 1)))
+
+			const bar = await getRevisionBar(db.env.DB, { id: lyricId, created_at: 1700000000 })
+			expect(bar.editors).toEqual([
+				{ keyId: "f".repeat(64), displayName: "Wren", avatarUrl: null },
+				{ keyId: "b".repeat(64), displayName: expect.any(String), avatarUrl: null },
+			])
+		})
+
+		it("credits no banned author and sends no editors when only the owner edited", async () => {
+			expect(
+				await getRevisionBar(db.env.DB, { id: lyricId, created_at: 1700000000 })
+			).not.toHaveProperty("editors")
+			await save(lrc(swapWords(LRC, 2)))
+			const patch = await propose(lrc(swapWords(LRC, 5)))
+			await approveRevision(db.env, lyricId, patch.id, owner, "web")
+			await db.pool.query("UPDATE users SET banned_at = 1700000000 WHERE id = $1", [proposer])
+			expect(
+				await getRevisionBar(db.env.DB, { id: lyricId, created_at: 1700000000 })
+			).not.toHaveProperty("editors")
+		})
+
 		it("regression: one proposer using up their suggestions on a lyric leaves others room", async () => {
 			for (let i = 1; i <= config.revisions.patchesPerLyricPerWindow; i++) {
 				await propose(lrc(swapWords(LRC, i)))
