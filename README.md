@@ -115,7 +115,7 @@ curl -i "https://unison.betterlyrics.org/lyrics?v=Ugr4KKK_SqY" \
   -H 'If-None-Match: <the ETag you saved>'
 ```
 
-The tag changes when someone edits the lyric or its song details, when the submitter changes their name, or when another version moves to the top. Votes, confidence and the submitter's stats can change under the same tag, so a saved copy may show old numbers.
+The tag changes when someone edits the lyric or its song details, when the submitter or an editor changes their name, or when another version moves to the top. Votes, confidence and the submitter's stats can change under the same tag, so a saved copy may show old numbers.
 
 ## Signed requests
 
@@ -147,10 +147,12 @@ There's a daily snapshot of the public lyrics corpus at
 the rest of the metadata are at `dumps/manifest.json` on the same host.
 
 It's a `pg_dump -Fc` against Postgres 18, scoped to a `public_dump` schema
-with `lyrics`, `contributors`, `requested_songs`, and `lyrics_requests`. It
-leaves out accounts, requester ids, individual votes and reports. Each lyric
-keeps its score, vote totals, submitter key id and Unison link. `contributors`
-has each submitter's display name and profile link.
+with `lyrics`, `lyric_editors`, `contributors`, `requested_songs`, and
+`lyrics_requests`. It leaves out accounts, requester ids, individual votes and
+reports. Each lyric keeps its score, vote totals, submitter key id and Unison
+link. `lyric_editors` lists the people whose suggested edits went live on each
+lyric. `contributors` has the display name and profile link of every submitter
+and editor.
 
 To restore a copy:
 
@@ -223,6 +225,8 @@ The `q` parameter searches across video ID, ISRC, metadata (song/artist/album vi
 - `low`: fewer than 3 votes, an effective score under 0.5, or upvotes only from accounts loyal to the submitter.
 - `medium`: at least 3 votes and an effective score of 0.5 or more.
 - `high`: the same as `medium`, and the upvotes come from both harsh and generous raters.
+
+`editors` lists the people whose suggested edits to the lyric went live, newest first, up to 10. Each entry has `keyId`, `displayName` and `avatarUrl`. The field is left out when nobody else has edited the lyric.
 
 ### Submitting
 
