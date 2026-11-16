@@ -47,6 +47,7 @@ export type SongShareInput = {
 	versions: number
 	sealed: boolean
 	person: Pick<NonNullable<SongCard["person"]>, "displayName" | "avatarUrl" | "keyId"> | null
+	editors: Pick<SongCard["editors"][number], "displayName" | "avatarUrl">[]
 	artwork: string | null
 }
 
@@ -63,7 +64,7 @@ const syncLine = (kind: SyncKind) => {
 
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`
 
-const CARD_DESIGN = 5
+const CARD_DESIGN = 6
 
 const hash = (inputs: unknown[]) =>
 	createHash("sha1")
@@ -83,6 +84,7 @@ export function songVersion(card: SongShareInput): string {
 		card.sealed,
 		person?.displayName,
 		person?.avatarUrl,
+		card.editors.map((p) => [p.displayName, p.avatarUrl]),
 		card.artwork,
 	])
 }

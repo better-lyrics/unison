@@ -1,3 +1,4 @@
+import type { CreditPart } from "@/utils/editor-credit"
 import { SYNC_KINDS, type SyncKind } from "@/utils/sync-type"
 import type { CSSProperties, ReactNode } from "react"
 import { FONT_STACK } from "./fonts"
@@ -422,6 +423,73 @@ export function XpAvatar({
 			>
 				{String(level)}
 			</div>
+		</div>
+	)
+}
+
+const FACE = 32
+const FACE_OVERLAP = 10
+const FACE_NOTCH = 3
+const HELP_GAP = 12
+const LONG_CREDIT = 38
+
+const faceNotch = `radial-gradient(circle at ${FACE * 1.5 - FACE_OVERLAP}px 50%, transparent ${FACE / 2 + FACE_NOTCH}px, black ${FACE / 2 + FACE_NOTCH + 1}px)`
+
+export function HelpLine({
+	parts,
+	short,
+	faces,
+	ink,
+	width,
+	style,
+}: {
+	parts: CreditPart[]
+	short: CreditPart[]
+	faces: string[]
+	ink: Inks
+	width: number
+	style?: CSSProperties
+}) {
+	const credit = parts.map((p) => p.text).join("").length <= LONG_CREDIT ? parts : short
+	const facesWidth = faces.length ? FACE + (faces.length - 1) * (FACE - FACE_OVERLAP) + HELP_GAP : 0
+	return (
+		<div style={{ display: "flex", alignItems: "center", ...style }}>
+			{faces.map((src, i) => (
+				<img
+					key={src}
+					alt=""
+					src={src}
+					style={{
+						width: FACE,
+						height: FACE,
+						flexShrink: 0,
+						borderRadius: 999,
+						objectFit: "cover",
+						marginLeft: i === 0 ? 0 : -FACE_OVERLAP,
+						marginRight: i === faces.length - 1 ? HELP_GAP : 0,
+						...(i < faces.length - 1 ? { maskImage: faceNotch } : {}),
+					}}
+				/>
+			))}
+			<span
+				style={{
+					fontSize: 20,
+					fontWeight: 500,
+					color: ink.three,
+					...fitLine(width - facesWidth),
+				}}
+			>
+				With help from{" "}
+				{credit.map((part) =>
+					part.strong ? (
+						<span key={part.text} style={{ color: ink.two, fontWeight: 600 }}>
+							{part.text}
+						</span>
+					) : (
+						part.text
+					)
+				)}
+			</span>
 		</div>
 	)
 }

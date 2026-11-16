@@ -19,6 +19,7 @@ const song = (title: string): SongShareInput => ({
 	versions: 2,
 	sealed: true,
 	person: { displayName: "mukeenanyafiq", avatarUrl: null, keyId: "a".repeat(64) },
+	editors: [],
 	artwork: "https://lh3.googleusercontent.com/cover=w544-h544",
 })
 

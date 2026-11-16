@@ -43,6 +43,7 @@ cache.store.set(
 				versions: 1,
 				sealed: false,
 				person: { displayName: "mukeenanyafiq", avatarUrl: null, keyId: KEY },
+				editors: [],
 				artwork: null,
 			},
 			"#d92626"
