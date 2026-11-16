@@ -220,6 +220,13 @@ export interface VariantRevision {
   updatedAt: number
   pending?: VariantPendingRevision | null
   suggestion?: RevisionSuggestion
+  editors?: RevisionEditor[]
+}
+
+export interface RevisionEditor {
+  keyId: string
+  displayName: string
+  avatarUrl: string | null
 }
 
 export interface VariantFull extends VariantSummary {

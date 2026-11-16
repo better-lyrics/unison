@@ -43,6 +43,26 @@ function MetaRow({ label, children }: { label: ReactNode; children: ReactNode })
   )
 }
 
+interface RailPersonProps {
+  person: { keyId: string; displayName: string; avatarUrl?: string | null }
+}
+
+function RailPerson({ person }: RailPersonProps) {
+  return (
+    <Link
+      to={`/curator/${person.keyId}`}
+      className="inline-flex min-w-0 max-w-full items-center gap-1.5 font-bold text-unison-text"
+    >
+      <UserAvatar
+        avatarUrl={person.avatarUrl}
+        keyId={person.keyId}
+        className="size-[18px] shrink-0 rounded-full object-cover"
+      />
+      <span className="truncate">{person.displayName}</span>
+    </Link>
+  )
+}
+
 function Stats({ variant, versions }: { variant: VariantFull; versions: number }) {
   const seal = variant.marks?.find((mark) => mark.type === "seal")
   const revision = variant.revision
@@ -73,21 +93,7 @@ function Stats({ variant, versions }: { variant: VariantFull; versions: number }
                 </>
               }
             >
-              {seal.by ? (
-                <Link
-                  to={`/curator/${seal.by.keyId}`}
-                  className="inline-flex min-w-0 items-center gap-1.5 font-bold text-unison-text"
-                >
-                  <UserAvatar
-                    avatarUrl={seal.by.avatarUrl}
-                    keyId={seal.by.keyId}
-                    className="size-[18px] shrink-0 rounded-full object-cover"
-                  />
-                  <span className="truncate">{seal.by.displayName}</span>
-                </Link>
-              ) : (
-                <span className="font-bold text-unison-text">Council</span>
-              )}
+              {seal.by ? <RailPerson person={seal.by} /> : <span className="font-bold text-unison-text">Council</span>}
             </MetaRow>
           ) : null}
           {variant.isrc ? (
@@ -100,6 +106,15 @@ function Stats({ variant, versions }: { variant: VariantFull; versions: number }
               <span className="font-bold tabular-nums text-unison-text">{formatFullDate(revision.updatedAt)}</span>
               <span className="inline-flex h-[22px] items-center rounded-[7px] bg-white/[0.08] px-2 text-xs font-medium text-(--ink-3) [corner-shape:superellipse(1.6)]">
                 {revision.revNo === 1 ? "Original" : `Revision ${revision.revNo}`}
+              </span>
+            </MetaRow>
+          ) : null}
+          {revision?.editors?.length ? (
+            <MetaRow label={<span className="shrink-0 self-start">Edited by</span>}>
+              <span className="flex min-w-0 flex-wrap justify-end gap-x-3 gap-y-1.5">
+                {revision.editors.map((editor) => (
+                  <RailPerson key={editor.keyId} person={editor} />
+                ))}
               </span>
             </MetaRow>
           ) : null}
