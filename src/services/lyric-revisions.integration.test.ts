@@ -4,7 +4,13 @@ import { createBookmark, listActiveBookmarks } from "@/db/council-bookmarks"
 import { listCouncilEdits } from "@/db/council-edits"
 import { listCouncilEvents } from "@/db/council-events"
 import { getRevisionBar, listSuggestionsForOwner } from "@/db/lyric-revisions"
-import { listNotifications, markSeen, unreadCount } from "@/db/notifications"
+import {
+	ackDiscord,
+	discordQueue,
+	listNotifications,
+	markSeen,
+	unreadCount,
+} from "@/db/notifications"
 import { getSealCandidates, getSealableVariants, rejectLyric, undoRejection } from "@/db/rejections"
 import { D1Compat } from "@/infra/database"
 import { queueOwnerReminders } from "@/jobs/notifications"
@@ -1907,6 +1913,26 @@ describeIntegration("lyric revisions pipeline (integration)", () => {
 				expect(await unreadCount(db.env.DB, owner)).toBe(1)
 				await markSeen(db.env.DB, owner)
 				expect(await unreadCount(db.env.DB, owner)).toBe(0)
+			})
+
+			it("queues Discord DMs only for opted-in, linked users until acked", async () => {
+				await db.pool.query("DELETE FROM discord_links WHERE key_id = ANY($1)", [
+					[OWNER_KEY, "b".repeat(64)],
+				])
+				await db.pool.query(
+					"INSERT INTO discord_links (discord_id, key_id) VALUES ('123456789012345678', $1), ('876543210987654321', $2)",
+					[OWNER_KEY, "b".repeat(64)]
+				)
+				await db.pool.query("UPDATE users SET notify_discord = TRUE WHERE id = $1", [owner])
+				const patch = await propose(lrc(swapWords(LRC, 1)))
+				await approveRevision(db.env, lyricId, patch.id, owner, "web")
+
+				const queued = await discordQueue(db.env.DB)
+				expect(queued.map((n) => [n.kind, n.discordId])).toEqual([
+					["suggestion_new", "123456789012345678"],
+				])
+				expect(await ackDiscord(db.env.DB, [queued[0].id])).toBe(1)
+				expect(await discordQueue(db.env.DB)).toEqual([])
 			})
 
 			it("reminds the owner once, a day before the window ends, and never after a decision", async () => {

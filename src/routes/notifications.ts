@@ -1,5 +1,9 @@
+import { config } from "@/config"
 import {
 	type NotificationItem,
+	ackDiscord,
+	discordOptOut,
+	discordQueue,
 	getDiscordDm,
 	listNotifications,
 	markSeen,
@@ -9,6 +13,8 @@ import {
 import { NOTIFICATION_KINDS } from "@/notifications/kinds"
 import { resolveActors } from "@/routes/marks"
 import type { Env, MarkActor } from "@/types"
+import { isAuthorizedBot } from "@/utils/bot-auth"
+import { DISCORD_ID_PATTERN } from "@/utils/discord-oauth"
 import { ErrorCode, buildError } from "@/utils/errors"
 import { readRateLimit } from "@/utils/read-rate-limit"
 import { bearerKeyId } from "@/utils/session"
@@ -89,4 +95,43 @@ const webRoutes = (env: Env) =>
 			return { success: true, data: { unread, items: await toWireItems(env, items) } }
 		})
 
-export const notificationRoutes = (env: Env) => new Elysia().use(webRoutes(env))
+const botRoutes = (env: Env) =>
+	new Elysia({ prefix: "/notifications/bot/discord" })
+		.decorate("env", env)
+		.onBeforeHandle(({ env, headers }) => {
+			if (!isAuthorizedBot(headers.authorization, env)) {
+				return status(401, buildError(ErrorCode.AUTH_REQUIRED))
+			}
+		})
+		.get("", async ({ env }) => {
+			const queue = await discordQueue(env.DB)
+			const wire = await toWireItems(env, queue)
+			return {
+				success: true,
+				data: { items: wire.map((item, i) => ({ ...item, discordId: queue[i].discordId })) },
+			}
+		})
+		.post(
+			"/ack",
+			async ({ env, body }) => ({
+				success: true,
+				data: { acked: await ackDiscord(env.DB, body.ids) },
+			}),
+			{
+				body: t.Object({
+					ids: t.Array(t.Integer({ minimum: 1 }), {
+						maxItems: config.notifications.discordBatchMax,
+					}),
+				}),
+			}
+		)
+		.put(
+			"/opt-out",
+			async ({ env, body }) => ({
+				success: true,
+				data: { optedOut: await discordOptOut(env.DB, body.discordId) },
+			}),
+			{ body: t.Object({ discordId: t.String({ pattern: DISCORD_ID_PATTERN }) }) }
+		)
+
+export const notificationRoutes = (env: Env) => new Elysia().use(webRoutes(env)).use(botRoutes(env))

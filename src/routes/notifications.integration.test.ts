@@ -1,4 +1,5 @@
 import {
+	BOT_SECRET,
 	type IntegrationDb,
 	describeIntegration,
 	openIntegrationDb,
@@ -82,5 +83,21 @@ describeIntegration("notification routes (integration)", () => {
 				data: { revNo: 2, revisionId: 101 },
 			}),
 		])
+	})
+
+	it("refuses every bot route without the bot secret", async () => {
+		const routes: [string, string, unknown?][] = [
+			["GET", "/notifications/bot/discord"],
+			["POST", "/notifications/bot/discord/ack", { ids: [1] }],
+			["PUT", "/notifications/bot/discord/opt-out", { discordId: "123456789012345678" }],
+		]
+		for (const [method, path, body] of routes) {
+			const res = await call(method, path, { authorization: `Bearer ${A_TOKEN}` }, body)
+			expect(res.status, `${method} ${path}`).toBe(401)
+		}
+		expect(
+			(await call("GET", "/notifications/bot/discord", { authorization: `Bearer ${BOT_SECRET}` }))
+				.status
+		).toBe(200)
 	})
 })
