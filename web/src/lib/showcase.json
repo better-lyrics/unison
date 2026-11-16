@@ -60,6 +60,16 @@
     ]
   },
   {
+    "name": "WiseWave",
+    "description": "One more song, then we'll sleep.",
+    "url": "https://wisewave.me",
+    "icon": "/showcase/wisewave-a00d7a8d.png",
+    "platforms": [
+      "Windows",
+      "Android (Soon)"
+    ]
+  },
+  {
     "name": "YouLy+",
     "description": "Word-by-word lyrics in your browser for YouTube Music, Apple Music and Tidal.",
     "url": "https://github.com/ibratabian17/YouLyPlus",
