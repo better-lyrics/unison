@@ -1,16 +1,18 @@
-import { IconMenu2, IconX } from "@tabler/icons-react"
-import { motion } from "motion/react"
-import { useEffect, useRef, useState } from "react"
-import { Link, NavLink } from "react-router-dom"
+import { useSession } from "@/auth/useSession"
 import { usePresence } from "@/hooks/usePresence"
 import { cn } from "@/lib/cn"
 import { LAYOUT_TRANSITION } from "@/lib/motion-variants"
 import { type PageWidth, pageWidthClass } from "@/lib/page-width"
+import { IconMenu2, IconX } from "@tabler/icons-react"
+import { motion } from "motion/react"
+import { useEffect, useRef, useState } from "react"
+import { Link, NavLink } from "react-router-dom"
 import { BetterLyricsLogo } from "./BetterLyricsLogo"
-import { CouncilNavLink } from "./council/CouncilNavLink"
 import { SearchBar } from "./SearchBar"
-import { IconSwap } from "./icons/IconSwap"
 import { SignInControl } from "./SignInControl"
+import { CouncilNavLink } from "./council/CouncilNavLink"
+import { IconSwap } from "./icons/IconSwap"
+import { NotificationBell } from "./notifications/NotificationBell"
 import { artTextShadowClass, glassClass, popoverSurfaceClass } from "./ui"
 
 const tabClass = ({ isActive }: { isActive: boolean }) =>
@@ -50,6 +52,7 @@ function NavTab({ to, end, children }: { to: string; end?: boolean; children: st
 
 export function AppHeader({ width }: { width: PageWidth }) {
 	const [menuOpen, setMenuOpen] = useState(false)
+	const signedIn = useSession().status === "signed-in"
 	const menu = usePresence(menuOpen)
 	const headerRef = useRef<HTMLElement | null>(null)
 	const closeMenu = () => setMenuOpen(false)
@@ -121,6 +124,7 @@ export function AppHeader({ width }: { width: PageWidth }) {
 					<div className="lg:hidden">
 						<SearchBar compact glass />
 					</div>
+					{signedIn ? <NotificationBell /> : null}
 					<div className="hidden lg:block">
 						<SignInControl glass />
 					</div>
