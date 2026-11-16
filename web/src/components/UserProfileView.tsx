@@ -1,6 +1,7 @@
 import "./profile.css"
 import { IconEye } from "@tabler/icons-react"
 import { type Ref, useCallback, useRef, useState } from "react"
+import { useLocation } from "react-router-dom"
 import { useOptionalSession, useViewerOwns } from "@/auth/useSession"
 import { usePageArt } from "@/components/PageArt"
 import { BadgeCatalogueProvider, useBadgeCatalogue } from "@/components/BadgeCatalogueContext"
@@ -26,7 +27,7 @@ import { fetchUserBadges, fetchUserRank, isNotFound } from "@/lib/api"
 import { cn } from "@/lib/cn"
 import { formatRank, titleCase } from "@/lib/format"
 import { languageName } from "@/lib/language"
-import { NOT_FOUND_TITLE, profileTitle } from "@/lib/page-title"
+import { NOT_FOUND_TITLE, profileTitle, titleForPath } from "@/lib/page-title"
 import { scrollToStart } from "@/lib/scroll"
 import type { BadgeCatalogue, ExpertiseEntry, UserGamification, UserRankResponse } from "@/lib/types"
 
@@ -295,7 +296,8 @@ export function UserProfileView({ keyId }: UserProfileViewProps) {
   }, [keyId])
 
   const fetchedRank = rankOverride?.keyId === keyId ? rankOverride : rank.status === "success" ? rank.data : null
-  usePageTitle(fetchedRank ? profileTitle(fetchedRank.displayName) : isNotFound(rank.error) ? NOT_FOUND_TITLE : null)
+  const ownTitle = fetchedRank ? profileTitle(fetchedRank.displayName) : isNotFound(rank.error) ? NOT_FOUND_TITLE : null
+  usePageTitle(titleForPath(useLocation().pathname) === null ? ownTitle : null)
   const shownRank =
     fetchedRank && ownAvatarUrl !== undefined ? { ...fetchedRank, avatarUrl: ownAvatarUrl } : fetchedRank
   const fetched = gamification.status === "success" ? gamification.data : null
