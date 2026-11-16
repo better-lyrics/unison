@@ -44,12 +44,6 @@ describe("decisionRole", () => {
 		})
 	})
 
-	it("leaves approval on a lyric with no owner to the council, even for its submitting account", () => {
-		const community = { ...suggestion, reviewerId: OWNER, isCouncil: false, ownerless: true }
-		expect(decisionRole(community)).toEqual({ ok: false, reason: "not_committee" })
-		expect(decisionRole({ ...community, action: "reject" })).toEqual({ ok: true, role: "owner" })
-	})
-
 	it("lets the owner reject a suggestion held for any reason", () => {
 		const reject = { ...suggestion, action: "reject" as const, reviewerId: OWNER, isCouncil: false }
 		expect(decisionRole({ ...reject, reason: "flagged", sealed: true })).toEqual({
@@ -81,10 +75,8 @@ describe("decisionRole", () => {
 		).toEqual({ ok: false, reason: "not_committee" })
 	})
 
-	it("lets the council decide at once on a lyric with no owner who can act", () => {
-		const ownerless = { ...suggestion, ownerless: true }
-		expect(decisionRole(ownerless)).toEqual({ ok: true, role: "council" })
-		expect(decisionRole({ ...ownerless, submitterId: null })).toEqual({
+	it("lets the council decide at once on a lyric with no submitter", () => {
+		expect(decisionRole({ ...suggestion, submitterId: null, ownerless: true })).toEqual({
 			ok: true,
 			role: "council",
 		})

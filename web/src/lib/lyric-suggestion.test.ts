@@ -76,9 +76,9 @@ describe("suggestAction", () => {
 })
 
 describe("isOwnerless", () => {
-  it("leaves a suggestion on a lyric with no owner to the council", () => {
+  it("leaves a suggestion on a lyric with no submitter to the council, and the community account owns its lyrics", () => {
     expect(isOwnerless(null)).toBe(true)
-    expect(isOwnerless(COMMUNITY_KEY_ID)).toBe(true)
+    expect(isOwnerless(COMMUNITY_KEY_ID)).toBe(false)
     expect(isOwnerless(OWNER.keyId)).toBe(false)
   })
 })
@@ -209,7 +209,7 @@ describe("decision parity with the server", () => {
 
   it("lets the same people approve and reject on the web as on the server", () => {
     for (const owner of OWNERS) {
-      const ownerless = owner.id === null || owner.keyId === SERVER_COMMUNITY_KEY_ID
+      const ownerless = owner.id === null
       for (const role of ROLES) {
         const reviewer = role.as === "owner" ? owner : { id: IDS[role.as], keyId: KEYS[role.as] }
         if (reviewer.id === null || reviewer.keyId === null) continue

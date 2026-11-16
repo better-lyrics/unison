@@ -1,13 +1,11 @@
 import { AUTHED_FETCH_ERRORS, AuthedFetchError } from "./authedFetch"
-import { COMMUNITY_KEY_ID } from "./community"
 import { plural } from "./format"
 import type { DiffRow } from "./revision-types"
 import type { LyricsFormat, RevisionSuggestion, VariantPendingRevision } from "./types"
 
 export const ownerWindow = (ownerDecisionSec: number): string => plural(ownerDecisionSec / 86_400, "day", "days")
 
-export const isOwnerless = (submitterKeyId: string | null | undefined): boolean =>
-  !submitterKeyId || submitterKeyId === COMMUNITY_KEY_ID
+export const isOwnerless = (submitterKeyId: string | null | undefined): boolean => !submitterKeyId
 
 export type SuggestAction = "suggest" | "withdraw" | "waiting" | "sign-in" | "needs-lyric" | "none"
 

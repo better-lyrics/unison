@@ -1674,18 +1674,15 @@ describeIntegration("lyric revisions pipeline (integration)", () => {
 			})
 		})
 
-		it("hands a suggestion on a community-owned lyric to the council at once", async () => {
+		it("regression: the community account owns its lyrics like any other owner", async () => {
 			const community = await seedUser(db, COMMUNITY_KEY_ID)
 			await db.pool.query("UPDATE lyrics SET submitter_id = $2 WHERE id = $1", [lyricId, community])
-			const council = await seedCouncilMember(db, "c".repeat(64))
 			const patch = await propose(lrc(swapWords(LRC, 1)))
 			const bar = await getRevisionBar(db.env.DB, { id: lyricId, created_at: 1700000000 })
-			expect(bar.suggestion?.councilDecidesAt).toBeNull()
-			expect((await listCouncilEdits(db.env)).items).toMatchObject([
-				{ revisionId: patch.id, ownerless: true },
-			])
-			expect(await listPendingCards(db.env)).toMatchObject([{ ownerless: true }])
-			expect(await approveRevision(db.env, lyricId, patch.id, council, "web")).toMatchObject({
+			expect(bar.suggestion).toMatchObject({ decider: "owner" })
+			expect(bar.suggestion?.councilDecidesAt).not.toBeNull()
+			expect((await listCouncilEdits(db.env)).items).toEqual([])
+			expect(await approveRevision(db.env, lyricId, patch.id, community, "web")).toMatchObject({
 				ok: true,
 				revision: { status: "live" },
 			})

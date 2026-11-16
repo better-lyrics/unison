@@ -1,4 +1,4 @@
-import { COMMUNITY_KEY_ID, config } from "@/config"
+import { config } from "@/config"
 import type { DecisionRole, PendingReason } from "@/types"
 
 export type DecisionRefusal = "not_committee" | "own_patch" | "owner_window"
@@ -15,8 +15,7 @@ export const waitingSuggestionSql = (revision: string, lyric: string): string =>
 export const ownerDecisionSql = (revision: string, lyric: string): string =>
 	`(${revision}.reviewed_by IS NOT DISTINCT FROM ${lyric}.submitter_id AND ${patchSql(revision, lyric)})`
 
-export const ownerlessSql = (lyric: string): string =>
-	`(${lyric}.submitter_id IS NULL OR ${lyric}.submitter_id IN (SELECT id FROM users WHERE key_id = '${COMMUNITY_KEY_ID}'))`
+export const ownerlessSql = (lyric: string): string => `(${lyric}.submitter_id IS NULL)`
 
 export const ownerWindowOpenSql = (revision: string, lyric: string): string =>
 	`(${revision}.pending_reason = 'suggested' AND ${lyric}.committee_approved_at IS NULL AND NOT ${ownerlessSql(lyric)} AND ${revision}.created_at > EXTRACT(EPOCH FROM NOW())::INTEGER - ${config.revisions.ownerDecisionSec})`
