@@ -61,7 +61,7 @@
   },
   {
     "name": "WiseWave",
-    "description": "One more song, then we'll sleep.",
+    "description": "A free music player for Windows with synced lyrics and offline playback.",
     "url": "https://wisewave.me",
     "icon": "/showcase/wisewave-a00d7a8d.png",
     "platforms": [
