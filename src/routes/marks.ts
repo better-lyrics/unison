@@ -3,7 +3,7 @@ import { AVATAR_COLUMNS, AVATAR_JOINS, type AvatarRow, avatarUrlForRow } from "@
 import { getBadgeSummaries } from "@/db/badge-summary"
 import { getXpForUsers } from "@/db/contribution-events"
 import { getCuratorTierMap } from "@/db/leaderboard"
-import type { Env, Mark, MarkActor } from "@/types"
+import type { Env, Mark, MarkActor, RevisionEditor } from "@/types"
 import { generatePetName } from "@/utils/petname"
 import { levelForXp, levelProgress } from "@/utils/xp"
 
@@ -48,6 +48,21 @@ export async function resolveActors(
 		})
 	}
 	return actors
+}
+
+export const peopleIds = (rows: { submitter_id?: number | null; editor_ids?: number[] | null }[]) =>
+	rows.flatMap((r) => [r.submitter_id, ...(r.editor_ids ?? [])])
+
+export function editorsOf(
+	row: { editor_ids?: number[] | null },
+	actors: Map<number, MarkActor>
+): RevisionEditor[] {
+	return (row.editor_ids ?? []).flatMap((id) => {
+		const actor = actors.get(id)
+		return actor
+			? [{ keyId: actor.keyId, displayName: actor.displayName, avatarUrl: actor.avatarUrl }]
+			: []
+	})
 }
 
 export async function buildSealMarks(

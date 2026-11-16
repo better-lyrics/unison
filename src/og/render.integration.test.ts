@@ -10,11 +10,13 @@ import {
 } from "@/test/integration-harness"
 import sharp from "sharp"
 import { afterAll, beforeAll, expect, it, vi } from "vitest"
-import { renderProfileDownload, renderProfileOg, renderSongOg } from "./render"
+import { loadSongCard, renderProfileDownload, renderProfileOg, renderSongOg } from "./render"
 
 const MAX_OG_BYTES = 600 * 1024
 const KEY_ID = "7c1e9a04b2d35f6e8a9b0c1d2e3f405162738495a6b7c8d9e0f1a2b3c4d5e6f7"
 const VIDEOS = ["q3Fv8LkP0sA", "Zt7mW2xYc4Q", "Hb1nR6pQe9U"]
+const EDITED_VIDEO = "Wd5kT8vNa2E"
+const EDITORS = ["harbourlights", "nightferry", "quietkeel", "tidewatcher"]
 const ART_URL = (videoId: string) =>
 	`https://lh3.googleusercontent.com/${videoId}-art=w544-h544-l90-rj`
 
@@ -48,6 +50,21 @@ describeIntegration("share card renderer (integration)", () => {
 			db.cache.store.set(artworkCacheKey(videoId), ART_URL(videoId))
 		}
 		await setProfileSettings(db.env, KEY_ID, { banner: VIDEOS[0] })
+		const edited = await seedLyric(db, userId, {
+			lyrics: "[00:01.00]Gulls circle the empty pier",
+			format: "lrc",
+			videoId: EDITED_VIDEO,
+		})
+		db.cache.store.set(artworkCacheKey(EDITED_VIDEO), ART_URL(EDITED_VIDEO))
+		for (const [i, nickname] of EDITORS.entries()) {
+			const editor = await seedUser(db, `${i}`.repeat(64))
+			await db.pool.query("UPDATE users SET nickname = $1 WHERE id = $2", [nickname, editor])
+			await db.pool.query(
+				`INSERT INTO lyric_revisions (lyrics_id, rev_no, lyrics, format, sync_type, content_hash, author_id, status)
+				 VALUES ($1, $2, 'Gulls circle the pier', 'plain', 'plain', 'edit', $3, 'past')`,
+				[edited, 10 + i, editor]
+			)
+		}
 	})
 
 	afterAll(async () => {
@@ -60,6 +77,13 @@ describeIntegration("share card renderer (integration)", () => {
 		const meta = await sharp(card?.bytes).metadata()
 		expect([meta.format, meta.width, meta.height]).toEqual(["jpeg", 1200, 630])
 		expect(card?.bytes.length).toBeLessThan(MAX_OG_BYTES)
+	}, 30_000)
+
+	it("renders the song card with four editors credited", async () => {
+		expect((await loadSongCard(db.env, EDITED_VIDEO))?.editors).toHaveLength(EDITORS.length)
+		const card = await renderSongOg(db.env, EDITED_VIDEO)
+		const meta = await sharp(card?.bytes).metadata()
+		expect([meta.format, meta.width, meta.height]).toEqual(["jpeg", 1200, 630])
 	}, 30_000)
 
 	it("renders the profile card as a 1200x630 JPEG small enough for every unfurler", async () => {

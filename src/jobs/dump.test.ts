@@ -392,7 +392,7 @@ describe("buildManifest", () => {
 	}
 
 	it("returns the documented static fields plus inputs", async () => {
-		const { env } = createManifestMockEnv([100, 10, 5, 2])
+		const { env } = createManifestMockEnv([100, 10, 5, 2, 3])
 		const manifest = await buildManifest(env, baseInput)
 		expect(manifest.schema_version).toBe(1)
 		expect(manifest.sha256).toBe(baseInput.sha256)
@@ -404,18 +404,20 @@ describe("buildManifest", () => {
 	})
 
 	it("populates row_counts from the COUNT(*) queries against public_dump", async () => {
-		const { env, prepared } = createManifestMockEnv([100, 10, 5, 2])
+		const { env, prepared } = createManifestMockEnv([100, 10, 5, 2, 3])
 		const manifest = await buildManifest(env, baseInput)
 		expect(manifest.row_counts.lyrics).toBe(100)
 		expect(manifest.row_counts.requested_songs).toBe(10)
 		expect(manifest.row_counts.lyrics_requests).toBe(5)
 		expect(manifest.row_counts.contributors).toBe(2)
-		expect(prepared).toHaveLength(4)
+		expect(manifest.row_counts.lyric_editors).toBe(3)
+		expect(prepared).toHaveLength(5)
 		expect(prepared[0]).toMatch(/COUNT\(\*\)/i)
 		expect(prepared[0]).toMatch(/public_dump\.lyrics\b/i)
 		expect(prepared[1]).toMatch(/public_dump\.requested_songs\b/i)
 		expect(prepared[2]).toMatch(/public_dump\.lyrics_requests\b/i)
 		expect(prepared[3]).toMatch(/public_dump\.contributors\b/i)
+		expect(prepared[4]).toMatch(/public_dump\.lyric_editors\b/i)
 	})
 
 	it("constructs dump_url and latest_url with the dumps/ prefix carried through", async () => {
@@ -471,7 +473,13 @@ const sampleManifest: DumpManifest = {
 	bytes: 4096,
 	dump_url: "https://unison-dumps.boidu.dev/dumps/unison-2026-05-29.dump",
 	latest_url: "https://unison-dumps.boidu.dev/dumps/latest.dump",
-	row_counts: { lyrics: 100, requested_songs: 10, lyrics_requests: 5, contributors: 2 },
+	row_counts: {
+		lyrics: 100,
+		requested_songs: 10,
+		lyrics_requests: 5,
+		contributors: 2,
+		lyric_editors: 3,
+	},
 	format: "pg_dump custom (-Fc), Postgres 18",
 	license: "LicenseRef-Unison-Community-1.0",
 	attribution_text: "Lyrics from Unison (https://unison.betterlyrics.org)",

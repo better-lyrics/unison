@@ -5,8 +5,10 @@ import { ProfileSkeleton } from "@/components/ProfileSkeleton"
 import { UserProfileView } from "@/components/UserProfileView"
 import { useViewerOwns } from "@/auth/useSession"
 import { useAsyncData } from "@/hooks/useAsyncData"
+import { usePageTitle } from "@/hooks/usePageTitle"
 import { fetchUserByHandle } from "@/lib/api"
 import { toHandle } from "@/lib/handle"
+import { NOT_FOUND_TITLE } from "@/lib/page-title"
 
 // Resolves a /u/<handle> share URL to a curator via the authoritative handle lookup.
 // UserProfileView surfaces the owner's edit controls itself when the viewer owns the profile.
@@ -16,6 +18,7 @@ export function NicknamePage() {
   const resolver = useCallback(() => fetchUserByHandle(nickname ?? ""), [nickname])
   const resolved = useAsyncData(resolver, `handle:${handle}`)
   const owns = useViewerOwns({ handle })
+  usePageTitle(resolved.status === "error" ? NOT_FOUND_TITLE : null)
 
   if (!nickname) return <EmptyState title="No curator specified" />
   if (resolved.status === "loading") return <ProfileSkeleton owner={owns} />

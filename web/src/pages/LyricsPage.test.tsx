@@ -66,7 +66,8 @@ vi.mock("@/components/VoteControls", () => ({
 
 const fetchVariants = vi.fn()
 const fetchVariant = vi.fn()
-vi.mock("@/lib/api", () => ({
+vi.mock("@/lib/api", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/api")>()),
   fetchLyricsVariants: (...args: unknown[]) => fetchVariants(...args),
   fetchLyricsVariant: (...args: unknown[]) => fetchVariant(...args),
 }))

@@ -18,6 +18,7 @@ import {
 } from "@/og/render"
 import type { Env } from "@/types"
 import { sharedInFlight } from "@/utils/in-flight"
+import { profileTitle, songTitle } from "@/utils/page-title"
 import { SYNC_KINDS, type SyncKind, syncTypeFor } from "@/utils/sync-type"
 import { isVideoId } from "@/utils/video-id"
 import { levelProgress } from "@/utils/xp"
@@ -47,6 +48,7 @@ export type SongShareInput = {
 	versions: number
 	sealed: boolean
 	person: Pick<NonNullable<SongCard["person"]>, "displayName" | "avatarUrl" | "keyId"> | null
+	editors: Pick<SongCard["editors"][number], "displayName" | "avatarUrl">[]
 	artwork: string | null
 }
 
@@ -63,7 +65,7 @@ const syncLine = (kind: SyncKind) => {
 
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`
 
-const CARD_DESIGN = 5
+const CARD_DESIGN = 6
 
 const hash = (inputs: unknown[]) =>
 	createHash("sha1")
@@ -83,6 +85,7 @@ export function songVersion(card: SongShareInput): string {
 		card.sealed,
 		person?.displayName,
 		person?.avatarUrl,
+		card.editors.map((p) => [p.displayName, p.avatarUrl]),
 		card.artwork,
 	])
 }
@@ -115,7 +118,7 @@ export function songShare(card: SongShareInput, themeColor: string): Share {
 		card.versions > 1 ? plural(card.versions, "version") : null,
 	]
 	return {
-		title: `${top.song} · ${top.artist}`,
+		title: songTitle(top.song, top.artist),
 		description: details.filter(Boolean).join(" · "),
 		themeColor,
 		image: `/og/song/${card.videoId}.jpg?v=${version}`,
@@ -132,7 +135,7 @@ export function profileShare(card: ProfileShareInput, themeColor: string): Share
 	const tierName = card.tier ? CATALOGUE.find((b) => b.key === card.tier)?.name : null
 	const version = profileVersion(card)
 	return {
-		title: identity.displayName,
+		title: profileTitle(identity.displayName),
 		description: rank
 			? [
 					`${plural(rank.submissionCount, "song")} synced`,

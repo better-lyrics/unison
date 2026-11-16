@@ -17,7 +17,7 @@ import { Logger } from "@/infra/logger"
 import { resyncVoteCounts } from "@/jobs/resync-vote-counts"
 import { toFeedResponse } from "@/routes/feed"
 import { toResponse, toSearchResponse } from "@/routes/lyrics.transformers"
-import { buildSealMarks, resolveActors } from "@/routes/marks"
+import { buildSealMarks, peopleIds, resolveActors } from "@/routes/marks"
 import { findLyricsByTrack } from "@/services/track-lookup"
 import type { Env, LyricsResponse, LyricsSubmission } from "@/types"
 import { ALBUM_HINT, isValidAlbum } from "@/utils/album"
@@ -113,17 +113,9 @@ export const lyricsRoutes = (env: Env) =>
 						getFulfillmentByLyricsId(env, result.id),
 					])
 					const marks = await buildSealMarks(env, [result])
-					const actors = await resolveActors(
-						env,
-						result.submitter_id != null ? [result.submitter_id] : []
-					)
+					const actors = await resolveActors(env, peopleIds([result]))
 					return withEtag({
-						...toResponse(
-							result,
-							fulfilled,
-							marks.get(result.id),
-							result.submitter_id != null ? actors.get(result.submitter_id) : undefined
-						),
+						...toResponse(result, fulfilled, marks.get(result.id), actors),
 						userVote,
 						variant: served.variant,
 					})
@@ -157,17 +149,9 @@ export const lyricsRoutes = (env: Env) =>
 						getFulfillmentByLyricsId(env, result.id),
 					])
 					const marks = await buildSealMarks(env, [result])
-					const actors = await resolveActors(
-						env,
-						result.submitter_id != null ? [result.submitter_id] : []
-					)
+					const actors = await resolveActors(env, peopleIds([result]))
 					return withEtag({
-						...toResponse(
-							result,
-							fulfilled,
-							marks.get(result.id),
-							result.submitter_id != null ? actors.get(result.submitter_id) : undefined
-						),
+						...toResponse(result, fulfilled, marks.get(result.id), actors),
 						userVote,
 						matchedBy: match.matchedBy,
 					})
@@ -233,20 +217,10 @@ export const lyricsRoutes = (env: Env) =>
 						limit
 					)
 					const marks = await buildSealMarks(env, results)
-					const actors = await resolveActors(
-						env,
-						results.map((r) => r.submitter_id)
-					)
+					const actors = await resolveActors(env, peopleIds(results))
 					return {
 						success: true,
-						data: results.map((row) =>
-							toResponse(
-								row,
-								undefined,
-								marks.get(row.id),
-								row.submitter_id != null ? actors.get(row.submitter_id) : undefined
-							)
-						),
+						data: results.map((row) => toResponse(row, undefined, marks.get(row.id), actors)),
 					}
 				}
 
@@ -290,19 +264,11 @@ export const lyricsRoutes = (env: Env) =>
 						)
 					: null
 				const marks = await buildSealMarks(env, results)
-				const actors = await resolveActors(
-					env,
-					results.map((r) => r.submitter_id)
-				)
+				const actors = await resolveActors(env, peopleIds(results))
 				return {
 					success: true,
 					data: results.map((row) => ({
-						...toResponse(
-							row,
-							undefined,
-							marks.get(row.id),
-							row.submitter_id != null ? actors.get(row.submitter_id) : undefined
-						),
+						...toResponse(row, undefined, marks.get(row.id), actors),
 						userVote: votesMap?.get(row.id) ?? null,
 					})),
 				}
@@ -396,19 +362,11 @@ export const lyricsRoutes = (env: Env) =>
 					getRevisionBar(env.DB, result),
 				])
 				const marks = await buildSealMarks(env, [result])
-				const actors = await resolveActors(
-					env,
-					result.submitter_id != null ? [result.submitter_id] : []
-				)
+				const actors = await resolveActors(env, peopleIds([result]))
 				return {
 					success: true,
 					data: {
-						...toResponse(
-							result,
-							fulfilled,
-							marks.get(result.id),
-							result.submitter_id != null ? actors.get(result.submitter_id) : undefined
-						),
+						...toResponse(result, fulfilled, marks.get(result.id), actors),
 						userVote,
 						revision,
 					},

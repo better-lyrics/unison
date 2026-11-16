@@ -12,6 +12,7 @@ import { resolveArtworkCover } from "@/services/artwork"
 import { type DumpStats, readDumpStats } from "@/services/dump-manifest"
 import type { Env } from "@/types"
 import { type Accent, accentHex, inks, scrimFor } from "@/utils/accent"
+import { creditLine } from "@/utils/editor-credit"
 import { syncTypeFor } from "@/utils/sync-type"
 import { levelProgress } from "@/utils/xp"
 import { render } from "takumi-js"
@@ -129,13 +130,17 @@ export async function loadSongCard(env: Env, videoId: string) {
 		countVariantsByVideoId(env, videoId),
 		resolveArtworkCover(env, videoId),
 		buildSealMarks(env, [top]),
-		top.submitter_id == null ? null : resolvePeople(env, [top.submitter_id]),
+		resolvePeople(
+			env,
+			[top.submitter_id, ...(top.editor_ids ?? [])].filter((id): id is number => id != null)
+		),
 	])
 	return {
 		top,
 		versions,
 		sealed: marks.has(Number(top.id)),
-		person: top.submitter_id == null ? null : (people?.get(top.submitter_id) ?? null),
+		person: top.submitter_id == null ? null : (people.get(top.submitter_id) ?? null),
+		editors: (top.editor_ids ?? []).flatMap((id) => people.get(id) ?? []),
 		artwork: cover?.url ?? null,
 		cover,
 	}
@@ -155,16 +160,18 @@ export async function songAccent(card: SongCard): Promise<string> {
 export async function renderSongOg(env: Env, videoId: string): Promise<RenderedCard | null> {
 	const card = await loadSongCard(env, videoId)
 	if (!card) return null
-	const { top, person, sealed } = card
+	const { top, person, sealed, editors } = card
 	const art = await songArt(card)
-	const [wash, accent, avatar, seal] = await Promise.all([
+	const [wash, accent, avatar, seal, faces] = await Promise.all([
 		washFrom(art, OG.width, OG.height),
 		sampleAccent(art),
 		person ? avatarBytes(person.avatarUrl, person.keyId) : null,
 		sealed ? badgeArt("committee.svg") : null,
+		Promise.all(editors.slice(0, config.og.editorCredit.faces).map((p) => avatarBytes(p.avatarUrl, p.keyId))),
 	])
 	const images = new Images()
 	const { scrim, ink, accent: hex } = palette(accent)
+	const names = editors.map((p) => p.displayName)
 	const node = songCardNode({
 		song: top.song,
 		artist: top.artist,
@@ -176,6 +183,13 @@ export async function renderSongOg(env: Env, videoId: string): Promise<RenderedC
 			person && avatar
 				? { displayName: person.displayName, avatar: images.add("avatar", avatar) }
 				: null,
+		editors: editors.length
+			? {
+					parts: creditLine(names),
+					short: creditLine(names, 1),
+					faces: faces.map((face, i) => images.add(`editor:${i}`, face)),
+				}
+			: null,
 		cover: images.add("cover", art),
 		wash: images.add("wash", wash),
 		seal: seal ? images.asset("seal", seal) : null,

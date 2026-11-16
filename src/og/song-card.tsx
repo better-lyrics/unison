@@ -1,6 +1,17 @@
+import type { CreditPart } from "@/utils/editor-credit"
 import type { SyncKind } from "@/utils/sync-type"
 import type { CSSProperties } from "react"
-import { Frame, type Inks, OgBrand, Pill, SyncTag, TEXT, fill, fitLine } from "./components"
+import {
+	Frame,
+	HelpLine,
+	type Inks,
+	OgBrand,
+	Pill,
+	SyncTag,
+	TEXT,
+	fill,
+	fitLine,
+} from "./components"
 
 export interface SongCardData {
 	song: string
@@ -10,6 +21,7 @@ export interface SongCardData {
 	versions: number
 	sealed: boolean
 	submitter: { displayName: string; avatar: string } | null
+	editors: { parts: CreditPart[]; short: CreditPart[]; faces: string[] } | null
 	cover: string
 	wash: string
 	seal: string | null
@@ -83,7 +95,7 @@ export function songCardNode(card: SongCardData) {
 				style={{
 					position: "absolute",
 					left: 64,
-					top: 130,
+					top: card.editors ? 106 : 130,
 					bottom: 100,
 					width: 540,
 					display: "flex",
@@ -133,6 +145,9 @@ export function songCardNode(card: SongCardData) {
 							{card.submitter.displayName}
 						</span>
 					</div>
+				) : null}
+				{card.editors ? (
+					<HelpLine {...card.editors} ink={card.ink} width={540} style={{ marginTop: 12 }} />
 				) : null}
 			</div>
 			<OgBrand left />

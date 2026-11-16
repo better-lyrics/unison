@@ -6,6 +6,7 @@ type LyricIdentity = Pick<
 	"id" | "videoId" | "song" | "artist" | "album" | "isrc" | "language" | "format" | "lyrics"
 > & {
 	submitter?: { keyId: string; displayName: string }
+	editors?: { keyId: string; displayName: string }[]
 	variant?: string
 	matchedBy?: string
 }
@@ -13,7 +14,8 @@ type LyricIdentity = Pick<
 /** Weak, because votes, confidence and submitter stats can change under the same tag; the credit cannot. */
 export function lyricEtag(lyric: LyricIdentity): string {
 	const { videoId, song, artist, album, isrc, language, format, lyrics, variant, matchedBy } = lyric
-	const credit = [lyric.submitter?.keyId, lyric.submitter?.displayName]
+	const credit: unknown[] = [lyric.submitter?.keyId, lyric.submitter?.displayName]
+	if (lyric.editors?.length) credit.push(lyric.editors.map((e) => [e.keyId, e.displayName]))
 	const hash = createHash("sha1")
 		.update(
 			JSON.stringify([

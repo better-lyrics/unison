@@ -5,6 +5,7 @@ import { tmpdir } from "node:os"
 import { basename, join } from "node:path"
 import pg from "pg"
 import { config } from "@/config"
+import { editorsSql } from "@/db/predicates"
 import { D1Compat } from "@/infra/database"
 import { Logger } from "@/infra/logger"
 import { createStorage, type Storage } from "@/infra/storage"
@@ -115,6 +116,15 @@ export async function materializeDumpSchema(env: Env): Promise<void> {
 				"CREATE TABLE public_dump.contributors (key_id TEXT PRIMARY KEY, display_name TEXT NOT NULL, profile_url TEXT NOT NULL)"
 			),
 			tx.prepare("CREATE INDEX ON public_dump.lyrics (submitter_key_id)"),
+			tx.prepare(
+				`CREATE TABLE public_dump.lyric_editors AS
+				SELECT l.id AS lyrics_id, u.key_id, e.last_at AS last_edited_at
+				FROM public.lyrics l
+				CROSS JOIN LATERAL (${editorsSql("l")}) e
+				JOIN public.users u ON u.id = e.author_id`
+			),
+			tx.prepare("CREATE INDEX ON public_dump.lyric_editors (lyrics_id)"),
+			tx.prepare("CREATE INDEX ON public_dump.lyric_editors (key_id)"),
 		])
 		await writeContributors(tx)
 	})
@@ -126,7 +136,9 @@ async function writeContributors(tx: D1Compat): Promise<void> {
 	const { results } = await tx
 		.prepare(
 			`SELECT u.key_id, u.nickname FROM public.users u
-		WHERE u.key_id IN (SELECT submitter_key_id FROM public_dump.lyrics)`
+		WHERE u.key_id IN (
+			SELECT submitter_key_id FROM public_dump.lyrics UNION SELECT key_id FROM public_dump.lyric_editors
+		)`
 		)
 		.all<{ key_id: string; nickname: string | null }>()
 	if (results.length === 0) return
@@ -182,6 +194,7 @@ export interface DumpManifest {
 		requested_songs: number
 		lyrics_requests: number
 		contributors: number
+		lyric_editors: number
 	}
 	format: "pg_dump custom (-Fc), Postgres 18"
 	license: "LicenseRef-Unison-Community-1.0"
@@ -196,7 +209,12 @@ export interface BuildManifestInput {
 	now?: Date
 }
 
-type DumpTable = "lyrics" | "requested_songs" | "lyrics_requests" | "contributors"
+type DumpTable =
+	| "lyrics"
+	| "requested_songs"
+	| "lyrics_requests"
+	| "contributors"
+	| "lyric_editors"
 
 async function countRows(env: Env, table: DumpTable): Promise<number> {
 	const row = await env.DB.prepare(
@@ -209,12 +227,14 @@ export async function buildManifest(
 	env: Env,
 	input: BuildManifestInput
 ): Promise<DumpManifest> {
-	const [lyrics, requested_songs, lyrics_requests, contributors] = await Promise.all([
-		countRows(env, "lyrics"),
-		countRows(env, "requested_songs"),
-		countRows(env, "lyrics_requests"),
-		countRows(env, "contributors"),
-	])
+	const [lyrics, requested_songs, lyrics_requests, contributors, lyric_editors] =
+		await Promise.all([
+			countRows(env, "lyrics"),
+			countRows(env, "requested_songs"),
+			countRows(env, "lyrics_requests"),
+			countRows(env, "contributors"),
+			countRows(env, "lyric_editors"),
+		])
 
 	const generatedAt = (input.now ?? new Date()).toISOString()
 
@@ -225,7 +245,7 @@ export async function buildManifest(
 		bytes: input.bytes,
 		dump_url: `${input.publicBaseUrl}/${input.datedKey}`,
 		latest_url: `${input.publicBaseUrl}/dumps/latest.dump`,
-		row_counts: { lyrics, requested_songs, lyrics_requests, contributors },
+		row_counts: { lyrics, requested_songs, lyrics_requests, contributors, lyric_editors },
 		format: "pg_dump custom (-Fc), Postgres 18",
 		license: "LicenseRef-Unison-Community-1.0",
 		attribution_text: "Lyrics from Unison (https://unison.betterlyrics.org)",

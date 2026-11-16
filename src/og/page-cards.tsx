@@ -1,4 +1,5 @@
 import type { DumpStats } from "@/services/dump-manifest"
+import { PAGE_TITLES } from "@/utils/page-title"
 import type { CSSProperties, ReactNode } from "react"
 import { Frame, OgBrand, fill } from "./components"
 import { MONO_STACK } from "./fonts"
@@ -29,31 +30,31 @@ function homeSubtitle(lyrics: number | null): [string, string, string] {
 
 export const PAGE_COPY = {
 	home: {
-		title: "Unison",
+		title: PAGE_TITLES.home,
 		description: "The public database for synced lyrics",
 		headline: ["Every word,", "on time."],
 		subtitle: (lyrics: number | null) => homeSubtitle(lyrics).join(""),
 	},
 	leaderboard: {
-		title: "Leaderboard · Unison",
+		title: PAGE_TITLES.leaderboard,
 		label: "Leaderboard",
 		headline: ["Leaderboard"],
 		subtitle: "Curators behind the community's top-rated lyrics.",
 	},
 	sealed: {
-		title: "Sealed lyrics · Unison",
+		title: PAGE_TITLES.sealed,
 		label: "Sealed lyrics",
 		headline: ["Council approved"],
 		subtitle: "Our editors' choice: synced lyrics the Better Lyrics Council sealed.",
 	},
 	docs: {
-		title: "Docs · Unison",
+		title: PAGE_TITLES.docs,
 		label: "Docs",
 		headline: ["Build on Unison"],
 		subtitle: "Pull synced lyrics into your app without an API key.",
 	},
 	downloads: {
-		title: "Downloads · Unison",
+		title: PAGE_TITLES.downloads,
 		label: "Downloads",
 		headline: ["The whole", "database."],
 		subtitle: "A daily snapshot of the lyrics and the request queue.",
