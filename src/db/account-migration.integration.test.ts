@@ -852,6 +852,57 @@ describeIntegration("account migration (integration)", () => {
 			expect(await restoreFromSnapshot(env, auditId)).toEqual({ error: "HAS_INTERIM_ACTIVITY" })
 		})
 	})
+
+	describe("notifications", () => {
+		const notificationsOf = async (userId: number) =>
+			(
+				await pool.query(
+					"SELECT id, kind, ref_id, actor_id, data FROM notifications WHERE user_id = $1 ORDER BY id",
+					[userId]
+				)
+			).rows
+		const settingsOf = (userId: number) =>
+			one("SELECT notifications_seen_at, notify_discord FROM users WHERE id = $1", [userId])
+
+		it("merges colliding notifications and the read and Discord settings, and undo restores both accounts", async () => {
+			const { oldId, newId } = await seedIdentities()
+			await pool.query(
+				"UPDATE users SET notifications_seen_at = 1500, notify_discord = FALSE WHERE id = $1",
+				[oldId]
+			)
+			await pool.query(
+				"UPDATE users SET notifications_seen_at = 2500, notify_discord = TRUE WHERE id = $1",
+				[newId]
+			)
+			await pool.query(
+				`INSERT INTO notifications (user_id, kind, ref_id, actor_id, data) VALUES
+					($1, 'suggestion_new', 4242, NULL, '{"song":"Old"}'),
+					($2, 'suggestion_new', 4242, NULL, '{"song":"New"}'),
+					($2, 'suggestion_approved', 77, $1, '{}')`,
+				[oldId, newId]
+			)
+			const oldBefore = await notificationsOf(oldId)
+			const newBefore = await notificationsOf(newId)
+
+			const auditId = await migrate("sess-notifications")
+
+			const survivor = await notificationsOf(oldId)
+			expect(survivor.map((n) => [n.kind, n.ref_id])).toEqual([["suggestion_new", "4242"]])
+			expect(await notificationsOf(newId)).toEqual([])
+			expect(await settingsOf(oldId)).toEqual({ notifications_seen_at: 2500, notify_discord: true })
+
+			expect(await restoreFromSnapshot(env, auditId)).toEqual({ restored: true })
+
+			expect(await notificationsOf(oldId)).toEqual(oldBefore)
+			expect(await notificationsOf(newId)).toEqual(newBefore)
+			expect(await settingsOf(oldId)).toEqual({
+				notifications_seen_at: 1500,
+				notify_discord: false,
+			})
+			expect(await settingsOf(newId)).toEqual({ notifications_seen_at: 2500, notify_discord: true })
+		})
+	})
+
 	describe("committee ownership", () => {
 		const committeeRow = (userId: number) =>
 			num("SELECT count(*)::int n FROM committee_members WHERE user_id = $1", [userId])

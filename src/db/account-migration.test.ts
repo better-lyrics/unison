@@ -237,6 +237,7 @@ describe("runMigration (merge case)", () => {
 				"lyrics_requests",
 				"metadata_proposals",
 				"metadata_votes",
+				"notifications",
 				"rejections",
 				"report_case_votes",
 				"reports",
