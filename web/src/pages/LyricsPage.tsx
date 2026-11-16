@@ -13,11 +13,14 @@ import {
 } from "@/components/song/SuggestionPreview"
 import { useFillHeight } from "@/hooks/useFillHeight"
 import { useLyricsVariant, useLyricsVariants, useRevisionDetail, useRevisionDiff } from "@/hooks/useLyricsData"
+import { usePageTitle } from "@/hooks/usePageTitle"
 import { useActedOnSuggestion } from "@/hooks/useSuggestionMutations"
 import { useSuggestionViewer } from "@/hooks/useSuggestionViewer"
 import { useYouTubePlayer } from "@/hooks/useYouTubePlayer"
+import { isNotFound } from "@/lib/api"
 import { songBackdrop, useArtworkCover } from "@/lib/artwork"
 import { type SuggestionContent, contentOf, isOwnerless, jumpTargets, previewActions } from "@/lib/lyric-suggestion"
+import { NOT_FOUND_TITLE, songTitle } from "@/lib/page-title"
 import { syncTypeFor } from "@/lib/sync-type"
 import { pushToast } from "@/lib/toast"
 import type { VariantFull } from "@/lib/types"
@@ -78,6 +81,7 @@ export function LyricsPage() {
 
   const { data: art, isPending: artPending } = useArtworkCover(safeVideoId)
   const lead = variants[0]
+  usePageTitle(lead ? songTitle(lead.song, lead.artist) : isNotFound(variantsQuery.error) ? NOT_FOUND_TITLE : null)
   const backdrop = useMemo(
     () => (artPending || !lead ? null : songBackdrop(safeVideoId, Boolean(art), lead.song, lead.artist)),
     [artPending, lead, art, safeVideoId],

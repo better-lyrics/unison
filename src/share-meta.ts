@@ -18,6 +18,7 @@ import {
 } from "@/og/render"
 import type { Env } from "@/types"
 import { sharedInFlight } from "@/utils/in-flight"
+import { profileTitle, songTitle } from "@/utils/page-title"
 import { SYNC_KINDS, type SyncKind, syncTypeFor } from "@/utils/sync-type"
 import { isVideoId } from "@/utils/video-id"
 import { levelProgress } from "@/utils/xp"
@@ -117,7 +118,7 @@ export function songShare(card: SongShareInput, themeColor: string): Share {
 		card.versions > 1 ? plural(card.versions, "version") : null,
 	]
 	return {
-		title: `${top.song} · ${top.artist}`,
+		title: songTitle(top.song, top.artist),
 		description: details.filter(Boolean).join(" · "),
 		themeColor,
 		image: `/og/song/${card.videoId}.jpg?v=${version}`,
@@ -134,7 +135,7 @@ export function profileShare(card: ProfileShareInput, themeColor: string): Share
 	const tierName = card.tier ? CATALOGUE.find((b) => b.key === card.tier)?.name : null
 	const version = profileVersion(card)
 	return {
-		title: identity.displayName,
+		title: profileTitle(identity.displayName),
 		description: rank
 			? [
 					`${plural(rank.submissionCount, "song")} synced`,
