@@ -516,14 +516,10 @@ describeIntegration("revision routes (integration)", () => {
 		})
 
 		it("leaves out who decides when the stranger's edit cannot be saved", async () => {
-			const { json } = await call<PreviewResult>(
-				"POST",
-				`/lyrics/${lyricId}/revisions/preview`,
-				{
-					token: "stranger-token",
-					body: { lyrics: "<tt><body><div><p>unclosed", format: "ttml", language: "en" },
-				}
-			)
+			const { json } = await call<PreviewResult>("POST", `/lyrics/${lyricId}/revisions/preview`, {
+				token: "stranger-token",
+				body: { lyrics: "<tt><body><div><p>unclosed", format: "ttml", language: "en" },
+			})
 			expect(json.data).not.toHaveProperty("decider")
 		})
 
@@ -560,6 +556,31 @@ describeIntegration("revision routes (integration)", () => {
 			})
 			expect(history.at(-1)).toMatchObject({ authorKeyId: OWNER_KEY })
 			expect(history.at(-1)).not.toHaveProperty("decidedBy")
+		})
+
+		it("regression: reports an owner on the council deciding as the council only when the council decides", async () => {
+			await db.pool.query("INSERT INTO committee_members (user_id, added_by) VALUES ($1, 'test')", [
+				owner,
+			])
+			const approve = (revId: number) =>
+				call<{ revision: RevisionSummary }>(
+					"POST",
+					`/lyrics/${lyricId}/revisions/${revId}/approve`,
+					{ token: "owner-token" }
+				)
+			const plain = (await propose(swapWords(LRC, 1))).json.data.revision
+			expect((await approve(plain.id)).json.data.revision.decidedBy).toBe("owner")
+
+			await db.pool.query(
+				"UPDATE lyrics SET committee_approved_at = EXTRACT(EPOCH FROM NOW())::INTEGER WHERE id = $1",
+				[lyricId]
+			)
+			const sealed = (await propose(swapWords(LRC, 2))).json.data.revision
+			expect((await approve(sealed.id)).json.data.revision.decidedBy).toBe("council")
+
+			const history = (await listRevisions()).json.data.revisions
+			expect(history.find((r) => r.id === plain.id)?.decidedBy).toBe("owner")
+			expect(history.find((r) => r.id === sealed.id)?.decidedBy).toBe("council")
 		})
 	})
 

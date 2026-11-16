@@ -13,7 +13,7 @@ export const waitingSuggestionSql = (revision: string, lyric: string): string =>
 	`(${revision}.status = 'pending' AND ${patchSql(revision, lyric)})`
 
 export const ownerDecisionSql = (revision: string, lyric: string): string =>
-	`(${revision}.reviewed_by IS NOT DISTINCT FROM ${lyric}.submitter_id AND ${patchSql(revision, lyric)})`
+	`(${revision}.reviewed_by IS NOT DISTINCT FROM ${lyric}.submitter_id AND ${patchSql(revision, lyric)} AND NOT EXISTS (SELECT 1 FROM council_events ce WHERE ce.kind IN ('edit_approve', 'edit_reject') AND ce.ref_id = ${revision}.id))`
 
 export const ownerlessSql = (lyric: string): string => `(${lyric}.submitter_id IS NULL)`
 
