@@ -61,7 +61,8 @@ export function decisionRole(
 	if (input.reviewerId === input.authorId) return { ok: false, reason: "own_patch" }
 	if (
 		input.reviewerId === input.submitterId &&
-		(input.action === "reject" || (input.reason === "suggested" && !input.sealed))
+		(input.action === "reject" ||
+			suggestionDecider(input.reason, input.sealed, input.ownerless) === "owner")
 	) {
 		return { ok: true, role: "owner" }
 	}

@@ -10,7 +10,6 @@ import {
   lyricsFormatOf,
   previewActions,
   suggestAction,
-  suggestionDecider,
 } from "./lyric-suggestion"
 import type { DiffRow } from "./revision-types"
 import type { PendingReason, RevisionSuggestion } from "./types"
@@ -30,6 +29,7 @@ const waiting = (authorKeyId: string): RevisionSuggestion => ({
   createdAt: 1_700_000_000,
   councilDecidesAt: 1_700_604_800,
   rejectNoteMaxLength: config.validation.report.maxDetailsLength,
+  decider: "owner",
 })
 
 describe("suggestAction", () => {
@@ -75,16 +75,8 @@ describe("suggestAction", () => {
   })
 })
 
-describe("suggestionDecider", () => {
-  it("leaves a plain suggestion to the owner and everything else to the council", () => {
-    expect(suggestionDecider({ pendingReason: "suggested", sealed: false })).toBe("owner")
-    expect(suggestionDecider({ pendingReason: null })).toBe("owner")
-    expect(suggestionDecider({ pendingReason: "suggested", sealed: true })).toBe("council")
-    expect(suggestionDecider({ pendingReason: "flagged", sealed: false })).toBe("council")
-  })
-
+describe("isOwnerless", () => {
   it("leaves a suggestion on a lyric with no owner to the council", () => {
-    expect(suggestionDecider({ pendingReason: "suggested", sealed: false, ownerless: true })).toBe("council")
     expect(isOwnerless(null)).toBe(true)
     expect(isOwnerless(COMMUNITY_KEY_ID)).toBe(true)
     expect(isOwnerless(OWNER.keyId)).toBe(false)
@@ -109,8 +101,12 @@ describe("previewActions", () => {
 
   it("leaves approval to the council when the suggestion was held for another reason or the lyric is sealed", () => {
     const councilDecides = { approve: "council-decides", reject: true, withdraw: false }
-    expect(previewActions(viewer(OWNER.keyId), lyric({ pendingReason: "large_text_drift" }))).toEqual(councilDecides)
-    expect(previewActions(viewer(OWNER.keyId), lyric({ councilDecidesAt: null }, true))).toEqual(councilDecides)
+    expect(
+      previewActions(viewer(OWNER.keyId), lyric({ pendingReason: "large_text_drift", decider: "council" })),
+    ).toEqual(councilDecides)
+    expect(previewActions(viewer(OWNER.keyId), lyric({ councilDecidesAt: null, decider: "council" }, true))).toEqual(
+      councilDecides,
+    )
   })
 
   it("lets a council member decide only once the owner's window has closed", () => {
@@ -161,6 +157,7 @@ describe("previewActions", () => {
 })
 
 interface ServerDecisionRule {
+  suggestionDecider: (reason: PendingReason | null, sealed: boolean, ownerless: boolean) => "owner" | "council"
   councilDecidesAt: (
     reason: PendingReason | null,
     sealed: boolean,
@@ -182,7 +179,7 @@ interface ServerDecisionRule {
   }) => { ok: boolean }
 }
 
-const [{ councilDecidesAt, decisionRole }] = Object.values(
+const [{ councilDecidesAt, decisionRole, suggestionDecider }] = Object.values(
   import.meta.glob<ServerDecisionRule>("../../../src/utils/lyric-patch.ts", { eager: true }),
 )
 
@@ -244,6 +241,7 @@ describe("decision parity with the server", () => {
                     sealed,
                     createdAt,
                     councilDecidesAt: councilDecidesAt(reason, sealed, ownerless, createdAt, NOW),
+                    decider: suggestionDecider(reason, sealed, ownerless),
                   },
                 },
               )

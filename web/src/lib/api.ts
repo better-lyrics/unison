@@ -27,6 +27,7 @@ import type {
   SongsLeaderboardResponse,
   SubmissionSort,
   SubmissionSyncType,
+  SuggestionDecider,
   UserGamification,
   UserRankResponse,
   UserSubmissionsResponse,
@@ -224,8 +225,8 @@ export function previewRevision(lyricsId: number, input: RevisionInput): Promise
 export function submitRevision(
   lyricsId: number,
   input: RevisionInput & { note?: string },
-): Promise<{ revision: RevisionSummary }> {
-  return authedFetch<{ revision: RevisionSummary }>(`/lyrics/${lyricsId}/revisions`, {
+): Promise<{ revision: RevisionSummary; decider?: SuggestionDecider }> {
+  return authedFetch<{ revision: RevisionSummary; decider?: SuggestionDecider }>(`/lyrics/${lyricsId}/revisions`, {
     method: "POST",
     headers: JSON_HEADERS,
     body: JSON.stringify(input),

@@ -2,23 +2,12 @@ import { AUTHED_FETCH_ERRORS, AuthedFetchError } from "./authedFetch"
 import { COMMUNITY_KEY_ID } from "./community"
 import { plural } from "./format"
 import type { DiffRow } from "./revision-types"
-import type { LyricsFormat, PendingReason, RevisionSuggestion, VariantPendingRevision } from "./types"
+import type { LyricsFormat, RevisionSuggestion, VariantPendingRevision } from "./types"
 
 export const ownerWindow = (ownerDecisionSec: number): string => plural(ownerDecisionSec / 86_400, "day", "days")
 
-export type SuggestionDecider = "owner" | "council"
-
 export const isOwnerless = (submitterKeyId: string | null | undefined): boolean =>
   !submitterKeyId || submitterKeyId === COMMUNITY_KEY_ID
-
-export function suggestionDecider(suggestion: {
-  pendingReason: PendingReason | null
-  sealed?: boolean
-  ownerless?: boolean
-}): SuggestionDecider {
-  const plain = suggestion.pendingReason === null || suggestion.pendingReason === "suggested"
-  return plain && !suggestion.sealed && !suggestion.ownerless ? "owner" : "council"
-}
 
 export type SuggestAction = "suggest" | "withdraw" | "waiting" | "sign-in" | "needs-lyric" | "none"
 
@@ -83,7 +72,7 @@ function viewerActions(viewer: PreviewViewer | null, lyric: PreviewedLyric): Pre
   if (isOwnSuggestion(viewer, suggestion.authorKeyId)) return { ...NO_ACTIONS, withdraw: true }
   const councilMay = viewer.council && suggestion.councilDecidesAt === null
   if (viewer.keyId === lyric.submitterKeyId) {
-    const ownerMay = suggestionDecider(suggestion) === "owner"
+    const ownerMay = suggestion.decider === "owner"
     return { approve: ownerMay || councilMay ? "available" : "council-decides", reject: true, withdraw: false }
   }
   return councilMay ? { approve: "available", reject: true, withdraw: false } : NO_ACTIONS

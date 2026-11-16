@@ -14,7 +14,7 @@ import { type SuggestionViewer, useSuggestionViewer } from "@/hooks/useSuggestio
 import { cn } from "@/lib/cn"
 import { reasonLabel } from "@/lib/council-reasons"
 import { formatElapsed, formatRemaining } from "@/lib/format"
-import { type SuggestionContent, previewActions, suggestionDecider } from "@/lib/lyric-suggestion"
+import { type SuggestionContent, previewActions } from "@/lib/lyric-suggestion"
 import type { SuggestionInboxItem } from "@/lib/revision-types"
 import { IconAlertTriangle, IconArrowsDiff } from "@tabler/icons-react"
 import { useState } from "react"
@@ -72,7 +72,7 @@ export function SuggestionInboxView({
           <InboxRow
             key={item.suggestion.id}
             item={item}
-            councilDecides={suggestionDecider(item.suggestion) === "council"}
+            councilDecides={item.suggestion.decider === "council"}
             now={now}
             onSeeChanges={() => {
               setOpenId(item.suggestion.id)

@@ -29,6 +29,7 @@ const ITEM: SuggestionInboxItem = {
     createdAt: NOW - 3600,
     councilDecidesAt: NOW + 6 * 86400,
     rejectNoteMaxLength: 1000,
+    decider: "owner",
   },
 }
 

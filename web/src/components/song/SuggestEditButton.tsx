@@ -31,18 +31,16 @@ import { languageName } from "@/lib/language"
 import { FORMAT_LABEL, lyricsFilename, MIME_BY_FORMAT } from "@/lib/lyrics-download"
 import {
   type SuggestAction,
-  type SuggestionDecider,
   lyricsFormatOf,
   ownerWindow,
   suggestAction,
   isOwnerless,
-  suggestionDecider,
   suggestionErrorMessage,
 } from "@/lib/lyric-suggestion"
 import { FIELD_LABEL } from "@/lib/revision-fields"
 import type { FieldCheck, PreviewResult, RevisionInput } from "@/lib/revision-types"
 import { pushToast } from "@/lib/toast"
-import type { VariantFull } from "@/lib/types"
+import type { SuggestionDecider, VariantFull } from "@/lib/types"
 import {
   type Icon,
   IconAlertTriangle,
@@ -256,7 +254,7 @@ export function SuggestionWaitingLine({ variant }: { variant: VariantFull }) {
   const action = useSuggestAction(variant)
   const suggestion = variant.revision?.suggestion
   if (action !== "withdraw" || !suggestion) return null
-  const ownerDecides = suggestionDecider({ ...suggestion, ownerless: ownerlessLyric(variant) }) === "owner"
+  const ownerDecides = suggestion.decider === "owner"
   const waitingOn = !ownerDecides
     ? "Your suggestion is waiting on the council."
     : suggestion.councilDecidesAt === null
@@ -320,12 +318,8 @@ function SuggestDialog({
     send.mutate(
       { input, note },
       {
-        onSuccess: ({ revision }) => {
-          suggestionSentToast(
-            ownerName(variant),
-            suggestionDecider({ pendingReason: revision.pendingReason, ownerless: ownerlessLyric(variant) }),
-            ownerDecisionSec,
-          )
+        onSuccess: ({ decider }) => {
+          if (decider) suggestionSentToast(ownerName(variant), decider, ownerDecisionSec)
           onSent()
           onClose()
         },
@@ -675,9 +669,9 @@ function previewBlocker(result: PreviewResult): string | null {
   return null
 }
 
-function whoDecides(result: PreviewResult, owner: string, ownerless: boolean): string {
+function whoDecides(result: PreviewResult, owner: string): string {
   const reason = result.outcome.reason
-  if (suggestionDecider({ pendingReason: reason, ownerless }) === "owner") return `${owner}, the owner.`
+  if (result.decider === "owner") return `${owner}, the owner.`
   if (reason === null || reason === "suggested") return "The council, because this lyric has no owner."
   return `The council, because ${reasonBecause(reason)}.`
 }
@@ -715,8 +709,7 @@ export function PreviewStep({
   const picker = useLyricsFilePicker(onReplace)
   const noteId = useId()
   const owner = ownerName(variant)
-  const ownerless = ownerlessLyric(variant)
-  const ownerDecides = suggestionDecider({ pendingReason: result.outcome.reason, ownerless }) === "owner"
+  const ownerDecides = result.decider === "owner"
   const reader = ownerDecides ? owner : "the council"
   const blocker = previewBlocker(result)
   const sendRef = useFocusOnMount<HTMLButtonElement>(blocker === null)
@@ -765,7 +758,7 @@ export function PreviewStep({
               <li className={CHECK_ROW}>
                 <IconInfoCircle aria-hidden className="mt-0.5 size-4 text-council-edit-ink" stroke={1.75} />
                 <span className="text-unison-text-muted">Who decides</span>
-                <span className="text-unison-text-secondary">{whoDecides(result, owner, ownerless)}</span>
+                <span className="text-unison-text-secondary">{whoDecides(result, owner)}</span>
               </li>
             )}
           </ul>

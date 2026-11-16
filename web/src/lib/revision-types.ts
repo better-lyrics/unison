@@ -1,4 +1,4 @@
-import type { LyricsFormat, PendingReason, RevisionSuggestion } from "./types"
+import type { LyricsFormat, PendingReason, RevisionSuggestion, SuggestionDecider } from "./types"
 
 export type DiffPart = ["=" | "+" | "-", string]
 
@@ -87,6 +87,7 @@ export interface PreviewResult {
   diff: RevisionDiff
   noteMaxLength: number
   ownerDecisionSec: number
+  decider?: SuggestionDecider
 }
 
 export interface SuggestionInboxItem {

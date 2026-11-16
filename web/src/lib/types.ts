@@ -196,6 +196,8 @@ export interface VariantSummary {
 
 export type PendingReason = "sealed" | "flagged" | "large_text_drift" | "large_timing_drift" | "suggested"
 
+export type SuggestionDecider = "owner" | "council"
+
 export interface RevisionSuggestion {
   id: number
   revNo: number
@@ -208,6 +210,7 @@ export interface RevisionSuggestion {
   createdAt: number
   councilDecidesAt: number | null
   rejectNoteMaxLength: number
+  decider: SuggestionDecider
 }
 
 export interface VariantPendingRevision {

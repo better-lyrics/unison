@@ -80,6 +80,7 @@ const SUGGESTION: RevisionSuggestion = {
   createdAt: NOW - 3 * HOUR,
   councilDecidesAt: NOW + 6 * DAY + 21 * HOUR,
   rejectNoteMaxLength: 1000,
+  decider: "owner",
 }
 
 const OVERDUE: RevisionSuggestion = { ...SUGGESTION, createdAt: NOW - 7 * DAY - 2 * HOUR, councilDecidesAt: null }
@@ -178,6 +179,7 @@ const PASSING: PreviewResult = {
   diff: { rows: DIFF_ROWS, againstRevNo: 3 },
   noteMaxLength: 300,
   ownerDecisionSec: 604_800,
+  decider: "owner",
 }
 
 const FAILING: PreviewResult = {
@@ -223,6 +225,7 @@ const INBOX: SuggestionInboxItem[] = [
       createdAt: NOW - DAY,
       councilDecidesAt: null,
       rejectNoteMaxLength: 1000,
+      decider: "council",
     },
   },
 ]
@@ -357,7 +360,9 @@ function DialogFixtures() {
             <PreviewStep
               variant={fixture === "ownerless" ? withRevision({}, true) : VARIANT}
               file={FILE}
-              result={fixture === "failing" ? FAILING : PASSING}
+              result={
+                fixture === "failing" ? FAILING : fixture === "ownerless" ? { ...PASSING, decider: "council" } : PASSING
+              }
               note={note}
               onNote={setNote}
               sending={false}
@@ -396,12 +401,12 @@ const ACTION_STATES: {
   {
     label: "You suggested it, council decides",
     session: SESSIONS.proposer,
-    revision: { suggestion: { ...SUGGESTION, pendingReason: "flagged", councilDecidesAt: null } },
+    revision: { suggestion: { ...SUGGESTION, pendingReason: "flagged", councilDecidesAt: null, decider: "council" } },
   },
   {
     label: "You suggested it, lyric has no owner",
     session: SESSIONS.proposer,
-    revision: { suggestion: { ...SUGGESTION, councilDecidesAt: null } },
+    revision: { suggestion: { ...SUGGESTION, councilDecidesAt: null, decider: "council" } },
     ownerless: true,
   },
 ]
