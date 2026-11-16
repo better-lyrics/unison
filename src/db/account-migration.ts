@@ -1,4 +1,9 @@
 import { config } from "@/config"
+import {
+	type WithdrawnSuggestion,
+	restoreWithdrawnSuggestion,
+	withdrawOwnSuggestions,
+} from "@/db/lyric-revisions"
 import { updateReputations } from "@/db/reputation"
 import type { D1Compat } from "@/infra/database"
 import type { Env } from "@/types"
@@ -26,6 +31,7 @@ export interface MigrationSnapshot {
 	discord_links: unknown[]
 	lyrics_requests: unknown[]
 	lyric_revisions?: unknown[]
+	withdrawn_suggestions?: (number | WithdrawnSuggestion)[]
 	contribution_events?: unknown[]
 	badge_awards?: unknown[]
 	committee_members?: unknown[]
@@ -287,6 +293,7 @@ export async function runMigration(
 				.prepare("UPDATE lyric_revisions SET reviewed_by = ? WHERE reviewed_by = ?")
 				.bind(oldId, newId)
 				.run()
+			snapshot.withdrawn_suggestions = await withdrawOwnSuggestions(tx, oldId)
 		}
 
 		const reqCollisions = await countTx(
@@ -885,7 +892,10 @@ interface SnapBadgeAward {
 export async function restoreFromSnapshot(
 	env: Env,
 	migrationId: number
-): Promise<{ restored: true } | { error: "NOT_FOUND" | "NOT_COMMITTED" | "HAS_INTERIM_ACTIVITY" }> {
+): Promise<
+	| { restored: true; keptWithdrawn?: number[] }
+	| { error: "NOT_FOUND" | "NOT_COMMITTED" | "HAS_INTERIM_ACTIVITY" }
+> {
 	const audit = await getAudit(env, migrationId)
 	if (!audit) return { error: "NOT_FOUND" }
 	if (audit.status !== "committed" || !audit.snapshot) return { error: "NOT_COMMITTED" }
@@ -1119,6 +1129,12 @@ export async function restoreFromSnapshot(
 				.run()
 		}
 
+		const keptWithdrawn: number[] = []
+		for (const entry of snap.withdrawn_suggestions ?? []) {
+			const withdrawn = typeof entry === "number" ? { id: entry, albumInherited: null } : entry
+			if (!(await restoreWithdrawnSuggestion(tx, withdrawn))) keptWithdrawn.push(withdrawn.id)
+		}
+
 		for (const f of snap.request_fulfillments as SnapFulfillment[]) {
 			await tx
 				.prepare("UPDATE request_fulfillments SET submitter_id = ? WHERE id = ?")
@@ -1264,6 +1280,8 @@ export async function restoreFromSnapshot(
 				.run()
 		}
 
-		return { restored: true } as const
+		return keptWithdrawn.length > 0
+			? { restored: true as const, keptWithdrawn }
+			: { restored: true as const }
 	})
 }

@@ -5,6 +5,7 @@ import {
 	detectFormat,
 	detectPrettyPrintedTtml,
 	detectSyncType,
+	findNulCharacter,
 	findXmlProblem,
 	hasDegenerateWordTiming,
 	validateTtmlStructure,
@@ -44,6 +45,15 @@ export function validateLyricContent(
 
 	const format = detectFormat(lyrics)
 	const content = format === "ttml" ? (declareStandardPrefixes(lyrics) ?? lyrics) : lyrics
+
+	const nul = format === "ttml" ? null : findNulCharacter(content)
+	if (nul) {
+		return {
+			ok: false,
+			code: ErrorCode.INVALID_PAYLOAD,
+			hint: `${nul.message} (line ${nul.line}, column ${nul.column}). Remove it and try again.`,
+		}
+	}
 
 	if (format === "ttml") {
 		const xmlProblem = findXmlProblem(content)

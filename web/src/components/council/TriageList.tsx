@@ -1,6 +1,7 @@
 import { EmptyState } from "@/components/EmptyState"
 import { Kbd } from "@/components/Kbd"
 import { Bone, skeletonKeys } from "@/components/skeleton"
+import { scrollFadeClass } from "@/components/ui"
 import type { Bookmarkable, Triage } from "@/hooks/useTriage"
 import { cn } from "@/lib/cn"
 import { plural } from "@/lib/format"
@@ -47,7 +48,7 @@ export function TriageList<T extends Bookmarkable>({
   return (
     <div className="flex min-h-0 flex-col triage:sticky triage:top-[calc(var(--app-header-h)+2rem)] triage:max-h-[calc(100dvh-var(--app-header-h)-4rem)]">
       {tools ? <div className="flex flex-col gap-2.5 pb-4">{tools}</div> : null}
-      <div className="-mx-1.5 min-h-0 overflow-y-auto px-1.5 pb-7 [mask-image:linear-gradient(to_bottom,#000_calc(100%-28px),transparent_100%)] [scrollbar-color:var(--color-unison-border-strong)_transparent] [scrollbar-width:thin]">
+      <div className={cn("-mx-1.5 min-h-0 overflow-y-auto px-1.5 pb-7", scrollFadeClass)}>
         {fresh.count > 0 ? (
           <button
             type="button"

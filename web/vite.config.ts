@@ -25,8 +25,22 @@ function devBadgeArt(): Plugin {
   }
 }
 
+// Parity tests import server rules from the repo-root src, whose own "@/" imports mean that src.
+function serverAlias(): Plugin {
+  const webSrc = resolve(__dirname, "./src")
+  const serverSrc = resolve(__dirname, "../src")
+  return {
+    name: "unison-server-alias",
+    enforce: "pre",
+    resolveId(source, importer) {
+      if (!importer?.startsWith(`${serverSrc}/`) || !source.startsWith(`${webSrc}/`)) return null
+      return this.resolve(`${serverSrc}${source.slice(webSrc.length)}`, importer, { skipSelf: true })
+    },
+  }
+}
+
 export default defineConfig({
-  plugins: [react(), tailwindcss(), devBadgeArt()],
+  plugins: [react(), tailwindcss(), devBadgeArt(), serverAlias()],
   resolve: {
     alias: {
       "@": resolve(__dirname, "./src"),

@@ -152,6 +152,16 @@ describeIntegration("backfillCouncilEvents (integration)", () => {
 			expect((await kinds()).filter(([k]) => k === "edit_approve")).toHaveLength(1)
 		})
 
+		it("never backfills an owner's decision on someone else's suggestion", async () => {
+			await db.pool.query(
+				`INSERT INTO lyric_revisions (lyrics_id, rev_no, author_id, lyrics, format, sync_type, content_hash, status, reviewed_by, reviewed_at)
+				 VALUES ($1, 60, $2, $4, 'lrc', 'linesync', 'bf-d', 'past', $3, 600),
+				        ($1, 61, $2, $4, 'lrc', 'linesync', 'bf-e', 'rejected', $3, 700)`,
+				[lyricId, member, submitter, swapWords(LRC, 2)]
+			)
+			expect(await backfillCouncilEvents(db.env)).toBe(0)
+		})
+
 		it("does nothing on an empty history", async () => {
 			expect(await backfillCouncilEvents(db.env)).toBe(0)
 			expect(await kinds()).toEqual([])

@@ -252,7 +252,14 @@ export interface ApiResponse<T = unknown> {
 }
 
 export type RevisionStatus = "live" | "past" | "pending" | "superseded" | "rejected" | "withdrawn"
-export type PendingReason = "sealed" | "flagged" | "large_text_drift" | "large_timing_drift"
+export type PendingReason =
+	| "sealed"
+	| "flagged"
+	| "large_text_drift"
+	| "large_timing_drift"
+	| "suggested"
+
+export type DecisionRole = "owner" | "council"
 
 export interface RevisionAuthor {
 	displayName: string
@@ -268,6 +275,8 @@ export interface RevisionSummary {
 	timingDrift: number
 	revertsRevNo: number | null
 	author: RevisionAuthor | null
+	authorKeyId: string | null
+	decidedBy?: DecisionRole
 	reviewNote: string | null
 	createdAt: number
 	reviewedAt: number | null
@@ -290,6 +299,8 @@ export interface FieldCheck {
 	status: CheckStatus
 	message: string
 	line?: number
+	language?: string
+	detectedLanguage?: string
 }
 
 export interface GateOutcome {
@@ -318,6 +329,9 @@ export interface PreviewResult {
 	noChanges: boolean
 	rateLimit: RevisionRateLimit
 	diff: RevisionDiff
+	noteMaxLength: number
+	ownerDecisionSec: number
+	decider?: DecisionRole
 }
 
 export type DiffPart = ["=" | "+" | "-", string]
@@ -376,6 +390,9 @@ export interface PendingRevisionCard {
 	timingDrift: number
 	author: RevisionAuthor | null
 	authorKeyId: string | null
+	suggestion?: boolean
+	ownerless?: boolean
+	authorNote?: string | null
 	createdAt: number
 	diffPreview: string
 	diffFull: string
@@ -392,4 +409,35 @@ export interface RevisionBar {
 	} | null
 	lastRejected: { revNo: number; reviewNote: string | null } | null
 	updatedAt: number
+	suggestion?: RevisionSuggestion
+	editors?: RevisionEditor[]
+}
+
+export interface RevisionEditor {
+	keyId: string
+	displayName: string
+	avatarUrl: string | null
+}
+
+export interface RevisionSuggestion {
+	id: number
+	revNo: number
+	author: RevisionAuthor | null
+	authorKeyId: string | null
+	authorAvatarUrl: string | null
+	pendingReason: PendingReason
+	sealed: boolean
+	createdAt: number
+	councilDecidesAt: number | null
+	note: string | null
+	rejectNoteMaxLength: number
+	decider: DecisionRole
+}
+
+export interface SuggestionInboxItem {
+	lyricsId: number
+	videoId: string
+	song: string
+	artist: string
+	suggestion: RevisionSuggestion
 }

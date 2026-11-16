@@ -253,6 +253,7 @@ describe("POST /auth/session", () => {
 			...registrationQueue(first.keyId, first.publicKey),
 			{ nickname: null },
 			null,
+			null,
 			...registrationQueue(second.keyId, second.publicKey),
 		])
 		const env = makeEnvFull(db, cache)

@@ -180,7 +180,7 @@ function isQueueDecision(decision: Decision): decision is Extract<Decision, { it
   return decision.kind === "seal" || decision.kind === "reject"
 }
 
-function refreshCouncil(client: QueryClient, lyric?: { lyricsId: number; videoId: string }): void {
+export function refreshCouncil(client: QueryClient, lyric?: { lyricsId: number; videoId: string }): void {
   client.invalidateQueries({ queryKey: councilKeys.all })
   if (!lyric) return
   client.invalidateQueries({ queryKey: lyricsKeys.variants(lyric.videoId) })

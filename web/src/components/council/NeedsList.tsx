@@ -8,12 +8,14 @@ import {
   IconClock,
   IconRosetteDiscountCheck,
   IconSchool,
+  IconUserEdit,
 } from "@tabler/icons-react"
 import { Link } from "react-router-dom"
 
 const ICONS: Record<NeedKind, Icon> = {
   "sealed-edit": IconRosetteDiscountCheck,
   "flagged-edit": IconAlertTriangle,
+  "suggested-edit": IconUserEdit,
   "my-bookmarks": IconBookmark,
   "expiring-bookmark": IconClock,
   applicants: IconSchool,

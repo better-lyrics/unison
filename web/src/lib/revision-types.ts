@@ -1,4 +1,4 @@
-import type { PendingReason } from "./council-types"
+import type { LyricsFormat, PendingReason, RevisionSuggestion, SuggestionDecider } from "./types"
 
 export type DiffPart = ["=" | "+" | "-", string]
 
@@ -29,6 +29,7 @@ export type DiffRow =
     }
   | ({ kind: "syllable"; lineNo: number; startMs: number | null; text: string } & SyllableChange)
   | { kind: "gap"; count: number; section?: "head" }
+  | { kind: "field"; field: "language" | "isrc" | "album"; before: string | null; after: string | null }
 
 export interface RevisionDiff {
   rows: DiffRow[]
@@ -50,4 +51,49 @@ export interface RevisionSummary {
   reviewNote: string | null
   createdAt: number
   reviewedAt: number | null
+}
+
+export interface RevisionDetail extends RevisionSummary {
+  lyrics: string
+  format: LyricsFormat
+}
+
+export interface RevisionInput {
+  lyrics: string
+  format: LyricsFormat
+}
+
+export interface FieldCheck {
+  field: "lyrics" | "language" | "isrc" | "album"
+  status: "ok" | "warn" | "bad"
+  message: string
+  line?: number
+  language?: string
+  detectedLanguage?: string
+}
+
+export interface RevisionRateLimit {
+  lyricRemaining: number
+  lyricLimit: number
+  userRemaining: number
+  userLimit: number
+}
+
+export interface PreviewResult {
+  checks: FieldCheck[]
+  outcome: { goesLive: boolean; reason: PendingReason | null }
+  noChanges: boolean
+  rateLimit: RevisionRateLimit
+  diff: RevisionDiff
+  noteMaxLength: number
+  ownerDecisionSec: number
+  decider?: SuggestionDecider
+}
+
+export interface SuggestionInboxItem {
+  lyricsId: number
+  videoId: string
+  song: string
+  artist: string
+  suggestion: RevisionSuggestion
 }

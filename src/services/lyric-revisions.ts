@@ -1,4 +1,5 @@
 import { config } from "@/config"
+import { isBanned } from "@/db/bans"
 import { isCommittee } from "@/db/committee"
 import { releaseBookmarksForItem } from "@/db/council-bookmarks"
 import { type CouncilSource, recordCouncilEvent } from "@/db/council-events"
@@ -27,10 +28,12 @@ import {
 	supersedePending,
 } from "@/db/lyric-revisions"
 import { invalidateCacheForLyric } from "@/db/lyrics"
+import { type SuggestStanding, suggestStanding } from "@/db/suggest-standing"
 import type { D1Compat } from "@/infra/database"
 import { Logger } from "@/infra/logger"
 import { type JevVerdict, disabledJevGate, jevLyricContext, runJevStep } from "@/services/jev-gate"
 import type {
+	DecisionRole,
 	Env,
 	FieldCheck,
 	GateOutcome,
@@ -60,6 +63,7 @@ import {
 	unifiedDiff,
 } from "@/utils/lyric-diff"
 import { type DriftResult, measureDrift } from "@/utils/lyric-drift"
+import { decisionRole, isPatch, suggestionDecider } from "@/utils/lyric-patch"
 import { decideOutcome } from "@/utils/revision-gate"
 import { type ContentValidation, validateLyricContent } from "@/utils/validate-lyrics"
 
@@ -71,6 +75,7 @@ export interface RevisionInput {
 	language?: string | null
 	isrc?: string | null
 	album?: string | null
+	note?: string | null
 }
 
 interface RevertSource {
@@ -108,16 +113,29 @@ interface Assessment {
 }
 
 type AccessFailure = { ok: false; reason: "not_found" | "not_owner" }
+type SuggestRefusal = { ok: false; reason: "needs_lyric" }
+
+const NEEDS_LYRIC: SuggestRefusal = { ok: false, reason: "needs_lyric" }
 
 export type SaveResult =
-	| { ok: true; revision: RevisionSummary }
+	| { ok: true; revision: RevisionSummary; decider?: DecisionRole }
 	| AccessFailure
-	| { ok: false; reason: "rate_limited" | "no_changes" | "stale" }
+	| SuggestRefusal
+	| { ok: false; reason: "rate_limited" | "no_changes" | "stale" | "pending_taken" }
 	| { ok: false; reason: "invalid"; code: ErrorCode; hint?: string }
 
 export type DecisionResult =
 	| { ok: true; revision: RevisionSummary }
-	| { ok: false; reason: "not_committee" | "not_found" | "already_decided" | "stale" }
+	| {
+			ok: false
+			reason:
+				| "not_committee"
+				| "not_found"
+				| "already_decided"
+				| "stale"
+				| "own_patch"
+				| "owner_window"
+	  }
 
 const NO_DRIFT: DriftResult = { text: 0, timing: 0, timingOffsetMs: 0 }
 type JevStep =
@@ -129,6 +147,8 @@ const JEV_DISABLED: JevStep = { state: "disabled" }
 const JEV_SKIPPED: JevStep = { state: "skipped" }
 
 class UncheckedLiveEdit extends Error {}
+
+class StaleDecision extends Error {}
 const NOT_SAVABLE: GateOutcome = { goesLive: false, reason: null }
 
 const joinText = (lines: LyricLine[]): string => lines.map((line) => line.text).join("\n")
@@ -204,10 +224,17 @@ async function languageCheck(
 				field: "language",
 				status: "warn",
 				message: `The lyrics look like ${detected.language}, not ${language.value}.`,
+				language: language.value,
+				detectedLanguage: detected.language,
 			}
 		}
 	}
-	return { field: "language", status: "ok", message: `Language: ${language.value}.` }
+	return {
+		field: "language",
+		status: "ok",
+		message: `Language: ${language.value}.`,
+		language: language.value,
+	}
 }
 
 function isrcCheck(isrc: ResolvedField): FieldCheck {
@@ -248,11 +275,14 @@ function firstFailure(
 async function remainingEdits(
 	db: D1Compat,
 	lyricsId: number,
-	userId: number
+	userId: number,
+	patch: boolean
 ): Promise<RevisionRateLimit> {
 	const since = Math.floor(Date.now() / 1000) - config.revisions.windowSeconds
-	const used = await countRecentRevisions(db, lyricsId, userId, since)
-	const lyricLimit = config.revisions.perLyricPerWindow
+	const used = await countRecentRevisions(db, lyricsId, userId, patch, since)
+	const lyricLimit = patch
+		? config.revisions.patchesPerLyricPerWindow
+		: config.revisions.perLyricPerWindow
 	const userLimit = config.revisions.perUserPerWindow
 	return {
 		lyricRemaining: Math.max(0, lyricLimit - used.lyric),
@@ -273,7 +303,8 @@ async function assess(
 ): Promise<{ ok: true; assessment: Assessment } | AccessFailure> {
 	const initial = await loadLyricState(db, lyricsId, lock)
 	if (!initial || initial.deleted_at !== null) return { ok: false, reason: "not_found" }
-	if (initial.submitter_id !== userId) return { ok: false, reason: "not_owner" }
+	const patch = isPatch(userId, initial.submitter_id)
+	if (revert && patch) return { ok: false, reason: "not_owner" }
 	if (initial.current_revision_id === null) await ensureBaseRevision(db, lyricsId)
 	const lyric =
 		initial.current_revision_id === null ? await loadLyricState(db, lyricsId, false) : initial
@@ -285,7 +316,7 @@ async function assess(
 	const anchor = await getRevisionRow(db, lyricsId, lyric.anchor_revision_id)
 	if (!live || !anchor) return { ok: false, reason: "not_found" }
 
-	const rateLimit = await remainingEdits(db, lyricsId, userId)
+	const rateLimit = await remainingEdits(db, lyricsId, userId, patch)
 	const validated = validateLyricContent(input.lyrics, input.format)
 	const current = { language: live.language, isrc: live.isrc, album: lyric.album }
 	const language = resolveField(input.language, current.language, revert?.language, acceptLanguage)
@@ -369,6 +400,7 @@ async function assess(
 		jevFlagged: jev.state === "checked" && jev.verdict.flagged,
 		textDrift: drift.text,
 		timingDrift: drift.timing,
+		patch,
 	})
 
 	return {
@@ -399,10 +431,15 @@ export async function compareWithLive(
 	lyricsId: number,
 	userId: number,
 	input: RevisionInput
-): Promise<{ ok: true; same: boolean } | AccessFailure> {
+): Promise<{ ok: true; same: boolean } | AccessFailure | SuggestRefusal> {
 	const initial = await loadLyricState(env.DB, lyricsId, false)
 	if (!initial || initial.deleted_at !== null) return { ok: false, reason: "not_found" }
-	if (initial.submitter_id !== userId) return { ok: false, reason: "not_owner" }
+	if (
+		isPatch(userId, initial.submitter_id) &&
+		(await suggestStanding(env, userId)) === "needs_lyric"
+	) {
+		return NEEDS_LYRIC
+	}
 	if (initial.current_revision_id === null) await ensureBaseRevision(env.DB, lyricsId)
 	const lyric =
 		initial.current_revision_id === null ? await loadLyricState(env.DB, lyricsId, false) : initial
@@ -430,12 +467,19 @@ export async function compareWithLive(
 	return { ok: true, same: await matchesLive(candidate, live, current) }
 }
 
+async function standingOn(env: Env, lyricsId: number, userId: number): Promise<SuggestStanding> {
+	const lyric = await loadLyricState(env.DB, lyricsId, false)
+	if (!lyric || lyric.deleted_at !== null || !isPatch(userId, lyric.submitter_id)) return "allowed"
+	return suggestStanding(env, userId)
+}
+
 export async function previewRevision(
 	env: Env,
 	lyricsId: number,
 	userId: number,
 	input: RevisionInput
-): Promise<{ ok: true; preview: PreviewResult } | AccessFailure> {
+): Promise<{ ok: true; preview: PreviewResult } | AccessFailure | SuggestRefusal> {
+	if ((await standingOn(env, lyricsId, userId)) === "needs_lyric") return NEEDS_LYRIC
 	const result = await assess(env.DB, lyricsId, userId, input, false, null, JEV_SKIPPED)
 	if (!result.ok) return result
 	const a = result.assessment
@@ -460,6 +504,9 @@ export async function previewRevision(
 					: [...buildDiffRows(a.liveLines, a.candidateLines), ...buildFieldRows(a.fieldChanges)],
 				againstRevNo: a.liveRevNo,
 			},
+			noteMaxLength: config.revisions.maxNoteLength,
+			ownerDecisionSec: config.revisions.ownerDecisionSec,
+			...deciderFor(a, userId),
 		},
 	}
 }
@@ -467,12 +514,37 @@ export async function previewRevision(
 const hasRoom = (limit: RevisionRateLimit): boolean =>
 	limit.lyricRemaining > 0 && limit.userRemaining > 0
 
+const clearsGate = (outcome: GateOutcome): boolean =>
+	outcome.goesLive || outcome.reason === "suggested"
+
+const deciderFor = (a: Assessment, userId: number): { decider?: DecisionRole } =>
+	isPatch(userId, a.lyric.submitter_id) && a.outcome !== NOT_SAVABLE
+		? {
+				decider: suggestionDecider(
+					a.outcome.reason,
+					a.lyric.committee_approved_at !== null,
+					a.lyric.ownerless
+				),
+			}
+		: {}
+
 const needsJev = (a: Assessment): boolean =>
 	a.candidate !== null &&
 	!a.noChanges &&
-	a.outcome.goesLive &&
+	clearsGate(a.outcome) &&
 	hasRoom(a.rateLimit) &&
 	showsLineChanges(a.anchorLines, a.candidateLines)
+
+async function pendingTaken(
+	db: D1Compat,
+	lyric: LyricRevisionState,
+	userId: number
+): Promise<boolean> {
+	if (!isPatch(userId, lyric.submitter_id)) return false
+	if (await isBanned(db, userId)) return true
+	const pending = await getPendingRevisionRow(db, lyric.id)
+	return pending !== null && pending.author_id !== userId
+}
 
 // Runs before the row lock so a slow TypeSafe call never holds it.
 async function checkWithJev(
@@ -486,6 +558,7 @@ async function checkWithJev(
 	if (gate === disabledJevGate) return JEV_DISABLED
 	const result = await assess(env.DB, lyricsId, userId, input, false, revert, JEV_SKIPPED)
 	if (!result.ok || !needsJev(result.assessment)) return JEV_SKIPPED
+	if (await pendingTaken(env.DB, result.assessment.lyric, userId)) return JEV_SKIPPED
 	const a = result.assessment
 	const verdict = await runJevStep(gate, {
 		lyricsId,
@@ -504,6 +577,11 @@ async function commitRevision(
 	input: RevisionInput,
 	revert: RevertSource | null
 ): Promise<SaveResult> {
+	if (!revert) {
+		const standing = await standingOn(env, lyricsId, userId)
+		if (standing === "banned") return { ok: false, reason: "pending_taken" }
+		if (standing === "needs_lyric") return NEEDS_LYRIC
+	}
 	for (let attempt = 0; ; attempt++) {
 		const jev = await checkWithJev(env, lyricsId, userId, input, revert)
 		try {
@@ -541,6 +619,7 @@ async function commitAssessed(
 			}
 		}
 		if (a.noChanges) return { ok: false, reason: "no_changes" }
+		if (await pendingTaken(tx, a.lyric, userId)) return { ok: false, reason: "pending_taken" }
 		if (jev.state === "skipped" && needsJev(a)) throw new UncheckedLiveEdit()
 
 		await supersedePending(tx, lyricsId)
@@ -560,10 +639,11 @@ async function commitAssessed(
 			timingDrift: a.drift.timing,
 			jevProbability: a.jevProbability,
 			revertsRevisionId: revert?.revisionId ?? null,
+			authorNote: isPatch(userId, a.lyric.submitter_id) ? (input.note ?? null) : null,
 		})
 		if (a.outcome.goesLive) await setCurrentRevision(tx, revision)
 		const summary = await getRevisionSummary(tx, lyricsId, revision.id)
-		return { ok: true, revision: summary! }
+		return { ok: true, revision: summary!, ...deciderFor(a, userId) }
 	})
 	if (result.ok && result.revision.status === "live") {
 		await invalidateCacheForLyric(env, lyricsId)
@@ -615,9 +695,9 @@ export async function withdrawPending(
 	return env.DB.transaction(async (tx) => {
 		const lyric = await loadLyricState(tx, lyricsId, true)
 		if (!lyric || lyric.deleted_at !== null) return { ok: false, reason: "not_found" } as const
-		if (lyric.submitter_id !== userId) return { ok: false, reason: "not_owner" } as const
 		const pending = await getPendingRevisionRow(tx, lyricsId)
 		if (!pending) return { ok: false, reason: "not_found" } as const
+		if (pending.author_id !== userId) return { ok: false, reason: "not_owner" } as const
 		await setRevisionStatus(tx, pending.id, "withdrawn")
 		const revision = await getRevisionSummary(tx, lyricsId, pending.id)
 		return { ok: true, revision: revision! } as const
@@ -702,31 +782,54 @@ async function decide(
 	revisionId: number,
 	reviewerId: number,
 	log: DecisionLog,
-	apply: (tx: D1Compat, revision: RevisionRow) => Promise<void>
+	apply: (tx: D1Compat, revision: RevisionRow, role: DecisionRole) => Promise<boolean>
 ): Promise<DecisionResult> {
-	if (!(await isCommittee(env, reviewerId))) return { ok: false, reason: "not_committee" }
-	return env.DB.transaction(async (tx): Promise<DecisionResult> => {
-		const lyric = await loadLyricState(tx, lyricsId, true)
-		if (!lyric || lyric.deleted_at !== null) return { ok: false, reason: "not_found" }
-		const revision = await getRevisionRow(tx, lyricsId, revisionId)
-		if (!revision) return { ok: false, reason: "not_found" }
-		if (revision.status === "superseded" || revision.status === "withdrawn") {
-			return { ok: false, reason: "stale" }
-		}
-		if (revision.status !== "pending") return { ok: false, reason: "already_decided" }
-		await apply(tx, revision)
-		await recordCouncilEvent(tx, {
-			actorId: reviewerId,
-			kind: log.kind,
-			source: log.source,
-			lyricsId,
-			refId: revision.id,
-			note: log.note,
+	const isCouncil = await isCommittee(env, reviewerId)
+	try {
+		return await env.DB.transaction(async (tx): Promise<DecisionResult> => {
+			const lyric = await loadLyricState(tx, lyricsId, true)
+			if (!lyric || lyric.deleted_at !== null) return { ok: false, reason: "not_found" }
+			const revision = await getRevisionRow(tx, lyricsId, revisionId)
+			if (!revision) return { ok: false, reason: "not_found" }
+			const decision = decisionRole({
+				action: log.kind === "edit_approve" ? "approve" : "reject",
+				reviewerId,
+				isCouncil,
+				submitterId: lyric.submitter_id,
+				authorId: revision.author_id,
+				reason: revision.pending_reason,
+				sealed: lyric.committee_approved_at !== null,
+				ownerless: lyric.ownerless,
+				createdAt: revision.created_at,
+				now: Math.floor(Date.now() / 1000),
+			})
+			if (!decision.ok && decision.reason !== "owner_window") return decision
+			if (revision.status === "superseded" || revision.status === "withdrawn") {
+				return { ok: false, reason: "stale" }
+			}
+			if (revision.status !== "pending") return { ok: false, reason: "already_decided" }
+			if (!decision.ok) return decision
+			if (!(await apply(tx, revision, decision.role))) throw new StaleDecision()
+			if (decision.role === "owner") {
+				const summary = await getRevisionSummary(tx, lyricsId, revisionId)
+				return { ok: true, revision: summary! }
+			}
+			await recordCouncilEvent(tx, {
+				actorId: reviewerId,
+				kind: log.kind,
+				source: log.source,
+				lyricsId,
+				refId: revision.id,
+				note: log.note,
+			})
+			await releaseBookmarksForItem(tx, "edit", revision.id)
+			const summary = await getRevisionSummary(tx, lyricsId, revisionId)
+			return { ok: true, revision: summary! }
 		})
-		await releaseBookmarksForItem(tx, "edit", revision.id)
-		const summary = await getRevisionSummary(tx, lyricsId, revisionId)
-		return { ok: true, revision: summary! }
-	})
+	} catch (err) {
+		if (err instanceof StaleDecision) return { ok: false, reason: "stale" }
+		throw err
+	}
 }
 
 export async function approveRevision(
@@ -737,12 +840,20 @@ export async function approveRevision(
 	source: CouncilSource
 ): Promise<DecisionResult> {
 	const log: DecisionLog = { kind: "edit_approve", source, note: null }
-	const result = await decide(env, lyricsId, revisionId, reviewerId, log, async (tx, revision) => {
-		await retireLiveRevision(tx, lyricsId)
-		await recordReview(tx, revision.id, "live", reviewerId, null)
-		await setCurrentRevision(tx, revision)
-		await setAnchorRevision(tx, lyricsId, revision.id)
-	})
+	const result = await decide(
+		env,
+		lyricsId,
+		revisionId,
+		reviewerId,
+		log,
+		async (tx, revision, role) => {
+			await retireLiveRevision(tx, lyricsId)
+			if (!(await recordReview(tx, revision.id, "live", reviewerId, null))) return false
+			await setCurrentRevision(tx, revision)
+			if (role === "council") await setAnchorRevision(tx, lyricsId, revision.id)
+			return true
+		}
+	)
 	if (result.ok) await invalidateCacheForLyric(env, lyricsId)
 	return result
 }
@@ -781,6 +892,9 @@ function pendingSummary(row: PendingRow): PendingRevisionSummary {
 		timingDrift: row.timing_drift,
 		author: revisionAuthor(row.author_key_id, row.author_nickname),
 		authorKeyId: row.author_key_id,
+		suggestion: row.suggestion,
+		ownerless: row.ownerless,
+		authorNote: row.author_note,
 		createdAt: row.created_at,
 	}
 }

@@ -1,7 +1,14 @@
 import { loadStoredSession } from "./auth"
 import { AUTHED_FETCH_ERRORS, authedFetch } from "./authedFetch"
 import type { ReportReason } from "./report-reasons"
-import type { RevisionDiff, RevisionSummary } from "./revision-types"
+import type {
+  PreviewResult,
+  RevisionDetail,
+  RevisionDiff,
+  RevisionInput,
+  RevisionSummary,
+  SuggestionInboxItem,
+} from "./revision-types"
 import { IS_SPA_EXPANSION_SEED } from "./seed-flag"
 import type {
   ApiEnvelope,
@@ -20,6 +27,7 @@ import type {
   SongsLeaderboardResponse,
   SubmissionSort,
   SubmissionSyncType,
+  SuggestionDecider,
   UserGamification,
   UserRankResponse,
   UserSubmissionsResponse,
@@ -188,12 +196,49 @@ export function fetchRevisionDiff(lyricsId: number, revisionId: number, signal?:
   return getJsonWithSignal(`/lyrics/${lyricsId}/revisions/${revisionId}/diff`, signal)
 }
 
+export function fetchRevisionDetail(
+  lyricsId: number,
+  revisionId: number,
+  signal?: AbortSignal,
+): Promise<RevisionDetail> {
+  return getJsonWithSignal(`/lyrics/${lyricsId}/revisions/${revisionId}`, signal)
+}
+
 export async function fetchRevisions(lyricsId: number, signal?: AbortSignal): Promise<RevisionSummary[]> {
   const { revisions } = await getJsonWithSignal<{ revisions: RevisionSummary[] }>(
     `/lyrics/${lyricsId}/revisions`,
     signal,
   )
   return revisions
+}
+
+const JSON_HEADERS = { "content-type": "application/json" }
+
+export function previewRevision(lyricsId: number, input: RevisionInput): Promise<PreviewResult> {
+  return authedFetch<PreviewResult>(`/lyrics/${lyricsId}/revisions/preview`, {
+    method: "POST",
+    headers: JSON_HEADERS,
+    body: JSON.stringify(input),
+  })
+}
+
+export function submitRevision(
+  lyricsId: number,
+  input: RevisionInput & { note?: string },
+): Promise<{ revision: RevisionSummary; decider?: SuggestionDecider }> {
+  return authedFetch<{ revision: RevisionSummary; decider?: SuggestionDecider }>(`/lyrics/${lyricsId}/revisions`, {
+    method: "POST",
+    headers: JSON_HEADERS,
+    body: JSON.stringify(input),
+  })
+}
+
+export function withdrawPendingRevision(lyricsId: number): Promise<{ revision: RevisionSummary }> {
+  return authedFetch<{ revision: RevisionSummary }>(`/lyrics/${lyricsId}/revisions/pending`, { method: "DELETE" })
+}
+
+export function fetchMySuggestions(signal?: AbortSignal): Promise<SuggestionInboxItem[]> {
+  return authedFetch<SuggestionInboxItem[]>("/lyrics/mine/suggestions", { signal })
 }
 
 export interface ArtworkCover {

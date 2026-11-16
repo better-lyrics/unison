@@ -14,6 +14,7 @@ export interface EditThresholds {
 	textDrift: number
 	timingDrift: number
 	jevFlag: number
+	ownerDecisionSec: number
 }
 
 export async function listCouncilEdits(
@@ -44,6 +45,7 @@ export async function listCouncilEdits(
 			textDrift: config.revisions.textDriftLimit,
 			timingDrift: config.revisions.timingDriftLimit,
 			jevFlag: config.revisions.jevFlagThreshold,
+			ownerDecisionSec: config.revisions.ownerDecisionSec,
 		},
 	}
 }

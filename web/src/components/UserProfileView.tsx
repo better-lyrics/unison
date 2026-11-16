@@ -13,6 +13,7 @@ import { BannerPicker } from "@/components/profile/BannerPicker"
 import { ProfileCard } from "@/components/profile/ProfileCard"
 import { ProfileSide } from "@/components/profile/ProfileSide"
 import { SectionHeading } from "@/components/profile/SectionHeading"
+import { SuggestionInbox } from "@/components/profile/SuggestionInbox"
 import { PROFILE_STAGE } from "@/components/profile/layout"
 import { ProfileSkeleton } from "@/components/ProfileSkeleton"
 import { SubmissionsList } from "@/components/SubmissionsList"
@@ -187,6 +188,7 @@ function ProfileBody({
       </section>
 
       <div className="flex flex-col gap-14 pb-[108px]">
+        {owner ? <SuggestionInbox /> : null}
         <SubmissionsList keyId={keyId} total={rank.ranked ? rank.submissionCount : undefined} owner={owner} />
         {gamification?.topExpertise && gamification.topExpertise.length > 0 ? (
           <ExpertiseStrip entries={gamification.topExpertise} />

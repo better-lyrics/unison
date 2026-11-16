@@ -1,8 +1,8 @@
 import { editItem } from "@/test/council-fixtures"
 import { describe, expect, it } from "vitest"
-import { reasonLabel, reasonMetric, reasonWhy } from "./council-reasons"
+import { editWhy, reasonLabel, reasonMetric, reasonWhy } from "./council-reasons"
 
-const thresholds = { textDrift: 0.15, timingDrift: 0.3, jevFlag: 0.7 }
+const thresholds = { textDrift: 0.15, timingDrift: 0.3, jevFlag: 0.7, ownerDecisionSec: 604_800 }
 
 describe("council reasons", () => {
   it("labels every pending reason", () => {
@@ -10,6 +10,21 @@ describe("council reasons", () => {
     expect(reasonLabel("flagged")).toBe("Flagged by Jev")
     expect(reasonLabel("large_text_drift")).toBe("Large text change")
     expect(reasonLabel("large_timing_drift")).toBe("Large timing change")
+    expect(reasonLabel("suggested")).toBe("Owner did not decide")
+  })
+
+  it("says a suggestion reached the council because the owner did not decide", () => {
+    expect(reasonWhy("suggested", thresholds)).toBe(
+      "Someone other than the owner suggested this, and the owner did not decide within 7 days.",
+    )
+    expect(reasonMetric(editItem({ pendingReason: "suggested" }))).toBe("owner silent")
+  })
+
+  it("never calls a lyric with no owner silent", () => {
+    const edit = editItem({ pendingReason: "suggested", suggestion: true, ownerless: true })
+    expect(reasonLabel("suggested", true)).toBe("No owner")
+    expect(reasonMetric(edit)).toBe("no owner")
+    expect(editWhy(edit, thresholds)).toBe("This lyric has no owner, so the council decides every suggestion to it.")
   })
 
   it("explains drift reasons with the server thresholds", () => {

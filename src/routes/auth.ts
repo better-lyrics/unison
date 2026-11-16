@@ -1,6 +1,7 @@
 import { config } from "@/config"
 import { getCouncilRole } from "@/db/committee"
-import { clearNickname, resolveIdentity, setNickname } from "@/db/users"
+import { suggestStanding } from "@/db/suggest-standing"
+import { clearNickname, getUserByKeyId, resolveIdentity, setNickname } from "@/db/users"
 import type { Env } from "@/types"
 import { signedRequest } from "@/utils/auth"
 import { eitherAuth } from "@/utils/either-auth"
@@ -14,7 +15,9 @@ const CHALLENGE_PREFIX = "challenge:"
 async function sessionIdentity(env: Env, keyId: string) {
 	const { displayName, avatarUrl } = await resolveIdentity(env, keyId)
 	const council = await getCouncilRole(env, keyId)
-	return { keyId, displayName, avatarUrl, council }
+	const user = await getUserByKeyId(env, keyId)
+	const canSuggest = user ? (await suggestStanding(env, user.id)) !== "needs_lyric" : false
+	return { keyId, displayName, avatarUrl, council, canSuggest }
 }
 
 function generateNonce(): string {

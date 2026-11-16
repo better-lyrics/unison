@@ -6,6 +6,12 @@ export const EXTENSION_BY_FORMAT: Record<LyricsFormat, string> = {
   plain: "txt",
 }
 
+export const FORMAT_LABEL: Record<LyricsFormat, string> = {
+  ttml: "TTML",
+  lrc: "LRC",
+  plain: "Plain text",
+}
+
 export const MIME_BY_FORMAT: Record<LyricsFormat, string> = {
   ttml: "application/xml;charset=utf-8",
   lrc: "text/plain;charset=utf-8",

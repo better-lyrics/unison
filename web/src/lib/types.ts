@@ -194,9 +194,42 @@ export interface VariantSummary {
   userVote?: 1 | -1 | null
 }
 
+export type PendingReason = "sealed" | "flagged" | "large_text_drift" | "large_timing_drift" | "suggested"
+
+export type SuggestionDecider = "owner" | "council"
+
+export interface RevisionSuggestion {
+  id: number
+  revNo: number
+  author: { displayName: string } | null
+  authorKeyId: string | null
+  authorAvatarUrl: string | null
+  note: string | null
+  pendingReason: PendingReason
+  sealed: boolean
+  createdAt: number
+  councilDecidesAt: number | null
+  rejectNoteMaxLength: number
+  decider: SuggestionDecider
+}
+
+export interface VariantPendingRevision {
+  revNo: number
+  pendingReason: PendingReason
+}
+
 export interface VariantRevision {
   revNo: number
   updatedAt: number
+  pending?: VariantPendingRevision | null
+  suggestion?: RevisionSuggestion
+  editors?: RevisionEditor[]
+}
+
+export interface RevisionEditor {
+  keyId: string
+  displayName: string
+  avatarUrl: string | null
 }
 
 export interface VariantFull extends VariantSummary {

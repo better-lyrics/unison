@@ -39,7 +39,7 @@ export function CouncilEditsPage() {
     <>
       <PageHead
         title="Edits"
-        sub="Owner edits held for council review. Approving makes the new revision live for everyone."
+        sub="Owner edits and suggestions held for council review. Approving makes the new revision live for everyone."
       />
       <TriageShell
         list={
@@ -56,7 +56,7 @@ export function CouncilEditsPage() {
                   <EmptyState
                     icon={<IconCheck className="size-5" stroke={1.5} />}
                     title="No edits waiting"
-                    hint="Owner edits that need council review show up here."
+                    hint="Edits and suggestions that need council review show up here."
                   />
                 ) : null
               }

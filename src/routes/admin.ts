@@ -233,7 +233,10 @@ export const adminRoutes = (env: Env) =>
 					return status(mapped.httpStatus, buildError(mapped.code))
 				}
 				await markAuditReverted(env, params.id)
-				log.info("admin migration undone", { migrationId: params.id })
+				log.info("admin migration undone", {
+					migrationId: params.id,
+					keptWithdrawn: result.keptWithdrawn,
+				})
 				return status(200, { success: true, data: { restored: true } })
 			},
 			{ params: paramsId }

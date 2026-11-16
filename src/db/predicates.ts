@@ -56,9 +56,12 @@ const buildVoteHidePredicate = (prefix: string) => `(
 	)
 )`
 
-// Uncorrelated IN so Postgres hashes the banned set once per query; COALESCE keeps a NULL submitter visible.
+// Uncorrelated IN so Postgres hashes the banned set once per query; COALESCE keeps a NULL user visible.
+export const bannedUserPredicate = (userIdColumn: string) =>
+	`COALESCE(${userIdColumn} IN (SELECT id FROM users WHERE banned_at IS NOT NULL), FALSE)`
+
 const buildBannedSubmitterPredicate = (prefix: string) =>
-	`COALESCE(${prefix}submitter_id IN (SELECT id FROM users WHERE banned_at IS NOT NULL), FALSE)`
+	bannedUserPredicate(`${prefix}submitter_id`)
 
 export const COUNTED_VOTER_PREDICATE = "(u.banned_at IS NULL AND u.votes_discounted_at IS NULL)"
 

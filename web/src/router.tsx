@@ -32,6 +32,7 @@ if (import.meta.env.DEV) {
     { path: "dev/me", load: () => import("./pages/DevMePreview") },
     { path: "dev/migrate", load: () => import("./pages/DevMigratePreview") },
     { path: "dev/showcase", load: () => import("./pages/DevShowcasePreview") },
+    { path: "dev/suggestions", load: () => import("./pages/DevSuggestionsPreview") },
   ]
   for (const { path, load } of devPages) {
     const Page = lazy(load)

@@ -9,6 +9,7 @@ import {
 	missingRootPrefixes,
 	validateTtmlStructure,
 } from "./validation"
+import { validateLyricContent } from "./validate-lyrics"
 
 
 
@@ -771,5 +772,15 @@ describe("detectPrettyPrintedTtml", () => {
 		it("returns ok for empty string", () => {
 			expect(detectPrettyPrintedTtml("").ok).toBe(true)
 		})
+	})
+})
+
+describe("validateLyricContent", () => {
+	it("regression: refuses lyrics that contain a NUL byte", () => {
+		const plain = "Paper lanterns over the harbour\nWe drift\u0000 until the morning"
+		const lrc =
+			"[00:01.20]Paper lanterns over the harbour\n[00:04.80]We drift\u0000 until the morning"
+		expect(validateLyricContent(plain, "plain").ok).toBe(false)
+		expect(validateLyricContent(lrc, "lrc").ok).toBe(false)
 	})
 })

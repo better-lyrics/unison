@@ -151,6 +151,18 @@ describeIntegration("council bookmarks (integration)", () => {
 			})
 		})
 
+		it("refuses a suggestion while its owner's window is open", async () => {
+			const revisionId = await seedPendingRevision(lyricIds[0])
+			await db.pool.query(
+				"UPDATE lyric_revisions SET author_id = $2, pending_reason = 'suggested' WHERE id = $1",
+				[revisionId, outsider]
+			)
+			expect(await createBookmark(db.env, mira, "edit", revisionId, "web")).toEqual({
+				ok: false,
+				reason: "item_not_found",
+			})
+		})
+
 		it("refuses a lyric that is already sealed or rejected", async () => {
 			await db.pool.query("UPDATE lyrics SET committee_approved_at = 1 WHERE id = $1", [
 				lyricIds[0],

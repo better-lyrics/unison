@@ -22,16 +22,21 @@ export const glassClass =
 export const glassActionClass = `${glassClass} inline-flex h-11 cursor-pointer items-center justify-center gap-2 whitespace-nowrap rounded-full px-[18px] text-sm font-bold text-unison-text transition-[background-color,scale] duration-150 ease-out hover:bg-white/[0.14] active:not-disabled:scale-[0.96] disabled:cursor-not-allowed disabled:opacity-60`
 
 const CHIP_BASE =
-  "relative inline-flex h-[30px] cursor-pointer select-none items-center whitespace-nowrap rounded-[10px] text-[13px] [corner-shape:superellipse(1.6)] [text-shadow:none] transition-[background-color,color,scale] duration-150 ease-out after:absolute after:-inset-x-1 after:-inset-y-[5px] active:not-disabled:scale-[0.96]"
+  "relative inline-flex h-[30px] cursor-pointer select-none items-center whitespace-nowrap rounded-[10px] text-[13px] [corner-shape:superellipse(1.6)] [text-shadow:none] transition-[background-color,color,scale] duration-150 ease-out after:absolute after:-inset-x-1 after:-inset-y-[5px] active:not-disabled:not-aria-disabled:scale-[0.96]"
 
-export const chipClass = `${glassClass} ${CHIP_BASE} gap-[7px] pr-3 pl-2.5 font-medium text-(--ink-2) hover:bg-white/[0.14] hover:text-unison-text`
+export const chipClass = `${glassClass} ${CHIP_BASE} gap-[7px] pr-3 pl-2.5 font-medium text-(--ink-2) hover:not-aria-disabled:bg-white/[0.14] hover:not-aria-disabled:text-unison-text aria-disabled:cursor-not-allowed aria-disabled:opacity-60`
 
 export const raisedChipClass = `${CHIP_BASE} gap-[7px] bg-[linear-gradient(180deg,#fff,#e8e8ee)] pr-3 pl-2.5 font-bold text-[#121116] shadow-[inset_0_1px_0_#fff,inset_0_-1px_0_rgba(18,17,22,0.14),0_1px_2px_rgba(0,0,0,0.25)]`
+
+export const scrollFadeClass =
+  "[mask-image:linear-gradient(to_bottom,#000_calc(100%-28px),transparent_100%)] [scrollbar-color:var(--color-unison-border-strong)_transparent] [scrollbar-width:thin]"
 
 export const chipIconClass = "size-[15px] shrink-0"
 
 export const tagClass =
   "inline-flex items-center gap-1 rounded bg-unison-bg-hover px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-unison-text-secondary"
+
+export const sentenceCaseTagClass = "normal-case tracking-normal"
 
 export const popoverSurfaceClass =
   "bg-[rgba(15,14,19,0.42)] text-unison-text shadow-[inset_0_1px_0_rgba(255,255,255,0.1),inset_0_0_0_1px_rgba(255,255,255,0.06),0_16px_48px_rgba(0,0,0,0.35)] backdrop-blur-[24px] backdrop-saturate-[1.8]"
@@ -46,6 +51,7 @@ const BUTTON_VARIANTS = {
   fill: "bg-white/[0.08] text-unison-text hover:bg-white/[0.12]",
   ghost: "text-unison-text-secondary hover:bg-unison-bg-hover hover:text-unison-text",
   danger: "bg-red-500/10 text-[#fca5a5] hover:bg-red-500/20",
+  destructive: "bg-council-reject font-semibold text-white hover:opacity-90",
 }
 
 const BUTTON_SIZES = {

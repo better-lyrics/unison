@@ -6,6 +6,11 @@ const previews = [
   { to: "/dev/me", title: "Me page", desc: "Profile, nickname, and Discord cards from fixtures." },
   { to: "/dev/migrate", title: "Migrate UI", desc: "Every state of the account migration page." },
   { to: "/dev/showcase", title: "Showcase", desc: "Showcase page with long names, many tags and a broken icon." },
+  {
+    to: "/dev/suggestions",
+    title: "Suggested edits",
+    desc: "Every step of suggesting, previewing and deciding an edit.",
+  },
 ]
 
 export default function DevIndex() {

@@ -30,7 +30,7 @@ function ToastCard({ toast }: ToastCardProps) {
       data-toast-kind={toast.kind}
       className={cn(
         "pointer-events-auto flex min-w-[220px] max-w-sm items-start gap-3 rounded-md border px-3 py-2 text-sm shadow-md",
-        "transition duration-200 ease-out",
+        "transition-[opacity,translate,filter] duration-300 ease-out starting:translate-y-3 starting:opacity-0 starting:blur-[4px] motion-reduce:starting:translate-y-0 motion-reduce:starting:blur-none",
         KIND_STYLES[toast.kind],
       )}
     >

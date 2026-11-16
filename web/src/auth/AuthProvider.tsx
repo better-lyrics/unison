@@ -103,6 +103,33 @@ export function AuthProvider({ children }: AuthProviderProps) {
     }
   }, [])
 
+  const awaitingFirstLyric = phase.kind === "signed-in" && phase.identity.canSuggest === false
+  useEffect(() => {
+    if (!awaitingFirstLyric) return
+    let cancelled = false
+    const refresh = () => {
+      const stored = loadStoredSession()
+      if (!stored) return
+      fetchMe(stored.sessionToken).then(
+        (identity) => {
+          if (cancelled || loadStoredSession()?.sessionToken !== stored.sessionToken) return
+          saveStoredSession({ ...identity, sessionToken: stored.sessionToken })
+          setPhase((prev) =>
+            prev.kind === "signed-in" && prev.identity.keyId === identity.keyId
+              ? { kind: "signed-in", identity }
+              : prev,
+          )
+        },
+        (error) => console.warn("Could not refresh the session", error),
+      )
+    }
+    window.addEventListener("focus", refresh)
+    return () => {
+      cancelled = true
+      window.removeEventListener("focus", refresh)
+    }
+  }, [awaitingFirstLyric])
+
   const completeSignIn = useCallback(async (sign: (nonce: string) => Promise<SignedBody>) => {
     if (signInLock.current) return
     signInLock.current = true
@@ -120,6 +147,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
           expiresAt: session.expiresAt,
           avatarUrl: session.avatarUrl,
           council: session.council ?? null,
+          canSuggest: session.canSuggest,
         },
       })
     } catch (err) {

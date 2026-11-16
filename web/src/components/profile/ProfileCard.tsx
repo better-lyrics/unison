@@ -143,7 +143,11 @@ export function ProfileCard({ keyId, rank, gamification, catalogue, art, onChang
       >
         <ArtBackground src={art.wash} contained dithering={CARD_DITHERING} onReady={markReady} />
         {art.banner && art.banner !== brokenBanner ? (
-          <div key={art.banner} aria-hidden="true" className="t-reveal absolute inset-x-0 top-0 isolate h-[64%] overflow-hidden">
+          <div
+            key={art.banner}
+            aria-hidden="true"
+            className="t-reveal absolute inset-x-0 top-0 isolate h-[64%] overflow-hidden"
+          >
             <img src={art.banner} alt="" onError={() => setBrokenBanner(art.banner)} className="pf-banner-soft" />
             <img src={art.banner} alt="" className="pf-banner-sharp" />
           </div>
@@ -169,6 +173,7 @@ export function ProfileCard({ keyId, rank, gamification, catalogue, art, onChang
             className="mt-auto size-[116px] shrink-0"
           />
           <h1
+            tabIndex={-1}
             title={rank.displayName}
             className={cn(
               NAME_SIZE[nameSize(rank.displayName)],
@@ -180,7 +185,11 @@ export function ProfileCard({ keyId, rank, gamification, catalogue, art, onChang
           {rank.handle ? <p className="mt-2.5 text-sm font-medium text-(--ink-3)">@{rank.handle}</p> : null}
           {gamification && catalogue ? <FeaturedBadges gamification={gamification} catalogue={catalogue} /> : null}
           <div className="mt-5 flex gap-[22px] pt-[18px] shadow-[inset_0_1px_0_var(--tw-shadow-color,rgba(255,255,255,0.03))]">
-            <Stat value={String(rank.ranked ? rank.submissionCount : 0)} label="Songs synced" testId="stat-submissions" />
+            <Stat
+              value={String(rank.ranked ? rank.submissionCount : 0)}
+              label="Songs synced"
+              testId="stat-submissions"
+            />
             <Stat value={formatCompact(rank.ranked ? rank.totalUpvotes : 0)} label="Upvotes" testId="stat-upvotes" />
             {gamification ? (
               <Stat value={String(gamification.counts.earned)} label="Badges" testId="stat-badges" />

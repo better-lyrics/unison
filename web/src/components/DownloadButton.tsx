@@ -6,6 +6,7 @@ interface DownloadButtonProps {
   className?: string
   iconClassName?: string
   withText?: boolean
+  label?: string
 }
 
 export function DownloadButton({
@@ -14,18 +15,13 @@ export function DownloadButton({
   className,
   iconClassName = "size-4",
   withText = false,
+  label,
 }: DownloadButtonProps) {
+  const name = label ?? "Download lyrics file"
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={disabled}
-      aria-label="Download lyrics file"
-      title="Download lyrics"
-      className={className}
-    >
-      <IconDownload className={iconClassName} stroke={1.75} />
-      {withText ? <span>Download</span> : null}
+    <button type="button" onClick={onClick} disabled={disabled} aria-label={name} title={name} className={className}>
+      <IconDownload aria-hidden className={iconClassName} stroke={1.75} />
+      {withText ? <span className="truncate">{label ?? "Download"}</span> : null}
     </button>
   )
 }

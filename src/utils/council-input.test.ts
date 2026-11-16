@@ -35,5 +35,9 @@ describe("parseCouncilNote", () => {
 			expect(parseCouncilNote({ note: 42 })).toEqual({ ok: false })
 			expect(parseCouncilNote({ note: ["late"] })).toEqual({ ok: false })
 		})
+
+		it("regression: refuses a note that contains a NUL character", () => {
+			expect(parseCouncilNote({ note: "late\u0000 chorus" })).toEqual({ ok: false })
+		})
 	})
 })

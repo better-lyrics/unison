@@ -6,6 +6,7 @@ import { UNDECIDED_LYRIC_JOINED } from "@/db/predicates"
 import { type Person, resolvePeople } from "@/db/users"
 import { type D1Compat, advisoryXactLock } from "@/infra/database"
 import type { Env } from "@/types"
+import { ownerWindowOpenSql } from "@/utils/lyric-patch"
 
 export type BookmarkItemType = "seal" | "edit"
 
@@ -143,7 +144,10 @@ async function itemLyricsId(
 					.bind(itemId)
 					.first<{ lyrics_id: number | string }>()
 			: await db
-					.prepare("SELECT lyrics_id FROM lyric_revisions WHERE id = ? AND status = 'pending'")
+					.prepare(
+						`SELECT r.lyrics_id FROM lyric_revisions r JOIN lyrics l ON l.id = r.lyrics_id
+						 WHERE r.id = ? AND r.status = 'pending' AND NOT ${ownerWindowOpenSql("r", "l")}`
+					)
 					.bind(itemId)
 					.first<{ lyrics_id: number | string }>()
 	return row ? Number(row.lyrics_id) : null

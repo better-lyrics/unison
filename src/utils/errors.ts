@@ -2,6 +2,8 @@
 // may exact-match on it, so it stays at its pre-existing value per code.
 // The `code` field is the stable machine-readable contract for new clients.
 // The `hint` field is humanized display copy and may evolve.
+import { config } from "@/config"
+
 export const ErrorCode = {
 	INVALID_PAYLOAD: "INVALID_PAYLOAD",
 	SONG_TOO_LONG: "SONG_TOO_LONG",
@@ -86,6 +88,9 @@ export const ErrorCode = {
 	PROTECTED_MEMBER: "PROTECTED_MEMBER",
 	FLAG_CONFLICT: "FLAG_CONFLICT",
 	STRIKE_ALREADY_UNDONE: "STRIKE_ALREADY_UNDONE",
+	OWN_SUGGESTION: "OWN_SUGGESTION",
+	OWNER_WINDOW_OPEN: "OWNER_WINDOW_OPEN",
+	SUGGEST_NEEDS_LYRIC: "SUGGEST_NEEDS_LYRIC",
 } as const
 
 export type ErrorCode = (typeof ErrorCode)[keyof typeof ErrorCode]
@@ -367,11 +372,11 @@ const TEMPLATES: Record<ErrorCode, Template> = {
 	},
 	ALREADY_DECIDED: {
 		error: "Already decided",
-		hint: "Another council member already approved or rejected this revision.",
+		hint: "This revision was already approved or rejected.",
 	},
 	STALE: {
 		error: "Revision out of date",
-		hint: "The owner replaced or withdrew this revision. Refresh the queue.",
+		hint: "This revision was replaced or withdrawn. Refresh and check again.",
 	},
 	EXAM_TOKEN_INVALID: {
 		error: "Invalid exam link",
@@ -420,6 +425,18 @@ const TEMPLATES: Record<ErrorCode, Template> = {
 	STRIKE_ALREADY_UNDONE: {
 		error: "Strike already undone",
 		hint: "Another council admin already restored these votes.",
+	},
+	OWN_SUGGESTION: {
+		error: "Cannot decide your own suggestion",
+		hint: "The lyric's owner or the council decides it. You can withdraw it instead.",
+	},
+	OWNER_WINDOW_OPEN: {
+		error: "Waiting on the owner",
+		hint: `The owner has ${config.revisions.ownerDecisionSec / 86400} days to decide this suggestion. Check back after that.`,
+	},
+	SUGGEST_NEEDS_LYRIC: {
+		error: "Add a lyric first",
+		hint: "Add a lyric of your own first. Then you can suggest edits to other lyrics.",
 	},
 	INVALID_OPINION: {
 		error: "Invalid opinion",

@@ -18,16 +18,19 @@ import {
 } from "@/services/lyric-revisions"
 import type { Env, LyricsFormat } from "@/types"
 import { isAuthorizedBot } from "@/utils/bot-auth"
-import { allowCouncilWrite, parseCouncilNote } from "@/utils/council-input"
+import { allowCouncilWrite, parseCouncilNote, parseNote } from "@/utils/council-input"
 import { eitherAuth } from "@/utils/either-auth"
 import { ErrorCode, type SubmissionErrorBody, buildError } from "@/utils/errors"
 import { Elysia, t } from "elysia"
 
-const EDIT_NOT_OWNER_HINT = "You can only edit lyrics you submitted yourself."
-const PREVIEW_THROTTLE_HINT = "Too many checks at once. Wait a moment and keep typing."
+const EDIT_NOT_OWNER_HINT =
+	"Only the lyric's owner can revert it. Only the person who sent an edit can withdraw it."
+const PENDING_TAKEN_HINT = "Another edit is waiting on this lyric. Try again once it is decided."
+const PREVIEW_THROTTLE_HINT = "Too many checks at once. Wait a moment and try again."
 const SAVE_STALE_HINT = "This lyric changed while saving. Try again."
 const DAILY_LIMIT_HINT =
 	"You've reached today's edit limit for this lyric or your account. Try again tomorrow."
+const NOTE_HINT = `Keep the note to ${config.revisions.maxNoteLength} characters or fewer.`
 
 function parseId(raw: string | undefined): number | null {
 	const id = Number(raw)
@@ -56,10 +59,17 @@ function saveFailure(result: Exclude<SaveResult, { ok: true }>): Failure {
 			return { status: 404, body: buildError(ErrorCode.NOT_FOUND) }
 		case "not_owner":
 			return { status: 403, body: buildError(ErrorCode.NOT_OWNER, { hint: EDIT_NOT_OWNER_HINT }) }
+		case "needs_lyric":
+			return { status: 403, body: buildError(ErrorCode.SUGGEST_NEEDS_LYRIC) }
 		case "rate_limited":
 			return { status: 429, body: buildError(ErrorCode.RATE_LIMITED, { hint: DAILY_LIMIT_HINT }) }
 		case "no_changes":
 			return { status: 409, body: buildError(ErrorCode.NO_CHANGES) }
+		case "pending_taken":
+			return {
+				status: 409,
+				body: buildError(ErrorCode.PROPOSAL_OPEN, { hint: PENDING_TAKEN_HINT }),
+			}
 		case "stale":
 			return { status: 409, body: buildError(ErrorCode.STALE, { hint: SAVE_STALE_HINT }) }
 		case "invalid":
@@ -78,6 +88,8 @@ const DECISION_ERROR: Record<
 	not_found: { status: 404, code: ErrorCode.NOT_FOUND },
 	already_decided: { status: 409, code: ErrorCode.ALREADY_DECIDED },
 	stale: { status: 409, code: ErrorCode.STALE },
+	own_patch: { status: 403, code: ErrorCode.OWN_SUGGESTION },
+	owner_window: { status: 409, code: ErrorCode.OWNER_WINDOW_OPEN },
 }
 
 export const revisionRoutes = (env: Env) =>
@@ -159,12 +171,16 @@ export const revisionRoutes = (env: Env) =>
 			if (id === null) return status(400, buildError(ErrorCode.INVALID_ID))
 			const input = parseRevisionBody(body)
 			if (!input) return status(400, buildError(ErrorCode.INVALID_PAYLOAD))
-			const result = await saveRevision(env, id, userId, input)
+			const note = parseNote(body, config.revisions.maxNoteLength)
+			if (!note.ok) {
+				return status(400, buildError(ErrorCode.INVALID_PAYLOAD, { hint: NOTE_HINT }))
+			}
+			const result = await saveRevision(env, id, userId, { ...input, note: note.note })
 			if (!result.ok) {
 				const failure = saveFailure(result)
 				return status(failure.status, failure.body)
 			}
-			return { success: true, data: { revision: result.revision } }
+			return { success: true, data: { revision: result.revision, decider: result.decider } }
 		})
 		.post("/:id/revisions/:revId/revert", async ({ params, env, userId, status }) => {
 			const id = parseId(params.id)

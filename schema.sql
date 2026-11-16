@@ -530,6 +530,20 @@ UPDATE lyric_revisions SET isrc = UPPER(REGEXP_REPLACE(NORMALIZE(isrc, NFKC), '[
       AND UPPER(REGEXP_REPLACE(NORMALIZE(isrc, NFKC), '[[:space:]-]', '', 'g')) ~ '^[A-Z]{2}[A-Z0-9]{3}[0-9]{7}$';
 UPDATE lyric_revisions SET isrc = NULL WHERE isrc !~ '^[A-Z]{2}[A-Z0-9]{3}[0-9]{7}$';
 
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint
+        WHERE conname = 'lyric_revisions_pending_reason_check'
+            AND pg_get_constraintdef(oid) LIKE '%suggested%'
+    ) THEN
+        ALTER TABLE lyric_revisions DROP CONSTRAINT IF EXISTS lyric_revisions_pending_reason_check;
+        ALTER TABLE lyric_revisions ADD CONSTRAINT lyric_revisions_pending_reason_check
+            CHECK (pending_reason IN
+                ('sealed', 'flagged', 'large_text_drift', 'large_timing_drift', 'suggested'));
+    END IF;
+END $$;
+
 CREATE UNIQUE INDEX IF NOT EXISTS idx_lyric_revisions_one_live
     ON lyric_revisions(lyrics_id) WHERE status = 'live';
 CREATE UNIQUE INDEX IF NOT EXISTS idx_lyric_revisions_one_pending
@@ -560,6 +574,8 @@ BEGIN
         ALTER TABLE lyric_revisions ALTER COLUMN album_known SET DEFAULT FALSE;
     END IF;
 END $$;
+
+ALTER TABLE lyric_revisions ADD COLUMN IF NOT EXISTS author_note TEXT;
 
 ALTER TABLE lyrics ADD COLUMN IF NOT EXISTS current_revision_id INTEGER
     REFERENCES lyric_revisions(id) DEFERRABLE INITIALLY DEFERRED;

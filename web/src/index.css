@@ -358,6 +358,53 @@ select {
 }
 
 :root {
+  --modal-open-dur: 250ms;
+  --modal-close-dur: 150ms;
+  --modal-scale: 0.96;
+  --modal-scale-close: 0.96;
+  --modal-ease: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.t-modal,
+.t-modal-backdrop {
+  opacity: 1;
+  transition: opacity var(--modal-open-dur) var(--modal-ease);
+  @starting-style {
+    opacity: 0;
+  }
+}
+.t-modal {
+  transform-origin: center;
+  scale: 1;
+  transition:
+    scale var(--modal-open-dur) var(--modal-ease),
+    opacity var(--modal-open-dur) var(--modal-ease);
+  @starting-style {
+    scale: var(--modal-scale);
+  }
+}
+.t-modal.is-closing,
+.t-modal-backdrop.is-closing {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--modal-close-dur) var(--modal-ease);
+}
+.t-modal.is-closing {
+  scale: var(--modal-scale-close);
+  transition:
+    scale var(--modal-close-dur) var(--modal-ease),
+    opacity var(--modal-close-dur) var(--modal-ease);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .t-modal,
+  .t-modal.is-closing {
+    scale: 1;
+    transition-property: opacity;
+  }
+}
+
+:root {
   --reveal-dur: 400ms;
   --reveal-blur: 2px;
 }
@@ -374,6 +421,30 @@ select {
 
 @media (prefers-reduced-motion: reduce) {
   .t-reveal { transition: none !important; }
+}
+
+.t-step {
+  --step-from: 8px;
+  transition:
+    opacity var(--dropdown-open-dur) var(--dropdown-ease),
+    translate var(--dropdown-open-dur) var(--dropdown-ease),
+    filter var(--dropdown-open-dur) var(--dropdown-ease);
+  @starting-style {
+    opacity: 0;
+    translate: var(--step-from) 0;
+    filter: blur(var(--reveal-blur));
+  }
+}
+.t-step[data-back] { --step-from: -8px; }
+
+.t-resize {
+  overflow: hidden;
+  transition: height var(--dropdown-open-dur) var(--dropdown-ease);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .t-step { transition-property: opacity; }
+  .t-resize { transition: none !important; }
 }
 
 :root {
@@ -411,7 +482,21 @@ select {
     overflow 0s var(--acc-expand) allow-discrete;
 }
 
+@starting-style {
+  .t-acc-enter[data-open="true"] .t-acc-panel {
+    grid-template-rows: 0fr;
+  }
+  .t-acc-enter[data-open="true"] .t-acc-panel-inner {
+    overflow: hidden;
+    opacity: 0;
+    filter: blur(2px);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
+  :root {
+    --acc-collapse: 0ms;
+  }
   .t-acc-panel, .t-acc-panel-inner {
     transition: none !important;
   }

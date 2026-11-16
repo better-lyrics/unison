@@ -49,7 +49,7 @@ describe("CouncilNavLink", () => {
         queue: [queueItem({ id: 1 }), queueItem({ id: 2 }), queueItem({ id: 3, bookmark: bookmarkBy(OLA) })],
         edits: {
           items: [editItem({ revisionId: 9 })],
-          thresholds: { textDrift: 0.15, timingDrift: 0.3, jevFlag: 0.7 },
+          thresholds: { textDrift: 0.15, timingDrift: 0.3, jevFlag: 0.7, ownerDecisionSec: 604_800 },
         },
       }),
     )

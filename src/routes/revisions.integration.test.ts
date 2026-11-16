@@ -1,4 +1,5 @@
 import { config } from "@/config"
+import { AVATAR_PRESETS } from "@/db/avatar-presets"
 import { lyricsRoutes } from "@/routes/lyrics"
 import { reviewQueueBotRoutes } from "@/routes/review-queue"
 import { videoLinkRoutes } from "@/routes/video-links"
@@ -21,6 +22,7 @@ import {
 	withTranslation,
 } from "@/test/lyric-fixtures"
 import type {
+	DecisionRole,
 	Env,
 	LyricsResponse,
 	PendingRevisionCard,
@@ -45,7 +47,7 @@ interface Envelope<T> {
 	hint?: string
 }
 
-type Saved = { revision: RevisionSummary }
+type Saved = { revision: RevisionSummary; decider?: DecisionRole }
 
 const buildApp = (env: Env) =>
 	new Elysia()
@@ -78,9 +80,9 @@ describeIntegration("revision routes (integration)", () => {
 	const call = async <T = unknown>(
 		method: string,
 		path: string,
-		opts: { token?: string; body?: unknown; env?: Env } = {}
+		opts: { token?: string; body?: unknown; env?: Env; headers?: Record<string, string> } = {}
 	): Promise<{ status: number; json: Envelope<T> }> => {
-		const headers: Record<string, string> = { "content-type": "application/json" }
+		const headers: Record<string, string> = { "content-type": "application/json", ...opts.headers }
 		if (opts.token) headers.authorization = `Bearer ${opts.token}`
 		const res = await buildApp(opts.env ?? db.env).handle(
 			new Request(`http://localhost${path}`, {
@@ -127,6 +129,8 @@ describeIntegration("revision routes (integration)", () => {
 				noChanges: false,
 				drift: { textLimit: 0.15, timingLimit: 0.3, anchorRevNo: 1 },
 				rateLimit: { lyricRemaining: 5, userRemaining: 20 },
+				noteMaxLength: config.revisions.maxNoteLength,
+				ownerDecisionSec: config.revisions.ownerDecisionSec,
 			})
 			expect(json.data.checks.map((c) => c.field)).toEqual(["lyrics", "language", "isrc", "album"])
 			expect((await listRevisions()).json.data.revisions).toHaveLength(1)
@@ -317,6 +321,269 @@ describeIntegration("revision routes (integration)", () => {
 		})
 	})
 
+	describe("patches", () => {
+		const STRANGER_KEY = "b".repeat(64)
+
+		beforeEach(async () => {
+			const stranger = await seedUser(db, STRANGER_KEY)
+			await seedLyric(db, stranger, { lyrics: LRC, format: "lrc", videoId: "strangerown" })
+			seedSession(db, "stranger-token", STRANGER_KEY)
+		})
+
+		const propose = (lyrics: string, token = "stranger-token", note?: unknown) =>
+			call<Saved>("POST", `/lyrics/${lyricId}/revisions`, {
+				token,
+				body: { lyrics, format: "lrc", language: "en", note },
+			})
+		const previewAs = (token: string) =>
+			call<PreviewResult>("POST", `/lyrics/${lyricId}/revisions/preview`, {
+				token,
+				body: { lyrics: swapWords(LRC, 1), format: "lrc", language: "en" },
+			})
+
+		it("shows a stranger's suggestion beside the bar's pending field, never in it", async () => {
+			const preset = AVATAR_PRESETS[0]
+			await db.pool.query(
+				"UPDATE users SET avatar_type = 'preset', avatar_ref = $1 WHERE key_id = $2",
+				[preset.id, STRANGER_KEY]
+			)
+			const patch = (await propose(swapWords(LRC, 1), "stranger-token", "  Fixed verse two  ")).json
+				.data.revision
+			const bar = (await lyricDetail()).json.data.revision
+			expect(bar.pending).toBeNull()
+			expect(bar.suggestion).toEqual({
+				id: patch.id,
+				revNo: 2,
+				author: { displayName: expect.any(String) },
+				authorKeyId: STRANGER_KEY,
+				authorAvatarUrl: config.avatar.cdnBase + preset.file,
+				pendingReason: "suggested",
+				sealed: false,
+				createdAt: patch.createdAt,
+				councilDecidesAt: patch.createdAt + config.revisions.ownerDecisionSec,
+				note: "Fixed verse two",
+				rejectNoteMaxLength: config.validation.report.maxDetailsLength,
+				decider: "owner",
+			})
+		})
+
+		it("reports a saved suggestion's reason as null and keeps suggested for the bar", async () => {
+			const saved = await propose(swapWords(LRC, 1))
+			expect(saved.json.data.revision).toMatchObject({ status: "pending", pendingReason: null })
+			expect((await lyricDetail()).json.data.revision.suggestion?.pendingReason).toBe("suggested")
+		})
+
+		it("keeps a pending suggestion out of the history but serves it by id", async () => {
+			const patch = (await propose(swapWords(LRC, 1))).json.data.revision
+			expect((await listRevisions()).json.data.revisions.map((r) => r.revNo)).toEqual([1])
+
+			const detail = await call<RevisionDetail>("GET", `/lyrics/${lyricId}/revisions/${patch.id}`)
+			expect(detail.json.data).toMatchObject({
+				id: patch.id,
+				status: "pending",
+				pendingReason: null,
+			})
+			expect(detail.json.data.lyrics).toBe(swapWords(LRC, 1))
+			const diff = await call<RevisionDiff>("GET", `/lyrics/${lyricId}/revisions/${patch.id}/diff`)
+			expect(diff.json.data.againstRevNo).toBe(1)
+
+			await call("POST", `/lyrics/${lyricId}/revisions/${patch.id}/approve`, {
+				token: "owner-token",
+				body: {},
+			})
+			const [latest] = (await listRevisions()).json.data.revisions
+			expect(latest).toMatchObject({ id: patch.id, status: "live", pendingReason: null })
+		})
+
+		it("regression: never reports a rejected suggestion as the owner's last rejected edit", async () => {
+			await seedCouncilMember(db, COUNCIL_KEY)
+			const patch = (await propose(swapWords(LRC, 1))).json.data.revision
+			const decline = await call<Saved>("POST", `/lyrics/${lyricId}/revisions/${patch.id}/reject`, {
+				token: "owner-token",
+				body: {},
+			})
+			expect(decline.json.data.revision).toMatchObject({ status: "rejected" })
+			expect((await lyricDetail()).json.data.revision.lastRejected).toBeNull()
+
+			const ownEdit = (await saveAsOwner(swapWords(LRC, 15))).json.data.revision
+			await call("POST", `/lyrics/${lyricId}/revisions/${ownEdit.id}/reject/bot`, {
+				token: BOT_SECRET,
+				body: { keyId: COUNCIL_KEY, note: "Keep the hymn text" },
+			})
+			expect((await lyricDetail()).json.data.revision.lastRejected).toEqual({
+				revNo: ownEdit.revNo,
+				reviewNote: "Keep the hymn text",
+			})
+		})
+
+		it("refuses a note over the limit and stores nothing", async () => {
+			const tooLong = "x".repeat(config.revisions.maxNoteLength + 1)
+			const res = await propose(swapWords(LRC, 1), "stranger-token", tooLong)
+			expect([res.status, res.json.code]).toEqual([400, "INVALID_PAYLOAD"])
+			expect(res.json.hint).toContain(String(config.revisions.maxNoteLength))
+			const { rows } = await db.pool.query(
+				"SELECT count(*)::int AS n FROM lyric_revisions WHERE lyrics_id = $1",
+				[lyricId]
+			)
+			expect(rows[0].n).toBeLessThanOrEqual(1)
+			expect((await lyricDetail()).json.data.revision.suggestion).toBeUndefined()
+		})
+
+		it("lists the suggestions on the caller's own lyrics in the owner inbox", async () => {
+			const patch = (await propose(swapWords(LRC, 1), "stranger-token", "Fixed verse two")).json
+				.data.revision
+			await db.pool.query("UPDATE lyrics SET committee_approved_at = 1700000000 WHERE id = $1", [
+				lyricId,
+			])
+			const inbox = await call<unknown[]>("GET", "/lyrics/mine/suggestions", {
+				token: "owner-token",
+			})
+			expect(inbox.status).toBe(200)
+			expect(inbox.json.data).toEqual([
+				{
+					lyricsId: lyricId,
+					videoId: expect.any(String),
+					song: expect.any(String),
+					artist: expect.any(String),
+					suggestion: expect.objectContaining({
+						id: patch.id,
+						pendingReason: "suggested",
+						sealed: true,
+						authorAvatarUrl: null,
+						note: "Fixed verse two",
+					}),
+				},
+			])
+			const strangerInbox = await call<unknown[]>("GET", "/lyrics/mine/suggestions", {
+				token: "stranger-token",
+			})
+			expect(strangerInbox.json.data).toEqual([])
+			const anonymous = await call("GET", "/lyrics/mine/suggestions")
+			expect([anonymous.status, anonymous.json.code]).toEqual([401, "AUTH_REQUIRED"])
+		})
+
+		it("refuses an owner inbox read that only names the owner's key", async () => {
+			await propose(swapWords(LRC, 1))
+			const unverified = await call("GET", "/lyrics/mine/suggestions", {
+				headers: { "x-key-id": OWNER_KEY },
+			})
+			expect([unverified.status, unverified.json.code]).toEqual([401, "AUTH_REQUIRED"])
+		})
+
+		it("maps patch failures to their status and code", async () => {
+			await seedCouncilMember(db, COUNCIL_KEY)
+			await saveAsOwner(swapWords(LRC, 15))
+			const taken = await propose(swapWords(LRC, 1))
+			expect([taken.status, taken.json.code]).toEqual([409, "PROPOSAL_OPEN"])
+
+			await call("DELETE", `/lyrics/${lyricId}/revisions/pending`, {
+				token: "owner-token",
+				body: {},
+			})
+			const patch = (await propose(swapWords(LRC, 1))).json.data.revision
+			const path = (action: string) => `/lyrics/${lyricId}/revisions/${patch.id}/${action}/bot`
+			const early = await call("POST", path("approve"), {
+				token: BOT_SECRET,
+				body: { keyId: COUNCIL_KEY },
+			})
+			expect([early.status, early.json.code]).toEqual([409, "OWNER_WINDOW_OPEN"])
+			const own = await call("POST", path("reject"), {
+				token: BOT_SECRET,
+				body: { keyId: STRANGER_KEY },
+			})
+			expect([own.status, own.json.code]).toEqual([403, "OWN_SUGGESTION"])
+		})
+
+		it("refuses a suggestion from an account with no lyric of its own on every write path", async () => {
+			const newcomerKey = "d".repeat(64)
+			await seedUser(db, newcomerKey)
+			seedSession(db, "newcomer-token", newcomerKey)
+			const body = { lyrics: swapWords(LRC, 1), format: "lrc", language: "en" }
+			for (const path of ["", "/preview", "/compare"]) {
+				const { status, json } = await call("POST", `/lyrics/${lyricId}/revisions${path}`, {
+					token: "newcomer-token",
+					body,
+				})
+				expect([status, json.code]).toEqual([403, "SUGGEST_NEEDS_LYRIC"])
+				expect(json.hint).toBeTruthy()
+			}
+			expect((await listRevisions()).json.data.revisions).toHaveLength(1)
+		})
+
+		it("tells a stranger the owner decides a plain suggestion, and tells the owner nothing", async () => {
+			expect((await previewAs("stranger-token")).json.data.decider).toBe("owner")
+			expect((await previewAs("owner-token")).json.data).not.toHaveProperty("decider")
+		})
+
+		it("leaves out who decides when the stranger's edit cannot be saved", async () => {
+			const { json } = await call<PreviewResult>("POST", `/lyrics/${lyricId}/revisions/preview`, {
+				token: "stranger-token",
+				body: { lyrics: "<tt><body><div><p>unclosed", format: "ttml", language: "en" },
+			})
+			expect(json.data).not.toHaveProperty("decider")
+		})
+
+		it("leaves a suggestion on a sealed lyric or a lyric with no owner to the council", async () => {
+			await db.pool.query(
+				"UPDATE lyrics SET committee_approved_at = EXTRACT(EPOCH FROM NOW())::INTEGER WHERE id = $1",
+				[lyricId]
+			)
+			expect((await previewAs("stranger-token")).json.data.decider).toBe("council")
+			await db.pool.query(
+				"UPDATE lyrics SET committee_approved_at = NULL, submitter_id = NULL WHERE id = $1",
+				[lyricId]
+			)
+			expect((await previewAs("stranger-token")).json.data.decider).toBe("council")
+		})
+
+		it("sends who decides with a saved suggestion and never with the owner's own save", async () => {
+			expect((await propose(swapWords(LRC, 1))).json.data.decider).toBe("owner")
+			expect((await saveAsOwner(swapWords(LRC, 2))).json.data).not.toHaveProperty("decider")
+		})
+
+		it("names the author and who decided a suggestion in the history", async () => {
+			const patch = (await propose(swapWords(LRC, 1))).json.data.revision
+			await call("POST", `/lyrics/${lyricId}/revisions/${patch.id}/reject`, {
+				token: "owner-token",
+				body: { note: "Kept on purpose" },
+			})
+			const history = (await listRevisions()).json.data.revisions
+			expect(history.find((r) => r.id === patch.id)).toMatchObject({
+				authorKeyId: STRANGER_KEY,
+				status: "rejected",
+				decidedBy: "owner",
+				reviewNote: "Kept on purpose",
+			})
+			expect(history.at(-1)).toMatchObject({ authorKeyId: OWNER_KEY })
+			expect(history.at(-1)).not.toHaveProperty("decidedBy")
+		})
+
+		it("regression: reports an owner on the council deciding as the council only when the council decides", async () => {
+			await db.pool.query("INSERT INTO committee_members (user_id, added_by) VALUES ($1, 'test')", [
+				owner,
+			])
+			const approve = (revId: number) =>
+				call<{ revision: RevisionSummary }>(
+					"POST",
+					`/lyrics/${lyricId}/revisions/${revId}/approve`,
+					{ token: "owner-token" }
+				)
+			const plain = (await propose(swapWords(LRC, 1))).json.data.revision
+			expect((await approve(plain.id)).json.data.revision.decidedBy).toBe("owner")
+
+			await db.pool.query(
+				"UPDATE lyrics SET committee_approved_at = EXTRACT(EPOCH FROM NOW())::INTEGER WHERE id = $1",
+				[lyricId]
+			)
+			const sealed = (await propose(swapWords(LRC, 2))).json.data.revision
+			expect((await approve(sealed.id)).json.data.revision.decidedBy).toBe("council")
+
+			const history = (await listRevisions()).json.data.revisions
+			expect(history.find((r) => r.id === plain.id)?.decidedBy).toBe("owner")
+			expect(history.find((r) => r.id === sealed.id)?.decidedBy).toBe("council")
+		})
+	})
+
 	describe("edge cases", () => {
 		it("keeps an absent language and ISRC and clears one sent as null", async () => {
 			const liveMetadata = async () =>
@@ -416,9 +683,10 @@ describeIntegration("revision routes (integration)", () => {
 			const stranger = "b".repeat(64)
 			await seedUser(db, stranger)
 			seedSession(db, "stranger-token", stranger)
-			const notOwner = await call("POST", `/lyrics/${lyricId}/revisions`, {
+			const rev1 = (await listRevisions()).json.data.revisions[0].id
+			const notOwner = await call("POST", `/lyrics/${lyricId}/revisions/${rev1}/revert`, {
 				token: "stranger-token",
-				body: { lyrics: swapWords(LRC, 1), format: "lrc" },
+				body: {},
 			})
 			expect([notOwner.status, notOwner.json.code]).toEqual([403, "NOT_OWNER"])
 
@@ -463,7 +731,7 @@ describeIntegration("revision routes (integration)", () => {
 				env: { ...db.env, RATE_LIMITER: refusing } as unknown as Env,
 			})
 			expect([status, json.code]).toEqual([429, "RATE_LIMITED"])
-			expect(json.hint).toBe("Too many checks at once. Wait a moment and keep typing.")
+			expect(json.hint).toBe("Too many checks at once. Wait a moment and try again.")
 		})
 
 		it("returns 409 STALE when the lyric keeps changing while saving", async () => {

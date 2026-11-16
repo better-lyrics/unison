@@ -39,7 +39,7 @@ const busy = () =>
     ],
     edits: {
       items: [editItem({ revisionId: 9001, pendingReason: "sealed", createdAt: NOW - 2 * DAY - 6 * HOUR })],
-      thresholds: { textDrift: 0.15, timingDrift: 0.3, jevFlag: 0.7 },
+      thresholds: { textDrift: 0.15, timingDrift: 0.3, jevFlag: 0.7, ownerDecisionSec: 604_800 },
     },
     applicants: [applicant()],
     overview: overview({

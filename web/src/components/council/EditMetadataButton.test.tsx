@@ -68,7 +68,7 @@ describe("EditMetadataButton", () => {
       ]),
     )
     await screen.findByText("Proposed new details. 2 more approvals needed.")
-    expect(screen.queryByRole("dialog", { name: "Edit song details" })).toBeNull()
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Edit song details" })).toBeNull())
   })
 
   describe("edge cases", () => {
@@ -101,7 +101,7 @@ describe("EditMetadataButton", () => {
       renderButton()
       fireEvent.click(await screen.findByRole("button", { name: /Edit details/ }))
       fireEvent.click(screen.getByRole("button", { name: "Cancel" }))
-      expect(screen.queryByRole("dialog")).toBeNull()
+      await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull())
       expect(log).toEqual([])
     })
   })

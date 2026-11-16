@@ -189,6 +189,7 @@ function mergeSeed(): unknown[] {
 		[{ id: 30, author_id: 2, reviewed_by: null }], // lyric_revisions snapshot
 		{ n: 1 }, // vote collisions
 		{ n: 0 }, // report collisions
+		[], // withdrawn suggestions
 		{ n: 1 }, // request collisions
 	]
 }
@@ -243,6 +244,7 @@ describe("runMigration (merge case)", () => {
 				"users",
 				"vote_strikes",
 				"votes",
+				"withdrawn_suggestions",
 			].sort()
 		)
 		expect(result.snapshot.users).toHaveLength(2)
