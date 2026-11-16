@@ -592,6 +592,11 @@ export async function invalidateCacheForEditor(env: Env, keyId: string): Promise
 	)
 }
 
+export async function invalidateCacheForAccount(env: Env, keyId: string): Promise<void> {
+	await invalidateCacheForSubmitter(env, keyId)
+	await invalidateCacheForEditor(env, keyId)
+}
+
 export async function invalidateCacheAfterDelete(env: Env, lyricsId: number): Promise<void> {
 	await invalidateCacheForLyric(env, lyricsId)
 	await evictFeedCaches(env)

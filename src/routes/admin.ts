@@ -16,7 +16,7 @@ import { revokeBoostByAdmin } from "@/db/boost"
 import { addCommittee, listCommittee, removeCommittee, setCouncilAdmin } from "@/db/committee"
 import { getByKeyId } from "@/db/discordLinks"
 import { invalidateCuratorLeaderboardCache } from "@/db/leaderboard"
-import { invalidateCacheForSubmitter } from "@/db/lyrics"
+import { invalidateCacheForAccount } from "@/db/lyrics"
 import { type AccountSearchRow, getUserById, getUserByKeyId, searchAccounts } from "@/db/users"
 import { Logger } from "@/infra/logger"
 import { recalculateScore } from "@/jobs/score-updater"
@@ -178,7 +178,7 @@ export const adminRoutes = (env: Env) =>
 					}
 
 					await invalidateCuratorLeaderboardCache(env)
-					await invalidateCacheForSubmitter(env, audit.new_key)
+					await invalidateCacheForAccount(env, audit.new_key)
 					for (const lyricsId of result.affectedLyricsIds) {
 						recalculateScore(env, lyricsId).catch((err) =>
 							log.error("post-migration recalc failed", { lyricsId, error: String(err) })
@@ -233,6 +233,8 @@ export const adminRoutes = (env: Env) =>
 					return status(mapped.httpStatus, buildError(mapped.code))
 				}
 				await markAuditReverted(env, params.id)
+				await invalidateCacheForAccount(env, audit.old_key)
+				await invalidateCacheForAccount(env, audit.new_key)
 				log.info("admin migration undone", {
 					migrationId: params.id,
 					keptWithdrawn: result.keptWithdrawn,
