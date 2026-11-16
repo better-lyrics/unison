@@ -60,6 +60,15 @@
     ]
   },
   {
+    "name": "WiseWave",
+    "description": "A free music player for Windows with synced lyrics and offline playback.",
+    "url": "https://wisewave.me",
+    "icon": "/showcase/wisewave-a00d7a8d.png",
+    "platforms": [
+      "Windows"
+    ]
+  },
+  {
     "name": "YouLy+",
     "description": "Word-by-word lyrics in your browser for YouTube Music, Apple Music and Tidal.",
     "url": "https://github.com/ibratabian17/YouLyPlus",
