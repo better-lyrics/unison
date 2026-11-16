@@ -24,6 +24,7 @@ import { backfillVideoLinks } from "@/jobs/backfill-video-links"
 import { backfillXp } from "@/jobs/backfill-xp"
 import { cleanupFulfilledRequests } from "@/jobs/cleanup-fulfilled-requests"
 import { runDumpJob } from "@/jobs/dump"
+import { pruneNotifications, queueOwnerReminders } from "@/jobs/notifications"
 import { resyncVoteCounts } from "@/jobs/resync-vote-counts"
 import { updateScores } from "@/jobs/score-updater"
 import { auditThresholds } from "@/jobs/threshold-audit"
@@ -148,6 +149,36 @@ const app = new Elysia({ adapter: node() })
 					cronLog.info("threshold check complete", result)
 				} catch (err) {
 					cronLog.error("threshold check failed", { error: (err as Error).message })
+				}
+			},
+		})
+	)
+	.use(
+		cron({
+			name: "owner-reminders",
+			pattern: "5 * * * *",
+			timezone: "UTC",
+			async run() {
+				try {
+					const due = await queueOwnerReminders(env)
+					if (due > 0) cronLog.info("owner reminders checked", { due })
+				} catch (err) {
+					cronLog.error("owner reminders failed", { error: (err as Error).message })
+				}
+			},
+		})
+	)
+	.use(
+		cron({
+			name: "notification-prune",
+			pattern: "40 3 * * *",
+			timezone: "UTC",
+			async run() {
+				try {
+					const pruned = await pruneNotifications(env)
+					cronLog.info("notification prune complete", { pruned })
+				} catch (err) {
+					cronLog.error("notification prune failed", { error: (err as Error).message })
 				}
 			},
 		})

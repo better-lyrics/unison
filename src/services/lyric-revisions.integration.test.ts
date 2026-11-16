@@ -7,6 +7,7 @@ import { getRevisionBar, listSuggestionsForOwner } from "@/db/lyric-revisions"
 import { listNotifications, markSeen, unreadCount } from "@/db/notifications"
 import { getSealCandidates, getSealableVariants, rejectLyric, undoRejection } from "@/db/rejections"
 import { D1Compat } from "@/infra/database"
+import { queueOwnerReminders } from "@/jobs/notifications"
 import type { JevCheckInput, JevGate } from "@/services/jev-gate"
 import {
 	type IntegrationDb,
@@ -1906,6 +1907,31 @@ describeIntegration("lyric revisions pipeline (integration)", () => {
 				expect(await unreadCount(db.env.DB, owner)).toBe(1)
 				await markSeen(db.env.DB, owner)
 				expect(await unreadCount(db.env.DB, owner)).toBe(0)
+			})
+
+			it("reminds the owner once, a day before the window ends, and never after a decision", async () => {
+				const intoLeadWindow = (id: number) =>
+					db.pool.query("UPDATE lyric_revisions SET created_at = $2 WHERE id = $1", [
+						id,
+						Math.floor(Date.now() / 1000) - config.revisions.ownerDecisionSec + 3600,
+					])
+				const deadlines = async () =>
+					(await inbox(owner))
+						.filter((n) => n.kind === "suggestion_deadline")
+						.map((n) => Number(n.ref_id))
+
+				const waiting = await propose(lrc(swapWords(LRC, 1)))
+				await intoLeadWindow(waiting.id)
+				await queueOwnerReminders(db.env)
+				await queueOwnerReminders(db.env)
+				expect(await deadlines()).toEqual([waiting.id])
+
+				await rejectRevision(db.env, lyricId, waiting.id, owner, null, "web")
+				const decided = await propose(lrc(swapWords(LRC, 2)))
+				await intoLeadWindow(decided.id)
+				await rejectRevision(db.env, lyricId, decided.id, owner, null, "web")
+				await queueOwnerReminders(db.env)
+				expect(await deadlines()).toEqual([waiting.id])
 			})
 		})
 	})
