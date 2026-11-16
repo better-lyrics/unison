@@ -60,6 +60,13 @@ const buildVoteHidePredicate = (prefix: string) => `(
 export const bannedUserPredicate = (userIdColumn: string) =>
 	`COALESCE(${userIdColumn} IN (SELECT id FROM users WHERE banned_at IS NOT NULL), FALSE)`
 
+export const editorsSql = (lyric: string) => `SELECT r.author_id, MAX(r.created_at) AS last_at
+	FROM lyric_revisions r
+	WHERE r.lyrics_id = ${lyric}.id AND r.status IN ('live', 'past')
+		AND r.author_id IS NOT NULL AND r.author_id IS DISTINCT FROM ${lyric}.submitter_id
+		AND NOT ${bannedUserPredicate("r.author_id")}
+	GROUP BY r.author_id`
+
 const buildBannedSubmitterPredicate = (prefix: string) =>
 	bannedUserPredicate(`${prefix}submitter_id`)
 

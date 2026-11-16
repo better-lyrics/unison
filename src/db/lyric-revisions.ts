@@ -1,6 +1,6 @@
 import { config } from "@/config"
 import { AVATAR_COLUMNS, AVATAR_JOINS, type AvatarRow, avatarUrlForRow } from "@/db/avatar-join"
-import { bannedUserPredicate, videoServesExpr } from "@/db/predicates"
+import { bannedUserPredicate, editorsSql, videoServesExpr } from "@/db/predicates"
 import { lapseRejectionForEdit } from "@/db/rejections"
 import { type D1Compat, advisoryXactLock } from "@/infra/database"
 import { Logger } from "@/infra/logger"
@@ -717,13 +717,7 @@ const REVISION_BAR_SELECT = `SELECT l.id AS lyrics_id, live.rev_no, live.created
 	LEFT JOIN LATERAL (
 		SELECT json_agg(e ORDER BY e.last_at DESC) AS editors FROM (
 			SELECT u.key_id, u.nickname, ${AVATAR_COLUMNS}, a.last_at
-			FROM (
-				SELECT r.author_id, MAX(r.created_at) AS last_at FROM lyric_revisions r
-				WHERE r.lyrics_id = l.id AND r.status IN ('live', 'past')
-					AND r.author_id IS NOT NULL AND r.author_id IS DISTINCT FROM l.submitter_id
-					AND NOT ${bannedUserPredicate("r.author_id")}
-				GROUP BY r.author_id ORDER BY last_at DESC LIMIT ${config.revisions.editorCreditLimit}
-			) a
+			FROM (${editorsSql("l")} ORDER BY last_at DESC LIMIT ${config.revisions.editorCreditLimit}) a
 			JOIN users u ON u.id = a.author_id
 			${AVATAR_JOINS}
 		) e
