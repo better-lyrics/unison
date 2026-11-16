@@ -4,6 +4,7 @@ import { createBookmark, listActiveBookmarks } from "@/db/council-bookmarks"
 import { listCouncilEdits } from "@/db/council-edits"
 import { listCouncilEvents } from "@/db/council-events"
 import { getRevisionBar, listSuggestionsForOwner } from "@/db/lyric-revisions"
+import { listNotifications, markSeen, unreadCount } from "@/db/notifications"
 import { getSealCandidates, getSealableVariants, rejectLyric, undoRejection } from "@/db/rejections"
 import { D1Compat } from "@/infra/database"
 import type { JevCheckInput, JevGate } from "@/services/jev-gate"
@@ -1884,6 +1885,27 @@ describeIntegration("lyric revisions pipeline (integration)", () => {
 			it("never notifies people about their own actions", async () => {
 				await save(lrc(swapWords(LRC, 2)))
 				expect(await inbox(owner)).toEqual([])
+			})
+
+			it("hides a suggestion's items once it is withdrawn or superseded", async () => {
+				await propose(lrc(swapWords(LRC, 1)))
+				await save(lrc(swapWords(LRC, 3)))
+				expect((await listNotifications(db.env.DB, owner)).items).toEqual([])
+			})
+
+			it("keeps a waiting suggestion past the window and counts unread until seen", async () => {
+				const patch = await propose(lrc(swapWords(LRC, 1)))
+				await db.pool.query("UPDATE notifications SET created_at = created_at - $1", [
+					config.notifications.windowSec + 60,
+				])
+				const first = await listNotifications(db.env.DB, owner)
+				expect(first.items.map((i) => i.refId)).toEqual([patch.id])
+				await db.pool.query(
+					"UPDATE notifications SET created_at = EXTRACT(EPOCH FROM NOW())::INTEGER"
+				)
+				expect(await unreadCount(db.env.DB, owner)).toBe(1)
+				await markSeen(db.env.DB, owner)
+				expect(await unreadCount(db.env.DB, owner)).toBe(0)
 			})
 		})
 	})
