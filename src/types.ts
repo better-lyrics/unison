@@ -103,6 +103,7 @@ export interface LyricsRow {
 	deleted_by_role: "submitter" | "admin" | "system" | null
 	deletion_reason: string | null
 	hidden?: boolean
+	editor_ids?: number[] | null
 }
 
 export interface BadgeRef {
@@ -174,6 +175,7 @@ export interface LyricsResponse {
 	confidence: Confidence
 	hidden: boolean
 	submitter?: SubmitterInfo
+	editors?: RevisionEditor[]
 	fulfilled?: LyricsFulfillmentBadge | null
 	userVote?: 1 | -1 | null
 	marks?: Mark[]

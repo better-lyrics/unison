@@ -11,6 +11,7 @@ import {
 	RANKING_EXPR,
 	RANKING_EXPR_JOINED,
 	RANKING_EXPR_VARIANT,
+	editorsSql,
 	fuzzyMatch,
 	videoServesExpr,
 } from "@/db/predicates"
@@ -46,7 +47,10 @@ const exploreLog = new Logger("explore")
 const LYRICS_WITH_SUBMITTER = `
 	SELECT l.*, u.key_id AS submitter_key_id, u.reputation AS submitter_reputation,
 		u.nickname AS submitter_nickname,
-		${AUTO_HIDE_PREDICATE_JOINED} AS hidden
+		${AUTO_HIDE_PREDICATE_JOINED} AS hidden,
+		(SELECT array_agg(e.author_id ORDER BY e.last_at DESC)
+			FROM (${editorsSql("l")} ORDER BY last_at DESC LIMIT ${config.revisions.editorCreditLimit}) e
+		) AS editor_ids
 	FROM lyrics l
 	LEFT JOIN users u ON l.submitter_id = u.id
 `

@@ -1,3 +1,4 @@
+import { editorsOf } from "@/routes/marks"
 import type {
 	Confidence,
 	LyricsFulfillmentBadge,
@@ -47,6 +48,7 @@ export interface LyricsRowForResponse {
 	effective_score: number
 	vote_count: number
 	confidence: Confidence
+	submitter_id?: number | null
 	submitter_key_id?: string | null
 	submitter_reputation?: number | null
 	submitter_nickname?: string | null
@@ -54,14 +56,17 @@ export interface LyricsRowForResponse {
 	committee_approved_by?: number | null
 	hidden?: boolean
 	created_at?: number
+	editor_ids?: number[] | null
 }
 
 export function toResponse(
 	row: LyricsRowForResponse,
 	fulfilled?: LyricsFulfillmentBadge | null,
 	marks?: Mark[],
-	submitterActor?: MarkActor
+	actors: Map<number, MarkActor> = new Map()
 ): LyricsResponse {
+	const submitterActor = row.submitter_id != null ? actors.get(row.submitter_id) : undefined
+	const editors = editorsOf(row, actors)
 	return {
 		id: row.id,
 		videoId: row.video_id,
@@ -79,6 +84,7 @@ export function toResponse(
 		confidence: row.confidence,
 		hidden: row.hidden ?? false,
 		submitter: buildSubmitter(row, submitterActor),
+		...(editors.length ? { editors } : {}),
 		fulfilled: fulfilled ?? undefined,
 		marks: marks && marks.length > 0 ? marks : undefined,
 		...(row.created_at === undefined ? {} : { createdAt: row.created_at }),

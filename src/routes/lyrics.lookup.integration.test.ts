@@ -1,13 +1,15 @@
 import { submitLyrics } from "@/db/lyrics"
 import { lyricsRoutes } from "@/routes/lyrics"
+import { revisionRoutes } from "@/routes/revisions"
 import {
 	type IntegrationDb,
 	describeIntegration,
 	openIntegrationDb,
+	seedSession,
 	seedUser,
 	wipeRevisionData,
 } from "@/test/integration-harness"
-import type { LyricsSubmission } from "@/types"
+import type { LyricsResponse, LyricsSubmission, RevisionSummary } from "@/types"
 import { Elysia } from "elysia"
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest"
 
@@ -36,7 +38,7 @@ describeIntegration("GET /lyrics lookups (integration)", () => {
 
 	beforeAll(async () => {
 		db = await openIntegrationDb()
-		app = new Elysia().use(lyricsRoutes(db.env))
+		app = new Elysia().use(lyricsRoutes(db.env)).use(revisionRoutes(db.env))
 	})
 
 	afterAll(async () => {
@@ -48,6 +50,73 @@ describeIntegration("GET /lyrics lookups (integration)", () => {
 		await wipeRevisionData(db)
 		submitter = await seedUser(db, "lookup-submitter")
 		await submitLyrics(db.env, SHADOWS, submitter)
+	})
+
+	describe("editors", () => {
+		const HARBOUR_LINES = [
+			"Lanterns swing above the harbour wall",
+			"Gulls are counting boats that never call",
+			"Salt is drying on the morning rope",
+			"Every sailor keeps a pocket full of hope",
+			"Tide comes walking up the cobbled street",
+			"Fishmongers singing to the beat",
+			"Bells are ringing out across the bay",
+			"Nobody is leaving here today",
+			"Clouds are folding over distant hills",
+			"Quiet settles on the window sills",
+		]
+		const harbour = (lines: string[]) =>
+			lines.map((line, i) => `[00:${String(i * 4 + 1).padStart(2, "0")}.00] ${line}`).join("\n")
+		const HARBOUR: LyricsSubmission = {
+			...SHADOWS,
+			videoId: "Ugr4KKK_SqY",
+			song: "Harbour Lights",
+			artist: "Example Artist",
+			album: undefined,
+			isrc: undefined,
+			lyrics: harbour(HARBOUR_LINES),
+		}
+
+		const post = async <T>(path: string, token: string, body: unknown) => {
+			const res = await app.handle(
+				new Request(`http://localhost${path}`, {
+					method: "POST",
+					headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
+					body: JSON.stringify(body),
+				})
+			)
+			return (await res.json()) as { data: T }
+		}
+		const lookup = async (videoId: string) =>
+			(await get(`v=${videoId}`)).body as { data: LyricsResponse }
+
+		it("credits a stranger whose suggestion went live and leaves an unedited lyric bare", async () => {
+			const editorKey = "e".repeat(64)
+			const editor = await seedUser(db, editorKey)
+			await submitLyrics(db.env, { ...HARBOUR, videoId: "dvgZkm1xWPE" }, editor)
+			const lyric = await submitLyrics(db.env, HARBOUR, submitter)
+			seedSession(db, "editor-token", editorKey)
+			seedSession(db, "owner-token", "lookup-submitter")
+
+			const fixed = HARBOUR_LINES.map((line, i) =>
+				i === 5 ? "Fishmongers humming to the beat" : line
+			)
+			const saved = await post<{ revision: RevisionSummary }>(
+				`/lyrics/${lyric.id}/revisions`,
+				"editor-token",
+				{ lyrics: harbour(fixed), format: "lrc", language: "en" }
+			)
+			await post(
+				`/lyrics/${lyric.id}/revisions/${saved.data.revision.id}/approve`,
+				"owner-token",
+				{}
+			)
+
+			expect((await lookup("Ugr4KKK_SqY")).data.editors).toEqual([
+				{ keyId: editorKey, displayName: expect.any(String), avatarUrl: null },
+			])
+			expect((await lookup("lkW3jsz0Gnc")).data.editors).toBeUndefined()
+		})
 	})
 
 	describe("regressions", () => {

@@ -105,13 +105,14 @@ describe("toResponse", () => {
 		const result = toResponse(
 			{
 				...baseRow,
+				submitter_id: 7,
 				submitter_key_id: keyId,
 				submitter_reputation: 1.42,
 				submitter_nickname: "Curator Cat",
 			},
 			undefined,
 			undefined,
-			submitterActor
+			new Map([[7, submitterActor]])
 		)
 
 		expect(result.submitter).toEqual({

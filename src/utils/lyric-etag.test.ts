@@ -35,6 +35,13 @@ describe("lyricEtag", () => {
 			lyricEtag({ ...lyric, variant: "primary" })
 		)
 	})
+
+	it("keeps the tag for a lyric without editors and changes it when an editor is credited", () => {
+		const base = { ...lyric, submitter: { keyId: "a80e8e35", displayName: "boidu" } }
+		const editor = { keyId: "k2", displayName: "Mirelle", avatarUrl: null }
+		expect(lyricEtag({ ...base, editors: [] })).toBe(lyricEtag(base))
+		expect(lyricEtag({ ...base, editors: [editor] })).not.toBe(lyricEtag(base))
+	})
 })
 
 describe("matchesEtag", () => {
