@@ -1,11 +1,11 @@
-import { Elysia, status } from "elysia"
 import { getPublicKey, registerPublicKey } from "@/db/publicKeys"
 import { getOrCreateUser } from "@/db/users"
 import { Logger } from "@/infra/logger"
 import type { Env } from "@/types"
 import { isTimestampFresh, verifyKeyId, verifySignature } from "@/utils/crypto"
-import { buildError, ErrorCode } from "@/utils/errors"
-import { getSession } from "@/utils/session"
+import { ErrorCode, buildError } from "@/utils/errors"
+import { bearerToken, getSession } from "@/utils/session"
+import { Elysia, status } from "elysia"
 
 const log = new Logger("either-auth")
 
@@ -23,12 +23,6 @@ interface SignedBody {
 }
 
 const SIGNED_PAYLOAD_RESERVED = new Set(["timestamp", "nonce", "keyId"])
-
-function extractBearer(header: string | undefined): string | null {
-	if (!header || !header.startsWith("Bearer ")) return null
-	const token = header.slice(7).trim()
-	return token.length > 0 ? token : null
-}
 
 function isValidSignedBody(body: unknown): body is SignedBody {
 	if (!body || typeof body !== "object") return false
@@ -66,7 +60,7 @@ export const eitherAuth = new Elysia({ name: "either-auth" }).derive(
 	{ as: "scoped" },
 	async (ctx) => {
 		const env = (ctx as unknown as { env: Env }).env
-		const bearer = extractBearer(ctx.headers.authorization)
+		const bearer = bearerToken(ctx.headers.authorization)
 
 		if (bearer !== null) {
 			const record = await getSession(env, bearer)
