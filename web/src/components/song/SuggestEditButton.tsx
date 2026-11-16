@@ -712,6 +712,7 @@ export function PreviewStep({
   const owner = ownerName(variant)
   const ownerDecides = result.decider === "owner"
   const reader = ownerDecides ? owner : "the council"
+  const readerAtStart = ownerDecides && variant.submitter ? owner : titleCase(reader)
   const blocker = previewBlocker(result)
   const sendRef = useFocusOnMount<HTMLButtonElement>(blocker === null)
   const replaceRef = useFocusOnMount<HTMLButtonElement>(blocker !== null)
@@ -793,7 +794,7 @@ export function PreviewStep({
                 rows={2}
               />
               <p className="mt-1 text-xs text-unison-text-muted">
-                {`Say what you fixed and where. ${titleCase(reader)} sees this note with your suggestion.`}
+                {`Say what you fixed and where. ${readerAtStart} sees this note with your suggestion.`}
               </p>
             </div>
           </>
