@@ -6,6 +6,7 @@ export const config = {
 		downloadCacheControl: "public, max-age=300",
 		siteOrigin: "https://unison.betterlyrics.org",
 		memoryEntries: 100,
+		editorCredit: { faces: 3, maxNamesChars: 38 },
 	},
 	artwork: {
 		size: 544,

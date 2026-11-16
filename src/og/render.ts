@@ -55,7 +55,6 @@ const CARD_SCALE = 3
 const JPEG_QUALITY = 88
 const WALL_SUBMISSIONS = 24
 const WALL_COVER_SIZE = 400
-const EDITOR_FACES = 3
 
 const compact = new Intl.NumberFormat("en-US", { notation: "compact", maximumFractionDigits: 1 })
 
@@ -168,7 +167,7 @@ export async function renderSongOg(env: Env, videoId: string): Promise<RenderedC
 		sampleAccent(art),
 		person ? avatarBytes(person.avatarUrl, person.keyId) : null,
 		sealed ? badgeArt("committee.svg") : null,
-		Promise.all(editors.slice(0, EDITOR_FACES).map((p) => avatarBytes(p.avatarUrl, p.keyId))),
+		Promise.all(editors.slice(0, config.og.editorCredit.faces).map((p) => avatarBytes(p.avatarUrl, p.keyId))),
 	])
 	const images = new Images()
 	const { scrim, ink, accent: hex } = palette(accent)

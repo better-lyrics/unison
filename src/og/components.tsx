@@ -1,3 +1,4 @@
+import { config } from "@/config"
 import type { CreditPart } from "@/utils/editor-credit"
 import { SYNC_KINDS, type SyncKind } from "@/utils/sync-type"
 import type { CSSProperties, ReactNode } from "react"
@@ -431,7 +432,6 @@ const FACE = 32
 const FACE_OVERLAP = 10
 const FACE_NOTCH = 3
 const HELP_GAP = 12
-const LONG_CREDIT = 38
 
 const faceNotch = `radial-gradient(circle at ${FACE * 1.5 - FACE_OVERLAP}px 50%, transparent ${FACE / 2 + FACE_NOTCH}px, black ${FACE / 2 + FACE_NOTCH + 1}px)`
 
@@ -450,7 +450,7 @@ export function HelpLine({
 	width: number
 	style?: CSSProperties
 }) {
-	const credit = parts.map((p) => p.text).join("").length <= LONG_CREDIT ? parts : short
+	const credit = parts.map((p) => p.text).join("").length <= config.og.editorCredit.maxNamesChars ? parts : short
 	const facesWidth = faces.length ? FACE + (faces.length - 1) * (FACE - FACE_OVERLAP) + HELP_GAP : 0
 	return (
 		<div style={{ display: "flex", alignItems: "center", ...style }}>
