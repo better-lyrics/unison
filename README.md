@@ -59,11 +59,13 @@ Any app that shows Unison lyrics must credit Unison and the person who submitted
 
 Show `Lyrics from Unison`, linked to `https://unison.betterlyrics.org/song/<videoId>`, and the submitter's `submitter.displayName`, linked to `https://unison.betterlyrics.org/curator/<submitter.keyId>`. Every lyric response carries both.
 
+Some lyrics also carry `editors`: people whose suggested edits to that lyric went live. Please credit them as well, for example "with help from <displayName>", with each name linked to `https://unison.betterlyrics.org/curator/<keyId>`. This one is a request; the deadline above does not cover it.
+
 After the deadline, apps that don't show the credit may lose access to the API.
 
 ### If you use the database dump
 
-The [dump](#database-dump) license requires the Unison credit. The submitter credit is our request rather than a license term. A lyric's `submitter_key_id`, when set, matches a row in `contributors`, which has the submitter's `display_name` and `profile_url`. The lyric's `url` column links to its page on Unison.
+The [dump](#database-dump) license requires the Unison credit. The submitter credit is our request rather than a license term. A lyric's `submitter_key_id`, when set, matches a row in `contributors`, which has the submitter's `display_name` and `profile_url`. The lyric's `url` column links to its page on Unison. `lyric_editors` lists the same people for each lyric (`lyrics_id`, `key_id`, `last_edited_at`). Each `key_id` matches a row in `contributors`.
 
 ### Good examples
 

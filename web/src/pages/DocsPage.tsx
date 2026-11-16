@@ -256,6 +256,12 @@ export function DocsPage() {
             both.
           </p>
           <p className="text-sm leading-relaxed text-unison-text-secondary">
+            Some lyrics also carry <Code>editors</Code>: people whose suggested edits to that lyric went live. Please
+            credit them as well, for example "with help from &lt;displayName&gt;", with each name linked to{" "}
+            <Code>https://unison.betterlyrics.org/curator/&lt;keyId&gt;</Code>. This one is a request; the deadline
+            above does not cover it.
+          </p>
+          <p className="text-sm leading-relaxed text-unison-text-secondary">
             After the deadline, apps that don't show the credit may lose access to the API. Apps that show it can join
             the{" "}
             <Link to="/showcase" className="text-unison-text transition-colors hover:text-unison-text-secondary">
@@ -277,7 +283,9 @@ export function DocsPage() {
             license requires the Unison credit. The submitter credit is our request rather than a license term. A
             lyric's <Code>submitter_key_id</Code>, when set, matches a row in <Code>contributors</Code>, which has the
             submitter's <Code>display_name</Code> and <Code>profile_url</Code>. The lyric's <Code>url</Code> column
-            links to its page on Unison.
+            links to its page on Unison. <Code>lyric_editors</Code> lists the same people for each lyric (
+            <Code>lyrics_id</Code>, <Code>key_id</Code>, <Code>last_edited_at</Code>). Each <Code>key_id</Code> matches
+            a row in <Code>contributors</Code>.
           </p>
           <h3 className="text-sm font-semibold text-unison-text">Good examples</h3>
           <ul className="space-y-1.5 text-sm leading-relaxed text-unison-text-secondary">
