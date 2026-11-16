@@ -110,7 +110,7 @@ function Stats({ variant, versions }: { variant: VariantFull; versions: number }
             </MetaRow>
           ) : null}
           {revision?.editors?.length ? (
-            <MetaRow label={<span className="shrink-0 self-start">Edited by</span>}>
+            <MetaRow label={<span className="shrink-0 self-start">With help from</span>}>
               <span className="flex min-w-0 flex-wrap justify-end gap-x-3 gap-y-1.5">
                 {revision.editors.map((editor) => (
                   <RailPerson key={editor.keyId} person={editor} />
