@@ -24,6 +24,7 @@ const ITEM: SuggestionInboxItem = {
     sealed: false,
     createdAt: NOW - 8 * 86400,
     councilDecidesAt: null,
+    rejectNoteMaxLength: 1000,
   },
 }
 

@@ -356,6 +356,7 @@ describeIntegration("revision routes (integration)", () => {
 				createdAt: patch.createdAt,
 				councilDecidesAt: patch.createdAt + config.revisions.ownerDecisionSec,
 				note: "Fixed verse two",
+				rejectNoteMaxLength: config.validation.report.maxDetailsLength,
 			})
 		})
 

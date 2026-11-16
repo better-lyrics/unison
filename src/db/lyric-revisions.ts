@@ -1,3 +1,4 @@
+import { config } from "@/config"
 import { AVATAR_COLUMNS, AVATAR_JOINS, type AvatarRow, avatarUrlForRow } from "@/db/avatar-join"
 import { bannedUserPredicate, videoServesExpr } from "@/db/predicates"
 import { lapseRejectionForEdit } from "@/db/rejections"
@@ -673,6 +674,7 @@ function toSuggestion(row: SuggestionColumns): RevisionSuggestion | null {
 			Math.floor(Date.now() / 1000)
 		),
 		note: row.suggestion_note,
+		rejectNoteMaxLength: config.validation.report.maxDetailsLength,
 	}
 }
 

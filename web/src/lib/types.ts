@@ -207,6 +207,7 @@ export interface RevisionSuggestion {
   sealed: boolean
   createdAt: number
   councilDecidesAt: number | null
+  rejectNoteMaxLength: number
 }
 
 export interface VariantPendingRevision {

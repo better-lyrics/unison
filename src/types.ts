@@ -418,6 +418,7 @@ export interface RevisionSuggestion {
 	createdAt: number
 	councilDecidesAt: number | null
 	note: string | null
+	rejectNoteMaxLength: number
 }
 
 export interface SuggestionInboxItem {

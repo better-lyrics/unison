@@ -11,7 +11,7 @@ import { useRevisionDiff } from "@/hooks/useLyricsData"
 import { useSuggestionDecision, useWithdrawSuggestion } from "@/hooks/useSuggestionMutations"
 import { cn } from "@/lib/cn"
 import { formatElapsed, titleCase } from "@/lib/format"
-import { type PreviewActions, REJECT_NOTE_MAX, type SuggestionContent, contentOf } from "@/lib/lyric-suggestion"
+import { type PreviewActions, type SuggestionContent, contentOf } from "@/lib/lyric-suggestion"
 import type { SuggestionInboxItem } from "@/lib/revision-types"
 import type { RevisionSuggestion } from "@/lib/types"
 import { IconArrowBackUp, IconCheck, IconEye, IconInfoCircle } from "@tabler/icons-react"
@@ -152,7 +152,7 @@ export function SuggestionDecision({
         submitLabel: "Reject suggestion",
         hint: `${authorName(suggestion, "start")} sees this note with the rejected suggestion.`,
         noteLabel: `Note for ${by} (optional)`,
-        noteMax: REJECT_NOTE_MAX,
+        noteMax: suggestion.rejectNoteMaxLength,
         placeholder: "For example: the second verse timing was already right",
         unavailable: notLoaded ? NOT_LOADED_HINT : null,
         submitVariant: "destructive",

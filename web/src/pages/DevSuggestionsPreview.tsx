@@ -79,6 +79,7 @@ const SUGGESTION: RevisionSuggestion = {
   sealed: false,
   createdAt: NOW - 3 * HOUR,
   councilDecidesAt: NOW + 6 * DAY + 21 * HOUR,
+  rejectNoteMaxLength: 1000,
 }
 
 const OVERDUE: RevisionSuggestion = { ...SUGGESTION, createdAt: NOW - 7 * DAY - 2 * HOUR, councilDecidesAt: null }
@@ -221,6 +222,7 @@ const INBOX: SuggestionInboxItem[] = [
       pendingReason: "large_text_drift",
       createdAt: NOW - DAY,
       councilDecidesAt: null,
+      rejectNoteMaxLength: 1000,
     },
   },
 ]

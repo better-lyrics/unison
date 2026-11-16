@@ -4,8 +4,6 @@ import { plural } from "./format"
 import type { DiffRow } from "./revision-types"
 import type { LyricsFormat, PendingReason, RevisionSuggestion, VariantPendingRevision } from "./types"
 
-export const REJECT_NOTE_MAX = 1000
-
 export const ownerWindow = (ownerDecisionSec: number): string => plural(ownerDecisionSec / 86_400, "day", "days")
 
 export type SuggestionDecider = "owner" | "council"
