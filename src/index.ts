@@ -47,6 +47,7 @@ import { leaderboardRoutes } from "@/routes/leaderboard"
 import { linkRoutes, linkStartRoutes } from "@/routes/links"
 import { lyricsRoutes } from "@/routes/lyrics"
 import { migrationRoutes } from "@/routes/migrations"
+import { notificationRoutes } from "@/routes/notifications"
 import { ogRoutes } from "@/routes/og"
 import { requestRoutes } from "@/routes/requests"
 import { reviewQueueBotRoutes, reviewQueueRoutes } from "@/routes/review-queue"
@@ -256,6 +257,7 @@ const app = new Elysia({ adapter: node() })
 	.use(badgeRoutes(env))
 	.use(avatarRoutes(env))
 	.use(userRoutes(env))
+	.use(notificationRoutes(env))
 	.use(authRoutes(env))
 	.use(linkStartRoutes(env))
 	.use(linkRoutes(env))
