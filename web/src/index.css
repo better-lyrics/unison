@@ -559,6 +559,13 @@ select {
     --ink-4 var(--art-fade) var(--art-ease);
 }
 
+.scroll-fade {
+  mask-image: linear-gradient(transparent, #000 var(--ft), #000 calc(100% - var(--fb)), transparent);
+  transition:
+    --ft 150ms ease-out,
+    --fb 150ms ease-out;
+}
+
 .lyrics-pane {
   transition:
     opacity 150ms ease-in-out,

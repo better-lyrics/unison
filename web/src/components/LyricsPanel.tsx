@@ -4,17 +4,17 @@ import { LyricsContentSkeleton, LyricsRenderer, parseVariantLyrics } from "@/com
 import { RawLyricsView } from "@/components/RawLyricsView"
 import { Bone } from "@/components/skeleton"
 import { glassClass } from "@/components/ui"
-import { IconFocusCentered } from "@tabler/icons-react"
+import { useScrollEdges } from "@/hooks/useScrollEdges"
 import { cn } from "@/lib/cn"
 import { downloadTextFile } from "@/lib/download"
+import { languageName } from "@/lib/language"
 import { pickTranslationLanguage, translationLanguages } from "@/lib/lyric-translations"
 import { MIME_BY_FORMAT, lyricsFilename } from "@/lib/lyrics-download"
+import { LAYOUT_TRANSITION } from "@/lib/motion-variants"
 import type { VariantFull } from "@/lib/types"
+import { IconFocusCentered } from "@tabler/icons-react"
 import { motion } from "motion/react"
 import { useMemo, useRef, useState } from "react"
-import { LAYOUT_TRANSITION } from "@/lib/motion-variants"
-import { languageName } from "@/lib/language"
-import { useScrollEdges } from "@/hooks/useScrollEdges"
 
 const TOOL_CLASS = cn(
   glassClass,
@@ -161,7 +161,7 @@ export function LyricsPanel({
           tabIndex={-1}
           data-loading={variant ? undefined : ""}
           className={cn(
-            "lyrics-pane outline-none [text-shadow:none] [mask-clip:no-clip] [mask-image:linear-gradient(transparent,#000_var(--ft),#000_calc(100%-var(--fb)),transparent)] [mask-repeat:repeat-x]",
+            "scroll-fade lyrics-pane outline-none [text-shadow:none] [mask-clip:no-clip] [mask-repeat:repeat-x]",
             edges.up && "[--ft:56px]",
             edges.down && "[--fb:72px]",
           )}
