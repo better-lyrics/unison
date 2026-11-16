@@ -15,6 +15,7 @@ const { Pool } = pg
 const NAMED_KEY = "a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f90"
 const UNNAMED_KEY = "5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d"
 const IDLE_KEY = "0f1e2d3c4b5a69788796a5b4c3d2e1f00f1e2d3c4b5a69788796a5b4c3d2e1f0"
+const BANNED_KEY = "9a8b7c6d5e4f30211203f4e5d6c7b8a99a8b7c6d5e4f30211203f4e5d6c7b8a9"
 
 const shouldRun = process.env.RUN_INTEGRATION === "1"
 const describeIntegration = shouldRun ? describe : describe.skip
@@ -51,18 +52,28 @@ describeIntegration("dump pipeline (integration)", () => {
 
 		await sourcePool.query(`
 			INSERT INTO public_keys (key_id, public_key) VALUES
-				('${NAMED_KEY}', 'pubkey-a'), ('${UNNAMED_KEY}', 'pubkey-b'), ('${IDLE_KEY}', 'pubkey-c')
+				('${NAMED_KEY}', 'pubkey-a'), ('${UNNAMED_KEY}', 'pubkey-b'), ('${IDLE_KEY}', 'pubkey-c'),
+				('${BANNED_KEY}', 'pubkey-d')
 		`)
 		await sourcePool.query(`
 			INSERT INTO users (id, key_id, nickname) VALUES
 				(1, '${NAMED_KEY}', 'Moonlit'), (2, '${UNNAMED_KEY}', NULL), (3, '${IDLE_KEY}', 'Lurker')
 		`)
+		await sourcePool.query(
+			`INSERT INTO users (id, key_id, nickname, banned_at) VALUES (4, '${BANNED_KEY}', 'Gone', 1)`
+		)
 		await sourcePool.query(`
 			INSERT INTO lyrics (id, video_id, song, artist, duration, song_norm, artist_norm, lyrics, format, submitter_id)
 			VALUES
 				(1, 'abc123', 'Song A', 'Artist A', 180, 'song a', 'artist a', 'gzipped-base64', 'lrc', 1),
 				(2, 'def456', 'Song B', 'Artist B', 200, 'song b', 'artist b', 'gzipped-base64', 'plain', 1),
 				(3, 'ghi789', 'Song C', 'Artist C', 210, 'song c', 'artist c', 'gzipped-base64', 'plain', 2)
+		`)
+		await sourcePool.query(`
+			INSERT INTO lyric_revisions (lyrics_id, rev_no, lyrics, format, sync_type, content_hash, author_id, status, created_at)
+			VALUES
+				(1, 2, 'gzipped-base64', 'lrc', 'linesync', 'edit-a', 3, 'live', 1700000000),
+				(2, 2, 'gzipped-base64', 'plain', 'plain', 'edit-b', 4, 'live', 1700000000)
 		`)
 		await sourcePool.query(`
 			INSERT INTO requested_songs (video_id, song, artist) VALUES ('xyz789', 'Wanted', 'Someone')
@@ -135,6 +146,11 @@ describeIntegration("dump pipeline (integration)", () => {
 		)
 		expect(contributors.rows).toEqual([
 			{
+				key_id: IDLE_KEY,
+				display_name: "Lurker",
+				profile_url: `https://unison.betterlyrics.org/curator/${IDLE_KEY}`,
+			},
+			{
 				key_id: UNNAMED_KEY,
 				display_name: generatePetName(UNNAMED_KEY),
 				profile_url: `https://unison.betterlyrics.org/curator/${UNNAMED_KEY}`,
@@ -145,6 +161,11 @@ describeIntegration("dump pipeline (integration)", () => {
 				profile_url: `https://unison.betterlyrics.org/curator/${NAMED_KEY}`,
 			},
 		])
+
+		const editors = await restorePool.query(
+			"SELECT lyrics_id, key_id, last_edited_at FROM public_dump.lyric_editors"
+		)
+		expect(editors.rows).toEqual([{ lyrics_id: 1, key_id: IDLE_KEY, last_edited_at: 1700000000 }])
 
 		const requestedCount = await restorePool.query<{ count: string }>(
 			"SELECT COUNT(*)::TEXT AS count FROM public_dump.requested_songs"
