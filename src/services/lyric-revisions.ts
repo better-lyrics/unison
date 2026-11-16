@@ -518,7 +518,7 @@ const clearsGate = (outcome: GateOutcome): boolean =>
 	outcome.goesLive || outcome.reason === "suggested"
 
 const deciderFor = (a: Assessment, userId: number): { decider?: DecisionRole } =>
-	isPatch(userId, a.lyric.submitter_id)
+	isPatch(userId, a.lyric.submitter_id) && a.outcome !== NOT_SAVABLE
 		? {
 				decider: suggestionDecider(
 					a.outcome.reason,

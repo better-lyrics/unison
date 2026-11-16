@@ -515,6 +515,18 @@ describeIntegration("revision routes (integration)", () => {
 			expect((await previewAs("owner-token")).json.data).not.toHaveProperty("decider")
 		})
 
+		it("leaves out who decides when the stranger's edit cannot be saved", async () => {
+			const { json } = await call<PreviewResult>(
+				"POST",
+				`/lyrics/${lyricId}/revisions/preview`,
+				{
+					token: "stranger-token",
+					body: { lyrics: "<tt><body><div><p>unclosed", format: "ttml", language: "en" },
+				}
+			)
+			expect(json.data).not.toHaveProperty("decider")
+		})
+
 		it("leaves a suggestion on a sealed lyric or a lyric with no owner to the council", async () => {
 			await db.pool.query(
 				"UPDATE lyrics SET committee_approved_at = EXTRACT(EPOCH FROM NOW())::INTEGER WHERE id = $1",
