@@ -539,6 +539,7 @@ export function PickStep({
             href={composerLyricUrl(variant.id)}
             target="_blank"
             rel="noopener noreferrer"
+            onClick={onCancel}
             className={buttonClass("primary", "md")}
           >
             <IconExternalLink aria-hidden className="size-4" stroke={1.75} />
