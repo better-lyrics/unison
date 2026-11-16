@@ -19,6 +19,8 @@ import type {
   DumpManifest,
   FeedEntry,
   LyricsSearchHit,
+  NotificationList,
+  NotificationSettings,
   Page,
   ProfileSettings,
   QueueEntry,
@@ -345,4 +347,32 @@ export async function fetchDumpManifest(): Promise<DumpManifest> {
   } catch {
     throw new Error("manifest is malformed")
   }
+}
+
+export function fetchUnreadNotifications(signal?: AbortSignal): Promise<{ unread: number }> {
+  return authedFetch<{ unread: number }>("/notifications/unread", { signal })
+}
+
+export function fetchNotifications(signal?: AbortSignal): Promise<NotificationList> {
+  return authedFetch<NotificationList>("/notifications", { signal })
+}
+
+export async function markNotificationsSeen(): Promise<void> {
+  await authedFetch<unknown>("/notifications/seen", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({}),
+  })
+}
+
+export function fetchNotificationSettings(signal?: AbortSignal): Promise<NotificationSettings> {
+  return authedFetch<NotificationSettings>("/notifications/settings", { signal })
+}
+
+export async function putNotificationSettings(settings: NotificationSettings): Promise<void> {
+  await authedFetch<unknown>("/notifications/settings", {
+    method: "PUT",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(settings),
+  })
 }
