@@ -3,7 +3,7 @@ import { config } from "@/config"
 import { markAuditFailed, runMigration } from "@/db/account-migration"
 import { getByDiscordId } from "@/db/discordLinks"
 import { invalidateCuratorLeaderboardCache } from "@/db/leaderboard"
-import { invalidateCacheForSubmitter } from "@/db/lyrics"
+import { invalidateCacheForEditor, invalidateCacheForSubmitter } from "@/db/lyrics"
 import { Logger } from "@/infra/logger"
 import { recalculateScore } from "@/jobs/score-updater"
 import type { Env } from "@/types"
@@ -171,6 +171,7 @@ export const migrationRoutes = (env: Env) =>
 
 				await invalidateCuratorLeaderboardCache(env)
 				await invalidateCacheForSubmitter(env, session.newKey)
+				await invalidateCacheForEditor(env, session.newKey)
 				for (const lyricsId of result.affectedLyricsIds) {
 					recalculateScore(env, lyricsId).catch((err) =>
 						log.error("post-migration recalc failed", { lyricsId, error: String(err) })

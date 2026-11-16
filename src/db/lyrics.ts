@@ -48,8 +48,8 @@ const LYRICS_WITH_SUBMITTER = `
 	SELECT l.*, u.key_id AS submitter_key_id, u.reputation AS submitter_reputation,
 		u.nickname AS submitter_nickname,
 		${AUTO_HIDE_PREDICATE_JOINED} AS hidden,
-		(SELECT array_agg(e.author_id ORDER BY e.last_at DESC)
-			FROM (${editorsSql("l")} ORDER BY last_at DESC LIMIT ${config.revisions.editorCreditLimit}) e
+		(SELECT array_agg(e.author_id ORDER BY e.last_at DESC, e.author_id)
+			FROM (${editorsSql("l")} ORDER BY last_at DESC, author_id LIMIT ${config.revisions.editorCreditLimit}) e
 		) AS editor_ids
 	FROM lyrics l
 	LEFT JOIN users u ON l.submitter_id = u.id
@@ -576,13 +576,20 @@ export async function invalidateCacheForSubmitter(env: Env, keyId: string): Prom
 }
 
 export async function invalidateCacheForEditor(env: Env, keyId: string): Promise<void> {
-	const rows = await env.DB.prepare(
-		`SELECT DISTINCT r.lyrics_id FROM lyric_revisions r JOIN users u ON u.id = r.author_id
+	const edited = `SELECT r.lyrics_id FROM lyric_revisions r JOIN users u ON u.id = r.author_id
 		WHERE u.key_id = ? AND r.status IN ('live', 'past')`
+	const rows = await env.DB.prepare(
+		`SELECT video_id FROM lyrics WHERE id IN (${edited})
+		UNION
+		SELECT video_id FROM lyrics_video_ids WHERE lyrics_id IN (${edited})`
 	)
-		.bind(keyId)
-		.all<{ lyrics_id: number }>()
-	for (const { lyrics_id } of rows.results) await invalidateCacheForLyric(env, lyrics_id)
+		.bind(keyId, keyId)
+		.all<{ video_id: string }>()
+	await Promise.all(rows.results.map((r) => env.CACHE.delete(`v:${r.video_id}`)))
+	notifyLyricsInvalidated(
+		env,
+		rows.results.map((r) => r.video_id)
+	)
 }
 
 export async function invalidateCacheAfterDelete(env: Env, lyricsId: number): Promise<void> {

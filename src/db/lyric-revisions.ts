@@ -715,9 +715,9 @@ const REVISION_BAR_SELECT = `SELECT l.id AS lyrics_id, live.rev_no, live.created
 		ORDER BY r.rev_no DESC LIMIT 1
 	) rejected ON TRUE
 	LEFT JOIN LATERAL (
-		SELECT json_agg(e ORDER BY e.last_at DESC) AS editors FROM (
-			SELECT u.key_id, u.nickname, ${AVATAR_COLUMNS}, a.last_at
-			FROM (${editorsSql("l")} ORDER BY last_at DESC LIMIT ${config.revisions.editorCreditLimit}) a
+		SELECT json_agg(e ORDER BY e.last_at DESC, e.author_id) AS editors FROM (
+			SELECT a.author_id, u.key_id, u.nickname, ${AVATAR_COLUMNS}, a.last_at
+			FROM (${editorsSql("l")} ORDER BY last_at DESC, author_id LIMIT ${config.revisions.editorCreditLimit}) a
 			JOIN users u ON u.id = a.author_id
 			${AVATAR_JOINS}
 		) e
