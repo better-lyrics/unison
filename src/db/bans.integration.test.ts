@@ -128,6 +128,22 @@ describeIntegration("shadowban (integration)", () => {
 			expect(db.cache.store.has("v:VID00000001")).toBe(false)
 			expect(await findByVideoId(db.env, "VID00000001")).toBeNull()
 		})
+
+		it("evicts lyrics the banned user is credited on as an editor", async () => {
+			const banned = await seedUser(BANNED_KEY)
+			const other = await seedUser(OTHER_KEY)
+			const lyric = await submit(other)
+			await db.pool.query(
+				`INSERT INTO lyric_revisions (lyrics_id, rev_no, lyrics, format, sync_type, content_hash, author_id, status)
+				 VALUES ($1, 99, 'first line', 'plain', 'plain', 'edit', $2, 'past')`,
+				[lyric, banned]
+			)
+			expect((await findByVideoId(db.env, "VID00000001"))?.editor_ids).toEqual([banned])
+
+			await setBanned(db.env, BANNED_KEY, true)
+
+			expect((await findByVideoId(db.env, "VID00000001"))?.editor_ids).toBeNull()
+		})
 	})
 
 	describe("direct reads", () => {

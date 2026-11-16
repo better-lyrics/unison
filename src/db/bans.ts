@@ -1,7 +1,7 @@
 import { evictFeedCaches } from "@/db/feed"
 import { invalidateCuratorLeaderboardCache } from "@/db/leaderboard"
 import { lockRevisionAuthor, withdrawPendingSuggestionsBy } from "@/db/lyric-revisions"
-import { invalidateCacheForSubmitter } from "@/db/lyrics"
+import { invalidateCacheForEditor, invalidateCacheForSubmitter } from "@/db/lyrics"
 import type { D1Compat } from "@/infra/database"
 import { recalculateScore } from "@/jobs/score-updater"
 import type { Env } from "@/types"
@@ -32,6 +32,7 @@ export async function setBanned(env: Env, keyId: string, banned: boolean): Promi
 	for (const { lyrics_id } of voted.results) await recalculateScore(env, lyrics_id)
 
 	await invalidateCacheForSubmitter(env, keyId)
+	await invalidateCacheForEditor(env, keyId)
 	await evictFeedCaches(env)
 	await invalidateCuratorLeaderboardCache(env)
 	return true

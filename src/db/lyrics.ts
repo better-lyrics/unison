@@ -575,6 +575,16 @@ export async function invalidateCacheForSubmitter(env: Env, keyId: string): Prom
 	)
 }
 
+export async function invalidateCacheForEditor(env: Env, keyId: string): Promise<void> {
+	const rows = await env.DB.prepare(
+		`SELECT DISTINCT r.lyrics_id FROM lyric_revisions r JOIN users u ON u.id = r.author_id
+		WHERE u.key_id = ? AND r.status IN ('live', 'past')`
+	)
+		.bind(keyId)
+		.all<{ lyrics_id: number }>()
+	for (const { lyrics_id } of rows.results) await invalidateCacheForLyric(env, lyrics_id)
+}
+
 export async function invalidateCacheAfterDelete(env: Env, lyricsId: number): Promise<void> {
 	await invalidateCacheForLyric(env, lyricsId)
 	await evictFeedCaches(env)
