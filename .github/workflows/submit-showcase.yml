@@ -8,7 +8,7 @@ name: Submit Showcase App
 
 on:
   issues:
-    types: [opened, edited, reopened]
+    types: [opened, edited, reopened, labeled]
 
 permissions:
   contents: read
