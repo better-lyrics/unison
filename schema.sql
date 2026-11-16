@@ -37,6 +37,10 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_updated_at INTEGER;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS banner_video_id TEXT;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS show_discord BOOLEAN NOT NULL DEFAULT FALSE;
 
+-- Notifications: unread is created_at after notifications_seen_at; Discord DMs are opt-in
+ALTER TABLE users ADD COLUMN IF NOT EXISTS notifications_seen_at INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS notify_discord BOOLEAN NOT NULL DEFAULT FALSE;
+
 -- Discord account links (Discord user <-> Better Lyrics key)
 CREATE TABLE IF NOT EXISTS discord_links (
     discord_id TEXT PRIMARY KEY,
@@ -792,3 +796,18 @@ BEGIN
             CHECK (source IN ('web', 'discord', 'admin', 'system'));
     END IF;
 END $$;
+
+CREATE TABLE IF NOT EXISTS notifications (
+    id BIGSERIAL PRIMARY KEY,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    kind TEXT NOT NULL,
+    ref_id BIGINT NOT NULL,
+    actor_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    lyrics_id INTEGER REFERENCES lyrics(id) ON DELETE CASCADE,
+    data JSONB NOT NULL DEFAULT '{}',
+    created_at INTEGER NOT NULL DEFAULT (EXTRACT(EPOCH FROM NOW())::INTEGER),
+    discord_sent_at INTEGER,
+    UNIQUE (user_id, kind, ref_id)
+);
+CREATE INDEX IF NOT EXISTS idx_notifications_user_created ON notifications (user_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_notifications_discord_queue ON notifications (created_at) WHERE discord_sent_at IS NULL;
