@@ -33,6 +33,7 @@ import type { D1Compat } from "@/infra/database"
 import { Logger } from "@/infra/logger"
 import { type JevVerdict, disabledJevGate, jevLyricContext, runJevStep } from "@/services/jev-gate"
 import type {
+	DecisionRole,
 	Env,
 	FieldCheck,
 	GateOutcome,
@@ -62,7 +63,7 @@ import {
 	unifiedDiff,
 } from "@/utils/lyric-diff"
 import { type DriftResult, measureDrift } from "@/utils/lyric-drift"
-import { type DecisionRole, decisionRole, isPatch } from "@/utils/lyric-patch"
+import { decisionRole, isPatch, suggestionDecider } from "@/utils/lyric-patch"
 import { decideOutcome } from "@/utils/revision-gate"
 import { type ContentValidation, validateLyricContent } from "@/utils/validate-lyrics"
 
@@ -117,7 +118,7 @@ type SuggestRefusal = { ok: false; reason: "needs_lyric" }
 const NEEDS_LYRIC: SuggestRefusal = { ok: false, reason: "needs_lyric" }
 
 export type SaveResult =
-	| { ok: true; revision: RevisionSummary }
+	| { ok: true; revision: RevisionSummary; decider?: DecisionRole }
 	| AccessFailure
 	| SuggestRefusal
 	| { ok: false; reason: "rate_limited" | "no_changes" | "stale" | "pending_taken" }
@@ -505,6 +506,7 @@ export async function previewRevision(
 			},
 			noteMaxLength: config.revisions.maxNoteLength,
 			ownerDecisionSec: config.revisions.ownerDecisionSec,
+			...deciderFor(a, userId),
 		},
 	}
 }
@@ -514,6 +516,17 @@ const hasRoom = (limit: RevisionRateLimit): boolean =>
 
 const clearsGate = (outcome: GateOutcome): boolean =>
 	outcome.goesLive || outcome.reason === "suggested"
+
+const deciderFor = (a: Assessment, userId: number): { decider?: DecisionRole } =>
+	isPatch(userId, a.lyric.submitter_id)
+		? {
+				decider: suggestionDecider(
+					a.outcome.reason,
+					a.lyric.committee_approved_at !== null,
+					a.lyric.ownerless
+				),
+			}
+		: {}
 
 const needsJev = (a: Assessment): boolean =>
 	a.candidate !== null &&
@@ -630,7 +643,7 @@ async function commitAssessed(
 		})
 		if (a.outcome.goesLive) await setCurrentRevision(tx, revision)
 		const summary = await getRevisionSummary(tx, lyricsId, revision.id)
-		return { ok: true, revision: summary! }
+		return { ok: true, revision: summary!, ...deciderFor(a, userId) }
 	})
 	if (result.ok && result.revision.status === "live") {
 		await invalidateCacheForLyric(env, lyricsId)

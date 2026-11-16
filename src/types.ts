@@ -259,6 +259,8 @@ export type PendingReason =
 	| "large_timing_drift"
 	| "suggested"
 
+export type DecisionRole = "owner" | "council"
+
 export interface RevisionAuthor {
 	displayName: string
 }
@@ -327,6 +329,7 @@ export interface PreviewResult {
 	diff: RevisionDiff
 	noteMaxLength: number
 	ownerDecisionSec: number
+	decider?: DecisionRole
 }
 
 export type DiffPart = ["=" | "+" | "-", string]
@@ -426,6 +429,7 @@ export interface RevisionSuggestion {
 	councilDecidesAt: number | null
 	note: string | null
 	rejectNoteMaxLength: number
+	decider: DecisionRole
 }
 
 export interface SuggestionInboxItem {

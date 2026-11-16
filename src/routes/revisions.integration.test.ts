@@ -22,6 +22,7 @@ import {
 	withTranslation,
 } from "@/test/lyric-fixtures"
 import type {
+	DecisionRole,
 	Env,
 	LyricsResponse,
 	PendingRevisionCard,
@@ -46,7 +47,7 @@ interface Envelope<T> {
 	hint?: string
 }
 
-type Saved = { revision: RevisionSummary }
+type Saved = { revision: RevisionSummary; decider?: DecisionRole }
 
 const buildApp = (env: Env) =>
 	new Elysia()
@@ -334,6 +335,11 @@ describeIntegration("revision routes (integration)", () => {
 				token,
 				body: { lyrics, format: "lrc", language: "en", note },
 			})
+		const previewAs = (token: string) =>
+			call<PreviewResult>("POST", `/lyrics/${lyricId}/revisions/preview`, {
+				token,
+				body: { lyrics: swapWords(LRC, 1), format: "lrc", language: "en" },
+			})
 
 		it("shows a stranger's suggestion beside the bar's pending field, never in it", async () => {
 			const preset = AVATAR_PRESETS[0]
@@ -357,6 +363,7 @@ describeIntegration("revision routes (integration)", () => {
 				councilDecidesAt: patch.createdAt + config.revisions.ownerDecisionSec,
 				note: "Fixed verse two",
 				rejectNoteMaxLength: config.validation.report.maxDetailsLength,
+				decider: "owner",
 			})
 		})
 
@@ -501,6 +508,29 @@ describeIntegration("revision routes (integration)", () => {
 				expect(json.hint).toBeTruthy()
 			}
 			expect((await listRevisions()).json.data.revisions).toHaveLength(1)
+		})
+
+		it("tells a stranger the owner decides a plain suggestion, and tells the owner nothing", async () => {
+			expect((await previewAs("stranger-token")).json.data.decider).toBe("owner")
+			expect((await previewAs("owner-token")).json.data).not.toHaveProperty("decider")
+		})
+
+		it("leaves a suggestion on a sealed lyric or a lyric with no owner to the council", async () => {
+			await db.pool.query(
+				"UPDATE lyrics SET committee_approved_at = EXTRACT(EPOCH FROM NOW())::INTEGER WHERE id = $1",
+				[lyricId]
+			)
+			expect((await previewAs("stranger-token")).json.data.decider).toBe("council")
+			await db.pool.query(
+				"UPDATE lyrics SET committee_approved_at = NULL, submitter_id = NULL WHERE id = $1",
+				[lyricId]
+			)
+			expect((await previewAs("stranger-token")).json.data.decider).toBe("council")
+		})
+
+		it("sends who decides with a saved suggestion and never with the owner's own save", async () => {
+			expect((await propose(swapWords(LRC, 1))).json.data.decider).toBe("owner")
+			expect((await saveAsOwner(swapWords(LRC, 2))).json.data).not.toHaveProperty("decider")
 		})
 	})
 

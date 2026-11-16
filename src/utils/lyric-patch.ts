@@ -1,7 +1,6 @@
 import { COMMUNITY_KEY_ID, config } from "@/config"
-import type { PendingReason } from "@/types"
+import type { DecisionRole, PendingReason } from "@/types"
 
-export type DecisionRole = "owner" | "council"
 export type DecisionRefusal = "not_committee" | "own_patch" | "owner_window"
 
 export const isPatch = (authorId: number | null, submitterId: number | null): boolean =>
@@ -22,6 +21,12 @@ export const ownerlessSql = (lyric: string): string =>
 export const ownerWindowOpenSql = (revision: string, lyric: string): string =>
 	`(${revision}.pending_reason = 'suggested' AND ${lyric}.committee_approved_at IS NULL AND NOT ${ownerlessSql(lyric)} AND ${revision}.created_at > EXTRACT(EPOCH FROM NOW())::INTEGER - ${config.revisions.ownerDecisionSec})`
 
+export const suggestionDecider = (
+	reason: PendingReason | null,
+	sealed: boolean,
+	ownerless: boolean
+): DecisionRole => (reason === "suggested" && !sealed && !ownerless ? "owner" : "council")
+
 export function councilDecidesAt(
 	reason: PendingReason | null,
 	sealed: boolean,
@@ -29,7 +34,7 @@ export function councilDecidesAt(
 	createdAt: number,
 	now: number
 ): number | null {
-	if (reason !== "suggested" || sealed || ownerless) return null
+	if (suggestionDecider(reason, sealed, ownerless) === "council") return null
 	const opensAt = createdAt + config.revisions.ownerDecisionSec
 	return opensAt > now ? opensAt : null
 }

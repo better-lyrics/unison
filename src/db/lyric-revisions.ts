@@ -26,6 +26,7 @@ import {
 	ownerWindowOpenSql,
 	ownerlessSql,
 	patchSql,
+	suggestionDecider,
 	waitingSuggestionSql,
 } from "@/utils/lyric-patch"
 import { normalizeAlbum } from "@/utils/normalize"
@@ -676,6 +677,11 @@ function toSuggestion(row: SuggestionColumns): RevisionSuggestion | null {
 		),
 		note: row.suggestion_note,
 		rejectNoteMaxLength: config.validation.report.maxDetailsLength,
+		decider: suggestionDecider(
+			row.suggestion_reason,
+			row.suggestion_sealed,
+			row.suggestion_ownerless
+		),
 	}
 }
 

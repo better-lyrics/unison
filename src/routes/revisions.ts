@@ -180,7 +180,7 @@ export const revisionRoutes = (env: Env) =>
 				const failure = saveFailure(result)
 				return status(failure.status, failure.body)
 			}
-			return { success: true, data: { revision: result.revision } }
+			return { success: true, data: { revision: result.revision, decider: result.decider } }
 		})
 		.post("/:id/revisions/:revId/revert", async ({ params, env, userId, status }) => {
 			const id = parseId(params.id)
