@@ -28,6 +28,7 @@ import {
 	supersedePending,
 } from "@/db/lyric-revisions"
 import { invalidateCacheForLyric } from "@/db/lyrics"
+import { notify } from "@/db/notifications"
 import { type SuggestStanding, suggestStanding } from "@/db/suggest-standing"
 import type { D1Compat } from "@/infra/database"
 import { Logger } from "@/infra/logger"
@@ -51,7 +52,6 @@ import { detectLanguage } from "@/utils/detect-language"
 import { ErrorCode, buildError } from "@/utils/errors"
 import { type LyricLine, extractComparableLines, isBodyLine } from "@/utils/extract-text"
 import { sha256Hex } from "@/utils/hash"
-import { lyricFingerprint } from "@/utils/lyric-fingerprint"
 import { ISRC_HINT, normalizeIsrc } from "@/utils/isrc"
 import { LANGUAGE_HINT, isCuratedLanguage, isLanguageCode } from "@/utils/language-code"
 import {
@@ -63,6 +63,7 @@ import {
 	unifiedDiff,
 } from "@/utils/lyric-diff"
 import { type DriftResult, measureDrift } from "@/utils/lyric-drift"
+import { lyricFingerprint } from "@/utils/lyric-fingerprint"
 import { decisionRole, isPatch, suggestionDecider } from "@/utils/lyric-patch"
 import { decideOutcome } from "@/utils/revision-gate"
 import { type ContentValidation, validateLyricContent } from "@/utils/validate-lyrics"
@@ -642,6 +643,17 @@ async function commitAssessed(
 			authorNote: isPatch(userId, a.lyric.submitter_id) ? (input.note ?? null) : null,
 		})
 		if (a.outcome.goesLive) await setCurrentRevision(tx, revision)
+		const owner = a.lyric.submitter_id
+		if (revision.status === "pending" && owner !== null && isPatch(userId, owner)) {
+			await notify(tx, {
+				userId: owner,
+				kind: "suggestion_new",
+				refId: revision.id,
+				actorId: userId,
+				lyricsId,
+				data: { revNo: revision.rev_no },
+			})
+		}
 		const summary = await getRevisionSummary(tx, lyricsId, revision.id)
 		return { ok: true, revision: summary!, ...deciderFor(a, userId) }
 	})
@@ -776,6 +788,48 @@ interface DecisionLog {
 	note: string | null
 }
 
+async function notifyDecision(
+	tx: D1Compat,
+	d: {
+		lyric: LyricRevisionState
+		revision: RevisionRow
+		role: DecisionRole
+		reviewerId: number
+		log: DecisionLog
+	}
+): Promise<void> {
+	const owner = d.lyric.submitter_id
+	const author = d.revision.author_id
+	if (owner === null || author === null || !isPatch(author, owner)) return
+	const approved = d.log.kind === "edit_approve"
+	await notify(tx, {
+		userId: author,
+		kind: approved ? "suggestion_approved" : "suggestion_rejected",
+		refId: d.revision.id,
+		actorId: d.role === "council" ? null : d.reviewerId,
+		lyricsId: d.lyric.id,
+		data: {
+			revNo: d.revision.rev_no,
+			decidedBy: d.role,
+			...(approved ? {} : { note: d.log.note }),
+		},
+	})
+	if (d.role === "council" && d.reviewerId !== owner) {
+		await notify(tx, {
+			userId: owner,
+			kind: "suggestion_council_decided",
+			refId: d.revision.id,
+			actorId: null,
+			lyricsId: d.lyric.id,
+			data: {
+				revNo: d.revision.rev_no,
+				outcome: approved ? "approved" : "rejected",
+				authorId: author,
+			},
+		})
+	}
+}
+
 async function decide(
 	env: Env,
 	lyricsId: number,
@@ -810,6 +864,7 @@ async function decide(
 			if (revision.status !== "pending") return { ok: false, reason: "already_decided" }
 			if (!decision.ok) return decision
 			if (!(await apply(tx, revision, decision.role))) throw new StaleDecision()
+			await notifyDecision(tx, { lyric, revision, role: decision.role, reviewerId, log })
 			if (decision.role === "owner") {
 				const summary = await getRevisionSummary(tx, lyricsId, revisionId)
 				return { ok: true, revision: summary! }

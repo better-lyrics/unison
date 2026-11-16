@@ -1,8 +1,8 @@
 import { COMMUNITY_KEY_ID, config } from "@/config"
+import { setBanned } from "@/db/bans"
 import { createBookmark, listActiveBookmarks } from "@/db/council-bookmarks"
 import { listCouncilEdits } from "@/db/council-edits"
 import { listCouncilEvents } from "@/db/council-events"
-import { setBanned } from "@/db/bans"
 import { getRevisionBar, listSuggestionsForOwner } from "@/db/lyric-revisions"
 import { getSealCandidates, getSealableVariants, rejectLyric, undoRejection } from "@/db/rejections"
 import { D1Compat } from "@/infra/database"
@@ -1835,6 +1835,56 @@ describeIntegration("lyric revisions pipeline (integration)", () => {
 			})
 			const another = await seedProposer("f".repeat(64))
 			expect(await propose(lrc(swapWords(LRC, 9)), another)).toMatchObject({ status: "pending" })
+		})
+
+		describe("notifications", () => {
+			const inbox = async (userId: number) =>
+				(
+					await db.pool.query(
+						"SELECT kind, actor_id, ref_id FROM notifications WHERE user_id = $1 ORDER BY id",
+						[userId]
+					)
+				).rows
+
+			it("tells the owner about a new suggestion and the proposer about the owner's decision", async () => {
+				const patch = await propose(lrc(swapWords(LRC, 1)))
+				expect(await inbox(owner)).toEqual([
+					{ kind: "suggestion_new", actor_id: proposer, ref_id: String(patch.id) },
+				])
+				await approveRevision(db.env, lyricId, patch.id, owner, "web")
+				expect(await inbox(proposer)).toEqual([
+					{ kind: "suggestion_approved", actor_id: owner, ref_id: String(patch.id) },
+				])
+			})
+
+			it("tells the proposer about a rejection with the note, and the owner when the council decided", async () => {
+				const council = await seedCouncilMember(db, "c".repeat(64))
+				const patch = await propose(lrc(swapWords(LRC, 1)))
+				await backdate(patch.id)
+				await rejectRevision(db.env, lyricId, patch.id, council, "timing was right", "web")
+				const { rows } = await db.pool.query(
+					"SELECT user_id, kind, data FROM notifications WHERE kind <> 'suggestion_new' ORDER BY user_id"
+				)
+				expect(rows).toEqual(
+					expect.arrayContaining([
+						{
+							user_id: proposer,
+							kind: "suggestion_rejected",
+							data: expect.objectContaining({ note: "timing was right" }),
+						},
+						{
+							user_id: owner,
+							kind: "suggestion_council_decided",
+							data: expect.objectContaining({ outcome: "rejected" }),
+						},
+					])
+				)
+			})
+
+			it("never notifies people about their own actions", async () => {
+				await save(lrc(swapWords(LRC, 2)))
+				expect(await inbox(owner)).toEqual([])
+			})
 		})
 	})
 
