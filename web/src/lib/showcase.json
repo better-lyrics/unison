@@ -60,6 +60,16 @@
     ]
   },
   {
+    "name": "OpenLyryc Studio",
+    "description": "Make lyrics for the songs you love in your browser, now supporting live karaoke.",
+    "url": "https://openlyryc.pages.dev/studio",
+    "icon": "/showcase/openlyryc-studio-06bbd5d6.png",
+    "iconFillsTile": true,
+    "platforms": [
+      "Web"
+    ]
+  },
+  {
     "name": "YouLy+",
     "description": "Word-by-word lyrics in your browser for YouTube Music, Apple Music and Tidal.",
     "url": "https://github.com/ibratabian17/YouLyPlus",
