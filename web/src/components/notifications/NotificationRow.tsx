@@ -22,22 +22,24 @@ export function NotificationRow({ item, now, onNavigate }: NotificationRowProps)
   const content = (
     <>
       <span className="relative ml-1 block size-10 shrink-0">
-        {item.song ? (
-          <SongThumbnail
-            videoId={item.song.videoId}
-            song={item.song.song}
-            artist={item.song.artist}
-            className="size-10"
-          />
-        ) : (
-          <span className="block size-10 rounded-md bg-unison-bg-hover outline outline-1 -outline-offset-1 outline-white/10" />
-        )}
+        <span className={cn("block size-10", item.actor && "cutout [--cut-r:12px] [--cut-x:35px] [--cut-y:35px]")}>
+          {item.song ? (
+            <SongThumbnail
+              videoId={item.song.videoId}
+              song={item.song.song}
+              artist={item.song.artist}
+              className="size-10"
+            />
+          ) : (
+            <span className="block size-10 rounded-md bg-unison-bg-hover outline outline-1 -outline-offset-1 outline-white/10" />
+          )}
+        </span>
         {item.actor ? (
           <UserAvatar
             avatarUrl={item.actor.avatarUrl}
             keyId={item.actor.keyId}
             loading="lazy"
-            className="absolute -right-[5px] -bottom-[5px] size-5 rounded-full bg-unison-bg-hover shadow-[0_0_0_2px_#1c1a22]"
+            className="absolute -right-[5px] -bottom-[5px] size-5 rounded-full bg-unison-bg-hover"
           />
         ) : null}
       </span>

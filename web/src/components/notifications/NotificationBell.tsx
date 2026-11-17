@@ -73,7 +73,7 @@ export function NotificationBell() {
           <IconSwap
             swapped={hasUnread}
             from={<IconBell className="size-full" stroke={1.5} />}
-            to={<IconBellFilled className="bell-cut size-full" />}
+            to={<IconBellFilled className="cutout size-full [--cut-r:5px] [--cut-x:15px] [--cut-y:3px]" />}
             className="size-full"
           />
           <span aria-hidden="true" data-on={hasUnread || undefined} className="bell-pip" />
