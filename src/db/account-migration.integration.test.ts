@@ -852,6 +852,96 @@ describeIntegration("account migration (integration)", () => {
 			expect(await restoreFromSnapshot(env, auditId)).toEqual({ error: "HAS_INTERIM_ACTIVITY" })
 		})
 	})
+
+	describe("notifications", () => {
+		const notificationsOf = async (userId: number) =>
+			(
+				await pool.query(
+					"SELECT id, kind, ref_id, actor_id, data FROM notifications WHERE user_id = $1 ORDER BY id",
+					[userId]
+				)
+			).rows
+		const settingsOf = (userId: number) =>
+			one<{ notifications_seen_at: number; notify_discord: boolean }>(
+				"SELECT notifications_seen_at, notify_discord FROM users WHERE id = $1",
+				[userId]
+			)
+
+		it("merges colliding notifications and the read and Discord settings, and undo restores both accounts", async () => {
+			const { oldId, newId } = await seedIdentities()
+			await pool.query(
+				"UPDATE users SET notifications_seen_at = 1500, notify_discord = FALSE WHERE id = $1",
+				[oldId]
+			)
+			await pool.query(
+				"UPDATE users SET notifications_seen_at = 2500, notify_discord = TRUE WHERE id = $1",
+				[newId]
+			)
+			await pool.query(
+				`INSERT INTO notifications (user_id, kind, ref_id, actor_id, data) VALUES
+					($1, 'suggestion_new', 4242, NULL, '{"song":"Old"}'),
+					($2, 'suggestion_new', 4242, NULL, '{"song":"New"}'),
+					($2, 'suggestion_approved', 77, $1, '{}')`,
+				[oldId, newId]
+			)
+			const oldBefore = await notificationsOf(oldId)
+			const newBefore = await notificationsOf(newId)
+
+			const auditId = await migrate("sess-notifications")
+
+			const survivor = await notificationsOf(oldId)
+			expect(survivor.map((n) => [n.kind, n.ref_id])).toEqual([["suggestion_new", "4242"]])
+			expect(await notificationsOf(newId)).toEqual([])
+			expect(await settingsOf(oldId)).toEqual({ notifications_seen_at: 2500, notify_discord: true })
+
+			expect(await restoreFromSnapshot(env, auditId)).toEqual({ restored: true })
+
+			expect(await notificationsOf(oldId)).toEqual(oldBefore)
+			expect(await notificationsOf(newId)).toEqual(newBefore)
+			expect(await settingsOf(oldId)).toEqual({
+				notifications_seen_at: 1500,
+				notify_discord: false,
+			})
+			expect(await settingsOf(newId)).toEqual({ notifications_seen_at: 2500, notify_discord: true })
+		})
+
+		it("regression: undo keeps notifications, sent DMs and a Discord opt-out from after the migration", async () => {
+			const { oldId, newId } = await seedIdentities()
+			await pool.query("UPDATE users SET notify_discord = TRUE WHERE id = ANY($1)", [
+				[oldId, newId],
+			])
+			await pool.query(
+				`INSERT INTO notifications (user_id, kind, ref_id, actor_id, data) VALUES
+					($1, 'suggestion_new', 4242, NULL, '{}'),
+					($2, 'suggestion_approved', 77, NULL, '{}')`,
+				[oldId, newId]
+			)
+			const auditId = await migrate("sess-notifications-later")
+			await pool.query("UPDATE notifications SET discord_sent_at = 9000 WHERE user_id = $1", [
+				oldId,
+			])
+			await pool.query(
+				"INSERT INTO notifications (user_id, kind, ref_id, data) VALUES ($1, 'suggestion_deadline', 4242, '{}')",
+				[oldId]
+			)
+			await pool.query("UPDATE users SET notify_discord = FALSE WHERE id = $1", [oldId])
+
+			expect(await restoreFromSnapshot(env, auditId)).toEqual({ restored: true })
+
+			const sent = await pool.query(
+				"SELECT user_id, kind, discord_sent_at FROM notifications WHERE user_id = ANY($1) ORDER BY kind",
+				[[oldId, newId]]
+			)
+			expect(sent.rows).toEqual([
+				{ user_id: newId, kind: "suggestion_approved", discord_sent_at: 9000 },
+				{ user_id: oldId, kind: "suggestion_deadline", discord_sent_at: null },
+				{ user_id: oldId, kind: "suggestion_new", discord_sent_at: 9000 },
+			])
+			expect((await settingsOf(oldId)).notify_discord).toBe(false)
+			expect((await settingsOf(newId)).notify_discord).toBe(false)
+		})
+	})
+
 	describe("committee ownership", () => {
 		const committeeRow = (userId: number) =>
 			num("SELECT count(*)::int n FROM committee_members WHERE user_id = $1", [userId])

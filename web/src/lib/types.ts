@@ -353,3 +353,46 @@ export type AvatarChoice =
   | { type: "song"; ref: string }
   | { type: "discord" }
   | { type: "default" }
+
+export type NotificationKind =
+  | "suggestion_new"
+  | "suggestion_deadline"
+  | "suggestion_council_decided"
+  | "suggestion_approved"
+  | "suggestion_rejected"
+
+export type NotificationGroup = "lyrics" | "suggestions"
+
+export interface NotificationActor {
+  keyId: string
+  displayName: string
+  avatarUrl: string | null
+}
+
+export interface NotificationItem {
+  id: number
+  kind: NotificationKind
+  group: NotificationGroup
+  createdAt: number
+  unread: boolean
+  refStatus: string | null
+  actor: NotificationActor | null
+  song: { lyricsId: number; videoId: string; song: string; artist: string } | null
+  data: {
+    revisionId: number
+    revNo?: number
+    note?: string | null
+    decidesAt?: number
+    outcome?: "approved" | "rejected"
+    decidedBy?: "owner" | "council"
+  }
+}
+
+export interface NotificationList {
+  unread: number
+  items: NotificationItem[]
+}
+
+export interface NotificationSettings {
+  discordDm: boolean
+}

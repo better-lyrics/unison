@@ -28,7 +28,7 @@ import { normalizeLanguage } from "@/utils/language-code"
 import { lyricEtag, matchesEtag } from "@/utils/lyric-etag"
 import { PROVIDER_ID_HINT, readProviderIds } from "@/utils/provider-id"
 import { readRateLimit } from "@/utils/read-rate-limit"
-import { getSession } from "@/utils/session"
+import { bearerKeyId } from "@/utils/session"
 import { validateLyricContent } from "@/utils/validate-lyrics"
 import { VIDEO_ID_HINT, videoIdFromInput } from "@/utils/video-id"
 import { Elysia, t } from "elysia"
@@ -56,19 +56,9 @@ export const lyricsRoutes = (env: Env) =>
 		.decorate("env", env)
 		.use(readRateLimit)
 		.derive({ as: "scoped" }, async ({ headers, env }) => {
-			let keyId: string | null = headers["x-key-id"] ?? null
-			let bearerVerified = false
-			if (!keyId) {
-				const auth = headers.authorization
-				const token = auth?.startsWith("Bearer ") ? auth.slice(7).trim() : null
-				if (token) {
-					const session = await getSession(env, token)
-					if (session) {
-						keyId = session.keyId
-						bearerVerified = true
-					}
-				}
-			}
+			const headerKeyId = headers["x-key-id"] ?? null
+			const bearerVerified = !headerKeyId
+			const keyId = headerKeyId ?? (await bearerKeyId(env, headers.authorization))
 			if (!keyId) {
 				return {
 					lyricsUserId: null as number | null,

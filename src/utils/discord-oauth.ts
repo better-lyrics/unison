@@ -22,6 +22,8 @@ export class DiscordOAuthError extends Error {
 	}
 }
 
+export const DISCORD_ID_PATTERN = "^[0-9]{17,20}$"
+
 export function sanitizeDiscordAvatarHash(hash: string | null | undefined): string | null {
 	return hash && DISCORD_AVATAR_HASH.test(hash) ? hash : null
 }

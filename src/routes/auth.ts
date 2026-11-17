@@ -7,7 +7,7 @@ import { signedRequest } from "@/utils/auth"
 import { eitherAuth } from "@/utils/either-auth"
 import { isProfane } from "@/utils/profanity"
 import { readRateLimit } from "@/utils/read-rate-limit"
-import { createSession, deleteSession, getSession } from "@/utils/session"
+import { bearerToken, createSession, deleteSession, getSession } from "@/utils/session"
 import { Elysia } from "elysia"
 
 const CHALLENGE_PREFIX = "challenge:"
@@ -40,8 +40,7 @@ export const authRoutes = (env: Env) =>
 			return { success: true, data: { nonce, expiresAt } }
 		})
 		.post("/logout", async ({ env, headers, set }) => {
-			const auth = headers.authorization
-			const token = auth?.startsWith("Bearer ") ? auth.slice(7).trim() : null
+			const token = bearerToken(headers.authorization)
 			if (!token) {
 				set.status = 401
 				return { success: false, error: "MISSING_TOKEN" }
@@ -50,8 +49,7 @@ export const authRoutes = (env: Env) =>
 			return { success: true, data: { revoked: true } }
 		})
 		.get("/me", async ({ env, headers, set }) => {
-			const auth = headers.authorization
-			const token = auth?.startsWith("Bearer ") ? auth.slice(7).trim() : null
+			const token = bearerToken(headers.authorization)
 			if (!token) {
 				set.status = 401
 				return { success: false, error: "MISSING_TOKEN" }

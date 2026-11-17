@@ -33,6 +33,7 @@ export interface MigrationSnapshot {
 	lyric_revisions?: unknown[]
 	withdrawn_suggestions?: (number | WithdrawnSuggestion)[]
 	contribution_events?: unknown[]
+	notifications?: unknown[]
 	badge_awards?: unknown[]
 	committee_members?: unknown[]
 	boosts?: unknown[]
@@ -374,6 +375,42 @@ export async function runMigration(
 				.run()
 			await tx
 				.prepare("UPDATE badge_awards SET user_id = ? WHERE user_id = ?")
+				.bind(oldId, newId)
+				.run()
+
+			snapshot.notifications = await all(
+				tx,
+				"SELECT * FROM notifications WHERE user_id = ANY(?) OR actor_id = ANY(?)",
+				[ids, ids]
+			)
+			await tx
+				.prepare(
+					`DELETE FROM notifications
+					 WHERE user_id = ? AND (kind, ref_id) IN
+					   (SELECT kind, ref_id FROM notifications WHERE user_id = ?)`
+				)
+				.bind(newId, oldId)
+				.run()
+			await tx
+				.prepare("UPDATE notifications SET user_id = ? WHERE user_id = ?")
+				.bind(oldId, newId)
+				.run()
+			await tx
+				.prepare("UPDATE notifications SET actor_id = ? WHERE actor_id = ?")
+				.bind(oldId, newId)
+				.run()
+			await tx
+				.prepare("DELETE FROM notifications WHERE user_id = ? AND actor_id = ?")
+				.bind(oldId, oldId)
+				.run()
+			await tx
+				.prepare(
+					`UPDATE users AS survivor SET
+						notifications_seen_at = GREATEST(survivor.notifications_seen_at, merged.notifications_seen_at),
+						notify_discord = survivor.notify_discord OR merged.notify_discord
+					 FROM users AS merged
+					 WHERE survivor.id = ? AND merged.id = ?`
+				)
 				.bind(oldId, newId)
 				.run()
 
@@ -739,6 +776,8 @@ interface SnapUser {
 	avatar_updated_at?: number | null
 	votes_discounted_at?: number | null
 	vote_strike_id?: number | null
+	notifications_seen_at?: number
+	notify_discord?: boolean
 }
 
 interface StrikeMark {
@@ -823,6 +862,17 @@ interface SnapContributionEvent {
 	ref_type: string
 	ref_id: number
 	created_at: number
+}
+interface SnapNotification {
+	id: number | string
+	user_id: number
+	kind: string
+	ref_id: number | string
+	actor_id: number | null
+	lyrics_id: number | null
+	data: unknown
+	created_at: number
+	discord_sent_at: number | null
 }
 interface SnapCommitteeMember {
 	user_id: number
@@ -1165,6 +1215,48 @@ export async function restoreFromSnapshot(
 						"INSERT INTO contribution_events (id, user_id, delta, kind, ref_type, ref_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)"
 					)
 					.bind(e.id, e.user_id, e.delta, e.kind, e.ref_type, e.ref_id, e.created_at)
+					.run()
+			}
+		}
+
+		const snapNotifications = snap.notifications as SnapNotification[] | undefined
+		if (snapNotifications) {
+			const survivor = await tx
+				.prepare("SELECT notify_discord FROM users WHERE id = ?")
+				.bind(oldSnap.id)
+				.first<{ notify_discord: boolean }>()
+			for (const u of newSnap ? [oldSnap, newSnap] : [oldSnap]) {
+				await tx
+					.prepare("UPDATE users SET notifications_seen_at = ?, notify_discord = ? WHERE id = ?")
+					.bind(
+						u.notifications_seen_at ?? 0,
+						(u.notify_discord ?? false) && (survivor?.notify_discord ?? false),
+						u.id
+					)
+					.run()
+			}
+			for (const n of snapNotifications) {
+				await tx
+					.prepare("UPDATE notifications SET user_id = ?, actor_id = ? WHERE id = ?")
+					.bind(n.user_id, n.actor_id, n.id)
+					.run()
+				await tx
+					.prepare(
+						`INSERT INTO notifications (id, user_id, kind, ref_id, actor_id, lyrics_id, data, created_at, discord_sent_at)
+						 VALUES (?, ?, ?, ?, ?, ?, ?::jsonb, ?, ?)
+						 ON CONFLICT DO NOTHING`
+					)
+					.bind(
+						n.id,
+						n.user_id,
+						n.kind,
+						n.ref_id,
+						n.actor_id,
+						n.lyrics_id,
+						JSON.stringify(n.data),
+						n.created_at,
+						n.discord_sent_at
+					)
 					.run()
 			}
 		}

@@ -19,6 +19,7 @@
   --color-unison-text-secondary: rgba(245, 245, 247, 0.72);
   --color-unison-text-muted: rgba(245, 245, 247, 0.48);
   --color-unison-warn: #f5a623;
+  --color-unison-unread: #ff5a6e;
   --color-unison-discord: hsl(235 86% 75%);
   --color-unison-medal-gold: #ffc83d;
   --color-unison-medal-gold-wash: rgba(255, 200, 61, 0.12);
@@ -357,6 +358,44 @@ select {
   .t-dropdown { transition: none !important; }
 }
 
+@keyframes bell-swing {
+  0%,
+  100% { rotate: 0deg; }
+  15% { rotate: 14deg; }
+  35% { rotate: -11deg; }
+  55% { rotate: 7deg; }
+  75% { rotate: -3deg; }
+}
+
+.bell-swing { transform-origin: 50% 12%; }
+.bell-swing[data-ringing] { animation: bell-swing 900ms cubic-bezier(0.77, 0, 0.175, 1) both; }
+
+.cutout {
+  -webkit-mask: radial-gradient(circle var(--cut-r) at var(--cut-x) var(--cut-y), transparent 98%, #000);
+  mask: radial-gradient(circle var(--cut-r) at var(--cut-x) var(--cut-y), transparent 98%, #000);
+}
+
+.bell-pip {
+  position: absolute;
+  top: 0;
+  left: 11.5px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--color-unison-unread);
+  opacity: 0;
+  scale: 0.25;
+  transition:
+    opacity 250ms cubic-bezier(0.23, 1, 0.32, 1),
+    scale 250ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+.bell-pip[data-on] { opacity: 1; scale: 1; }
+
+@media (prefers-reduced-motion: reduce) {
+  .bell-swing[data-ringing] { animation: none; }
+  .bell-pip { scale: 1; transition-property: opacity; }
+}
+
 :root {
   --modal-open-dur: 250ms;
   --modal-close-dur: 150ms;
@@ -557,6 +596,13 @@ select {
     --ink-3 var(--art-fade) var(--art-ease),
     --ink-dim var(--art-fade) var(--art-ease),
     --ink-4 var(--art-fade) var(--art-ease);
+}
+
+.scroll-fade {
+  mask-image: linear-gradient(transparent, #000 var(--ft), #000 calc(100% - var(--fb)), transparent);
+  transition:
+    --ft 150ms ease-out,
+    --fb 150ms ease-out;
 }
 
 .lyrics-pane {

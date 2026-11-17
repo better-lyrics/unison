@@ -147,6 +147,14 @@ export const config = {
 		},
 	},
 
+	notifications: {
+		windowSec: 30 * 86400,
+		listMax: 50,
+		reminderLeadSec: 86400,
+		discordMaxAgeSec: 86400,
+		discordBatchMax: 50,
+	},
+
 	moderation: {
 		reportsThreshold: 2,
 		autoHide: {

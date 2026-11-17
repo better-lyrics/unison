@@ -1,11 +1,19 @@
 import { COMMUNITY_KEY_ID, config } from "@/config"
+import { setBanned } from "@/db/bans"
 import { createBookmark, listActiveBookmarks } from "@/db/council-bookmarks"
 import { listCouncilEdits } from "@/db/council-edits"
 import { listCouncilEvents } from "@/db/council-events"
-import { setBanned } from "@/db/bans"
 import { getRevisionBar, listSuggestionsForOwner } from "@/db/lyric-revisions"
+import {
+	ackDiscord,
+	discordQueue,
+	listNotifications,
+	markSeen,
+	unreadCount,
+} from "@/db/notifications"
 import { getSealCandidates, getSealableVariants, rejectLyric, undoRejection } from "@/db/rejections"
 import { D1Compat } from "@/infra/database"
+import { queueOwnerReminders } from "@/jobs/notifications"
 import type { JevCheckInput, JevGate } from "@/services/jev-gate"
 import {
 	type IntegrationDb,
@@ -1835,6 +1843,134 @@ describeIntegration("lyric revisions pipeline (integration)", () => {
 			})
 			const another = await seedProposer("f".repeat(64))
 			expect(await propose(lrc(swapWords(LRC, 9)), another)).toMatchObject({ status: "pending" })
+		})
+
+		describe("notifications", () => {
+			const inbox = async (userId: number) =>
+				(
+					await db.pool.query(
+						"SELECT kind, actor_id, ref_id FROM notifications WHERE user_id = $1 ORDER BY id",
+						[userId]
+					)
+				).rows
+
+			it("tells the owner about a new suggestion and the proposer about the owner's decision", async () => {
+				const patch = await propose(lrc(swapWords(LRC, 1)))
+				expect(await inbox(owner)).toEqual([
+					{ kind: "suggestion_new", actor_id: proposer, ref_id: String(patch.id) },
+				])
+				await approveRevision(db.env, lyricId, patch.id, owner, "web")
+				expect(await inbox(proposer)).toEqual([
+					{ kind: "suggestion_approved", actor_id: owner, ref_id: String(patch.id) },
+				])
+			})
+
+			it("tells the proposer about a rejection with the note, and the owner when the council decided", async () => {
+				const council = await seedCouncilMember(db, "c".repeat(64))
+				const patch = await propose(lrc(swapWords(LRC, 1)))
+				await backdate(patch.id)
+				await rejectRevision(db.env, lyricId, patch.id, council, "timing was right", "web")
+				const { rows } = await db.pool.query(
+					"SELECT user_id, kind, actor_id, data FROM notifications WHERE kind <> 'suggestion_new' ORDER BY user_id"
+				)
+				expect(rows).toEqual(
+					expect.arrayContaining([
+						{
+							user_id: proposer,
+							kind: "suggestion_rejected",
+							actor_id: null,
+							data: expect.objectContaining({ note: "timing was right" }),
+						},
+						{
+							user_id: owner,
+							kind: "suggestion_council_decided",
+							actor_id: proposer,
+							data: expect.objectContaining({ outcome: "rejected" }),
+						},
+					])
+				)
+			})
+
+			it("regression: tells the proposer about a council decision on a lyric with no owner", async () => {
+				await db.pool.query("UPDATE lyrics SET submitter_id = NULL WHERE id = $1", [lyricId])
+				const council = await seedCouncilMember(db, "c".repeat(64))
+				const patch = await propose(lrc(swapWords(LRC, 1)))
+				await rejectRevision(db.env, lyricId, patch.id, council, null, "web")
+				expect(await inbox(proposer)).toEqual([
+					{ kind: "suggestion_rejected", actor_id: null, ref_id: String(patch.id) },
+				])
+			})
+
+			it("never notifies people about their own actions", async () => {
+				await save(lrc(swapWords(LRC, 2)))
+				expect(await inbox(owner)).toEqual([])
+			})
+
+			it("hides a suggestion's items once it is withdrawn or superseded", async () => {
+				await propose(lrc(swapWords(LRC, 1)))
+				await save(lrc(swapWords(LRC, 3)))
+				expect((await listNotifications(db.env.DB, owner)).items).toEqual([])
+			})
+
+			it("keeps a waiting suggestion past the window and counts unread until seen", async () => {
+				const patch = await propose(lrc(swapWords(LRC, 1)))
+				await db.pool.query("UPDATE notifications SET created_at = created_at - $1", [
+					config.notifications.windowSec + 60,
+				])
+				const first = await listNotifications(db.env.DB, owner)
+				expect(first.items.map((i) => i.refId)).toEqual([patch.id])
+				await db.pool.query(
+					"UPDATE notifications SET created_at = EXTRACT(EPOCH FROM NOW())::INTEGER"
+				)
+				expect(await unreadCount(db.env.DB, owner)).toBe(1)
+				await markSeen(db.env.DB, owner)
+				expect(await unreadCount(db.env.DB, owner)).toBe(0)
+			})
+
+			it("queues Discord DMs only for opted-in, linked users until acked", async () => {
+				await db.pool.query("DELETE FROM discord_links WHERE key_id = ANY($1)", [
+					[OWNER_KEY, "b".repeat(64)],
+				])
+				await db.pool.query(
+					"INSERT INTO discord_links (discord_id, key_id) VALUES ('123456789012345678', $1), ('876543210987654321', $2)",
+					[OWNER_KEY, "b".repeat(64)]
+				)
+				await db.pool.query("UPDATE users SET notify_discord = TRUE WHERE id = $1", [owner])
+				const patch = await propose(lrc(swapWords(LRC, 1)))
+				await approveRevision(db.env, lyricId, patch.id, owner, "web")
+
+				const queued = await discordQueue(db.env.DB)
+				expect(queued.map((n) => [n.kind, n.discordId])).toEqual([
+					["suggestion_new", "123456789012345678"],
+				])
+				expect(await ackDiscord(db.env.DB, [queued[0].id])).toBe(1)
+				expect(await discordQueue(db.env.DB)).toEqual([])
+			})
+
+			it("reminds the owner once, a day before the window ends, and never after a decision", async () => {
+				const intoLeadWindow = (id: number) =>
+					db.pool.query("UPDATE lyric_revisions SET created_at = $2 WHERE id = $1", [
+						id,
+						Math.floor(Date.now() / 1000) - config.revisions.ownerDecisionSec + 3600,
+					])
+				const deadlines = async () =>
+					(await inbox(owner))
+						.filter((n) => n.kind === "suggestion_deadline")
+						.map((n) => Number(n.ref_id))
+
+				const waiting = await propose(lrc(swapWords(LRC, 1)))
+				await intoLeadWindow(waiting.id)
+				await queueOwnerReminders(db.env)
+				await queueOwnerReminders(db.env)
+				expect(await deadlines()).toEqual([waiting.id])
+
+				await rejectRevision(db.env, lyricId, waiting.id, owner, null, "web")
+				const decided = await propose(lrc(swapWords(LRC, 2)))
+				await intoLeadWindow(decided.id)
+				await rejectRevision(db.env, lyricId, decided.id, owner, null, "web")
+				await queueOwnerReminders(db.env)
+				expect(await deadlines()).toEqual([waiting.id])
+			})
 		})
 	})
 

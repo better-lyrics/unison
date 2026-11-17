@@ -42,6 +42,21 @@ export async function getSession(env: Env, token: string): Promise<SessionRecord
 	}
 }
 
+export function bearerToken(authorization: string | undefined): string | null {
+	if (!authorization?.startsWith("Bearer ")) return null
+	const token = authorization.slice(7).trim()
+	return token.length > 0 ? token : null
+}
+
+export async function bearerKeyId(
+	env: Env,
+	authorization: string | undefined
+): Promise<string | null> {
+	const token = bearerToken(authorization)
+	if (!token) return null
+	return (await getSession(env, token))?.keyId ?? null
+}
+
 export async function deleteSession(env: Env, token: string): Promise<void> {
 	await env.CACHE.delete(`${SESSION_PREFIX}${token}`)
 }

@@ -11,15 +11,16 @@ import { invalidateCuratorLeaderboardCache } from "@/db/leaderboard"
 import { Logger } from "@/infra/logger"
 import type { Env } from "@/types"
 import { signedRequest } from "@/utils/auth"
+import { discordAvatarUrl } from "@/utils/avatar-url"
 import { isLinkBlacklisted } from "@/utils/blacklist"
 import { isAuthorizedBot } from "@/utils/bot-auth"
 import type { DiscordIdentity } from "@/utils/discord-oauth"
 import {
+	DISCORD_ID_PATTERN,
 	buildAuthorizeUrl,
 	exchangeCodeForUser,
 	sanitizeDiscordAvatarHash,
 } from "@/utils/discord-oauth"
-import { discordAvatarUrl } from "@/utils/avatar-url"
 import { eitherAuth } from "@/utils/either-auth"
 import { ErrorCode, buildError } from "@/utils/errors"
 import {
@@ -205,7 +206,7 @@ export const linkRoutes = (env: Env, fetchImpl: typeof fetch = fetch) =>
 				body: t.Object({
 					profiles: t.Array(
 						t.Object({
-							discordId: t.String({ pattern: "^[0-9]{17,20}$" }),
+							discordId: t.String({ pattern: DISCORD_ID_PATTERN }),
 							avatar: t.Union([t.String(), t.Null()]),
 							username: t.String({ minLength: 1, maxLength: 100 }),
 						}),
