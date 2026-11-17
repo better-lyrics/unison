@@ -4,6 +4,7 @@ import { CollapsibleSection } from "@/components/CollapsibleSection"
 import { DiscordSection } from "@/components/DiscordSection"
 import { NicknameEditor } from "@/components/NicknameEditor"
 import type { DiscordLink } from "@/hooks/useDiscordLink"
+import { useNotificationSettings, useSetNotificationSettings } from "@/hooks/useNotifications"
 import { type ReactNode, useState } from "react"
 import { putProfileSettings } from "@/lib/api"
 
@@ -42,6 +43,15 @@ export function OwnerControls({ discord, discordRevealRequest, showDiscord, onPr
     }
   }
 
+  const notificationSettings = useNotificationSettings(discord.status === "linked")
+  const setNotificationSettings = useSetNotificationSettings()
+  const notificationDm = notificationSettings.data
+    ? {
+        checked: notificationSettings.data.discordDm,
+        onChange: (checked: boolean) => setNotificationSettings.mutate({ discordDm: checked }),
+      }
+    : undefined
+
   return (
     <>
       <OwnerSection title="Profile picture" subtitle="Pick how you appear across Unison.">
@@ -55,7 +65,11 @@ export function OwnerControls({ discord, discordRevealRequest, showDiscord, onPr
         subtitle="Link your account for leaderboard roles."
         revealRequest={discordRevealRequest}
       >
-        <DiscordSection link={link} showOnProfile={{ checked: discordShown, onChange: toggleDiscord }} />
+        <DiscordSection
+          link={link}
+          showOnProfile={{ checked: discordShown, onChange: toggleDiscord }}
+          notificationDm={notificationDm}
+        />
       </OwnerSection>
     </>
   )

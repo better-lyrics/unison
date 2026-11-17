@@ -13,6 +13,8 @@ export interface NotificationWords {
 
 export const NOTIFICATIONS_TITLE = "Notifications"
 
+export const NOTIFICATIONS_DISCORD_SWITCH = "Send my Unison notifications as DMs"
+
 export const newCountLabel = (count: number) => `${count} new`
 
 export const NOTIFICATIONS_EMPTY = {

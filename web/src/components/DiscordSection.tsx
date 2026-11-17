@@ -3,6 +3,7 @@ import { DiscordConnectLock, discordButtonClass, secondaryButtonClass } from "@/
 import { DiscordIcon } from "@/components/icons/DiscordIcon"
 import { editableCardClass } from "@/components/ui"
 import type { DiscordLink } from "@/hooks/useDiscordLink"
+import { NOTIFICATIONS_DISCORD_SWITCH } from "@/lib/notification-words"
 import { IconLoader2 } from "@tabler/icons-react"
 
 export interface DiscordSectionModel {
@@ -15,6 +16,7 @@ export interface DiscordSectionModel {
   onConnect: () => void
   onDisconnect: () => void
   showOnProfile?: { checked: boolean; onChange: (checked: boolean) => void }
+  notificationDm?: { checked: boolean; onChange: (checked: boolean) => void }
 }
 
 export function DiscordSectionView({ model }: { model: DiscordSectionModel }) {
@@ -35,6 +37,11 @@ export function DiscordSectionView({ model }: { model: DiscordSectionModel }) {
         {model.showOnProfile ? (
           <Switch checked={model.showOnProfile.checked} onChange={model.showOnProfile.onChange}>
             Show Discord on my profile
+          </Switch>
+        ) : null}
+        {model.notificationDm ? (
+          <Switch checked={model.notificationDm.checked} onChange={model.notificationDm.onChange}>
+            {NOTIFICATIONS_DISCORD_SWITCH}
           </Switch>
         ) : null}
         <button type="button" onClick={model.onDisconnect} disabled={model.working} className={secondaryButtonClass}>
@@ -74,9 +81,11 @@ export function DiscordSectionView({ model }: { model: DiscordSectionModel }) {
 export function DiscordSection({
   link,
   showOnProfile,
+  notificationDm,
 }: {
   link: DiscordLink
   showOnProfile?: DiscordSectionModel["showOnProfile"]
+  notificationDm?: DiscordSectionModel["notificationDm"]
 }) {
   return (
     <DiscordSectionView
@@ -90,6 +99,7 @@ export function DiscordSection({
         onConnect: link.connect,
         onDisconnect: link.disconnect,
         showOnProfile,
+        notificationDm,
       }}
     />
   )
