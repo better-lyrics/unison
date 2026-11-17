@@ -800,7 +800,7 @@ async function notifyDecision(
 ): Promise<void> {
 	const owner = d.lyric.submitter_id
 	const author = d.revision.author_id
-	if (owner === null || author === null || !isPatch(author, owner)) return
+	if (author === null || !isPatch(author, owner)) return
 	const approved = d.log.kind === "edit_approve"
 	await notify(tx, {
 		userId: author,
@@ -814,18 +814,14 @@ async function notifyDecision(
 			...(approved ? {} : { note: d.log.note }),
 		},
 	})
-	if (d.role === "council" && d.reviewerId !== owner) {
+	if (owner !== null && d.role === "council" && d.reviewerId !== owner) {
 		await notify(tx, {
 			userId: owner,
 			kind: "suggestion_council_decided",
 			refId: d.revision.id,
-			actorId: null,
+			actorId: author,
 			lyricsId: d.lyric.id,
-			data: {
-				revNo: d.revision.rev_no,
-				outcome: approved ? "approved" : "rejected",
-				authorId: author,
-			},
+			data: { revNo: d.revision.rev_no, outcome: approved ? "approved" : "rejected" },
 		})
 	}
 }

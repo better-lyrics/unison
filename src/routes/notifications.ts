@@ -20,15 +20,8 @@ import { readRateLimit } from "@/utils/read-rate-limit"
 import { bearerKeyId } from "@/utils/session"
 import { Elysia, status, t } from "elysia"
 
-function actorIdOf(item: NotificationItem): number | null {
-	if (item.kind !== "suggestion_council_decided") return item.actorId
-	return typeof item.data.authorId === "number" ? item.data.authorId : null
-}
-
 function toWire(item: NotificationItem, actors: Map<number, MarkActor>) {
-	const actorId = actorIdOf(item)
-	const actor = actorId === null ? undefined : actors.get(actorId)
-	const { authorId: _, ...data } = item.data
+	const actor = item.actorId === null ? undefined : actors.get(item.actorId)
 	return {
 		id: item.id,
 		kind: item.kind,
@@ -47,12 +40,15 @@ function toWire(item: NotificationItem, actors: Map<number, MarkActor>) {
 					artist: item.lyric.artist,
 				}
 			: null,
-		data: { ...data, revisionId: item.refId },
+		data: { ...item.data, revisionId: item.refId },
 	}
 }
 
 async function toWireItems(env: Env, items: NotificationItem[]) {
-	const actors = await resolveActors(env, items.map(actorIdOf))
+	const actors = await resolveActors(
+		env,
+		items.map((item) => item.actorId)
+	)
 	return items.map((item) => toWire(item, actors))
 }
 

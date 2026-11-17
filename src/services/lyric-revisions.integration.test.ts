@@ -1871,22 +1871,34 @@ describeIntegration("lyric revisions pipeline (integration)", () => {
 				await backdate(patch.id)
 				await rejectRevision(db.env, lyricId, patch.id, council, "timing was right", "web")
 				const { rows } = await db.pool.query(
-					"SELECT user_id, kind, data FROM notifications WHERE kind <> 'suggestion_new' ORDER BY user_id"
+					"SELECT user_id, kind, actor_id, data FROM notifications WHERE kind <> 'suggestion_new' ORDER BY user_id"
 				)
 				expect(rows).toEqual(
 					expect.arrayContaining([
 						{
 							user_id: proposer,
 							kind: "suggestion_rejected",
+							actor_id: null,
 							data: expect.objectContaining({ note: "timing was right" }),
 						},
 						{
 							user_id: owner,
 							kind: "suggestion_council_decided",
+							actor_id: proposer,
 							data: expect.objectContaining({ outcome: "rejected" }),
 						},
 					])
 				)
+			})
+
+			it("regression: tells the proposer about a council decision on a lyric with no owner", async () => {
+				await db.pool.query("UPDATE lyrics SET submitter_id = NULL WHERE id = $1", [lyricId])
+				const council = await seedCouncilMember(db, "c".repeat(64))
+				const patch = await propose(lrc(swapWords(LRC, 1)))
+				await rejectRevision(db.env, lyricId, patch.id, council, null, "web")
+				expect(await inbox(proposer)).toEqual([
+					{ kind: "suggestion_rejected", actor_id: null, ref_id: String(patch.id) },
+				])
 			})
 
 			it("never notifies people about their own actions", async () => {
