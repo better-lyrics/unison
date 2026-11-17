@@ -87,9 +87,7 @@ export const NOTIFICATION_WORDS: Record<NotificationKind, (item: NotificationIte
 export function notificationWords(item: NotificationItem): NotificationWords {
   const pending = item.refStatus === "pending"
   const href = item.song
-    ? pending
-      ? `/song/${item.song.videoId}?suggestion=${item.data.revisionId}`
-      : `/song/${item.song.videoId}`
+    ? `/song/${item.song.videoId}?variantId=${item.song.lyricsId}${pending ? `&suggestion=${item.data.revisionId}` : ""}`
     : null
   return { parts: NOTIFICATION_WORDS[item.kind](item), href, pending }
 }
