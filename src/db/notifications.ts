@@ -189,14 +189,18 @@ export async function ackDiscord(db: D1Compat, ids: number[]): Promise<number> {
 	return results.length
 }
 
-export async function discordOptOut(db: D1Compat, discordId: string): Promise<boolean> {
+export async function setDiscordDmByDiscordId(
+	db: D1Compat,
+	discordId: string,
+	on: boolean
+): Promise<boolean> {
 	const { results } = await db
 		.prepare(
-			`UPDATE users SET notify_discord = FALSE
+			`UPDATE users SET notify_discord = ?
 			 WHERE key_id = (SELECT key_id FROM discord_links WHERE discord_id = ?)
 			 RETURNING id`
 		)
-		.bind(discordId)
+		.bind(on, discordId)
 		.all<{ id: number }>()
 	return results.length > 0
 }

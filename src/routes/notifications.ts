@@ -2,12 +2,12 @@ import { config } from "@/config"
 import {
 	type NotificationItem,
 	ackDiscord,
-	discordOptOut,
 	discordQueue,
 	getDiscordDm,
 	listNotifications,
 	markSeen,
 	setDiscordDm,
+	setDiscordDmByDiscordId,
 	unreadCount,
 } from "@/db/notifications"
 import { NOTIFICATION_KINDS } from "@/notifications/kinds"
@@ -126,12 +126,12 @@ const botRoutes = (env: Env) =>
 			}
 		)
 		.put(
-			"/opt-out",
+			"/dm",
 			async ({ env, body }) => ({
 				success: true,
-				data: { optedOut: await discordOptOut(env.DB, body.discordId) },
+				data: { linked: await setDiscordDmByDiscordId(env.DB, body.discordId, body.on) },
 			}),
-			{ body: t.Object({ discordId: t.String({ pattern: DISCORD_ID_PATTERN }) }) }
+			{ body: t.Object({ discordId: t.String({ pattern: DISCORD_ID_PATTERN }), on: t.Boolean() }) }
 		)
 
 export const notificationRoutes = (env: Env) => new Elysia().use(webRoutes(env)).use(botRoutes(env))

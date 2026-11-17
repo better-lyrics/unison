@@ -89,7 +89,7 @@ describeIntegration("notification routes (integration)", () => {
 		const routes: [string, string, unknown?][] = [
 			["GET", "/notifications/bot/discord"],
 			["POST", "/notifications/bot/discord/ack", { ids: [1] }],
-			["PUT", "/notifications/bot/discord/opt-out", { discordId: "123456789012345678" }],
+			["PUT", "/notifications/bot/discord/dm", { discordId: "123456789012345678", on: false }],
 		]
 		for (const [method, path, body] of routes) {
 			const res = await call(method, path, { authorization: `Bearer ${A_TOKEN}` }, body)
