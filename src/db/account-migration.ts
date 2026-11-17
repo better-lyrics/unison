@@ -1221,19 +1221,30 @@ export async function restoreFromSnapshot(
 
 		const snapNotifications = snap.notifications as SnapNotification[] | undefined
 		if (snapNotifications) {
+			const survivor = await tx
+				.prepare("SELECT notify_discord FROM users WHERE id = ?")
+				.bind(oldSnap.id)
+				.first<{ notify_discord: boolean }>()
 			for (const u of newSnap ? [oldSnap, newSnap] : [oldSnap]) {
 				await tx
 					.prepare("UPDATE users SET notifications_seen_at = ?, notify_discord = ? WHERE id = ?")
-					.bind(u.notifications_seen_at ?? 0, u.notify_discord ?? false, u.id)
+					.bind(
+						u.notifications_seen_at ?? 0,
+						(u.notify_discord ?? false) && (survivor?.notify_discord ?? false),
+						u.id
+					)
 					.run()
 			}
-			await tx.prepare("DELETE FROM notifications WHERE user_id = ANY(?)").bind(ids).run()
 			for (const n of snapNotifications) {
+				await tx
+					.prepare("UPDATE notifications SET user_id = ?, actor_id = ? WHERE id = ?")
+					.bind(n.user_id, n.actor_id, n.id)
+					.run()
 				await tx
 					.prepare(
 						`INSERT INTO notifications (id, user_id, kind, ref_id, actor_id, lyrics_id, data, created_at, discord_sent_at)
 						 VALUES (?, ?, ?, ?, ?, ?, ?::jsonb, ?, ?)
-						 ON CONFLICT (id) DO UPDATE SET actor_id = EXCLUDED.actor_id`
+						 ON CONFLICT DO NOTHING`
 					)
 					.bind(
 						n.id,
