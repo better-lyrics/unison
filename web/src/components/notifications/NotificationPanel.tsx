@@ -1,10 +1,11 @@
 import { EmptyState } from "@/components/EmptyState"
-import { popoverSurfaceClass } from "@/components/ui"
+import { buttonClass, popoverSurfaceClass } from "@/components/ui"
 import { useNotificationList } from "@/hooks/useNotifications"
 import { useScrollEdges } from "@/hooks/useScrollEdges"
 import { cn } from "@/lib/cn"
 import {
   NOTIFICATIONS_EMPTY,
+  NOTIFICATIONS_ERROR,
   NOTIFICATIONS_TITLE,
   NOTIFICATION_GROUP_LABELS,
   newCountLabel,
@@ -50,7 +51,15 @@ export function NotificationPanel({ open, closing, unread, onClose }: Notificati
           </span>
         ) : null}
       </div>
-      {items && items.length === 0 ? (
+      {!items && list.isError ? (
+        <div className="px-1.5 pb-1.5">
+          <EmptyState title={NOTIFICATIONS_ERROR.title} icon={<IconBell className="size-5" stroke={1.5} />}>
+            <button type="button" className={buttonClass("fill", "sm")} onClick={() => list.refetch()}>
+              {NOTIFICATIONS_ERROR.retry}
+            </button>
+          </EmptyState>
+        </div>
+      ) : items && items.length === 0 ? (
         <div className="px-1.5 pb-1.5">
           <EmptyState
             title={NOTIFICATIONS_EMPTY.title}
@@ -64,11 +73,7 @@ export function NotificationPanel({ open, closing, unread, onClose }: Notificati
             data-scroller
             className="max-h-[440px] overflow-auto overscroll-contain px-1.5 pb-1.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
           >
-            {items ? (
-              <NotificationGroups items={items} now={now} onNavigate={onClose} />
-            ) : list.isError ? null : (
-              <NotificationSkeleton />
-            )}
+            {items ? <NotificationGroups items={items} now={now} onNavigate={onClose} /> : <NotificationSkeleton />}
           </div>
         </div>
       )}

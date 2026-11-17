@@ -17,6 +17,11 @@ export const NOTIFICATIONS_DISCORD_SWITCH = "Send my Unison notifications as DMs
 
 export const newCountLabel = (count: number) => `${count} new`
 
+export const NOTIFICATIONS_ERROR = {
+  title: "Could not load notifications",
+  retry: "Try again",
+}
+
 export const NOTIFICATIONS_EMPTY = {
   title: "Nothing here yet",
   body: "When someone suggests an edit to your lyrics, or decides on a suggestion you sent, it shows up here.",
