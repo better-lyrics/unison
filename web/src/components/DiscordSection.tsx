@@ -34,15 +34,19 @@ export function DiscordSectionView({ model }: { model: DiscordSectionModel }) {
         <p className="text-sm text-unison-text">
           Connected{model.username ? ` as ${model.username}` : ""}. Your roles update on their own.
         </p>
-        {model.showOnProfile ? (
-          <Switch checked={model.showOnProfile.checked} onChange={model.showOnProfile.onChange}>
-            Show Discord on my profile
-          </Switch>
-        ) : null}
-        {model.notificationDm ? (
-          <Switch checked={model.notificationDm.checked} onChange={model.notificationDm.onChange}>
-            {NOTIFICATIONS_DISCORD_SWITCH}
-          </Switch>
+        {model.showOnProfile || model.notificationDm ? (
+          <div className="flex flex-col items-start gap-2.5 text-sm text-unison-text">
+            {model.showOnProfile ? (
+              <Switch checked={model.showOnProfile.checked} onChange={model.showOnProfile.onChange}>
+                Show Discord on my profile
+              </Switch>
+            ) : null}
+            {model.notificationDm ? (
+              <Switch checked={model.notificationDm.checked} onChange={model.notificationDm.onChange}>
+                {NOTIFICATIONS_DISCORD_SWITCH}
+              </Switch>
+            ) : null}
+          </div>
         ) : null}
         <button type="button" onClick={model.onDisconnect} disabled={model.working} className={secondaryButtonClass}>
           {model.working ? "Disconnecting..." : "Disconnect"}
