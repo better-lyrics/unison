@@ -357,6 +357,11 @@ export async function getCuratorRank(
 	return all.find((r) => r.keyId === keyId) ?? null
 }
 
+export async function getTieredCurators(env: Env): Promise<CuratorLeaderboardRow[]> {
+	const board = await getCuratorLeaderboard(env, config.requests.leaderboard.rankScanLimit)
+	return board.filter((r) => r.tier !== null)
+}
+
 export async function getCuratorTierMap(env: Env): Promise<Map<string, TierName | null>> {
 	const cached = await env.CACHE.get("curator:tier-map")
 	if (cached) {
