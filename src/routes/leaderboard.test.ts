@@ -1,5 +1,6 @@
 import { config } from "@/config"
 import { AVATAR_PRESETS } from "@/db/avatar-presets"
+import { invalidateCuratorLeaderboardCache } from "@/db/leaderboard"
 import type { Env } from "@/types"
 import { describe, expect, it } from "vitest"
 import { leaderboardRoutes } from "./leaderboard"
@@ -296,6 +297,86 @@ describe("GET /leaderboard/users", () => {
 		}
 		expect(json.data.curators[0].discordLinked).toBe(true)
 		expect(json.data.curators[1].discordLinked).toBe(false)
+	})
+})
+
+describe("GET /leaderboard/users/bot", () => {
+	const curatorRows = (count: number) =>
+		Array.from({ length: count }, (_, i) => ({
+			key_id: i.toString(16).padStart(64, "0"),
+			reputation: 1,
+			score: count - i,
+			submission_count: 1,
+			total_upvotes: 1,
+			total_count: count,
+		}))
+
+	it("refuses a request without the bot secret", async () => {
+		const env = { ...makeEnv(makeMockDB()), BUTLER_BOT_SECRET: "secret" }
+		const app = leaderboardRoutes(env)
+		const res = await app.handle(new Request("http://localhost/leaderboard/users/bot"))
+		expect(res.status).toBe(401)
+	})
+
+	it("regression: returns lyricists ranked below the public topN", async () => {
+		const total = config.requests.leaderboard.topN * 10
+		const env = { ...makeEnv(makeMockDB([curatorRows(total)])), BUTLER_BOT_SECRET: "secret" }
+		const app = leaderboardRoutes(env)
+		const res = await app.handle(
+			new Request("http://localhost/leaderboard/users/bot", {
+				headers: { authorization: "Bearer secret" },
+			})
+		)
+		expect(res.status).toBe(200)
+		const json = (await res.json()) as {
+			data: { curators: Array<{ tier: string | null; displayName: string }> }
+		}
+		const { curators } = json.data
+		expect(curators.length).toBe(Math.ceil(total * 0.2))
+		expect(curators.length).toBeGreaterThan(config.requests.leaderboard.topN)
+		expect(curators.every((c) => c.tier !== null && c.displayName.length > 0)).toBe(true)
+		expect(curators.at(-1)?.tier).toBe("lyricist")
+	})
+
+	it("returns the whole tier band when it runs past the rank scan limit", async () => {
+		const total = config.requests.leaderboard.rankScanLimit * 6
+		const all = curatorRows(total)
+		const db = {
+			prepare(sql: string) {
+				return {
+					bind(...args: unknown[]) {
+						return {
+							async all() {
+								const isBoard = sql.includes("COUNT(*) OVER ()")
+								return { results: isBoard ? all.slice(0, Number(args.at(-1))) : [] }
+							},
+						}
+					},
+				}
+			},
+		}
+		const env = {
+			...makeEnv(makeMockDB()),
+			DB: db as unknown as Env["DB"],
+			BUTLER_BOT_SECRET: "secret",
+		}
+		const app = leaderboardRoutes(env)
+		const res = await app.handle(
+			new Request("http://localhost/leaderboard/users/bot", {
+				headers: { authorization: "Bearer secret" },
+			})
+		)
+		expect(res.status).toBe(200)
+		const json = (await res.json()) as { data: { curators: Array<{ tier: string | null }> } }
+		expect(json.data.curators.length).toBe(Math.ceil(total * 0.2))
+		expect(json.data.curators.length).toBeGreaterThan(config.requests.leaderboard.rankScanLimit)
+
+		await invalidateCuratorLeaderboardCache(env)
+		const curatorKeys = env.cache.puts
+			.map((p) => p.key)
+			.filter((k) => k.startsWith("leaderboard:users"))
+		expect(curatorKeys.length).toBeGreaterThan(0)
+		for (const key of curatorKeys) expect(env.cache.deletes).toContain(key)
 	})
 })
 

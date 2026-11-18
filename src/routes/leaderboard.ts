@@ -3,16 +3,19 @@ import { getProfileExtras } from "@/db/profile-settings"
 import { getByKeyId } from "@/db/discordLinks"
 import {
 	CURATOR_LEADERBOARD_CACHE_KEY,
+	type CuratorLeaderboardRow,
 	type MostWantedCursor,
 	getCuratorLeaderboard,
 	getCuratorRank,
 	getMostWantedPage,
 	getSongLeaderboard,
 	getSongRank,
+	getTieredCurators,
 } from "@/db/leaderboard"
 import { getLastVoteAt } from "@/db/profile"
 import { resolveIdentity } from "@/db/users"
 import type { Env } from "@/types"
+import { isAuthorizedBot } from "@/utils/bot-auth"
 import { ErrorCode, buildError } from "@/utils/errors"
 import { generatePetName } from "@/utils/petname"
 import { readRateLimit } from "@/utils/read-rate-limit"
@@ -30,6 +33,11 @@ function clampQueueLimit(raw: string | undefined): number {
 	const parsed = Number.parseInt(raw, 10)
 	if (!Number.isFinite(parsed)) return QUEUE_DEFAULT_LIMIT
 	return Math.max(QUEUE_MIN_LIMIT, Math.min(QUEUE_MAX_LIMIT, parsed))
+}
+
+function toCuratorWire(row: CuratorLeaderboardRow) {
+	const { nickname, ...rest } = row
+	return { ...rest, displayName: nickname ?? generatePetName(row.keyId) }
 }
 
 function encodeCursor(cursor: MostWantedCursor): string {
@@ -121,15 +129,18 @@ export const leaderboardRoutes = (env: Env) =>
 				}
 			}
 			const rows = await getCuratorLeaderboard(env, config.requests.leaderboard.topN)
-			const curators = rows.map((r) => {
-				const { nickname, ...rest } = r
-				return { ...rest, displayName: nickname ?? generatePetName(r.keyId) }
-			})
-			const data = { curators }
+			const data = { curators: rows.map(toCuratorWire) }
 			await env.CACHE.put(USERS_CACHE_KEY, JSON.stringify(data), {
 				expirationTtl: config.requests.leaderboard.cacheTtl,
 			})
 			return { success: true, data }
+		})
+		.get("/users/bot", async ({ env, headers, status }) => {
+			if (!isAuthorizedBot(headers.authorization, env)) {
+				return status(401, buildError(ErrorCode.AUTH_REQUIRED))
+			}
+			const rows = await getTieredCurators(env)
+			return status(200, { success: true, data: { curators: rows.map(toCuratorWire) } })
 		})
 		.get(
 			"/songs/:videoId",
