@@ -336,6 +336,40 @@ describe("GET /leaderboard/users/bot", () => {
 		expect(curators.every((c) => c.tier !== null && c.displayName.length > 0)).toBe(true)
 		expect(curators.at(-1)?.tier).toBe("lyricist")
 	})
+
+	it("returns the whole tier band when it runs past the rank scan limit", async () => {
+		const total = config.requests.leaderboard.rankScanLimit * 6
+		const all = curatorRows(total)
+		const db = {
+			prepare(sql: string) {
+				return {
+					bind(...args: unknown[]) {
+						return {
+							async all() {
+								const isBoard = sql.includes("COUNT(*) OVER ()")
+								return { results: isBoard ? all.slice(0, Number(args.at(-1))) : [] }
+							},
+						}
+					},
+				}
+			},
+		}
+		const env = {
+			...makeEnv(makeMockDB()),
+			DB: db as unknown as Env["DB"],
+			BUTLER_BOT_SECRET: "secret",
+		}
+		const app = leaderboardRoutes(env)
+		const res = await app.handle(
+			new Request("http://localhost/leaderboard/users/bot", {
+				headers: { authorization: "Bearer secret" },
+			})
+		)
+		expect(res.status).toBe(200)
+		const json = (await res.json()) as { data: { curators: Array<{ tier: string | null }> } }
+		expect(json.data.curators.length).toBe(Math.ceil(total * 0.2))
+		expect(json.data.curators.length).toBeGreaterThan(config.requests.leaderboard.rankScanLimit)
+	})
 })
 
 describe("GET /leaderboard/songs cache hit", () => {

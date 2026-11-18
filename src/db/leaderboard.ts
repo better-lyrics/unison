@@ -358,7 +358,12 @@ export async function getCuratorRank(
 }
 
 export async function getTieredCurators(env: Env): Promise<CuratorLeaderboardRow[]> {
-	const board = await getCuratorLeaderboard(env, config.requests.leaderboard.rankScanLimit)
+	let limit = config.requests.leaderboard.rankScanLimit
+	let board = await getCuratorLeaderboard(env, limit)
+	while (board.length === limit && board.at(-1)?.tier != null) {
+		limit *= 2
+		board = await getCuratorLeaderboard(env, limit)
+	}
 	return board.filter((r) => r.tier !== null)
 }
 
