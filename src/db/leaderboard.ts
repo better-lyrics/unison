@@ -22,12 +22,17 @@ const curatorBoardCacheKey = (limit: number) => `${CURATOR_LEADERBOARD_CACHE_KEY
 const CREDITED_SCORE_EXPR =
 	"CASE WHEN loyal_only THEN LEAST(effective_score, 0) ELSE effective_score END"
 
+function tierScanLimits(): number[] {
+	const { rankScanLimit, tierScanDoublings } = config.requests.leaderboard
+	return Array.from({ length: tierScanDoublings + 1 }, (_, i) => rankScanLimit * 2 ** i)
+}
+
 export async function invalidateCuratorLeaderboardCache(env: Env): Promise<void> {
-	const { rankScanLimit, topN } = config.requests.leaderboard
+	const { topN } = config.requests.leaderboard
 	await Promise.all([
 		env.CACHE.delete(CURATOR_LEADERBOARD_CACHE_KEY),
-		env.CACHE.delete(curatorBoardCacheKey(rankScanLimit)),
 		env.CACHE.delete(curatorBoardCacheKey(topN)),
+		...tierScanLimits().map((limit) => env.CACHE.delete(curatorBoardCacheKey(limit))),
 	])
 }
 
@@ -358,11 +363,10 @@ export async function getCuratorRank(
 }
 
 export async function getTieredCurators(env: Env): Promise<CuratorLeaderboardRow[]> {
-	let limit = config.requests.leaderboard.rankScanLimit
-	let board = await getCuratorLeaderboard(env, limit)
-	while (board.length === limit && board.at(-1)?.tier != null) {
-		limit *= 2
+	let board: CuratorLeaderboardRow[] = []
+	for (const limit of tierScanLimits()) {
 		board = await getCuratorLeaderboard(env, limit)
+		if (board.length < limit || board.at(-1)?.tier == null) break
 	}
 	return board.filter((r) => r.tier !== null)
 }

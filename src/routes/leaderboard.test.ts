@@ -1,5 +1,6 @@
 import { config } from "@/config"
 import { AVATAR_PRESETS } from "@/db/avatar-presets"
+import { invalidateCuratorLeaderboardCache } from "@/db/leaderboard"
 import type { Env } from "@/types"
 import { describe, expect, it } from "vitest"
 import { leaderboardRoutes } from "./leaderboard"
@@ -369,6 +370,11 @@ describe("GET /leaderboard/users/bot", () => {
 		const json = (await res.json()) as { data: { curators: Array<{ tier: string | null }> } }
 		expect(json.data.curators.length).toBe(Math.ceil(total * 0.2))
 		expect(json.data.curators.length).toBeGreaterThan(config.requests.leaderboard.rankScanLimit)
+
+		await invalidateCuratorLeaderboardCache(env)
+		const boardKeys = env.cache.puts.map((p) => p.key).filter((k) => k.includes(":board:"))
+		expect(boardKeys.length).toBeGreaterThan(1)
+		for (const key of boardKeys) expect(env.cache.deletes).toContain(key)
 	})
 })
 
