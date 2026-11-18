@@ -372,9 +372,11 @@ describe("GET /leaderboard/users/bot", () => {
 		expect(json.data.curators.length).toBeGreaterThan(config.requests.leaderboard.rankScanLimit)
 
 		await invalidateCuratorLeaderboardCache(env)
-		const boardKeys = env.cache.puts.map((p) => p.key).filter((k) => k.includes(":board:"))
-		expect(boardKeys.length).toBeGreaterThan(1)
-		for (const key of boardKeys) expect(env.cache.deletes).toContain(key)
+		const curatorKeys = env.cache.puts
+			.map((p) => p.key)
+			.filter((k) => k.startsWith("leaderboard:users"))
+		expect(curatorKeys.length).toBeGreaterThan(0)
+		for (const key of curatorKeys) expect(env.cache.deletes).toContain(key)
 	})
 })
 

@@ -181,8 +181,6 @@ export const config = {
 			cacheTtl: 300,
 			topN: 200,
 			rankScanLimit: 5000,
-			// Each doubling of rankScanLimit the bot tier scan may use; 6 covers 320,000 rows
-			tierScanDoublings: 6,
 		},
 	},
 

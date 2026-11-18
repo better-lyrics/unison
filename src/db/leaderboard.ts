@@ -22,18 +22,33 @@ const curatorBoardCacheKey = (limit: number) => `${CURATOR_LEADERBOARD_CACHE_KEY
 const CREDITED_SCORE_EXPR =
 	"CASE WHEN loyal_only THEN LEAST(effective_score, 0) ELSE effective_score END"
 
-function tierScanLimits(): number[] {
-	const { rankScanLimit, tierScanDoublings } = config.requests.leaderboard
-	return Array.from({ length: tierScanDoublings + 1 }, (_, i) => rankScanLimit * 2 ** i)
-}
+const TIERED_CURATORS_CACHE_KEY = `${CURATOR_LEADERBOARD_CACHE_KEY}:tiered`
 
 export async function invalidateCuratorLeaderboardCache(env: Env): Promise<void> {
-	const { topN } = config.requests.leaderboard
+	const { rankScanLimit, topN } = config.requests.leaderboard
 	await Promise.all([
 		env.CACHE.delete(CURATOR_LEADERBOARD_CACHE_KEY),
+		env.CACHE.delete(curatorBoardCacheKey(rankScanLimit)),
 		env.CACHE.delete(curatorBoardCacheKey(topN)),
-		...tierScanLimits().map((limit) => env.CACHE.delete(curatorBoardCacheKey(limit))),
+		env.CACHE.delete(TIERED_CURATORS_CACHE_KEY),
 	])
+}
+
+async function readCachedBoard(env: Env, key: string): Promise<CuratorLeaderboardRow[] | null> {
+	const cached = await env.CACHE.get(key)
+	if (!cached) return null
+	try {
+		return JSON.parse(cached) as CuratorLeaderboardRow[]
+	} catch {
+		await env.CACHE.delete(key)
+		return null
+	}
+}
+
+async function cacheBoard(env: Env, key: string, board: CuratorLeaderboardRow[]): Promise<void> {
+	await env.CACHE.put(key, JSON.stringify(board), {
+		expirationTtl: config.requests.leaderboard.cacheTtl,
+	})
 }
 
 export interface SongLeaderboardRow {
@@ -262,15 +277,14 @@ export async function getCuratorLeaderboard(
 	limit: number
 ): Promise<CuratorLeaderboardRow[]> {
 	const cacheKey = curatorBoardCacheKey(limit)
-	const cached = await env.CACHE.get(cacheKey)
-	if (cached) {
-		try {
-			return JSON.parse(cached) as CuratorLeaderboardRow[]
-		} catch {
-			await env.CACHE.delete(cacheKey)
-		}
-	}
+	const cached = await readCachedBoard(env, cacheKey)
+	if (cached) return cached
+	const board = await queryCuratorBoard(env, limit)
+	await cacheBoard(env, cacheKey, board)
+	return board
+}
 
+async function queryCuratorBoard(env: Env, limit: number): Promise<CuratorLeaderboardRow[]> {
 	const res = await env.DB.prepare(
 		`SELECT u.id AS user_id, u.key_id, u.reputation, u.nickname, ${AVATAR_COLUMNS},
 		        agg.score, agg.submission_count, agg.total_upvotes,
@@ -348,9 +362,6 @@ export async function getCuratorLeaderboard(
 		}
 	})
 
-	await env.CACHE.put(cacheKey, JSON.stringify(board), {
-		expirationTtl: config.requests.leaderboard.cacheTtl,
-	})
 	return board
 }
 
@@ -363,12 +374,17 @@ export async function getCuratorRank(
 }
 
 export async function getTieredCurators(env: Env): Promise<CuratorLeaderboardRow[]> {
-	let board: CuratorLeaderboardRow[] = []
-	for (const limit of tierScanLimits()) {
-		board = await getCuratorLeaderboard(env, limit)
-		if (board.length < limit || board.at(-1)?.tier == null) break
+	const cached = await readCachedBoard(env, TIERED_CURATORS_CACHE_KEY)
+	if (cached) return cached
+	let limit = config.requests.leaderboard.rankScanLimit
+	let board = await getCuratorLeaderboard(env, limit)
+	while (board.length === limit && board.at(-1)?.tier != null) {
+		limit *= 2
+		board = await queryCuratorBoard(env, limit)
 	}
-	return board.filter((r) => r.tier !== null)
+	const tiered = board.filter((r) => r.tier !== null)
+	await cacheBoard(env, TIERED_CURATORS_CACHE_KEY, tiered)
+	return tiered
 }
 
 export async function getCuratorTierMap(env: Env): Promise<Map<string, TierName | null>> {
