@@ -209,6 +209,17 @@ describeIntegration("resolveArtwork (integration)", () => {
 			expect(art.find).not.toHaveBeenCalled()
 		})
 
+		it("regression: finds the cover once a lyric arrives for a video looked up before it", async () => {
+			const art = finds(ALBUM_ART)
+			expect(await resolveArtwork(env, ATV, { sources: [art], random: NEVER })).toBeNull()
+			expect(await getVideoArtwork(env, ATV)).toBeNull()
+			expect(cache.ttls.get(artworkCacheKey(ATV))).toBe(config.artwork.unknownTtlSeconds)
+
+			await seedLyric(ATV)
+			cache.store.delete(artworkCacheKey(ATV))
+			expect(await resolveArtwork(env, ATV, { sources: [art], random: NEVER })).toBe(ALBUM_ART)
+		})
+
 		it("ignores a deleted lyric", async () => {
 			const id = await seedLyric(ATV)
 			const user = await pool.query("INSERT INTO users (key_id) VALUES ('k') RETURNING id")

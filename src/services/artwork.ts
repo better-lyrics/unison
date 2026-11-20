@@ -32,16 +32,23 @@ export type ArtworkHit = { url: string } | { mirror: string } | { bytes: Buffer 
 export interface ArtworkSource {
 	name: string
 	onRefresh: boolean
-	/** Null is a miss; a throw means the source was unavailable, so a miss is not final. */
+	/** Null is a miss; a throw means the source was unavailable, so the miss is incomplete. */
 	find: (env: Env, videoId: string, song: VideoSong) => Promise<ArtworkHit | null>
 }
 
-export interface Resolution {
-	url: string | null
-	final: boolean
-}
+/** Only a "searched" miss is an answer; the others are kept briefly and never saved. */
+type Miss = "searched" | "incomplete" | "unknown"
 
-const OUT_OF_TIME: Resolution = { url: null, final: false }
+export type Resolution = { url: string } | { url: null; miss: Miss }
+
+const OUT_OF_TIME: Resolution = { url: null, miss: "incomplete" }
+
+const missTtlSeconds = (miss: Miss): number =>
+	({
+		searched: config.artwork.negativeTtlSeconds,
+		incomplete: config.artwork.incompleteTtlSeconds,
+		unknown: config.artwork.unknownTtlSeconds,
+	})[miss]
 
 export const ARTWORK_SOURCES: ArtworkSource[] = [
 	{
@@ -114,17 +121,17 @@ async function runSources(
 	sources: ArtworkSource[]
 ): Promise<Resolution> {
 	const song = await findSongForVideo(env, videoId)
-	if (!song) return { url: null, final: true }
-	let final = true
+	if (!song) return { url: null, miss: "unknown" }
+	let miss: Miss = "searched"
 	const deadline = Date.now() + config.artwork.resolveBudgetMs
 	for (const source of sources) {
 		if (Date.now() > deadline) return OUT_OF_TIME
 		try {
 			const hit = await source.find(env, videoId, song)
 			const url = hit ? await hitUrl(env, videoId, hit) : null
-			if (url) return { url, final }
+			if (url) return { url }
 		} catch (error) {
-			final = false
+			miss = "incomplete"
 			log.warn("artwork source failed", {
 				source: source.name,
 				videoId,
@@ -132,7 +139,7 @@ async function runSources(
 			})
 		}
 	}
-	return { url: null, final }
+	return { url: null, miss }
 }
 
 const inflight = sharedInFlight<Resolution>()
@@ -169,12 +176,12 @@ function withinBudget(work: Promise<Resolution>): Promise<Resolution> {
 
 async function resolveCold(env: Env, videoId: string, sources: ArtworkSource[]) {
 	const resolved = await withinBudget(runSources(env, videoId, sources))
-	const cover = resolved.url ? { url: resolved.url, fallbackUrl: null } : null
-	if (resolved.url || resolved.final) {
-		await upsertVideoArtwork(env, videoId, resolved.url)
-		await writeCachedCover(env, videoId, cover)
+	if (resolved.url === null) {
+		if (resolved.miss === "searched") await upsertVideoArtwork(env, videoId, null)
+		await writeCachedCover(env, videoId, null, missTtlSeconds(resolved.miss))
 	} else {
-		await writeCachedCover(env, videoId, null, config.artwork.incompleteTtlSeconds)
+		await upsertVideoArtwork(env, videoId, resolved.url)
+		await writeCachedCover(env, videoId, { url: resolved.url, fallbackUrl: null })
 	}
 	return resolved
 }
