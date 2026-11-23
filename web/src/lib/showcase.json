@@ -10,6 +10,17 @@
     ]
   },
   {
+    "name": "ArchiveTune",
+    "description": "The Cutest Music Player With Support Local File and Youtube Music for Android!",
+    "url": "https://archivetune.miuka.moe",
+    "icon": "/showcase/archivetune-85228666.png",
+    "platforms": [
+      "Android",
+      "Android Auto",
+      "Android TV"
+    ]
+  },
+  {
     "name": "Better Lyrics",
     "description": "Synced lyrics for YouTube Music in your browser. Unison was built for it.",
     "url": "https://betterlyrics.org",
