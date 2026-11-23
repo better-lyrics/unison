@@ -60,6 +60,19 @@
     ]
   },
   {
+    "name": "Vey",
+    "description": "a cross-platform music player",
+    "url": "https://github.com/superstilist/Vey",
+    "icon": "/showcase/vey-1e87f308.png",
+    "iconFillsTile": true,
+    "platforms": [
+      "Windows",
+      "linux",
+      "andoind",
+      "macos"
+    ]
+  },
+  {
     "name": "WiseWave",
     "description": "A free music player for Windows with synced lyrics and offline playback.",
     "url": "https://wisewave.me",
