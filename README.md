@@ -471,6 +471,7 @@ Signing in with the extension needs Chrome or a Chromium-based browser. In any o
 - [Chora](https://github.com/CraftWorksMC/Chora): A music player for Navidrome and Subsonic servers.
 - [Metrolist](https://metrolist.cc): A YouTube Music client for Android and desktop.
 - [MixMusic](https://github.com/fzn0x/mixmusic): A desktop player for YouTube Music and Spotify, with community themes and plugins.
+- [Vey](https://github.com/superstilist/Vey): a cross-platform music player
 - [WiseWave](https://wisewave.me): A free music player for Windows with synced lyrics and offline playback.
 - [YouLy+](https://github.com/ibratabian17/YouLyPlus): Word-by-word lyrics in your browser for YouTube Music, Apple Music and Tidal.
 <!-- showcase:end -->
