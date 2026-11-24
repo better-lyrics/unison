@@ -469,6 +469,7 @@ Signing in with the extension needs Chrome or a Chromium-based browser. In any o
 - [am-lyrics](https://lyrics.binimum.org): Word-synced lyrics as a web component you can drop into any page.
 - [Better Lyrics](https://betterlyrics.org): Synced lyrics for YouTube Music in your browser. Unison was built for it.
 - [Chora](https://github.com/CraftWorksMC/Chora): A music player for Navidrome and Subsonic servers.
+- [KasetPlus](https://github.com/popcornfuzzy/KasetPlus): A native macOS YouTube Music client built with Swift and SwiftUI
 - [Metrolist](https://metrolist.cc): A YouTube Music client for Android and desktop.
 - [MixMusic](https://github.com/fzn0x/mixmusic): A desktop player for YouTube Music and Spotify, with community themes and plugins.
 - [WiseWave](https://wisewave.me): A free music player for Windows with synced lyrics and offline playback.

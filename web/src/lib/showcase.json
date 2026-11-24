@@ -34,6 +34,16 @@
     ]
   },
   {
+    "name": "KasetPlus",
+    "description": "A native macOS YouTube Music client built with Swift and SwiftUI",
+    "url": "https://github.com/popcornfuzzy/KasetPlus",
+    "icon": "/showcase/kasetplus-da530385.png",
+    "iconFillsTile": true,
+    "platforms": [
+      "macOS"
+    ]
+  },
+  {
     "name": "Metrolist",
     "description": "A YouTube Music client for Android and desktop.",
     "url": "https://metrolist.cc",
