@@ -467,6 +467,7 @@ Signing in with the extension needs Chrome or a Chromium-based browser. In any o
 
 <!-- showcase:start -->
 - [am-lyrics](https://lyrics.binimum.org): Word-synced lyrics as a web component you can drop into any page.
+- [AMuseic](https://github.com/ibratabian17/amuseic): A native Apple Music desktop client built with Rust and Qt 6
 - [Better Lyrics](https://betterlyrics.org): Synced lyrics for YouTube Music in your browser. Unison was built for it.
 - [Chora](https://github.com/CraftWorksMC/Chora): A music player for Navidrome and Subsonic servers.
 - [Metrolist](https://metrolist.cc): A YouTube Music client for Android and desktop.
