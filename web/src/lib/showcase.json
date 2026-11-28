@@ -10,6 +10,17 @@
     ]
   },
   {
+    "name": "AMuseic",
+    "description": "A native Apple Music desktop client built with Rust and Qt 6",
+    "url": "https://github.com/ibratabian17/amuseic",
+    "icon": "/showcase/amuseic-8382d27f.png",
+    "platforms": [
+      "macOS",
+      "Windows",
+      "Linux"
+    ]
+  },
+  {
     "name": "Better Lyrics",
     "description": "Synced lyrics for YouTube Music in your browser. Unison was built for it.",
     "url": "https://betterlyrics.org",
